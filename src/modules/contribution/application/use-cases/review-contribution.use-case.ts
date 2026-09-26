@@ -3,6 +3,7 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
 import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import type { ReviewOutcome } from '../../domain/entities/contribution.entity';
@@ -51,6 +52,7 @@ export class ReviewContributionUseCase {
     private readonly imageStorage: ImageStoragePort,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly pushCooldown?: ReviewPushCooldownGate,
   ) {}
 
   async execute(cmd: ReviewContributionCommand): Promise<ReviewOutcome> {
@@ -108,25 +110,35 @@ export class ReviewContributionUseCase {
 
     if (this.notifyUser) {
       const approved = cmd.decision === 'approve';
-      // WAJIB await: di Cloudflare Workers, void/fire-and-forget sering
-      // terbunuh saat response sudah dikirim. Review sedikit lebih lambat
-      // (~FCM RTT) tapi push benar-benar selesai.
-      await this.notifyUser.execute({
-        userId: outcome.contributorUserId,
-        title: approved ? 'Kontribusi disetujui' : 'Kontribusi ditolak',
-        body: approved
-          ? 'Usulan Anda telah disetujui dan dipublikasikan.'
-          : 'Usulan Anda ditolak. Buka Kontribusi Saya untuk melihat alasan.',
-        actorId: cmd.actorId,
-        data: {
-          type: approved ? 'contribution_approved' : 'contribution_rejected',
-          target_kind: 'contribution',
-          target_id: outcome.contributionId,
-          contribution_id: outcome.contributionId,
-          entity_type: outcome.entityType,
-          entity_id: outcome.entityId,
-        },
-      });
+      const maySend =
+        !this.pushCooldown ||
+        (await this.pushCooldown.maySend(outcome.contributorUserId, cmd.decision));
+      if (maySend) {
+        // WAJIB await: di Cloudflare Workers, void/fire-and-forget sering
+        // terbunuh saat response sudah dikirim. Review sedikit lebih lambat
+        // (~FCM RTT) tapi push benar-benar selesai.
+        await this.notifyUser.execute({
+          userId: outcome.contributorUserId,
+          title: approved ? 'Kontribusi disetujui' : 'Kontribusi ditolak',
+          body: approved
+            ? 'Usulan Anda telah disetujui dan dipublikasikan.'
+            : 'Usulan Anda ditolak. Buka Kontribusi Saya untuk melihat alasan.',
+          actorId: cmd.actorId,
+          data: {
+            type: approved ? 'contribution_approved' : 'contribution_rejected',
+            target_kind: 'contribution',
+            target_id: outcome.contributionId,
+            contribution_id: outcome.contributionId,
+            entity_type: outcome.entityType,
+            entity_id: outcome.entityId,
+          },
+        });
+        // Touch setelah memutuskan kirim (termasuk self-skip / no-token di
+        // NotifyUserUseCase) agar review beruntun tidak spam attempt.
+        if (cmd.actorId !== outcome.contributorUserId) {
+          await this.pushCooldown?.touchAfterSend(outcome.contributorUserId, cmd.decision);
+        }
+      }
     }
 
     return outcome;

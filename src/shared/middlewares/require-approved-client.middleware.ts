@@ -20,6 +20,11 @@ function hasScope(granted: string | undefined, required: string): boolean {
 export interface RequireApprovedClientOptions {
   /** Scope wajib (mis. vote.write). Di-skip saat OAUTH_REQUIRE_AZP=false tanpa azp. */
   scope?: string;
+  /**
+   * Untuk jalur optionalAuthenticate (mis. kontribusi anon).
+   * Tanpa user → lanjut; dengan user → gate azp/scope seperti biasa.
+   */
+  allowMissingUser?: boolean;
 }
 
 /**
@@ -35,6 +40,10 @@ export function createRequireApprovedClientMiddleware(
   return createMiddleware<{ Variables: AppVariables }>(async (c, next) => {
     const user = c.get('user') as AuthUser | undefined;
     if (!user) {
+      if (opts.allowMissingUser) {
+        await next();
+        return;
+      }
       return deny(c, 401, 'UNAUTHORIZED', 'Token tidak disertakan');
     }
 

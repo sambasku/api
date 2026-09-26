@@ -19,15 +19,22 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export interface DeviceRoutesDeps {
   controller: DeviceController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope device.write pada register/revoke. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 // Device FCM tokens - register/revoke. Mount di /api/v1/device.
 export function createDeviceRoutes(deps: DeviceRoutesDeps) {
   const routes = createOpenApiApp();
 
+  const writeGuards = [
+    deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+  ];
+
   routes.use(
     '/register',
-    deps.authenticate,
+    ...writeGuards,
     rateLimit({
       points: 30,
       duration: 60,
@@ -39,7 +46,7 @@ export function createDeviceRoutes(deps: DeviceRoutesDeps) {
   );
   routes.use(
     '/revoke',
-    deps.authenticate,
+    ...writeGuards,
     rateLimit({
       points: 30,
       duration: 60,

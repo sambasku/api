@@ -25,6 +25,8 @@ const json = <T extends z.ZodType>(schema: T) => ({ 'application/json': { schema
 export interface WordSuggestionRoutesDeps {
   controller: WordSuggestionController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope contribute.write pada usulan edit (publik). */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 // PUBLIK: riwayat perubahan kata
@@ -67,6 +69,7 @@ export function createWordSuggestionRoutes(deps: WordSuggestionRoutesDeps) {
   routes.use(
     '/:id/suggest-edit',
     deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
     authorizeRole('admin', 'editor', 'contributor', 'root', 'reviewer'),
     rateLimit({
       points: 10,

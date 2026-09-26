@@ -25,14 +25,24 @@ function client(partial: Partial<ApiClient> & Pick<ApiClient, 'clientId'>): ApiC
   };
 }
 
+function stubRepo(partial: Partial<ApiClientRepository>): ApiClientRepository {
+  return {
+    findByClientId: vi.fn(),
+    findById: vi.fn(),
+    list: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    ...partial,
+  };
+}
+
 describe('ResolveFirstPartyClientUseCase', () => {
   it('default mobile → sambasku-mobile', async () => {
-    const repo: ApiClientRepository = {
+    const repo = stubRepo({
       findByClientId: vi.fn().mockResolvedValue(
         client({ clientId: 'sambasku-mobile', allowedChannels: ['mobile'] }),
       ),
-      findById: vi.fn(),
-    };
+    });
     const uc = new ResolveFirstPartyClientUseCase(repo);
     const result = await uc.execute({ clientType: 'mobile' });
     expect(result.clientId).toBe('sambasku-mobile');
@@ -40,12 +50,11 @@ describe('ResolveFirstPartyClientUseCase', () => {
   });
 
   it('tolak third-party di jalur login langsung', async () => {
-    const repo: ApiClientRepository = {
+    const repo = stubRepo({
       findByClientId: vi.fn().mockResolvedValue(
         client({ clientId: 'evil-app', isFirstParty: false, allowedChannels: ['web'] }),
       ),
-      findById: vi.fn(),
-    };
+    });
     const uc = new ResolveFirstPartyClientUseCase(repo);
     await expect(uc.execute({ clientId: 'evil-app', clientType: 'web' })).rejects.toMatchObject({
       errorCode: 'CLIENT_MISMATCH',
@@ -53,12 +62,11 @@ describe('ResolveFirstPartyClientUseCase', () => {
   });
 
   it('tolak channel mismatch (mobile id + web type)', async () => {
-    const repo: ApiClientRepository = {
+    const repo = stubRepo({
       findByClientId: vi.fn().mockResolvedValue(
         client({ clientId: 'sambasku-mobile', allowedChannels: ['mobile'] }),
       ),
-      findById: vi.fn(),
-    };
+    });
     const uc = new ResolveFirstPartyClientUseCase(repo);
     await expect(
       uc.execute({ clientId: 'sambasku-mobile', clientType: 'web' }),
@@ -66,7 +74,7 @@ describe('ResolveFirstPartyClientUseCase', () => {
   });
 
   it('tolak klien suspended', async () => {
-    const repo: ApiClientRepository = {
+    const repo = stubRepo({
       findByClientId: vi.fn().mockResolvedValue(
         client({
           clientId: 'sambasku-web',
@@ -74,8 +82,7 @@ describe('ResolveFirstPartyClientUseCase', () => {
           allowedChannels: ['web'],
         }),
       ),
-      findById: vi.fn(),
-    };
+    });
     const uc = new ResolveFirstPartyClientUseCase(repo);
     await expect(uc.execute({ clientId: 'sambasku-web', clientType: 'web' })).rejects.toMatchObject({
       errorCode: 'CLIENT_NOT_ALLOWED',

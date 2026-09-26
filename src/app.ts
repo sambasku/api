@@ -17,6 +17,14 @@ import {
 import { createRequireApprovedClientMiddleware } from '@/shared/middlewares/require-approved-client.middleware';
 import { ApiClientRepositoryImpl } from '@/modules/developer-oauth/infrastructure/api-client.repository.impl';
 import { ResolveFirstPartyClientUseCase } from '@/modules/developer-oauth/application/use-cases/resolve-first-party-client.use-case';
+import {
+  CreateAdminApiClientUseCase,
+  GetAdminApiClientUseCase,
+  ListAdminApiClientsUseCase,
+  UpdateAdminApiClientUseCase,
+} from '@/modules/developer-oauth/application/use-cases/admin-api-client.use-cases';
+import { AdminApiClientController } from '@/modules/developer-oauth/presentation/v1/admin-api-client.controller';
+import { createAdminApiClientRoutes } from '@/modules/developer-oauth/presentation/v1/admin-api-client.routes';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { UserRepositoryImpl } from '@/modules/auth/infrastructure/user.repository.impl';
 import { RefreshTokenRepositoryImpl } from '@/modules/auth/infrastructure/refresh-token.repository.impl';
@@ -281,7 +289,9 @@ import { createPushSender } from '@/modules/device/infrastructure/push-sender.fa
 import { DeviceController } from '@/modules/device/presentation/v1/device.controller';
 import { createDeviceRoutes } from '@/modules/device/presentation/v1/device.routes';
 import { NotificationRepositoryImpl } from '@/modules/notification/infrastructure/notification.repository.impl';
+import { NotificationPushCooldownRepositoryImpl } from '@/modules/notification/infrastructure/notification-push-cooldown.repository.impl';
 import { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
 import { ListMyNotificationsUseCase } from '@/modules/notification/application/use-cases/list-my-notifications.use-case';
 import { GetUnreadNotificationCountUseCase } from '@/modules/notification/application/use-cases/get-unread-notification-count.use-case';
 import { MarkNotificationReadUseCase } from '@/modules/notification/application/use-cases/mark-notification-read.use-case';
@@ -343,6 +353,7 @@ const pushSender = createPushSender();
 const notifyUser = new NotifyUserUseCase(deviceTokenRepo, pushSender);
 const notificationRepo = new NotificationRepositoryImpl(db);
 const recordInbox = new RecordInboxNotificationUseCase(notificationRepo);
+const notificationPushCooldownRepo = new NotificationPushCooldownRepositoryImpl(db);
 const tokenService = new JwtTokenService({
   privateKeyPem: env.JWT_PRIVATE_KEY,
   publicKeyPem: env.JWT_PUBLIC_KEY,
@@ -435,6 +446,29 @@ const optionalAuthenticate = createOptionalAuthenticateMiddleware((token) =>
 const requireVoteWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
   scope: 'vote.write',
 });
+const requireCommentWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'comment.write',
+});
+const requireContributeWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'contribute.write',
+});
+/** Kontribusi kata publik: anon tanpa token lolos; Bearer wajib azp/scope. */
+const requireContributeWriteIfAuthed = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'contribute.write',
+  allowMissingUser: true,
+});
+const requireTranslationHelpWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'translation_help.write',
+});
+const requireBookmarkWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'bookmark.write',
+});
+const requireDeviceWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'device.write',
+});
+const requireProfileWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'profile.read',
+});
 
 // ---- Modul word (+ language & category sebagai data referensi form admin) ----
 const wordRepo = new WordRepositoryImpl(db);
@@ -512,6 +546,7 @@ const contributionController = new ContributionController({
     imageStorage,
     notifyUser,
     recordInbox,
+    new ReviewPushCooldownGate(appSettingsRepo, notificationPushCooldownRepo),
   ),
   correct: new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo, recordInbox),
   imageProviderName: publicImageStorage.providerName,
@@ -758,15 +793,40 @@ app.route('/api/v1/legal', createLegalPublicRoutes({ controller: legalController
 app.route('/api/v1/auth', createLegalAuthRoutes({ controller: legalController, authenticate }));
 app.route('/api/v1/admin/legal', createAdminLegalRoutes({ controller: legalController, authenticate }));
 
+const adminApiClientController = new AdminApiClientController({
+  list: new ListAdminApiClientsUseCase(apiClientRepo),
+  get: new GetAdminApiClientUseCase(apiClientRepo),
+  create: new CreateAdminApiClientUseCase(apiClientRepo, auditRepo),
+  update: new UpdateAdminApiClientUseCase(apiClientRepo, auditRepo),
+});
+app.route(
+  '/api/v1/admin/api-clients',
+  createAdminApiClientRoutes({ controller: adminApiClientController, authenticate }),
+);
+
 // Modul word - admin (write) + publik (read)
 app.route('/api/v1/admin/words', createAdminWordRoutes({ controller: wordController, authenticate }));
 // Kontribusi media (pronounce/gambar/contoh) DI-MOUNT SEBELUM public routes -
 // public punya rate limit IP 100/menit global (use '*'), limit per-user 30/menit
 // tetap jadi batas efektif; urutan mount menentukan middleware yang berlaku
-app.route('/api/v1/words', createWordMediaRoutes({ controller: wordController, authenticate }));
+app.route(
+  '/api/v1/words',
+  createWordMediaRoutes({
+    controller: wordController,
+    authenticate,
+    requireApprovedClient: requireContributeWriteClient,
+  }),
+);
 // Komentar per kata (09) - SEBELUM public word routes (pola media routes),
 // supaya /:wordId/comments tidak tertelan routes.use('*') rate limit publik
-app.route('/api/v1/words', createWordCommentRoutes({ controller: commentController, authenticate }));
+app.route(
+  '/api/v1/words',
+  createWordCommentRoutes({
+    controller: commentController,
+    authenticate,
+    requireApprovedClient: requireCommentWriteClient,
+  }),
+);
 const setWordImageContentWarnings = new SetWordImageContentWarningsUseCase(wordRepo, auditRepo);
 const wordReportController = new WordReportController({
   create: new CreateWordReportUseCase(wordReportRepo, wordRepo, auditRepo),
@@ -784,13 +844,24 @@ app.route('/api/v1/words', createPublicWordRoutes({ controller: wordController, 
 app.route('/api/v1/words', createWordHistoryRoutes({ controller: suggestionController, authenticate }));
 app.route(
   '/api/v1/words',
-  createWordSuggestionRoutes({ controller: suggestionController, authenticate }),
+  createWordSuggestionRoutes({
+    controller: suggestionController,
+    authenticate,
+    requireApprovedClient: requireContributeWriteClient,
+  }),
 );
 app.route(
   '/api/v1/admin',
   createAdminSuggestionRoutes({ controller: suggestionController, authenticate }),
 );
-app.route('/api/v1/meanings', createMeaningExampleRoutes({ controller: wordController, authenticate }));
+app.route(
+  '/api/v1/meanings',
+  createMeaningExampleRoutes({
+    controller: wordController,
+    authenticate,
+    requireApprovedClient: requireContributeWriteClient,
+  }),
+);
 app.route('/api/v1/word-classes', createWordClassRoutes({ controller: wordController }));
 
 // Vote polymorphic (08-api-upvote-downvote.md) - toggle (login) + counts
@@ -805,22 +876,44 @@ app.route(
 );
 
 // Komentar (09-api-comment.md): my + delete by author; admin takedown
-app.route('/api/v1/comments', createCommentRoutes({ controller: commentController, authenticate }));
+app.route(
+  '/api/v1/comments',
+  createCommentRoutes({
+    controller: commentController,
+    authenticate,
+    requireApprovedClient: requireCommentWriteClient,
+  }),
+);
 
 // Bookmark kata per user (16-api-bookmark.md) - toggle + my (login, semua
 // role). Tanpa prefix bentrok, urutan mount bebas.
-app.route('/api/v1/bookmarks', createBookmarkRoutes({ controller: bookmarkController, authenticate }));
+app.route(
+  '/api/v1/bookmarks',
+  createBookmarkRoutes({
+    controller: bookmarkController,
+    authenticate,
+    requireApprovedClient: requireBookmarkWriteClient,
+  }),
+);
 
 // Profil publik by username (19-api-profil-publik.md) - tanpa auth, rate
 // limit 100/menit/IP di routes factory. Tidak bentrok /admin/users.
 // Mount /me dulu supaya tidak tertangkap oleh /:username.
 app.route(
   '/api/v1/users/me',
-  createMeProfileRoutes({ controller: userController, authenticate }),
+  createMeProfileRoutes({
+    controller: userController,
+    authenticate,
+    requireApprovedClient: requireProfileWriteClient,
+  }),
 );
 app.route(
   '/api/v1/users/me/avatar',
-  createMeAvatarRoutes({ controller: userController, authenticate }),
+  createMeAvatarRoutes({
+    controller: userController,
+    authenticate,
+    requireApprovedClient: requireProfileWriteClient,
+  }),
 );
 app.route('/api/v1/users', createPublicUserRoutes({ controller: userController }));
 
@@ -829,9 +922,20 @@ const publicImageController = new PublicImageController({
 });
 app.route(
   '/api/v1/images',
-  createPublicImageRoutes({ controller: publicImageController, authenticate }),
+  createPublicImageRoutes({
+    controller: publicImageController,
+    authenticate,
+    requireApprovedClient: requireContributeWriteClient,
+  }),
 );
-app.route('/api/v1/device', createDeviceRoutes({ controller: deviceController, authenticate }));
+app.route(
+  '/api/v1/device',
+  createDeviceRoutes({
+    controller: deviceController,
+    authenticate,
+    requireApprovedClient: requireDeviceWriteClient,
+  }),
+);
 app.route(
   '/api/v1/notifications',
   createNotificationRoutes({
@@ -861,7 +965,11 @@ app.route('/api/v1/admin/contributions', createContributionRoutes({ controller: 
 // Anonim, otomatis pending_review (03-api-kontribusi-verifikasi.md)
 app.route(
   '/api/v1/contributions',
-  createAnonContributionRoutes({ controller: wordController, optionalAuthenticate }),
+  createAnonContributionRoutes({
+    controller: wordController,
+    optionalAuthenticate,
+    requireApprovedClient: requireContributeWriteIfAuthed,
+  }),
 );
 app.route(
   '/api/v1/contributions',
@@ -889,7 +997,14 @@ const imageController = new ImageController({
     defaultFolder: '/words',
   }),
 });
-app.route('/api/v1/admin/images/upload-token', createImageRoutes({ controller: imageController, authenticate }));
+app.route(
+  '/api/v1/admin/images/upload-token',
+  createImageRoutes({
+    controller: imageController,
+    authenticate,
+    requireApprovedClient: requireContributeWriteClient,
+  }),
+);
 
 const bugReportRepo = new BugReportRepositoryImpl(db);
 const bugReportController = new BugReportController({
@@ -944,6 +1059,7 @@ app.route(
     controller: translationHelpController,
     authenticate,
     optionalAuthenticate,
+    requireApprovedClient: requireTranslationHelpWriteClient,
   }),
 );
 app.route(

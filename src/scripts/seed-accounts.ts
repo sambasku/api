@@ -6,17 +6,17 @@ import { logger } from '@/shared/logging/logger';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
-/** Akun login default - seed menimpa password jadi pass1234. */
+/** Akun login default - domain @sambasku.com (lihat api-base-stack.md). Seed menimpa password jadi pass1234. */
 const SEED_USERS = [
-  { username: 'admin', email: 'admin@email.com', role: 'admin' },
-  { username: 'root', email: 'root@email.com', role: 'root' },
-  { username: 'contributor', email: 'contributor@email.com', role: 'contributor' },
-  { username: 'reviewer', email: 'reviewer@email.com', role: 'reviewer' },
+  { username: 'admin', email: 'admin@sambasku.com', role: 'admin' },
+  { username: 'root', email: 'root@sambasku.com', role: 'root' },
+  { username: 'contributor', email: 'contributor@sambasku.com', role: 'contributor' },
+  { username: 'reviewer', email: 'reviewer@sambasku.com', role: 'reviewer' },
 ] as const;
 
 const SEED_PASSWORD = 'pass1234';
 
-/** Seed akun default (upsert password/role). Tidak menyentuh user sistem / referensi. */
+/** Seed akun default (upsert by username: email/password/role). Tidak menyentuh user sistem / referensi. */
 export async function seedAccounts(): Promise<void> {
   const hasher = new Pbkdf2PasswordService();
   const passwordHash = await hasher.hash(SEED_PASSWORD);
@@ -26,8 +26,14 @@ export async function seedAccounts(): Promise<void> {
       .insert(users)
       .values({ ...user, passwordHash, emailVerified: true, displayName: user.username })
       .onConflictDoUpdate({
-        target: users.email,
-        set: { passwordHash, role: user.role, emailVerified: true, updatedAt: new Date() },
+        target: users.username,
+        set: {
+          email: user.email,
+          passwordHash,
+          role: user.role,
+          emailVerified: true,
+          updatedAt: new Date(),
+        },
       });
     logger.info(`Seeded user ${user.email} (role: ${user.role})`);
   }

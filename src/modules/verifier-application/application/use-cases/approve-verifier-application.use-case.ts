@@ -45,8 +45,8 @@ export class ApproveVerifierApplicationUseCase {
 
     await this.notifyUser.execute({
       userId: updated.userId,
-      title: 'Pengajuan verifikator disetujui',
-      body: 'Pengajuan Anda disetujui. Masuk ulang agar peran baru aktif.',
+      title: 'Selamat, Anda jadi verifikator',
+      body: 'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.',
       actorId: cmd.actorId,
       data: {
         type: 'verifier_application_approved',

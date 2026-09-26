@@ -62,6 +62,8 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `INVALID_SETTING_VALUE` | 400 | Nilai app_settings tidak valid (mis. third_party_registration / retensi) |
 | `CLIENT_REQUIRED` | 401 | Write dengan JWT tanpa claim `azp` saat `OAUTH_REQUIRE_AZP=true` |
 | `CLIENT_NOT_ALLOWED` | 403 | `azp` unknown/suspended/revoked, atau klien first-party tidak approved |
+| `CLIENT_NOT_FOUND` | 404 | Admin GET/PATCH api_client id tidak ada |
+| `CLIENT_ID_EXISTS` | 409 | Admin POST api_client dengan `client_id` yang sudah dipakai |
 | `CLIENT_MISMATCH` | 400 | `client_id` login bukan first-party / tidak cocok `client_type` |
 | `INSUFFICIENT_SCOPE` | 403 | Token third-party kurang scope untuk endpoint write |
 | `CANNOT_DEACTIVATE_SELF` | 403 | Admin mencoba mengubah status aktif akunnya sendiri |

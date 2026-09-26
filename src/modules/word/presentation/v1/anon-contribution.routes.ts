@@ -19,6 +19,11 @@ export interface AnonContributionRoutesDeps {
   controller: WordController;
   /** Auth opsional: Bearer valid → atribusi ke user login; tanpa token → anonim */
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /**
+   * Gate azp + contribute.write jika Bearer ada.
+   * Pakai allowMissingUser supaya anon tanpa token tetap lolos.
+   */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 // Body = create-word TANPA field status (dipaksa 'published' =
@@ -36,7 +41,11 @@ const anonWordSchema = createWordBodySchema
 export function createAnonContributionRoutes(deps: AnonContributionRoutesDeps) {
   const routes = createOpenApiApp();
 
-  routes.use('/words', deps.optionalAuthenticate);
+  routes.use(
+    '/words',
+    deps.optionalAuthenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+  );
 
   const submitRoute = createRoute({
     method: 'post',

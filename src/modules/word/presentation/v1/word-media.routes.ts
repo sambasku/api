@@ -27,12 +27,15 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export interface WordMediaRoutesDeps {
   controller: WordController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope contribute.write pada kontribusi media. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
-// Middleware tulis-data Section 15: authenticate + role + 30/menit per user_id
+// Middleware tulis-data Section 15: authenticate + azp + role + 30/menit per user_id
 function mediaMiddleware(deps: WordMediaRoutesDeps, ...roles: string[]) {
   return [
     deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
     authorizeRole(...roles),
     rateLimit({
       points: 30,

@@ -20,12 +20,15 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export function createPublicImageRoutes(deps: {
   controller: PublicImageController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope contribute.write. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
 
   routes.use(
     '/',
     deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
     authorizeRole('admin', 'editor', 'contributor', 'root', 'reviewer'),
     rateLimit({ points: 30, duration: 60 }),
   );
