@@ -4,6 +4,14 @@ const wordStatusSchema = z.enum(['draft', 'pending_review', 'published', 'reject
 const contributionStatusSchema = z.enum(['pending', 'approved', 'rejected', 'corrected']);
 const appRoleSchema = z.enum(['root', 'admin', 'editor', 'reviewer', 'contributor']);
 
+const activityDailyPointSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  contributions: z.number().int().nonnegative(),
+  votes: z.number().int().nonnegative(),
+  comments: z.number().int().nonnegative(),
+  new_users: z.number().int().nonnegative(),
+});
+
 export const dashboardStatsResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -23,6 +31,7 @@ export const dashboardStatsResponseSchema = z.object({
     }),
     activity: z.object({
       audit_logs_last_7_days: z.number().int(),
+      daily_last_30_days: z.array(activityDailyPointSchema).length(30),
     }),
   }),
 });
