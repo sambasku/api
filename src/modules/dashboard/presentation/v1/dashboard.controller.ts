@@ -55,5 +55,10 @@ function toWireStats(stats: DashboardStats) {
         },
       },
     },
+    verifier_applications: {
+      pending: stats.verifierApplications.pending,
+      approved: stats.verifierApplications.approved,
+      rejected: stats.verifierApplications.rejected,
+    },
   };
 }

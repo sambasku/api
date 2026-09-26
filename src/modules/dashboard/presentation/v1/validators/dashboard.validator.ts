@@ -46,5 +46,10 @@ export const dashboardStatsResponseSchema = z.object({
         word_reports: problemSourceSchema,
       }),
     }),
+    verifier_applications: z.object({
+      pending: z.number().int().nonnegative(),
+      approved: z.number().int().nonnegative(),
+      rejected: z.number().int().nonnegative(),
+    }),
   }),
 });
