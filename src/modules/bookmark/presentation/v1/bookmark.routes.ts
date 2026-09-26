@@ -20,6 +20,8 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export interface BookmarkRoutesDeps {
   controller: BookmarkController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope bookmark.write pada toggle. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 // Bookmark kata per user (16-api-bookmark.md): toggle + daftar milik user.
@@ -27,12 +29,13 @@ export interface BookmarkRoutesDeps {
 export function createBookmarkRoutes(deps: BookmarkRoutesDeps) {
   const routes = createOpenApiApp();
 
-  // Toggle: login (semua role) + 30/menit per user_id - tier tulis standar
+  // Toggle: login + azp gate + 30/menit per user_id - tier tulis standar
   // (Section 15), tidak butuh kelonggaran seperti vote (60) karena toggle
   // bookmark satu arah idempotent.
   routes.use(
     '/',
     deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
     rateLimit({
       points: 30,
       duration: 60,

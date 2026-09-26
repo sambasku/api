@@ -66,6 +66,8 @@ export function createPublicUserRoutes(deps: { controller: UserController }) {
 export function createMeProfileRoutes(deps: {
   controller: UserController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope profile.read pada PATCH. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
 
@@ -74,6 +76,9 @@ export function createMeProfileRoutes(deps: {
     deps.authenticate,
     rateLimit({ points: 20, duration: 60, keyFn: (c) => `me-profile:${c.get('user')?.user_id}` }),
   );
+  if (deps.requireApprovedClient) {
+    routes.on('patch', '/', deps.requireApprovedClient);
+  }
 
   const getRoute = createRoute({
     method: 'get',
@@ -110,12 +115,15 @@ export function createMeProfileRoutes(deps: {
 export function createMeAvatarRoutes(deps: {
   controller: UserController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope profile.read pada upload/hapus avatar. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
 
   routes.use(
     '/',
     deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
     rateLimit({ points: 20, duration: 60 }),
   );
 

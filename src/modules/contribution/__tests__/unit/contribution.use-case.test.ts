@@ -15,8 +15,13 @@ import type { WordRepository } from '@/modules/word/domain/repositories/word.rep
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { Contribution } from '../../domain/entities/contribution.entity';
 import { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
 import { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { WordImageMedia } from '@/modules/word/domain/repositories/word.repository';
+import {
+  REVIEW_APPROVE_PUSH_COOLDOWN_MINUTES_KEY,
+  REVIEW_REJECT_PUSH_COOLDOWN_MINUTES_KEY,
+} from '@/modules/legal/domain/entities/app-setting.entity';
 
 vi.mock('../../application/utils/promote-word-image-staging', () => ({
   promoteWordImageFromStaging: vi.fn().mockResolvedValue({
@@ -242,6 +247,183 @@ describe('ReviewContributionUseCase', () => {
         actorId: ACTOR.userId,
       }),
     );
+  });
+
+  function makePushCooldownGate(opts: {
+    approveMinutes?: string;
+    rejectMinutes?: string;
+    lastApproveAt?: Date | null;
+    lastRejectAt?: Date | null;
+  }) {
+    const settings = new Map<string, string>([
+      [REVIEW_APPROVE_PUSH_COOLDOWN_MINUTES_KEY, opts.approveMinutes ?? '360'],
+      [REVIEW_REJECT_PUSH_COOLDOWN_MINUTES_KEY, opts.rejectMinutes ?? '360'],
+    ]);
+    const settingsRepo = {
+      getValue: vi.fn(async (key: string) => settings.get(key) ?? null),
+    };
+    const store = new Map<string, Date>();
+    if (opts.lastApproveAt) store.set('contribution_approved', opts.lastApproveAt);
+    if (opts.lastRejectAt) store.set('contribution_rejected', opts.lastRejectAt);
+    const cooldownRepo = {
+      get: vi.fn(async (_userId: string, channel: string) => {
+        const at = store.get(channel);
+        if (!at) return null;
+        return { userId: _userId, channel, lastPushAt: at };
+      }),
+      touch: vi.fn(async (_userId: string, channel: string, at: Date = new Date()) => {
+        store.set(channel, at);
+      }),
+    };
+    const gate = new ReviewPushCooldownGate(settingsRepo as never, cooldownRepo as never);
+    return { gate, settingsRepo, cooldownRepo, store };
+  }
+
+  it('approve pertama → push + touch cooldown', async () => {
+    const { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage } = makeReviewDeps();
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const { gate, cooldownRepo } = makePushCooldownGate({});
+    const useCase = new ReviewContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+      wordRepo,
+      publicImageStorage as never,
+      imageStorage as never,
+      notifyUser as never,
+      inbox as never,
+      gate,
+    );
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    expect(notifyUser.execute).toHaveBeenCalledOnce();
+    expect(cooldownRepo.touch).toHaveBeenCalledWith(
+      '01CONTRIBUTORULID0000000000',
+      'contribution_approved',
+    );
+    expect(inbox.execute).toHaveBeenCalledOnce();
+  });
+
+  it('approve kedua dalam cooldown → inbox ya, push tidak', async () => {
+    const { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage } = makeReviewDeps();
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const { gate, cooldownRepo } = makePushCooldownGate({
+      lastApproveAt: new Date(Date.now() - 5 * 60_000),
+    });
+    const useCase = new ReviewContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+      wordRepo,
+      publicImageStorage as never,
+      imageStorage as never,
+      notifyUser as never,
+      inbox as never,
+      gate,
+    );
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    expect(inbox.execute).toHaveBeenCalledOnce();
+    expect(notifyUser.execute).not.toHaveBeenCalled();
+    expect(cooldownRepo.touch).not.toHaveBeenCalled();
+  });
+
+  it('approve setelah cooldown lewat → push lagi', async () => {
+    const { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage } = makeReviewDeps();
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const { gate, cooldownRepo } = makePushCooldownGate({
+      lastApproveAt: new Date(Date.now() - 361 * 60_000),
+    });
+    const useCase = new ReviewContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+      wordRepo,
+      publicImageStorage as never,
+      imageStorage as never,
+      notifyUser as never,
+      inbox as never,
+      gate,
+    );
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    expect(notifyUser.execute).toHaveBeenCalledOnce();
+    expect(cooldownRepo.touch).toHaveBeenCalledOnce();
+  });
+
+  it('reject punya jendela terpisah dari approve', async () => {
+    const { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage } = makeReviewDeps();
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const { gate, cooldownRepo } = makePushCooldownGate({
+      lastApproveAt: new Date(Date.now() - 5 * 60_000),
+    });
+    const useCase = new ReviewContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+      wordRepo,
+      publicImageStorage as never,
+      imageStorage as never,
+      notifyUser as never,
+      inbox as never,
+      gate,
+    );
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'reject',
+      comment: 'kurang lengkap',
+      actorId: ACTOR.userId,
+    });
+    expect(notifyUser.execute).toHaveBeenCalledOnce();
+    expect(cooldownRepo.touch).toHaveBeenCalledWith(
+      '01CONTRIBUTORULID0000000000',
+      'contribution_rejected',
+    );
+  });
+
+  it('cooldown 0 → selalu push', async () => {
+    const { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage } = makeReviewDeps();
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const { gate } = makePushCooldownGate({
+      approveMinutes: '0',
+      lastApproveAt: new Date(),
+    });
+    const useCase = new ReviewContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+      wordRepo,
+      publicImageStorage as never,
+      imageStorage as never,
+      notifyUser as never,
+      inbox as never,
+      gate,
+    );
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    expect(notifyUser.execute).toHaveBeenCalledTimes(2);
   });
 
   it('reject tanpa comment → VALIDATION_ERROR field comment (domain rule)', async () => {

@@ -93,7 +93,16 @@ export async function seedReference(): Promise<void> {
       emailVerified: true,
     })
     .onConflictDoNothing({ target: users.id });
-  logger.info(`Seed referensi: user sistem ${ANONIM_EMAIL} (skip jika sudah ada)`);
+  // Email/username boleh berganti lewat konstanta; password dan id tetap.
+  await db
+    .update(users)
+    .set({
+      username: ANONIM_USERNAME,
+      displayName: ANONIM_USERNAME,
+      email: ANONIM_EMAIL,
+    })
+    .where(eq(users.id, ANONIM_USER_ID));
+  logger.info(`Seed referensi: user sistem ${ANONIM_EMAIL}`);
 
   await db
     .insert(users)
@@ -107,15 +116,16 @@ export async function seedReference(): Promise<void> {
       emailVerified: true,
     })
     .onConflictDoNothing({ target: users.id });
-  // Nama tampilan boleh berganti; password dan id tetap.
+  // Nama tampilan/email boleh berganti; password dan id tetap.
   await db
     .update(users)
     .set({
       username: CSV_IMPORTER_USERNAME,
       displayName: CSV_IMPORTER_USERNAME,
+      email: CSV_IMPORTER_EMAIL,
     })
     .where(eq(users.id, CSV_IMPORTER_USER_ID));
-  logger.info(`Seed referensi: user sistem ${CSV_IMPORTER_EMAIL} (skip jika sudah ada)`);
+  logger.info(`Seed referensi: user sistem ${CSV_IMPORTER_EMAIL}`);
 
   for (const lang of SEED_LANGUAGES) {
     await db.insert(languages).values({ ...lang }).onConflictDoNothing({ target: languages.code });

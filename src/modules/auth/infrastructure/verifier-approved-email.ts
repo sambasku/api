@@ -5,7 +5,7 @@ export function verifierApprovedEmailText(displayName: string): string {
     `Selamat, ${displayName}.\n\n` +
     'Pengajuan Anda disetujui. Anda sekarang Verifikator SambasKu.\n\n' +
     'Terima kasih sudah bersedia menjaga ketepatan kamus bahasa Sambas bersama kami. Ini apresiasi dari tim SambasKu.\n\n' +
-    'Masuk ulang agar peran baru aktif, lalu mulai meninjau kontribusi.'
+    'Satu langkah lagi: silakan keluar dari akun, lalu masuk kembali. Setelah itu peran Verifikator aktif dan Anda bisa mulai meninjau kontribusi.'
   );
 }
 
@@ -17,7 +17,7 @@ export function verifierApprovedEmailHtml(displayName: string): string {
     paragraphs: [
       'Pengajuan Anda disetujui. Anda sekarang Verifikator SambasKu.',
       'Terima kasih sudah bersedia menjaga ketepatan kamus bahasa Sambas bersama kami. Ini apresiasi dari tim SambasKu.',
-      'Masuk ulang agar peran baru aktif, lalu mulai meninjau kontribusi.',
+      'Satu langkah lagi: silakan keluar dari akun, lalu masuk kembali. Setelah itu peran Verifikator aktif dan Anda bisa mulai meninjau kontribusi.',
     ],
     footer: 'Tim SambasKu',
   });

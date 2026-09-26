@@ -4,4 +4,4 @@
 // ID ULID STABIL - idempoten di seeder, konsisten antar environment.
 export const CSV_IMPORTER_USER_ID = '01CSVIMP'.padEnd(26, '0');
 export const CSV_IMPORTER_USERNAME = 'Pengimpor Data CSV';
-export const CSV_IMPORTER_EMAIL = 'importir-csv@iamutaki.com';
+export const CSV_IMPORTER_EMAIL = 'importir-csv@sambasku.com';

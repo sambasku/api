@@ -31,6 +31,7 @@ export * from './comment-blocklist-words.schema';
 export * from './bookmarks.schema';
 export * from './device-tokens.schema';
 export * from './notifications.schema';
+export * from './notification-push-cooldowns.schema';
 export * from './notification-templates.schema';
 export * from './notification-campaigns.schema';
 export * from './notification-campaign-recipients.schema';

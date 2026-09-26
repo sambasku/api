@@ -32,6 +32,8 @@ export interface TranslationHelpRoutesDeps {
   controller: TranslationHelpController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope translation_help.write pada tulis. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 const tokenUserLimit = rateLimit({
@@ -68,10 +70,16 @@ const replyUserLimit = rateLimit({
 
 export function createTranslationHelpRoutes(deps: TranslationHelpRoutesDeps) {
   const routes = createOpenApiApp();
+  const writeClient = deps.requireApprovedClient ? [deps.requireApprovedClient] : [];
 
-  routes.use('/upload-token', deps.authenticate, tokenUserLimit, tokenIpLimit);
+  routes.use('/upload-token', deps.authenticate, ...writeClient, tokenUserLimit, tokenIpLimit);
   routes.use('/', async (c, next) => {
     if (c.req.method === 'POST') return deps.authenticate(c, next);
+    return next();
+  });
+  routes.use('/', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
     return next();
   });
   routes.use('/', async (c, next) => {
@@ -80,8 +88,8 @@ export function createTranslationHelpRoutes(deps: TranslationHelpRoutesDeps) {
   });
   routes.use('/my', deps.authenticate);
   routes.use('/:id', deps.optionalAuthenticate);
-  routes.use('/:id/replies', deps.authenticate, replyUserLimit);
-  routes.use('/replies/:id', deps.authenticate);
+  routes.use('/:id/replies', deps.authenticate, ...writeClient, replyUserLimit);
+  routes.use('/replies/:id', deps.authenticate, ...writeClient);
 
   const uploadTokenRoute = createRoute({
     method: 'get',

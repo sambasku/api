@@ -2,6 +2,36 @@ export type WordStatusKey = 'draft' | 'pending_review' | 'published' | 'rejected
 export type ContributionStatusKey = 'pending' | 'approved' | 'rejected' | 'corrected';
 export type AppRoleKey = 'root' | 'admin' | 'editor' | 'reviewer' | 'contributor';
 
+/** Satu titik aktivitas harian (tanggal kalender WIB) - 4 series. */
+export interface ActivityDailyPoint {
+  /** 'YYYY-MM-DD' di zona WIB */
+  date: string;
+  /** usulan kontribusi masuk (exclude soft-deleted) */
+  contributions: number;
+  /** baris vote baru (engagement) */
+  votes: number;
+  /** komentar baru (exclude soft-deleted) */
+  comments: number;
+  /** registrasi user baru (exclude soft-deleted) */
+  newUsers: number;
+}
+
+export interface ProblemSourceCounts {
+  open: number;
+  /** resolved (+ rejected untuk bug) */
+  closed: number;
+}
+
+/** Snapshot permasalahan (bug + laporan kata). */
+export interface ProblemsStats {
+  open: number;
+  closed: number;
+  bySource: {
+    bugReports: ProblemSourceCounts;
+    wordReports: ProblemSourceCounts;
+  };
+}
+
 // Statistik agregat halaman dashboard admin (GET /api/v1/admin/dashboard/stats).
 // Semua angka kata/contributions sudah meng-exclude yang soft-deleted.
 export interface DashboardStats {
@@ -27,5 +57,11 @@ export interface DashboardStats {
   activity: {
     /** jumlah baris audit log 7 hari terakhir (indikator aktivitas mutasi) */
     auditLogsLast7Days: number;
+    /**
+     * 30 hari kalender WIB inklusif (today-29 … today).
+     * Hari tanpa aktivitas tetap ada dengan angka 0 (panjang selalu 30).
+     */
+    dailyLast30Days: ActivityDailyPoint[];
   };
+  problems: ProblemsStats;
 }

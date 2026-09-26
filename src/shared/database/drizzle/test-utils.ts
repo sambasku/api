@@ -25,6 +25,7 @@ import {
   notificationCampaignRecipients,
   notificationCampaigns,
   notificationTemplates,
+  notificationPushCooldowns,
   notifications,
   passwordResetTokens,
   pronunciations,
@@ -53,7 +54,7 @@ const FIRST_PARTY_SCOPES_JSON = JSON.stringify(FIRST_PARTY_SCOPE_STRING.split(' 
 
 /**
  * Seed referensi yang wajib ada setelah truncate (register consent + login
- * first-party). Isi selaras migrasi 0020/0021.
+ * first-party). Isi selaras migrasi 0020/0021/0025.
  */
 export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
   const now = new Date();
@@ -64,6 +65,19 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
       { key: 'oauth.request_log_retention_days', value: '90', updatedAt: now, updatedBy: null },
       { key: 'legal.terms_version', value: LEGAL_VERSION, updatedAt: now, updatedBy: null },
       { key: 'legal.privacy_version', value: LEGAL_VERSION, updatedAt: now, updatedBy: null },
+      // Migrasi 0025 - cooldown push hasil review (default 6 jam)
+      {
+        key: 'notification.review_approve_push_cooldown_minutes',
+        value: '360',
+        updatedAt: now,
+        updatedBy: null,
+      },
+      {
+        key: 'notification.review_reject_push_cooldown_minutes',
+        value: '360',
+        updatedAt: now,
+        updatedBy: null,
+      },
     ])
     .onConflictDoNothing();
 
@@ -180,6 +194,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     notificationCampaignRecipients,
     notificationCampaigns,
     notificationTemplates,
+    notificationPushCooldowns,
     notifications,
     deviceTokens,
     verifierApplications,

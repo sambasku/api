@@ -22,6 +22,8 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export interface CommentRoutesDeps {
   controller: CommentController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope comment.write pada tulis komentar. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 const ulid26 = z.string().length(26);
@@ -34,9 +36,15 @@ export function createWordCommentRoutes(deps: CommentRoutesDeps) {
 
   // List: baca publik - tier 100/menit per IP (Section 15)
   routes.use('/:wordId/comments', rateLimit({ points: 100, duration: 60 }));
-  // Tulis: login (semua role) + tier tulis 30/menit per user_id.
+  // Tulis: login (semua role) + azp gate + tier tulis 30/menit per user_id.
   // routes.on('post', ...) - BUKAN use() - supaya GET list tetap publik.
-  routes.on('post', '/:wordId/comments', deps.authenticate, wordCommentLimiter());
+  routes.on(
+    'post',
+    '/:wordId/comments',
+    deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    wordCommentLimiter(),
+  );
 
   const listRoute = createRoute({
     method: 'get',
@@ -119,7 +127,12 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
 
   routes.openapi(myRoute, (c) => deps.controller.my(c, c.req.valid('query')) as never);
 
-  routes.use('/:id', deps.authenticate, wordCommentLimiter());
+  routes.use(
+    '/:id',
+    deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    wordCommentLimiter(),
+  );
 
   const deleteRoute = createRoute({
     method: 'delete',

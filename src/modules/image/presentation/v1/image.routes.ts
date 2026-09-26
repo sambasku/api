@@ -21,12 +21,15 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export function createImageRoutes(deps: {
   controller: ImageController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate azp + scope contribute.write. */
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
 
   routes.use(
     '/',
     deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
     // Mirror role media-kontribusi (03): contributor ke atas boleh
     // ambil token; root/reviewer ikut supaya konsol & mobile tidak 403.
     authorizeRole('admin', 'editor', 'contributor', 'root', 'reviewer'),

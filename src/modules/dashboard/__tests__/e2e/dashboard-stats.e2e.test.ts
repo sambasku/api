@@ -119,6 +119,33 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
     expect(d.contributions.by_status.approved).toBe(1);
     expect(d.contributions.by_status).toMatchObject({ pending: 0, rejected: 0, corrected: 0 });
     expect(d.contributions.total).toBe(1);
+    expect(d.contributions.daily_last_30_days).toBeUndefined();
+
+    // Series aktivitas 30 hari WIB: 4 metrik, length tetap
+    const daily = d.activity.daily_last_30_days as Array<{
+      date: string;
+      contributions: number;
+      votes: number;
+      comments: number;
+      new_users: number;
+    }>;
+    expect(Array.isArray(daily)).toBe(true);
+    expect(daily).toHaveLength(30);
+    expect(
+      daily.every(
+        (p) =>
+          /^\d{4}-\d{2}-\d{2}$/.test(p.date) &&
+          typeof p.contributions === 'number' &&
+          typeof p.votes === 'number' &&
+          typeof p.comments === 'number' &&
+          typeof p.new_users === 'number',
+      ),
+    ).toBe(true);
+    const todayWib = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    expect(daily[29]?.date).toBe(todayWib);
+    expect(daily.reduce((sum, p) => sum + p.contributions, 0)).toBe(1);
+    // 2 user register di beforeAll masuk jendela 30 hari
+    expect(daily.reduce((sum, p) => sum + p.new_users, 0)).toBe(2);
 
     // register mencipta 2 user aktif: admin (role di-upgrade) + contributor
     expect(d.users.active).toBe(2);
@@ -126,6 +153,16 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
     expect(d.users.by_role.contributor).toBe(1);
 
     expect(typeof d.activity.audit_logs_last_7_days).toBe('number');
+
+    // Snapshot permasalahan (bug + word reports)
+    expect(typeof d.problems.open).toBe('number');
+    expect(typeof d.problems.closed).toBe('number');
+    expect(d.problems.open).toBe(
+      d.problems.by_source.bug_reports.open + d.problems.by_source.word_reports.open,
+    );
+    expect(d.problems.closed).toBe(
+      d.problems.by_source.bug_reports.closed + d.problems.by_source.word_reports.closed,
+    );
   });
 
   it('contributor (login) juga boleh akses - dashboard adalah halaman pertama semua role', async () => {

@@ -187,7 +187,11 @@ describe('ApproveVerifierApplicationUseCase', () => {
     expect(appRepo.approveAtomically).toHaveBeenCalledWith(APP_ID, ADMIN);
     expect(refreshTokenRepo.revokeAllForUser).toHaveBeenCalledWith(USER);
     expect(notifyUser.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER, title: 'Pengajuan verifikator disetujui' }),
+      expect.objectContaining({
+        userId: USER,
+        title: 'Selamat, Anda jadi verifikator',
+        body: 'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.',
+      }),
     );
     expect(mailer.sendVerifierApprovedEmail).toHaveBeenCalledWith('budi@test.com', 'Budi');
   });

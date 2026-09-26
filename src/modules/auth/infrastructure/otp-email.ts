@@ -1,6 +1,6 @@
 import { brandedCodeEmailHtml } from './branded-email';
 
-export const DEFAULT_MAIL_FROM = 'SambasKu <no-reply@iamutaki.com>';
+export const DEFAULT_MAIL_FROM = 'SambasKu <no-reply@sambasku.com>';
 
 export function otpEmailText(displayCode: string): string {
   return (

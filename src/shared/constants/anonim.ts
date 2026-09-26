@@ -6,4 +6,4 @@
 // idempoten di seeder, dan konsisten antar environment.
 export const ANONIM_USER_ID = '01ANONIM'.padEnd(26, '0');
 export const ANONIM_USERNAME = 'anonim';
-export const ANONIM_EMAIL = 'anonim@iamutaki.com';
+export const ANONIM_EMAIL = 'anonim@sambasku.com';
