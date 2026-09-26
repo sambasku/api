@@ -5,6 +5,7 @@ import {
   comments,
   contributions,
   users,
+  verifierApplications,
   votes,
   wordReports,
   words,
@@ -16,6 +17,7 @@ import type {
   ContributionStatusKey,
   DashboardStats,
   ProblemSourceCounts,
+  VerifierApplicationsStats,
   WordStatusKey,
 } from '../domain/entities/dashboard-stats.entity';
 import type { DashboardRepository } from '../domain/repositories/dashboard.repository';
@@ -113,6 +115,19 @@ export function mapWordProblemCounts(rows: StatusRow[]): ProblemSourceCounts {
   return { open, closed };
 }
 
+/** Verifier application: pending / approved / rejected. */
+export function mapVerifierApplicationCounts(rows: StatusRow[]): VerifierApplicationsStats {
+  let pending = 0;
+  let approved = 0;
+  let rejected = 0;
+  for (const row of rows) {
+    if (row.status === 'pending') pending += row.count;
+    else if (row.status === 'approved') approved += row.count;
+    else if (row.status === 'rejected') rejected += row.count;
+  }
+  return { pending, approved, rejected };
+}
+
 // Agregasi ringan lintas tabel untuk halaman dashboard. Semua query jalan
 // paralel (satu Promise.all) - dashboard tampil cepat tanpa beban kunci.
 export class DashboardRepositoryImpl implements DashboardRepository {
@@ -143,6 +158,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
       auditLast7Days,
       bugByStatus,
       wordReportByStatus,
+      verifierAppByStatus,
     ] = await Promise.all([
       this.db
         .select({ status: words.status, count: sql<number>`count(*)`.mapWith(Number) })
@@ -223,6 +239,14 @@ export class DashboardRepositoryImpl implements DashboardRepository {
         .select({ status: wordReports.status, count: sql<number>`count(*)`.mapWith(Number) })
         .from(wordReports)
         .groupBy(wordReports.status),
+
+      this.db
+        .select({
+          status: verifierApplications.status,
+          count: sql<number>`count(*)`.mapWith(Number),
+        })
+        .from(verifierApplications)
+        .groupBy(verifierApplications.status),
     ]);
 
     const wordCounts = toRecord(WORD_STATUSES, wordByStatus);
@@ -230,6 +254,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
     const roleCounts = toRecord(APP_ROLES, userByRole);
     const bugCounts = mapBugProblemCounts(bugByStatus);
     const wordReportCounts = mapWordProblemCounts(wordReportByStatus);
+    const verifierAppCounts = mapVerifierApplicationCounts(verifierAppByStatus);
 
     return {
       words: {
@@ -266,6 +291,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
           wordReports: wordReportCounts,
         },
       },
+      verifierApplications: verifierAppCounts,
     };
   }
 }

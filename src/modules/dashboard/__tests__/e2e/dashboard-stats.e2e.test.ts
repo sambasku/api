@@ -163,6 +163,10 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
     expect(d.problems.closed).toBe(
       d.problems.by_source.bug_reports.closed + d.problems.by_source.word_reports.closed,
     );
+
+    expect(typeof d.verifier_applications.pending).toBe('number');
+    expect(typeof d.verifier_applications.approved).toBe('number');
+    expect(typeof d.verifier_applications.rejected).toBe('number');
   });
 
   it('contributor (login) juga boleh akses - dashboard adalah halaman pertama semua role', async () => {

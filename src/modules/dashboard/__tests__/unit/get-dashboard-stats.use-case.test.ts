@@ -5,6 +5,7 @@ import type { DashboardStats } from '../../domain/entities/dashboard-stats.entit
 import {
   fillDailyActivityLast30Days,
   mapBugProblemCounts,
+  mapVerifierApplicationCounts,
   mapWordProblemCounts,
   shiftCalendarDate,
   startOfWibDayUtc,
@@ -27,6 +28,12 @@ const EMPTY_PROBLEMS: DashboardStats['problems'] = {
   },
 };
 
+const EMPTY_VERIFIER_APPS: DashboardStats['verifierApplications'] = {
+  pending: 0,
+  approved: 0,
+  rejected: 0,
+};
+
 const EMPTY_STATS: DashboardStats = {
   words: {
     total: 0,
@@ -41,6 +48,7 @@ const EMPTY_STATS: DashboardStats = {
   users: { active: 0, byRole: { root: 0, admin: 0, editor: 0, reviewer: 0, contributor: 0 } },
   activity: { auditLogsLast7Days: 0, dailyLast30Days: emptyDaily() },
   problems: EMPTY_PROBLEMS,
+  verifierApplications: EMPTY_VERIFIER_APPS,
 };
 
 describe('GetDashboardStatsUseCase', () => {
@@ -77,6 +85,7 @@ describe('GetDashboardStatsUseCase', () => {
           wordReports: { open: 2, closed: 2 },
         },
       },
+      verifierApplications: { pending: 2, approved: 4, rejected: 1 },
     };
     const repo = { getStats: vi.fn().mockResolvedValue(sample) } as unknown as DashboardRepository;
     const useCase = new GetDashboardStatsUseCase(repo);
@@ -94,6 +103,7 @@ describe('GetDashboardStatsUseCase', () => {
     expect(stats.activity.auditLogsLast7Days).toBe(0);
     expect(stats.problems.open).toBe(0);
     expect(stats.problems.closed).toBe(0);
+    expect(stats.verifierApplications).toEqual({ pending: 0, approved: 0, rejected: 0 });
     expect(stats.activity.dailyLast30Days).toHaveLength(30);
     expect(
       stats.activity.dailyLast30Days.every(
@@ -156,5 +166,15 @@ describe('problem count mappers', () => {
         { status: 'resolved', count: 5 },
       ]),
     ).toEqual({ open: 7, closed: 5 });
+  });
+
+  it('mapVerifierApplicationCounts: pending/approved/rejected', () => {
+    expect(
+      mapVerifierApplicationCounts([
+        { status: 'pending', count: 3 },
+        { status: 'approved', count: 8 },
+        { status: 'rejected', count: 2 },
+      ]),
+    ).toEqual({ pending: 3, approved: 8, rejected: 2 });
   });
 });
