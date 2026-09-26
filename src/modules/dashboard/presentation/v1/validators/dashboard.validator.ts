@@ -12,6 +12,11 @@ const activityDailyPointSchema = z.object({
   new_users: z.number().int().nonnegative(),
 });
 
+const problemSourceSchema = z.object({
+  open: z.number().int().nonnegative(),
+  closed: z.number().int().nonnegative(),
+});
+
 export const dashboardStatsResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -32,6 +37,14 @@ export const dashboardStatsResponseSchema = z.object({
     activity: z.object({
       audit_logs_last_7_days: z.number().int(),
       daily_last_30_days: z.array(activityDailyPointSchema).length(30),
+    }),
+    problems: z.object({
+      open: z.number().int().nonnegative(),
+      closed: z.number().int().nonnegative(),
+      by_source: z.object({
+        bug_reports: problemSourceSchema,
+        word_reports: problemSourceSchema,
+      }),
     }),
   }),
 });

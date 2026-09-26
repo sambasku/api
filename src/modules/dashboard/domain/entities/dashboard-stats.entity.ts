@@ -16,6 +16,22 @@ export interface ActivityDailyPoint {
   newUsers: number;
 }
 
+export interface ProblemSourceCounts {
+  open: number;
+  /** resolved (+ rejected untuk bug) */
+  closed: number;
+}
+
+/** Snapshot permasalahan (bug + laporan kata). */
+export interface ProblemsStats {
+  open: number;
+  closed: number;
+  bySource: {
+    bugReports: ProblemSourceCounts;
+    wordReports: ProblemSourceCounts;
+  };
+}
+
 // Statistik agregat halaman dashboard admin (GET /api/v1/admin/dashboard/stats).
 // Semua angka kata/contributions sudah meng-exclude yang soft-deleted.
 export interface DashboardStats {
@@ -47,4 +63,5 @@ export interface DashboardStats {
      */
     dailyLast30Days: ActivityDailyPoint[];
   };
+  problems: ProblemsStats;
 }

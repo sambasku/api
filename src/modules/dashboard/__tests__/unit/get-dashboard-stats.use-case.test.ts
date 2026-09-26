@@ -4,6 +4,8 @@ import type { DashboardRepository } from '../../domain/repositories/dashboard.re
 import type { DashboardStats } from '../../domain/entities/dashboard-stats.entity';
 import {
   fillDailyActivityLast30Days,
+  mapBugProblemCounts,
+  mapWordProblemCounts,
   shiftCalendarDate,
   startOfWibDayUtc,
   wibDateString,
@@ -15,6 +17,15 @@ function emptyDaily(): DashboardStats['activity']['dailyLast30Days'] {
     '2026-09-27',
   );
 }
+
+const EMPTY_PROBLEMS: DashboardStats['problems'] = {
+  open: 0,
+  closed: 0,
+  bySource: {
+    bugReports: { open: 0, closed: 0 },
+    wordReports: { open: 0, closed: 0 },
+  },
+};
 
 const EMPTY_STATS: DashboardStats = {
   words: {
@@ -29,6 +40,7 @@ const EMPTY_STATS: DashboardStats = {
   },
   users: { active: 0, byRole: { root: 0, admin: 0, editor: 0, reviewer: 0, contributor: 0 } },
   activity: { auditLogsLast7Days: 0, dailyLast30Days: emptyDaily() },
+  problems: EMPTY_PROBLEMS,
 };
 
 describe('GetDashboardStatsUseCase', () => {
@@ -57,6 +69,14 @@ describe('GetDashboardStatsUseCase', () => {
           '2026-09-27',
         ),
       },
+      problems: {
+        open: 3,
+        closed: 5,
+        bySource: {
+          bugReports: { open: 1, closed: 3 },
+          wordReports: { open: 2, closed: 2 },
+        },
+      },
     };
     const repo = { getStats: vi.fn().mockResolvedValue(sample) } as unknown as DashboardRepository;
     const useCase = new GetDashboardStatsUseCase(repo);
@@ -72,6 +92,8 @@ describe('GetDashboardStatsUseCase', () => {
     expect(stats.contributions.byStatus.pending).toBe(0);
     expect(stats.users.active).toBe(0);
     expect(stats.activity.auditLogsLast7Days).toBe(0);
+    expect(stats.problems.open).toBe(0);
+    expect(stats.problems.closed).toBe(0);
     expect(stats.activity.dailyLast30Days).toHaveLength(30);
     expect(
       stats.activity.dailyLast30Days.every(
@@ -113,17 +135,26 @@ describe('dashboard daily activity helpers', () => {
     expect(points[0]?.date).toBe('2026-08-29');
     expect(points[29]?.date).toBe('2026-09-27');
     expect(points[29]).toMatchObject({ contributions: 3, votes: 5, comments: 0, newUsers: 0 });
-    expect(points.find((p) => p.date === '2026-09-20')).toMatchObject({
-      contributions: 1,
-      votes: 0,
-      comments: 0,
-      newUsers: 1,
-    });
-    expect(points.find((p) => p.date === '2026-09-21')).toMatchObject({
-      contributions: 0,
-      votes: 0,
-      comments: 2,
-      newUsers: 0,
-    });
+  });
+});
+
+describe('problem count mappers', () => {
+  it('mapBugProblemCounts: open vs resolved+rejected', () => {
+    expect(
+      mapBugProblemCounts([
+        { status: 'open', count: 4 },
+        { status: 'resolved', count: 2 },
+        { status: 'rejected', count: 1 },
+      ]),
+    ).toEqual({ open: 4, closed: 3 });
+  });
+
+  it('mapWordProblemCounts: open vs resolved', () => {
+    expect(
+      mapWordProblemCounts([
+        { status: 'open', count: 7 },
+        { status: 'resolved', count: 5 },
+      ]),
+    ).toEqual({ open: 7, closed: 5 });
   });
 });

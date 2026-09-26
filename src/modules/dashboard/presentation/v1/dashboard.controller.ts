@@ -41,5 +41,19 @@ function toWireStats(stats: DashboardStats) {
         new_users: point.newUsers,
       })),
     },
+    problems: {
+      open: stats.problems.open,
+      closed: stats.problems.closed,
+      by_source: {
+        bug_reports: {
+          open: stats.problems.bySource.bugReports.open,
+          closed: stats.problems.bySource.bugReports.closed,
+        },
+        word_reports: {
+          open: stats.problems.bySource.wordReports.open,
+          closed: stats.problems.bySource.wordReports.closed,
+        },
+      },
+    },
   };
 }

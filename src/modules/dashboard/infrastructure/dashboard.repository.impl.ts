@@ -1,10 +1,12 @@
 import { and, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import {
   auditLogs,
+  bugReports,
   comments,
   contributions,
   users,
   votes,
+  wordReports,
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
@@ -13,6 +15,7 @@ import type {
   AppRoleKey,
   ContributionStatusKey,
   DashboardStats,
+  ProblemSourceCounts,
   WordStatusKey,
 } from '../domain/entities/dashboard-stats.entity';
 import type { DashboardRepository } from '../domain/repositories/dashboard.repository';
@@ -88,6 +91,28 @@ export function fillDailyActivityLast30Days(
   return points;
 }
 
+/** Bug: open vs closed (resolved + rejected). */
+export function mapBugProblemCounts(rows: StatusRow[]): ProblemSourceCounts {
+  let open = 0;
+  let closed = 0;
+  for (const row of rows) {
+    if (row.status === 'open') open += row.count;
+    else if (row.status === 'resolved' || row.status === 'rejected') closed += row.count;
+  }
+  return { open, closed };
+}
+
+/** Word report: open vs resolved. */
+export function mapWordProblemCounts(rows: StatusRow[]): ProblemSourceCounts {
+  let open = 0;
+  let closed = 0;
+  for (const row of rows) {
+    if (row.status === 'open') open += row.count;
+    else if (row.status === 'resolved') closed += row.count;
+  }
+  return { open, closed };
+}
+
 // Agregasi ringan lintas tabel untuk halaman dashboard. Semua query jalan
 // paralel (satu Promise.all) - dashboard tampil cepat tanpa beban kunci.
 export class DashboardRepositoryImpl implements DashboardRepository {
@@ -116,6 +141,8 @@ export class DashboardRepositoryImpl implements DashboardRepository {
       newUserDailyRows,
       userByRole,
       auditLast7Days,
+      bugByStatus,
+      wordReportByStatus,
     ] = await Promise.all([
       this.db
         .select({ status: words.status, count: sql<number>`count(*)`.mapWith(Number) })
@@ -148,7 +175,6 @@ export class DashboardRepositoryImpl implements DashboardRepository {
         .where(and(isNull(contributions.deletedAt), gte(contributions.createdAt, windowStart)))
         .groupBy(contributionDayExpr),
 
-      // Vote: hard-delete on toggle-off - hitung baris yang masih ada by created_at
       this.db
         .select({
           day: voteDayExpr,
@@ -186,11 +212,24 @@ export class DashboardRepositoryImpl implements DashboardRepository {
         .select({ count: sql<number>`count(*)`.mapWith(Number) })
         .from(auditLogs)
         .where(gte(auditLogs.createdAt, sevenDaysAgo)),
+
+      this.db
+        .select({ status: bugReports.status, count: sql<number>`count(*)`.mapWith(Number) })
+        .from(bugReports)
+        .where(isNull(bugReports.deletedAt))
+        .groupBy(bugReports.status),
+
+      this.db
+        .select({ status: wordReports.status, count: sql<number>`count(*)`.mapWith(Number) })
+        .from(wordReports)
+        .groupBy(wordReports.status),
     ]);
 
     const wordCounts = toRecord(WORD_STATUSES, wordByStatus);
     const contributionCounts = toRecord(CONTRIBUTION_STATUSES, contributionByStatus);
     const roleCounts = toRecord(APP_ROLES, userByRole);
+    const bugCounts = mapBugProblemCounts(bugByStatus);
+    const wordReportCounts = mapWordProblemCounts(wordReportByStatus);
 
     return {
       words: {
@@ -218,6 +257,14 @@ export class DashboardRepositoryImpl implements DashboardRepository {
           },
           todayWib,
         ),
+      },
+      problems: {
+        open: bugCounts.open + wordReportCounts.open,
+        closed: bugCounts.closed + wordReportCounts.closed,
+        bySource: {
+          bugReports: bugCounts,
+          wordReports: wordReportCounts,
+        },
       },
     };
   }

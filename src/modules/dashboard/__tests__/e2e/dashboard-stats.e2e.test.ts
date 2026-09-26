@@ -153,6 +153,16 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
     expect(d.users.by_role.contributor).toBe(1);
 
     expect(typeof d.activity.audit_logs_last_7_days).toBe('number');
+
+    // Snapshot permasalahan (bug + word reports)
+    expect(typeof d.problems.open).toBe('number');
+    expect(typeof d.problems.closed).toBe('number');
+    expect(d.problems.open).toBe(
+      d.problems.by_source.bug_reports.open + d.problems.by_source.word_reports.open,
+    );
+    expect(d.problems.closed).toBe(
+      d.problems.by_source.bug_reports.closed + d.problems.by_source.word_reports.closed,
+    );
   });
 
   it('contributor (login) juga boleh akses - dashboard adalah halaman pertama semua role', async () => {
