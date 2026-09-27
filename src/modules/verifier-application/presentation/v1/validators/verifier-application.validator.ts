@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { normalizeIdPhone } from '@/modules/auth/presentation/v1/validators/register.validator';
+import { normalizePhone } from '@/modules/auth/presentation/v1/validators/register.validator';
 import { opaqueId } from '@/shared/validation/id';
 
 export const socialPlatformSchema = z.enum(
@@ -47,16 +47,16 @@ export const submitVerifierApplicationSchema = z
       .max(5, 'Maksimal 5 akun media sosial'),
   })
   .superRefine((d, ctx) => {
-    if (normalizeIdPhone(d.phone) === '__INVALID__') {
+    if (normalizePhone(d.phone) === '__INVALID__') {
       ctx.addIssue({
         code: 'custom',
-        message: 'Nomor HP tidak valid (contoh: 81234567890)',
+        message: 'Nomor HP tidak valid (contoh: 81234567890 atau 6281234567890)',
         path: ['phone'],
       });
     }
   })
   .transform((d) => ({
-    phone: normalizeIdPhone(d.phone) as string,
+    phone: normalizePhone(d.phone) as string,
     address: d.address,
     social_links: d.social_links,
   }));

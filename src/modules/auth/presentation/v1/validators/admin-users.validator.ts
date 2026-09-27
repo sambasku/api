@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { normalizeIdPhone } from './register.validator';
+import { normalizePhone } from './register.validator';
 
 const ASSIGNABLE_ADMIN_ROLES = ['contributor', 'editor', 'reviewer', 'admin'] as const;
 
@@ -62,16 +62,16 @@ export const createAdminUserBodySchema = z
         path: ['confirm_password'],
       });
     }
-    if (normalizeIdPhone(d.phone) === '__INVALID__') {
+    if (normalizePhone(d.phone) === '__INVALID__') {
       ctx.addIssue({
         code: 'custom',
-        message: 'Nomor HP tidak valid (contoh: 81234567890)',
+        message: 'Nomor HP tidak valid (contoh: 81234567890 atau 6281234567890)',
         path: ['phone'],
       });
     }
   })
   .transform((d) => {
-    const phone = normalizeIdPhone(d.phone);
+    const phone = normalizePhone(d.phone);
     return {
       username: d.username,
       email: d.email,

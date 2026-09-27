@@ -31,6 +31,12 @@ import {
   unlinkGoogleResponseSchema,
 } from './validators/google-link.validator';
 import { facebookLoginSchema, facebookLoginResponseSchema } from './validators/facebook-login.validator';
+import { githubLoginSchema, githubLoginResponseSchema } from './validators/github-login.validator';
+import {
+  githubLinkSchema,
+  githubLinkResponseSchema,
+  unlinkGithubResponseSchema,
+} from './validators/github-link.validator';
 import {
   accountDeletionMessageSchema,
   confirmAccountDeletionSchema,
@@ -53,6 +59,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
   authRoutes.use('/login', rateLimit({ points: 5, duration: 900 })); // 5/15 menit
   authRoutes.use('/google', rateLimit({ points: 5, duration: 900 })); // 5/15 menit per IP
   authRoutes.use('/facebook', rateLimit({ points: 5, duration: 900 })); // 5/15 menit per IP
+  authRoutes.use('/github', rateLimit({ points: 5, duration: 900 })); // 5/15 menit per IP
   authRoutes.use('/verify-email', rateLimit({ points: 5, duration: 900 })); // 5/15 menit
   authRoutes.use('/resend-otp', rateLimit({ points: 1, duration: 120 })); // 1/2 menit per IP
   authRoutes.use('/forgot-password', rateLimit({ points: 5, duration: 900 })); // 5/15 menit
@@ -81,6 +88,11 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     '/google/link',
     deps.authenticate,
     rateLimit({ points: 5, duration: 900, keyFn: (c) => `google-link:${c.get('user')?.user_id}` }),
+  );
+  authRoutes.use(
+    '/github/link',
+    deps.authenticate,
+    rateLimit({ points: 5, duration: 900, keyFn: (c) => `github-link:${c.get('user')?.user_id}` }),
   );
 
   // Generic supaya tipe schema tetap ter-infer oleh createRoute (c.req.valid tetap typed)
@@ -144,6 +156,21 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
       409: { description: 'Email sudah terdaftar tanpa identitas Facebook', content: json(errorResponseSchema) },
       429: { description: 'Terlalu banyak percobaan (5/15 menit per IP)', content: json(errorResponseSchema) },
       503: { description: 'FACEBOOK_APP_ID / FACEBOOK_APP_SECRET belum di-set', content: json(errorResponseSchema) },
+    },
+  });
+
+  const githubLoginRoute = createRoute({
+    method: 'post',
+    path: '/github',
+    tags: ['Auth'],
+    summary: 'Masuk dengan GitHub (access token)',
+    request: { body: { content: json(githubLoginSchema) } },
+    responses: {
+      200: { description: 'Login berhasil', content: json(githubLoginResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Access token GitHub tidak valid', content: json(errorResponseSchema) },
+      429: { description: 'Terlalu banyak percobaan (5/15 menit per IP)', content: json(errorResponseSchema) },
+      503: { description: 'GITHUB_CLIENT_ID belum di-set', content: json(errorResponseSchema) },
     },
   });
 
@@ -327,12 +354,41 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     },
   });
 
+  const linkGithubRoute = createRoute({
+    method: 'post',
+    path: '/github/link',
+    tags: ['Auth'],
+    summary: 'Hubungkan akun GitHub ke user yang sedang login',
+    request: { body: { content: json(githubLinkSchema) } },
+    responses: {
+      200: { description: 'GitHub terhubung', content: json(githubLinkResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token sesi / token GitHub tidak valid', content: json(errorResponseSchema) },
+      409: { description: 'GitHub sudah terhubung ke akun lain', content: json(errorResponseSchema) },
+      503: { description: 'GITHUB_CLIENT_ID / secret belum di-set', content: json(errorResponseSchema) },
+    },
+  });
+
+  const unlinkGithubRoute = createRoute({
+    method: 'delete',
+    path: '/github/link',
+    tags: ['Auth'],
+    summary: 'Lepas tautan akun GitHub',
+    responses: {
+      200: { description: 'GitHub dilepas', content: json(unlinkGithubResponseSchema) },
+      401: { description: 'Token tidak ada', content: json(errorResponseSchema) },
+      404: { description: 'GitHub belum terhubung', content: json(errorResponseSchema) },
+      409: { description: 'Metode login terakhir - setel password dulu', content: json(errorResponseSchema) },
+    },
+  });
+
   // ponytail: cast `as never` - controller memakai Context generik (untuk cookie),
   // jadi status literal tidak ter-infer; bentuk response dicek e2e test + schema validator
   authRoutes.openapi(registerRoute, (c) => deps.controller.register(c, c.req.valid('json')) as never);
   authRoutes.openapi(loginRoute, (c) => deps.controller.login(c, c.req.valid('json')) as never);
   authRoutes.openapi(googleLoginRoute, (c) => deps.controller.google(c, c.req.valid('json')) as never);
   authRoutes.openapi(facebookLoginRoute, (c) => deps.controller.facebook(c, c.req.valid('json')) as never);
+  authRoutes.openapi(githubLoginRoute, (c) => deps.controller.github(c, c.req.valid('json')) as never);
   authRoutes.openapi(verifyEmailRoute, (c) => deps.controller.verifyEmail(c, c.req.valid('json')) as never);
   authRoutes.openapi(resendOtpRoute, (c) => deps.controller.resendOtp(c, c.req.valid('json')) as never);
   authRoutes.openapi(refreshRoute, (c) => deps.controller.refresh(c, c.req.valid('json')) as never);
@@ -344,6 +400,8 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
   authRoutes.openapi(listProvidersRoute, (c) => deps.controller.listProviders(c) as never);
   authRoutes.openapi(linkGoogleRoute, (c) => deps.controller.linkGoogle(c, c.req.valid('json')) as never);
   authRoutes.openapi(unlinkGoogleRoute, (c) => deps.controller.unlinkGoogle(c) as never);
+  authRoutes.openapi(linkGithubRoute, (c) => deps.controller.linkGithub(c, c.req.valid('json')) as never);
+  authRoutes.openapi(unlinkGithubRoute, (c) => deps.controller.unlinkGithub(c) as never);
   authRoutes.openapi(deleteOwnAccountRoute, async (c) => {
     const typed = c as unknown as Context<{ Variables: AppVariables }>;
     const user = typed.get('user');

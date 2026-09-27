@@ -4,6 +4,7 @@ import type { ForgotPasswordDto } from '../dto/reset-password.dto';
 import type { MailerPort } from '../ports/mailer.port';
 import { generateToken } from '../utils/token';
 import { formatOtpDisplay, generateOtpCode, hashOtp, OTP_TTL_MS } from '../utils/otp';
+import { isSyntheticOauthEmail } from '../utils/username-slug';
 
 const RESET_LINK_TTL_MS = 60 * 60 * 1000; // tautan cadangan 1 jam
 
@@ -19,6 +20,11 @@ export class ForgotPasswordUseCase {
   async execute(dto: ForgotPasswordDto): Promise<void> {
     const user = await this.userRepo.findByEmail(dto.email);
     if (!user || user.deletedAt) return;
+
+    // OAuth-only atau email sintetis: jangan terbitkan / kirim reset password
+    if (!user.passwordHash || isSyntheticOauthEmail(user.email)) {
+      return;
+    }
 
     await this.resetTokenRepo.invalidateUnusedForUser(user.id);
 

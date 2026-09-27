@@ -1,5 +1,4 @@
-import { randomInt } from 'node:crypto';
-import { ConflictError, UnauthorizedError } from '@/shared/errors/app-error';
+import { UnauthorizedError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import { Email } from '../../domain/value-objects/email.vo';
 import type { UserRepository } from '../../domain/repositories/user.repository';
@@ -12,6 +11,7 @@ import type { FacebookLoginDto } from '../dto/facebook-login.dto';
 import type { FacebookTokenVerifierPort } from '../ports/facebook-token-verifier.port';
 import type { TokenServicePort } from '../ports/token-service.port';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
+import { allocateUniqueUsername, syntheticOauthEmail } from '../utils/username-slug';
 
 const FACEBOOK_PROVIDER = 'facebook';
 const INVALID_MESSAGE = 'Tidak bisa masuk dengan Facebook.';
@@ -34,25 +34,29 @@ export class LoginWithFacebookUseCase {
 
   async execute(dto: FacebookLoginDto, meta: LoginMeta = {}, requestId?: string | null): Promise<LoginResult> {
     const claims = await this.verifier.verify(dto.accessToken);
-    const email = Email.create(claims.email).value;
+    const providerEmail = Email.create(claims.email).value;
 
     const identity = await this.identityRepo.findByProvider(FACEBOOK_PROVIDER, claims.facebookUserId);
     if (identity) {
       return this.sessionForExistingIdentity(identity, meta);
     }
 
-    const userByEmail = await this.userRepo.findByEmail(email);
-    if (userByEmail) {
-      throw new ConflictError(
-        'EMAIL_ALREADY_EXISTS',
-        'Email sudah terdaftar. Masuk dengan password atau gunakan lupa password.',
-      );
-    }
+    const emailTaken = await this.userRepo.findByEmail(providerEmail);
+    const email = emailTaken
+      ? syntheticOauthEmail('facebook', claims.facebookUserId)
+      : providerEmail;
 
-    const username = await this.deriveUsername(claims.name, email);
+    const displayName = (claims.name?.trim() || providerEmail.split('@')[0] || 'Pengguna').slice(0, 100);
+    const username = await allocateUniqueUsername(
+      (u) => this.userRepo.findByUsername(u),
+      claims.name,
+      providerEmail,
+    );
+
     const created = await this.identityRepo.createUserWithGoogleIdentity(
       {
         username,
+        displayName,
         email,
         phone: null,
         passwordHash: null,
@@ -61,7 +65,7 @@ export class LoginWithFacebookUseCase {
       {
         provider: FACEBOOK_PROVIDER,
         providerUserId: claims.facebookUserId,
-        emailAtProvider: email,
+        emailAtProvider: providerEmail,
       },
     );
 
@@ -100,7 +104,7 @@ export class LoginWithFacebookUseCase {
 
   private issue(user: User, meta: LoginMeta): Promise<LoginResult> {
     return issueLoginSession(
-      { id: user.id, username: user.username, role: user.role, avatarUrl: user.avatarUrl },
+      { id: user.id, username: user.username, displayName: user.displayName, role: user.role, avatarUrl: user.avatarUrl },
       {
         tokenService: this.tokenService,
         refreshTokenRepo: this.refreshTokenRepo,
@@ -109,16 +113,5 @@ export class LoginWithFacebookUseCase {
       },
       meta,
     );
-  }
-
-  private async deriveUsername(name: string | null, email: string): Promise<string> {
-    const local = email.split('@')[0] ?? '';
-    const base = (name?.trim() || local.trim() || 'user').slice(0, 80);
-    if (!(await this.userRepo.findByUsername(base))) return base;
-    for (let n = 2; n <= 99; n++) {
-      const candidate = `${base}${n}`;
-      if (!(await this.userRepo.findByUsername(candidate))) return candidate;
-    }
-    return `${base}${randomInt(0, 10_000).toString().padStart(4, '0')}`;
   }
 }

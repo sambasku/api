@@ -13,16 +13,24 @@ import type { VerifyEmailUseCase } from '../../application/use-cases/verify-emai
 import type { ResendOtpUseCase } from '../../application/use-cases/resend-otp.use-case';
 import type { LoginWithGoogleUseCase } from '../../application/use-cases/login-with-google.use-case';
 import type { LoginWithFacebookUseCase } from '../../application/use-cases/login-with-facebook.use-case';
+import type { LoginWithGithubUseCase } from '../../application/use-cases/login-with-github.use-case';
 import type {
   LinkGoogleAccountUseCase,
   ListAuthProvidersUseCase,
   UnlinkGoogleAccountUseCase,
 } from '../../application/use-cases/link-google-account.use-case';
+import type {
+  LinkGithubAccountUseCase,
+  UnlinkGithubAccountUseCase,
+} from '../../application/use-cases/link-github-account.use-case';
+import type { GithubOauthCodeExchangerPort } from '../../application/ports/github-oauth-code-exchanger.port';
 import type { RegisterBody } from './validators/register.validator';
 import type { LoginBody } from './validators/login.validator';
 import type { GoogleLoginBody } from './validators/google-login.validator';
 import type { GoogleLinkBody } from './validators/google-link.validator';
 import type { FacebookLoginBody } from './validators/facebook-login.validator';
+import type { GithubLoginBody } from './validators/github-login.validator';
+import type { GithubLinkBody } from './validators/github-link.validator';
 import type { ForgotPasswordBody } from './validators/forgot-password.validator';
 import type { ResetPasswordBody } from './validators/reset-password.validator';
 import type { ChangePasswordBody } from './validators/change-password.validator';
@@ -51,9 +59,13 @@ export class AuthController {
       resendOtp: ResendOtpUseCase;
       google: LoginWithGoogleUseCase;
       facebook: LoginWithFacebookUseCase;
+      github: LoginWithGithubUseCase;
       listProviders: ListAuthProvidersUseCase;
       linkGoogle: LinkGoogleAccountUseCase;
       unlinkGoogle: UnlinkGoogleAccountUseCase;
+      linkGithub: LinkGithubAccountUseCase;
+      unlinkGithub: UnlinkGithubAccountUseCase;
+      githubCodeExchanger: GithubOauthCodeExchangerPort;
       resolveFirstPartyClient: ResolveFirstPartyClientUseCase;
     },
   ) {}
@@ -114,6 +126,14 @@ export class AuthController {
       meta,
       requestId,
     );
+    return this.loginJson(c, body.client_type, result);
+  }
+
+  async github(c: Context, body: GithubLoginBody) {
+    const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
+    const meta = await this.loginMetaWithClient(c, body.client_type, body.client_id);
+    const accessToken = await this.resolveGithubAccessToken(body);
+    const result = await this.deps.github.execute({ accessToken }, meta, requestId);
     return this.loginJson(c, body.client_type, result);
   }
 
@@ -271,6 +291,45 @@ export class AuthController {
     });
   }
 
+  async linkGithub(c: Context, body: GithubLinkBody) {
+    const user = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!user) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const accessToken = await this.resolveGithubAccessToken(body);
+    const identity = await this.deps.linkGithub.execute(user.user_id, accessToken);
+    return c.json({
+      success: true as const,
+      data: {
+        provider: 'github' as const,
+        linked_at: identity.createdAt.toISOString(),
+      },
+    });
+  }
+
+  async unlinkGithub(c: Context) {
+    const user = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!user) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    await this.deps.unlinkGithub.execute(user.user_id);
+    return c.json({
+      success: true as const,
+      data: { message: 'Akun GitHub berhasil dilepas.' },
+    });
+  }
+
+  private async resolveGithubAccessToken(body: {
+    access_token?: string;
+    code?: string;
+    redirect_uri?: string;
+    code_verifier?: string;
+  }): Promise<string> {
+    const direct = body.access_token?.trim();
+    if (direct) return direct;
+    return this.deps.githubCodeExchanger.exchange({
+      code: body.code!.trim(),
+      redirectUri: body.redirect_uri!.trim(),
+      codeVerifier: body.code_verifier?.trim(),
+    });
+  }
+
   private loginMeta(c: Context) {
     return {
       deviceInfo: c.req.header('User-Agent'),
@@ -300,6 +359,7 @@ export class AuthController {
     const user = {
       id: result.user.id,
       username: result.user.username,
+      display_name: result.user.displayName,
       role: result.user.role,
       avatar_url: result.user.avatarUrl,
     };

@@ -2,26 +2,44 @@ import { z } from 'zod';
 import { consentItemSchema } from '@/modules/legal/presentation/v1/validators/legal.validator';
 
 /**
- * Normalisasi no HP Indonesia ke digit internasional tanpa '+':
- * contoh: 6289988887777
- * Input: digit nasional (812… / 08…), atau sudah 62… / +62….
- * Kosong → null. Prefix negara di-lock 62 dulu (nanti dinamis).
+ * Normalisasi no HP ke digit internasional tanpa '+':
+ * contoh: 6289988887777, 60123456789
+ *
+ * - Kosong → null
+ * - Diawali 62… / +62… → simpan digit
+ * - Nasional ID (08… / 8…) → 62…
+ * - Internasional negara lain (8–15 digit, tidak leading 0) → terima
  */
-export function normalizeIdPhone(raw: string | undefined | null): string | null {
+export function normalizePhone(raw: string | undefined | null): string | null {
   if (raw == null) return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
   let digits = trimmed.replace(/\D/g, '');
-  if (digits.startsWith('0')) digits = digits.slice(1);
-  if (digits.startsWith('62')) digits = digits.slice(2);
+  if (!digits) return null;
 
-  // Mobile ID: mulai 8, total 8-13 digit setelah country code
-  if (!/^8\d{7,12}$/.test(digits)) {
-    return '__INVALID__';
+  // Sudah ID internasional
+  if (digits.startsWith('62') && /^62\d{8,13}$/.test(digits)) {
+    return digits;
   }
-  return `62${digits}`;
+
+  // Nasional ID: 08… atau 8…
+  let national = digits;
+  if (national.startsWith('0')) national = national.slice(1);
+  if (/^8\d{7,12}$/.test(national)) {
+    return `62${national}`;
+  }
+
+  // Internasional negara lain (E.164 tanpa '+')
+  if (!digits.startsWith('0') && /^\d{8,15}$/.test(digits)) {
+    return digits;
+  }
+
+  return '__INVALID__';
 }
+
+/** Alias kompatibilitas; pakai normalizePhone. */
+export const normalizeIdPhone = normalizePhone;
 
 export const registerSchema = z
   .object({
@@ -41,11 +59,11 @@ export const registerSchema = z
         path: ['confirm_password'],
       });
     }
-    const phone = normalizeIdPhone(d.phone);
+    const phone = normalizePhone(d.phone);
     if (phone === '__INVALID__') {
       ctx.addIssue({
         code: 'custom',
-        message: 'Nomor HP tidak valid (contoh: 81234567890)',
+        message: 'Nomor HP tidak valid (contoh: 81234567890 atau 6281234567890)',
         path: ['phone'],
       });
     }
@@ -54,7 +72,7 @@ export const registerSchema = z
     name: d.name.trim(),
     email: d.email,
     phone: (() => {
-      const p = normalizeIdPhone(d.phone);
+      const p = normalizePhone(d.phone);
       return p === '__INVALID__' ? null : p;
     })(),
     password: d.password,

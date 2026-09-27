@@ -78,13 +78,20 @@ import { createAuthRoutes } from '@/modules/auth/presentation/v1/auth.routes';
 import { AuthIdentityRepositoryImpl } from '@/modules/auth/infrastructure/auth-identity.repository.impl';
 import { googleTokenVerifier } from '@/modules/auth/infrastructure/google-token-verifier.holder';
 import { facebookTokenVerifier } from '@/modules/auth/infrastructure/facebook-token-verifier.holder';
+import { githubTokenVerifier } from '@/modules/auth/infrastructure/github-token-verifier.holder';
 import { LoginWithGoogleUseCase } from '@/modules/auth/application/use-cases/login-with-google.use-case';
 import { LoginWithFacebookUseCase } from '@/modules/auth/application/use-cases/login-with-facebook.use-case';
+import { LoginWithGithubUseCase } from '@/modules/auth/application/use-cases/login-with-github.use-case';
 import {
   LinkGoogleAccountUseCase,
   ListAuthProvidersUseCase,
   UnlinkGoogleAccountUseCase,
 } from '@/modules/auth/application/use-cases/link-google-account.use-case';
+import {
+  LinkGithubAccountUseCase,
+  UnlinkGithubAccountUseCase,
+} from '@/modules/auth/application/use-cases/link-github-account.use-case';
+import { GithubOauthCodeExchanger } from '@/modules/auth/infrastructure/github-oauth-code-exchanger';
 import { ListAdminUsersUseCase } from '@/modules/auth/application/use-cases/list-admin-users.use-case';
 import { UpdateUserRoleUseCase } from '@/modules/auth/application/use-cases/update-user-role.use-case';
 import { AdminUsersController } from '@/modules/auth/presentation/v1/admin-user.controller';
@@ -435,9 +442,22 @@ const controller = new AuthController({
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
   ),
+  github: new LoginWithGithubUseCase(
+    userRepo,
+    identityRepo,
+    githubTokenVerifier,
+    tokenService,
+    refreshTokenRepo,
+    auditRepo,
+    env.JWT_ACCESS_TOKEN_TTL,
+    env.JWT_REFRESH_TOKEN_TTL,
+  ),
   listProviders: new ListAuthProvidersUseCase(identityRepo),
   linkGoogle: new LinkGoogleAccountUseCase(userRepo, identityRepo, googleTokenVerifier),
   unlinkGoogle: new UnlinkGoogleAccountUseCase(userRepo, identityRepo),
+  linkGithub: new LinkGithubAccountUseCase(userRepo, identityRepo, githubTokenVerifier),
+  unlinkGithub: new UnlinkGithubAccountUseCase(userRepo, identityRepo),
+  githubCodeExchanger: new GithubOauthCodeExchanger(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET),
   resolveFirstPartyClient,
 });
 

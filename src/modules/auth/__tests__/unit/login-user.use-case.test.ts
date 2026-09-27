@@ -114,6 +114,7 @@ describe('LoginUserUseCase', () => {
     expect(result.user).toEqual({
       id: '01TESTULIDUSERID00000000',
       username: 'budi',
+      displayName: 'tester',
       role: 'contributor',
       avatarUrl: null,
     });
