@@ -489,13 +489,15 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
     });
   });
 
-  it('POST /google email existing tanpa identity Google → 409 EMAIL_ALREADY_EXISTS', async () => {
+  it('POST /google email existing tanpa identity Google → 200 akun baru (email sintetis, no-autolink)', async () => {
     const email = unique();
-    await registerAndVerify(email);
+    const reg = await registerAndVerify(email);
+    const passwordUserId = (await reg.json()).data.user_id as string;
+    const googleSub = `sub-new-${email}`;
     const res = await withGoogleVerifier(
       {
         verify: async () => ({
-          sub: `sub-new-${email}`,
+          sub: googleSub,
           email,
           emailVerified: true,
           name: 'Budi',
@@ -503,11 +505,18 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
       },
       () => postGoogle({ id_token: 'fake-id-token', client_type: 'mobile' }),
     );
-    expect(res.status).toBe(409);
-    expect(await jsonBody(res)).toMatchObject({
-      error_code: 'EMAIL_ALREADY_EXISTS',
-      message: 'Email sudah terdaftar. Masuk dengan password atau gunakan lupa password.',
-    });
+    expect(res.status).toBe(200);
+    const body = await jsonBody(res);
+    expect(body.success).toBe(true);
+    expect(body.data.access_token).toEqual(expect.any(String));
+    expect(body.data.user.id).not.toBe(passwordUserId);
+    // Akun password tetap bisa masuk - OAuth tidak menempel / menimpa.
+    const passwordLogin = await client.api.v1.auth.login.$post(
+      { json: { email, password: 'Password123' } },
+      { headers: xff() },
+    );
+    expect(passwordLogin.status).toBe(200);
+    expect((await passwordLogin.json()).data.user.id).toBe(passwordUserId);
   });
 
   it('POST /google verifier 503 → GOOGLE_AUTH_UNAVAILABLE', async () => {
@@ -719,9 +728,10 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
     });
   });
 
-  it('POST /facebook email existing tanpa identity Facebook → 409 EMAIL_ALREADY_EXISTS', async () => {
+  it('POST /facebook email existing tanpa identity Facebook → 200 akun baru (email sintetis, no-autolink)', async () => {
     const email = unique();
-    await registerAndVerify(email);
+    const reg = await registerAndVerify(email);
+    const passwordUserId = (await reg.json()).data.user_id as string;
     const res = await withFacebookVerifier(
       {
         verify: async () => ({
@@ -732,11 +742,17 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
       },
       () => postFacebook({ access_token: 'fake-fb-token', client_type: 'mobile' }),
     );
-    expect(res.status).toBe(409);
-    expect(await jsonBody(res)).toMatchObject({
-      error_code: 'EMAIL_ALREADY_EXISTS',
-      message: 'Email sudah terdaftar. Masuk dengan password atau gunakan lupa password.',
-    });
+    expect(res.status).toBe(200);
+    const body = await jsonBody(res);
+    expect(body.success).toBe(true);
+    expect(body.data.access_token).toEqual(expect.any(String));
+    expect(body.data.user.id).not.toBe(passwordUserId);
+    const passwordLogin = await client.api.v1.auth.login.$post(
+      { json: { email, password: 'Password123' } },
+      { headers: xff() },
+    );
+    expect(passwordLogin.status).toBe(200);
+    expect((await passwordLogin.json()).data.user.id).toBe(passwordUserId);
   });
 
   it('POST /facebook verifier 503 → FACEBOOK_AUTH_UNAVAILABLE', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ConflictError, ServiceUnavailableError, UnauthorizedError } from '@/shared/errors/app-error';
+import { ServiceUnavailableError, UnauthorizedError } from '@/shared/errors/app-error';
 import { LoginWithFacebookUseCase } from '../../application/use-cases/login-with-facebook.use-case';
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { AuthIdentityRepository } from '../../domain/repositories/auth-identity.repository';
@@ -271,13 +271,5 @@ describe('LoginWithFacebookUseCase', () => {
       errorCode: 'FACEBOOK_AUTH_UNAVAILABLE',
       statusCode: 503,
     });
-  });
-
-  it('ConflictError EMAIL_ALREADY_EXISTS adalah 409', () => {
-    const err = new ConflictError(
-      'EMAIL_ALREADY_EXISTS',
-      'Email sudah terdaftar. Masuk dengan password atau gunakan lupa password.',
-    );
-    expect(err.statusCode).toBe(409);
   });
 });
