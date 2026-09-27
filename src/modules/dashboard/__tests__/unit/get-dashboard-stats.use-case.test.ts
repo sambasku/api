@@ -45,7 +45,7 @@ const EMPTY_STATS: DashboardStats = {
     total: 0,
     byStatus: { pending: 0, approved: 0, rejected: 0, corrected: 0 },
   },
-  users: { active: 0, byRole: { root: 0, admin: 0, editor: 0, reviewer: 0, contributor: 0 } },
+  users: { active: 0, onlineRecently: 0, byRole: { root: 0, admin: 0, editor: 0, reviewer: 0, contributor: 0 } },
   activity: { auditLogsLast7Days: 0, dailyLast30Days: emptyDaily() },
   problems: EMPTY_PROBLEMS,
   verifierApplications: EMPTY_VERIFIER_APPS,
@@ -64,7 +64,7 @@ describe('GetDashboardStatsUseCase', () => {
         total: 5,
         byStatus: { pending: 3, approved: 1, rejected: 1, corrected: 0 },
       },
-      users: { active: 5, byRole: { root: 1, admin: 1, editor: 1, reviewer: 1, contributor: 1 } },
+      users: { active: 5, onlineRecently: 2, byRole: { root: 1, admin: 1, editor: 1, reviewer: 1, contributor: 1 } },
       activity: {
         auditLogsLast7Days: 15,
         dailyLast30Days: fillDailyActivityLast30Days(

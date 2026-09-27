@@ -29,6 +29,7 @@ function toWireStats(stats: DashboardStats) {
     },
     users: {
       active: stats.users.active,
+      online_recently: stats.users.onlineRecently,
       by_role: stats.users.byRole,
     },
     activity: {

@@ -100,6 +100,10 @@ npx wrangler secret put DATABASE_AUTH_TOKEN --env staging
 #   npx wrangler secret put PRONUNCIACION_GITHUB_TOKEN --env staging
 ```
 
+Staging (`NODE_ENV=staging`): email **tidak** dikirim via Resend (hemat free
+tier). Semua OTP (verifikasi, reset password, hapus akun) tetap
+**`1111-1111`**.
+
 ### Deploy otomatis dari GitHub (CI/CD)
 
 Push ke branch **`staging`** →

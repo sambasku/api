@@ -19,6 +19,7 @@ import {
 // MailerPort (Section 8): ganti provider email HTTP lain = satu file ini.
 // Tanpa API key (dev lokal): log saja. Dengan API key: gagal kirim → error
 // supaya UI hapus-akun/OTP tidak bilang "terkirim" padahal Resend menolak.
+// Avatar brand: CID inline (tampil tanpa "tampilkan gambar" di banyak klien).
 export class ResendMailerService implements MailerPort {
   async sendResetPasswordEmail(to: string, _resetUrl: string, displayCode: string): Promise<void> {
     await this.send({
@@ -69,8 +70,13 @@ export class ResendMailerService implements MailerPort {
     html?: string;
     inlineLogo?: boolean;
   }): Promise<void> {
-    if (!env.RESEND_API_KEY) {
-      logger.info({ to: input.to, subject: input.subject }, 'DEV: Resend tanpa API key, email tidak dikirim');
+    if (env.NODE_ENV === 'staging' || !env.RESEND_API_KEY) {
+      logger.info(
+        { to: input.to, subject: input.subject },
+        env.NODE_ENV === 'staging'
+          ? 'STAGING: email tidak dikirim via Resend'
+          : 'DEV: Resend tanpa API key, email tidak dikirim',
+      );
       return;
     }
     try {

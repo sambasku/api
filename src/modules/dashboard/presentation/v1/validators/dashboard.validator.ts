@@ -32,6 +32,7 @@ export const dashboardStatsResponseSchema = z.object({
     }),
     users: z.object({
       active: z.number().int(),
+      online_recently: z.number().int().nonnegative(),
       by_role: z.record(appRoleSchema, z.number().int()),
     }),
     activity: z.object({

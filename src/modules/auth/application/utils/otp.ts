@@ -5,9 +5,17 @@ export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RESEND_COOLDOWN_MS = 2 * 60 * 1000;
 export const OTP_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 export const OTP_CODE_LENGTH = 8;
+/** OTP tetap di staging (hemat Resend; input tampilan 1111-1111). */
+export const STAGING_OTP_CODE = '11111111';
 
-/** 8 karakter 0-9A-Z, tanpa bias modulo. */
+/**
+ * 8 karakter 0-9A-Z, tanpa bias modulo. Staging: selalu STAGING_OTP_CODE.
+ * Baca process.env.NODE_ENV langsung supaya utils ini tidak menarik
+ * parse Zod env (unit test use-case tetap jalan tanpa dotenv).
+ */
 export function generateOtpCode(): string {
+  if (process.env.NODE_ENV === 'staging') return STAGING_OTP_CODE;
+
   const n = OTP_ALPHABET.length;
   const limit = Math.floor(256 / n) * n;
   let result = '';

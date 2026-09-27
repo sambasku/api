@@ -149,6 +149,7 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
 
     // register mencipta 2 user aktif: admin (role di-upgrade) + contributor
     expect(d.users.active).toBe(2);
+    expect(typeof d.users.online_recently).toBe('number');
     expect(d.users.by_role.admin).toBe(1);
     expect(d.users.by_role.contributor).toBe(1);
 

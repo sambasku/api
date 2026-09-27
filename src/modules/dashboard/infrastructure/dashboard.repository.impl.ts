@@ -11,6 +11,7 @@ import {
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
+import { onlineRecentlySince } from '@/modules/auth/infrastructure/touch-last-seen';
 import type {
   ActivityDailyPoint,
   AppRoleKey,
@@ -155,6 +156,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
       commentDailyRows,
       newUserDailyRows,
       userByRole,
+      usersOnlineRecently,
       auditLast7Days,
       bugByStatus,
       wordReportByStatus,
@@ -226,6 +228,17 @@ export class DashboardRepositoryImpl implements DashboardRepository {
 
       this.db
         .select({ count: sql<number>`count(*)`.mapWith(Number) })
+        .from(users)
+        .where(
+          and(
+            isNull(users.deletedAt),
+            eq(users.isActive, true),
+            gte(users.lastSeenAt, onlineRecentlySince(now)),
+          ),
+        ),
+
+      this.db
+        .select({ count: sql<number>`count(*)`.mapWith(Number) })
         .from(auditLogs)
         .where(gte(auditLogs.createdAt, sevenDaysAgo)),
 
@@ -269,6 +282,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
       },
       users: {
         active: totalOf(roleCounts),
+        onlineRecently: countOf(usersOnlineRecently),
         byRole: roleCounts as Record<AppRoleKey, number>,
       },
       activity: {

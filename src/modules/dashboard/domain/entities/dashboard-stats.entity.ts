@@ -59,6 +59,11 @@ export interface DashboardStats {
   users: {
     /** belum soft-deleted + is_active */
     active: number;
+    /**
+     * Presence piggyback: last_seen_at dalam 15 menit terakhir
+     * (bukan heartbeat realtime).
+     */
+    onlineRecently: number;
     byRole: Record<AppRoleKey, number>;
   };
   activity: {

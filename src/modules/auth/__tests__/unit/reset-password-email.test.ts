@@ -14,13 +14,13 @@ describe('reset-password-email', () => {
     expect(text).not.toContain('http');
   });
 
-  it('html memuat kode dan logo CID, tanpa tombol tautan', () => {
+  it('html memuat kode dan avatar CID, tanpa tombol tautan', () => {
     const html = resetPasswordEmailHtml('A4K9-M2XP');
     expect(html).toContain('A4K9-M2XP');
     expect(html).toContain('8 karakter 0-9A-Z');
     expect(html).toContain('XXXX-XXXX');
     expect(html).toContain(`cid:${OTP_EMAIL_LOGO_CONTENT_ID}`);
-    expect(html).toContain('width="300"');
+    expect(html).toContain('width="96"');
     expect(html).not.toContain('Atur password baru');
     expect(html).not.toContain('href=');
     expect(html).not.toContain('<script');
