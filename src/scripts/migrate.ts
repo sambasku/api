@@ -9,10 +9,16 @@
  * Env: DATABASE_URL (wajib), DATABASE_AUTH_TOKEN (wajib untuk libsql:// / https://)
  */
 import 'dotenv/config';
-import { createClient } from '@libsql/client';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
-import { resolve } from 'node:path';
+import {
+  slugifyUsername,
+  USERNAME_HANDLE_REGEX,
+} from '@/modules/auth/application/utils/username-slug';
 
 const url = process.env.DATABASE_URL?.trim() ?? '';
 const authToken = process.env.DATABASE_AUTH_TOKEN?.trim() || undefined;
@@ -20,6 +26,9 @@ const migrationsFolder = resolve(
   process.cwd(),
   'src/shared/database/drizzle/migrations',
 );
+
+/** Harus sama dengan `when` di meta/_journal.json untuk tag 0026_user-last-seen. */
+const MIGRATION_0026_WHEN = 1_792_600_000_000;
 
 function fail(message: string, err?: unknown): never {
   console.error(`[db:migrate] ${message}`);
@@ -30,6 +39,112 @@ function fail(message: string, err?: unknown): never {
     }
   }
   process.exit(1);
+}
+
+function rowField(row: Record<string, unknown> | unknown[], key: string, index: number): unknown {
+  if (Array.isArray(row)) return row[index];
+  return row[key];
+}
+
+/**
+ * Staging drift: kolom `last_seen_at` sudah ada (ADD sempat sukses / manual)
+ * tapi baris 0026 belum masuk `__drizzle_migrations`. Tanpa repair, drizzle
+ * mengulang ADD → SQLITE duplicate column name.
+ */
+async function repairLastSeenDrift(client: Client): Promise<void> {
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hash text NOT NULL,
+      created_at numeric
+    )
+  `);
+
+  let hasUsers = false;
+  try {
+    const tables = await client.execute(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='users'`,
+    );
+    hasUsers = tables.rows.length > 0;
+  } catch {
+    return;
+  }
+  if (!hasUsers) return;
+
+  const info = await client.execute(`PRAGMA table_info(users)`);
+  const hasLastSeen = info.rows.some((r) => String(rowField(r as never, 'name', 1)) === 'last_seen_at');
+  if (!hasLastSeen) return;
+
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS users_last_seen_at_idx ON users (last_seen_at)`,
+  );
+
+  const lastMig = await client.execute(
+    `SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1`,
+  );
+  const lastAt = Number(rowField((lastMig.rows[0] ?? {}) as never, 'created_at', 0) ?? 0);
+  if (lastAt >= MIGRATION_0026_WHEN) return;
+
+  const sqlPath = resolve(migrationsFolder, '0026_user-last-seen.sql');
+  const query = readFileSync(sqlPath, 'utf8');
+  const hash = createHash('sha256').update(query).digest('hex');
+  await client.execute({
+    sql: `INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)`,
+    args: [hash, MIGRATION_0026_WHEN],
+  });
+  console.log(
+    '[db:migrate] repair: 0026_user-last-seen ditandai applied (last_seen_at sudah ada)',
+  );
+}
+
+/** Idempotent: slugify username yang tidak cocok charset handle @mention. */
+async function backfillUsernameHandles(client: Client): Promise<void> {
+  let rows: Array<Record<string, unknown> | unknown[]>;
+  try {
+    const result = await client.execute(`SELECT id, username FROM users WHERE username IS NOT NULL`);
+    rows = result.rows as Array<Record<string, unknown> | unknown[]>;
+  } catch {
+    return;
+  }
+
+  const taken = new Set<string>();
+  for (const row of rows) {
+    const u = String(rowField(row, 'username', 1) ?? '');
+    if (u) taken.add(u);
+  }
+
+  let updated = 0;
+  for (const row of rows) {
+    const id = String(rowField(row, 'id', 0) ?? '');
+    const username = String(rowField(row, 'username', 1) ?? '');
+    if (!id || !username || USERNAME_HANDLE_REGEX.test(username)) continue;
+
+    let base = slugifyUsername(username);
+    let candidate = base;
+    let n = 2;
+    while (taken.has(candidate) && candidate !== username) {
+      const suffix = String(n);
+      candidate = `${base.slice(0, Math.max(1, 30 - suffix.length))}${suffix}`;
+      n += 1;
+      if (n > 9999) {
+        candidate = `user${id.replace(/-/g, '').slice(0, 8)}`;
+        break;
+      }
+    }
+
+    if (candidate === username) continue;
+    taken.delete(username);
+    taken.add(candidate);
+    await client.execute({
+      sql: `UPDATE users SET username = ? WHERE id = ?`,
+      args: [candidate, id],
+    });
+    updated += 1;
+  }
+
+  if (updated > 0) {
+    console.log(`[db:migrate] backfill username handle: ${updated} baris diperbarui`);
+  }
 }
 
 if (!url) {
@@ -76,7 +191,9 @@ try {
 const db = drizzle(client);
 
 try {
+  await repairLastSeenDrift(client);
   await migrate(db, { migrationsFolder });
+  await backfillUsernameHandles(client);
   console.log('[db:migrate] OK - migrations applied');
 } catch (err) {
   fail('Migrate gagal', err);
