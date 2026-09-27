@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 
 // Sesuai tabel `users` di docs/dbdiagram.dbml
@@ -32,9 +32,12 @@ export const users = sqliteTable(
     avatarSha: text('avatar_sha'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
+    /** Piggyback presence: di-touch dari request authenticated (throttle 5 mnt). */
+    lastSeenAt: integer('last_seen_at', { mode: 'timestamp' }),
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   },
   (t) => [
     uniqueIndex('users_phone_unique').on(t.phone).where(sql`phone is not null`),
+    index('users_last_seen_at_idx').on(t.lastSeenAt),
   ],
 );

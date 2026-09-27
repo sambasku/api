@@ -13,7 +13,9 @@ import { requestDb } from '@/shared/middlewares/request-db.middleware';
 import {
   createAuthenticateMiddleware,
   createOptionalAuthenticateMiddleware,
+  scheduleAuthenticatedSideEffect,
 } from '@/shared/middlewares/authenticate.middleware';
+import { createTouchLastSeen } from '@/modules/auth/infrastructure/touch-last-seen';
 import { createRequireApprovedClientMiddleware } from '@/shared/middlewares/require-approved-client.middleware';
 import { ApiClientRepositoryImpl } from '@/modules/developer-oauth/infrastructure/api-client.repository.impl';
 import { ResolveFirstPartyClientUseCase } from '@/modules/developer-oauth/application/use-cases/resolve-first-party-client.use-case';
@@ -439,9 +441,20 @@ const controller = new AuthController({
   resolveFirstPartyClient,
 });
 
-const authenticate = createAuthenticateMiddleware((token) => tokenService.verifyAccessToken(token));
-const optionalAuthenticate = createOptionalAuthenticateMiddleware((token) =>
-  tokenService.verifyAccessToken(token),
+const touchLastSeen = createTouchLastSeen(db);
+const onAuthenticated = (
+  userId: string,
+  c: Parameters<typeof scheduleAuthenticatedSideEffect>[0],
+) => {
+  scheduleAuthenticatedSideEffect(c, () => touchLastSeen(userId));
+};
+const authenticate = createAuthenticateMiddleware(
+  (token) => tokenService.verifyAccessToken(token),
+  onAuthenticated,
+);
+const optionalAuthenticate = createOptionalAuthenticateMiddleware(
+  (token) => tokenService.verifyAccessToken(token),
+  onAuthenticated,
 );
 const requireVoteWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
   scope: 'vote.write',

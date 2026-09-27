@@ -38,7 +38,7 @@ function documentShell(title: string, rows: string): string {
           </tr>
           <tr>
             <td align="center" style="padding:28px 32px 12px;">
-              <img src="cid:${OTP_EMAIL_LOGO_CONTENT_ID}" width="300" alt="SambasKu" style="display:block;border:0;width:300px;max-width:100%;height:auto;" />
+              <img src="cid:${OTP_EMAIL_LOGO_CONTENT_ID}" width="96" height="96" alt="SambasKu" style="display:block;border:0;width:96px;height:96px;border-radius:16px;" />
             </td>
           </tr>
 ${rows}

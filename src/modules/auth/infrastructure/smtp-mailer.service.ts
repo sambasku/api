@@ -16,6 +16,7 @@ import {
 
 // Kalau SMTP belum dikonfigurasi (dev lokal), link reset hanya di-log -
 // email asli tidak pernah dikirim diam-diam dari environment sandbox.
+// Avatar brand: CID inline (sama dengan jalur Resend).
 export class SmtpMailerService implements MailerPort {
   private transporter = env.SMTP_HOST
     ? nodemailer.createTransport({

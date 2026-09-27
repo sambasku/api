@@ -12,13 +12,53 @@ export interface AccessTokenPayload {
 
 type VerifyFn = (token: string) => Promise<AccessTokenPayload>;
 
+/** Dipanggil setelah JWT valid - presence piggyback (best-effort). */
+export type OnAuthenticatedFn = (userId: string, c: Context<{ Variables: AppVariables }>) => void;
+
 function unauthorized(c: Context, error_code: string, message: string) {
   return c.json({ success: false as const, error_code, message, details: null }, 401);
 }
 
+function scheduleBackground(c: Context, task: Promise<unknown>) {
+  const executionCtx = (
+    c as Context & { executionCtx?: { waitUntil?: (p: Promise<unknown>) => void } }
+  ).executionCtx;
+  const safe = task.catch(() => undefined);
+  if (executionCtx?.waitUntil) {
+    executionCtx.waitUntil(safe);
+  } else {
+    void safe;
+  }
+}
+
+function applyUser(c: Context<{ Variables: AppVariables }>, payload: AccessTokenPayload) {
+  c.set('user', {
+    user_id: payload.user_id,
+    role: payload.role,
+    azp: payload.azp,
+    scope: payload.scope,
+  });
+}
+
+function notifyAuthenticated(
+  c: Context<{ Variables: AppVariables }>,
+  userId: string,
+  onAuthenticated?: OnAuthenticatedFn,
+) {
+  if (!onAuthenticated) return;
+  try {
+    onAuthenticated(userId, c);
+  } catch {
+    // Presence tidak boleh gagalkan auth.
+  }
+}
+
 // Factory: verify function di-inject dari composition root (main.ts), supaya
 // shared/ tidak import internal modul auth - arah dependency tetap ke dalam.
-export function createAuthenticateMiddleware(verifyAccessToken: VerifyFn) {
+export function createAuthenticateMiddleware(
+  verifyAccessToken: VerifyFn,
+  onAuthenticated?: OnAuthenticatedFn,
+) {
   return createMiddleware<{ Variables: AppVariables }>(async (c, next) => {
     const header = c.req.header('Authorization') ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : undefined;
@@ -28,12 +68,8 @@ export function createAuthenticateMiddleware(verifyAccessToken: VerifyFn) {
 
     try {
       const payload = await verifyAccessToken(token);
-      c.set('user', {
-        user_id: payload.user_id,
-        role: payload.role,
-        azp: payload.azp,
-        scope: payload.scope,
-      });
+      applyUser(c, payload);
+      notifyAuthenticated(c, payload.user_id, onAuthenticated);
       await next();
     } catch (err) {
       const code = err instanceof AppError && err.errorCode === 'TOKEN_EXPIRED' ? 'TOKEN_EXPIRED' : 'UNAUTHORIZED';
@@ -48,7 +84,10 @@ export function createAuthenticateMiddleware(verifyAccessToken: VerifyFn) {
  * Dipakai endpoint publik yang atribusi bergantung login
  * (mis. POST /contributions/words).
  */
-export function createOptionalAuthenticateMiddleware(verifyAccessToken: VerifyFn) {
+export function createOptionalAuthenticateMiddleware(
+  verifyAccessToken: VerifyFn,
+  onAuthenticated?: OnAuthenticatedFn,
+) {
   return createMiddleware<{ Variables: AppVariables }>(async (c, next) => {
     const header = c.req.header('Authorization') ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : undefined;
@@ -59,16 +98,20 @@ export function createOptionalAuthenticateMiddleware(verifyAccessToken: VerifyFn
 
     try {
       const payload = await verifyAccessToken(token);
-      c.set('user', {
-        user_id: payload.user_id,
-        role: payload.role,
-        azp: payload.azp,
-        scope: payload.scope,
-      });
+      applyUser(c, payload);
+      notifyAuthenticated(c, payload.user_id, onAuthenticated);
       await next();
     } catch (err) {
       const code = err instanceof AppError && err.errorCode === 'TOKEN_EXPIRED' ? 'TOKEN_EXPIRED' : 'UNAUTHORIZED';
       return unauthorized(c, code, 'Token tidak valid atau kadaluarsa');
     }
   });
+}
+
+/** Export untuk wiring composition root - schedule touch di background. */
+export function scheduleAuthenticatedSideEffect(
+  c: Context,
+  run: () => Promise<unknown>,
+) {
+  scheduleBackground(c, run());
 }
