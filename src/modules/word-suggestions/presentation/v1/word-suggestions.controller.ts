@@ -137,6 +137,7 @@ export class WordSuggestionController {
           word_lemma: item.wordLemma,
           contributor_id: item.contributorId,
           contributor_username: item.contributorUsername,
+          contributor_display_name: item.contributorDisplayName,
           reason: item.reason,
           reason_code: item.reasonCode,
           status: item.status,
@@ -184,6 +185,7 @@ export class WordSuggestionController {
             word_lemma: detail.suggestion.wordLemma,
             contributor_id: detail.suggestion.userId,
             contributor_username: detail.suggestion.contributorUsername,
+            contributor_display_name: detail.suggestion.contributorDisplayName ?? null,
             reason: detail.suggestion.reason,
             reason_code: detail.suggestion.reasonCode,
             proposed_changes: detail.suggestion.proposedChanges,
@@ -378,6 +380,7 @@ export class WordSuggestionController {
           actor: {
             user_id: item.actorUserId,
             username: item.actorUsername,
+            display_name: item.actorDisplayName,
           },
           type: item.type,
           changes: item.changes.map((ch) => ({
@@ -394,12 +397,14 @@ export class WordSuggestionController {
                 suggested_by: {
                   user_id: item.source.suggestedByUserId,
                   username: item.source.suggestedByUsername,
+                  display_name: item.source.suggestedByDisplayName,
                 },
                 reason: item.source.reason,
                 reviewer: item.source.reviewerUserId
                   ? {
                       user_id: item.source.reviewerUserId,
                       username: item.source.reviewerUsername,
+                      display_name: item.source.reviewerDisplayName,
                     }
                   : null,
                 review_comment: item.source.reviewComment,

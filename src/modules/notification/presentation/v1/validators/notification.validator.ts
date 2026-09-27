@@ -14,6 +14,7 @@ export const inboxNotificationTypeSchema = z.enum([
   'translation_help_approved',
   'translation_help_rejected',
   'translation_help_taken_down',
+  'word_comment',
   'campaign',
 ]);
 

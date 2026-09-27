@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import { RegisterDeviceTokenUseCase } from '../../application/use-cases/register-device-token.use-case';
 import { RevokeDeviceTokenUseCase } from '../../application/use-cases/revoke-device-token.use-case';
 import { NotifyUserUseCase } from '../../application/use-cases/notify-user.use-case';
@@ -76,6 +77,23 @@ describe('NotifyUserUseCase', () => {
     await useCase.execute({
       userId: selfId,
       actorId: selfId,
+      title: 't',
+      body: 'b',
+    });
+    expect(repo.listActiveFcmTokensByUserId).not.toHaveBeenCalled();
+    expect(push.send).not.toHaveBeenCalled();
+  });
+
+  it('skip pengimpor CSV', async () => {
+    const repo = makeDeviceRepo();
+    const push: PushSenderPort = {
+      isConfigured: true,
+      send: vi.fn(),
+      sendToTopic: vi.fn(),
+    };
+    const useCase = new NotifyUserUseCase(repo, push);
+    await useCase.execute({
+      userId: CSV_IMPORTER_USER_ID,
       title: 't',
       body: 'b',
     });

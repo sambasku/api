@@ -72,6 +72,7 @@ describe.skipIf(!hasTestDb)('ContributionRepositoryImpl', () => {
       entityId: wordId,
       status: 'pending',
       contributorUsername: 'kontributor',
+      contributorDisplayName: 'kontributor',
       wordLemma: 'kalintiak',
     });
   });

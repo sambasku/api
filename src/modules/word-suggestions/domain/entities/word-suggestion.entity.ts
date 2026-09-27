@@ -52,6 +52,7 @@ export interface WordEditSuggestion {
   deletedAt: Date | null;
   deletedBy: string | null;
   contributorUsername?: string | null;
+  contributorDisplayName?: string | null;
   wordLemma?: string;
 }
 
@@ -119,6 +120,7 @@ export interface SuggestionSummary {
   wordLemma: string;
   contributorId: string;
   contributorUsername: string | null;
+  contributorDisplayName: string | null;
   reason: string;
   reasonCode: SuggestionReasonCode;
   status: SuggestionStatus;

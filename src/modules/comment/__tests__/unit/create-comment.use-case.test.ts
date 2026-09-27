@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import { CreateCommentUseCase } from '../../application/use-cases/create-comment.use-case';
 import { DeleteCommentUseCase } from '../../application/use-cases/delete-comment.use-case';
 import { TakedownCommentUseCase } from '../../application/use-cases/takedown-comment.use-case';
@@ -10,6 +11,7 @@ const WORD = '01JDWORDMAKATN0000000000A';
 const AUTHOR = '01JDUSERAUTHOR00000000000A';
 const ADMIN = '01JDUSERADMIN000000000000A';
 const OTHER = '01JDUSEROTHER000000000000A';
+const OWNER = '01JDUSEROWNER000000000000A';
 
 function makeComment(overrides: Partial<Comment> = {}): Comment {
   return {
@@ -18,6 +20,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     wordLemma: 'makatn',
     userId: AUTHOR,
     username: 'budi',
+    displayName: 'budi',
     body: 'halo',
     bodyOriginal: null,
     status: 'published',
@@ -40,6 +43,7 @@ describe('CreateCommentUseCase', () => {
     const commentRepo = {
       create: vi.fn().mockResolvedValue(makeComment({ body: 'Ini *** sekali' })),
       findById: vi.fn().mockResolvedValue(makeComment({ body: 'Ini *** sekali' })),
+      listDistinctCommenterUserIds: vi.fn().mockResolvedValue([AUTHOR]),
     };
     const wordRepo = { findById: vi.fn().mockResolvedValue(null) };
     const auditRepo = { record: vi.fn() };
@@ -56,7 +60,12 @@ describe('CreateCommentUseCase', () => {
       uc.execute({ wordId: WORD, userId: AUTHOR, role: 'contributor', body: 'x' }),
     ).rejects.toBeInstanceOf(NotFoundError);
 
-    wordRepo.findById.mockResolvedValue({ id: WORD, status: 'published' });
+    wordRepo.findById.mockResolvedValue({
+      id: WORD,
+      status: 'published',
+      lemma: 'makatn',
+      createdBy: null,
+    });
     const created = await uc.execute({
       wordId: WORD,
       userId: AUTHOR,
@@ -71,6 +80,116 @@ describe('CreateCommentUseCase', () => {
     });
     expect(created.status).toBe('published');
     expect(auditRepo.record).toHaveBeenCalled();
+  });
+
+  it('notif inbox + push ke prior commenter dan owner (bukan aktor / CSV)', async () => {
+    const commentRepo = {
+      create: vi.fn().mockResolvedValue(makeComment({ body: 'Halo semua' })),
+      findById: vi.fn().mockResolvedValue(makeComment({ body: 'Halo semua' })),
+      listDistinctCommenterUserIds: vi.fn().mockResolvedValue([AUTHOR, OTHER, CSV_IMPORTER_USER_ID]),
+    };
+    const wordRepo = {
+      findById: vi.fn().mockResolvedValue({
+        id: WORD,
+        status: 'published',
+        lemma: 'makatn',
+        createdBy: OWNER,
+      }),
+    };
+    const auditRepo = { record: vi.fn() };
+    const blocklistRepo = { listAllActiveWords: vi.fn().mockResolvedValue([]) };
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue({
+        id: AUTHOR,
+        displayName: 'John Doe',
+        username: 'johndoe',
+      }),
+    };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+
+    const uc = new CreateCommentUseCase(
+      commentRepo as never,
+      wordRepo as never,
+      auditRepo as never,
+      blocklistRepo as never,
+      userRepo as never,
+      inbox as never,
+      notifyUser as never,
+    );
+
+    await uc.execute({
+      wordId: WORD,
+      userId: AUTHOR,
+      role: 'contributor',
+      body: 'Halo semua',
+    });
+
+    const expectedBody = 'John Doe juga berkomentar di "makatn": Halo semua';
+    expect(inbox.execute).toHaveBeenCalledTimes(2);
+    expect(notifyUser.execute).toHaveBeenCalledTimes(2);
+
+    const inboxUserIds = inbox.execute.mock.calls
+      .map((c: unknown[]) => (c[0] as { userId: string }).userId)
+      .sort();
+    expect(inboxUserIds).toEqual([OTHER, OWNER].sort());
+
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: OTHER,
+        type: 'word_comment',
+        targetKind: 'word',
+        targetId: WORD,
+        actorId: AUTHOR,
+        title: 'Komentar baru',
+        body: expectedBody,
+        refreshOnConflict: true,
+      }),
+    );
+    expect(notifyUser.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: OWNER,
+        title: 'Komentar baru',
+        body: expectedBody,
+        data: {
+          type: 'word_comment',
+          target_kind: 'word',
+          target_id: WORD,
+        },
+      }),
+    );
+  });
+
+  it('gagal notify tidak menggagalkan create', async () => {
+    const commentRepo = {
+      create: vi.fn().mockResolvedValue(makeComment()),
+      findById: vi.fn().mockResolvedValue(makeComment()),
+      listDistinctCommenterUserIds: vi.fn().mockRejectedValue(new Error('db down')),
+    };
+    const wordRepo = {
+      findById: vi.fn().mockResolvedValue({
+        id: WORD,
+        status: 'published',
+        lemma: 'makatn',
+        createdBy: OWNER,
+      }),
+    };
+    const auditRepo = { record: vi.fn() };
+    const blocklistRepo = { listAllActiveWords: vi.fn().mockResolvedValue([]) };
+
+    const uc = new CreateCommentUseCase(
+      commentRepo as never,
+      wordRepo as never,
+      auditRepo as never,
+      blocklistRepo as never,
+      undefined,
+      { execute: vi.fn() } as never,
+      { execute: vi.fn() } as never,
+    );
+
+    await expect(
+      uc.execute({ wordId: WORD, userId: AUTHOR, role: 'contributor', body: 'ok' }),
+    ).resolves.toMatchObject({ id: '01JDCOMMENTMAKATN00000000A' });
   });
 });
 

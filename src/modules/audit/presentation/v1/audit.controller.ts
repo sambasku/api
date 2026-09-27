@@ -24,6 +24,7 @@ export class AuditController {
         id: log.id,
         user_id: log.userId,
         user_name: log.userName,
+        user_display_name: log.userDisplayName,
         action: log.action,
         entity_type: log.entityType,
         entity_id: log.entityId,

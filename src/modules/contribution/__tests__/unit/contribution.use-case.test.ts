@@ -40,6 +40,7 @@ function makeContribution(overrides: Partial<Contribution> = {}): Contribution {
     id: '01CONTRIBULID0000000000000',
     userId: '01CONTRIBUTORULID0000000000',
     contributorUsername: 'kontributor',
+    contributorDisplayName: 'kontributor',
     entityType: 'word',
     entityId: '01WORDULID000000000000000',
     action: 'create',

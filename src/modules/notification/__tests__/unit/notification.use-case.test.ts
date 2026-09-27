@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import { RecordInboxNotificationUseCase } from '../../application/use-cases/record-inbox-notification.use-case';
 import { MarkNotificationReadUseCase } from '../../application/use-cases/mark-notification-read.use-case';
 import type { NotificationRepository } from '../../domain/repositories/notification.repository';
@@ -48,6 +49,41 @@ describe('RecordInboxNotificationUseCase', () => {
       targetId: '01CONTRIBULID0000000000000',
     });
     expect(notificationRepo.create).not.toHaveBeenCalled();
+  });
+
+  it('skip pengimpor CSV', async () => {
+    const notificationRepo = repo();
+    const useCase = new RecordInboxNotificationUseCase(notificationRepo);
+    await useCase.execute({
+      userId: CSV_IMPORTER_USER_ID,
+      type: 'word_comment',
+      targetKind: 'word',
+      targetId: '01WORDULID0000000000000000',
+    });
+    expect(notificationRepo.create).not.toHaveBeenCalled();
+    expect(notificationRepo.upsertUnread).not.toHaveBeenCalled();
+  });
+
+  it('override title dan body; upsert unread', async () => {
+    const notificationRepo = repo();
+    const useCase = new RecordInboxNotificationUseCase(notificationRepo);
+    await useCase.execute({
+      userId: '01CONTRIBUTORULID0000000000',
+      type: 'word_comment',
+      targetKind: 'word',
+      targetId: '01WORDULID0000000000000000',
+      title: 'Komentar baru',
+      body: 'John juga berkomentar di "rumah": Halo',
+      refreshOnConflict: true,
+    });
+    expect(notificationRepo.create).not.toHaveBeenCalled();
+    expect(notificationRepo.upsertUnread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'word_comment',
+        title: 'Komentar baru',
+        body: 'John juga berkomentar di "rumah": Halo',
+      }),
+    );
   });
 
   it('skip jika actorId sama dengan penerima (self-notify)', async () => {

@@ -97,6 +97,7 @@ export interface ChangeHistoryItem {
   timestamp: Date;
   actorUserId: string;
   actorUsername: string | null;
+  actorDisplayName: string | null;
   type: 'direct_edit' | 'suggest_edit';
   changes: ChangeRecord[];
   source: SuggestionSource | null;
@@ -115,8 +116,10 @@ export interface SuggestionSource {
   suggestionId: string;
   suggestedByUserId: string;
   suggestedByUsername: string;
+  suggestedByDisplayName: string;
   reason: string;
   reviewerUserId: string | null;
   reviewerUsername: string | null;
+  reviewerDisplayName: string | null;
   reviewComment: string | null;
 }

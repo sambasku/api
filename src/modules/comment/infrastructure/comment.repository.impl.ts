@@ -1,5 +1,8 @@
 import { and, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
-import { publicAccountName } from '@/shared/constants/deleted-account';
+import {
+  publicAccountDisplayName,
+  publicAccountName,
+} from '@/shared/constants/deleted-account';
 import { comments, users, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { Comment, CommentStatus, CursorPage } from '../domain/entities/comment.entity';
@@ -20,6 +23,7 @@ export class CommentRepositoryImpl implements CommentRepository {
       .select({
         comment: comments,
         username: users.username,
+        displayName: users.displayName,
         authorDeletedAt: users.deletedAt,
         wordLemma: words.lemma,
       })
@@ -44,7 +48,7 @@ export class CommentRepositoryImpl implements CommentRepository {
         status: 'published',
       })
       .returning();
-    return this.toComment(row, null, null);
+    return this.toComment(row, null, null, null);
   }
 
   async listByWord(wordId: string, params: ListCommentsParams): Promise<CursorPage<Comment>> {
@@ -62,7 +66,12 @@ export class CommentRepositoryImpl implements CommentRepository {
       .where(and(eq(comments.id, id), isNull(comments.deletedAt)))
       .limit(1);
     return row
-      ? this.toComment(row.comment, publicAccountName(row.username, row.authorDeletedAt), row.wordLemma)
+      ? this.toComment(
+          row.comment,
+          publicAccountName(row.username, row.authorDeletedAt),
+          publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
+          row.wordLemma,
+        )
       : null;
   }
 
@@ -128,7 +137,7 @@ export class CommentRepositoryImpl implements CommentRepository {
     const hasMore = rows.length > params.limit;
     const page = hasMore ? rows.slice(0, params.limit) : rows;
     const items = page.map((row) =>
-      this.toComment(row.comment, null, row.wordDeletedAt ? null : row.wordLemma),
+      this.toComment(row.comment, null, null, row.wordDeletedAt ? null : row.wordLemma),
     );
     return { items, nextCursor: hasMore ? items[items.length - 1].id : null, hasMore };
   }
@@ -165,6 +174,20 @@ export class CommentRepositoryImpl implements CommentRepository {
     return updated.length > 0;
   }
 
+  async listDistinctCommenterUserIds(wordId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ userId: comments.userId })
+      .from(comments)
+      .where(
+        and(
+          eq(comments.wordId, wordId),
+          inArray(comments.status, PUBLIC_STATUSES),
+          isNull(comments.deletedAt),
+        ),
+      );
+    return rows.map((r) => r.userId);
+  }
+
   private async page(where: ReturnType<typeof and> | undefined, limit: number): Promise<CursorPage<Comment>> {
     const rows = await this.selectBase()
       .where(where)
@@ -173,7 +196,12 @@ export class CommentRepositoryImpl implements CommentRepository {
 
     const hasMore = rows.length > limit;
     const items = (hasMore ? rows.slice(0, limit) : rows).map((r) =>
-      this.toComment(r.comment, publicAccountName(r.username, r.authorDeletedAt), r.wordLemma),
+      this.toComment(
+        r.comment,
+        publicAccountName(r.username, r.authorDeletedAt),
+        publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+        r.wordLemma,
+      ),
     );
     return { items, nextCursor: hasMore ? items[items.length - 1].id : null, hasMore };
   }
@@ -181,6 +209,7 @@ export class CommentRepositoryImpl implements CommentRepository {
   private toComment(
     row: typeof comments.$inferSelect,
     username: string | null,
+    displayName: string | null,
     wordLemma: string | null,
   ): Comment {
     return {
@@ -189,6 +218,7 @@ export class CommentRepositoryImpl implements CommentRepository {
       wordLemma,
       userId: row.userId,
       username,
+      displayName,
       body: row.body,
       bodyOriginal: row.bodyOriginal ?? null,
       status: row.status as CommentStatus,

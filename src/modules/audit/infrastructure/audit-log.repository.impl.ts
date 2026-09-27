@@ -6,11 +6,16 @@ import { logger } from '@/shared/logging/logger';
 import type { AuditLog, AuditLogFilter, AuditLogPage, NewAuditLog } from '../domain/entities/audit-log.entity';
 import type { AuditLogRepository } from '../domain/repositories/audit-log.repository';
 
-function toEntity(row: typeof auditLogs.$inferSelect, userName: string | null): AuditLog {
+function toEntity(
+  row: typeof auditLogs.$inferSelect,
+  userName: string | null,
+  userDisplayName: string | null,
+): AuditLog {
   return {
     id: row.id,
     userId: row.userId,
     userName,
+    userDisplayName,
     action: row.action,
     entityType: row.entityType,
     entityId: row.entityId,
@@ -51,7 +56,11 @@ export class AuditLogRepositoryImpl implements AuditLogRepository {
     );
 
     const rows = await this.db
-      .select({ log: auditLogs, userName: users.username })
+      .select({
+        log: auditLogs,
+        userName: users.username,
+        userDisplayName: users.displayName,
+      })
       .from(auditLogs)
       .leftJoin(users, eq(auditLogs.userId, users.id))
       .where(where)
@@ -59,7 +68,11 @@ export class AuditLogRepositoryImpl implements AuditLogRepository {
       .limit(filter.limit + 1);
 
     const hasMore = rows.length > filter.limit;
-    const page = (hasMore ? rows.slice(0, filter.limit) : rows).map((row) => toEntity(row.log, row.userName));
+    const page = (hasMore ? rows.slice(0, filter.limit) : rows).map((row) => {
+      const username = row.userName ?? null;
+      const trimmed = row.userDisplayName?.trim() || null;
+      return toEntity(row.log, username, trimmed || username);
+    });
 
     return {
       items: page,

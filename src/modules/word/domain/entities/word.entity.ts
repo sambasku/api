@@ -148,9 +148,9 @@ export interface WordDetail extends Word {
   appearsIn: RelatedWordRef[];
   variants: WordVariantRef[];
   /** JOIN users pada words.verified_by; tetap ada meski user soft-deleted */
-  verifier: { username: string; role: string } | null;
-  /** JOIN users pada words.created_by; username publik, bukan id */
-  creator: { username: string; role: string } | null;
+  verifier: { username: string; displayName: string; role: string } | null;
+  /** JOIN users pada words.created_by; username untuk link, displayName untuk label */
+  creator: { username: string; displayName: string; role: string } | null;
 }
 
 export interface WordClassSummary {

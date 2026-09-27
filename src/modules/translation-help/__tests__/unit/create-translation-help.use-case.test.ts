@@ -20,6 +20,7 @@ function makeHelp(overrides: Partial<TranslationHelp> = {}): TranslationHelp {
     id: ID,
     userId: USER,
     username: 'peminta',
+    displayName: 'peminta',
     body: 'Apa arti tulisan di papan ini?',
     images: [],
     status: 'pending_review',

@@ -38,23 +38,32 @@ import {
 import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
 import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
 
-async function getUsername(userId: string): Promise<string | null> {
+async function getUserPublicLabel(userId: string): Promise<UserPublicLabel> {
   const [u] = await db
-    .select({ username: users.username })
+    .select({ username: users.username, displayName: users.displayName })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
-  return u?.username ?? null;
+  if (!u) return { username: null, displayName: null };
+  const username = u.username ?? null;
+  const trimmed = u.displayName?.trim() || null;
+  return { username, displayName: trimmed || username };
 }
 
-async function getUsernames(ids: string[]): Promise<Record<string, string | null>> {
+type UserPublicLabel = { username: string | null; displayName: string | null };
+
+async function getUserPublicLabels(ids: string[]): Promise<Record<string, UserPublicLabel>> {
   if (ids.length === 0) return {};
   const rows = await db
-    .select({ id: users.id, username: users.username })
+    .select({ id: users.id, username: users.username, displayName: users.displayName })
     .from(users)
     .where(inArray(users.id, ids));
-  const map: Record<string, string | null> = {};
-  for (const r of rows) map[r.id] = r.username;
+  const map: Record<string, UserPublicLabel> = {};
+  for (const r of rows) {
+    const username = r.username ?? null;
+    const trimmed = r.displayName?.trim() || null;
+    map[r.id] = { username, displayName: trimmed || username };
+  }
   return map;
 }
 
@@ -418,7 +427,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       sourceContributionId: suggestion.id,
     });
 
-    const username = await getUsername(userId);
+    const label = await getUserPublicLabel(userId);
     return {
       id: suggestion.id,
       userId: suggestion.userId,
@@ -434,7 +443,8 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       updatedAt: suggestion.updatedAt,
       deletedAt: suggestion.deletedAt,
       deletedBy: suggestion.deletedBy,
-      contributorUsername: username,
+      contributorUsername: label.username,
+      contributorDisplayName: label.displayName,
       wordLemma: word.lemma,
     };
   }
@@ -461,6 +471,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         proposedChanges: wordEditSuggestions.proposedChanges,
         lemma: words.lemma,
         username: users.username,
+        displayName: users.displayName,
       })
       .from(wordEditSuggestions)
       .innerJoin(words, eq(wordEditSuggestions.wordId, words.id))
@@ -472,12 +483,14 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     const slice = rows.slice(0, limit);
     const items: SuggestionSummary[] = slice.map((s) => {
       const pc = asProposed(s.proposedChanges);
+      const trimmed = s.displayName?.trim() || null;
       return {
         id: s.id,
         wordId: s.wordId,
         wordLemma: s.lemma,
         contributorId: s.userId,
         contributorUsername: s.username,
+        contributorDisplayName: trimmed || s.username,
         reason: s.reason,
         reasonCode: (s.reasonCode ?? 'other') as SuggestionReasonCode,
         status: s.status as SuggestionStatus,
@@ -575,6 +588,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         suggestion: wordEditSuggestions,
         lemma: words.lemma,
         username: users.username,
+        displayName: users.displayName,
       })
       .from(wordEditSuggestions)
       .innerJoin(words, eq(wordEditSuggestions.wordId, words.id))
@@ -587,6 +601,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     if (!current) return null;
 
     const proposed = asProposed(row.suggestion.proposedChanges);
+    const trimmed = row.displayName?.trim() || null;
     return {
       suggestion: {
         id: row.suggestion.id,
@@ -604,6 +619,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         deletedAt: row.suggestion.deletedAt,
         deletedBy: row.suggestion.deletedBy,
         contributorUsername: row.username,
+        contributorDisplayName: trimmed || row.username,
         wordLemma: row.lemma,
       },
       currentWord: current,
@@ -1028,7 +1044,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       }
     }
 
-    const usernameMap = await getUsernames([...new Set(userIds)]);
+    const labelMap = await getUserPublicLabels([...new Set(userIds)]);
 
     const mapped: ChangeHistoryItem[] = rows.map((r) => {
       const type: 'direct_edit' | 'suggest_edit' = r.sourceContributionId
@@ -1038,21 +1054,29 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       let source: SuggestionSource | null = null;
       if (r.sourceContributionId && suggestionMap[r.sourceContributionId]) {
         const sug = suggestionMap[r.sourceContributionId];
+        const suggested = labelMap[sug.userId];
+        const reviewer = sug.reviewedBy ? labelMap[sug.reviewedBy] : undefined;
         source = {
           suggestionId: r.sourceContributionId,
           suggestedByUserId: sug.userId,
-          suggestedByUsername: usernameMap[sug.userId] ?? '',
+          suggestedByUsername: suggested?.username ?? '',
+          suggestedByDisplayName: suggested?.displayName ?? suggested?.username ?? '',
           reason: sug.reason,
           reviewerUserId: sug.reviewedBy,
-          reviewerUsername: sug.reviewedBy ? (usernameMap[sug.reviewedBy] ?? null) : null,
+          reviewerUsername: sug.reviewedBy ? (reviewer?.username ?? null) : null,
+          reviewerDisplayName: sug.reviewedBy
+            ? (reviewer?.displayName ?? reviewer?.username ?? null)
+            : null,
           reviewComment: sug.reviewComment,
         };
       }
+      const actor = r.auditUserId ? labelMap[r.auditUserId] : undefined;
       return {
         id: r.auditId,
         timestamp: r.createdAt,
         actorUserId: r.auditUserId ?? '',
-        actorUsername: r.auditUserId ? (usernameMap[r.auditUserId] ?? null) : null,
+        actorUsername: actor?.username ?? null,
+        actorDisplayName: actor?.displayName ?? actor?.username ?? null,
         type,
         changes,
         source,

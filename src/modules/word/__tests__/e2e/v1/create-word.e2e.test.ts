@@ -216,6 +216,7 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     expect(body.data.self_verified).toBe(true);
     expect(body.data.verified_by).toMatchObject({
       username: expect.stringMatching(/^adm/),
+      display_name: expect.any(String),
       role: 'admin',
     });
     expect(typeof body.data.verified_at).toBe('string');

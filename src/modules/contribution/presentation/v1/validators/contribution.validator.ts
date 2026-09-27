@@ -116,6 +116,7 @@ const contributionItemSchema = z.object({
   id: z.string(),
   user_id: z.string(),
   contributor_username: z.string().nullable(),
+  contributor_display_name: z.string().nullable(),
   entity_type: entityTypeSchema,
   entity_id: z.string(),
   action: z.string(),

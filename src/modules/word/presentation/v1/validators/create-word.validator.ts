@@ -480,12 +480,14 @@ export const wordDetailResponseSchema = z.object({
     created_by: z
       .object({
         username: z.string(),
+        display_name: z.string(),
         role: z.string(),
       })
       .nullable(),
     verified_by: z
       .object({
         username: z.string(),
+        display_name: z.string(),
         role: z.string(),
       })
       .nullable(),

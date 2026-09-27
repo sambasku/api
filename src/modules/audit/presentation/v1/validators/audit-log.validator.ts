@@ -19,6 +19,7 @@ const auditLogItemSchema = z.object({
   id: z.string(),
   user_id: z.string().nullable(),
   user_name: z.string().nullable(),
+  user_display_name: z.string().nullable(),
   action: z.string(),
   entity_type: z.string(),
   entity_id: z.string(),

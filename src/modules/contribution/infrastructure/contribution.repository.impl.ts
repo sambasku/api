@@ -46,6 +46,7 @@ function toContribution(row: {
   id: string;
   userId: string;
   username: string | null;
+  displayName: string | null;
   entityType: string;
   entityId: string;
   action: string;
@@ -57,10 +58,13 @@ function toContribution(row: {
   searchMissDirection: string | null;
   wordLemma?: string | null;
 }): Contribution {
+  const username = row.username;
+  const trimmed = row.displayName?.trim() || null;
   return {
     id: row.id,
     userId: row.userId,
-    contributorUsername: row.username,
+    contributorUsername: username,
+    contributorDisplayName: trimmed || username,
     entityType: row.entityType as Contribution['entityType'],
     entityId: row.entityId,
     action: row.action,
@@ -81,6 +85,7 @@ const contributionColumns = {
   id: contributions.id,
   userId: contributions.userId,
   username: users.username,
+  displayName: users.displayName,
   entityType: contributions.entityType,
   entityId: contributions.entityId,
   action: contributions.action,

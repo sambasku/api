@@ -640,7 +640,15 @@ const dashboardController = new DashboardController({
 const commentRepo = new CommentRepositoryImpl(db);
 const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
 const commentController = new CommentController({
-  create: new CreateCommentUseCase(commentRepo, wordRepo, auditRepo, commentBlocklistRepo),
+  create: new CreateCommentUseCase(
+    commentRepo,
+    wordRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+  ),
   listByWord: new ListWordCommentsUseCase(commentRepo, voteRepo),
   delete: new DeleteCommentUseCase(commentRepo, auditRepo),
   listAdmin: new ListAdminCommentsUseCase(commentRepo),

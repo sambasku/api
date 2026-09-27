@@ -46,4 +46,10 @@ export interface CommentRepository {
    * WHERE body_original IS NOT NULL AND deleted_at IS NULL.
    */
   uncensor(id: string): Promise<boolean>;
+
+  /**
+   * User distinct yang punya komentar tampil publik pada kata ini
+   * (status published | taken_down | deleted_by_author, belum soft-delete).
+   */
+  listDistinctCommenterUserIds(wordId: string): Promise<string[]>;
 }

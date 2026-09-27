@@ -11,8 +11,10 @@ export type WordImportSession = {
   id: string;
   triggeredBy: string;
   triggeredByUsername: string | null;
+  triggeredByDisplayName: string | null;
   attributedTo: string;
   attributedToUsername: string | null;
+  attributedToDisplayName: string | null;
   sourceLabel: string | null;
   status: WordImportSessionStatus;
   total: number;
