@@ -21,7 +21,10 @@ import {
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
-import { publicAccountName } from '@/shared/constants/deleted-account';
+import {
+  publicAccountDisplayName,
+  publicAccountName,
+} from '@/shared/constants/deleted-account';
 import { ConflictError, ValidationError } from '@/shared/errors/app-error';
 import { wordImageIsAutoVerified } from '../domain/word-image-provider';
 import { publishOrMergeMeaningsInTx } from './publish-or-merge-meanings';
@@ -524,9 +527,11 @@ export class WordRepositoryImpl implements WordRepository {
       .select({
         word: words,
         verifierUsername: verifierUsers.username,
+        verifierDisplayName: verifierUsers.displayName,
         verifierRole: verifierUsers.role,
         verifierDeletedAt: verifierUsers.deletedAt,
         creatorUsername: creatorUsers.username,
+        creatorDisplayName: creatorUsers.displayName,
         creatorRole: creatorUsers.role,
         creatorDeletedAt: creatorUsers.deletedAt,
       })
@@ -725,6 +730,11 @@ export class WordRepositoryImpl implements WordRepository {
         joined.verifierUsername != null && joined.verifierRole != null
           ? {
               username: publicAccountName(joined.verifierUsername, joined.verifierDeletedAt)!,
+              displayName: publicAccountDisplayName(
+                joined.verifierDisplayName,
+                joined.verifierUsername,
+                joined.verifierDeletedAt,
+              )!,
               role: joined.verifierRole,
             }
           : null,
@@ -732,6 +742,11 @@ export class WordRepositoryImpl implements WordRepository {
         joined.creatorUsername != null && joined.creatorRole != null
           ? {
               username: publicAccountName(joined.creatorUsername, joined.creatorDeletedAt)!,
+              displayName: publicAccountDisplayName(
+                joined.creatorDisplayName,
+                joined.creatorUsername,
+                joined.creatorDeletedAt,
+              )!,
               role: joined.creatorRole,
             }
           : null,

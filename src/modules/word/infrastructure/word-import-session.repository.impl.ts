@@ -37,14 +37,20 @@ function parseItems(raw: string): WordImportSessionItem[] {
 function toEntity(
   row: Row,
   triggeredByUsername: string | null,
+  triggeredByDisplayName: string | null,
   attributedToUsername: string | null,
+  attributedToDisplayName: string | null,
 ): WordImportSession {
+  const triggeredTrimmed = triggeredByDisplayName?.trim() || null;
+  const attributedTrimmed = attributedToDisplayName?.trim() || null;
   return {
     id: row.id,
     triggeredBy: row.triggeredBy,
     triggeredByUsername,
+    triggeredByDisplayName: triggeredTrimmed || triggeredByUsername,
     attributedTo: row.attributedTo,
     attributedToUsername,
+    attributedToDisplayName: attributedTrimmed || attributedToUsername,
     sourceLabel: row.sourceLabel,
     status: row.status as WordImportSessionStatus,
     total: row.total,
@@ -105,7 +111,9 @@ export class WordImportSessionRepositoryImpl implements WordImportSessionReposit
       .select({
         session: wordImportSessions,
         triggeredByUsername: triggeredUsers.username,
+        triggeredByDisplayName: triggeredUsers.displayName,
         attributedToUsername: attributedUsers.username,
+        attributedToDisplayName: attributedUsers.displayName,
       })
       .from(wordImportSessions)
       .leftJoin(triggeredUsers, eq(wordImportSessions.triggeredBy, triggeredUsers.id))
@@ -113,7 +121,13 @@ export class WordImportSessionRepositoryImpl implements WordImportSessionReposit
       .where(eq(wordImportSessions.id, id))
       .limit(1);
     if (!row) return null;
-    return toEntity(row.session, row.triggeredByUsername, row.attributedToUsername);
+    return toEntity(
+      row.session,
+      row.triggeredByUsername,
+      row.triggeredByDisplayName,
+      row.attributedToUsername,
+      row.attributedToDisplayName,
+    );
   }
 
   async list(filter: { limit: number; cursor?: string }): Promise<CursorPage<WordImportSession>> {
@@ -122,7 +136,9 @@ export class WordImportSessionRepositoryImpl implements WordImportSessionReposit
       .select({
         session: wordImportSessions,
         triggeredByUsername: triggeredUsers.username,
+        triggeredByDisplayName: triggeredUsers.displayName,
         attributedToUsername: attributedUsers.username,
+        attributedToDisplayName: attributedUsers.displayName,
       })
       .from(wordImportSessions)
       .leftJoin(triggeredUsers, eq(wordImportSessions.triggeredBy, triggeredUsers.id))
@@ -133,7 +149,13 @@ export class WordImportSessionRepositoryImpl implements WordImportSessionReposit
 
     const hasMore = rows.length > filter.limit;
     const page = (hasMore ? rows.slice(0, filter.limit) : rows).map((row) =>
-      toEntity(row.session, row.triggeredByUsername, row.attributedToUsername),
+      toEntity(
+        row.session,
+        row.triggeredByUsername,
+        row.triggeredByDisplayName,
+        row.attributedToUsername,
+        row.attributedToDisplayName,
+      ),
     );
     return {
       items: page,

@@ -301,6 +301,7 @@ import { NotificationRepositoryImpl } from '@/modules/notification/infrastructur
 import { NotificationPushCooldownRepositoryImpl } from '@/modules/notification/infrastructure/notification-push-cooldown.repository.impl';
 import { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
+import { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
 import { ListMyNotificationsUseCase } from '@/modules/notification/application/use-cases/list-my-notifications.use-case';
 import { GetUnreadNotificationCountUseCase } from '@/modules/notification/application/use-cases/get-unread-notification-count.use-case';
 import { MarkNotificationReadUseCase } from '@/modules/notification/application/use-cases/mark-notification-read.use-case';
@@ -639,8 +640,21 @@ const dashboardController = new DashboardController({
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----
 const commentRepo = new CommentRepositoryImpl(db);
 const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
+const wordCommentPushCooldown = new WordCommentPushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
 const commentController = new CommentController({
-  create: new CreateCommentUseCase(commentRepo, wordRepo, auditRepo, commentBlocklistRepo),
+  create: new CreateCommentUseCase(
+    commentRepo,
+    wordRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    wordCommentPushCooldown,
+  ),
   listByWord: new ListWordCommentsUseCase(commentRepo, voteRepo),
   delete: new DeleteCommentUseCase(commentRepo, auditRepo),
   listAdmin: new ListAdminCommentsUseCase(commentRepo),

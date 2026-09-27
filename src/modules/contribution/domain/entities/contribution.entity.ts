@@ -18,6 +18,8 @@ export interface Contribution {
   id: string;
   userId: string;
   contributorUsername: string | null;
+  /** Nama tampilan kontributor; fallback username. */
+  contributorDisplayName: string | null;
   entityType: ContributionEntityType;
   entityId: string;
   action: string;

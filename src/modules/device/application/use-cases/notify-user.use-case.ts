@@ -1,3 +1,5 @@
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import type { DeviceTokenRepository } from '../../domain/repositories/device-token.repository';
 import type { PushSenderPort } from '../ports/push-sender.port';
 
@@ -27,6 +29,17 @@ export class NotifyUserUseCase {
 
   async execute(cmd: NotifyUserCommand): Promise<void> {
     try {
+      if (
+        !cmd.userId ||
+        cmd.userId === ANONIM_USER_ID ||
+        cmd.userId === CSV_IMPORTER_USER_ID
+      ) {
+        log('info', 'push skipped: user sistem (anonim/csv)', {
+          user_id: cmd.userId,
+        });
+        return;
+      }
+
       if (cmd.actorId && cmd.actorId === cmd.userId) {
         log('info', 'push skipped: actor adalah penerima (self-notify)', {
           user_id: cmd.userId,

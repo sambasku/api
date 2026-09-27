@@ -30,6 +30,7 @@ const commentDataSchema = z.object({
   word_lemma: z.string().nullable(),
   user_id: z.string(),
   username: z.string().nullable(),
+  display_name: z.string().nullable(),
   body: z.string().nullable(),
   status: commentStatusSchema,
   created_at: z.string(),

@@ -160,7 +160,7 @@ describe('LoginWithFacebookUseCase', () => {
         email: 'fb_10201122334455@users.noreply.sambasku.local',
         passwordHash: null,
         displayName: 'Budi Santoso',
-        username: 'budi-santoso',
+        username: 'budi_santoso',
       }),
       expect.objectContaining({
         provider: 'facebook',
@@ -181,7 +181,7 @@ describe('LoginWithFacebookUseCase', () => {
         passwordHash: null,
         phone: null,
         emailVerified: true,
-        username: 'budi-santoso',
+        username: 'budi_santoso',
         displayName: 'Budi Santoso',
       }),
       expect.objectContaining({
@@ -245,13 +245,13 @@ describe('LoginWithFacebookUseCase', () => {
   it('username bentrok → sufiks terpakai', async () => {
     const { useCase, identityRepo } = makeDeps({
       identity: null,
-      usernamesTaken: ['budi-santoso'],
+      usernamesTaken: ['budi_santoso'],
     });
 
     await useCase.execute({ accessToken: 'fb-token' });
 
     expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ username: 'budi-santoso2' }),
+      expect.objectContaining({ username: 'budi_santoso_facebook' }),
       expect.any(Object),
     );
   });

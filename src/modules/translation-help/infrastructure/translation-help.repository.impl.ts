@@ -1,5 +1,8 @@
 import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
-import { publicAccountName } from '@/shared/constants/deleted-account';
+import {
+  publicAccountDisplayName,
+  publicAccountName,
+} from '@/shared/constants/deleted-account';
 import {
   translationHelpReplies,
   translationHelps,
@@ -57,11 +60,16 @@ function toImageRows(images: TranslationHelpImage[]): TranslationHelpImageRow[] 
   }));
 }
 
-function toHelp(row: HelpRow, username: string | null): TranslationHelp {
+function toHelp(
+  row: HelpRow,
+  username: string | null,
+  displayName: string | null,
+): TranslationHelp {
   return {
     id: row.id,
     userId: row.userId,
     username,
+    displayName,
     body: row.body,
     images: asImages(row.images),
     status: row.status as TranslationHelpStatus,
@@ -77,6 +85,7 @@ function toHelp(row: HelpRow, username: string | null): TranslationHelp {
 function toReply(
   row: ReplyRow,
   username: string | null,
+  displayName: string | null,
   userRole: string | null,
 ): TranslationHelpReply {
   return {
@@ -84,6 +93,7 @@ function toReply(
     helpId: row.helpId,
     userId: row.userId,
     username,
+    displayName,
     userRole,
     body: row.body,
     bodyOriginal: row.bodyOriginal,
@@ -108,7 +118,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
         status: 'pending_review',
       })
       .returning();
-    return toHelp(row, null);
+    return toHelp(row, null, null);
   }
 
   async findById(id: string): Promise<TranslationHelp | null> {
@@ -116,6 +126,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
       .select({
         help: translationHelps,
         username: users.username,
+        displayName: users.displayName,
         authorDeletedAt: users.deletedAt,
       })
       .from(translationHelps)
@@ -123,7 +134,11 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
       .where(eq(translationHelps.id, id))
       .limit(1);
     if (!row) return null;
-    return toHelp(row.help, publicAccountName(row.username, row.authorDeletedAt));
+    return toHelp(
+      row.help,
+      publicAccountName(row.username, row.authorDeletedAt),
+      publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
+    );
   }
 
   async list(filter: TranslationHelpListFilter): Promise<CursorPage<TranslationHelp>> {
@@ -135,6 +150,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
       .select({
         help: translationHelps,
         username: users.username,
+        displayName: users.displayName,
         authorDeletedAt: users.deletedAt,
       })
       .from(translationHelps)
@@ -152,7 +168,11 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
     const hasMore = rows.length > filter.limit;
     const page = hasMore ? rows.slice(0, filter.limit) : rows;
     const items = page.map((r) =>
-      toHelp(r.help, publicAccountName(r.username, r.authorDeletedAt)),
+      toHelp(
+        r.help,
+        publicAccountName(r.username, r.authorDeletedAt),
+        publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+      ),
     );
     return {
       items,
@@ -190,6 +210,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
       .select({
         help: translationHelps,
         username: users.username,
+        displayName: users.displayName,
         authorDeletedAt: users.deletedAt,
         upvotes: upvoteExpr,
       })
@@ -208,7 +229,11 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const items = page.map((r) =>
-      toHelp(r.help, publicAccountName(r.username, r.authorDeletedAt)),
+      toHelp(
+        r.help,
+        publicAccountName(r.username, r.authorDeletedAt),
+        publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+      ),
     );
 
     const last = page[page.length - 1];
@@ -273,7 +298,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
         status: 'published',
       })
       .returning();
-    return toReply(row, null, null);
+    return toReply(row, null, null, null);
   }
 
   async findReplyById(id: string): Promise<TranslationHelpReply | null> {
@@ -281,6 +306,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
       .select({
         reply: translationHelpReplies,
         username: users.username,
+        displayName: users.displayName,
         userRole: users.role,
         authorDeletedAt: users.deletedAt,
       })
@@ -292,6 +318,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
     return toReply(
       row.reply,
       publicAccountName(row.username, row.authorDeletedAt),
+      publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
       row.userRole,
     );
   }
@@ -301,6 +328,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
       .select({
         reply: translationHelpReplies,
         username: users.username,
+        displayName: users.displayName,
         userRole: users.role,
         authorDeletedAt: users.deletedAt,
       })
@@ -310,7 +338,12 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
       .orderBy(asc(translationHelpReplies.createdAt), asc(translationHelpReplies.id));
 
     return rows.map((r) =>
-      toReply(r.reply, publicAccountName(r.username, r.authorDeletedAt), r.userRole),
+      toReply(
+        r.reply,
+        publicAccountName(r.username, r.authorDeletedAt),
+        publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+        r.userRole,
+      ),
     );
   }
 

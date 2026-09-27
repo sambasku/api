@@ -37,6 +37,7 @@ export class RegisterUserUseCase {
       (u) => this.userRepo.findByUsername(u),
       dto.name,
       email.value,
+      'email',
     );
 
     if (await this.userRepo.findByEmail(email.value)) {

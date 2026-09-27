@@ -67,13 +67,14 @@ export class UpdateAppSettingsUseCase {
       }
       if (
         s.key === 'notification.review_approve_push_cooldown_minutes' ||
-        s.key === 'notification.review_reject_push_cooldown_minutes'
+        s.key === 'notification.review_reject_push_cooldown_minutes' ||
+        s.key === 'notification.word_comment_push_cooldown_minutes'
       ) {
         const n = Number(s.value);
         if (!Number.isInteger(n) || n < 0 || n > 10080) {
           throw new BadRequestError(
             'VALIDATION_ERROR',
-            'Cooldown push review harus bilangan 0-10080 menit',
+            'Cooldown push harus bilangan 0-10080 menit',
             [{ field: 'settings', message: 'Nilai cooldown tidak valid' }],
           );
         }

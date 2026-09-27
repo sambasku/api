@@ -11,6 +11,7 @@ export type InboxNotificationType =
   | 'translation_help_approved'
   | 'translation_help_rejected'
   | 'translation_help_taken_down'
+  | 'word_comment'
   | 'campaign';
 
 export type NotificationTargetKind =
@@ -93,6 +94,11 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       return {
         title: 'Bantuan terjemahan ditarik',
         body: 'Permintaan bantuanmu ditarik dari feed.',
+      };
+    case 'word_comment':
+      return {
+        title: 'Komentar baru',
+        body: 'Ada komentar baru di diskusi kosakata.',
       };
     case 'campaign':
       // Title/body campaign selalu dari snapshot admin (bukan copy bawaan).

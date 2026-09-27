@@ -16,6 +16,8 @@ export interface TranslationHelp {
   id: string;
   userId: string;
   username: string | null;
+  /** Nama tampilan publik; fallback username. */
+  displayName: string | null;
   body: string | null;
   images: TranslationHelpImage[];
   status: TranslationHelpStatus;
@@ -38,6 +40,8 @@ export interface TranslationHelpReply {
   helpId: string;
   userId: string;
   username: string | null;
+  /** Nama tampilan publik; fallback username. */
+  displayName: string | null;
   /** Role penulis - dipakai highlight verifikator di render, bukan flag DB. */
   userRole: string | null;
   body: string;

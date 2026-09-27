@@ -259,6 +259,7 @@ export const suggestionListResponseSchema = z.object({
       word_lemma: z.string(),
       contributor_id: z.string().length(26),
       contributor_username: z.string().nullable(),
+      contributor_display_name: z.string().nullable(),
       reason: z.string(),
       reason_code: suggestionReasonCodeSchema,
       status: z.enum(['pending', 'approved', 'rejected', 'corrected']),
@@ -291,6 +292,7 @@ export const suggestionDetailResponseSchema = z.object({
       word_lemma: z.string(),
       contributor_id: z.string().length(26),
       contributor_username: z.string().nullable(),
+      contributor_display_name: z.string().nullable(),
       reason: z.string(),
       reason_code: suggestionReasonCodeSchema,
       proposed_changes: z.any(),
@@ -424,6 +426,7 @@ export const changeHistoryResponseSchema = z.object({
       actor: z.object({
         user_id: z.string(),
         username: z.string().nullable(),
+        display_name: z.string().nullable(),
       }),
       type: z.enum(['direct_edit', 'suggest_edit']),
       changes: z.array(
@@ -442,12 +445,14 @@ export const changeHistoryResponseSchema = z.object({
           suggested_by: z.object({
             user_id: z.string().length(26),
             username: z.string().nullable(),
+            display_name: z.string().nullable(),
           }),
           reason: z.string(),
           reviewer: z
             .object({
               user_id: z.string().length(26),
               username: z.string().nullable(),
+              display_name: z.string().nullable(),
             })
             .nullable(),
           review_comment: z.string().nullable(),

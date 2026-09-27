@@ -1,5 +1,5 @@
-// Komentar pada lemma (09-api-comment.md). username di-resolve via LEFT
-// JOIN users saat baca (pola audit_logs) - null kalau penulis terhapus.
+// Komentar pada lemma (09-api-comment.md). username/displayName di-resolve
+// via LEFT JOIN users saat baca - null kalau penulis terhapus.
 export type CommentStatus = 'published' | 'taken_down' | 'deleted_by_author';
 
 export interface Comment {
@@ -9,6 +9,8 @@ export interface Comment {
   wordLemma: string | null;
   userId: string;
   username: string | null;
+  /** Nama tampilan publik; fallback username. Null jika penulis hilang. */
+  displayName: string | null;
   /** Body tayang (terfilter blocklist jika ada) */
   body: string;
   /** Teks asli sebelum sensor; null jika tidak disensor / sudah di-uncensor */

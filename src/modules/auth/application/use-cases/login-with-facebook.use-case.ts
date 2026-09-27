@@ -51,6 +51,7 @@ export class LoginWithFacebookUseCase {
       (u) => this.userRepo.findByUsername(u),
       claims.name,
       providerEmail,
+      'facebook',
     );
 
     const created = await this.identityRepo.createUserWithGoogleIdentity(

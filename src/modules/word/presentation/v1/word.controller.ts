@@ -220,8 +220,10 @@ export class WordController {
     id: string;
     triggeredBy: string;
     triggeredByUsername: string | null;
+    triggeredByDisplayName: string | null;
     attributedTo: string;
     attributedToUsername: string | null;
+    attributedToDisplayName: string | null;
     sourceLabel: string | null;
     status: 'running' | 'completed' | 'cancelled' | 'failed';
     total: number;
@@ -237,8 +239,10 @@ export class WordController {
       id: session.id,
       triggered_by: session.triggeredBy,
       triggered_by_username: session.triggeredByUsername,
+      triggered_by_display_name: session.triggeredByDisplayName,
       attributed_to: session.attributedTo,
       attributed_to_username: session.attributedToUsername,
+      attributed_to_display_name: session.attributedToDisplayName,
       source_label: session.sourceLabel,
       status: session.status,
       total: session.total,
@@ -350,8 +354,21 @@ export class WordController {
       self_verified: Boolean(
         word.isVerified && word.createdBy && word.verifiedBy && word.createdBy === word.verifiedBy,
       ),
-      created_by: word.creator,
-      verified_by: word.isVerified && word.verifier ? word.verifier : null,
+      created_by: word.creator
+        ? {
+            username: word.creator.username,
+            display_name: word.creator.displayName,
+            role: word.creator.role,
+          }
+        : null,
+      verified_by:
+        word.isVerified && word.verifier
+          ? {
+              username: word.verifier.username,
+              display_name: word.verifier.displayName,
+              role: word.verifier.role,
+            }
+          : null,
       verified_at: word.isVerified && word.verifiedAt ? word.verifiedAt.toISOString() : null,
       meanings: word.meanings.map((m) => ({
         id: m.id,
