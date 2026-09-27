@@ -97,7 +97,7 @@ async function repairLastSeenDrift(client: Client): Promise<void> {
   );
 }
 
-/** Idempotent: slugify username yang tidak cocok charset handle @mention. */
+/** Idempotent: slugify username yang tidak cocok charset handle @mention (tanpa `-`). */
 async function backfillUsernameHandles(client: Client): Promise<void> {
   let rows: Array<Record<string, unknown> | unknown[]>;
   try {
@@ -123,11 +123,11 @@ async function backfillUsernameHandles(client: Client): Promise<void> {
     let candidate = base;
     let n = 2;
     while (taken.has(candidate) && candidate !== username) {
-      const suffix = String(n);
+      const suffix = `_${n}`;
       candidate = `${base.slice(0, Math.max(1, 30 - suffix.length))}${suffix}`;
       n += 1;
       if (n > 9999) {
-        candidate = `user${id.replace(/-/g, '').slice(0, 8)}`;
+        candidate = `user_${id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase()}`;
         break;
       }
     }

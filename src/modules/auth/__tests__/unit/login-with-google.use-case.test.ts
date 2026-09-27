@@ -161,7 +161,7 @@ describe('LoginWithGoogleUseCase', () => {
         email: 'go_google-sub-1@users.noreply.sambasku.local',
         passwordHash: null,
         displayName: 'Budi Santoso',
-        username: 'budi-santoso',
+        username: 'budi_santoso',
       }),
       expect.objectContaining({
         provider: 'google',
@@ -182,7 +182,7 @@ describe('LoginWithGoogleUseCase', () => {
         passwordHash: null,
         phone: null,
         emailVerified: true,
-        username: 'budi-santoso',
+        username: 'budi_santoso',
         displayName: 'Budi Santoso',
       }),
       expect.objectContaining({
@@ -246,13 +246,13 @@ describe('LoginWithGoogleUseCase', () => {
   it('username bentrok → sufiks terpakai', async () => {
     const { useCase, identityRepo } = makeDeps({
       identity: null,
-      usernamesTaken: ['budi-santoso'],
+      usernamesTaken: ['budi_santoso'],
     });
 
     await useCase.execute({ idToken: 'id-token' });
 
     expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ username: 'budi-santoso2' }),
+      expect.objectContaining({ username: 'budi_santoso_google' }),
       expect.any(Object),
     );
   });

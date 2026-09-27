@@ -19,9 +19,11 @@ type Joined = {
   lemma: string | null;
   wordStatus: string | null;
   username: string | null;
+  displayName: string | null;
 };
 
 function toEntity(row: Joined): WordReport {
+  const trimmed = row.displayName?.trim() || null;
   return {
     id: row.report.id,
     wordId: row.report.wordId,
@@ -30,6 +32,7 @@ function toEntity(row: Joined): WordReport {
     wordStatus: row.wordStatus ?? '',
     userId: row.report.userId,
     username: row.username,
+    displayName: trimmed || row.username,
     reasonCode: row.report.reasonCode as WordReportReasonCode,
     note: row.report.note,
     status: row.report.status as WordReportStatus,
@@ -52,6 +55,7 @@ export class WordReportRepositoryImpl implements WordReportRepository {
         lemma: words.lemma,
         wordStatus: words.status,
         username: users.username,
+        displayName: users.displayName,
       })
       .from(wordReports)
       .leftJoin(words, eq(words.id, wordReports.wordId))

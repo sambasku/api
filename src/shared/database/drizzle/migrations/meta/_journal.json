@@ -197,6 +197,20 @@
       "when": 1792700000000,
       "tag": "0027_username-handle-slug",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1792800000000,
+      "tag": "0028_username-no-hyphen",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1792900000000,
+      "tag": "0029_word-comment-push-cooldown",
+      "breakpoints": true
     }
   ]
 }

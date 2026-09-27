@@ -14,6 +14,8 @@ export interface WordReport {
   wordStatus: string;
   userId: string;
   username: string | null;
+  /** Label UI; fallback username bila display_name kosong. */
+  displayName: string | null;
   reasonCode: WordReportReasonCode;
   note: string | null;
   status: WordReportStatus;

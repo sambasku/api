@@ -3,8 +3,8 @@ import { notificationPushCooldowns } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
   NotificationPushCooldown,
+  NotificationPushCooldownChannel,
   NotificationPushCooldownRepository,
-  ReviewPushCooldownChannel,
 } from '../domain/repositories/notification-push-cooldown.repository';
 
 export class NotificationPushCooldownRepositoryImpl implements NotificationPushCooldownRepository {
@@ -12,7 +12,7 @@ export class NotificationPushCooldownRepositoryImpl implements NotificationPushC
 
   async get(
     userId: string,
-    channel: ReviewPushCooldownChannel,
+    channel: NotificationPushCooldownChannel,
   ): Promise<NotificationPushCooldown | null> {
     const [row] = await this.db
       .select()
@@ -27,12 +27,16 @@ export class NotificationPushCooldownRepositoryImpl implements NotificationPushC
     if (!row) return null;
     return {
       userId: row.userId,
-      channel: row.channel as ReviewPushCooldownChannel,
+      channel: row.channel as NotificationPushCooldownChannel,
       lastPushAt: row.lastPushAt,
     };
   }
 
-  async touch(userId: string, channel: ReviewPushCooldownChannel, at: Date = new Date()): Promise<void> {
+  async touch(
+    userId: string,
+    channel: NotificationPushCooldownChannel,
+    at: Date = new Date(),
+  ): Promise<void> {
     await this.db
       .insert(notificationPushCooldowns)
       .values({

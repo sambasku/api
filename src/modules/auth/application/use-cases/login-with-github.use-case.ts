@@ -62,6 +62,7 @@ export class LoginWithGithubUseCase {
       (u) => this.userRepo.findByUsername(u),
       claims.login,
       providerEmail,
+      'github',
     );
 
     const created = await this.identityRepo.createUserWithGoogleIdentity(

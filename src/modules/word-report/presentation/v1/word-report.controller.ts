@@ -25,6 +25,7 @@ export function toWordReportItem(row: WordReport) {
     word_status: row.wordStatus,
     user_id: row.userId,
     username: row.username,
+    display_name: row.displayName,
     reason_code: row.reasonCode,
     note: row.note,
     status: row.status,

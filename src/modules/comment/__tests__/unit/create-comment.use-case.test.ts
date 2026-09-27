@@ -107,6 +107,10 @@ describe('CreateCommentUseCase', () => {
     };
     const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
     const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const pushCooldown = {
+      maySend: vi.fn().mockResolvedValue(true),
+      touchAfterSend: vi.fn().mockResolvedValue(undefined),
+    };
 
     const uc = new CreateCommentUseCase(
       commentRepo as never,
@@ -116,6 +120,7 @@ describe('CreateCommentUseCase', () => {
       userRepo as never,
       inbox as never,
       notifyUser as never,
+      pushCooldown as never,
     );
 
     await uc.execute({
@@ -128,6 +133,7 @@ describe('CreateCommentUseCase', () => {
     const expectedBody = 'John Doe juga berkomentar di "makatn": Halo semua';
     expect(inbox.execute).toHaveBeenCalledTimes(2);
     expect(notifyUser.execute).toHaveBeenCalledTimes(2);
+    expect(pushCooldown.touchAfterSend).toHaveBeenCalledTimes(2);
 
     const inboxUserIds = inbox.execute.mock.calls
       .map((c: unknown[]) => (c[0] as { userId: string }).userId)
@@ -158,6 +164,52 @@ describe('CreateCommentUseCase', () => {
         },
       }),
     );
+  });
+
+  it('cooldown aktif → inbox tetap, push di-skip', async () => {
+    const commentRepo = {
+      create: vi.fn().mockResolvedValue(makeComment({ body: 'lagi' })),
+      findById: vi.fn().mockResolvedValue(makeComment({ body: 'lagi' })),
+      listDistinctCommenterUserIds: vi.fn().mockResolvedValue([AUTHOR, OTHER]),
+    };
+    const wordRepo = {
+      findById: vi.fn().mockResolvedValue({
+        id: WORD,
+        status: 'published',
+        lemma: 'makatn',
+        createdBy: null,
+      }),
+    };
+    const auditRepo = { record: vi.fn() };
+    const blocklistRepo = { listAllActiveWords: vi.fn().mockResolvedValue([]) };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const pushCooldown = {
+      maySend: vi.fn().mockResolvedValue(false),
+      touchAfterSend: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const uc = new CreateCommentUseCase(
+      commentRepo as never,
+      wordRepo as never,
+      auditRepo as never,
+      blocklistRepo as never,
+      undefined,
+      inbox as never,
+      notifyUser as never,
+      pushCooldown as never,
+    );
+
+    await uc.execute({
+      wordId: WORD,
+      userId: AUTHOR,
+      role: 'contributor',
+      body: 'lagi',
+    });
+
+    expect(inbox.execute).toHaveBeenCalledTimes(1);
+    expect(notifyUser.execute).not.toHaveBeenCalled();
+    expect(pushCooldown.touchAfterSend).not.toHaveBeenCalled();
   });
 
   it('gagal notify tidak menggagalkan create', async () => {

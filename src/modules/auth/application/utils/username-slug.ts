@@ -1,23 +1,27 @@
 import { randomInt } from 'node:crypto';
 
-/** Handle mention: a-z, 0-9, titik, underscore, hyphen. */
-export const USERNAME_HANDLE_REGEX = /^[a-z0-9._-]{3,30}$/;
+/** Handle mention: a-z, 0-9, titik, underscore. Tanpa hyphen. */
+export const USERNAME_HANDLE_REGEX = /^[a-z0-9._]{3,30}$/;
 
 const MAX_LEN = 30;
 const MIN_LEN = 3;
 
+export type UsernameConflictProvider = 'google' | 'github' | 'facebook' | 'email';
+
 /**
  * Normalisasi ke handle username (lowercase, charset aman untuk @mention).
+ * Spasi / karakter asing / hyphen → underscore.
  * Kosong / terlalu pendek → fallback `user` (+ padding bila perlu).
  */
 export function slugifyUsername(raw: string | null | undefined): string {
   const base = (raw ?? '')
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/[._-]+$/g, '')
-    .replace(/^[._-]+/g, '')
+    .replace(/-/g, '_')
+    .replace(/[^a-z0-9._]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/[._]+$/g, '')
+    .replace(/^[._]+/g, '')
     .slice(0, MAX_LEN);
 
   if (base.length >= MIN_LEN && USERNAME_HANDLE_REGEX.test(base)) return base;
@@ -30,11 +34,35 @@ export function slugifyUsername(raw: string | null | undefined): string {
 
 export type FindByUsername = (username: string) => Promise<unknown | null>;
 
-/** Slug unik: base, base2..base99, lalu base + 4 digit acak. */
+/** 5 karakter acak [a-z0-9] untuk sufiks konflik. */
+export function randomUsernameToken(length = 5): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += alphabet[randomInt(0, alphabet.length)];
+  }
+  return out;
+}
+
+function fitCandidate(base: string, suffix: string): string {
+  const room = Math.max(MIN_LEN, MAX_LEN - suffix.length);
+  const head = base.slice(0, room).replace(/[._]+$/g, '');
+  const merged = `${head}${suffix}`;
+  if (USERNAME_HANDLE_REGEX.test(merged)) return merged;
+  return merged.replace(/-/g, '_').slice(0, MAX_LEN);
+}
+
+/**
+ * Slug unik.
+ * - Bebas → original slug.
+ * - Bentrok + provider → coba `base_provider`, lalu `base_xxxxx_provider`
+ *   (xxxxx = 5 char acak). Tanpa provider (email): `base_xxxxx`.
+ */
 export async function allocateUniqueUsername(
   findByUsername: FindByUsername,
   preferredRaw: string | null | undefined,
   emailFallback?: string | null,
+  conflictProvider?: UsernameConflictProvider,
 ): Promise<string> {
   const fromEmail = emailFallback?.split('@')[0] ?? '';
   let base = slugifyUsername(preferredRaw || fromEmail || 'user');
@@ -43,16 +71,28 @@ export async function allocateUniqueUsername(
   }
 
   if (!(await findByUsername(base))) return base;
-  for (let n = 2; n <= 99; n++) {
-    const suffix = String(n);
-    const candidate = `${base.slice(0, MAX_LEN - suffix.length)}${suffix}`;
+
+  const provider = conflictProvider ?? 'email';
+
+  const withProvider = fitCandidate(base, `_${provider}`);
+  if (withProvider !== base && !(await findByUsername(withProvider))) {
+    return withProvider;
+  }
+
+  for (let i = 0; i < 24; i++) {
+    const token = randomUsernameToken(5);
+    const candidate = fitCandidate(base, `_${token}_${provider}`);
     if (!(await findByUsername(candidate))) return candidate;
   }
-  for (let i = 0; i < 20; i++) {
-    const suffix = randomInt(0, 10_000).toString().padStart(4, '0');
-    const candidate = `${base.slice(0, MAX_LEN - suffix.length)}${suffix}`;
-    if (!(await findByUsername(candidate))) return candidate;
+
+  for (let i = 0; i < 12; i++) {
+    const token = randomUsernameToken(5);
+    const candidate = `${token}_${provider}`.slice(0, MAX_LEN);
+    if (USERNAME_HANDLE_REGEX.test(candidate) && !(await findByUsername(candidate))) {
+      return candidate;
+    }
   }
+
   return `user${randomInt(0, 1_000_000).toString().padStart(6, '0')}`;
 }
 

@@ -96,6 +96,7 @@ export const wordReportItemSchema = z.object({
   word_status: z.string(),
   user_id: z.string(),
   username: z.string().nullable(),
+  display_name: z.string().nullable(),
   reason_code: wordReportReasonCodeSchema,
   note: z.string().nullable(),
   status: z.enum(['open', 'resolved']),

@@ -78,6 +78,13 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
         updatedAt: now,
         updatedBy: null,
       },
+      // Migrasi 0029 - cooldown push diskusi komentar (default 3 menit)
+      {
+        key: 'notification.word_comment_push_cooldown_minutes',
+        value: '3',
+        updatedAt: now,
+        updatedBy: null,
+      },
     ])
     .onConflictDoNothing();
 

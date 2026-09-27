@@ -6,6 +6,7 @@ import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/dom
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 import { resolveDiscussionNotifyRecipients } from '../utils/resolve-discussion-notify-recipients';
@@ -34,6 +35,7 @@ function wordCommentBody(displayName: string, lemma: string, snippet: string): s
 // Tulis komentar (09-api-comment.md). Post-moderation: langsung published.
 // Body difilter lewat blocklist; jika berubah, body_original disimpan.
 // Setelah create: notifikasi inbox + push ke peserta diskusi (best-effort).
+// Push memakai cooldown Skip per user (default 3 menit); inbox tidak di-throttle.
 export class CreateCommentUseCase {
   constructor(
     private readonly commentRepo: CommentRepository,
@@ -43,6 +45,7 @@ export class CreateCommentUseCase {
     private readonly userRepo?: UserRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
+    private readonly pushCooldown?: WordCommentPushCooldownGate,
   ) {}
 
   async execute(cmd: CreateCommentCommand): Promise<Comment> {
@@ -135,17 +138,26 @@ export class CreateCommentUseCase {
           });
         }
         if (this.notifyUser) {
-          await this.notifyUser.execute({
-            userId,
-            title,
-            body,
-            actorId: input.actorId,
-            data: {
-              type: 'word_comment',
-              target_kind: 'word',
-              target_id: input.wordId,
-            },
-          });
+          const maySend =
+            !this.pushCooldown || (await this.pushCooldown.maySend(userId));
+          if (maySend) {
+            await this.notifyUser.execute({
+              userId,
+              title,
+              body,
+              actorId: input.actorId,
+              data: {
+                type: 'word_comment',
+                target_kind: 'word',
+                target_id: input.wordId,
+              },
+            });
+            // Touch setelah attempt (seperti ReviewPushCooldownGate) agar
+            // komentar beruntun tidak spam attempt FCM.
+            if (input.actorId !== userId) {
+              await this.pushCooldown?.touchAfterSend(userId);
+            }
+          }
         }
       }
     } catch (err) {

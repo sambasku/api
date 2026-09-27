@@ -51,6 +51,7 @@ export class LoginWithGoogleUseCase {
       (u) => this.userRepo.findByUsername(u),
       claims.name,
       providerEmail,
+      'google',
     );
 
     const created = await this.identityRepo.createUserWithGoogleIdentity(
