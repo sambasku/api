@@ -17,9 +17,13 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `OAUTH_NO_PASSWORD` | 400 | Ubah password pada akun tanpa password (OAuth-only) - arahkan ke lupa password |
 | `INVALID_GOOGLE_TOKEN` | 401 | ID token Google gagal verifikasi / akun Google tidak bisa dipakai |
 | `INVALID_FACEBOOK_TOKEN` | 401 | Access token Facebook gagal verifikasi / akun Facebook tidak bisa dipakai |
+| `INVALID_GITHUB_TOKEN` | 401 | Access token / code GitHub gagal verifikasi |
 | `GOOGLE_ALREADY_LINKED` | 409 | ID Google (`sub`) sudah terhubung ke akun lain |
 | `GOOGLE_NOT_LINKED` | 404 | Lepas Google padahal identity belum terhubung |
-| `LAST_AUTH_METHOD` | 409 | Lepas Google padahal itu satu-satunya cara masuk (belum punya password) |
+| `GITHUB_ALREADY_LINKED` | 409 | ID GitHub sudah terhubung ke akun lain |
+| `GITHUB_NOT_LINKED` | 404 | Lepas GitHub padahal identity belum terhubung |
+| `GITHUB_AUTH_UNAVAILABLE` | 503 | `GITHUB_CLIENT_ID` (atau secret untuk path code) belum di-set |
+| `LAST_AUTH_METHOD` | 409 | Lepas provider OAuth padahal itu satu-satunya cara masuk (belum punya password) |
 | `FORBIDDEN` | 403 | Role tidak diizinkan akses endpoint |
 | `NOT_FOUND` | 404 | Route/endpoint tidak ditemukan (via `app.notFound`) |
 | `USER_NOT_FOUND` | 404 | User tidak ditemukan (profil publik by username; akun soft-deleted / nonaktif; update role admin; user id tidak ada) |

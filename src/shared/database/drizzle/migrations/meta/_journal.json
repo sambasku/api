@@ -187,8 +187,15 @@
     {
       "idx": 26,
       "version": "6",
-      "when": 1790492536979,
+      "when": 1792600000000,
       "tag": "0026_user-last-seen",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1792700000000,
+      "tag": "0027_username-handle-slug",
       "breakpoints": true
     }
   ]

@@ -111,6 +111,14 @@ const envSchema = z.object({
   // GOOGLE_AUTH_UNAVAILABLE), API tidak crash.
   GOOGLE_CLIENT_ID: z.string().optional(),
 
+  // GitHub OAuth: Client ID publik (dokumentasi / enable flag).
+  // Kosong = POST /api/v1/auth/github → 503 GITHUB_AUTH_UNAVAILABLE.
+  // Verifikasi memakai access_token ke api.github.com (bukan JWKS).
+  GITHUB_CLIENT_ID: z.string().optional(),
+  // Secret hanya untuk tukar authorization code (mobile AppAuth).
+  // Access-token path (Bruno/SDK) tidak butuh secret.
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+
   // Facebook Login: App ID publik + App Secret (secret). Flutter
   // FACEBOOK_APP_ID_* harus SAMA dengan App ID env matching. Salah satu
   // kosong = POST /api/v1/auth/facebook → 503 FACEBOOK_AUTH_UNAVAILABLE.

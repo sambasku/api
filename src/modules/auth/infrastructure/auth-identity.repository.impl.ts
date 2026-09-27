@@ -19,6 +19,25 @@ function errHaystack(err: unknown): string {
   return `${e.message ?? ''} ${e.cause?.message ?? ''}`;
 }
 
+function providerAlreadyLinkedConflict(provider: string): ConflictError {
+  if (provider === 'github') {
+    return new ConflictError(
+      'GITHUB_ALREADY_LINKED',
+      'Akun GitHub ini sudah terhubung ke pengguna lain.',
+    );
+  }
+  if (provider === 'facebook') {
+    return new ConflictError(
+      'FACEBOOK_ALREADY_LINKED',
+      'Akun Facebook ini sudah terhubung ke pengguna lain.',
+    );
+  }
+  return new ConflictError(
+    'GOOGLE_ALREADY_LINKED',
+    'Akun Google ini sudah terhubung ke pengguna lain.',
+  );
+}
+
 function toUserEntity(row: UserRow): User {
   return {
     id: row.id,
@@ -98,22 +117,17 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
   }
 
   async link(userId: string, identity: NewGoogleIdentity): Promise<AuthIdentity> {
+    const conflict = providerAlreadyLinkedConflict(identity.provider);
     const existing = await this.findByProvider(identity.provider, identity.providerUserId);
 
     if (existing) {
       if (!existing.deletedAt) {
         if (existing.userId === userId) return existing;
-        throw new ConflictError(
-          'GOOGLE_ALREADY_LINKED',
-          'Akun Google ini sudah terhubung ke pengguna lain.',
-        );
+        throw conflict;
       }
       // Soft-deleted: restore hanya jika milik user yang sama
       if (existing.userId !== userId) {
-        throw new ConflictError(
-          'GOOGLE_ALREADY_LINKED',
-          'Akun Google ini sudah terhubung ke pengguna lain.',
-        );
+        throw conflict;
       }
       const [restored] = await this.db
         .update(authIdentities)
@@ -142,10 +156,7 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
       if (!isUniqueViolation(err)) throw err;
       const raced = await this.findByProvider(identity.provider, identity.providerUserId);
       if (raced && !raced.deletedAt && raced.userId === userId) return raced;
-      throw new ConflictError(
-        'GOOGLE_ALREADY_LINKED',
-        'Akun Google ini sudah terhubung ke pengguna lain.',
-      );
+      throw conflict;
     }
   }
 

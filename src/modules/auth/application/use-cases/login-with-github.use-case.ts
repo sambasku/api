@@ -7,24 +7,24 @@ import type { RefreshTokenRepository } from '../../domain/repositories/refresh-t
 import type { User } from '../../domain/entities/user.entity';
 import type { AuthIdentity } from '../../domain/entities/auth-identity.entity';
 import type { LoginMeta } from '../dto/login.dto';
-import type { GoogleLoginDto } from '../dto/google-login.dto';
-import type { GoogleTokenVerifierPort } from '../ports/google-token-verifier.port';
+import type { GithubLoginDto } from '../dto/github-login.dto';
+import type { GithubTokenVerifierPort } from '../ports/github-token-verifier.port';
 import type { TokenServicePort } from '../ports/token-service.port';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
 import { allocateUniqueUsername, syntheticOauthEmail } from '../utils/username-slug';
 
-const GOOGLE_PROVIDER = 'google';
-const INVALID_MESSAGE = 'Tidak bisa masuk dengan Google.';
+const GITHUB_PROVIDER = 'github';
+const INVALID_MESSAGE = 'Tidak bisa masuk dengan GitHub.';
 
-function invalidGoogleToken(): UnauthorizedError {
-  return new UnauthorizedError('INVALID_GOOGLE_TOKEN', INVALID_MESSAGE);
+function invalidGithubToken(): UnauthorizedError {
+  return new UnauthorizedError('INVALID_GITHUB_TOKEN', INVALID_MESSAGE);
 }
 
-export class LoginWithGoogleUseCase {
+export class LoginWithGithubUseCase {
   constructor(
     private readonly userRepo: UserRepository,
     private readonly identityRepo: AuthIdentityRepository,
-    private readonly verifier: GoogleTokenVerifierPort,
+    private readonly verifier: GithubTokenVerifierPort,
     private readonly tokenService: TokenServicePort,
     private readonly refreshTokenRepo: RefreshTokenRepository,
     private readonly auditRepo: AuditLogRepository,
@@ -32,24 +32,35 @@ export class LoginWithGoogleUseCase {
     private readonly refreshTokenTtlSeconds: number,
   ) {}
 
-  async execute(dto: GoogleLoginDto, meta: LoginMeta = {}, requestId?: string | null): Promise<LoginResult> {
-    const claims = await this.verifier.verify(dto.idToken);
-    const providerEmail = Email.create(claims.email).value;
+  async execute(dto: GithubLoginDto, meta: LoginMeta = {}, requestId?: string | null): Promise<LoginResult> {
+    const claims = await this.verifier.verify(dto.accessToken);
 
-    const identity = await this.identityRepo.findByProvider(GOOGLE_PROVIDER, claims.sub);
+    const identity = await this.identityRepo.findByProvider(GITHUB_PROVIDER, claims.id);
     if (identity) {
       return this.sessionForExistingIdentity(identity, meta);
     }
 
-    const emailTaken = await this.userRepo.findByEmail(providerEmail);
-    const email = emailTaken
-      ? syntheticOauthEmail('google', claims.sub)
-      : providerEmail;
+    let providerEmail: string | null = null;
+    if (claims.email) {
+      try {
+        providerEmail = Email.create(claims.email).value;
+      } catch {
+        providerEmail = null;
+      }
+    }
 
-    const displayName = (claims.name?.trim() || providerEmail.split('@')[0] || 'Pengguna').slice(0, 100);
+    let email: string;
+    if (providerEmail) {
+      const taken = await this.userRepo.findByEmail(providerEmail);
+      email = taken ? syntheticOauthEmail('github', claims.id) : providerEmail;
+    } else {
+      email = syntheticOauthEmail('github', claims.id);
+    }
+
+    const displayName = (claims.name?.trim() || claims.login || 'Pengguna').slice(0, 100);
     const username = await allocateUniqueUsername(
       (u) => this.userRepo.findByUsername(u),
-      claims.name,
+      claims.login,
       providerEmail,
     );
 
@@ -63,8 +74,8 @@ export class LoginWithGoogleUseCase {
         emailVerified: true,
       },
       {
-        provider: GOOGLE_PROVIDER,
-        providerUserId: claims.sub,
+        provider: GITHUB_PROVIDER,
+        providerUserId: claims.id,
         emailAtProvider: providerEmail,
       },
     );
@@ -83,7 +94,7 @@ export class LoginWithGoogleUseCase {
         email: created.user.email,
         phone: null,
         role: created.user.role,
-        via: 'google',
+        via: 'github',
       },
       requestId: requestId ?? null,
     });
@@ -96,9 +107,9 @@ export class LoginWithGoogleUseCase {
     meta: LoginMeta,
     knownUser?: User,
   ): Promise<LoginResult> {
-    if (identity.deletedAt) throw invalidGoogleToken();
+    if (identity.deletedAt) throw invalidGithubToken();
     const user = knownUser ?? (await this.userRepo.findById(identity.userId));
-    if (!user || user.deletedAt || !user.isActive) throw invalidGoogleToken();
+    if (!user || user.deletedAt || !user.isActive) throw invalidGithubToken();
     return this.issue(user, meta);
   }
 

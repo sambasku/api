@@ -12,6 +12,7 @@ import type { RegisterDto } from '../dto/register.dto';
 import type { PasswordHasherPort } from '../ports/password-hasher.port';
 import type { MailerPort } from '../ports/mailer.port';
 import { formatOtpDisplay, generateOtpCode, hashOtp, OTP_TTL_MS } from '../utils/otp';
+import { allocateUniqueUsername } from '../utils/username-slug';
 
 export class RegisterUserUseCase {
   constructor(
@@ -31,9 +32,13 @@ export class RegisterUserUseCase {
     const active = await this.settingsRepo.getLegalActiveVersions();
     assertConsentsMatchActiveVersions(dto.consents, active);
 
-    if (await this.userRepo.findByUsername(dto.name)) {
-      throw new ConflictError('USERNAME_ALREADY_EXISTS', 'Nama sudah dipakai');
-    }
+    const displayName = dto.name.trim().slice(0, 100);
+    const username = await allocateUniqueUsername(
+      (u) => this.userRepo.findByUsername(u),
+      dto.name,
+      email.value,
+    );
+
     if (await this.userRepo.findByEmail(email.value)) {
       throw new ConflictError('EMAIL_ALREADY_EXISTS', 'Email sudah terdaftar');
     }
@@ -43,7 +48,8 @@ export class RegisterUserUseCase {
 
     const passwordHash = await this.hasher.hash(dto.password);
     const user = await this.userRepo.save({
-      username: dto.name,
+      username,
+      displayName,
       email: email.value,
       phone: dto.phone,
       passwordHash,

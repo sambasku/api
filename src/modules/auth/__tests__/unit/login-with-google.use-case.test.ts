@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ConflictError, ServiceUnavailableError, UnauthorizedError } from '@/shared/errors/app-error';
+import { ServiceUnavailableError, UnauthorizedError } from '@/shared/errors/app-error';
 import { LoginWithGoogleUseCase } from '../../application/use-cases/login-with-google.use-case';
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { AuthIdentityRepository } from '../../domain/repositories/auth-identity.repository';
@@ -138,6 +138,7 @@ describe('LoginWithGoogleUseCase', () => {
     expect(result.user).toEqual({
       id: '01TESTGOOGLEUSER000000001',
       username: 'budi',
+      displayName: 'budi',
       role: 'contributor',
       avatarUrl: null,
     });
@@ -147,18 +148,26 @@ describe('LoginWithGoogleUseCase', () => {
     expect(refreshTokenRepo.create).toHaveBeenCalledOnce();
   });
 
-  it('identity tidak ada + email sudah di users → EMAIL_ALREADY_EXISTS, tidak create identity', async () => {
+  it('identity tidak ada + email sudah di users → akun baru dengan email sintetis', async () => {
     const { useCase, identityRepo } = makeDeps({
       identity: null,
       userByEmail: makeUser({ passwordHash: 'hash' }),
     });
 
-    await expect(useCase.execute({ idToken: 'id-token' })).rejects.toMatchObject({
-      errorCode: 'EMAIL_ALREADY_EXISTS',
-      statusCode: 409,
-      message: 'Email sudah terdaftar. Masuk dengan password atau gunakan lupa password.',
-    });
-    expect(identityRepo.createUserWithGoogleIdentity).not.toHaveBeenCalled();
+    await useCase.execute({ idToken: 'id-token' });
+
+    expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'go_google-sub-1@users.noreply.sambasku.local',
+        passwordHash: null,
+        displayName: 'Budi Santoso',
+        username: 'budi-santoso',
+      }),
+      expect.objectContaining({
+        provider: 'google',
+        emailAtProvider: 'budi@gmail.com',
+      }),
+    );
   });
 
   it('identity tidak ada + email baru → save user passwordHash null + identity + audit via google', async () => {
@@ -173,7 +182,8 @@ describe('LoginWithGoogleUseCase', () => {
         passwordHash: null,
         phone: null,
         emailVerified: true,
-        username: 'Budi Santoso',
+        username: 'budi-santoso',
+        displayName: 'Budi Santoso',
       }),
       expect.objectContaining({
         provider: 'google',
@@ -236,13 +246,13 @@ describe('LoginWithGoogleUseCase', () => {
   it('username bentrok → sufiks terpakai', async () => {
     const { useCase, identityRepo } = makeDeps({
       identity: null,
-      usernamesTaken: ['Budi Santoso'],
+      usernamesTaken: ['budi-santoso'],
     });
 
     await useCase.execute({ idToken: 'id-token' });
 
     expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ username: 'Budi Santoso2' }),
+      expect.objectContaining({ username: 'budi-santoso2' }),
       expect.any(Object),
     );
   });
@@ -262,13 +272,5 @@ describe('LoginWithGoogleUseCase', () => {
       errorCode: 'GOOGLE_AUTH_UNAVAILABLE',
       statusCode: 503,
     });
-  });
-
-  it('ConflictError EMAIL_ALREADY_EXISTS adalah 409', () => {
-    const err = new ConflictError(
-      'EMAIL_ALREADY_EXISTS',
-      'Email sudah terdaftar. Masuk dengan password atau gunakan lupa password.',
-    );
-    expect(err.statusCode).toBe(409);
   });
 });

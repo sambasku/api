@@ -7,11 +7,23 @@ export interface LoginResult {
   accessToken: string;
   expiresIn: number;
   refreshToken: string; // plain - di-hash hanya saat disimpan
-  user: { id: string; username: string; role: string; avatarUrl: string | null };
+  user: {
+    id: string;
+    username: string;
+    displayName: string;
+    role: string;
+    avatarUrl: string | null;
+  };
 }
 
 export async function issueLoginSession(
-  user: { id: string; username: string; role: string; avatarUrl?: string | null },
+  user: {
+    id: string;
+    username: string;
+    displayName?: string | null;
+    role: string;
+    avatarUrl?: string | null;
+  },
   deps: {
     tokenService: TokenServicePort;
     refreshTokenRepo: RefreshTokenRepository;
@@ -45,6 +57,7 @@ export async function issueLoginSession(
     user: {
       id: user.id,
       username: user.username,
+      displayName: user.displayName?.trim() || user.username,
       role: user.role,
       avatarUrl: user.avatarUrl ?? null,
     },

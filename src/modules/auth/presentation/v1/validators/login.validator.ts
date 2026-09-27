@@ -23,6 +23,7 @@ export const loginResponseSchema = z.object({
     user: z.object({
       id: z.string(), // ULID
       username: z.string(),
+      display_name: z.string(),
       role: z.string(),
       avatar_url: z.string().url().nullable(),
     }),
