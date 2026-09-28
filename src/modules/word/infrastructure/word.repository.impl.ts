@@ -794,10 +794,11 @@ export class WordRepositoryImpl implements WordRepository {
                 durationMs: a.durationMs,
                 isPrimary: a.isPrimary,
                 mimeType: a.mimeType,
+                // Publik butuh is_verified untuk badge Menunggu pengecekan
+                isVerified: a.isVerified,
                 ...(includeAll
                   ? {
                       status: a.status as ChildStatus,
-                      isVerified: a.isVerified,
                       isCorrected: a.isCorrected,
                     }
                   : {}),
@@ -862,10 +863,11 @@ export class WordRepositoryImpl implements WordRepository {
             durationMs: a.durationMs,
             isPrimary: a.isPrimary,
             mimeType: a.mimeType,
+            // Publik butuh is_verified untuk badge Menunggu pengecekan
+            isVerified: a.isVerified,
             ...(includeAll
               ? {
                   status: a.status as ChildStatus,
-                  isVerified: a.isVerified,
                   isCorrected: a.isCorrected,
                 }
               : {}),

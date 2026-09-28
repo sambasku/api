@@ -409,6 +409,7 @@ export class WordController {
             duration_ms: a.durationMs,
             is_primary: a.isPrimary,
             mime_type: a.mimeType,
+            is_verified: a.isVerified ?? false,
           })),
         })),
       })),
@@ -458,6 +459,7 @@ export class WordController {
         duration_ms: a.durationMs,
         is_primary: a.isPrimary,
         mime_type: a.mimeType,
+        is_verified: a.isVerified ?? false,
       })),
       related_words: word.relatedWords.map((rel) => ({
         word_id: rel.wordId,

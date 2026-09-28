@@ -41,7 +41,8 @@ export interface MeaningDetail extends Meaning {
       isPrimary: boolean;
       mimeType: string;
       status?: import('./word.entity').ChildStatus;
-      isVerified?: boolean;
+      /** selalu diisi agar klien bisa badge Menunggu pengecekan */
+      isVerified: boolean;
       isCorrected?: boolean;
     }[];
     /** terisi saat includeAllStatuses (layar review); publik selalu published */

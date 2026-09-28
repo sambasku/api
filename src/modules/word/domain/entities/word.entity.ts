@@ -139,7 +139,8 @@ export interface WordDetail extends Word {
     isPrimary: boolean;
     mimeType: string;
     status?: ChildStatus;
-    isVerified?: boolean;
+    /** selalu diisi agar klien bisa badge Menunggu pengecekan */
+    isVerified: boolean;
     isCorrected?: boolean;
   }[];
   /** relasi keluar (mis. peribahasa → komponen; kata → sinonim/antonim) */

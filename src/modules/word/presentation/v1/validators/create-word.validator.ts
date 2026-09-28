@@ -462,6 +462,8 @@ const wordDetailAudioSchema = z.object({
   duration_ms: z.number().int().nullable(),
   is_primary: z.boolean(),
   mime_type: z.string(),
+  // Default true: payload lama tanpa field tetap lolos OpenAPI/client
+  is_verified: z.boolean().optional().default(true),
 });
 
 export const wordDetailResponseSchema = z.object({
