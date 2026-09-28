@@ -424,24 +424,39 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     let reviewedAt: Date | null = null;
 
     if (selfApply) {
-      const prepared = await prepareProposedImagesForApprove(proposedChanges, {
-        publicImageStorage: this.publicImageStorage,
-        imageStorage: this.imageStorage,
-      });
-      await applyChangesToWord(suggestion.id, userId, 'approve', undefined, prepared);
-      // applyChangesToWord tidak set is_verified; verifikator = self-review (Section 22 parity).
-      await db
-        .update(words)
-        .set({
-          isVerified: true,
-          verifiedBy: userId,
-          verifiedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(words.id, wordId));
-      finalStatus = 'approved';
-      reviewedBy = userId;
-      reviewedAt = new Date();
+      // applyChangesToWord mensyaratkan status pending, jadi insert dulu pending
+      // lalu approve. Kalau apply/verify gagal: soft-delete supaya tidak
+      // meninggalkan orphan pending di antrean.
+      try {
+        const prepared = await prepareProposedImagesForApprove(proposedChanges, {
+          publicImageStorage: this.publicImageStorage,
+          imageStorage: this.imageStorage,
+        });
+        await applyChangesToWord(suggestion.id, userId, 'approve', undefined, prepared);
+        // applyChangesToWord tidak set is_verified; verifikator = self-review (Section 22 parity).
+        await db
+          .update(words)
+          .set({
+            isVerified: true,
+            verifiedBy: userId,
+            verifiedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(words.id, wordId));
+        finalStatus = 'approved';
+        reviewedBy = userId;
+        reviewedAt = new Date();
+      } catch (err) {
+        await db
+          .update(wordEditSuggestions)
+          .set({
+            deletedAt: new Date(),
+            deletedBy: userId,
+            updatedAt: new Date(),
+          })
+          .where(eq(wordEditSuggestions.id, suggestion.id));
+        throw err;
+      }
     } else if (applyPendingNow) {
       await applyChangesToWord(suggestion.id, userId, 'apply_pending');
     }
