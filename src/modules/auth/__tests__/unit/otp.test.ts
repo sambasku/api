@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   formatOtpDisplay,
   generateOtpCode,
@@ -10,11 +10,19 @@ import {
 } from '../../application/utils/otp';
 import { hashToken } from '../../application/utils/token';
 
-describe('otp utils', () => {
-  const originalNodeEnv = process.env.NODE_ENV;
+const envState = vi.hoisted(() => ({ NODE_ENV: 'test' as string }));
 
-  afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
+vi.mock('@/shared/config/env', () => ({
+  env: {
+    get NODE_ENV() {
+      return envState.NODE_ENV;
+    },
+  },
+}));
+
+describe('otp utils', () => {
+  beforeEach(() => {
+    envState.NODE_ENV = 'test';
   });
 
   it('generate 8 karakter 0-9A-Z', () => {
@@ -27,7 +35,7 @@ describe('otp utils', () => {
   });
 
   it('staging: selalu STAGING_OTP_CODE (1111-1111)', () => {
-    process.env.NODE_ENV = 'staging';
+    envState.NODE_ENV = 'staging';
     for (let i = 0; i < 5; i += 1) {
       expect(generateOtpCode()).toBe(STAGING_OTP_CODE);
     }

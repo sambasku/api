@@ -1,3 +1,4 @@
+import { env } from '@/shared/config/env';
 import { hashToken } from './token';
 
 export const OTP_TTL_MS = 10 * 60 * 1000;
@@ -10,11 +11,13 @@ export const STAGING_OTP_CODE = '11111111';
 
 /**
  * 8 karakter 0-9A-Z, tanpa bias modulo. Staging: selalu STAGING_OTP_CODE.
- * Baca process.env.NODE_ENV langsung supaya utils ini tidak menarik
- * parse Zod env (unit test use-case tetap jalan tanpa dotenv).
+ *
+ * Pakai `env.NODE_ENV` (bukan `process.env.NODE_ENV`). Wrangler/esbuild
+ * meng-inline `process.env.NODE_ENV` saat build Workers menjadi `"production"`,
+ * sehingga cabang staging jadi `if (false)` dan OTP random tetap tersimpan.
  */
 export function generateOtpCode(): string {
-  if (process.env.NODE_ENV === 'staging') return STAGING_OTP_CODE;
+  if (env.NODE_ENV === 'staging') return STAGING_OTP_CODE;
 
   const n = OTP_ALPHABET.length;
   const limit = Math.floor(256 / n) * n;
