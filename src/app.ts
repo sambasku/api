@@ -157,6 +157,7 @@ import { ListContributionsUseCase } from '@/modules/contribution/application/use
 import { GetContributionDetailUseCase } from '@/modules/contribution/application/use-cases/get-contribution-detail.use-case';
 import { ReviewContributionUseCase } from '@/modules/contribution/application/use-cases/review-contribution.use-case';
 import { CorrectContributionUseCase } from '@/modules/contribution/application/use-cases/correct-contribution.use-case';
+import { ReopenContributionUseCase } from '@/modules/contribution/application/use-cases/reopen-contribution.use-case';
 import { ContributionController } from '@/modules/contribution/presentation/v1/contribution.controller';
 import { createContributionRoutes } from '@/modules/contribution/presentation/v1/contribution.routes';
 import { createMyContributionRoutes } from '@/modules/contribution/presentation/v1/my-contribution.routes';
@@ -583,6 +584,7 @@ const contributionController = new ContributionController({
     new ReviewPushCooldownGate(appSettingsRepo, notificationPushCooldownRepo),
   ),
   correct: new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo, recordInbox),
+  reopen: new ReopenContributionUseCase(contributionRepo, auditRepo),
   imageProviderName: publicImageStorage.providerName,
 });
 

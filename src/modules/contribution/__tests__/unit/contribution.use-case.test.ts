@@ -51,6 +51,7 @@ function makeContribution(overrides: Partial<Contribution> = {}): Contribution {
     searchMissTerm: null,
     searchMissDirection: null,
     wordLemma: 'makatn',
+    reopenedBy: null,
     ...overrides,
   };
 }
@@ -60,7 +61,9 @@ function makeDeps() {
     list: vi.fn(),
     findById: vi.fn().mockResolvedValue(makeContribution()),
     findReview: vi.fn().mockResolvedValue(null),
+    listReviews: vi.fn().mockResolvedValue([]),
     findChildWithParent: vi.fn(),
+    reopen: vi.fn(),
     review: vi.fn().mockImplementation(({ decision }: { decision: string }) => ({
       contributionId: '01CONTRIBULID0000000000000',
       entityType: 'word',
@@ -802,6 +805,39 @@ describe('ListContributionsUseCase / GetContributionDetailUseCase', () => {
     const detail = await useCase.execute('01CONTRIBULID0000000000000');
     expect(wordRepo.findDetailById).toHaveBeenCalledWith('01WORDULID000000000000000', { includeAllStatuses: true });
     expect(detail.entity).toMatchObject({ lemma: 'makatn' });
+    expect(detail.review).toBeNull();
+    expect(detail.priorReviews).toEqual([]);
+  });
+
+  it('detail pending dengan history → review null, prior_reviews terisi', async () => {
+    const { contributionRepo, wordRepo } = makeDeps();
+    const prior = {
+      reviewerId: ACTOR.userId,
+      status: 'approved' as const,
+      comment: null,
+      createdAt: new Date(),
+    };
+    contributionRepo.findById = vi.fn().mockResolvedValue(makeContribution({ status: 'pending', reopenedBy: ACTOR.userId }));
+    contributionRepo.listReviews = vi.fn().mockResolvedValue([prior]);
+    const useCase = new GetContributionDetailUseCase(contributionRepo, wordRepo);
+    const detail = await useCase.execute('01CONTRIBULID0000000000000');
+    expect(detail.review).toBeNull();
+    expect(detail.priorReviews).toEqual([prior]);
+  });
+
+  it('detail approved → review = latest prior', async () => {
+    const { contributionRepo, wordRepo } = makeDeps();
+    const prior = {
+      reviewerId: ACTOR.userId,
+      status: 'approved' as const,
+      comment: 'ok',
+      createdAt: new Date(),
+    };
+    contributionRepo.findById = vi.fn().mockResolvedValue(makeContribution({ status: 'approved' }));
+    contributionRepo.listReviews = vi.fn().mockResolvedValue([prior]);
+    const useCase = new GetContributionDetailUseCase(contributionRepo, wordRepo);
+    const detail = await useCase.execute('01CONTRIBULID0000000000000');
+    expect(detail.review).toEqual(prior);
   });
 
   it('detail tidak ditemukan → 404 CONTRIBUTION_NOT_FOUND', async () => {
@@ -812,6 +848,122 @@ describe('ListContributionsUseCase / GetContributionDetailUseCase', () => {
       errorCode: 'CONTRIBUTION_NOT_FOUND',
       statusCode: 404,
     });
+  });
+});
+
+describe('ReopenContributionUseCase', () => {
+  it('reopen oleh reviewer keputusan → repo.reopen + audit', async () => {
+    const { contributionRepo, auditRepo } = makeDeps();
+    contributionRepo.findById = vi.fn().mockResolvedValue(makeContribution({ status: 'approved' }));
+    contributionRepo.findReview = vi.fn().mockResolvedValue({
+      reviewerId: ACTOR.userId,
+      status: 'approved',
+      comment: null,
+      createdAt: new Date(),
+    });
+    contributionRepo.reopen = vi.fn().mockResolvedValue({
+      contributionId: '01CONTRIBULID0000000000000',
+      entityType: 'word',
+      entityId: '01WORDULID000000000000000',
+      status: 'pending',
+      reopenedBy: ACTOR.userId,
+    });
+    const { ReopenContributionUseCase } = await import(
+      '../../application/use-cases/reopen-contribution.use-case'
+    );
+    const useCase = new ReopenContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+    );
+    const outcome = await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      actorId: ACTOR.userId,
+      actorRole: 'reviewer',
+      requestId: ACTOR.requestId,
+    });
+    expect(outcome.status).toBe('pending');
+    expect(contributionRepo.reopen).toHaveBeenCalledWith({
+      contributionId: '01CONTRIBULID0000000000000',
+      actorId: ACTOR.userId,
+    });
+    expect(auditRepo.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'reopen', userId: ACTOR.userId }),
+    );
+  });
+
+  it('reopen oleh reviewer lain → 403 CONTRIBUTION_REOPEN_FORBIDDEN', async () => {
+    const { contributionRepo, auditRepo } = makeDeps();
+    contributionRepo.findById = vi.fn().mockResolvedValue(makeContribution({ status: 'rejected' }));
+    contributionRepo.findReview = vi.fn().mockResolvedValue({
+      reviewerId: '01OTHERREVIEWER00000000000',
+      status: 'rejected',
+      comment: 'x',
+      createdAt: new Date(),
+    });
+    const { ReopenContributionUseCase } = await import(
+      '../../application/use-cases/reopen-contribution.use-case'
+    );
+    const useCase = new ReopenContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+    );
+    await expect(
+      useCase.execute({
+        contributionId: '01CONTRIBULID0000000000000',
+        actorId: ACTOR.userId,
+        actorRole: 'reviewer',
+      }),
+    ).rejects.toMatchObject({ errorCode: 'CONTRIBUTION_REOPEN_FORBIDDEN', statusCode: 403 });
+  });
+
+  it('admin boleh reopen keputusan orang lain', async () => {
+    const { contributionRepo, auditRepo } = makeDeps();
+    contributionRepo.findById = vi.fn().mockResolvedValue(makeContribution({ status: 'approved' }));
+    contributionRepo.findReview = vi.fn().mockResolvedValue({
+      reviewerId: '01OTHERREVIEWER00000000000',
+      status: 'approved',
+      comment: null,
+      createdAt: new Date(),
+    });
+    contributionRepo.reopen = vi.fn().mockResolvedValue({
+      contributionId: '01CONTRIBULID0000000000000',
+      entityType: 'word',
+      entityId: '01WORDULID000000000000000',
+      status: 'pending',
+      reopenedBy: ACTOR.userId,
+    });
+    const { ReopenContributionUseCase } = await import(
+      '../../application/use-cases/reopen-contribution.use-case'
+    );
+    const useCase = new ReopenContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+    );
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      actorId: ACTOR.userId,
+      actorRole: 'admin',
+    });
+    expect(contributionRepo.reopen).toHaveBeenCalled();
+  });
+
+  it('masih pending → 409 CONTRIBUTION_NOT_REOPENABLE', async () => {
+    const { contributionRepo, auditRepo } = makeDeps();
+    contributionRepo.findById = vi.fn().mockResolvedValue(makeContribution({ status: 'pending' }));
+    const { ReopenContributionUseCase } = await import(
+      '../../application/use-cases/reopen-contribution.use-case'
+    );
+    const useCase = new ReopenContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+    );
+    await expect(
+      useCase.execute({
+        contributionId: '01CONTRIBULID0000000000000',
+        actorId: ACTOR.userId,
+        actorRole: 'reviewer',
+      }),
+    ).rejects.toMatchObject({ errorCode: 'CONTRIBUTION_NOT_REOPENABLE', statusCode: 409 });
   });
 });
 

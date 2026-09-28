@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import {
   contributionReviews,
   contributions,
@@ -56,7 +56,11 @@ function toContribution(row: {
   searchMissId: string | null;
   searchMissTerm: string | null;
   searchMissDirection: string | null;
+  reopenedBy?: string | null;
   wordLemma?: string | null;
+  latestReviewStatus?: ContributionStatus | null;
+  latestReviewComment?: string | null;
+  latestReviewedAt?: Date | null;
 }): Contribution {
   const username = row.username;
   const trimmed = row.displayName?.trim() || null;
@@ -78,6 +82,14 @@ function toContribution(row: {
         ? row.searchMissDirection
         : null,
     wordLemma: row.wordLemma ?? null,
+    reopenedBy: row.reopenedBy ?? null,
+    ...(row.latestReviewStatus !== undefined
+      ? {
+          latestReviewStatus: row.latestReviewStatus,
+          latestReviewComment: row.latestReviewComment ?? null,
+          latestReviewedAt: row.latestReviewedAt ?? null,
+        }
+      : {}),
   };
 }
 
@@ -95,12 +107,40 @@ const contributionColumns = {
   searchMissId: contributions.searchMissId,
   searchMissTerm: searchMisses.term,
   searchMissDirection: searchMisses.direction,
+  reopenedBy: contributions.reopenedBy,
 };
 
 export class ContributionRepositoryImpl implements ContributionRepository {
   constructor(private readonly db: AppDatabase) {}
 
   async list(filter: ContributionListFilter): Promise<CursorPage<Contribution>> {
+    const mineScope =
+      filter.mine && filter.viewerId
+        ? or(
+            eq(contributions.reopenedBy, filter.viewerId),
+            exists(
+              this.db
+                .select({ one: sql`1` })
+                .from(contributionReviews)
+                .where(
+                  and(
+                    eq(contributionReviews.contributionId, contributions.id),
+                    eq(contributionReviews.reviewerId, filter.viewerId),
+                    isNull(contributionReviews.deletedAt),
+                    inArray(contributionReviews.status, ['approved', 'rejected', 'corrected']),
+                  ),
+                ),
+            ),
+          )
+        : undefined;
+
+    // Antrean global: sembunyikan soft-claim reopen milik orang lain
+    // (kecuali admin/root). Mode mine tidak memakai filter ini.
+    const reopenVisibility =
+      !filter.mine && filter.viewerId && !filter.viewerIsElevated
+        ? or(isNull(contributions.reopenedBy), eq(contributions.reopenedBy, filter.viewerId))
+        : undefined;
+
     const rows = await this.db
       .select(contributionColumns)
       .from(contributions)
@@ -114,6 +154,8 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           filter.action ? eq(contributions.action, filter.action) : undefined,
           filter.wordId ? this.belongsToWord(filter.wordId) : undefined,
           filter.cursor ? lt(contributions.id, filter.cursor) : undefined,
+          mineScope,
+          reopenVisibility,
         ),
       )
       .orderBy(desc(contributions.id))
@@ -122,12 +164,23 @@ export class ContributionRepositoryImpl implements ContributionRepository {
     const hasMore = rows.length > filter.limit;
     const sliced = hasMore ? rows.slice(0, filter.limit) : rows;
     const lemmaByKey = await this.resolveWordLemmas(sliced);
-    const items = sliced.map((row) =>
-      toContribution({
+    const latestReviews = filter.mine
+      ? await this.resolveLatestReviews(sliced.map((r) => r.id))
+      : null;
+    const items = sliced.map((row) => {
+      const latest = latestReviews?.get(row.id);
+      return toContribution({
         ...row,
         wordLemma: lemmaByKey.get(`${row.entityType}:${row.entityId}`) ?? null,
-      }),
-    );
+        ...(latest
+          ? {
+              latestReviewStatus: latest.status,
+              latestReviewComment: latest.comment,
+              latestReviewedAt: latest.createdAt,
+            }
+          : {}),
+      });
+    });
     return {
       items,
       nextCursor: hasMore && items.length > 0 ? items[items.length - 1].id : null,
@@ -305,6 +358,34 @@ export class ContributionRepositoryImpl implements ContributionRepository {
     return out;
   }
 
+  private async resolveLatestReviews(
+    ids: string[],
+  ): Promise<Map<string, { status: ContributionStatus; comment: string | null; createdAt: Date }>> {
+    const out = new Map<string, { status: ContributionStatus; comment: string | null; createdAt: Date }>();
+    if (ids.length === 0) return out;
+    const rows = await this.db
+      .select({
+        contributionId: contributionReviews.contributionId,
+        status: contributionReviews.status,
+        comment: contributionReviews.comment,
+        createdAt: contributionReviews.createdAt,
+      })
+      .from(contributionReviews)
+      .where(
+        and(inArray(contributionReviews.contributionId, ids), isNull(contributionReviews.deletedAt)),
+      )
+      .orderBy(desc(contributionReviews.createdAt));
+    for (const row of rows) {
+      if (out.has(row.contributionId)) continue;
+      out.set(row.contributionId, {
+        status: row.status as ContributionStatus,
+        comment: row.comment,
+        createdAt: row.createdAt,
+      });
+    }
+    return out;
+  }
+
   async findReview(contributionId: string): Promise<ContributionReview | null> {
     const [row] = await this.db
       .select({
@@ -318,6 +399,251 @@ export class ContributionRepositoryImpl implements ContributionRepository {
       .orderBy(desc(contributionReviews.createdAt))
       .limit(1);
     return row ? { ...row, status: row.status as ContributionStatus } : null;
+  }
+
+  async listReviews(contributionId: string): Promise<ContributionReview[]> {
+    const rows = await this.db
+      .select({
+        reviewerId: contributionReviews.reviewerId,
+        status: contributionReviews.status,
+        comment: contributionReviews.comment,
+        createdAt: contributionReviews.createdAt,
+      })
+      .from(contributionReviews)
+      .where(and(eq(contributionReviews.contributionId, contributionId), isNull(contributionReviews.deletedAt)))
+      .orderBy(desc(contributionReviews.createdAt));
+    return rows.map((row) => ({ ...row, status: row.status as ContributionStatus }));
+  }
+
+  async reopen(cmd: {
+    contributionId: string;
+    actorId: string;
+  }): Promise<{
+    contributionId: string;
+    entityType: ContributionEntityType;
+    entityId: string;
+    status: 'pending';
+    reopenedBy: string;
+  }> {
+    return this.db.transaction(async (tx) => {
+      const [contrib] = await tx
+        .select()
+        .from(contributions)
+        .where(and(eq(contributions.id, cmd.contributionId), isNull(contributions.deletedAt)))
+        .limit(1);
+      if (!contrib) {
+        throw new NotFoundError('CONTRIBUTION_NOT_FOUND', 'Kontribusi dengan id tersebut tidak ditemukan');
+      }
+      if (contrib.status === 'pending') {
+        throw new ConflictError(
+          'CONTRIBUTION_NOT_REOPENABLE',
+          'Kontribusi ini masih menunggu review - tidak perlu dibuka ulang',
+        );
+      }
+      if (!['approved', 'rejected', 'corrected'].includes(contrib.status)) {
+        throw new ConflictError(
+          'CONTRIBUTION_NOT_REOPENABLE',
+          'Status kontribusi tidak bisa dibuka ulang',
+        );
+      }
+
+      const entityType = contrib.entityType as ContributionEntityType;
+      const entityId = contrib.entityId;
+      const now = new Date();
+
+      await this.rollbackEntityForReopen(tx, entityType, entityId, cmd.actorId, now);
+
+      const updated = await tx
+        .update(contributions)
+        .set({ status: 'pending', reopenedBy: cmd.actorId })
+        .where(
+          and(
+            eq(contributions.id, contrib.id),
+            inArray(contributions.status, ['approved', 'rejected', 'corrected']),
+            isNull(contributions.deletedAt),
+          ),
+        )
+        .returning({ id: contributions.id });
+      if (updated.length === 0) {
+        throw new ConflictError(
+          'CONTRIBUTION_NOT_REOPENABLE',
+          'Kontribusi tidak bisa dibuka ulang - status sudah berubah',
+        );
+      }
+
+      return {
+        contributionId: contrib.id,
+        entityType,
+        entityId,
+        status: 'pending' as const,
+        reopenedBy: cmd.actorId,
+      };
+    });
+  }
+
+  private async rollbackEntityForReopen(
+    tx: Tx,
+    entityType: ContributionEntityType,
+    entityId: string,
+    actorId: string,
+    now: Date,
+  ): Promise<void> {
+    switch (entityType) {
+      case 'word': {
+        const [word] = await tx
+          .select({ id: words.id, deletedAt: words.deletedAt })
+          .from(words)
+          .where(eq(words.id, entityId))
+          .limit(1);
+        if (!word || word.deletedAt) {
+          throw new ConflictError(
+            'CONTRIBUTION_NOT_REOPENABLE',
+            'Kata sudah digabung atau dihapus - tidak bisa dibuka ulang',
+          );
+        }
+        await tx
+          .update(words)
+          .set({
+            status: 'pending_review',
+            isVerified: false,
+            verifiedBy: null,
+            verifiedAt: null,
+            updatedBy: actorId,
+            updatedAt: now,
+          })
+          .where(and(eq(words.id, entityId), isNull(words.deletedAt)));
+        await this.setWordChildrenPendingReview(tx, entityId, actorId, now);
+        break;
+      }
+      case 'pronunciation': {
+        const updated = await tx
+          .update(pronunciations)
+          .set({
+            status: 'pending_review',
+            isVerified: false,
+            updatedBy: actorId,
+            updatedAt: now,
+          })
+          .where(and(eq(pronunciations.id, entityId), isNull(pronunciations.deletedAt)))
+          .returning({ id: pronunciations.id });
+        if (updated.length === 0) {
+          throw new ConflictError(
+            'CONTRIBUTION_NOT_REOPENABLE',
+            'Pengucapan tidak ditemukan atau sudah dihapus - tidak bisa dibuka ulang',
+          );
+        }
+        break;
+      }
+      case 'word_image': {
+        // Reject soft-delete baris; restore agar bisa ditinjau lagi.
+        const updated = await tx
+          .update(wordImages)
+          .set({
+            status: 'pending_review',
+            isVerified: false,
+            deletedAt: null,
+          })
+          .where(eq(wordImages.id, entityId))
+          .returning({ id: wordImages.id });
+        if (updated.length === 0) {
+          throw new ConflictError(
+            'CONTRIBUTION_NOT_REOPENABLE',
+            'Gambar tidak ditemukan - tidak bisa dibuka ulang',
+          );
+        }
+        break;
+      }
+      case 'word_audio': {
+        const updated = await tx
+          .update(wordAudios)
+          .set({ status: 'pending_review', isVerified: false })
+          .where(and(eq(wordAudios.id, entityId), isNull(wordAudios.deletedAt)))
+          .returning({ id: wordAudios.id });
+        if (updated.length === 0) {
+          throw new ConflictError(
+            'CONTRIBUTION_NOT_REOPENABLE',
+            'Audio tidak ditemukan atau sudah dihapus - tidak bisa dibuka ulang',
+          );
+        }
+        break;
+      }
+      case 'example': {
+        const updated = await tx
+          .update(examples)
+          .set({
+            status: 'pending_review',
+            isVerified: false,
+            updatedBy: actorId,
+            updatedAt: now,
+          })
+          .where(and(eq(examples.id, entityId), isNull(examples.deletedAt)))
+          .returning({ id: examples.id });
+        if (updated.length === 0) {
+          throw new ConflictError(
+            'CONTRIBUTION_NOT_REOPENABLE',
+            'Contoh kalimat tidak ditemukan atau sudah dihapus - tidak bisa dibuka ulang',
+          );
+        }
+        break;
+      }
+      case 'meaning': {
+        const updated = await tx
+          .update(meanings)
+          .set({
+            status: 'pending_review',
+            isVerified: false,
+            updatedBy: actorId,
+            updatedAt: now,
+          })
+          .where(and(eq(meanings.id, entityId), isNull(meanings.deletedAt)))
+          .returning({ id: meanings.id });
+        if (updated.length === 0) {
+          throw new ConflictError(
+            'CONTRIBUTION_NOT_REOPENABLE',
+            'Makna tidak ditemukan atau sudah dihapus - tidak bisa dibuka ulang',
+          );
+        }
+        break;
+      }
+      default:
+        throw new ConflictError(
+          'CONTRIBUTION_NOT_REOPENABLE',
+          'Jenis entitas ini tidak bisa dibuka ulang',
+        );
+    }
+  }
+
+  private async setWordChildrenPendingReview(
+    tx: Tx,
+    wordId: string,
+    actorId: string,
+    now: Date,
+  ): Promise<void> {
+    const meaningRows = await tx.select({ id: meanings.id }).from(meanings).where(eq(meanings.wordId, wordId));
+    await tx
+      .update(meanings)
+      .set({ status: 'pending_review', isVerified: false, updatedBy: actorId, updatedAt: now })
+      .where(eq(meanings.wordId, wordId));
+    if (meaningRows.length > 0) {
+      await tx
+        .update(examples)
+        .set({ status: 'pending_review', isVerified: false, updatedBy: actorId, updatedAt: now })
+        .where(inArray(examples.meaningId, meaningRows.map((m) => m.id)));
+    }
+    await tx
+      .update(pronunciations)
+      .set({ status: 'pending_review', isVerified: false, updatedBy: actorId, updatedAt: now })
+      .where(eq(pronunciations.wordId, wordId));
+    // Foto yang di-soft-delete saat approve (image_decisions reject) tidak
+    // di-restore - batasan v1. Hanya anak yang masih hidup.
+    await tx
+      .update(wordImages)
+      .set({ status: 'pending_review', isVerified: false })
+      .where(and(eq(wordImages.wordId, wordId), isNull(wordImages.deletedAt)));
+    await tx
+      .update(wordAudios)
+      .set({ status: 'pending_review', isVerified: false })
+      .where(and(eq(wordAudios.wordId, wordId), isNull(wordAudios.deletedAt)));
   }
 
   async findChildWithParent(
@@ -706,7 +1032,7 @@ export class ContributionRepositoryImpl implements ContributionRepository {
       const status = decisionToStatus(cmd.decision);
       const closed = await tx
         .update(contributions)
-        .set({ status })
+        .set({ status, reopenedBy: null })
         .where(and(eq(contributions.id, contrib.id), eq(contributions.status, 'pending')))
         .returning({ id: contributions.id });
       if (closed.length === 0) {

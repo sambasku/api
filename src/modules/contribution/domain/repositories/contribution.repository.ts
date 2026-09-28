@@ -15,6 +15,15 @@ export interface ContributionListFilter {
   action?: string;
   /** Batasi antrean ke kontribusi kata ini (entity word atau anaknya). */
   wordId?: string;
+  /**
+   * true = riwayat verifikasi milik viewerId (join contribution_reviews).
+   * Jangan terima reviewer_id arbitrary dari client.
+   */
+  mine?: boolean;
+  /** User yang request (auth). Dipakai untuk mine + filter reopened_by. */
+  viewerId?: string;
+  /** admin|root melihat semua reopened claim di antrean global. */
+  viewerIsElevated?: boolean;
   limit: number;
   /** cursor-based (Section 13): ULID id item terakhir halaman sebelumnya */
   cursor?: string;
@@ -129,10 +138,20 @@ export interface ContributionRepository {
   findById(id: string): Promise<Contribution | null>;
   /** baris review terakhir untuk kontribsi (null kalau belum ada keputusan) */
   findReview(contributionId: string): Promise<ContributionReview | null>;
+  /** Jejak review append-only (terbaru dulu). */
+  listReviews(contributionId: string): Promise<ContributionReview[]>;
   findChildWithParent(
     entityType: 'pronunciation' | 'word_image' | 'word_audio' | 'example' | 'meaning',
     entityId: string,
   ): Promise<ChildEntityWithParent | null>;
+  /**
+   * Buka ulang keputusan: status→pending, set reopened_by, rollback entity.
+   * Tidak menghapus baris contribution_reviews (append-only).
+   */
+  reopen(cmd: {
+    contributionId: string;
+    actorId: string;
+  }): Promise<{ contributionId: string; entityType: ContributionEntityType; entityId: string; status: 'pending'; reopenedBy: string }>;
   review(cmd: ReviewCommand, tx?: unknown): Promise<ReviewOutcome>;
   /**
    * Buka transaksi, klaim baris masih pending, lalu jalankan kerja

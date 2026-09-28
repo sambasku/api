@@ -9,6 +9,7 @@ import type {
   ReviewContributionUseCase,
 } from '../../application/use-cases/review-contribution.use-case';
 import type { CorrectContributionUseCase } from '../../application/use-cases/correct-contribution.use-case';
+import type { ReopenContributionUseCase } from '../../application/use-cases/reopen-contribution.use-case';
 import {
   approveContributionSchema,
   type ApproveContributionBody,
@@ -87,17 +88,23 @@ export class ContributionController {
       getDetail: GetContributionDetailUseCase;
       review: ReviewContributionUseCase;
       correct: CorrectContributionUseCase;
+      reopen: ReopenContributionUseCase;
       /** provider gambar aktif - untuk mapping koreksi entity word */
       imageProviderName: string;
     },
   ) {}
 
   async list(c: Context, query: ListContributionsQueryBody) {
+    const actor = this.requireActor(c);
+    const elevated = actor.role === 'admin' || actor.role === 'root';
     const { items, nextCursor, hasMore } = await this.deps.list.execute({
       status: query.status,
       entityType: query.entity_type,
       action: query.action,
       wordId: query.word_id,
+      mine: query.mine === true,
+      viewerId: actor.userId,
+      viewerIsElevated: elevated,
       limit: query.limit,
       cursor: query.cursor,
     });
@@ -117,13 +124,21 @@ export class ContributionController {
         search_miss_id: item.searchMissId,
         search_miss_term: item.searchMissTerm,
         search_miss_direction: item.searchMissDirection,
+        reopened_by: item.reopenedBy,
+        ...(query.mine === true
+          ? {
+              review_status: item.latestReviewStatus ?? null,
+              review_comment: item.latestReviewComment ?? null,
+              reviewed_at: item.latestReviewedAt?.toISOString() ?? null,
+            }
+          : {}),
       })),
       meta: { limit: query.limit, next_cursor: nextCursor, has_more: hasMore },
     });
   }
 
   async detail(c: Context, id: string) {
-    const { contribution, review, entity } = await this.deps.getDetail.execute(id);
+    const { contribution, review, priorReviews, entity } = await this.deps.getDetail.execute(id);
     return c.json({
       success: true as const,
       data: {
@@ -141,6 +156,7 @@ export class ContributionController {
           search_miss_id: contribution.searchMissId,
           search_miss_term: contribution.searchMissTerm,
           search_miss_direction: contribution.searchMissDirection,
+          reopened_by: contribution.reopenedBy,
         },
         review: review
           ? {
@@ -150,9 +166,35 @@ export class ContributionController {
               created_at: review.createdAt.toISOString(),
             }
           : null,
+        prior_reviews: priorReviews.map((row) => ({
+          reviewer_id: row.reviewerId,
+          status: row.status,
+          comment: row.comment,
+          created_at: row.createdAt.toISOString(),
+        })),
         // payload polymorphic - snake_case untuk entity anak; word detail
         // bentuknya sama seperti GET /words/:id (semua status)
         entity: serializeEntity(entity),
+      },
+    });
+  }
+
+  async reopen(c: Context, id: string) {
+    const actor = this.requireActor(c);
+    const outcome = await this.deps.reopen.execute({
+      contributionId: id,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      requestId: actor.requestId,
+    });
+    return c.json({
+      success: true as const,
+      data: {
+        contribution_id: outcome.contributionId,
+        entity_type: outcome.entityType,
+        entity_id: outcome.entityId,
+        status: outcome.status,
+        reopened_by: outcome.reopenedBy,
       },
     });
   }

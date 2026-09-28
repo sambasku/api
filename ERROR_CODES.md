@@ -81,6 +81,8 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `APPLICATION_ALREADY_EXISTS` | 409 | POST pengajuan padahal user sudah punya baris verifier_applications |
 | `APPLICATION_ALREADY_REVIEWED` | 409 | Approve/reject pengajuan yang statusnya bukan pending |
 | `CONTRIBUTION_ALREADY_REVIEWED` | 409 | Kontribusi sudah punya keputusan (approve/reject/correct), termasuk dua verifikator yang mengirim bersamaan |
+| `CONTRIBUTION_NOT_REOPENABLE` | 409 | Kontribusi masih pending / belum ada keputusan, atau tidak bisa dibuka ulang (mis. kata hasil merge lemma) |
+| `CONTRIBUTION_REOPEN_FORBIDDEN` | 403 | Hanya reviewer keputusan terkini (atau admin/root) yang boleh membuka ulang |
 | `WORD_ALREADY_VERIFIED` | 409 | Verify dipanggil pada kata yang sudah `is_verified = true` (tanpa audit baru) |
 | `WORD_ALREADY_UNVERIFIED` | 409 | Unverify dipanggil pada kata yang sudah `is_verified = false` (tanpa audit baru) |
 | `SUGGESTION_NOT_FOUND` | 404 | Usulan perubahan kata tidak ditemukan |
