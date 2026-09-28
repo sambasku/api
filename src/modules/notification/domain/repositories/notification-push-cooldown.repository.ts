@@ -4,7 +4,8 @@ export type ReviewPushCooldownChannel = 'contribution_approved' | 'contribution_
 export type NotificationPushCooldownChannel =
   | ReviewPushCooldownChannel
   | 'word_comment'
-  | 'word_vote';
+  | 'word_vote'
+  | 'discussion_reply';
 
 export interface NotificationPushCooldown {
   userId: string;

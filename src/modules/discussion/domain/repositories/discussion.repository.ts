@@ -32,6 +32,8 @@ export interface DiscussionRepository {
   createReply(input: NewDiscussionReply): Promise<DiscussionReply>;
   findReplyById(id: string): Promise<DiscussionReply | null>;
   listReplies(discussionId: string): Promise<DiscussionReply[]>;
+  /** User unik yang pernah membalas thread (semua status kecuali soft-delete opsional: semua). */
+  listDistinctReplierUserIds(discussionId: string): Promise<string[]>;
 
   markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownReply(id: string, reviewerId: string): Promise<boolean>;

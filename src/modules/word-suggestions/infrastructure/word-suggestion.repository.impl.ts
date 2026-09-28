@@ -1097,10 +1097,16 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     const labelMap = await getUserPublicLabels([...new Set(userIds)]);
 
     const mapped: ChangeHistoryItem[] = rows.map((r) => {
-      const type: 'direct_edit' | 'suggest_edit' = r.sourceContributionId
-        ? 'suggest_edit'
-        : 'direct_edit';
-      const changes = this._extractChanges(r.oldData, r.newData);
+      const type: ChangeHistoryItem['type'] =
+        r.action === 'duplicate_vote'
+          ? 'duplicate_vote'
+          : r.sourceContributionId
+            ? 'suggest_edit'
+            : 'direct_edit';
+      const changes =
+        r.action === 'duplicate_vote'
+          ? this._extractDuplicateVoteChanges(r.newData)
+          : this._extractChanges(r.oldData, r.newData);
       let source: SuggestionSource | null = null;
       if (r.sourceContributionId && suggestionMap[r.sourceContributionId]) {
         const sug = suggestionMap[r.sourceContributionId];
@@ -1140,6 +1146,41 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null,
       hasMore,
     };
+  }
+
+  private _extractDuplicateVoteChanges(newData: unknown): ChangeHistoryItem['changes'] {
+    const n = (newData ?? {}) as Record<string, unknown>;
+    const value = n.value === -1 || n.value === '-1' ? -1 : 1;
+    const arah = value === 1 ? 'Mendukung' : 'Tidak mendukung';
+    const definition = typeof n.definition === 'string' ? n.definition : '-';
+    const translation =
+      typeof n.translation_text === 'string' ? n.translation_text : '-';
+    return [
+      {
+        entity: 'meaning',
+        field: 'duplicate_vote',
+        oldValue: null,
+        newValue: value,
+        displayOld: '-',
+        displayNew: arah,
+      },
+      {
+        entity: 'meaning',
+        field: 'definition',
+        oldValue: null,
+        newValue: definition,
+        displayOld: '-',
+        displayNew: definition,
+      },
+      {
+        entity: 'meaning',
+        field: 'translation_text',
+        oldValue: null,
+        newValue: translation,
+        displayOld: '-',
+        displayNew: translation,
+      },
+    ];
   }
 
   private _extractChanges(oldData: unknown, newData: unknown): ChangeHistoryItem['changes'] {

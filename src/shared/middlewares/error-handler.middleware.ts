@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import {
   AppError,
   BadRequestError,
+  ConflictError,
   ForbiddenError,
   RateLimitedError,
   ValidationError,
@@ -17,22 +18,31 @@ export const errorHandler: ErrorHandler = (err, c) => {
     if (err instanceof RateLimitedError) {
       c.header('Retry-After', String(err.retryAfterSeconds));
     }
-    return c.json(
-      {
-        success: false as const,
-        error_code: err.errorCode,
-        message: err.message,
-        details:
-          err instanceof ValidationError
+    const body: {
+      success: false;
+      error_code: string;
+      message: string;
+      details:
+        | { field: string; message: string }[]
+        | null;
+      data?: Record<string, unknown> | null;
+    } = {
+      success: false as const,
+      error_code: err.errorCode,
+      message: err.message,
+      details:
+        err instanceof ValidationError
+          ? err.details
+          : err instanceof BadRequestError
             ? err.details
-            : err instanceof BadRequestError
+            : err instanceof ForbiddenError
               ? err.details
-              : err instanceof ForbiddenError
-                ? err.details
-                : null,
-      },
-      err.statusCode as 400 | 401 | 403 | 404 | 409 | 429,
-    );
+              : null,
+    };
+    if (err instanceof ConflictError && err.data) {
+      body.data = err.data;
+    }
+    return c.json(body, err.statusCode as 400 | 401 | 403 | 404 | 409 | 429);
   }
 
   // ZodError = gagal parsing schema body/query dari route `c.req.valid()`

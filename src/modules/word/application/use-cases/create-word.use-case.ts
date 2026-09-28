@@ -24,6 +24,8 @@ import {
   DUPLICATE_LEMMA_PENDING_MERGE,
   DUPLICATE_LEMMA_USE_TAB,
 } from '../utils/duplicate-lemma-warning';
+import { throwDuplicateMeaningConflict } from '../utils/throw-duplicate-meaning-conflict';
+import { isPlaceholderMeaningText } from '../utils/normalize-meaning-text';
 
 export interface InlineCreatedResult {
   /** skema, urut sesuai request - diteruskan ke respons (04) */
@@ -109,6 +111,10 @@ export class CreateWordUseCase {
     });
     const details = mapMissingToDetails(dto, missing);
     if (details.length > 0) throw new ValidationError(details);
+
+    // 1b. Exact lemma + makna (definition + terjemahan ID) yang sudah tayang
+    //     → 409 DUPLICATE_MEANING (modal vote), bukan insert baru.
+    await this.assertNoDuplicatePublishedMeaning(dto);
 
     // 2. Cek duplikat - warning, bukan error (induk + tiap lemma inline).
     //    Copy + auto-merge published dijalankan SETELAH save (butuh id baru).
@@ -224,6 +230,35 @@ export class CreateWordUseCase {
       word: saved,
       warnings: [{ field, message: DUPLICATE_LEMMA_USE_TAB }],
     };
+  }
+
+  /**
+   * Exact match lemma + definition + terjemahan Indonesia pada kata
+   * published → 409 DUPLICATE_MEANING (jangan insert).
+   */
+  private async assertNoDuplicatePublishedMeaning(dto: CreateWordDto): Promise<void> {
+    const indonesianLanguageId = await this.wordRepo.findLanguageIdByCode('id');
+    if (!indonesianLanguageId) return;
+
+    for (const meaning of dto.meanings) {
+      if (meaning.isHaveDefinition === false || meaning.isHaveTranslation === false) {
+        continue;
+      }
+      if (isPlaceholderMeaningText(meaning.definition)) continue;
+      const idTranslation = meaning.translations.find(
+        (t) => t.languageId === indonesianLanguageId,
+      );
+      if (!idTranslation || isPlaceholderMeaningText(idTranslation.translationText)) {
+        continue;
+      }
+      const match = await this.wordRepo.findPublishedDuplicateMeaning({
+        languageId: dto.languageId,
+        lemma: dto.lemma,
+        definition: meaning.definition,
+        translationText: idTranslation.translationText,
+      });
+      if (match) throwDuplicateMeaningConflict(match);
+    }
   }
 
   /** Validasi miss aktif + soft-check term (12-api). No-op kalau field absen. */

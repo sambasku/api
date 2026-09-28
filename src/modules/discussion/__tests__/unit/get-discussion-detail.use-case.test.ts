@@ -21,6 +21,7 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     username: 'peminta',
     displayName: 'peminta',
     body: 'Apa arti ini?',
+    linkUrl: null,
     images: [],
     status: 'published',
     rejectionNote: null,
@@ -68,6 +69,7 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     listReplies: vi.fn().mockResolvedValue([]),
     markReplyDeletedByAuthor: vi.fn(),
     takedownReply: vi.fn(),
+    listDistinctReplierUserIds: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as DiscussionRepository;
 }

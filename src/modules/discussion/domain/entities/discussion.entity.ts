@@ -10,6 +10,8 @@ export interface DiscussionImage {
   url: string;
   providerFileId: string;
   publicUrl: string | null;
+  /** Peringatan visual (parity foto kata). Hanya diisi saat approve. */
+  contentWarnings: string[];
 }
 
 export interface Discussion {
@@ -19,6 +21,8 @@ export interface Discussion {
   /** Nama tampilan publik; fallback username. */
   displayName: string | null;
   body: string | null;
+  /** Tautan https luar (opsional). */
+  linkUrl: string | null;
   images: DiscussionImage[];
   status: DiscussionStatus;
   rejectionNote: string | null;
@@ -31,7 +35,8 @@ export interface Discussion {
 
 export interface NewDiscussion {
   userId: string;
-  body: string | null;
+  body: string;
+  linkUrl?: string | null;
   images: DiscussionImage[];
 }
 

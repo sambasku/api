@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, like, or, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, like, or, lt, sql } from 'drizzle-orm';
 import { users } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { NotFoundError } from '@/shared/errors/app-error';
@@ -129,6 +129,21 @@ export class UserRepositoryImpl implements UserRepository {
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
       hasMore,
     };
+  }
+
+  async listActiveIdsByRoles(roles: UserRole[]): Promise<string[]> {
+    if (roles.length === 0) return [];
+    const rows = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          isNull(users.deletedAt),
+          eq(users.isActive, true),
+          inArray(users.role, roles),
+        ),
+      );
+    return rows.map((r) => r.id);
   }
 
   async setCanContribute(id: string, canContribute: boolean): Promise<boolean> {

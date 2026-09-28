@@ -9,6 +9,8 @@ export interface UserRepository {
   updatePassword(id: string, passwordHash: string): Promise<void>;
   markEmailVerified(id: string): Promise<void>;
   list(filter: UserListFilter): Promise<UserListResult>;
+  /** ID user aktif (is_active, belum soft-delete) dengan salah satu role. */
+  listActiveIdsByRoles(roles: UserRole[]): Promise<string[]>;
   updateRole(id: string, role: UserRole): Promise<void>;
   setCanContribute(id: string, canContribute: boolean): Promise<boolean>;
   setIsActive(id: string, isActive: boolean): Promise<boolean>;

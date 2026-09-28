@@ -17,32 +17,25 @@ export const discussionImageSchema = z.object({
     .min(1, 'Alamat gambar tidak valid'),
 });
 
-export const createDiscussionBodySchema = z
-  .object({
-    body: z
-      .string({ error: 'Isi teks minimal 1 karakter' })
-      .trim()
-      .min(1, 'Isi teks minimal 1 karakter')
-      .max(1000, 'Isi teks maksimal 1000 karakter')
-      .optional()
-      .nullable(),
-    images: z
-      .array(discussionImageSchema, { error: 'Lampiran tidak boleh lebih dari 4 gambar' })
-      .max(4, 'Lampiran tidak boleh lebih dari 4 gambar')
-      .optional()
-      .default([]),
-  })
-  .superRefine((val, ctx) => {
-    const hasBody = val.body != null && val.body.trim().length > 0;
-    const hasImages = (val.images?.length ?? 0) > 0;
-    if (!hasBody && !hasImages) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['body'],
-        message: 'Isi teks atau unggah minimal 1 gambar',
-      });
-    }
-  });
+export const createDiscussionBodySchema = z.object({
+  body: z
+    .string({ error: 'Deskripsi wajib diisi' })
+    .trim()
+    .min(1, 'Deskripsi wajib diisi')
+    .max(1000, 'Deskripsi maksimal 1000 karakter'),
+  /** Opsional; kosong/null = tanpa tautan. Harus https jika diisi. */
+  link_url: z
+    .string({ error: 'Tautan tidak valid' })
+    .trim()
+    .max(2048, 'Tautan maksimal 2048 karakter')
+    .nullable()
+    .optional(),
+  images: z
+    .array(discussionImageSchema, { error: 'Lampiran tidak boleh lebih dari 4 gambar' })
+    .max(4, 'Lampiran tidak boleh lebih dari 4 gambar')
+    .optional()
+    .default([]),
+});
 
 export type CreateDiscussionBody = z.infer<typeof createDiscussionBodySchema>;
 
@@ -125,18 +118,21 @@ export type PinDiscussionReplyBody = z.infer<typeof pinDiscussionReplyBodySchema
 
 const publicImageWireSchema = z.object({
   public_url: z.string(),
+  content_warnings: z.array(z.string()).default([]),
 });
 
 const ownerImageWireSchema = z.object({
   url: z.string(),
   provider_file_id: z.string(),
   public_url: z.string().nullable(),
+  content_warnings: z.array(z.string()).default([]),
 });
 
 const adminImageWireSchema = z.object({
   url: z.string(),
   provider_file_id: z.string(),
   public_url: z.string().nullable(),
+  content_warnings: z.array(z.string()).default([]),
 });
 
 export const discussionReplyPublicSchema = z.object({
@@ -160,6 +156,7 @@ export const discussionPublicItemSchema = z.object({
   username: z.string().nullable(),
   display_name: z.string().nullable(),
   body: z.string().nullable(),
+  link_url: z.string().nullable(),
   images: z.array(publicImageWireSchema),
   status: z.literal('published'),
   pinned_reply_id: z.string().nullable(),
@@ -173,6 +170,7 @@ export const discussionOwnerItemSchema = z.object({
   username: z.string().nullable(),
   display_name: z.string().nullable(),
   body: z.string().nullable(),
+  link_url: z.string().nullable(),
   images: z.array(ownerImageWireSchema),
   status: discussionStatusSchema,
   rejection_note: z.string().nullable(),
@@ -189,6 +187,7 @@ export const discussionAdminItemSchema = z.object({
   username: z.string().nullable(),
   display_name: z.string().nullable(),
   body: z.string().nullable(),
+  link_url: z.string().nullable(),
   images: z.array(adminImageWireSchema),
   status: discussionStatusSchema,
   rejection_note: z.string().nullable(),

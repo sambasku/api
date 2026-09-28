@@ -82,6 +82,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `APPLICATION_ALREADY_REVIEWED` | 409 | Approve/reject pengajuan yang statusnya bukan pending |
 | `CONTRIBUTION_ALREADY_REVIEWED` | 409 | Kontribusi sudah punya keputusan (approve/reject/correct), termasuk dua verifikator yang mengirim bersamaan |
 | `CONTRIBUTION_NOT_REOPENABLE` | 409 | Kontribusi masih pending / belum ada keputusan, atau tidak bisa dibuka ulang (mis. kata hasil merge lemma) |
+| `DUPLICATE_MEANING` | 409 | Submit kata/makna exact-match lemma + definition + terjemahan Indonesia yang sudah tayang - klien minta vote via duplicate-confirm |
 | `CONTRIBUTION_REOPEN_FORBIDDEN` | 403 | Hanya reviewer keputusan terkini (atau admin/root) yang boleh membuka ulang |
 | `WORD_ALREADY_VERIFIED` | 409 | Verify dipanggil pada kata yang sudah `is_verified = true` (tanpa audit baru) |
 | `WORD_ALREADY_UNVERIFIED` | 409 | Unverify dipanggil pada kata yang sudah `is_verified = false` (tanpa audit baru) |

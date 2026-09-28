@@ -36,7 +36,10 @@ function redactReplyBody(reply: DiscussionReply): string | null {
 function toPublicImages(help: Discussion) {
   return help.images
     .filter((img) => img.publicUrl)
-    .map((img) => ({ public_url: img.publicUrl as string }));
+    .map((img) => ({
+      public_url: img.publicUrl as string,
+      content_warnings: img.contentWarnings ?? [],
+    }));
 }
 
 function toOwnerImages(help: Discussion) {
@@ -44,6 +47,7 @@ function toOwnerImages(help: Discussion) {
     url: img.url,
     provider_file_id: img.providerFileId,
     public_url: img.publicUrl,
+    content_warnings: img.contentWarnings ?? [],
   }));
 }
 
@@ -58,6 +62,7 @@ export function toPublicItem(help: Discussion & { upvotes?: number }) {
     username: help.username,
     display_name: help.displayName,
     body: help.body,
+    link_url: help.linkUrl,
     images: toPublicImages(help),
     status: 'published' as const,
     pinned_reply_id: help.pinnedReplyId,
@@ -73,6 +78,7 @@ export function toOwnerItem(help: Discussion & { upvotes?: number }) {
     username: help.username,
     display_name: help.displayName,
     body: help.body,
+    link_url: help.linkUrl,
     images: toOwnerImages(help),
     status: help.status,
     rejection_note: help.rejectionNote,
@@ -91,6 +97,7 @@ export function toAdminItem(help: Discussion & { upvotes?: number }) {
     username: help.username,
     display_name: help.displayName,
     body: help.body,
+    link_url: help.linkUrl,
     images: toAdminImages(help),
     status: help.status,
     rejection_note: help.rejectionNote,
@@ -137,13 +144,30 @@ function toAdminReply(
   };
 }
 
-async function parseApproveFiles(c: Context): Promise<{
+async function parseApprovePayload(c: Context): Promise<{
   files: Uint8Array[];
   mimeTypes: (string | null)[];
+  imageContentWarnings: string[][] | null;
 }> {
   const contentType = c.req.header('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    let json: unknown = {};
+    try {
+      json = await c.req.json();
+    } catch {
+      json = {};
+    }
+    const warnings = extractContentWarningsField(
+      json && typeof json === 'object' && json !== null
+        ? (json as Record<string, unknown>).content_warnings
+        : undefined,
+    );
+    return { files: [], mimeTypes: [], imageContentWarnings: warnings };
+  }
+
   if (!contentType.includes('multipart/form-data')) {
-    return { files: [], mimeTypes: [] };
+    return { files: [], mimeTypes: [], imageContentWarnings: null };
   }
 
   const body = await c.req.parseBody({ all: true });
@@ -151,7 +175,12 @@ async function parseApproveFiles(c: Context): Promise<{
   const mimeTypes: (string | null)[] = [];
 
   const collect = async (part: unknown) => {
-    if (!part || typeof part === 'string') return;
+    if (!part || typeof part === 'string') {
+      // Slot teks kosong / placeholder - treat as empty file
+      files.push(new Uint8Array(0));
+      mimeTypes.push(null);
+      return;
+    }
     const file = part as File;
     files.push(new Uint8Array(await file.arrayBuffer()));
     mimeTypes.push(file.type || null);
@@ -159,14 +188,16 @@ async function parseApproveFiles(c: Context): Promise<{
 
   // file_0, file_1, ... lalu fallback single `file`
   let idx = 0;
+  let sawIndexed = false;
   while (true) {
     const key = `file_${idx}`;
     if (!(key in body)) break;
+    sawIndexed = true;
     await collect(body[key]);
     idx += 1;
   }
 
-  if (files.length === 0 && 'file' in body) {
+  if (!sawIndexed && 'file' in body) {
     const part = body['file'];
     if (Array.isArray(part)) {
       for (const item of part) await collect(item);
@@ -175,7 +206,40 @@ async function parseApproveFiles(c: Context): Promise<{
     }
   }
 
-  return { files, mimeTypes };
+  const rawWarnings = body['content_warnings'];
+  let warningsField: unknown = rawWarnings;
+  if (typeof rawWarnings === 'string') {
+    try {
+      warningsField = JSON.parse(rawWarnings);
+    } catch {
+      throw new ValidationError([
+        { field: 'content_warnings', message: 'content_warnings harus JSON array' },
+      ]);
+    }
+  }
+
+  return {
+    files,
+    mimeTypes,
+    imageContentWarnings: extractContentWarningsField(warningsField),
+  };
+}
+
+function extractContentWarningsField(raw: unknown): string[][] | null {
+  if (raw == null || raw === '') return null;
+  if (!Array.isArray(raw)) {
+    throw new ValidationError([
+      { field: 'content_warnings', message: 'content_warnings harus berupa array' },
+    ]);
+  }
+  return raw.map((slot) => {
+    if (!Array.isArray(slot)) {
+      throw new ValidationError([
+        { field: 'content_warnings', message: 'Setiap entri content_warnings harus berupa array' },
+      ]);
+    }
+    return slot.map((w) => String(w));
+  });
 }
 
 export class DiscussionController {
@@ -205,11 +269,13 @@ export class DiscussionController {
     const user = this.requireUser(c);
     const row = await this.deps.create.execute({
       userId: user.user_id,
-      body: body.body ?? null,
+      body: body.body,
+      linkUrl: body.link_url ?? null,
       images: (body.images ?? []).map((img) => ({
         url: img.url,
         providerFileId: img.provider_file_id,
         publicUrl: null,
+        contentWarnings: [],
       })),
       requestId: this.requestId(c),
     });
@@ -313,12 +379,13 @@ export class DiscussionController {
 
   async approve(c: Context, id: string) {
     const user = this.requireUser(c);
-    const { files, mimeTypes } = await parseApproveFiles(c);
+    const { files, mimeTypes, imageContentWarnings } = await parseApprovePayload(c);
     const row = await this.deps.approve.execute({
       id,
       actorId: user.user_id,
       censoredFiles: files.length > 0 ? files : undefined,
       censoredMimeTypes: mimeTypes.length > 0 ? mimeTypes : undefined,
+      imageContentWarnings,
       requestId: this.requestId(c),
     });
     return c.json({ success: true as const, data: toAdminItem(row) });

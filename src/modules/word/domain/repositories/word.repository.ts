@@ -111,6 +111,15 @@ export interface DuplicateWordGroup {
   items: DuplicateWordItem[];
 }
 
+/** Hasil exact-match lemma + makna published (DUPLICATE_MEANING). */
+export interface PublishedDuplicateMeaning {
+  wordId: string;
+  meaningId: string;
+  lemma: string;
+  definition: string;
+  translationText: string;
+}
+
 /** Kandidat pecah lemma berkoma (tab Pemisahan). */
 export interface CommaSplitLemmaCandidate {
   wordId: string;
@@ -288,6 +297,33 @@ export interface WordRepository {
    *  excludeWordId (05-api-edit-kata.md): cek duplikat EDIT harus mengabaikan
    *  kata itu sendiri - tanpa ini setiap edit selalu "duplikat" dirinya. */
   findDuplicate(languageId: string, lemma: string, excludeWordId?: string): Promise<boolean>;
+  /**
+   * Makna published yang exact-match lemma + definition + terjemahan
+   * Indonesia (normalisasi trim/lowercase/collapse whitespace). Null jika
+   * definition/translation placeholder atau belum ada kembaran tayang.
+   */
+  findPublishedDuplicateMeaning(params: {
+    languageId: string;
+    lemma: string;
+    definition: string;
+    translationText: string;
+  }): Promise<PublishedDuplicateMeaning | null>;
+  /** Resolve language id by code (mis. `id` untuk Indonesia). */
+  findLanguageIdByCode(code: string): Promise<string | null>;
+  /**
+   * Makna published milik word_id (untuk POST duplicate-confirm).
+   * Null jika tidak ada / bukan published / soft-deleted.
+   */
+  findPublishedMeaningForDuplicateConfirm(
+    wordId: string,
+    meaningId: string,
+  ): Promise<{
+    wordId: string;
+    meaningId: string;
+    lemma: string;
+    definition: string;
+    translationText: string | null;
+  } | null>;
   /** Lemma aktif (belum dihapus), apa pun status tayangnya. Null = boleh dibuat baru. */
   findActiveByLemma(
     languageId: string,

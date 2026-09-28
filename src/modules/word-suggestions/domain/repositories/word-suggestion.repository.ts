@@ -99,7 +99,7 @@ export interface ChangeHistoryItem {
   actorUserId: string;
   actorUsername: string | null;
   actorDisplayName: string | null;
-  type: 'direct_edit' | 'suggest_edit';
+  type: 'direct_edit' | 'suggest_edit' | 'duplicate_vote';
   changes: ChangeRecord[];
   source: SuggestionSource | null;
 }

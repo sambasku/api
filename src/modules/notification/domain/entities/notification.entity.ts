@@ -8,9 +8,11 @@ export type InboxNotificationType =
   | 'word_taken_down'
   | 'contribution_paused'
   | 'contribution_resumed'
+  | 'discussion_pending_review'
   | 'discussion_approved'
   | 'discussion_rejected'
   | 'discussion_taken_down'
+  | 'discussion_reply'
   | 'word_comment'
   | 'word_vote'
   | 'campaign';
@@ -91,6 +93,11 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
         title: 'Kontribusi dibuka lagi',
         body: 'Kamu bisa mengirim usulan lagi.',
       };
+    case 'discussion_pending_review':
+      return {
+        title: 'Diskusi menunggu tinjauan',
+        body: 'Ada diskusi baru yang menunggu pemeriksaan.',
+      };
     case 'discussion_approved':
       return {
         title: 'Diskusi tayang',
@@ -105,6 +112,11 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       return {
         title: 'Diskusi ditarik',
         body: 'Diskusimu ditarik dari feed.',
+      };
+    case 'discussion_reply':
+      return {
+        title: 'Balasan baru',
+        body: 'Ada balasan baru di Ruang Diskusi.',
       };
     case 'word_comment':
       return {

@@ -11,6 +11,7 @@ import {
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { DiscussionImageRow } from '@/shared/database/drizzle/schema/discussions.schema';
+import { IMAGE_CONTENT_WARNING_SET } from '@/shared/constants/image-content-warnings';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
   NewDiscussion,
@@ -42,6 +43,12 @@ export function decodePopularDiscussionCursor(raw: string): { upvotes: number; i
   return { upvotes, id };
 }
 
+function normalizeContentWarnings(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (x): x is string => typeof x === 'string' && IMAGE_CONTENT_WARNING_SET.has(x),
+  );
+}
 
 function asImages(value: unknown): DiscussionImage[] {
   if (!Array.isArray(value)) return [];
@@ -49,6 +56,7 @@ function asImages(value: unknown): DiscussionImage[] {
     url: item.url,
     providerFileId: item.provider_file_id,
     publicUrl: item.public_url ?? null,
+    contentWarnings: normalizeContentWarnings(item.content_warnings),
   }));
 }
 
@@ -57,6 +65,7 @@ function toImageRows(images: DiscussionImage[]): DiscussionImageRow[] {
     url: img.url,
     provider_file_id: img.providerFileId,
     public_url: img.publicUrl,
+    content_warnings: img.contentWarnings ?? [],
   }));
 }
 
@@ -71,6 +80,7 @@ function toDiscussion(
     username,
     displayName,
     body: row.body,
+    linkUrl: row.linkUrl ?? null,
     images: asImages(row.images),
     status: row.status as DiscussionStatus,
     rejectionNote: row.rejectionNote,
@@ -116,6 +126,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
       .values({
         userId: input.userId,
         body: input.body,
+        linkUrl: input.linkUrl ?? null,
         images: toImageRows(input.images),
         status: 'pending_review',
       })
@@ -351,6 +362,14 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         r.authorDeletedAt ? null : (r.userRole ?? null),
       ),
     );
+  }
+
+  async listDistinctReplierUserIds(discussionId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ userId: discussionReplies.userId })
+      .from(discussionReplies)
+      .where(eq(discussionReplies.discussionId, discussionId));
+    return rows.map((r) => r.userId);
   }
 
   async markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean> {

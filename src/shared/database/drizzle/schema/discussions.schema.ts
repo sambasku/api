@@ -6,6 +6,7 @@ export type DiscussionImageRow = {
   url: string;
   provider_file_id: string;
   public_url?: string | null;
+  content_warnings?: string[];
 };
 
 /** Thread Ruang Diskusi (feed komunitas). Staging ImageKit → GitHub on approve. */
@@ -17,6 +18,8 @@ export const discussions = sqliteTable(
       .notNull()
       .references(() => users.id),
     body: text('body'),
+    /** Tautan https opsional untuk share konten luar. */
+    linkUrl: text('link_url'),
     images: text('images', { mode: 'json' }).$type<DiscussionImageRow[]>().notNull(),
     // pending_review | published | rejected | taken_down
     status: text('status').notNull().default('pending_review'),

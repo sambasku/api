@@ -100,6 +100,8 @@ function makeDeps(missing: Partial<MissingReferences> = {}, duplicate = false, i
     findDuplicate: vi.fn().mockImplementation((_lang: string, lemma: string) =>
       Promise.resolve(inlineDuplicate ? lemma === 'ngamakn' : duplicate),
     ),
+    findPublishedDuplicateMeaning: vi.fn().mockResolvedValue(null),
+    findLanguageIdByCode: vi.fn().mockResolvedValue(null),
     findById: vi.fn().mockImplementation((id: string) =>
       Promise.resolve(makeWord({ id, status: 'published', isVerified: true })),
     ),

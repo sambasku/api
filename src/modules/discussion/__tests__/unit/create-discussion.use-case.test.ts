@@ -13,6 +13,7 @@ const image = {
   url: 'https://ik.imagekit.io/test/discussions/x.jpg',
   providerFileId: 'file_th_x',
   publicUrl: null as string | null,
+  contentWarnings: [] as string[],
 };
 
 function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
@@ -22,6 +23,7 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     username: 'peminta',
     displayName: 'peminta',
     body: 'Apa arti tulisan di papan ini?',
+    linkUrl: null,
     images: [],
     status: 'pending_review',
     rejectionNote: null,
@@ -46,6 +48,7 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     listReplies: vi.fn(),
     markReplyDeletedByAuthor: vi.fn(),
     takedownReply: vi.fn(),
+    listDistinctReplierUserIds: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as DiscussionRepository;
 }
@@ -69,10 +72,10 @@ describe('discussionUploadTokenQuerySchema', () => {
 });
 
 describe('CreateDiscussionUseCase', () => {
-  it('tanpa body dan tanpa gambar → VALIDATION_ERROR', async () => {
+  it('tanpa body → VALIDATION_ERROR', async () => {
     const uc = new CreateDiscussionUseCase(makeRepo(), makeAudit());
     await expect(
-      uc.execute({ userId: USER, body: null, images: [] }),
+      uc.execute({ userId: USER, body: '   ', images: [] }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -88,7 +91,8 @@ describe('CreateDiscussionUseCase', () => {
     await expect(
       uc.execute({
         userId: USER,
-        body: null,
+        body: 'Deskripsi wajib',
+        linkUrl: null,
         images: [image, image, image, image, image],
       }),
     ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
@@ -101,12 +105,14 @@ describe('CreateDiscussionUseCase', () => {
     await uc.execute({
       userId: USER,
       body: 'Apa arti tulisan di papan ini?',
+      linkUrl: null,
       images: [],
     });
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER,
         body: 'Apa arti tulisan di papan ini?',
+        linkUrl: null,
         images: [],
       }),
     );
@@ -119,14 +125,112 @@ describe('CreateDiscussionUseCase', () => {
     );
   });
 
-  it('gambar saja (tanpa body) → lolos', async () => {
-    const repo = makeRepo({
-      create: vi.fn().mockResolvedValue(makeHelp({ body: null, images: [image] })),
+  it('create → blast inbox+push ke verifikator, skip penulis', async () => {
+    const repo = makeRepo();
+    const audit = makeAudit();
+    const MOD_A = '01JDMODERATORAAAA000000000A';
+    const MOD_B = '01JDMODERATORBBBB000000000B';
+    const userRepo = {
+      listActiveIdsByRoles: vi.fn().mockResolvedValue([MOD_A, MOD_B, USER]),
+    };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const uc = new CreateDiscussionUseCase(
+      repo,
+      audit,
+      userRepo as never,
+      inbox as never,
+      notifyUser as never,
+    );
+    await uc.execute({
+      userId: USER,
+      body: 'Apa arti tulisan di papan ini?',
+      images: [],
     });
+
+    expect(userRepo.listActiveIdsByRoles).toHaveBeenCalledWith([
+      'reviewer',
+      'admin',
+      'root',
+      'editor',
+    ]);
+    expect(inbox.execute).toHaveBeenCalledTimes(2);
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: MOD_A,
+        type: 'discussion_pending_review',
+        targetKind: 'discussion',
+        targetId: ID,
+        actorId: USER,
+        actionKind: 'discussion',
+        actionValue: ID,
+      }),
+    );
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: MOD_B }),
+    );
+    expect(inbox.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER }),
+    );
+    expect(notifyUser.execute).toHaveBeenCalledTimes(2);
+    expect(notifyUser.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: MOD_A,
+        title: 'Diskusi menunggu tinjauan',
+        data: expect.objectContaining({
+          type: 'discussion_pending_review',
+          target_id: ID,
+        }),
+      }),
+    );
+  });
+
+  it('gambar saja (tanpa body) → VALIDATION_ERROR', async () => {
+    const uc = new CreateDiscussionUseCase(makeRepo(), makeAudit());
+    await expect(
+      uc.execute({ userId: USER, body: '', images: [image] }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('deskripsi + gambar → lolos', async () => {
+    const repo = makeRepo();
     const uc = new CreateDiscussionUseCase(repo, makeAudit());
-    await uc.execute({ userId: USER, body: null, images: [image] });
+    await uc.execute({ userId: USER, body: 'Tolong jelaskan foto ini', images: [image] });
     expect(repo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ body: null, images: [expect.objectContaining({ url: image.url })] }),
+      expect.objectContaining({
+        body: 'Tolong jelaskan foto ini',
+        linkUrl: null,
+        images: [expect.objectContaining({ url: image.url })],
+      }),
+    );
+  });
+
+  it('link http (bukan https) → VALIDATION_ERROR', async () => {
+    const uc = new CreateDiscussionUseCase(makeRepo(), makeAudit());
+    await expect(
+      uc.execute({
+        userId: USER,
+        body: 'Lihat tautan ini',
+        linkUrl: 'http://example.com/x',
+        images: [],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('link https → tersimpan', async () => {
+    const repo = makeRepo();
+    const uc = new CreateDiscussionUseCase(repo, makeAudit());
+    await uc.execute({
+      userId: USER,
+      body: 'Lihat tautan ini',
+      linkUrl: 'https://example.com/artikel',
+      images: [],
+    });
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: 'Lihat tautan ini',
+        linkUrl: 'https://example.com/artikel',
+      }),
     );
   });
 });

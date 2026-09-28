@@ -161,6 +161,8 @@ import { ReopenContributionUseCase } from '@/modules/contribution/application/us
 import { ContributionController } from '@/modules/contribution/presentation/v1/contribution.controller';
 import { createContributionRoutes } from '@/modules/contribution/presentation/v1/contribution.routes';
 import { createMyContributionRoutes } from '@/modules/contribution/presentation/v1/my-contribution.routes';
+import { createDuplicateConfirmRoutes } from '@/modules/contribution/presentation/v1/duplicate-confirm.routes';
+import { ConfirmDuplicateMeaningUseCase } from '@/modules/contribution/application/use-cases/confirm-duplicate-meaning.use-case';
 import { MyContributionController } from '@/modules/contribution/presentation/v1/my-contribution.controller';
 import { ListMyContributionsUseCase } from '@/modules/contribution/application/use-cases/list-my-contributions.use-case';
 import { GetMyContributionDetailUseCase } from '@/modules/contribution/application/use-cases/get-my-contribution-detail.use-case';
@@ -303,6 +305,7 @@ import { NotificationPushCooldownRepositoryImpl } from '@/modules/notification/i
 import { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
 import { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
+import { DiscussionReplyPushCooldownGate } from '@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate';
 import { WordVotePushCooldownGate } from '@/modules/notification/application/use-cases/word-vote-push-cooldown-gate';
 import { ListMyNotificationsUseCase } from '@/modules/notification/application/use-cases/list-my-notifications.use-case';
 import { GetUnreadNotificationCountUseCase } from '@/modules/notification/application/use-cases/get-unread-notification-count.use-case';
@@ -619,14 +622,15 @@ const wordVotePushCooldown = new WordVotePushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
 );
+const toggleVoteUseCase = new ToggleVoteUseCase(
+  voteRepo,
+  userRepo,
+  recordInbox,
+  notifyUser,
+  wordVotePushCooldown,
+);
 const voteController = new VoteController({
-  toggle: new ToggleVoteUseCase(
-    voteRepo,
-    userRepo,
-    recordInbox,
-    notifyUser,
-    wordVotePushCooldown,
-  ),
+  toggle: toggleVoteUseCase,
   counts: new GetVoteCountsUseCase(voteRepo),
   myVotes: new GetMyVotesUseCase(voteRepo),
   history: new ListMyVoteHistoryUseCase(voteRepo),
@@ -654,6 +658,10 @@ const dashboardController = new DashboardController({
 const commentRepo = new CommentRepositoryImpl(db);
 const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
 const wordCommentPushCooldown = new WordCommentPushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
+const discussionReplyPushCooldown = new DiscussionReplyPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
 );
@@ -716,6 +724,12 @@ const myContributionController = new MyContributionController({
   listMine: new ListMyContributionsUseCase(contributionRepo, suggestionRepo),
   getMine: new GetMyContributionDetailUseCase(contributionRepo, suggestionRepo),
 });
+
+const confirmDuplicateMeaning = new ConfirmDuplicateMeaningUseCase(
+  wordRepo,
+  toggleVoteUseCase,
+  auditRepo,
+);
 
 // ---- HTTP app ----
 export const app = createOpenApiApp();
@@ -1035,6 +1049,14 @@ app.route(
   '/api/v1/contributions',
   createMyContributionRoutes({ controller: myContributionController, authenticate }),
 );
+app.route(
+  '/api/v1/contributions',
+  createDuplicateConfirmRoutes({
+    confirmDuplicate: confirmDuplicateMeaning,
+    authenticate,
+    requireApprovedClient: requireVoteWriteClient,
+  }),
+);
 
 // Search miss - beranda publik (peluang kontribusi) + panel admin
 app.route('/api/v1/search-misses', createSearchMissRoutes({ controller: searchMissController, authenticate }));
@@ -1084,7 +1106,13 @@ app.route(
 
 const discussionRepo = new DiscussionRepositoryImpl(db);
 const discussionController = new DiscussionController({
-  create: new CreateDiscussionUseCase(discussionRepo, auditRepo),
+  create: new CreateDiscussionUseCase(
+    discussionRepo,
+    auditRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+  ),
   listPublished: new ListPublishedDiscussionsUseCase(discussionRepo, voteRepo),
   listMine: new ListMyDiscussionsUseCase(discussionRepo),
   getDetail: new GetDiscussionDetailUseCase(discussionRepo, voteRepo),
@@ -1107,6 +1135,10 @@ const discussionController = new DiscussionController({
     discussionRepo,
     auditRepo,
     commentBlocklistRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    discussionReplyPushCooldown,
   ),
   deleteReply: new DeleteDiscussionReplyUseCase(discussionRepo, auditRepo),
   pinReply: new PinDiscussionReplyUseCase(discussionRepo, auditRepo),

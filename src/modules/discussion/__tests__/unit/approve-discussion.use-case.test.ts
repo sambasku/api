@@ -30,6 +30,7 @@ const stagingImage = {
   url: 'https://ik.imagekit.io/test/discussions/x.jpg',
   providerFileId: 'file_th_x',
   publicUrl: null as string | null,
+  contentWarnings: [] as string[],
 };
 
 function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
@@ -39,6 +40,7 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     username: 'peminta',
     displayName: 'peminta',
     body: 'Apa arti tulisan di papan ini?',
+    linkUrl: null,
     images: [],
     status: 'pending_review',
     rejectionNote: null,
@@ -63,6 +65,7 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     listReplies: vi.fn(),
     markReplyDeletedByAuthor: vi.fn(),
     takedownReply: vi.fn(),
+    listDistinctReplierUserIds: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as DiscussionRepository;
 }
@@ -232,6 +235,66 @@ describe('ApproveDiscussionUseCase', () => {
     );
     expect(publicStorage.upload).toHaveBeenCalled();
     expect(imageStorage.deleteFile).toHaveBeenCalledWith('file_th_x');
+  });
+
+  it('N=2 satu sensor + satu kekerasan → warnings tersimpan per indeks', async () => {
+    const img0 = { ...stagingImage, providerFileId: 'file_0' };
+    const img1 = {
+      ...stagingImage,
+      url: 'https://ik.imagekit.io/test/discussions/y.jpg',
+      providerFileId: 'file_1',
+    };
+    const updateStatus = vi.fn().mockResolvedValue(makeHelp({ status: 'published' }));
+    const repo = makeRepo({
+      findById: vi.fn().mockResolvedValue(makeHelp({ images: [img0, img1] })),
+      updateStatus,
+    });
+    const publicStorage = makePublicStorage();
+    const uc = new ApproveDiscussionUseCase(
+      repo,
+      publicStorage,
+      makeImageStorage(),
+      makeAudit(),
+      makeInbox(),
+    );
+
+    await uc.execute({
+      id: ID,
+      actorId: ADMIN,
+      censoredFiles: [JPEG_BYTES, new Uint8Array(0)],
+      censoredMimeTypes: ['image/jpeg', null],
+      imageContentWarnings: [[], ['kekerasan']],
+    });
+
+    expect(publicStorage.upload).toHaveBeenCalledTimes(2);
+    expect(updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        images: [
+          expect.objectContaining({ contentWarnings: [], publicUrl: expect.any(String) }),
+          expect.objectContaining({
+            contentWarnings: ['kekerasan'],
+            publicUrl: expect.any(String),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('content_warnings panjang ≠ N → VALIDATION_ERROR', async () => {
+    const uc = new ApproveDiscussionUseCase(
+      makeRepo({ findById: vi.fn().mockResolvedValue(makeHelp({ images: [stagingImage] })) }),
+      makePublicStorage(),
+      makeImageStorage(),
+      makeAudit(),
+      makeInbox(),
+    );
+    await expect(
+      uc.execute({
+        id: ID,
+        actorId: ADMIN,
+        imageContentWarnings: [[], ['kekerasan']],
+      }),
+    ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
   });
 
   it('censored file invalid → VALIDATION_ERROR / BadRequest', async () => {

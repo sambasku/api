@@ -167,6 +167,10 @@ export function createWordMediaRoutes(deps: WordMediaRoutesDeps) {
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
       403: { description: 'Role tidak diizinkan', content: json(errorResponseSchema) },
       404: { description: 'Kata tidak ditemukan', content: json(errorResponseSchema) },
+      409: {
+        description: 'Lemma + makna exact sudah tayang - arahkan ke duplicate-confirm',
+        content: json(errorResponseSchema),
+      },
     },
   });
 

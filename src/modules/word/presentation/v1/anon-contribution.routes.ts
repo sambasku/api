@@ -69,6 +69,10 @@ export function createAnonContributionRoutes(deps: AnonContributionRoutesDeps) {
         description: 'Bearer ada tapi invalid/expired',
         content: json(errorResponseSchema),
       },
+      409: {
+        description: 'Lemma + makna exact sudah tayang - arahkan ke duplicate-confirm',
+        content: json(errorResponseSchema),
+      },
     },
   });
 
