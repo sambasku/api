@@ -5,6 +5,7 @@ import type { User } from '@/modules/auth/domain/entities/user.entity';
 import type { RefreshTokenRepository } from '@/modules/auth/domain/repositories/refresh-token.repository';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import { ApproveVerifierApplicationUseCase } from '../../application/use-cases/approve-verifier-application.use-case';
 import type { VerifierApplication } from '../../domain/entities/verifier-application.entity';
 import type { VerifierApplicationRepository } from '../../domain/repositories/verifier-application.repository';
@@ -49,6 +50,9 @@ function makeUseCase(user: User | null, mailerRejects = false) {
   } as unknown as RefreshTokenRepository;
   const auditRepo = { record: vi.fn().mockResolvedValue(undefined) } as unknown as AuditLogRepository;
   const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) } as unknown as NotifyUserUseCase;
+  const inbox = {
+    execute: vi.fn().mockResolvedValue(undefined),
+  } as unknown as RecordInboxNotificationUseCase;
   const userRepo = {
     findById: vi.fn().mockResolvedValue(user),
   } as unknown as UserRepository;
@@ -60,6 +64,8 @@ function makeUseCase(user: User | null, mailerRejects = false) {
 
   return {
     mailer,
+    inbox,
+    notifyUser,
     useCase: new ApproveVerifierApplicationUseCase(
       appRepo,
       refreshTokenRepo,
@@ -67,6 +73,7 @@ function makeUseCase(user: User | null, mailerRejects = false) {
       notifyUser,
       userRepo,
       mailer,
+      inbox,
     ),
   };
 }
@@ -79,10 +86,28 @@ const cmd = {
 
 describe('ApproveVerifierApplicationUseCase', () => {
   it('mengirim email selamat ke email dan nama tampilan user', async () => {
-    const { useCase, mailer } = makeUseCase(makeUser());
+    const { useCase, mailer, inbox, notifyUser } = makeUseCase(makeUser());
     const result = await useCase.execute(cmd);
     expect(result).toEqual({ id: APP_ID, status: 'approved', role: 'reviewer' });
     expect(mailer.sendVerifierApprovedEmail).toHaveBeenCalledWith('siti@test.com', 'Siti');
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        type: 'verifier_application_approved',
+        targetKind: 'verifier_application',
+        targetId: APP_ID,
+      }),
+    );
+    expect(notifyUser.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        data: expect.objectContaining({
+          type: 'verifier_application_approved',
+          title: 'Selamat, Anda jadi verifikator',
+          body: expect.any(String),
+        }),
+      }),
+    );
   });
 
   it('memakai username bila nama tampilan kosong', async () => {

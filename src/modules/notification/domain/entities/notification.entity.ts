@@ -15,14 +15,17 @@ export type InboxNotificationType =
   | 'discussion_reply'
   | 'word_comment'
   | 'word_vote'
-  | 'campaign';
+  | 'campaign'
+  | 'verifier_application_approved'
+  | 'verifier_application_rejected';
 
 export type NotificationTargetKind =
   | 'contribution'
   | 'suggestion'
   | 'word'
   | 'discussion'
-  | 'campaign';
+  | 'campaign'
+  | 'verifier_application';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
 export type NotificationActionKind =
@@ -131,5 +134,15 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
     case 'campaign':
       // Title/body campaign selalu dari snapshot admin (bukan copy bawaan).
       return { title: 'Pengumuman', body: '' };
+    case 'verifier_application_approved':
+      return {
+        title: 'Selamat, Anda jadi verifikator',
+        body: 'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.',
+      };
+    case 'verifier_application_rejected':
+      return {
+        title: 'Pengajuan verifikator ditolak',
+        body: 'Pengajuan ditolak. Buka profil untuk memperbaiki.',
+      };
   }
 }

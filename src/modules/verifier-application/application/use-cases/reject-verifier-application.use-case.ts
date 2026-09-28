@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { VerifierApplicationRepository } from '../../domain/repositories/verifier-application.repository';
 
 export interface RejectVerifierApplicationCommand {
@@ -15,11 +16,24 @@ export interface RejectVerifierApplicationResult {
   status: 'rejected';
 }
 
+const REJECT_TITLE = 'Pengajuan verifikator ditolak';
+
+function rejectBody(comment: string): string {
+  const trimmed = comment.trim();
+  if (!trimmed) {
+    return 'Pengajuan ditolak. Buka profil untuk memperbaiki.';
+  }
+  const max = 180;
+  const snippet = trimmed.length > max ? `${trimmed.slice(0, max - 1)}...` : trimmed;
+  return `Pengajuan ditolak: ${snippet}`;
+}
+
 export class RejectVerifierApplicationUseCase {
   constructor(
     private readonly appRepo: VerifierApplicationRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly notifyUser: NotifyUserUseCase,
+    private readonly inbox: RecordInboxNotificationUseCase,
   ) {}
 
   async execute(cmd: RejectVerifierApplicationCommand): Promise<RejectVerifierApplicationResult> {
@@ -55,16 +69,30 @@ export class RejectVerifierApplicationUseCase {
       requestId: cmd.requestId ?? null,
     });
 
+    const body = rejectBody(cmd.comment);
+
+    await this.inbox.execute({
+      userId: row.userId,
+      type: 'verifier_application_rejected',
+      targetKind: 'verifier_application',
+      targetId: row.id,
+      actorId: cmd.actorId,
+      title: REJECT_TITLE,
+      body,
+    });
+
     await this.notifyUser.execute({
       userId: row.userId,
-      title: 'Pengajuan verifikator ditolak',
-      body: 'Pengajuan ditolak. Buka profil untuk memperbaiki.',
+      title: REJECT_TITLE,
+      body,
       actorId: cmd.actorId,
       data: {
         type: 'verifier_application_rejected',
         target_kind: 'verifier_application',
         target_id: row.id,
         application_id: row.id,
+        title: REJECT_TITLE,
+        body,
       },
     });
 

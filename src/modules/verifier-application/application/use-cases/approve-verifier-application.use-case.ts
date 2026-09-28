@@ -3,6 +3,7 @@ import type { MailerPort } from '@/modules/auth/application/ports/mailer.port';
 import type { RefreshTokenRepository } from '@/modules/auth/domain/repositories/refresh-token.repository';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { VerifierApplicationRepository } from '../../domain/repositories/verifier-application.repository';
 
 export interface ApproveVerifierApplicationCommand {
@@ -18,6 +19,10 @@ export interface ApproveVerifierApplicationResult {
   role: 'reviewer';
 }
 
+const APPROVE_TITLE = 'Selamat, Anda jadi verifikator';
+const APPROVE_BODY =
+  'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.';
+
 export class ApproveVerifierApplicationUseCase {
   constructor(
     private readonly appRepo: VerifierApplicationRepository,
@@ -26,6 +31,7 @@ export class ApproveVerifierApplicationUseCase {
     private readonly notifyUser: NotifyUserUseCase,
     private readonly userRepo: UserRepository,
     private readonly mailer: MailerPort,
+    private readonly inbox: RecordInboxNotificationUseCase,
   ) {}
 
   async execute(cmd: ApproveVerifierApplicationCommand): Promise<ApproveVerifierApplicationResult> {
@@ -43,16 +49,30 @@ export class ApproveVerifierApplicationUseCase {
       requestId: cmd.requestId ?? null,
     });
 
+    await this.inbox.execute({
+      userId: updated.userId,
+      type: 'verifier_application_approved',
+      targetKind: 'verifier_application',
+      targetId: updated.id,
+      actorId: cmd.actorId,
+      title: APPROVE_TITLE,
+      body: APPROVE_BODY,
+    });
+
+    // WAJIB await: di Cloudflare Workers, void/fire-and-forget sering
+    // terbunuh saat response sudah dikirim.
     await this.notifyUser.execute({
       userId: updated.userId,
-      title: 'Selamat, Anda jadi verifikator',
-      body: 'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.',
+      title: APPROVE_TITLE,
+      body: APPROVE_BODY,
       actorId: cmd.actorId,
       data: {
         type: 'verifier_application_approved',
         target_kind: 'verifier_application',
         target_id: updated.id,
         application_id: updated.id,
+        title: APPROVE_TITLE,
+        body: APPROVE_BODY,
       },
     });
 

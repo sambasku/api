@@ -19,6 +19,8 @@ export const inboxNotificationTypeSchema = z.enum([
   'word_comment',
   'word_vote',
   'campaign',
+  'verifier_application_approved',
+  'verifier_application_rejected',
 ]);
 
 export const notificationTargetKindSchema = z.enum([
@@ -27,6 +29,7 @@ export const notificationTargetKindSchema = z.enum([
   'word',
   'discussion',
   'campaign',
+  'verifier_application',
 ]);
 
 export const notificationActionKindSchema = z.enum([

@@ -1201,8 +1201,14 @@ const verifierApplicationController = new VerifierApplicationController({
     notifyUser,
     userRepo,
     mailer,
+    recordInbox,
   ),
-  reject: new RejectVerifierApplicationUseCase(verifierApplicationRepo, auditRepo, notifyUser),
+  reject: new RejectVerifierApplicationUseCase(
+    verifierApplicationRepo,
+    auditRepo,
+    notifyUser,
+    recordInbox,
+  ),
 });
 app.route(
   '/api/v1/verifier-applications',
