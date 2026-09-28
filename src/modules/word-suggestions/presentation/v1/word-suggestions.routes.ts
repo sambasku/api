@@ -103,7 +103,7 @@ export function createWordSuggestionRoutes(deps: WordSuggestionRoutesDeps) {
     const { id: wordId } = c.req.param();
     const body = c.req.valid('json');
     const user = c.get('user') as AuthUser;
-    return deps.controller.createSuggestion(c, body, user.user_id, wordId);
+    return deps.controller.createSuggestion(c, body, user.user_id, wordId, user.role);
   }) as never);
 
   return routes;

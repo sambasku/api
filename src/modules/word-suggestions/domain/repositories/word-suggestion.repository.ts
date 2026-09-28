@@ -10,13 +10,14 @@ import type {
 // Kontrak repository modul word-suggestions - implementasi Drizzle di
 // infrastructure/. Dipakai oleh use case, TIDAK boleh tahu soal HTTP/Hono.
 export interface WordSuggestionRepository {
-  /** Buat usulan baru */
+  /** Buat usulan baru. Verifikator (isVerifierRole) langsung approved + apply. */
   createSuggestion(
     userId: string,
     wordId: string,
     proposedChanges: ProposedChanges,
     reason: string,
     reasonCode: string,
+    actorRole?: string,
   ): Promise<WordEditSuggestion>;
 
   /** List usulan dengan filter status + cursor pagination (DESC id) */

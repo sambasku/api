@@ -95,7 +95,7 @@ export interface WordSuggestionControllerDeps {
 export class WordSuggestionController {
   constructor(private deps: WordSuggestionControllerDeps) {}
 
-  async createSuggestion(c: Context, body: CreateSuggestionRequest, userId: string, wordId: string) {
+  async createSuggestion(c: Context, body: CreateSuggestionRequest, userId: string, wordId: string, actorRole?: string) {
     await assertCanContribute(userId);
     const proposed = mapProposedChanges(body.proposed_changes);
     const { reasonCode, reasonDisplay } = resolveReasonFields(body);
@@ -105,7 +105,9 @@ export class WordSuggestionController {
       proposed,
       reasonDisplay,
       reasonCode,
+      actorRole,
     );
+    const approved = suggestion.status === 'approved';
     return c.json(
       createSuggestionResponseSchema.parse({
         success: true,
@@ -113,9 +115,11 @@ export class WordSuggestionController {
           suggestion_id: suggestion.id,
           word_id: suggestion.wordId,
           word_lemma: suggestion.wordLemma ?? '',
-          status: 'pending',
+          status: suggestion.status,
           created_at: suggestion.createdAt.toISOString(),
-          message: 'Usul perubahan berhasil dikirim. Terima kasih!',
+          message: approved
+            ? 'Perubahan langsung diterapkan.'
+            : 'Usul perubahan berhasil dikirim. Terima kasih!',
         },
       }),
       201,

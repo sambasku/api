@@ -244,7 +244,7 @@ export const createSuggestionResponseSchema = z.object({
     suggestion_id: z.string().length(26),
     word_id: z.string().length(26),
     word_lemma: z.string(),
-    status: z.literal('pending'),
+    status: z.enum(['pending', 'approved']),
     created_at: z.string(),
     message: z.string(),
   }),
