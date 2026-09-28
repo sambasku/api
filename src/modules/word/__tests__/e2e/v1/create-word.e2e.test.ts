@@ -150,8 +150,43 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     expect(searchBody.data.some((w: { lemma: string }) => w.lemma === 'minum')).toBe(true);
   });
 
-  it('POST submit kedua lemma sama → warnings duplikat', async () => {
+  it('POST lemma+makna exact sama dengan published → 409 DUPLICATE_MEANING', async () => {
+    // validBody() sama dengan submit admin pertama di suite ini
     const res = await post('/api/v1/admin/words', validBody(), adminToken);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error_code).toBe('DUPLICATE_MEANING');
+    expect(body.data).toEqual(
+      expect.objectContaining({
+        lemma: 'makatn',
+        definition: 'Aktivitas memasukkan makanan ke mulut',
+        translation_text: 'makan',
+        word_id: expect.any(String),
+        meaning_id: expect.any(String),
+      }),
+    );
+  });
+
+  it('POST lemma sama, makna beda → 201 warnings auto-merge', async () => {
+    const res = await post(
+      '/api/v1/admin/words',
+      validBody({
+        meanings: [
+          {
+            word_class_id: NOMINA,
+            definition: 'Makanan pokok yang sudah dimasak',
+            order_index: 1,
+            translations: [
+              { language_id: IDN, translation_text: 'nasi', translation_type: 'direct' },
+            ],
+            examples: [],
+          },
+        ],
+        // Hindari bentrok unique provider_file_id dengan submit pertama
+        images: [],
+      }),
+      adminToken,
+    );
     expect(res.status).toBe(201);
     const body = await res.json();
     // Admin + published: auto-merge ke kembaran tayang

@@ -206,6 +206,31 @@ describe('CreateWordUseCase', () => {
     ]);
   });
 
+  it('exact lemma + makna published → 409 DUPLICATE_MEANING, tidak insert', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    (wordRepo.findLanguageIdByCode as ReturnType<typeof vi.fn>).mockResolvedValue(
+      '01LANGUAGESINDONESIA00000',
+    );
+    (wordRepo.findPublishedDuplicateMeaning as ReturnType<typeof vi.fn>).mockResolvedValue({
+      wordId: '01WORDULIDEXIST0000000000',
+      meaningId: '01MEANINGULIDEXIST000000',
+      lemma: 'makatn',
+      definition: 'Aktivitas memasukkan makanan ke mulut',
+      translationText: 'makan',
+    });
+
+    await expect(useCase.execute(makeDto(), CONTRIBUTOR)).rejects.toMatchObject({
+      errorCode: 'DUPLICATE_MEANING',
+      statusCode: 409,
+      data: expect.objectContaining({
+        word_id: '01WORDULIDEXIST0000000000',
+        meaning_id: '01MEANINGULIDEXIST000000',
+        lemma: 'makatn',
+      }),
+    });
+    expect(wordRepo.saveWithRelations).not.toHaveBeenCalled();
+  });
+
   it('duplikat lemma + published → auto-merge ke kembaran tayang', async () => {
     const { useCase, wordRepo } = makeDeps({}, true);
     const keptId = '01WORDULIDKEPT00000000000';
