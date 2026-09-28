@@ -1,5 +1,6 @@
 import { ForbiddenError, NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { PronunciationStoragePort } from '@/modules/word/application/ports/pronunciation-storage.port';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
 
 export interface DeleteDiscussionReplyCommand {
@@ -12,6 +13,7 @@ export class DeleteDiscussionReplyUseCase {
   constructor(
     private readonly repo: DiscussionRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly storage?: PronunciationStoragePort,
   ) {}
 
   async execute(cmd: DeleteDiscussionReplyCommand): Promise<void> {
@@ -54,12 +56,20 @@ export class DeleteDiscussionReplyUseCase {
       });
     }
 
+    if (reply.audio?.sha && this.storage) {
+      await this.storage.delete(reply.audio.providerFileId, reply.audio.sha);
+    }
+
     await this.auditRepo.record({
       userId: cmd.actorId,
       action: 'delete',
       entityType: 'discussion_reply',
       entityId: reply.id,
-      oldData: { discussion_id: reply.discussionId, status: reply.status },
+      oldData: {
+        discussion_id: reply.discussionId,
+        status: reply.status,
+        has_audio: reply.audio != null,
+      },
       newData: { status: 'deleted_by_author' },
       requestId: cmd.requestId ?? null,
     });

@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
 import type { AppVariables } from '@/shared/types';
@@ -12,6 +13,7 @@ import {
   createDiscussionReplyResponseSchema,
   createDiscussionResponseSchema,
   deleteDiscussionReplyResponseSchema,
+  attachDiscussionAudioResponseSchema,
   listMyDiscussionsQuerySchema,
   listDiscussionsQuerySchema,
   discussionIdParamSchema,
@@ -68,6 +70,15 @@ const replyUserLimit = rateLimit({
   },
 });
 
+const replyAudioUserLimit = rateLimit({
+  points: 30,
+  duration: 60,
+  keyFn: (c) => {
+    const uid = (c as { get: (k: 'user') => { user_id: string } | undefined }).get('user')?.user_id;
+    return uid ? `th-reply-audio:user:${uid}` : '';
+  },
+});
+
 export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   const routes = createOpenApiApp();
   const writeClient = deps.requireApprovedClient ? [deps.requireApprovedClient] : [];
@@ -88,6 +99,42 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   });
   routes.use('/my', deps.authenticate);
   routes.use('/:id', deps.optionalAuthenticate);
+  routes.use(
+    '/:id/audio',
+    deps.authenticate,
+    ...writeClient,
+    replyAudioUserLimit,
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) =>
+        c.json(
+          {
+            success: false as const,
+            error_code: 'AUDIO_TOO_LARGE',
+            message: 'File audio terlalu besar (maks 5 MB)',
+          },
+          400,
+        ),
+    }),
+  );
+  routes.use(
+    '/:id/replies/audio',
+    deps.authenticate,
+    ...writeClient,
+    replyAudioUserLimit,
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) =>
+        c.json(
+          {
+            success: false as const,
+            error_code: 'AUDIO_TOO_LARGE',
+            message: 'File audio terlalu besar (maks 5 MB)',
+          },
+          400,
+        ),
+    }),
+  );
   routes.use('/:id/replies', deps.authenticate, ...writeClient, replyUserLimit);
   routes.use('/replies/:id', deps.authenticate, ...writeClient);
 
@@ -188,6 +235,66 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     },
   });
 
+  const createReplyAudioRoute = createRoute({
+    method: 'post',
+    path: '/:id/replies/audio',
+    tags: ['Discussions'],
+    summary: 'Balas dengan rekaman suara (multipart; publish langsung)',
+    request: {
+      params: discussionIdParamSchema,
+      body: {
+        content: {
+          'multipart/form-data': {
+            schema: z.object({
+              audio: z.any().openapi({ type: 'string', format: 'binary' }),
+              body: z.string().max(500).optional(),
+              duration_ms: z.coerce.number().int().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      201: { description: 'Balasan suara tersimpan', content: json(createDiscussionReplyResponseSchema) },
+      400: { description: 'File/MIME tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Diskusi belum tayang', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+      503: { description: 'Storage audio belum dikonfigurasi', content: json(errorResponseSchema) },
+    },
+  });
+
+  const attachTopicAudioRoute = createRoute({
+    method: 'post',
+    path: '/:id/audio',
+    tags: ['Discussions'],
+    summary: 'Lampirkan audio ke opening thread pending_review (owner)',
+    request: {
+      params: discussionIdParamSchema,
+      body: {
+        content: {
+          'multipart/form-data': {
+            schema: z.object({
+              audio: z.any().openapi({ type: 'string', format: 'binary' }),
+              duration_ms: z.coerce.number().int().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: { description: 'Audio dilampirkan', content: json(attachDiscussionAudioResponseSchema) },
+      400: { description: 'File/MIME tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan pemilik', content: json(errorResponseSchema) },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Bukan pending_review', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+      503: { description: 'Storage audio belum dikonfigurasi', content: json(errorResponseSchema) },
+    },
+  });
+
   const deleteReplyRoute = createRoute({
     method: 'delete',
     path: '/replies/:id',
@@ -215,6 +322,13 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   routes.openapi(myRoute, (c) => deps.controller.listMine(c, c.req.valid('query')) as never);
   routes.openapi(detailRoute, (c) =>
     deps.controller.getDetail(c, c.req.valid('param').id) as never,
+  );
+  // Audio route sebelum /:id/replies agar path spesifik menang
+  routes.openapi(attachTopicAudioRoute, (c) =>
+    deps.controller.attachAudio(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(createReplyAudioRoute, (c) =>
+    deps.controller.createReplyAudio(c, c.req.valid('param').id) as never,
   );
   routes.openapi(createReplyRoute, (c) =>
     deps.controller.createReply(c, c.req.valid('param').id, c.req.valid('json')) as never,

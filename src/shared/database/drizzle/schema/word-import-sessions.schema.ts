@@ -13,6 +13,19 @@ export const wordImportSessions = sqliteTable(
       .notNull()
       .references(() => users.id),
     sourceLabel: text('source_label'),
+    /** Nama sumber sitasi (situs, penerbit, dll). */
+    supportName: text('support_name'),
+    /** web | book | article | other */
+    supportType: text('support_type'),
+    /** URL atau alamat fisik sumber. */
+    supportAddress: text('support_address'),
+    /** Judul artikel / buku. */
+    supportTitle: text('support_title'),
+    /** Keterangan tambahan sumber. */
+    supportDesc: text('support_desc'),
+    /** Admin yang mengklaim batch ke user (fase 2). */
+    claimedBy: text('claimed_by').references(() => users.id),
+    claimedAt: integer('claimed_at', { mode: 'timestamp' }),
     status: text('status').notNull(),
     total: integer('total').notNull().default(0),
     createdCount: integer('created_count').notNull().default(0),

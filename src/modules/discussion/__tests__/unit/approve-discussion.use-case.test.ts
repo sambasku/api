@@ -42,6 +42,7 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     body: 'Apa arti tulisan di papan ini?',
     linkUrl: null,
     images: [],
+    audio: null,
     status: 'pending_review',
     rejectionNote: null,
     reviewedBy: null,

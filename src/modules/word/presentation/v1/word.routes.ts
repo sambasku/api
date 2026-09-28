@@ -36,6 +36,7 @@ import {
 import { takedownWordBodySchema } from '@/modules/word-report/presentation/v1/validators/word-report.validator';
 import { importWordsBodySchema, importWordsResponseSchema } from './validators/import-words.validator';
 import {
+  claimImportSessionBodySchema,
   importSessionResponseSchema,
   listImportSessionsQuerySchema,
   saveImportSessionBodySchema,
@@ -119,7 +120,7 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
     method: 'post',
     path: '/import',
     tags: ['Words', 'Admin'],
-    summary: 'Impor kata dari CSV yang sudah dipratinjau (maksimal 5 kata)',
+    summary: 'Impor kata dari CSV yang sudah dipratinjau (maksimal 5 kata; attributed_to opsional)',
     request: { body: { content: json(importWordsBodySchema) } },
     responses: {
       200: { description: 'Hasil cek tanpa menulis', content: json(importWordsResponseSchema) },
@@ -150,6 +151,19 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
     authorizeRole('admin', 'editor', 'root', 'reviewer'),
     rateLimit({ points: 60, duration: 60 }),
   );
+  routes.use(
+    '/import-sessions/:id/claim',
+    deps.authenticate,
+    authorizeRole('admin', 'editor', 'root', 'reviewer'),
+    rateLimit({
+      points: 30,
+      duration: 60,
+      keyFn: (c) => {
+        const user = (c.get('user') as AuthUser | undefined) ?? null;
+        return `word-import-session-claim:${user?.user_id ?? 'unknown'}`;
+      },
+    }),
+  );
 
   const saveImportSessionRoute = createRoute({
     method: 'post',
@@ -168,7 +182,7 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
     method: 'get',
     path: '/import-sessions',
     tags: ['Words', 'Admin'],
-    summary: 'Daftar riwayat impor massal',
+    summary: 'Daftar riwayat impor massal (cari Data Pendukung lewat q)',
     request: { query: listImportSessionsQuerySchema },
     responses: {
       200: {
@@ -202,9 +216,30 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
       404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
     },
   });
+  const claimImportSessionRoute = createRoute({
+    method: 'post',
+    path: '/import-sessions/{id}/claim',
+    tags: ['Words', 'Admin'],
+    summary: 'Klaim batch Pengimpor CSV ke user nyata (geser atribusi creator)',
+    request: {
+      params: z.object({ id: opaqueId }),
+      body: { content: json(claimImportSessionBodySchema) },
+    },
+    responses: {
+      200: { description: 'Sesi setelah klaim', content: json(importSessionResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Role tidak diizinkan', content: json(errorResponseSchema) },
+      404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Sudah diatribusikan / target tidak valid', content: json(errorResponseSchema) },
+    },
+  });
   routes.openapi(saveImportSessionRoute, (c) => deps.controller.saveImportSession(c, c.req.valid('json')) as never);
   routes.openapi(listImportSessionsRoute, (c) => deps.controller.listImportSessions(c, c.req.valid('query')) as never);
   routes.openapi(getImportSessionRoute, (c) => deps.controller.getImportSession(c, c.req.param('id')) as never);
+  routes.openapi(claimImportSessionRoute, (c) =>
+    deps.controller.claimImportSession(c, c.req.param('id'), c.req.valid('json')) as never,
+  );
 
   // Mass-action (checkbox panel Kata) - literal SEBELUM /:id
   routes.use(

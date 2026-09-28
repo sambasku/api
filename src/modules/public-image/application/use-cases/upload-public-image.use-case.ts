@@ -1,6 +1,11 @@
 import type { PublicImageStoragePort } from '../ports/public-image-storage.port';
-import { buildWordImagePath } from '../utils/public-image-path';
+import {
+  buildCampaignImagePath,
+  buildWordImagePath,
+} from '../utils/public-image-path';
 import { validateImageFile } from '../utils/validate-image-file';
+
+export type PublicImagePurpose = 'word' | 'campaign';
 
 export interface UploadPublicImageResult {
   url: string;
@@ -9,7 +14,7 @@ export interface UploadPublicImageResult {
   sha: string;
 }
 
-/** Upload gambar kata saja (purpose=word). Avatar punya use-case sendiri. */
+/** Upload gambar publik (GitHub). Avatar punya use-case sendiri. */
 export class UploadPublicImageUseCase {
   constructor(private readonly storage: PublicImageStoragePort) {}
 
@@ -17,9 +22,14 @@ export class UploadPublicImageUseCase {
     bytes: Uint8Array;
     mimeType: string | null | undefined;
     filename?: string | null;
+    purpose?: PublicImagePurpose;
   }): Promise<UploadPublicImageResult> {
     const file = validateImageFile(input);
-    const path = buildWordImagePath(file.mimeType);
+    const purpose = input.purpose ?? 'word';
+    const path =
+      purpose === 'campaign'
+        ? buildCampaignImagePath(file.mimeType)
+        : buildWordImagePath(file.mimeType);
     const uploaded = await this.storage.upload({
       path,
       content: file.bytes,

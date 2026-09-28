@@ -125,6 +125,7 @@ import { AddPronunciationUseCase } from '@/modules/word/application/use-cases/ad
 import { AddMeaningUseCase } from '@/modules/word/application/use-cases/add-meaning.use-case';
 import { ImportWordsUseCase } from '@/modules/word/application/use-cases/import-words.use-case';
 import {
+  ClaimWordImportSessionUseCase,
   GetWordImportSessionUseCase,
   ListWordImportSessionsUseCase,
   SaveWordImportSessionUseCase,
@@ -227,6 +228,8 @@ import { ApproveDiscussionUseCase } from '@/modules/discussion/application/use-c
 import { RejectDiscussionUseCase } from '@/modules/discussion/application/use-cases/reject-discussion.use-case';
 import { TakedownDiscussionUseCase } from '@/modules/discussion/application/use-cases/takedown-discussion.use-case';
 import { CreateDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/create-discussion-reply.use-case';
+import { CreateDiscussionReplyAudioUseCase } from '@/modules/discussion/application/use-cases/create-discussion-reply-audio.use-case';
+import { AttachDiscussionAudioUseCase } from '@/modules/discussion/application/use-cases/attach-discussion-audio.use-case';
 import { DeleteDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/delete-discussion-reply.use-case';
 import { PinDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/pin-discussion-reply.use-case';
 import { TakedownDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/takedown-discussion-reply.use-case';
@@ -254,6 +257,7 @@ import { ResetVotesByClientUseCase } from '@/modules/vote/application/use-cases/
 import { GetTopTargetVotesUseCase } from '@/modules/vote/application/use-cases/get-top-target-votes.use-case';
 import { CommentRepositoryImpl } from '@/modules/comment/infrastructure/comment.repository.impl';
 import { CreateCommentUseCase } from '@/modules/comment/application/use-cases/create-comment.use-case';
+import { CreateCommentAudioUseCase } from '@/modules/comment/application/use-cases/create-comment-audio.use-case';
 import { ListWordCommentsUseCase } from '@/modules/comment/application/use-cases/list-word-comments.use-case';
 import { DeleteCommentUseCase } from '@/modules/comment/application/use-cases/delete-comment.use-case';
 import { ListAdminCommentsUseCase } from '@/modules/comment/application/use-cases/list-admin-comments.use-case';
@@ -322,6 +326,10 @@ import { createShareBackgroundProviderRegistry, listShareBackgroundProviderInfos
 import { ListShareBackgroundsUseCase } from '@/modules/share/application/use-cases/list-share-backgrounds.use-case';
 import { ShareController } from '@/modules/share/presentation/v1/share.controller';
 import { createShareRoutes } from '@/modules/share/presentation/v1/share.routes';
+import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
+import { ListActivityUseCase } from '@/modules/activity/application/use-cases/list-activity.use-case';
+import { ActivityController } from '@/modules/activity/presentation/v1/activity.controller';
+import { createActivityRoutes } from '@/modules/activity/presentation/v1/activity.routes';
 import { VerifierApplicationRepositoryImpl } from '@/modules/verifier-application/infrastructure/verifier-application.repository.impl';
 import { CreateVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/create-verifier-application.use-case';
 import { GetMyVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/get-my-verifier-application.use-case';
@@ -554,10 +562,11 @@ const wordController = new WordController({
   addWordImage: new AddWordImageUseCase(wordRepo, auditRepo, publicImageStorage.providerName),
   addExample: new AddExampleUseCase(wordRepo, auditRepo),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
-  importWords: new ImportWordsUseCase(wordRepo, languageRepo),
-  saveImportSession: new SaveWordImportSessionUseCase(wordImportSessionRepo),
+  importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo),
+  saveImportSession: new SaveWordImportSessionUseCase(wordImportSessionRepo, userRepo),
   listImportSessions: new ListWordImportSessionsUseCase(wordImportSessionRepo),
   getImportSession: new GetWordImportSessionUseCase(wordImportSessionRepo),
+  claimImportSession: new ClaimWordImportSessionUseCase(wordImportSessionRepo, userRepo),
   uploadPronunciationAudio: new UploadPronunciationAudioUseCase(
     wordRepo,
     pronunciationStorage,
@@ -672,6 +681,17 @@ const commentController = new CommentController({
   create: new CreateCommentUseCase(
     commentRepo,
     wordRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    wordCommentPushCooldown,
+  ),
+  createAudio: new CreateCommentAudioUseCase(
+    commentRepo,
+    wordRepo,
+    pronunciationStorage,
     auditRepo,
     commentBlocklistRepo,
     userRepo,
@@ -1132,8 +1152,14 @@ const discussionController = new DiscussionController({
     imageStorage,
     auditRepo,
     recordInbox,
+    pronunciationStorage,
   ),
-  takedown: new TakedownDiscussionUseCase(discussionRepo, auditRepo, recordInbox),
+  takedown: new TakedownDiscussionUseCase(
+    discussionRepo,
+    auditRepo,
+    recordInbox,
+    pronunciationStorage,
+  ),
   createReply: new CreateDiscussionReplyUseCase(
     discussionRepo,
     auditRepo,
@@ -1143,7 +1169,26 @@ const discussionController = new DiscussionController({
     notifyUser,
     discussionReplyPushCooldown,
   ),
-  deleteReply: new DeleteDiscussionReplyUseCase(discussionRepo, auditRepo),
+  createReplyAudio: new CreateDiscussionReplyAudioUseCase(
+    discussionRepo,
+    pronunciationStorage,
+    auditRepo,
+    commentBlocklistRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    discussionReplyPushCooldown,
+  ),
+  attachAudio: new AttachDiscussionAudioUseCase(
+    discussionRepo,
+    pronunciationStorage,
+    auditRepo,
+  ),
+  deleteReply: new DeleteDiscussionReplyUseCase(
+    discussionRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
   pinReply: new PinDiscussionReplyUseCase(discussionRepo, auditRepo),
   takedownReply: new TakedownDiscussionReplyUseCase(discussionRepo, auditRepo),
   imageController,
@@ -1286,7 +1331,13 @@ app.route(
   createLemmaDefinitionRoutes({ controller: lemmaDefinitionController }),
 );
 
-// Latar kartu share - proxy Unsplash (docs/backlogs/SHARE.md). Publik.
+// Feed lintas aktivitas publik (37-api-activity-feed.md). Beranda mobile.
+const activityRepo = new ActivityRepositoryImpl(db);
+const activityController = new ActivityController({
+  list: new ListActivityUseCase(activityRepo),
+});
+app.route('/api/v1/activity', createActivityRoutes({ controller: activityController }));
+
 // Latar kartu share - multi-provider (docs/backlogs/SHARE.md). Publik.
 const shareBackgroundProviders = createShareBackgroundProviderRegistry();
 const shareController = new ShareController({

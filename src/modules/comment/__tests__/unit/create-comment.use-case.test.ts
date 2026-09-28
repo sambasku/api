@@ -25,6 +25,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     userRole: 'contributor',
     body: 'halo',
     bodyOriginal: null,
+    audio: null,
     status: 'published',
     reviewedBy: null,
     reviewedAt: null,

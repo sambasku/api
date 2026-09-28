@@ -24,6 +24,8 @@ export interface Discussion {
   /** Tautan https luar (opsional). */
   linkUrl: string | null;
   images: DiscussionImage[];
+  /** Audio opening thread; null jika belum dilampirkan. */
+  audio: DiscussionReplyAudio | null;
   status: DiscussionStatus;
   rejectionNote: string | null;
   reviewedBy: string | null;
@@ -40,6 +42,16 @@ export interface NewDiscussion {
   images: DiscussionImage[];
 }
 
+export interface DiscussionReplyAudio {
+  url: string;
+  mimeType: string;
+  fileSize: number;
+  durationMs: number | null;
+  provider: string;
+  providerFileId: string;
+  sha: string | null;
+}
+
 export interface DiscussionReply {
   id: string;
   discussionId: string;
@@ -51,8 +63,10 @@ export interface DiscussionReply {
   avatarUrl: string | null;
   /** Role penulis - dipakai highlight verifikator di render, bukan flag DB. */
   userRole: string | null;
+  /** Caption; string kosong untuk voice-only (wire → null). */
   body: string;
   bodyOriginal: string | null;
+  audio: DiscussionReplyAudio | null;
   status: DiscussionReplyStatus;
   reviewedBy: string | null;
   reviewedAt: Date | null;
@@ -65,6 +79,7 @@ export interface NewDiscussionReply {
   userId: string;
   body: string;
   bodyOriginal?: string | null;
+  audio?: DiscussionReplyAudio | null;
 }
 
 export interface DiscussionListFilter {

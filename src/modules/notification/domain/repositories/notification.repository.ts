@@ -10,6 +10,7 @@ export interface CreateInboxNotificationInput {
   type: InboxNotificationType;
   title: string;
   body: string;
+  imageUrl?: string | null;
   targetKind: NotificationTargetKind;
   targetId: string;
   actionKind?: NotificationActionKind | null;

@@ -34,6 +34,9 @@ const commentDataSchema = z.object({
   avatar_url: z.string().nullable(),
   is_verifier: z.boolean(),
   body: z.string().nullable(),
+  audio_url: z.string().nullable(),
+  audio_mime_type: z.string().nullable(),
+  audio_duration_ms: z.number().int().nullable(),
   status: commentStatusSchema,
   created_at: z.string(),
 });

@@ -12,6 +12,7 @@ export interface CreateTemplateInput {
   name: string;
   title: string;
   body: string;
+  imageUrl?: string | null;
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
   createdBy: string;
@@ -21,6 +22,7 @@ export interface UpdateTemplateInput {
   name?: string;
   title?: string;
   body?: string;
+  imageUrl?: string | null;
   deepLinkKind?: DeepLinkKind;
   deepLinkValue?: string | null;
 }
@@ -29,6 +31,7 @@ export interface CreateCampaignInput {
   templateId: string | null;
   title: string;
   body: string;
+  imageUrl?: string | null;
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
   audienceType: CampaignAudienceType;

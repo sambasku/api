@@ -6,6 +6,7 @@ import type {
   DiscussionImage,
   DiscussionListFilter,
   DiscussionReply,
+  DiscussionReplyAudio,
   DiscussionStatus,
 } from '../entities/discussion.entity';
 
@@ -34,6 +35,12 @@ export interface DiscussionRepository {
   listReplies(discussionId: string): Promise<DiscussionReply[]>;
   /** User unik yang pernah membalas thread (semua status kecuali soft-delete opsional: semua). */
   listDistinctReplierUserIds(discussionId: string): Promise<string[]>;
+
+  /** Lampirkan / ganti audio opening thread (owner, pending_review). */
+  setDiscussionAudio(input: {
+    id: string;
+    audio: DiscussionReplyAudio;
+  }): Promise<Discussion | null>;
 
   markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownReply(id: string, reviewerId: string): Promise<boolean>;

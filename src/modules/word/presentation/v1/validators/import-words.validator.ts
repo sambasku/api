@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { choiceId } from '@/shared/validation/id';
 
 const importMeaningSchema = z
   .object({
@@ -12,6 +13,8 @@ const importMeaningSchema = z
 
 export const importWordsBodySchema = z.object({
   mode: z.enum(['validate', 'commit']),
+  /** Opsional: atribusi ke user nyata; kosong = Pengimpor Data CSV. */
+  attributed_to: choiceId('User atribusi').optional(),
   items: z
     .array(
       z.object({

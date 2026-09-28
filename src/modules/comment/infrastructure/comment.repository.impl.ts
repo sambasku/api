@@ -39,7 +39,17 @@ export class CommentRepositoryImpl implements CommentRepository {
     userId: string;
     body: string;
     bodyOriginal?: string | null;
+    audio?: {
+      url: string;
+      mimeType: string;
+      fileSize: number;
+      durationMs: number | null;
+      provider: string;
+      providerFileId: string;
+      sha: string | null;
+    } | null;
   }): Promise<Comment> {
+    const audio = data.audio ?? null;
     const [row] = await this.db
       .insert(comments)
       .values({
@@ -47,6 +57,13 @@ export class CommentRepositoryImpl implements CommentRepository {
         userId: data.userId,
         body: data.body,
         bodyOriginal: data.bodyOriginal ?? null,
+        audioUrl: audio?.url ?? null,
+        audioMimeType: audio?.mimeType ?? null,
+        audioFileSize: audio?.fileSize ?? null,
+        audioDurationMs: audio?.durationMs ?? null,
+        audioProvider: audio?.provider ?? null,
+        audioProviderFileId: audio?.providerFileId ?? null,
+        audioSha: audio?.sha ?? null,
         status: 'published',
       })
       .returning();
@@ -231,6 +248,13 @@ export class CommentRepositoryImpl implements CommentRepository {
     userRole: string | null,
     wordLemma: string | null,
   ): Comment {
+    const hasAudio =
+      typeof row.audioUrl === 'string' &&
+      row.audioUrl.length > 0 &&
+      typeof row.audioMimeType === 'string' &&
+      typeof row.audioProvider === 'string' &&
+      typeof row.audioProviderFileId === 'string';
+
     return {
       id: row.id,
       wordId: row.wordId,
@@ -242,6 +266,17 @@ export class CommentRepositoryImpl implements CommentRepository {
       userRole,
       body: row.body,
       bodyOriginal: row.bodyOriginal ?? null,
+      audio: hasAudio
+        ? {
+            url: row.audioUrl as string,
+            mimeType: row.audioMimeType as string,
+            fileSize: row.audioFileSize ?? 0,
+            durationMs: row.audioDurationMs ?? null,
+            provider: row.audioProvider as string,
+            providerFileId: row.audioProviderFileId as string,
+            sha: row.audioSha ?? null,
+          }
+        : null,
       status: row.status as CommentStatus,
       reviewedBy: row.reviewedBy,
       reviewedAt: row.reviewedAt,

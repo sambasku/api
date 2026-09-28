@@ -22,6 +22,7 @@ export class CreateNotificationTemplateUseCase {
     name: string;
     title: string;
     body: string;
+    imageUrl?: string | null;
     deepLinkKind: DeepLinkKind;
     deepLinkValue?: string | null;
     createdBy: string;
@@ -32,6 +33,7 @@ export class CreateNotificationTemplateUseCase {
       name: input.name.trim(),
       title: input.title.trim(),
       body: input.body.trim(),
+      imageUrl: input.imageUrl?.trim() || null,
       deepLinkKind: input.deepLinkKind,
       deepLinkValue: input.deepLinkValue?.trim() || null,
       createdBy: input.createdBy,
@@ -59,6 +61,7 @@ export class UpdateNotificationTemplateUseCase {
     name?: string;
     title?: string;
     body?: string;
+    imageUrl?: string | null;
     deepLinkKind?: DeepLinkKind;
     deepLinkValue?: string | null;
     actorId: string;
@@ -77,6 +80,8 @@ export class UpdateNotificationTemplateUseCase {
       name: input.name?.trim(),
       title: input.title?.trim(),
       body: input.body?.trim(),
+      imageUrl:
+        input.imageUrl !== undefined ? (input.imageUrl?.trim() || null) : undefined,
       deepLinkKind: input.deepLinkKind,
       deepLinkValue: input.deepLinkValue !== undefined ? (input.deepLinkValue?.trim() || null) : undefined,
     });

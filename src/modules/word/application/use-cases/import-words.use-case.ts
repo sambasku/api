@@ -1,8 +1,9 @@
 import { BadRequestError } from '@/shared/errors/app-error';
-import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import type { LanguageRepository } from '@/modules/language/domain/repositories/language.repository';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { Actor } from './create-word.use-case';
+import type { UserLookupPort } from '../ports/user-lookup.port';
+import { resolveImportAttributedTo } from '../utils/resolve-import-attribution';
 import {
   decideImportPublication,
   meaningFingerprint,
@@ -20,18 +21,20 @@ export class ImportWordsUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly languageRepo: LanguageRepository,
+    private readonly users: UserLookupPort,
   ) {}
 
   async execute(
-    input: { mode: 'validate' | 'commit'; items: ImportWordInput[] },
+    input: { mode: 'validate' | 'commit'; items: ImportWordInput[]; attributed_to?: string },
     actor: Actor,
   ): Promise<ImportWordsResult> {
     if (input.items.length > 5) {
       throw new BadRequestError('IMPORT_TOO_LARGE', 'Maksimal 5 kata per permintaan');
     }
     const refs = await this.resolveRefs();
-    // Atribusi data ke user sistem; role login tetap untuk aturan tayang/verifikasi.
-    const writeActorId = CSV_IMPORTER_USER_ID;
+    // Default Pengimpor CSV; opsional override ke user yang dipilih admin.
+    // Role login tetap untuk aturan tayang/verifikasi.
+    const writeActorId = await resolveImportAttributedTo(this.users, input.attributed_to);
     const items: ImportWordResult[] = [];
     for (const item of input.items) {
       items.push(await this.one(item, actor, writeActorId, refs, input.mode));

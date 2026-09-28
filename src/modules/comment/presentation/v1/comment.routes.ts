@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
@@ -45,6 +46,25 @@ export function createWordCommentRoutes(deps: CommentRoutesDeps) {
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
     wordCommentLimiter(),
   );
+  routes.on(
+    'post',
+    '/:wordId/comments/audio',
+    deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    wordCommentLimiter(),
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) =>
+        c.json(
+          {
+            success: false as const,
+            error_code: 'AUDIO_TOO_LARGE',
+            message: 'File audio terlalu besar (maks 5 MB)',
+          },
+          400,
+        ),
+    }),
+  );
 
   const listRoute = createRoute({
     method: 'get',
@@ -80,8 +100,42 @@ export function createWordCommentRoutes(deps: CommentRoutesDeps) {
     },
   });
 
+  const createCommentAudioRoute = createRoute({
+    method: 'post',
+    path: '/:wordId/comments/audio',
+    tags: ['Comments'],
+    summary: 'Komentar dengan rekaman suara (multipart; publish langsung)',
+    request: {
+      params: z.object({ wordId: ulid26 }),
+      body: {
+        content: {
+          'multipart/form-data': {
+            schema: z.object({
+              audio: z.any().openapi({ type: 'string', format: 'binary' }),
+              body: z.string().max(1000).optional(),
+              duration_ms: z.coerce.number().int().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      201: { description: 'Komentar suara tersimpan', content: json(createCommentResponseSchema) },
+      400: { description: 'File/MIME tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      404: { description: 'Kata tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Kata belum tayang', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+      503: { description: 'Storage audio belum dikonfigurasi', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(listRoute, (c) =>
     deps.controller.listByWord(c, c.req.param('wordId'), c.req.valid('query')) as never,
+  );
+  // Audio sebelum POST JSON comments agar path spesifik menang
+  routes.openapi(createCommentAudioRoute, (c) =>
+    deps.controller.createAudio(c, c.req.param('wordId')) as never,
   );
   routes.openapi(createCommentRoute, (c) =>
     deps.controller.create(c, c.req.param('wordId'), c.req.valid('json')) as never,

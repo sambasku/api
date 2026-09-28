@@ -1,7 +1,8 @@
 import type { Context } from 'hono';
-import { UnauthorizedError, ValidationError } from '@/shared/errors/app-error';
+import { BadRequestError, UnauthorizedError, ValidationError } from '@/shared/errors/app-error';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { ImageController } from '@/modules/image/presentation/v1/image.controller';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import {
   isVerifierRole,
   type Discussion,
@@ -16,6 +17,8 @@ import type { ApproveDiscussionUseCase } from '../../application/use-cases/appro
 import type { RejectDiscussionUseCase } from '../../application/use-cases/reject-discussion.use-case';
 import type { TakedownDiscussionUseCase } from '../../application/use-cases/takedown-discussion.use-case';
 import type { CreateDiscussionReplyUseCase } from '../../application/use-cases/create-discussion-reply.use-case';
+import type { CreateDiscussionReplyAudioUseCase } from '../../application/use-cases/create-discussion-reply-audio.use-case';
+import type { AttachDiscussionAudioUseCase } from '../../application/use-cases/attach-discussion-audio.use-case';
 import type { DeleteDiscussionReplyUseCase } from '../../application/use-cases/delete-discussion-reply.use-case';
 import type { PinDiscussionReplyUseCase } from '../../application/use-cases/pin-discussion-reply.use-case';
 import type { TakedownDiscussionReplyUseCase } from '../../application/use-cases/takedown-discussion-reply.use-case';
@@ -30,7 +33,50 @@ import type {
 } from './validators/discussion.validator';
 
 function redactReplyBody(reply: DiscussionReply): string | null {
-  return reply.status === 'published' ? reply.body : null;
+  if (reply.status !== 'published') return null;
+  const trimmed = reply.body.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function redactReplyAudio(reply: DiscussionReply): {
+  audio_url: string | null;
+  audio_mime_type: string | null;
+  audio_duration_ms: number | null;
+} {
+  if (reply.status !== 'published' || !reply.audio) {
+    return {
+      audio_url: null,
+      audio_mime_type: null,
+      audio_duration_ms: null,
+    };
+  }
+  return {
+    audio_url: reply.audio.url,
+    audio_mime_type: reply.audio.mimeType,
+    audio_duration_ms: reply.audio.durationMs,
+  };
+}
+
+function redactDiscussionAudio(
+  help: Discussion,
+  opts: { expose: boolean },
+): {
+  audio_url: string | null;
+  audio_mime_type: string | null;
+  audio_duration_ms: number | null;
+} {
+  if (!opts.expose || !help.audio) {
+    return {
+      audio_url: null,
+      audio_mime_type: null,
+      audio_duration_ms: null,
+    };
+  }
+  return {
+    audio_url: help.audio.url,
+    audio_mime_type: help.audio.mimeType,
+    audio_duration_ms: help.audio.durationMs,
+  };
 }
 
 function toPublicImages(help: Discussion) {
@@ -64,6 +110,7 @@ export function toPublicItem(help: Discussion & { upvotes?: number }) {
     body: help.body,
     link_url: help.linkUrl,
     images: toPublicImages(help),
+    ...redactDiscussionAudio(help, { expose: help.status === 'published' }),
     status: 'published' as const,
     pinned_reply_id: help.pinnedReplyId,
     upvotes: help.upvotes ?? 0,
@@ -80,6 +127,9 @@ export function toOwnerItem(help: Discussion & { upvotes?: number }) {
     body: help.body,
     link_url: help.linkUrl,
     images: toOwnerImages(help),
+    ...redactDiscussionAudio(help, {
+      expose: help.status === 'published' || help.status === 'pending_review',
+    }),
     status: help.status,
     rejection_note: help.rejectionNote,
     pinned_reply_id: help.pinnedReplyId,
@@ -99,6 +149,7 @@ export function toAdminItem(help: Discussion & { upvotes?: number }) {
     body: help.body,
     link_url: help.linkUrl,
     images: toAdminImages(help),
+    ...redactDiscussionAudio(help, { expose: true }),
     status: help.status,
     rejection_note: help.rejectionNote,
     reviewed_by: help.reviewedBy,
@@ -121,6 +172,7 @@ function toPublicReply(
     display_name: reply.displayName,
     avatar_url: reply.avatarUrl,
     body: redactReplyBody(reply),
+    ...redactReplyAudio(reply),
     status: reply.status,
     is_verifier: isVerifierRole(reply.userRole),
     is_pinned: pinnedReplyId === reply.id,
@@ -254,6 +306,8 @@ export class DiscussionController {
       reject: RejectDiscussionUseCase;
       takedown: TakedownDiscussionUseCase;
       createReply: CreateDiscussionReplyUseCase;
+      createReplyAudio: CreateDiscussionReplyAudioUseCase;
+      attachAudio: AttachDiscussionAudioUseCase;
       deleteReply: DeleteDiscussionReplyUseCase;
       pinReply: PinDiscussionReplyUseCase;
       takedownReply: TakedownDiscussionReplyUseCase;
@@ -431,6 +485,85 @@ export class DiscussionController {
       },
       201,
     );
+  }
+
+  async createReplyAudio(c: Context, discussionId: string) {
+    const user = this.requireUser(c);
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const caption =
+      typeof body['body'] === 'string' ? body['body'] : null;
+
+    const reply = await this.deps.createReplyAudio.execute({
+      discussionId,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: caption,
+      durationMs: body['duration_ms'],
+      requestId: this.requestId(c),
+    });
+
+    const help = await this.deps.getDetail.execute({
+      id: discussionId,
+      viewerUserId: user.user_id,
+    });
+    return c.json(
+      {
+        success: true as const,
+        data: toPublicReply(reply, help.discussion.pinnedReplyId),
+      },
+      201,
+    );
+  }
+
+  async attachAudio(c: Context, discussionId: string) {
+    const user = this.requireUser(c);
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+
+    const row = await this.deps.attachAudio.execute({
+      discussionId,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      durationMs: body['duration_ms'],
+      requestId: this.requestId(c),
+    });
+
+    return c.json({ success: true as const, data: toOwnerItem(row) }, 200);
   }
 
   async deleteReply(c: Context, replyId: string) {

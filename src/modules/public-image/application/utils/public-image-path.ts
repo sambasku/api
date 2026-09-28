@@ -25,3 +25,8 @@ export function buildAvatarImagePath(userId: string, mimeType: string): string {
 export function buildDiscussionImagePath(mimeType: string): string {
   return `assets/discussions/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path campaign notifikasi: assets/campaigns/<ulid>.<ext> */
+export function buildCampaignImagePath(mimeType: string): string {
+  return `assets/campaigns/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

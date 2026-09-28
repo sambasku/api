@@ -75,6 +75,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `DISCUSSION_NOT_FOUND` | 404 | Diskusi tidak ditemukan / tidak boleh diakses |
 | `DISCUSSION_REPLY_NOT_FOUND` | 404 | Balasan diskusi tidak ditemukan |
 | `DISCUSSION_NOT_PUBLISHED` | 409 | Balasan hanya untuk diskusi yang sudah tayang |
+| `DISCUSSION_NOT_PENDING` | 409 | Audio opening hanya untuk diskusi pending_review |
 | `VERIFIER_APPLICATION_NOT_FOUND` | 404 | Pengajuan verifikator tidak ada (GET me belum apply; detail admin id tidak dikenal) |
 | `VERIFIER_APPLICATION_NOT_REJECTED` | 409 | PATCH me hanya boleh jika status rejected |
 | `ALREADY_VERIFIER` | 403 | POST/PATCH pengajuan oleh user yang role-nya bukan contributor; juga approve jika pemohon sudah bukan contributor |

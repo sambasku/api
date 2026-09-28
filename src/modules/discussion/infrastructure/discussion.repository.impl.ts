@@ -20,6 +20,7 @@ import type {
   DiscussionImage,
   DiscussionListFilter,
   DiscussionReply,
+  DiscussionReplyAudio,
   DiscussionReplyStatus,
   DiscussionStatus,
 } from '../domain/entities/discussion.entity';
@@ -69,6 +70,25 @@ function toImageRows(images: DiscussionImage[]): DiscussionImageRow[] {
   }));
 }
 
+function toDiscussionAudio(row: DiscussionRow): Discussion['audio'] {
+  const hasAudio =
+    typeof row.audioUrl === 'string' &&
+    row.audioUrl.length > 0 &&
+    typeof row.audioMimeType === 'string' &&
+    typeof row.audioProvider === 'string' &&
+    typeof row.audioProviderFileId === 'string';
+  if (!hasAudio) return null;
+  return {
+    url: row.audioUrl as string,
+    mimeType: row.audioMimeType as string,
+    fileSize: row.audioFileSize ?? 0,
+    durationMs: row.audioDurationMs ?? null,
+    provider: row.audioProvider as string,
+    providerFileId: row.audioProviderFileId as string,
+    sha: row.audioSha ?? null,
+  };
+}
+
 function toDiscussion(
   row: DiscussionRow,
   username: string | null,
@@ -82,6 +102,7 @@ function toDiscussion(
     body: row.body,
     linkUrl: row.linkUrl ?? null,
     images: asImages(row.images),
+    audio: toDiscussionAudio(row),
     status: row.status as DiscussionStatus,
     rejectionNote: row.rejectionNote,
     reviewedBy: row.reviewedBy,
@@ -99,6 +120,13 @@ function toReply(
   avatarUrl: string | null,
   userRole: string | null,
 ): DiscussionReply {
+  const hasAudio =
+    typeof row.audioUrl === 'string' &&
+    row.audioUrl.length > 0 &&
+    typeof row.audioMimeType === 'string' &&
+    typeof row.audioProvider === 'string' &&
+    typeof row.audioProviderFileId === 'string';
+
   return {
     id: row.id,
     discussionId: row.discussionId,
@@ -109,6 +137,17 @@ function toReply(
     userRole,
     body: row.body,
     bodyOriginal: row.bodyOriginal,
+    audio: hasAudio
+      ? {
+          url: row.audioUrl as string,
+          mimeType: row.audioMimeType as string,
+          fileSize: row.audioFileSize ?? 0,
+          durationMs: row.audioDurationMs ?? null,
+          provider: row.audioProvider as string,
+          providerFileId: row.audioProviderFileId as string,
+          sha: row.audioSha ?? null,
+        }
+      : null,
     status: row.status as DiscussionReplyStatus,
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt,
@@ -300,7 +339,30 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
     return this.findById(row.id);
   }
 
+  async setDiscussionAudio(input: {
+    id: string;
+    audio: DiscussionReplyAudio;
+  }): Promise<Discussion | null> {
+    const [row] = await this.db
+      .update(discussions)
+      .set({
+        audioUrl: input.audio.url,
+        audioMimeType: input.audio.mimeType,
+        audioFileSize: input.audio.fileSize,
+        audioDurationMs: input.audio.durationMs,
+        audioProvider: input.audio.provider,
+        audioProviderFileId: input.audio.providerFileId,
+        audioSha: input.audio.sha,
+        updatedAt: new Date(),
+      })
+      .where(eq(discussions.id, input.id))
+      .returning();
+    if (!row) return null;
+    return this.findById(row.id);
+  }
+
   async createReply(input: NewDiscussionReply): Promise<DiscussionReply> {
+    const audio = input.audio ?? null;
     const [row] = await this.db
       .insert(discussionReplies)
       .values({
@@ -308,6 +370,13 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal ?? null,
+        audioUrl: audio?.url ?? null,
+        audioMimeType: audio?.mimeType ?? null,
+        audioFileSize: audio?.fileSize ?? null,
+        audioDurationMs: audio?.durationMs ?? null,
+        audioProvider: audio?.provider ?? null,
+        audioProviderFileId: audio?.providerFileId ?? null,
+        audioSha: audio?.sha ?? null,
         status: 'published',
       })
       .returning();

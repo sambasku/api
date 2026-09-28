@@ -1,8 +1,9 @@
 import type { Context } from 'hono';
 import { logger } from '@/shared/logging/logger';
-import { UnauthorizedError } from '@/shared/errors/app-error';
+import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
 import type { AppVariables } from '@/shared/types';
 import type { CreateCommentUseCase } from '../../application/use-cases/create-comment.use-case';
+import type { CreateCommentAudioUseCase } from '../../application/use-cases/create-comment-audio.use-case';
 import type { ListWordCommentsUseCase } from '../../application/use-cases/list-word-comments.use-case';
 import type { DeleteCommentUseCase } from '../../application/use-cases/delete-comment.use-case';
 import type { ListAdminCommentsUseCase } from '../../application/use-cases/list-admin-comments.use-case';
@@ -11,6 +12,7 @@ import type { UncensorCommentUseCase } from '../../application/use-cases/uncenso
 import type { ListMyCommentsUseCase } from '../../application/use-cases/list-my-comments.use-case';
 import type { Comment } from '../../domain/entities/comment.entity';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type {
   CreateCommentBody,
   ListAdminCommentsQueryBody,
@@ -19,7 +21,26 @@ import type {
 } from './validators/comment.validator';
 
 function redactPublicBody(cm: Comment): string | null {
-  return cm.status === 'published' ? cm.body : null;
+  return cm.status === 'published' ? (cm.body.trim().length > 0 ? cm.body : null) : null;
+}
+
+function redactPublicAudio(cm: Comment): {
+  audio_url: string | null;
+  audio_mime_type: string | null;
+  audio_duration_ms: number | null;
+} {
+  if (cm.status !== 'published' || !cm.audio) {
+    return {
+      audio_url: null,
+      audio_mime_type: null,
+      audio_duration_ms: null,
+    };
+  }
+  return {
+    audio_url: cm.audio.url,
+    audio_mime_type: cm.audio.mimeType,
+    audio_duration_ms: cm.audio.durationMs,
+  };
 }
 
 function toPublicCommentFields(cm: Comment) {
@@ -33,6 +54,7 @@ function toPublicCommentFields(cm: Comment) {
     avatar_url: cm.avatarUrl,
     is_verifier: isVerifierRole(cm.userRole ?? ''),
     body: redactPublicBody(cm),
+    ...redactPublicAudio(cm),
     status: cm.status,
     created_at: cm.createdAt.toISOString(),
   };
@@ -42,6 +64,7 @@ export class CommentController {
   constructor(
     private readonly deps: {
       create: CreateCommentUseCase;
+      createAudio: CreateCommentAudioUseCase;
       listByWord: ListWordCommentsUseCase;
       delete: DeleteCommentUseCase;
       listAdmin: ListAdminCommentsUseCase;
@@ -68,7 +91,57 @@ export class CommentController {
         success: true as const,
         data: {
           ...toPublicCommentFields(comment),
-          body: comment.body,
+          body: comment.body.trim().length > 0 ? comment.body : null,
+        },
+      },
+      201,
+    );
+  }
+
+  async createAudio(c: Context, wordId: string) {
+    const actor = this.requireUser(c);
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const caption = typeof body['body'] === 'string' ? body['body'] : null;
+
+    const comment = await this.deps.createAudio.execute({
+      wordId,
+      userId: actor.user_id,
+      role: actor.role,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: caption,
+      durationMs: body['duration_ms'],
+      requestId: this.requestId(c),
+    });
+
+    logger.info(
+      { request_id: this.requestId(c), comment_id: comment.id, word_id: wordId },
+      'comment audio created',
+    );
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          ...toPublicCommentFields(comment),
+          body: comment.body.trim().length > 0 ? comment.body : null,
         },
       },
       201,

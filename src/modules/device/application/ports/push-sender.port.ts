@@ -1,6 +1,8 @@
 export interface PushMessage {
   title: string;
   body: string;
+  /** HTTPS URL untuk rich image (Android tray / FCM notification.image). */
+  imageUrl?: string;
   data?: Record<string, string>;
 }
 

@@ -11,6 +11,8 @@ export const notificationTemplates = sqliteTable(
     name: text('name').notNull(),
     title: text('title').notNull(),
     body: text('body').notNull(),
+    /** URL gambar opsional untuk rich push / inbox. */
+    imageUrl: text('image_url'),
     /** word | contribution | suggestion | url | none */
     deepLinkKind: text('deep_link_kind').notNull().default('none'),
     deepLinkValue: text('deep_link_value'),

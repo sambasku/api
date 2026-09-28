@@ -92,7 +92,14 @@ async function pushOne(
   const payload = {
     message: {
       token: fcmToken,
-      notification: { title: message.title, body: message.body },
+      notification: {
+        title: message.title,
+        body: message.body,
+        ...(message.imageUrl ? { image: message.imageUrl } : {}),
+      },
+      ...(message.imageUrl
+        ? { android: { notification: { image: message.imageUrl } } }
+        : {}),
       ...(message.data && Object.keys(message.data).length > 0
         ? { data: message.data }
         : {}),
@@ -132,7 +139,14 @@ async function pushTopic(
   const payload = {
     message: {
       topic,
-      notification: { title: message.title, body: message.body },
+      notification: {
+        title: message.title,
+        body: message.body,
+        ...(message.imageUrl ? { image: message.imageUrl } : {}),
+      },
+      ...(message.imageUrl
+        ? { android: { notification: { image: message.imageUrl } } }
+        : {}),
       ...(message.data && Object.keys(message.data).length > 0
         ? { data: message.data }
         : {}),

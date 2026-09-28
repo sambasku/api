@@ -60,6 +60,7 @@ const notificationItemSchema = z.object({
   type: inboxNotificationTypeSchema,
   title: z.string(),
   body: z.string(),
+  image_url: z.string().nullable(),
   target_kind: notificationTargetKindSchema,
   target_id: z.string(),
   action_kind: notificationActionKindSchema.nullable(),

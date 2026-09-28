@@ -20,6 +20,7 @@ import type { AddExampleUseCase } from '../../application/use-cases/add-example.
 import type { AddMeaningUseCase } from '../../application/use-cases/add-meaning.use-case';
 import type { ImportWordsUseCase } from '../../application/use-cases/import-words.use-case';
 import type {
+  ClaimWordImportSessionUseCase,
   GetWordImportSessionUseCase,
   ListWordImportSessionsUseCase,
   SaveWordImportSessionUseCase,
@@ -35,9 +36,11 @@ import type {
 } from './validators/create-word.validator';
 import type { ImportWordsBody } from './validators/import-words.validator';
 import type {
+  ClaimImportSessionBody,
   ListImportSessionsQuery,
   SaveImportSessionBody,
 } from './validators/import-session.validator';
+import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import type { BulkWordsBody } from './validators/bulk-words.validator';
 import type { UpdateWordBody } from './validators/update-word.validator';
 import type { TakedownWordBody } from '@/modules/word-report/presentation/v1/validators/word-report.validator';
@@ -100,6 +103,7 @@ export class WordController {
       saveImportSession: SaveWordImportSessionUseCase;
       listImportSessions: ListWordImportSessionsUseCase;
       getImportSession: GetWordImportSessionUseCase;
+      claimImportSession: ClaimWordImportSessionUseCase;
       uploadPronunciationAudio: UploadPronunciationAudioUseCase;
       deletePronunciationAudio: DeletePronunciationAudioUseCase;
       listWordClasses: () => Promise<WordClassSummary[]>;
@@ -182,7 +186,13 @@ export class WordController {
     const session = await this.deps.saveImportSession.execute({
       id: body.id,
       triggeredBy: actor.user_id,
+      attributedTo: body.attributed_to,
       sourceLabel: body.source_label,
+      supportName: body.support_name,
+      supportType: body.support_type,
+      supportAddress: body.support_address,
+      supportTitle: body.support_title,
+      supportDesc: body.support_desc,
       status: body.status,
       total: body.total,
       createdCount: body.created_count,
@@ -199,6 +209,7 @@ export class WordController {
     const page = await this.deps.listImportSessions.execute({
       limit,
       cursor: query.cursor,
+      q: query.q,
     });
     return c.json({
       success: true as const,
@@ -216,6 +227,17 @@ export class WordController {
     return c.json({ success: true as const, data: this.toImportSessionData(session) });
   }
 
+  async claimImportSession(c: Context, id: string, body: ClaimImportSessionBody) {
+    const actor = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const session = await this.deps.claimImportSession.execute({
+      sessionId: id,
+      attributedTo: body.attributed_to,
+      claimedBy: actor.user_id,
+    });
+    return c.json({ success: true as const, data: this.toImportSessionData(session) });
+  }
+
   private toImportSessionData(session: {
     id: string;
     triggeredBy: string;
@@ -225,6 +247,15 @@ export class WordController {
     attributedToUsername: string | null;
     attributedToDisplayName: string | null;
     sourceLabel: string | null;
+    supportName: string | null;
+    supportType: 'web' | 'book' | 'article' | 'other' | null;
+    supportAddress: string | null;
+    supportTitle: string | null;
+    supportDesc: string | null;
+    claimedBy: string | null;
+    claimedByUsername: string | null;
+    claimedByDisplayName: string | null;
+    claimedAt: Date | null;
     status: 'running' | 'completed' | 'cancelled' | 'failed';
     total: number;
     createdCount: number;
@@ -244,6 +275,16 @@ export class WordController {
       attributed_to_username: session.attributedToUsername,
       attributed_to_display_name: session.attributedToDisplayName,
       source_label: session.sourceLabel,
+      support_name: session.supportName,
+      support_type: session.supportType,
+      support_address: session.supportAddress,
+      support_title: session.supportTitle,
+      support_desc: session.supportDesc,
+      claimed_by: session.claimedBy,
+      claimed_by_username: session.claimedByUsername,
+      claimed_by_display_name: session.claimedByDisplayName,
+      claimed_at: session.claimedAt?.toISOString() ?? null,
+      can_claim: session.attributedTo === CSV_IMPORTER_USER_ID,
       status: session.status,
       total: session.total,
       created_count: session.createdCount,

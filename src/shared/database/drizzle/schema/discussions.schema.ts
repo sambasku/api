@@ -21,6 +21,14 @@ export const discussions = sqliteTable(
     /** Tautan https opsional untuk share konten luar. */
     linkUrl: text('link_url'),
     images: text('images', { mode: 'json' }).$type<DiscussionImageRow[]>().notNull(),
+    /** Audio opsional pada opening thread (GitHub sambasku/audios). */
+    audioUrl: text('audio_url'),
+    audioMimeType: text('audio_mime_type'),
+    audioFileSize: integer('audio_file_size'),
+    audioDurationMs: integer('audio_duration_ms'),
+    audioProvider: text('audio_provider'),
+    audioProviderFileId: text('audio_provider_file_id'),
+    audioSha: text('audio_sha'),
     // pending_review | published | rejected | taken_down
     status: text('status').notNull().default('pending_review'),
     rejectionNote: text('rejection_note'),
@@ -47,8 +55,16 @@ export const discussionReplies = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
+    /** Teks caption; string kosong untuk balasan voice-only. */
     body: text('body').notNull(),
     bodyOriginal: text('body_original'),
+    audioUrl: text('audio_url'),
+    audioMimeType: text('audio_mime_type'),
+    audioFileSize: integer('audio_file_size'),
+    audioDurationMs: integer('audio_duration_ms'),
+    audioProvider: text('audio_provider'),
+    audioProviderFileId: text('audio_provider_file_id'),
+    audioSha: text('audio_sha'),
     // published | taken_down | deleted_by_author
     status: text('status').notNull().default('published'),
     reviewedBy: text('reviewed_by').references(() => users.id),

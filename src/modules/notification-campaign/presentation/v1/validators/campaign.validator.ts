@@ -32,6 +32,16 @@ const bodySchema = z
   .min(1, 'Isi wajib diisi')
   .max(500, 'Isi maksimal 500 karakter');
 
+/** HTTPS URL publik untuk gambar campaign (opsional). */
+const imageUrlSchema = z
+  .string()
+  .trim()
+  .max(2000, 'URL gambar maksimal 2000 karakter')
+  .url('URL gambar tidak valid')
+  .refine((u) => u.startsWith('https://'), 'URL gambar harus HTTPS')
+  .nullable()
+  .optional();
+
 export const createTemplateBodySchema = z.object({
   name: z
     .string({ error: 'Nama template wajib diisi' })
@@ -40,6 +50,7 @@ export const createTemplateBodySchema = z.object({
     .max(100, 'Nama template maksimal 100 karakter'),
   title: titleSchema,
   body: bodySchema,
+  image_url: imageUrlSchema,
   deep_link_kind: deepLinkKindSchema.default('none'),
   deep_link_value: z.string().trim().max(500).nullable().optional(),
 });
@@ -48,6 +59,7 @@ export const updateTemplateBodySchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   title: titleSchema.optional(),
   body: bodySchema.optional(),
+  image_url: imageUrlSchema,
   deep_link_kind: deepLinkKindSchema.optional(),
   deep_link_value: z.string().trim().max(500).nullable().optional(),
 });
@@ -64,6 +76,7 @@ const templateItemSchema = z.object({
   name: z.string(),
   title: z.string(),
   body: z.string(),
+  image_url: z.string().nullable(),
   deep_link_kind: deepLinkKindSchema,
   deep_link_value: z.string().nullable(),
   created_by: z.string(),
@@ -91,6 +104,7 @@ export const createCampaignBodySchema = z
     template_id: opaqueId.nullable().optional(),
     title: titleSchema.optional(),
     body: bodySchema.optional(),
+    image_url: imageUrlSchema,
     deep_link_kind: deepLinkKindSchema.optional(),
     deep_link_value: z.string().trim().max(500).nullable().optional(),
     audience_type: audienceTypeSchema,
@@ -119,6 +133,7 @@ const campaignItemSchema = z.object({
   template_id: z.string().nullable(),
   title: z.string(),
   body: z.string(),
+  image_url: z.string().nullable(),
   deep_link_kind: deepLinkKindSchema,
   deep_link_value: z.string().nullable(),
   audience_type: audienceTypeSchema,

@@ -1,5 +1,6 @@
 import { NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { PronunciationStoragePort } from '@/modules/word/application/ports/pronunciation-storage.port';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { Discussion } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
@@ -15,12 +16,24 @@ export class TakedownDiscussionUseCase {
     private readonly repo: DiscussionRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly audioStorage?: PronunciationStoragePort,
   ) {}
 
   async execute(cmd: TakedownDiscussionCommand): Promise<Discussion> {
     const existing = await this.repo.findById(cmd.id);
     if (!existing || existing.status !== 'published') {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');
+    }
+
+    if (existing.audio?.providerFileId && existing.audio.sha && this.audioStorage) {
+      try {
+        await this.audioStorage.delete(
+          existing.audio.providerFileId,
+          existing.audio.sha,
+        );
+      } catch {
+        // best-effort
+      }
     }
 
     const updated = await this.repo.updateStatus({

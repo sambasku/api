@@ -1,6 +1,7 @@
 import { NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
+import type { PronunciationStoragePort } from '@/modules/word/application/ports/pronunciation-storage.port';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { Discussion } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
@@ -18,6 +19,7 @@ export class RejectDiscussionUseCase {
     private readonly imageStorage: ImageStoragePort,
     private readonly auditRepo: AuditLogRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly audioStorage?: PronunciationStoragePort,
   ) {}
 
   async execute(cmd: RejectDiscussionCommand): Promise<Discussion> {
@@ -37,6 +39,17 @@ export class RejectDiscussionUseCase {
     for (const img of existing.images) {
       // deleteFile ImageKit sudah best-effort (log internal, tidak lempar)
       await this.imageStorage.deleteFile(img.providerFileId);
+    }
+
+    if (existing.audio?.providerFileId && existing.audio.sha && this.audioStorage) {
+      try {
+        await this.audioStorage.delete(
+          existing.audio.providerFileId,
+          existing.audio.sha,
+        );
+      } catch {
+        // best-effort
+      }
     }
 
     const updated = await this.repo.updateStatus({

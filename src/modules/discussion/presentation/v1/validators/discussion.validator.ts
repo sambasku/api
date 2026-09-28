@@ -142,6 +142,9 @@ export const discussionReplyPublicSchema = z.object({
   display_name: z.string().nullable(),
   avatar_url: z.string().nullable(),
   body: z.string().nullable(),
+  audio_url: z.string().nullable(),
+  audio_mime_type: z.string().nullable(),
+  audio_duration_ms: z.number().int().nullable(),
   status: z.enum(['published', 'taken_down', 'deleted_by_author']),
   is_verifier: z.boolean(),
   is_pinned: z.boolean(),
@@ -158,6 +161,9 @@ export const discussionPublicItemSchema = z.object({
   body: z.string().nullable(),
   link_url: z.string().nullable(),
   images: z.array(publicImageWireSchema),
+  audio_url: z.string().nullable(),
+  audio_mime_type: z.string().nullable(),
+  audio_duration_ms: z.number().int().nullable(),
   status: z.literal('published'),
   pinned_reply_id: z.string().nullable(),
   upvotes: z.number().int(),
@@ -172,6 +178,9 @@ export const discussionOwnerItemSchema = z.object({
   body: z.string().nullable(),
   link_url: z.string().nullable(),
   images: z.array(ownerImageWireSchema),
+  audio_url: z.string().nullable(),
+  audio_mime_type: z.string().nullable(),
+  audio_duration_ms: z.number().int().nullable(),
   status: discussionStatusSchema,
   rejection_note: z.string().nullable(),
   pinned_reply_id: z.string().nullable(),
@@ -189,6 +198,9 @@ export const discussionAdminItemSchema = z.object({
   body: z.string().nullable(),
   link_url: z.string().nullable(),
   images: z.array(adminImageWireSchema),
+  audio_url: z.string().nullable(),
+  audio_mime_type: z.string().nullable(),
+  audio_duration_ms: z.number().int().nullable(),
   status: discussionStatusSchema,
   rejection_note: z.string().nullable(),
   reviewed_by: z.string().nullable(),
@@ -260,6 +272,11 @@ export const discussionAdminDetailResponseSchema = z.object({
 export const discussionAdminItemResponseSchema = z.object({
   success: z.literal(true),
   data: discussionAdminItemSchema,
+});
+
+export const attachDiscussionAudioResponseSchema = z.object({
+  success: z.literal(true),
+  data: discussionOwnerItemSchema,
 });
 
 export const createDiscussionReplyResponseSchema = z.object({
