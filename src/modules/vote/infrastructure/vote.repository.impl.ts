@@ -6,8 +6,8 @@ import {
   meanings,
   meaningTranslations,
   pronunciations,
-  translationHelpReplies,
-  translationHelps,
+  discussionReplies,
+  discussions,
   users,
   votes,
   wordImages,
@@ -104,27 +104,27 @@ export class VoteRepositoryImpl implements VoteRepository {
           .limit(1);
         return rows.length > 0;
       }
-      case 'translation_help_reply': {
+      case 'discussion_reply': {
         // Hanya balasan tayang yang boleh di-vote (taken_down /
         // deleted_by_author → 404 VOTE_TARGET_NOT_FOUND).
         const rows = await this.db
-          .select({ id: translationHelpReplies.id })
-          .from(translationHelpReplies)
+          .select({ id: discussionReplies.id })
+          .from(discussionReplies)
           .where(
             and(
-              eq(translationHelpReplies.id, target.entityId),
-              eq(translationHelpReplies.status, 'published'),
+              eq(discussionReplies.id, target.entityId),
+              eq(discussionReplies.status, 'published'),
             ),
           )
           .limit(1);
         return rows.length > 0;
       }
-      case 'translation_help': {
+      case 'discussion': {
         const rows = await this.db
-          .select({ id: translationHelps.id })
-          .from(translationHelps)
+          .select({ id: discussions.id })
+          .from(discussions)
           .where(
-            and(eq(translationHelps.id, target.entityId), eq(translationHelps.status, 'published')),
+            and(eq(discussions.id, target.entityId), eq(discussions.status, 'published')),
           )
           .limit(1);
         return rows.length > 0;
@@ -373,8 +373,8 @@ export class VoteRepositoryImpl implements VoteRepository {
     target: VoteTarget,
   ): Promise<{ wordId: string; lemma: string; ownerUserId: string | null } | null> {
     if (
-      target.entityType === 'translation_help' ||
-      target.entityType === 'translation_help_reply'
+      target.entityType === 'discussion' ||
+      target.entityType === 'discussion_reply'
     ) {
       return null;
     }
@@ -675,17 +675,17 @@ export class VoteRepositoryImpl implements VoteRepository {
       );
     }
 
-    const replyIds = [...new Set(idsByType.get('translation_help_reply') ?? [])];
+    const replyIds = [...new Set(idsByType.get('discussion_reply') ?? [])];
     if (replyIds.length > 0) {
       jobs.push(
         this.db
-          .select({ id: translationHelpReplies.id, body: translationHelpReplies.body })
-          .from(translationHelpReplies)
-          .where(inArray(translationHelpReplies.id, replyIds))
+          .select({ id: discussionReplies.id, body: discussionReplies.body })
+          .from(discussionReplies)
+          .where(inArray(discussionReplies.id, replyIds))
           .then((rows) => {
             for (const r of rows) {
               out.set(
-                voteTargetKey({ entityType: 'translation_help_reply', entityId: r.id }),
+                voteTargetKey({ entityType: 'discussion_reply', entityId: r.id }),
                 clipPreview(r.body),
               );
             }
@@ -693,18 +693,18 @@ export class VoteRepositoryImpl implements VoteRepository {
       );
     }
 
-    const helpIds = [...new Set(idsByType.get('translation_help') ?? [])];
-    if (helpIds.length > 0) {
+    const discussionIds = [...new Set(idsByType.get('discussion') ?? [])];
+    if (discussionIds.length > 0) {
       jobs.push(
         this.db
-          .select({ id: translationHelps.id, body: translationHelps.body })
-          .from(translationHelps)
-          .where(inArray(translationHelps.id, helpIds))
+          .select({ id: discussions.id, body: discussions.body })
+          .from(discussions)
+          .where(inArray(discussions.id, discussionIds))
           .then((rows) => {
             for (const r of rows) {
               out.set(
-                voteTargetKey({ entityType: 'translation_help', entityId: r.id }),
-                clipPreview(r.body?.trim() || 'Pertanyaan bantuan'),
+                voteTargetKey({ entityType: 'discussion', entityId: r.id }),
+                clipPreview(r.body?.trim() || 'Pertanyaan diskusi'),
               );
             }
           }),

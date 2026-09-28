@@ -36,8 +36,8 @@ function wordVoteBody(
 // yang dipilih user. TANPA audit (KEPUTUSAN PRODUK: volume tinggi, bukan
 // aksi admin; analitik cukup dari tabel votes sendiri).
 //
-// KEPUTUSAN PRODUK: target `translation_help` (pertanyaan) upvote-only -
-// downvote ditolak (komunitas minta bantuan, bukan konten yang di-downvote).
+// KEPUTUSAN PRODUK: target `discussion` (pertanyaan) upvote-only -
+// downvote ditolak (komunitas minta jawaban, bukan konten yang di-downvote).
 //
 // Setelah cast (bukan unvote): inbox + push ke pemilik kata induk (best-effort),
 // cooldown Skip per user (default 3 menit). Inbox tidak di-throttle.
@@ -51,11 +51,11 @@ export class ToggleVoteUseCase {
   ) {}
 
   async execute(cmd: ToggleVoteCommand): Promise<ToggleVoteResult> {
-    if (cmd.targetType === 'translation_help' && cmd.value === -1) {
+    if (cmd.targetType === 'discussion' && cmd.value === -1) {
       throw new ValidationError([
         {
           field: 'value',
-          message: 'Pertanyaan bantuan hanya bisa di-upvote',
+          message: 'Pertanyaan diskusi hanya bisa di-upvote',
         },
       ]);
     }

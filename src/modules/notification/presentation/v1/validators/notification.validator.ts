@@ -11,9 +11,9 @@ export const inboxNotificationTypeSchema = z.enum([
   'word_taken_down',
   'contribution_paused',
   'contribution_resumed',
-  'translation_help_approved',
-  'translation_help_rejected',
-  'translation_help_taken_down',
+  'discussion_approved',
+  'discussion_rejected',
+  'discussion_taken_down',
   'word_comment',
   'word_vote',
   'campaign',
@@ -23,7 +23,7 @@ export const notificationTargetKindSchema = z.enum([
   'contribution',
   'suggestion',
   'word',
-  'translation_help',
+  'discussion',
   'campaign',
 ]);
 
@@ -31,7 +31,7 @@ export const notificationActionKindSchema = z.enum([
   'word',
   'contribution',
   'suggestion',
-  'translation_help',
+  'discussion',
   'url',
 ]);
 

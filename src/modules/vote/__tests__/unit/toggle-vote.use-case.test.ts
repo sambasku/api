@@ -35,12 +35,12 @@ describe('ToggleVoteUseCase', () => {
     expect(voteRepo.toggle).not.toHaveBeenCalled();
   });
 
-  it('translation_help + downvote → VALIDATION_ERROR, toggle TIDAK dipanggil', async () => {
+  it('discussion + downvote → VALIDATION_ERROR, toggle TIDAK dipanggil', async () => {
     const { useCase, voteRepo } = makeDeps();
     await expect(
       useCase.execute({
         userId: USER,
-        targetType: 'translation_help',
+        targetType: 'discussion',
         targetId: WORD_ID,
         value: -1,
       }),

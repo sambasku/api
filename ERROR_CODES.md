@@ -72,9 +72,9 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `INSUFFICIENT_SCOPE` | 403 | Token third-party kurang scope untuk endpoint write |
 | `CANNOT_DEACTIVATE_SELF` | 403 | Admin mencoba mengubah status aktif akunnya sendiri |
 | `BUG_REPORT_NOT_FOUND` | 404 | Laporan masalah tidak ditemukan / sudah selesai (resolve admin) |
-| `TRANSLATION_HELP_NOT_FOUND` | 404 | Bantuan terjemahan tidak ditemukan / tidak boleh diakses |
-| `TRANSLATION_HELP_REPLY_NOT_FOUND` | 404 | Balasan bantuan terjemahan tidak ditemukan |
-| `TRANSLATION_HELP_NOT_PUBLISHED` | 409 | Balasan hanya untuk bantuan yang sudah tayang |
+| `DISCUSSION_NOT_FOUND` | 404 | Diskusi tidak ditemukan / tidak boleh diakses |
+| `DISCUSSION_REPLY_NOT_FOUND` | 404 | Balasan diskusi tidak ditemukan |
+| `DISCUSSION_NOT_PUBLISHED` | 409 | Balasan hanya untuk diskusi yang sudah tayang |
 | `VERIFIER_APPLICATION_NOT_FOUND` | 404 | Pengajuan verifikator tidak ada (GET me belum apply; detail admin id tidak dikenal) |
 | `VERIFIER_APPLICATION_NOT_REJECTED` | 409 | PATCH me hanya boleh jika status rejected |
 | `ALREADY_VERIFIER` | 403 | POST/PATCH pengajuan oleh user yang role-nya bukan contributor; juga approve jika pemohon sudah bukan contributor |

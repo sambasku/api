@@ -18,7 +18,7 @@ export const notifications = sqliteTable(
     body: text('body').notNull(),
     targetKind: text('target_kind').notNull(),
     targetId: text('target_id').notNull(),
-    /** CTA: word | contribution | suggestion | translation_help | url */
+    /** CTA: word | contribution | suggestion | discussion | url */
     actionKind: text('action_kind'),
     actionValue: text('action_value'),
     readAt: integer('read_at', { mode: 'timestamp' }),

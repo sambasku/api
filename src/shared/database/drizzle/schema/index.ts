@@ -38,7 +38,7 @@ export * from './notification-campaign-recipients.schema';
 export * from './verifier-applications.schema';
 export * from './bug-reports.schema';
 export * from './word-reports.schema';
-export * from './translation-helps.schema';
+export * from './discussions.schema';
 export * from './word-audios.schema';
 export * from './word-import-sessions.schema';
 export * from './app-settings.schema';

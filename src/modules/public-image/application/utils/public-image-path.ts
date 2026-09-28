@@ -21,7 +21,7 @@ export function buildAvatarImagePath(userId: string, mimeType: string): string {
   return `assets/avatars/${safeUser}/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
 
-/** Path bantuan terjemahan: assets/translation-helps/<ulid>.<ext> */
-export function buildTranslationHelpImagePath(mimeType: string): string {
-  return `assets/translation-helps/${generateId()}.${extensionForImageMime(mimeType)}`;
+/** Path ruang diskusi: assets/discussions/<ulid>.<ext> */
+export function buildDiscussionImagePath(mimeType: string): string {
+  return `assets/discussions/${generateId()}.${extensionForImageMime(mimeType)}`;
 }

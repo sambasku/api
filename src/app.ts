@@ -214,22 +214,22 @@ import { ResolveBugReportUseCase } from '@/modules/bug-report/application/use-ca
 import { BugReportController } from '@/modules/bug-report/presentation/v1/bug-report.controller';
 import { createBugReportRoutes } from '@/modules/bug-report/presentation/v1/bug-report.routes';
 import { createAdminBugReportRoutes } from '@/modules/bug-report/presentation/v1/admin-bug-report.routes';
-import { TranslationHelpRepositoryImpl } from '@/modules/translation-help/infrastructure/translation-help.repository.impl';
-import { CreateTranslationHelpUseCase } from '@/modules/translation-help/application/use-cases/create-translation-help.use-case';
-import { ListPublishedTranslationHelpsUseCase } from '@/modules/translation-help/application/use-cases/list-published-translation-helps.use-case';
-import { ListMyTranslationHelpsUseCase } from '@/modules/translation-help/application/use-cases/list-my-translation-helps.use-case';
-import { GetTranslationHelpDetailUseCase } from '@/modules/translation-help/application/use-cases/get-translation-help-detail.use-case';
-import { ListAdminTranslationHelpsUseCase } from '@/modules/translation-help/application/use-cases/list-admin-translation-helps.use-case';
-import { ApproveTranslationHelpUseCase } from '@/modules/translation-help/application/use-cases/approve-translation-help.use-case';
-import { RejectTranslationHelpUseCase } from '@/modules/translation-help/application/use-cases/reject-translation-help.use-case';
-import { TakedownTranslationHelpUseCase } from '@/modules/translation-help/application/use-cases/takedown-translation-help.use-case';
-import { CreateTranslationHelpReplyUseCase } from '@/modules/translation-help/application/use-cases/create-translation-help-reply.use-case';
-import { DeleteTranslationHelpReplyUseCase } from '@/modules/translation-help/application/use-cases/delete-translation-help-reply.use-case';
-import { PinTranslationHelpReplyUseCase } from '@/modules/translation-help/application/use-cases/pin-translation-help-reply.use-case';
-import { TakedownTranslationHelpReplyUseCase } from '@/modules/translation-help/application/use-cases/takedown-translation-help-reply.use-case';
-import { TranslationHelpController } from '@/modules/translation-help/presentation/v1/translation-help.controller';
-import { createTranslationHelpRoutes } from '@/modules/translation-help/presentation/v1/translation-help.routes';
-import { createAdminTranslationHelpRoutes } from '@/modules/translation-help/presentation/v1/admin-translation-help.routes';
+import { DiscussionRepositoryImpl } from '@/modules/discussion/infrastructure/discussion.repository.impl';
+import { CreateDiscussionUseCase } from '@/modules/discussion/application/use-cases/create-discussion.use-case';
+import { ListPublishedDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-published-discussions.use-case';
+import { ListMyDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-my-discussions.use-case';
+import { GetDiscussionDetailUseCase } from '@/modules/discussion/application/use-cases/get-discussion-detail.use-case';
+import { ListAdminDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-admin-discussions.use-case';
+import { ApproveDiscussionUseCase } from '@/modules/discussion/application/use-cases/approve-discussion.use-case';
+import { RejectDiscussionUseCase } from '@/modules/discussion/application/use-cases/reject-discussion.use-case';
+import { TakedownDiscussionUseCase } from '@/modules/discussion/application/use-cases/takedown-discussion.use-case';
+import { CreateDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/create-discussion-reply.use-case';
+import { DeleteDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/delete-discussion-reply.use-case';
+import { PinDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/pin-discussion-reply.use-case';
+import { TakedownDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/takedown-discussion-reply.use-case';
+import { DiscussionController } from '@/modules/discussion/presentation/v1/discussion.controller';
+import { createDiscussionRoutes } from '@/modules/discussion/presentation/v1/discussion.routes';
+import { createAdminDiscussionRoutes } from '@/modules/discussion/presentation/v1/admin-discussion.routes';
 import { DashboardController } from '@/modules/dashboard/presentation/v1/dashboard.controller';
 import { createDashboardRoutes } from '@/modules/dashboard/presentation/v1/dashboard.routes';
 import { GetDashboardStatsUseCase } from '@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case';
@@ -493,8 +493,8 @@ const requireContributeWriteIfAuthed = createRequireApprovedClientMiddleware(api
   scope: 'contribute.write',
   allowMissingUser: true,
 });
-const requireTranslationHelpWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'translation_help.write',
+const requireDiscussionWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'discussion.write',
 });
 const requireBookmarkWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
   scope: 'bookmark.write',
@@ -1082,50 +1082,50 @@ app.route(
   createAdminBugReportRoutes({ controller: bugReportController, authenticate }),
 );
 
-const translationHelpRepo = new TranslationHelpRepositoryImpl(db);
-const translationHelpController = new TranslationHelpController({
-  create: new CreateTranslationHelpUseCase(translationHelpRepo, auditRepo),
-  listPublished: new ListPublishedTranslationHelpsUseCase(translationHelpRepo, voteRepo),
-  listMine: new ListMyTranslationHelpsUseCase(translationHelpRepo),
-  getDetail: new GetTranslationHelpDetailUseCase(translationHelpRepo, voteRepo),
-  listAdmin: new ListAdminTranslationHelpsUseCase(translationHelpRepo),
-  approve: new ApproveTranslationHelpUseCase(
-    translationHelpRepo,
+const discussionRepo = new DiscussionRepositoryImpl(db);
+const discussionController = new DiscussionController({
+  create: new CreateDiscussionUseCase(discussionRepo, auditRepo),
+  listPublished: new ListPublishedDiscussionsUseCase(discussionRepo, voteRepo),
+  listMine: new ListMyDiscussionsUseCase(discussionRepo),
+  getDetail: new GetDiscussionDetailUseCase(discussionRepo, voteRepo),
+  listAdmin: new ListAdminDiscussionsUseCase(discussionRepo),
+  approve: new ApproveDiscussionUseCase(
+    discussionRepo,
     publicImageStorage,
     imageStorage,
     auditRepo,
     recordInbox,
   ),
-  reject: new RejectTranslationHelpUseCase(
-    translationHelpRepo,
+  reject: new RejectDiscussionUseCase(
+    discussionRepo,
     imageStorage,
     auditRepo,
     recordInbox,
   ),
-  takedown: new TakedownTranslationHelpUseCase(translationHelpRepo, auditRepo, recordInbox),
-  createReply: new CreateTranslationHelpReplyUseCase(
-    translationHelpRepo,
+  takedown: new TakedownDiscussionUseCase(discussionRepo, auditRepo, recordInbox),
+  createReply: new CreateDiscussionReplyUseCase(
+    discussionRepo,
     auditRepo,
     commentBlocklistRepo,
   ),
-  deleteReply: new DeleteTranslationHelpReplyUseCase(translationHelpRepo, auditRepo),
-  pinReply: new PinTranslationHelpReplyUseCase(translationHelpRepo, auditRepo),
-  takedownReply: new TakedownTranslationHelpReplyUseCase(translationHelpRepo, auditRepo),
+  deleteReply: new DeleteDiscussionReplyUseCase(discussionRepo, auditRepo),
+  pinReply: new PinDiscussionReplyUseCase(discussionRepo, auditRepo),
+  takedownReply: new TakedownDiscussionReplyUseCase(discussionRepo, auditRepo),
   imageController,
 });
 app.route(
-  '/api/v1/translation-helps',
-  createTranslationHelpRoutes({
-    controller: translationHelpController,
+  '/api/v1/discussions',
+  createDiscussionRoutes({
+    controller: discussionController,
     authenticate,
     optionalAuthenticate,
-    requireApprovedClient: requireTranslationHelpWriteClient,
+    requireApprovedClient: requireDiscussionWriteClient,
   }),
 );
 app.route(
-  '/api/v1/admin/translation-helps',
-  createAdminTranslationHelpRoutes({
-    controller: translationHelpController,
+  '/api/v1/admin/discussions',
+  createAdminDiscussionRoutes({
+    controller: discussionController,
     authenticate,
   }),
 );

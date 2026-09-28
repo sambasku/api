@@ -8,9 +8,9 @@ export type InboxNotificationType =
   | 'word_taken_down'
   | 'contribution_paused'
   | 'contribution_resumed'
-  | 'translation_help_approved'
-  | 'translation_help_rejected'
-  | 'translation_help_taken_down'
+  | 'discussion_approved'
+  | 'discussion_rejected'
+  | 'discussion_taken_down'
   | 'word_comment'
   | 'word_vote'
   | 'campaign';
@@ -19,7 +19,7 @@ export type NotificationTargetKind =
   | 'contribution'
   | 'suggestion'
   | 'word'
-  | 'translation_help'
+  | 'discussion'
   | 'campaign';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
@@ -27,7 +27,7 @@ export type NotificationActionKind =
   | 'word'
   | 'contribution'
   | 'suggestion'
-  | 'translation_help'
+  | 'discussion'
   | 'url';
 
 export interface InboxNotification {
@@ -91,20 +91,20 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
         title: 'Kontribusi dibuka lagi',
         body: 'Kamu bisa mengirim usulan lagi.',
       };
-    case 'translation_help_approved':
+    case 'discussion_approved':
       return {
-        title: 'Bantuan terjemahan tayang',
-        body: 'Permintaan bantuanmu sudah diperiksa dan tayang di feed.',
+        title: 'Diskusi tayang',
+        body: 'Diskusimu sudah diperiksa dan tayang di feed.',
       };
-    case 'translation_help_rejected':
+    case 'discussion_rejected':
       return {
-        title: 'Bantuan terjemahan ditolak',
-        body: 'Permintaan bantuanmu ditolak. Buka riwayat untuk melihat alasan.',
+        title: 'Diskusi ditolak',
+        body: 'Diskusimu ditolak. Buka riwayat untuk melihat alasan.',
       };
-    case 'translation_help_taken_down':
+    case 'discussion_taken_down':
       return {
-        title: 'Bantuan terjemahan ditarik',
-        body: 'Permintaan bantuanmu ditarik dari feed.',
+        title: 'Diskusi ditarik',
+        body: 'Diskusimu ditarik dari feed.',
       };
     case 'word_comment':
       return {

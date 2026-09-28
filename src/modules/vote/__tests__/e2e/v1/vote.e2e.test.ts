@@ -225,9 +225,9 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect(afterBody.data.every((row) => row.word === null)).toBe(true);
   });
 
-  it('translation_help_reply: vote published → 200; taken_down → 404; detail counts', async () => {
+  it('discussion_reply: vote published → 200; taken_down → 404; detail counts', async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { translationHelps, translationHelpReplies, users } = await import(
+    const { discussions, discussionReplies, users } = await import(
       '@/shared/database/drizzle/schema'
     );
     const db = getTestDb();
@@ -235,12 +235,12 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     const allUsers = await db.select({ id: users.id, role: users.role }).from(users);
     const askerId = allUsers.find((u) => u.role === 'contributor')!.id;
     const adminId = allUsers.find((u) => u.role === 'admin')!.id;
-    const helpId = ulid26('01U2EHELPVOTE');
+    const discussionId = ulid26('01U2EHELPVOTE');
     const replyOk = ulid26('01U2EREPLYOKv');
     const replyDown = ulid26('01U2EREPLYDNv');
 
-    await db.insert(translationHelps).values({
-      id: helpId,
+    await db.insert(discussions).values({
+      id: discussionId,
       userId: askerId,
       body: 'Bantuan untuk vote e2e',
       images: [],
@@ -248,17 +248,17 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
       reviewedBy: adminId,
       reviewedAt: new Date(),
     });
-    await db.insert(translationHelpReplies).values([
+    await db.insert(discussionReplies).values([
       {
         id: replyOk,
-        helpId,
+        discussionId,
         userId: askerId,
         body: 'Jawaban bagus',
         status: 'published',
       },
       {
         id: replyDown,
-        helpId,
+        discussionId,
         userId: askerId,
         body: 'Jawaban diturunkan',
         status: 'taken_down',
@@ -269,14 +269,14 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
 
     const voted = await post(
       '/api/v1/votes',
-      { target_type: 'translation_help_reply', target_id: replyOk, value: 1 },
+      { target_type: 'discussion_reply', target_id: replyOk, value: 1 },
       contributorToken,
     );
     expect(voted.status).toBe(200);
     expect(await voted.json()).toMatchObject({
       success: true,
       data: {
-        target_type: 'translation_help_reply',
+        target_type: 'discussion_reply',
         target_id: replyOk,
         my_vote: 1,
         upvotes: 1,
@@ -286,13 +286,13 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
 
     const bad = await post(
       '/api/v1/votes',
-      { target_type: 'translation_help_reply', target_id: replyDown, value: 1 },
+      { target_type: 'discussion_reply', target_id: replyDown, value: 1 },
       contributorToken,
     );
     expect(bad.status).toBe(404);
     expect((await bad.json()).error_code).toBe('VOTE_TARGET_NOT_FOUND');
 
-    const detail = await get(`/api/v1/translation-helps/${helpId}`);
+    const detail = await get(`/api/v1/discussions/${discussionId}`);
     expect(detail.status).toBe(200);
     const body = (await detail.json()) as {
       data: { replies: { id: string; upvotes: number; downvotes: number }[] };
@@ -301,18 +301,18 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect(ok).toMatchObject({ upvotes: 1, downvotes: 0 });
   });
 
-  it('translation_help: upvote pertanyaan → 200; downvote → 400; sort popular', async () => {
+  it('discussion: upvote pertanyaan → 200; downvote → 400; sort popular', async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { translationHelps, users } = await import('@/shared/database/drizzle/schema');
+    const { discussions, users } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
 
     const allUsers = await db.select({ id: users.id, role: users.role }).from(users);
     const askerId = allUsers.find((u) => u.role === 'contributor')!.id;
     const adminId = allUsers.find((u) => u.role === 'admin')!.id;
-    const helpId = ulid26('01U2EHELPASK');
+    const discussionId = ulid26('01U2EHELPASK');
 
-    await db.insert(translationHelps).values({
-      id: helpId,
+    await db.insert(discussions).values({
+      id: discussionId,
       userId: askerId,
       body: 'Pertanyaan untuk upvote',
       images: [],
@@ -323,15 +323,15 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
 
     const voted = await post(
       '/api/v1/votes',
-      { target_type: 'translation_help', target_id: helpId, value: 1 },
+      { target_type: 'discussion', target_id: discussionId, value: 1 },
       contributorToken,
     );
     expect(voted.status).toBe(200);
     expect(await voted.json()).toMatchObject({
       success: true,
       data: {
-        target_type: 'translation_help',
-        target_id: helpId,
+        target_type: 'discussion',
+        target_id: discussionId,
         my_vote: 1,
         upvotes: 1,
       },
@@ -339,22 +339,22 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
 
     const down = await post(
       '/api/v1/votes',
-      { target_type: 'translation_help', target_id: helpId, value: -1 },
+      { target_type: 'discussion', target_id: discussionId, value: -1 },
       contributorToken,
     );
     expect(down.status).toBe(400);
     expect((await down.json()).error_code).toBe('VALIDATION_ERROR');
 
-    const detail = await get(`/api/v1/translation-helps/${helpId}`);
+    const detail = await get(`/api/v1/discussions/${discussionId}`);
     expect(detail.status).toBe(200);
     expect(await detail.json()).toMatchObject({
-      data: { id: helpId, upvotes: 1 },
+      data: { id: discussionId, upvotes: 1 },
     });
 
-    const popular = await get('/api/v1/translation-helps?sort=popular&limit=5');
+    const popular = await get('/api/v1/discussions?sort=popular&limit=5');
     expect(popular.status).toBe(200);
     const popBody = (await popular.json()) as { data: { id: string; upvotes: number }[] };
-    expect(popBody.data[0]).toMatchObject({ id: helpId, upvotes: 1 });
+    expect(popBody.data[0]).toMatchObject({ id: discussionId, upvotes: 1 });
   });
 
   it('GET /votes/deck: 401 tanpa token; login lihat kata; vote → hilang dari deck', async () => {

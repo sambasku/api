@@ -11,8 +11,8 @@ export const voteTargetTypeEnum = z.enum([
   'pronunciation',
   'word_image',
   'comment',
-  'translation_help_reply',
-  'translation_help',
+  'discussion_reply',
+  'discussion',
 ]);
 
 export const toggleVoteSchema = z.object({
@@ -29,7 +29,7 @@ export type ToggleVoteBody = z.infer<typeof toggleVoteSchema>;
 // ([0-9A-Za-z], bukan Crockford ketat) karena fixture ULID handmade di
 // repo memakai huruf bebas (mis. 01U2E... mengandung U).
 const TARGET_PATTERN =
-  /^(word|meaning|example|pronunciation|word_image|comment|translation_help_reply|translation_help):[0-9A-Za-z]{26}$/;
+  /^(word|meaning|example|pronunciation|word_image|comment|discussion_reply|discussion):[0-9A-Za-z]{26}$/;
 export const MAX_VOTE_TARGETS = 50;
 
 // "word:01X,meaning:01Y" → array target tervalidasi (trim, dedupe, maks 50)

@@ -1,6 +1,6 @@
 // Target vote yang dikenal (08-api-upvote-downvote.md): entitas kamus +
-// children-nya + komentar (09-api-comment.md) + balasan bantuan terjemahan
-// (32-api-translation-helps.md).
+// children-nya + komentar (09-api-comment.md) + balasan ruang diskusi
+// (32-api-discussions.md).
 export type VoteTargetType =
   | 'word'
   | 'meaning'
@@ -8,8 +8,8 @@ export type VoteTargetType =
   | 'pronunciation'
   | 'word_image'
   | 'comment'
-  | 'translation_help_reply'
-  | 'translation_help';
+  | 'discussion_reply'
+  | 'discussion';
 
 export interface VoteTarget {
   entityType: VoteTargetType;
@@ -279,7 +279,7 @@ export interface VoteRepository {
 
   /**
    * Resolve kata induk + pemilik untuk notifikasi vote.
-   * Null bila target translation_help*, tidak punya word, atau kata hilang.
+   * Null bila target discussion*, tidak punya word, atau kata hilang.
    */
   resolveWordOwnerForVoteTarget(target: VoteTarget): Promise<{
     wordId: string;
