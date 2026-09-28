@@ -85,18 +85,21 @@ export function createDuplicateConfirmRoutes(deps: DuplicateConfirmRoutesDeps) {
       requestId: c.get('requestId') ?? null,
       clientId: user.azp ?? null,
     });
-    return c.json({
-      success: true as const,
-      data: {
-        word_id: result.wordId,
-        meaning_id: result.meaningId,
-        lemma: result.lemma,
-        my_vote: result.myVote,
-        upvotes: result.upvotes,
-        downvotes: result.downvotes,
-        message: result.message,
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          word_id: result.wordId,
+          meaning_id: result.meaningId,
+          lemma: result.lemma,
+          my_vote: result.myVote,
+          upvotes: result.upvotes,
+          downvotes: result.downvotes,
+          message: result.message,
+        },
       },
-    });
+      200,
+    );
   });
 
   return routes;
