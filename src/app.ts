@@ -34,6 +34,7 @@ import { PasswordResetTokenRepositoryImpl } from '@/modules/auth/infrastructure/
 import { JwtTokenService } from '@/modules/auth/infrastructure/jwt-token.service';
 import { Pbkdf2PasswordService } from '@/modules/auth/infrastructure/pbkdf2-password.service';
 import { createMailer } from '@/modules/auth/infrastructure/mailer.factory';
+import { createEmailDomainVerifier } from '@/modules/auth/infrastructure/email-domain-verifier.factory';
 import { EmailVerificationOtpRepositoryImpl } from '@/modules/auth/infrastructure/email-verification-otp.repository.impl';
 import { RegisterUserUseCase } from '@/modules/auth/application/use-cases/register-user.use-case';
 import { AppSettingsRepositoryImpl } from '@/modules/legal/infrastructure/app-settings.repository.impl';
@@ -378,6 +379,7 @@ const hasher = new Pbkdf2PasswordService();
 // Email: Resend (HTTP) kalau RESEND_API_KEY ter-set - jalur Cloudflare
 // Workers; selain itu SMTP (Node). Keduanya implements MailerPort.
 const mailer = createMailer();
+const emailDomainVerifier = createEmailDomainVerifier();
 const identityRepo = new AuthIdentityRepositoryImpl(db);
 
 // ---- Modul audit (Section 21) - direkspos ke use case modul lain ----
@@ -397,6 +399,7 @@ const controller = new AuthController({
     mailer,
     appSettingsRepo,
     userConsentRepo,
+    emailDomainVerifier,
   ),
   login: new LoginUserUseCase(
     userRepo,
