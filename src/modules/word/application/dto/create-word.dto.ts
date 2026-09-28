@@ -17,6 +17,8 @@ export interface CreateWordExampleDto {
   sourceType?: string;
 }
 
+export type MeaningSource = 'manual' | 'kbbi' | 'kbbi_edited';
+
 export interface CreateWordMeaningDto {
   wordClassId: string;
   definition: string;
@@ -24,6 +26,8 @@ export interface CreateWordMeaningDto {
   isHaveDefinition?: boolean;
   /** false = sengaja tanpa padanan kata Indonesia (definisi uraian sudah ada). */
   isHaveTranslation?: boolean;
+  /** Provenance padanan/definisi dari form kontribusi. Default manual. */
+  meaningSource?: MeaningSource;
   orderIndex: number;
   translations: CreateWordTranslationDto[];
   examples?: CreateWordExampleDto[];

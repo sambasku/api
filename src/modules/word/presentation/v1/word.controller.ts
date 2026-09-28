@@ -387,6 +387,7 @@ export class WordController {
         // 17: false = placeholder "-" - client menurunkan CTA "Bantu definisi"
         is_have_definition: m.isHaveDefinition,
         is_have_translation: m.isHaveTranslation,
+        meaning_source: m.meaningSource,
         order_index: m.orderIndex,
         translations: m.translations.map((t) => ({
           language_id: t.languageId,

@@ -13,6 +13,8 @@ export interface Meaning {
   isHaveDefinition: boolean;
   /** false = tanpa padanan kata Indonesia */
   isHaveTranslation: boolean;
+  /** Provenance: manual | kbbi | kbbi_edited */
+  meaningSource: 'manual' | 'kbbi' | 'kbbi_edited';
   orderIndex: number;
   notes: string | null;
 }

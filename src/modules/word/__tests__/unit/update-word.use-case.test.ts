@@ -77,6 +77,7 @@ function makeDetail(overrides: Partial<WordDetail> = {}): WordDetail {
         definition: 'definisi lama',
         isHaveDefinition: true,
         isHaveTranslation: true,
+        meaningSource: 'manual',
         orderIndex: 1,
         notes: null,
         translations: [],

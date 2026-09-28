@@ -785,6 +785,9 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           wordLemma: words.lemma,
           wordClassId: meanings.wordClassId,
           definition: meanings.definition,
+          isHaveDefinition: meanings.isHaveDefinition,
+          isHaveTranslation: meanings.isHaveTranslation,
+          meaningSource: meanings.meaningSource,
           status: meanings.status,
           isVerified: meanings.isVerified,
           isCorrected: meanings.isCorrected,
@@ -818,6 +821,9 @@ export class ContributionRepositoryImpl implements ContributionRepository {
         data: {
           word_class_id: row.wordClassId,
           definition: row.definition,
+          is_have_definition: row.isHaveDefinition,
+          is_have_translation: row.isHaveTranslation,
+          meaning_source: row.meaningSource,
           translations: translationRows.map((t) => ({
             language_id: t.languageId,
             translation_text: t.translationText,

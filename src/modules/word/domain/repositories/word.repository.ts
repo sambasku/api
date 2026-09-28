@@ -615,6 +615,7 @@ export interface WordRepository {
       definition: string;
       isHaveDefinition?: boolean;
       isHaveTranslation?: boolean;
+      meaningSource?: 'manual' | 'kbbi' | 'kbbi_edited';
       translations: { languageId: string; translationText: string; translationType: string }[];
       status: ChildStatus | 'draft';
       isVerified: boolean;

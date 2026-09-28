@@ -906,6 +906,7 @@ export class WordRepositoryImpl implements WordRepository {
         definition: m.definition,
         isHaveDefinition: m.isHaveDefinition,
         isHaveTranslation: m.isHaveTranslation,
+        meaningSource: (m.meaningSource as 'manual' | 'kbbi' | 'kbbi_edited') ?? 'manual',
         orderIndex: m.orderIndex,
         notes: m.notes,
         translations: translationRows
@@ -2203,6 +2204,7 @@ export class WordRepositoryImpl implements WordRepository {
       definition: string;
       isHaveDefinition?: boolean;
       isHaveTranslation?: boolean;
+      meaningSource?: 'manual' | 'kbbi' | 'kbbi_edited';
       translations: { languageId: string; translationText: string; translationType: string }[];
       status: ChildStatus | 'draft';
       isVerified: boolean;
@@ -2226,6 +2228,7 @@ export class WordRepositoryImpl implements WordRepository {
             definition: data.definition,
             isHaveDefinition: data.isHaveDefinition ?? true,
             isHaveTranslation: data.isHaveTranslation ?? data.translations.length > 0,
+            meaningSource: data.meaningSource ?? 'manual',
             orderIndex: (last?.maxOrder ?? 0) + 1,
             status: data.status,
             isVerified: data.isVerified,
@@ -2354,6 +2357,7 @@ export class WordRepositoryImpl implements WordRepository {
               definition: m.definition,
               isHaveDefinition: m.isHaveDefinition,
               isHaveTranslation: m.isHaveTranslation,
+              meaningSource: m.meaningSource ?? 'manual',
               orderIndex: idx,
               notes: m.notes,
               createdBy: actorId,
@@ -2748,6 +2752,7 @@ export class WordRepositoryImpl implements WordRepository {
           definition: meaning.definition,
           isHaveDefinition: meaning.isHaveDefinition ?? true,
           isHaveTranslation: meaning.isHaveTranslation ?? meaning.translations.length > 0,
+          meaningSource: meaning.meaningSource ?? 'manual',
           orderIndex: meaning.orderIndex,
           status: childStatusOf(word.status),
           isVerified: word.isVerified,
