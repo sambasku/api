@@ -369,6 +369,36 @@ export class VoteRepositoryImpl implements VoteRepository {
     }));
   }
 
+  async resolveWordOwnerForVoteTarget(
+    target: VoteTarget,
+  ): Promise<{ wordId: string; lemma: string; ownerUserId: string | null } | null> {
+    if (
+      target.entityType === 'translation_help' ||
+      target.entityType === 'translation_help_reply'
+    ) {
+      return null;
+    }
+
+    const map = await this.resolveParentWords([
+      { entityType: target.entityType, entityId: target.entityId },
+    ]);
+    const parent = map.get(voteTargetKey(target));
+    if (!parent) return null;
+
+    const [row] = await this.db
+      .select({ createdBy: words.createdBy, lemma: words.lemma })
+      .from(words)
+      .where(and(eq(words.id, parent.id), isNull(words.deletedAt)))
+      .limit(1);
+    if (!row) return null;
+
+    return {
+      wordId: parent.id,
+      lemma: row.lemma,
+      ownerUserId: row.createdBy,
+    };
+  }
+
   async listByUser(userId: string, opts: VoteHistoryListOptions): Promise<VoteHistoryListResult> {
     const rows = await this.db
       .select({

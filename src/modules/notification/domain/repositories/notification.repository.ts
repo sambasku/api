@@ -1,6 +1,7 @@
 import type {
   InboxNotification,
   InboxNotificationType,
+  NotificationActionKind,
   NotificationTargetKind,
 } from '../entities/notification.entity';
 
@@ -11,6 +12,8 @@ export interface CreateInboxNotificationInput {
   body: string;
   targetKind: NotificationTargetKind;
   targetId: string;
+  actionKind?: NotificationActionKind | null;
+  actionValue?: string | null;
 }
 
 export interface NotificationListOptions {
@@ -27,7 +30,7 @@ export interface NotificationListResult {
 
 export interface NotificationRepository {
   create(input: CreateInboxNotificationInput): Promise<void>;
-  /** Insert banyak baris; conflict diabaikan (unique user+target). */
+  /** Insert banyak baris; conflict diabaikan (unique user+type+target). */
   createMany(inputs: CreateInboxNotificationInput[]): Promise<number>;
   /** Insert, atau timpa baris yang sama lalu tandai belum dibaca. */
   upsertUnread(input: CreateInboxNotificationInput): Promise<void>;

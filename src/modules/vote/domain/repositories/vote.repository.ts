@@ -276,4 +276,14 @@ export interface VoteRepository {
    * GROUP BY (entity_type, entity_id). Filter entity_type exact match.
    */
   getTopTargets(entityType: VoteTargetType, limit: number): Promise<AdminTopVoteTarget[]>;
+
+  /**
+   * Resolve kata induk + pemilik untuk notifikasi vote.
+   * Null bila target translation_help*, tidak punya word, atau kata hilang.
+   */
+  resolveWordOwnerForVoteTarget(target: VoteTarget): Promise<{
+    wordId: string;
+    lemma: string;
+    ownerUserId: string | null;
+  } | null>;
 }

@@ -10,6 +10,7 @@ import type { TakedownCommentUseCase } from '../../application/use-cases/takedow
 import type { UncensorCommentUseCase } from '../../application/use-cases/uncensor-comment.use-case';
 import type { ListMyCommentsUseCase } from '../../application/use-cases/list-my-comments.use-case';
 import type { Comment } from '../../domain/entities/comment.entity';
+import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type {
   CreateCommentBody,
   ListAdminCommentsQueryBody,
@@ -19,6 +20,22 @@ import type {
 
 function redactPublicBody(cm: Comment): string | null {
   return cm.status === 'published' ? cm.body : null;
+}
+
+function toPublicCommentFields(cm: Comment) {
+  return {
+    id: cm.id,
+    word_id: cm.wordId,
+    word_lemma: cm.wordLemma,
+    user_id: cm.userId,
+    username: cm.username,
+    display_name: cm.displayName,
+    avatar_url: cm.avatarUrl,
+    is_verifier: isVerifierRole(cm.userRole ?? ''),
+    body: redactPublicBody(cm),
+    status: cm.status,
+    created_at: cm.createdAt.toISOString(),
+  };
 }
 
 export class CommentController {
@@ -50,15 +67,8 @@ export class CommentController {
       {
         success: true as const,
         data: {
-          id: comment.id,
-          word_id: comment.wordId,
-          word_lemma: comment.wordLemma,
-          user_id: comment.userId,
-          username: comment.username,
-          display_name: comment.displayName,
+          ...toPublicCommentFields(comment),
           body: comment.body,
-          status: comment.status,
-          created_at: comment.createdAt.toISOString(),
         },
       },
       201,
@@ -70,15 +80,7 @@ export class CommentController {
     return c.json({
       success: true as const,
       data: page.items.map((cm) => ({
-        id: cm.id,
-        word_id: cm.wordId,
-        word_lemma: cm.wordLemma,
-        user_id: cm.userId,
-        username: cm.username,
-        display_name: cm.displayName,
-        body: redactPublicBody(cm),
-        status: cm.status,
-        created_at: cm.createdAt.toISOString(),
+        ...toPublicCommentFields(cm),
         upvotes: cm.upvotes,
         downvotes: cm.downvotes,
       })),
@@ -138,6 +140,8 @@ export class CommentController {
         user_id: cm.userId,
         username: cm.username,
         display_name: cm.displayName,
+        avatar_url: cm.avatarUrl,
+        is_verifier: isVerifierRole(cm.userRole ?? ''),
         body: cm.body,
         body_original: cm.bodyOriginal,
         is_censored: cm.bodyOriginal != null,

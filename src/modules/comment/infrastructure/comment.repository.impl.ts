@@ -24,6 +24,8 @@ export class CommentRepositoryImpl implements CommentRepository {
         comment: comments,
         username: users.username,
         displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        userRole: users.role,
         authorDeletedAt: users.deletedAt,
         wordLemma: words.lemma,
       })
@@ -48,7 +50,11 @@ export class CommentRepositoryImpl implements CommentRepository {
         status: 'published',
       })
       .returning();
-    return this.toComment(row, null, null, null);
+    const created = await this.findById(row.id);
+    if (!created) {
+      return this.toComment(row, null, null, null, null, null);
+    }
+    return created;
   }
 
   async listByWord(wordId: string, params: ListCommentsParams): Promise<CursorPage<Comment>> {
@@ -70,6 +76,8 @@ export class CommentRepositoryImpl implements CommentRepository {
           row.comment,
           publicAccountName(row.username, row.authorDeletedAt),
           publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
+          row.authorDeletedAt ? null : (row.avatarUrl ?? null),
+          row.authorDeletedAt ? null : (row.userRole ?? null),
           row.wordLemma,
         )
       : null;
@@ -137,7 +145,14 @@ export class CommentRepositoryImpl implements CommentRepository {
     const hasMore = rows.length > params.limit;
     const page = hasMore ? rows.slice(0, params.limit) : rows;
     const items = page.map((row) =>
-      this.toComment(row.comment, null, null, row.wordDeletedAt ? null : row.wordLemma),
+      this.toComment(
+        row.comment,
+        null,
+        null,
+        null,
+        null,
+        row.wordDeletedAt ? null : row.wordLemma,
+      ),
     );
     return { items, nextCursor: hasMore ? items[items.length - 1].id : null, hasMore };
   }
@@ -200,6 +215,8 @@ export class CommentRepositoryImpl implements CommentRepository {
         r.comment,
         publicAccountName(r.username, r.authorDeletedAt),
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+        r.authorDeletedAt ? null : (r.avatarUrl ?? null),
+        r.authorDeletedAt ? null : (r.userRole ?? null),
         r.wordLemma,
       ),
     );
@@ -210,6 +227,8 @@ export class CommentRepositoryImpl implements CommentRepository {
     row: typeof comments.$inferSelect,
     username: string | null,
     displayName: string | null,
+    avatarUrl: string | null,
+    userRole: string | null,
     wordLemma: string | null,
   ): Comment {
     return {
@@ -219,6 +238,8 @@ export class CommentRepositoryImpl implements CommentRepository {
       userId: row.userId,
       username,
       displayName,
+      avatarUrl,
+      userRole,
       body: row.body,
       bodyOriginal: row.bodyOriginal ?? null,
       status: row.status as CommentStatus,

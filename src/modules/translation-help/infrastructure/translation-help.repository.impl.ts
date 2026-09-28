@@ -86,6 +86,7 @@ function toReply(
   row: ReplyRow,
   username: string | null,
   displayName: string | null,
+  avatarUrl: string | null,
   userRole: string | null,
 ): TranslationHelpReply {
   return {
@@ -94,6 +95,7 @@ function toReply(
     userId: row.userId,
     username,
     displayName,
+    avatarUrl,
     userRole,
     body: row.body,
     bodyOriginal: row.bodyOriginal,
@@ -298,7 +300,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
         status: 'published',
       })
       .returning();
-    return toReply(row, null, null, null);
+    return toReply(row, null, null, null, null);
   }
 
   async findReplyById(id: string): Promise<TranslationHelpReply | null> {
@@ -307,6 +309,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
         reply: translationHelpReplies,
         username: users.username,
         displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
         userRole: users.role,
         authorDeletedAt: users.deletedAt,
       })
@@ -319,7 +322,8 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
       row.reply,
       publicAccountName(row.username, row.authorDeletedAt),
       publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
-      row.userRole,
+      row.authorDeletedAt ? null : (row.avatarUrl ?? null),
+      row.authorDeletedAt ? null : (row.userRole ?? null),
     );
   }
 
@@ -329,6 +333,7 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
         reply: translationHelpReplies,
         username: users.username,
         displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
         userRole: users.role,
         authorDeletedAt: users.deletedAt,
       })
@@ -342,7 +347,8 @@ export class TranslationHelpRepositoryImpl implements TranslationHelpRepository 
         r.reply,
         publicAccountName(r.username, r.authorDeletedAt),
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
-        r.userRole,
+        r.authorDeletedAt ? null : (r.avatarUrl ?? null),
+        r.authorDeletedAt ? null : (r.userRole ?? null),
       ),
     );
   }

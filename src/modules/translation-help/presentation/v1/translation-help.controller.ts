@@ -112,6 +112,7 @@ function toPublicReply(
     user_id: reply.userId,
     username: reply.username,
     display_name: reply.displayName,
+    avatar_url: reply.avatarUrl,
     body: redactReplyBody(reply),
     status: reply.status,
     is_verifier: isVerifierRole(reply.userRole),

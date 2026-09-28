@@ -135,6 +135,8 @@ export class CreateCommentUseCase {
             title,
             body,
             refreshOnConflict: true,
+            actionKind: 'word',
+            actionValue: input.wordId,
           });
         }
         if (this.notifyUser) {
@@ -150,6 +152,8 @@ export class CreateCommentUseCase {
                 type: 'word_comment',
                 target_kind: 'word',
                 target_id: input.wordId,
+                action_kind: 'word',
+                action_value: input.wordId,
               },
             });
             // Touch setelah attempt (seperti ReviewPushCooldownGate) agar

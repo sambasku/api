@@ -15,6 +15,7 @@ export const inboxNotificationTypeSchema = z.enum([
   'translation_help_rejected',
   'translation_help_taken_down',
   'word_comment',
+  'word_vote',
   'campaign',
 ]);
 
@@ -24,6 +25,14 @@ export const notificationTargetKindSchema = z.enum([
   'word',
   'translation_help',
   'campaign',
+]);
+
+export const notificationActionKindSchema = z.enum([
+  'word',
+  'contribution',
+  'suggestion',
+  'translation_help',
+  'url',
 ]);
 
 export const listNotificationsQuerySchema = z.object({
@@ -48,6 +57,8 @@ const notificationItemSchema = z.object({
   body: z.string(),
   target_kind: notificationTargetKindSchema,
   target_id: z.string(),
+  action_kind: notificationActionKindSchema.nullable(),
+  action_value: z.string().nullable(),
   read_at: z.string().nullable(),
   created_at: z.string(),
 });

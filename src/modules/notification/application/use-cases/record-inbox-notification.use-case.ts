@@ -1,6 +1,10 @@
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
-import type { InboxNotificationType, NotificationTargetKind } from '../../domain/entities/notification.entity';
+import type {
+  InboxNotificationType,
+  NotificationActionKind,
+  NotificationTargetKind,
+} from '../../domain/entities/notification.entity';
 import { inboxCopyFor } from '../../domain/entities/notification.entity';
 import type { NotificationRepository } from '../../domain/repositories/notification.repository';
 
@@ -17,6 +21,9 @@ export interface RecordInboxNotificationCommand {
   refreshOnConflict?: boolean;
   /** Pelaku aksi; jika sama dengan userId, notifikasi diri sendiri dilewati. */
   actorId?: string;
+  /** CTA tap (#19). */
+  actionKind?: NotificationActionKind | null;
+  actionValue?: string | null;
 }
 
 function logError(obj: Record<string, unknown>, msg: string) {
@@ -48,6 +55,8 @@ export class RecordInboxNotificationUseCase {
       body: cmd.body?.trim() ? cmd.body.trim() : copy.body,
       targetKind: cmd.targetKind,
       targetId: cmd.targetId,
+      actionKind: cmd.actionKind ?? null,
+      actionValue: cmd.actionValue ?? null,
     };
     try {
       if (cmd.refreshOnConflict) {
@@ -68,4 +77,3 @@ export class RecordInboxNotificationUseCase {
     }
   }
 }
-

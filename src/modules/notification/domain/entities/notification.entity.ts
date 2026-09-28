@@ -12,6 +12,7 @@ export type InboxNotificationType =
   | 'translation_help_rejected'
   | 'translation_help_taken_down'
   | 'word_comment'
+  | 'word_vote'
   | 'campaign';
 
 export type NotificationTargetKind =
@@ -21,6 +22,14 @@ export type NotificationTargetKind =
   | 'translation_help'
   | 'campaign';
 
+/** CTA tap (#19). Null = fallback ke target_kind/target_id. */
+export type NotificationActionKind =
+  | 'word'
+  | 'contribution'
+  | 'suggestion'
+  | 'translation_help'
+  | 'url';
+
 export interface InboxNotification {
   id: string;
   userId: string;
@@ -29,6 +38,8 @@ export interface InboxNotification {
   body: string;
   targetKind: NotificationTargetKind;
   targetId: string;
+  actionKind: NotificationActionKind | null;
+  actionValue: string | null;
   readAt: Date | null;
   createdAt: Date;
 }
@@ -99,6 +110,11 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       return {
         title: 'Komentar baru',
         body: 'Ada komentar baru di diskusi kosakata.',
+      };
+    case 'word_vote':
+      return {
+        title: 'Vote baru',
+        body: 'Ada penilaian baru pada kosakatamu.',
       };
     case 'campaign':
       // Title/body campaign selalu dari snapshot admin (bukan copy bawaan).

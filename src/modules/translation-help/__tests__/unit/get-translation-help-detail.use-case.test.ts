@@ -43,6 +43,7 @@ function makeReply(
     userId: USER,
     username: 'penjawab',
     displayName: 'penjawab',
+    avatarUrl: null,
     userRole: 'contributor',
     body: `balasan ${id.slice(-1)}`,
     bodyOriginal: null,

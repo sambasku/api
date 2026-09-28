@@ -31,6 +31,8 @@ const commentDataSchema = z.object({
   user_id: z.string(),
   username: z.string().nullable(),
   display_name: z.string().nullable(),
+  avatar_url: z.string().nullable(),
+  is_verifier: z.boolean(),
   body: z.string().nullable(),
   status: commentStatusSchema,
   created_at: z.string(),

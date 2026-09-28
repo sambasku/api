@@ -21,6 +21,8 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     userId: AUTHOR,
     username: 'budi',
     displayName: 'budi',
+    avatarUrl: null,
+    userRole: 'contributor',
     body: 'halo',
     bodyOriginal: null,
     status: 'published',

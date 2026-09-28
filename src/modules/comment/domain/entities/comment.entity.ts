@@ -11,6 +11,10 @@ export interface Comment {
   username: string | null;
   /** Nama tampilan publik; fallback username. Null jika penulis hilang. */
   displayName: string | null;
+  /** Avatar publik; null jika penulis hilang / tanpa foto. */
+  avatarUrl: string | null;
+  /** Role penulis (untuk is_verifier di wire); null jika penulis hilang. */
+  userRole: string | null;
   /** Body tayang (terfilter blocklist jika ada) */
   body: string;
   /** Teks asli sebelum sensor; null jika tidak disensor / sudah di-uncensor */

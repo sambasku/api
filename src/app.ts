@@ -303,6 +303,7 @@ import { NotificationPushCooldownRepositoryImpl } from '@/modules/notification/i
 import { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
 import { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
+import { WordVotePushCooldownGate } from '@/modules/notification/application/use-cases/word-vote-push-cooldown-gate';
 import { ListMyNotificationsUseCase } from '@/modules/notification/application/use-cases/list-my-notifications.use-case';
 import { GetUnreadNotificationCountUseCase } from '@/modules/notification/application/use-cases/get-unread-notification-count.use-case';
 import { MarkNotificationReadUseCase } from '@/modules/notification/application/use-cases/mark-notification-read.use-case';
@@ -614,8 +615,18 @@ const categoryController = new CategoryController({
 // pada word & children-nya. TANPA audit per vote (volume tinggi, bukan
 // aksi admin - lihat KEPUTUSAN PRODUK di doc). ----
 const voteRepo = new VoteRepositoryImpl(db);
+const wordVotePushCooldown = new WordVotePushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
 const voteController = new VoteController({
-  toggle: new ToggleVoteUseCase(voteRepo),
+  toggle: new ToggleVoteUseCase(
+    voteRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    wordVotePushCooldown,
+  ),
   counts: new GetVoteCountsUseCase(voteRepo),
   myVotes: new GetMyVotesUseCase(voteRepo),
   history: new ListMyVoteHistoryUseCase(voteRepo),

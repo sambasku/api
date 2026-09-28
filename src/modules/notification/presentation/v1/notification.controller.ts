@@ -34,6 +34,8 @@ export class NotificationController {
         body: n.body,
         target_kind: n.targetKind,
         target_id: n.targetId,
+        action_kind: n.actionKind,
+        action_value: n.actionValue,
         read_at: n.readAt?.toISOString() ?? null,
         created_at: n.createdAt.toISOString(),
       })),

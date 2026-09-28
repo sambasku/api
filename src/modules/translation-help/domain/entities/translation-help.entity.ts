@@ -42,6 +42,8 @@ export interface TranslationHelpReply {
   username: string | null;
   /** Nama tampilan publik; fallback username. */
   displayName: string | null;
+  /** Avatar publik; null jika penulis hilang / tanpa foto. */
+  avatarUrl: string | null;
   /** Role penulis - dipakai highlight verifikator di render, bukan flag DB. */
   userRole: string | null;
   body: string;

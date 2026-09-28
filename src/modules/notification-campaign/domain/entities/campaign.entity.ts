@@ -84,6 +84,8 @@ export function buildCampaignPushData(campaign: {
   if (campaign.deepLinkKind && campaign.deepLinkKind !== 'none' && campaign.deepLinkValue) {
     data.deep_link_kind = campaign.deepLinkKind;
     data.deep_link_value = campaign.deepLinkValue;
+    data.action_kind = campaign.deepLinkKind === 'url' ? 'url' : campaign.deepLinkKind;
+    data.action_value = campaign.deepLinkValue;
     if (campaign.deepLinkKind === 'word') {
       data.target_kind = 'word';
       data.target_id = campaign.deepLinkValue;
@@ -98,4 +100,25 @@ export function buildCampaignPushData(campaign: {
     }
   }
   return data;
+}
+
+/** Map deep link campaign → kolom action_* inbox. */
+export function campaignInboxAction(campaign: {
+  deepLinkKind: DeepLinkKind;
+  deepLinkValue: string | null;
+}): { actionKind: 'word' | 'contribution' | 'suggestion' | 'url' | null; actionValue: string | null } {
+  if (
+    !campaign.deepLinkKind ||
+    campaign.deepLinkKind === 'none' ||
+    !campaign.deepLinkValue
+  ) {
+    return { actionKind: null, actionValue: null };
+  }
+  if (campaign.deepLinkKind === 'url') {
+    return { actionKind: 'url', actionValue: campaign.deepLinkValue };
+  }
+  return {
+    actionKind: campaign.deepLinkKind,
+    actionValue: campaign.deepLinkValue,
+  };
 }

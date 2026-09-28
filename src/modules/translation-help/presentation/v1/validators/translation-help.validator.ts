@@ -144,6 +144,7 @@ export const translationHelpReplyPublicSchema = z.object({
   user_id: z.string(),
   username: z.string().nullable(),
   display_name: z.string().nullable(),
+  avatar_url: z.string().nullable(),
   body: z.string().nullable(),
   status: z.enum(['published', 'taken_down', 'deleted_by_author']),
   is_verifier: z.boolean(),
