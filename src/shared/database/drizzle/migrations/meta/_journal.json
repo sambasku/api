@@ -302,6 +302,27 @@
       "when": 1794200000000,
       "tag": "0042_word-import-session-rollback",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1794300000000,
+      "tag": "0043_ugc-abuse",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1794400000000,
+      "tag": "0044_ugc-anon-abuse",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1794500000000,
+      "tag": "0045_contribution-guest-display-name",
+      "breakpoints": true
     }
   ]
 }

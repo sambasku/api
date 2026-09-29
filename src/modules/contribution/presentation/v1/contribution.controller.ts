@@ -217,12 +217,13 @@ export class ContributionController {
     return decisionResponse(c, outcome);
   }
 
-  async reject(c: Context, id: string, body: { comment: string }) {
+  async reject(c: Context, id: string, body: { comment: string; reason_code?: 'spam' | 'other' }) {
     const actor = this.requireActor(c);
     const outcome = await this.deps.review.execute({
       contributionId: id,
       decision: 'reject',
       comment: body.comment,
+      reasonCode: body.reason_code ?? null,
       actorId: actor.userId,
       requestId: actor.requestId,
     });

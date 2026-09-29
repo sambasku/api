@@ -47,6 +47,7 @@ function toContribution(row: {
   userId: string;
   username: string | null;
   displayName: string | null;
+  guestDisplayName?: string | null;
   entityType: string;
   entityId: string;
   action: string;
@@ -63,12 +64,14 @@ function toContribution(row: {
   latestReviewedAt?: Date | null;
 }): Contribution {
   const username = row.username;
+  const guest = row.guestDisplayName?.trim() || null;
   const trimmed = row.displayName?.trim() || null;
   return {
     id: row.id,
     userId: row.userId,
     contributorUsername: username,
-    contributorDisplayName: trimmed || username,
+    // Prefer nama tamu teks-bebas; fallback display_name akun / username
+    contributorDisplayName: guest || trimmed || username,
     entityType: row.entityType as Contribution['entityType'],
     entityId: row.entityId,
     action: row.action,
@@ -98,6 +101,7 @@ const contributionColumns = {
   userId: contributions.userId,
   username: users.username,
   displayName: users.displayName,
+  guestDisplayName: contributions.guestDisplayName,
   entityType: contributions.entityType,
   entityId: contributions.entityId,
   action: contributions.action,

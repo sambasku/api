@@ -25,6 +25,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     role: 'reviewer',
     isActive: true,
     canContribute: true,
+    contributeMutedUntil: null,
     emailVerified: true,
     avatarUrl: null,
     avatarProvider: null,

@@ -65,6 +65,8 @@ export const approveContributionSchema = z
 export type ApproveContributionBody = z.infer<typeof approveContributionSchema>;
 export const rejectContributionSchema = z.object({
   comment: z.string().trim().min(1, 'Alasan penolakan wajib diisi').max(2000),
+  /** spam = sinyal abuse otomatis ke penulis kontribusi. */
+  reason_code: z.enum(['spam', 'other']).optional(),
 });
 
 // Koreksi - discriminated union pada entity_type. Varian 'word' memakai

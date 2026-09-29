@@ -7,6 +7,13 @@ import { resolveDiscussionNotifyRecipients } from '@/modules/comment/application
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { DiscussionReplyPushCooldownGate } from '@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate';
+import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
+import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
+import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
+import {
+  RecordAbuseSignalUseCase,
+  safeRecordAbuseSignal,
+} from '@/shared/moderation/record-abuse-signal.use-case';
 import type { DiscussionReply } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
 
@@ -45,16 +52,26 @@ export class CreateDiscussionReplyUseCase {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: DiscussionReplyPushCooldownGate,
+    private readonly abuse?: RecordAbuseSignalUseCase,
   ) {}
 
   async execute(cmd: CreateDiscussionReplyCommand): Promise<DiscussionReply> {
-    const body = cmd.body.trim();
-    if (body.length < 1) {
+    await assertCanContribute(cmd.userId);
+
+    const raw = cmd.body.trim();
+    if (raw.length < 1) {
       throw new ValidationError([{ field: 'body', message: 'Balasan minimal 1 karakter' }]);
     }
-    if (body.length > 500) {
+    if (raw.length > 500) {
       throw new ValidationError([{ field: 'body', message: 'Balasan maksimal 500 karakter' }]);
     }
+
+    const body = await assertUgcTextQualityWithStrike(raw, {
+      userId: cmd.userId,
+      abuse: this.abuse,
+      entityType: 'discussion_reply',
+      requestId: cmd.requestId,
+    });
 
     const discussion = await this.repo.findById(cmd.discussionId);
     if (!discussion) {
@@ -90,6 +107,16 @@ export class CreateDiscussionReplyUseCase {
       },
       requestId: cmd.requestId ?? null,
     });
+
+    if (wasFiltered && isHeavyCensor(body, filteredBody)) {
+      await safeRecordAbuseSignal(this.abuse, {
+        userId: cmd.userId,
+        signal: 'heavy_censor',
+        entityType: 'discussion_reply',
+        entityId: reply.id,
+        requestId: cmd.requestId,
+      });
+    }
 
     await this.notifyThreadParticipants({
       discussionId: cmd.discussionId,

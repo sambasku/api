@@ -12,6 +12,10 @@ import {
   deleteStagingWordImage,
   promoteWordImageFromStaging,
 } from '../utils/promote-word-image-staging';
+import {
+  RecordAbuseSignalUseCase,
+  safeRecordAbuseSignal,
+} from '@/shared/moderation/record-abuse-signal.use-case';
 
 export interface ImageReviewDecision {
   imageId: string;
@@ -30,6 +34,8 @@ export interface ReviewContributionCommand {
   comment: string | null;
   actorId: string;
   requestId?: string | null;
+  /** spam → catat sinyal abuse ke submittedBy. */
+  reasonCode?: 'spam' | 'other' | null;
   /**
    * Hanya usulan kata + decision approve. Foto yang tidak disebut ditayangkan.
    * Pada reject seluruh kontribusi, field ini diabaikan.
@@ -53,6 +59,7 @@ export class ReviewContributionUseCase {
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly pushCooldown?: ReviewPushCooldownGate,
+    private readonly abuse?: RecordAbuseSignalUseCase,
   ) {}
 
   async execute(cmd: ReviewContributionCommand): Promise<ReviewOutcome> {
@@ -95,10 +102,22 @@ export class ReviewContributionUseCase {
         contribution_id: outcome.contributionId,
         status: outcome.status,
         comment: cmd.comment,
+        reason_code: cmd.reasonCode ?? null,
         ...(rejectedImageIds.length > 0 ? { rejected_image_ids: rejectedImageIds } : {}),
       },
       requestId: cmd.requestId ?? null,
     });
+
+    if (cmd.decision === 'reject' && cmd.reasonCode === 'spam') {
+      await safeRecordAbuseSignal(this.abuse, {
+        userId: outcome.contributorUserId,
+        signal: 'contribution_spam_reject',
+        entityType: 'contribution',
+        entityId: outcome.contributionId,
+        requestId: cmd.requestId,
+        systemActorId: cmd.actorId,
+      });
+    }
 
     await this.inbox?.execute({
       userId: outcome.contributorUserId,

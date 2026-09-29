@@ -22,6 +22,7 @@ function user(partial: Partial<User> = {}): User {
     role: 'contributor',
     isActive: true,
     canContribute: true,
+    contributeMutedUntil: null,
     emailVerified: true,
     avatarUrl: null,
     avatarProvider: null,

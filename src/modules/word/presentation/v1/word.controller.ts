@@ -55,6 +55,11 @@ import type {
 } from './validators/word-media.validator';
 import { toCreateWordDto, toUpdateWordDto } from './map-create-word';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import {
+  clientIpKey,
+  normalizedDeviceId,
+} from '@/shared/middlewares/rate-limit.middleware';
+import type { AnonClientContext } from '@/shared/moderation/record-anon-abuse-signal.use-case';
 import type { LatestWordSummary, WordClassSummary, WordDetail } from '../../domain/entities/word.entity';
 import { mapPublicWordImageUrl } from './map-word-image-url';
 import type { ListAdminWordsUseCase } from '../../application/use-cases/list-admin-words.use-case';
@@ -114,6 +119,8 @@ export class WordController {
       listWordClasses: () => Promise<WordClassSummary[]>;
       /** provider gambar aktif - dari composition root, bukan hardcode */
       imageProviderName: string;
+      /** Soft-mute IP/device untuk kontribusi tanpa login. */
+      assertAnonWriteAllowed?: (ctx: AnonClientContext) => Promise<void>;
     },
   ) {}
 
@@ -189,10 +196,17 @@ export class WordController {
     const ctx = c as Context<{ Variables: AppVariables }>;
     const authUser = ctx.get('user');
     const triggeredBy = authUser?.user_id ?? ANONIM_USER_ID;
+    const clientIp = clientIpKey(c);
+    const deviceId = normalizedDeviceId(c);
+    if (!authUser) {
+      await this.deps.assertAnonWriteAllowed?.({ clientIp, deviceId });
+    }
     const result = await this.deps.batchContributeWords.execute({
       rows: body.rows,
       contributorName: body.contributor_name,
       triggeredBy,
+      clientIp,
+      deviceId,
     });
     return c.json({ success: true as const, data: result }, 201);
   }
@@ -843,19 +857,43 @@ export class WordController {
    * - Dengan Bearer valid (optionalAuth) → atribusi ke user login
    *   (role dari JWT). Status tetap dipaksa 'published' (= kirim review);
    *   contributor/role non-verifier → pending_review via resolvePublication.
+   * - contributor_name opsional (tamu) → contributions.guest_display_name.
    */
-  async createAnon(c: Context, body: Omit<CreateWordBody, 'status'>) {
+  async createAnon(
+    c: Context,
+    body: Omit<CreateWordBody, 'status'> & { contributor_name?: string },
+  ) {
     const ctx = c as Context<{ Variables: AppVariables }>;
     const requestId = ctx.get('requestId');
     const authUser = ctx.get('user');
+    const clientIp = clientIpKey(c);
+    const deviceId = normalizedDeviceId(c);
     const actor = authUser
       ? { userId: authUser.user_id, role: authUser.role, requestId }
-      : { userId: ANONIM_USER_ID, role: 'contributor' as const, requestId };
+      : {
+          userId: ANONIM_USER_ID,
+          role: 'contributor' as const,
+          requestId,
+          clientIp,
+          deviceId,
+        };
 
-    const { word, warnings, inlineCreatedWords, inlineWarnings, searchMissId } = await this.deps.create.execute(
-      toCreateWordDto({ ...body, status: 'published' }, this.deps.imageProviderName),
-      actor,
+    if (!authUser) {
+      await this.deps.assertAnonWriteAllowed?.({ clientIp, deviceId });
+    }
+
+    const { contributor_name: contributorName, ...wordFields } = body;
+    const guestName = contributorName?.trim() || null;
+    const dto = toCreateWordDto(
+      { ...wordFields, status: 'published' },
+      this.deps.imageProviderName,
     );
+    if (guestName) {
+      dto.guestDisplayName = guestName;
+    }
+
+    const { word, warnings, inlineCreatedWords, inlineWarnings, searchMissId } =
+      await this.deps.create.execute(dto, actor);
 
     return c.json(
       {

@@ -9,6 +9,7 @@ import {
   clampDurationMs,
   validateAudioFile,
 } from '@/modules/word/application/utils/validate-audio-file';
+import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import type { Discussion } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
 import { buildDiscussionReplyAudioPath } from '../utils/discussion-reply-audio-path';
@@ -35,6 +36,8 @@ export class AttachDiscussionAudioUseCase {
   ) {}
 
   async execute(cmd: AttachDiscussionAudioCommand): Promise<Discussion> {
+    await assertCanContribute(cmd.userId);
+
     const discussion = await this.repo.findById(cmd.discussionId);
     if (!discussion) {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');

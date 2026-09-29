@@ -12,6 +12,13 @@ import {
   clampDurationMs,
   validateAudioFile,
 } from '@/modules/word/application/utils/validate-audio-file';
+import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
+import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
+import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
+import {
+  RecordAbuseSignalUseCase,
+  safeRecordAbuseSignal,
+} from '@/shared/moderation/record-abuse-signal.use-case';
 import type { DiscussionReply } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
 import { buildDiscussionReplyAudioPath } from '../utils/discussion-reply-audio-path';
@@ -55,14 +62,27 @@ export class CreateDiscussionReplyAudioUseCase {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: DiscussionReplyPushCooldownGate,
+    private readonly abuse?: RecordAbuseSignalUseCase,
   ) {}
 
   async execute(cmd: CreateDiscussionReplyAudioCommand): Promise<DiscussionReply> {
+    await assertCanContribute(cmd.userId);
+
     const rawBody = (cmd.body ?? '').trim();
     if (rawBody.length > 500) {
       throw new ValidationError([
         { field: 'body', message: 'Balasan maksimal 500 karakter' },
       ]);
+    }
+
+    let caption = '';
+    if (rawBody.length > 0) {
+      caption = await assertUgcTextQualityWithStrike(rawBody, {
+        userId: cmd.userId,
+        abuse: this.abuse,
+        entityType: 'discussion_reply',
+        requestId: cmd.requestId,
+      });
     }
 
     const discussion = await this.repo.findById(cmd.discussionId);
@@ -85,10 +105,10 @@ export class CreateDiscussionReplyAudioUseCase {
 
     let filteredBody = '';
     let bodyOriginal: string | null = null;
-    if (rawBody.length > 0) {
+    if (caption.length > 0) {
       const blocked = await this.blocklistRepo.listAllActiveWords();
-      filteredBody = applyBlocklistFilter(rawBody, blocked);
-      bodyOriginal = filteredBody !== rawBody ? rawBody : null;
+      filteredBody = applyBlocklistFilter(caption, blocked);
+      bodyOriginal = filteredBody !== caption ? caption : null;
     }
 
     const path = buildDiscussionReplyAudioPath({
@@ -131,6 +151,16 @@ export class CreateDiscussionReplyAudioUseCase {
       },
       requestId: cmd.requestId ?? null,
     });
+
+    if (bodyOriginal != null && isHeavyCensor(caption, filteredBody)) {
+      await safeRecordAbuseSignal(this.abuse, {
+        userId: cmd.userId,
+        signal: 'heavy_censor',
+        entityType: 'discussion_reply',
+        entityId: reply.id,
+        requestId: cmd.requestId,
+      });
+    }
 
     await this.notifyThreadParticipants({
       discussionId: cmd.discussionId,

@@ -74,4 +74,28 @@ describe('mergeActivityFeed', () => {
     expect(merged).toHaveLength(7);
     expect(merged[0].id).toBe('vote:v0');
   });
+
+  it('before memotong item yang tidak lebih lama dari cursor', () => {
+    const merged = mergeActivityFeed(
+      [
+        item({
+          kind: 'vote',
+          id: 'vote:new',
+          createdAt: new Date('2026-09-28T12:00:00.000Z'),
+        }),
+        item({
+          kind: 'comment',
+          id: 'comment:old',
+          createdAt: new Date('2026-09-28T10:00:00.000Z'),
+        }),
+      ],
+      {
+        before: {
+          createdAt: new Date('2026-09-28T11:00:00.000Z'),
+          id: 'vote:mid',
+        },
+      },
+    );
+    expect(merged.map((e) => e.id)).toEqual(['comment:old']);
+  });
 });

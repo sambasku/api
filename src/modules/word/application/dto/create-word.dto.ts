@@ -122,4 +122,9 @@ export interface CreateWordDto {
   searchMissId?: string;
   /** Sesi impor massal yang menciptakan kata (rollback batch). */
   importSessionId?: string;
+  /**
+   * Nama tampilan opsional dari tamu (POST /contributions/words).
+   * Disimpan di contributions.guest_display_name; user_id tetap Anonim.
+   */
+  guestDisplayName?: string | null;
 }

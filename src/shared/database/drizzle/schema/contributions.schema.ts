@@ -21,6 +21,11 @@ export const contributions = sqliteTable(
     // 'approved'); baris lama di-backfill 'approved' lewat migration
     status: text('status').notNull().default('pending'),
     description: text('description'),
+    /**
+     * Nama tampilan opsional dari tamu (tanpa akun) - atribusi teks bebas.
+     * user_id tetap Anonim; antrean memakai ini sebagai contributor_display_name.
+     */
+    guestDisplayName: text('guest_display_name'),
     // Provenance jalur search-miss (12-api) - nullable: kontribusi biasa OK
     searchMissId: text('search_miss_id').references(() => searchMisses.id),
     /**

@@ -129,10 +129,14 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         body: string;
         subtitle: string | null;
       }>;
-      meta: { limit: number };
+      meta: { limit: number; next_cursor: string | null; has_more: boolean };
     };
     expect(body.success).toBe(true);
     expect(body.meta.limit).toBe(20);
+    expect(typeof body.meta.has_more).toBe('boolean');
+    expect(
+      body.meta.next_cursor === null || typeof body.meta.next_cursor === 'string',
+    ).toBe(true);
     expect(Array.isArray(body.data)).toBe(true);
     expect(body.data.length).toBeGreaterThan(0);
 

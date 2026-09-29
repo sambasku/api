@@ -283,6 +283,9 @@ export class WordRepositoryImpl implements WordRepository {
           action: 'create',
           status: contributionStatusOf(word.status, word.isVerified),
           ...(word.searchMissId ? { searchMissId: word.searchMissId } : {}),
+          ...(word.guestDisplayName?.trim()
+            ? { guestDisplayName: word.guestDisplayName.trim() }
+            : {}),
         });
 
         return toWord(wordRow);
@@ -347,6 +350,9 @@ export class WordRepositoryImpl implements WordRepository {
           action: 'create',
           status: contributionStatusOf(word.status, word.isVerified),
           ...(word.searchMissId ? { searchMissId: word.searchMissId } : {}),
+          ...(word.guestDisplayName?.trim()
+            ? { guestDisplayName: word.guestDisplayName.trim() }
+            : {}),
         });
 
         // 2) tiap kata inline

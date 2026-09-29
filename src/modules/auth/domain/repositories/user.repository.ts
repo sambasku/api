@@ -13,7 +13,17 @@ export interface UserRepository {
   listActiveIdsByRoles(roles: UserRole[]): Promise<string[]>;
   updateRole(id: string, role: UserRole): Promise<void>;
   setCanContribute(id: string, canContribute: boolean): Promise<boolean>;
+  setContributeMutedUntil(id: string, mutedUntil: Date | null): Promise<boolean>;
   setIsActive(id: string, isActive: boolean): Promise<boolean>;
+  /**
+   * Snapshot gate UGC: isActive, canContribute, contributeMutedUntil.
+   * null jika user tidak ketemu.
+   */
+  getContributeGate(id: string): Promise<{
+    isActive: boolean;
+    canContribute: boolean;
+    contributeMutedUntil: Date | null;
+  } | null>;
   updatePhone(id: string, phone: string): Promise<void>;
   updateAvatar(
     id: string,

@@ -12,6 +12,13 @@ import {
   clampDurationMs,
   validateAudioFile,
 } from '@/modules/word/application/utils/validate-audio-file';
+import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
+import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
+import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
+import {
+  RecordAbuseSignalUseCase,
+  safeRecordAbuseSignal,
+} from '@/shared/moderation/record-abuse-signal.use-case';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 import { resolveDiscussionNotifyRecipients } from '../utils/resolve-discussion-notify-recipients';
@@ -58,14 +65,27 @@ export class CreateCommentAudioUseCase {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: WordCommentPushCooldownGate,
+    private readonly abuse?: RecordAbuseSignalUseCase,
   ) {}
 
   async execute(cmd: CreateCommentAudioCommand): Promise<Comment> {
+    await assertCanContribute(cmd.userId);
+
     const rawBody = (cmd.body ?? '').trim();
     if (rawBody.length > 1000) {
       throw new ValidationError([
         { field: 'body', message: 'Komentar maksimal 1000 karakter' },
       ]);
+    }
+
+    let caption = '';
+    if (rawBody.length > 0) {
+      caption = await assertUgcTextQualityWithStrike(rawBody, {
+        userId: cmd.userId,
+        abuse: this.abuse,
+        entityType: 'comment',
+        requestId: cmd.requestId,
+      });
     }
 
     const word = await this.wordRepo.findById(cmd.wordId);
@@ -88,10 +108,10 @@ export class CreateCommentAudioUseCase {
 
     let filteredBody = '';
     let bodyOriginal: string | null = null;
-    if (rawBody.length > 0) {
+    if (caption.length > 0) {
       const blocked = await this.blocklistRepo.listAllActiveWords();
-      filteredBody = applyBlocklistFilter(rawBody, blocked);
-      bodyOriginal = filteredBody !== rawBody ? rawBody : null;
+      filteredBody = applyBlocklistFilter(caption, blocked);
+      bodyOriginal = filteredBody !== caption ? caption : null;
     }
 
     const path = buildCommentAudioPath({
@@ -134,6 +154,16 @@ export class CreateCommentAudioUseCase {
       },
       requestId: cmd.requestId ?? null,
     });
+
+    if (bodyOriginal != null && isHeavyCensor(caption, filteredBody)) {
+      await safeRecordAbuseSignal(this.abuse, {
+        userId: cmd.userId,
+        signal: 'heavy_censor',
+        entityType: 'comment',
+        entityId: comment.id,
+        requestId: cmd.requestId,
+      });
+    }
 
     await this.notifyDiscussionParticipants({
       wordId: cmd.wordId,

@@ -26,7 +26,7 @@ export function createActivityRoutes(deps: { controller: ActivityController }) {
     description:
       'Gabungan kata baru, komentar, vote, diskusi, kontribusi media, ' +
       'search-miss tayang, dan selamat datang akun terverifikasi. ' +
-      'Tanpa auth. V1 tanpa cursor; limit 1-50 (default 20).',
+      'Tanpa auth. Cursor opaque (created_at + id); limit 1-50 (default 20).',
     request: { query: listActivityQuerySchema },
     responses: {
       200: {

@@ -105,6 +105,7 @@ import { AdminUsersController } from '@/modules/auth/presentation/v1/admin-user.
 import { SetCanContributeUseCase } from '@/modules/auth/application/use-cases/set-can-contribute.use-case';
 import { CreateAdminUserUseCase } from '@/modules/auth/application/use-cases/create-admin-user.use-case';
 import { SetUserActiveUseCase } from '@/modules/auth/application/use-cases/set-user-active.use-case';
+import { ListUserAbuseEventsUseCase } from '@/modules/auth/application/use-cases/list-user-abuse-events.use-case';
 import { createAdminUserRoutes, createContributionAccessRoutes } from '@/modules/auth/presentation/v1/admin-user.routes';
 import { WordRepositoryImpl } from '@/modules/word/infrastructure/word.repository.impl';
 import { CreateWordUseCase } from '@/modules/word/application/use-cases/create-word.use-case';
@@ -373,6 +374,17 @@ import {
   createAdminNotificationCampaignRoutes,
   createAdminNotificationTemplateRoutes,
 } from '@/modules/notification-campaign/presentation/v1/notification-campaign.routes';
+import { UgcAbuseEventRepositoryImpl } from '@/shared/moderation/ugc-abuse-event.repository';
+import {
+  RecordAbuseSignalUseCase,
+  safeRecordAbuseSignal,
+} from '@/shared/moderation/record-abuse-signal.use-case';
+import { UgcAnonAbuseRepositoryImpl } from '@/shared/moderation/ugc-anon-abuse.repository';
+import {
+  RecordAnonAbuseSignalUseCase,
+  assertAnonWriteAllowed,
+  safeRecordAnonAbuseSignal,
+} from '@/shared/moderation/record-anon-abuse-signal.use-case';
 
 // ---- Composition root: rakit semua dependency (manual DI, api-base-stack.md Section 2) ----
 bindCanContributeLookup(lookupCanContribute);
@@ -543,10 +555,39 @@ const publicImageStorage = createPublicImageStorage();
 // dari SearchWordsUseCase lewat interface modul search-miss (Section 4)
 const searchMissRepo = new SearchMissRepositoryImpl(db);
 const languageRepo = new LanguageRepositoryImpl(db);
+const ugcAbuseEventRepo = new UgcAbuseEventRepositoryImpl(db);
+const recordAbuseSignal = new RecordAbuseSignalUseCase(
+  ugcAbuseEventRepo,
+  userRepo,
+  refreshTokenRepo,
+  auditRepo,
+  recordInbox,
+);
+const ugcAnonAbuseRepo = new UgcAnonAbuseRepositoryImpl(db);
+const recordAnonAbuseSignal = new RecordAnonAbuseSignalUseCase(ugcAnonAbuseRepo);
+const onUgcRateLimited = async (userId: string) => {
+  await safeRecordAbuseSignal(recordAbuseSignal, {
+    userId,
+    signal: 'rate_lockout',
+  });
+};
+const onAnonRateLimited = async (ctx: { clientIp: string; deviceId: string | null }) => {
+  await safeRecordAnonAbuseSignal(recordAnonAbuseSignal, {
+    clientIp: ctx.clientIp,
+    deviceId: ctx.deviceId,
+    signal: 'rate_lockout',
+  });
+};
 const publishWord = new PublishWordUseCase(wordRepo, auditRepo);
 const softDeleteWord = new SoftDeleteWordUseCase(wordRepo, auditRepo);
 const wordController = new WordController({
-  create: new CreateWordUseCase(wordRepo, auditRepo, searchMissRepo),
+  create: new CreateWordUseCase(
+    wordRepo,
+    auditRepo,
+    searchMissRepo,
+    recordAbuseSignal,
+    recordAnonAbuseSignal,
+  ),
   update: new UpdateWordUseCase(wordRepo, auditRepo),
   getById: new GetWordByIdUseCase(wordRepo),
   getByLemma: new GetWordByLemmaUseCase(wordRepo),
@@ -575,6 +616,7 @@ const wordController = new WordController({
     wordRepo,
     languageRepo,
     wordImportSessionRepo,
+    recordAnonAbuseSignal,
   ),
   saveImportSession: new SaveWordImportSessionUseCase(wordImportSessionRepo, userRepo),
   listImportSessions: new ListWordImportSessionsUseCase(wordImportSessionRepo),
@@ -598,6 +640,7 @@ const wordController = new WordController({
   listWordClasses: () => wordRepo.listWordClasses(),
   // Stempel provider gambar kata = GitHub publik (bukan ImageKit)
   imageProviderName: publicImageStorage.providerName,
+  assertAnonWriteAllowed: (ctx) => assertAnonWriteAllowed(ugcAnonAbuseRepo, ctx),
 });
 
 // ---- Modul contribution - antrean review (Section 22 approval gate,
@@ -616,6 +659,7 @@ const contributionController = new ContributionController({
     notifyUser,
     recordInbox,
     new ReviewPushCooldownGate(appSettingsRepo, notificationPushCooldownRepo),
+    recordAbuseSignal,
   ),
   correct: new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo, recordInbox),
   reopen: new ReopenContributionUseCase(contributionRepo, auditRepo),
@@ -705,6 +749,7 @@ const commentController = new CommentController({
     recordInbox,
     notifyUser,
     wordCommentPushCooldown,
+    recordAbuseSignal,
   ),
   createAudio: new CreateCommentAudioUseCase(
     commentRepo,
@@ -716,12 +761,13 @@ const commentController = new CommentController({
     recordInbox,
     notifyUser,
     wordCommentPushCooldown,
+    recordAbuseSignal,
   ),
   listByWord: new ListWordCommentsUseCase(commentRepo, voteRepo),
   delete: new DeleteCommentUseCase(commentRepo, auditRepo),
   listAdmin: new ListAdminCommentsUseCase(commentRepo),
   listMine: new ListMyCommentsUseCase(commentRepo),
-  takedown: new TakedownCommentUseCase(commentRepo, auditRepo),
+  takedown: new TakedownCommentUseCase(commentRepo, auditRepo, recordAbuseSignal),
   uncensor: new UncensorCommentUseCase(commentRepo, auditRepo),
 });
 const commentBlocklistController = new CommentBlocklistController({
@@ -951,6 +997,7 @@ app.route(
     controller: commentController,
     authenticate,
     requireApprovedClient: requireCommentWriteClient,
+    onUgcRateLimited,
   }),
 );
 const setWordImageContentWarnings = new SetWordImageContentWarningsUseCase(wordRepo, auditRepo);
@@ -1008,6 +1055,7 @@ app.route(
     controller: commentController,
     authenticate,
     requireApprovedClient: requireCommentWriteClient,
+    onUgcRateLimited,
   }),
 );
 
@@ -1087,14 +1135,15 @@ app.route('/api/v1/admin/votes', createAdminVoteRoutes({ controller: adminVotesC
 // Antrean review kontribusi - hanya verifikator (Section 22)
 app.route('/api/v1/admin/contributions', createContributionRoutes({ controller: contributionController, authenticate }));
 
-// Submit kata TANPA login (publik, tanpa limit) - atribusi ke user sistem
-// Anonim, otomatis pending_review (03-api-kontribusi-verifikasi.md)
+// Submit kata publik - rate limit IP/device untuk tamu; mute per sumber
+// (bukan ANONIM_USER_ID). Login → assertCanContribute.
 app.route(
   '/api/v1/contributions',
   createAnonContributionRoutes({
     controller: wordController,
     optionalAuthenticate,
     requireApprovedClient: requireContributeWriteIfAuthed,
+    onAnonRateLimited,
   }),
 );
 app.route(
@@ -1164,6 +1213,7 @@ const discussionController = new DiscussionController({
     userRepo,
     recordInbox,
     notifyUser,
+    recordAbuseSignal,
   ),
   listPublished: new ListPublishedDiscussionsUseCase(discussionRepo, voteRepo),
   listMine: new ListMyDiscussionsUseCase(discussionRepo),
@@ -1197,6 +1247,7 @@ const discussionController = new DiscussionController({
     recordInbox,
     notifyUser,
     discussionReplyPushCooldown,
+    recordAbuseSignal,
   ),
   createReplyAudio: new CreateDiscussionReplyAudioUseCase(
     discussionRepo,
@@ -1207,6 +1258,7 @@ const discussionController = new DiscussionController({
     recordInbox,
     notifyUser,
     discussionReplyPushCooldown,
+    recordAbuseSignal,
   ),
   attachAudio: new AttachDiscussionAudioUseCase(
     discussionRepo,
@@ -1229,6 +1281,7 @@ app.route(
     authenticate,
     optionalAuthenticate,
     requireApprovedClient: requireDiscussionWriteClient,
+    onUgcRateLimited,
   }),
 );
 app.route(
@@ -1254,6 +1307,7 @@ const adminUsersController = new AdminUsersController({
   setCanContribute: new SetCanContributeUseCase(userRepo, auditRepo, recordInbox),
   createUser: new CreateAdminUserUseCase(userRepo, hasher, auditRepo),
   setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
+  listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
 });
 app.route('/api/v1/admin/users', createAdminUserRoutes({ controller: adminUsersController, authenticate }));
 app.route(

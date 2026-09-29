@@ -20,6 +20,7 @@ function toEntity(row: UserRow): User {
     role: row.role as User['role'],
     isActive: row.isActive,
     canContribute: row.canContribute,
+    contributeMutedUntil: row.contributeMutedUntil ?? null,
     emailVerified: row.emailVerified,
     avatarUrl: row.avatarUrl ?? null,
     avatarProvider: row.avatarProvider ?? null,
@@ -94,6 +95,7 @@ export class UserRepositoryImpl implements UserRepository {
         role: users.role,
         isActive: users.isActive,
         canContribute: users.canContribute,
+        contributeMutedUntil: users.contributeMutedUntil,
         emailVerified: users.emailVerified,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
@@ -150,10 +152,48 @@ export class UserRepositoryImpl implements UserRepository {
     if (id === ANONIM_USER_ID) return false;
     const [updated] = await this.db
       .update(users)
-      .set({ canContribute, updatedAt: new Date() })
+      .set({
+        canContribute,
+        // Izinkan lagi: bersihkan mute sementara supaya gate langsung terbuka.
+        ...(canContribute ? { contributeMutedUntil: null } : {}),
+        updatedAt: new Date(),
+      })
       .where(and(eq(users.id, id), isNull(users.deletedAt)))
       .returning({ id: users.id });
     return !!updated;
+  }
+
+  async setContributeMutedUntil(id: string, mutedUntil: Date | null): Promise<boolean> {
+    if (id === ANONIM_USER_ID) return false;
+    const [updated] = await this.db
+      .update(users)
+      .set({ contributeMutedUntil: mutedUntil, updatedAt: new Date() })
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .returning({ id: users.id });
+    return !!updated;
+  }
+
+  async getContributeGate(id: string): Promise<{
+    isActive: boolean;
+    canContribute: boolean;
+    contributeMutedUntil: Date | null;
+  } | null> {
+    const [row] = await this.db
+      .select({
+        isActive: users.isActive,
+        canContribute: users.canContribute,
+        contributeMutedUntil: users.contributeMutedUntil,
+        deletedAt: users.deletedAt,
+      })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    if (!row || row.deletedAt) return null;
+    return {
+      isActive: row.isActive,
+      canContribute: row.canContribute,
+      contributeMutedUntil: row.contributeMutedUntil ?? null,
+    };
   }
 
   async setIsActive(id: string, isActive: boolean): Promise<boolean> {

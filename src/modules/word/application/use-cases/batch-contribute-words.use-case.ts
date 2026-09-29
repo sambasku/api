@@ -2,6 +2,8 @@ import { BadRequestError } from '@/shared/errors/app-error';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { generateId } from '@/shared/utils/ulid';
 import type { LanguageRepository } from '@/modules/language/domain/repositories/language.repository';
+import { assertUgcTextQualityWithAnonStrike } from '@/shared/moderation/assert-ugc-text-quality-with-anon-strike';
+import type { RecordAnonAbuseSignalUseCase } from '@/shared/moderation/record-anon-abuse-signal.use-case';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { WordImportSessionRepository } from '../../domain/repositories/word-import-session.repository';
 import type { WordImportSessionItem } from '../../domain/entities/word-import-session.entity';
@@ -38,12 +40,15 @@ export class BatchContributeWordsUseCase {
     private readonly wordRepo: WordRepository,
     private readonly languageRepo: LanguageRepository,
     private readonly sessionRepo: WordImportSessionRepository,
+    private readonly anonAbuse?: RecordAnonAbuseSignalUseCase,
   ) {}
 
   async execute(input: {
     rows: BatchContributeRow[];
     contributorName?: string | null;
     triggeredBy: string;
+    clientIp?: string | null;
+    deviceId?: string | null;
   }): Promise<BatchContributeResult> {
     if (input.rows.length === 0) {
       throw new BadRequestError('BATCH_EMPTY', 'Minimal satu baris kata harus diisi');
@@ -53,6 +58,27 @@ export class BatchContributeWordsUseCase {
         'BATCH_TOO_LARGE',
         `Maksimal ${BATCH_CONTRIBUTE_MAX_ROWS} kata per kiriman`,
       );
+    }
+
+    const clientIp = input.clientIp?.trim() || 'unknown';
+    const deviceId = input.deviceId ?? null;
+    for (const [i, row] of input.rows.entries()) {
+      await assertUgcTextQualityWithAnonStrike(row.sambas, {
+        clientIp,
+        deviceId,
+        abuse: this.anonAbuse,
+        entityType: 'word_batch',
+        field: `rows.${i}.sambas`,
+        minMeaningfulChars: 1,
+      });
+      await assertUgcTextQualityWithAnonStrike(row.indonesia, {
+        clientIp,
+        deviceId,
+        abuse: this.anonAbuse,
+        entityType: 'word_batch',
+        field: `rows.${i}.indonesia`,
+        minMeaningfulChars: 1,
+      });
     }
 
     const refs = await this.resolveRefs();

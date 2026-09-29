@@ -25,11 +25,15 @@ export class ActivityController {
   constructor(private readonly deps: { list: ListActivityUseCase }) {}
 
   async list(c: Context, query: ListActivityQuery) {
-    const items = await this.deps.list.execute(query.limit);
+    const page = await this.deps.list.execute(query.limit, query.cursor);
     return c.json({
       success: true as const,
-      data: items.map(toWire),
-      meta: { limit: query.limit },
+      data: page.items.map(toWire),
+      meta: {
+        limit: query.limit,
+        next_cursor: page.nextCursor,
+        has_more: page.hasMore,
+      },
     });
   }
 }

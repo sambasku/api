@@ -7,6 +7,13 @@ import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/ut
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
+import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
+import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
+import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
+import {
+  RecordAbuseSignalUseCase,
+  safeRecordAbuseSignal,
+} from '@/shared/moderation/record-abuse-signal.use-case';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 import { resolveDiscussionNotifyRecipients } from '../utils/resolve-discussion-notify-recipients';
@@ -46,9 +53,20 @@ export class CreateCommentUseCase {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: WordCommentPushCooldownGate,
+    private readonly abuse?: RecordAbuseSignalUseCase,
   ) {}
 
   async execute(cmd: CreateCommentCommand): Promise<Comment> {
+    await assertCanContribute(cmd.userId);
+
+    const body = await assertUgcTextQualityWithStrike(cmd.body, {
+      userId: cmd.userId,
+      abuse: this.abuse,
+      entityType: 'comment',
+      requestId: cmd.requestId,
+      minMeaningfulChars: 1,
+    });
+
     const word = await this.wordRepo.findById(cmd.wordId);
     if (!word) {
       throw new NotFoundError('WORD_NOT_FOUND', 'Kata dengan id tersebut tidak ditemukan');
@@ -58,14 +76,14 @@ export class CreateCommentUseCase {
     }
 
     const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filteredBody = applyBlocklistFilter(cmd.body, blocked);
-    const wasFiltered = filteredBody !== cmd.body;
+    const filteredBody = applyBlocklistFilter(body, blocked);
+    const wasFiltered = filteredBody !== body;
 
     const comment = await this.commentRepo.create({
       wordId: cmd.wordId,
       userId: cmd.userId,
       body: filteredBody,
-      bodyOriginal: wasFiltered ? cmd.body : null,
+      bodyOriginal: wasFiltered ? body : null,
     });
 
     await this.auditRepo.record({
@@ -82,6 +100,16 @@ export class CreateCommentUseCase {
       },
       requestId: cmd.requestId ?? null,
     });
+
+    if (wasFiltered && isHeavyCensor(body, filteredBody)) {
+      await safeRecordAbuseSignal(this.abuse, {
+        userId: cmd.userId,
+        signal: 'heavy_censor',
+        entityType: 'comment',
+        entityId: comment.id,
+        requestId: cmd.requestId,
+      });
+    }
 
     await this.notifyDiscussionParticipants({
       wordId: cmd.wordId,

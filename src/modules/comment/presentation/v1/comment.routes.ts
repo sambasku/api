@@ -25,6 +25,8 @@ export interface CommentRoutesDeps {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Gate azp + scope comment.write pada tulis komentar. */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Best-effort strike saat rate limit tulis UGC. */
+  onUgcRateLimited?: (userId: string) => void | Promise<void>;
 }
 
 const ulid26 = z.string().length(26);
@@ -44,14 +46,14 @@ export function createWordCommentRoutes(deps: CommentRoutesDeps) {
     '/:wordId/comments',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
-    wordCommentLimiter(),
+    wordCommentLimiter(deps.onUgcRateLimited),
   );
   routes.on(
     'post',
     '/:wordId/comments/audio',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
-    wordCommentLimiter(),
+    wordCommentLimiter(deps.onUgcRateLimited),
     bodyLimit({
       maxSize: 6 * 1024 * 1024,
       onError: (c) =>
@@ -185,7 +187,7 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
     '/:id',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
-    wordCommentLimiter(),
+    wordCommentLimiter(deps.onUgcRateLimited),
   );
 
   const deleteRoute = createRoute({
@@ -209,13 +211,19 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
   return routes;
 }
 
-function wordCommentLimiter() {
+function wordCommentLimiter(onUgcRateLimited?: (userId: string) => void | Promise<void>) {
   return rateLimit({
     points: 30,
     duration: 60,
     keyFn: (c) => {
       const user = (c.get('user') as AuthUser | undefined) ?? null;
       return `comment-write:${user?.user_id ?? 'unknown'}`;
+    },
+    onLimited: async (c) => {
+      const user = (c.get('user') as AuthUser | undefined) ?? null;
+      if (user?.user_id && onUgcRateLimited) {
+        await onUgcRateLimited(user.user_id);
+      }
     },
   });
 }

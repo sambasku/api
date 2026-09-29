@@ -1,4 +1,5 @@
-import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import type { AnyColumn } from 'drizzle-orm';
 import {
   comments,
   contributions,
@@ -21,7 +22,29 @@ import {
   publicAccountName,
 } from '@/shared/constants/deleted-account';
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
+import type { ActivityCursor } from '../domain/merge-activity';
 import type { ActivityRepository } from '../domain/repositories/activity.repository';
+
+/**
+ * Keyset DESC: baris lebih lama dari cursor.
+ * Kind cocok → (time, id) < cursor; kind beda → time < cursor saja.
+ */
+function keysetBefore(
+  timeExpr: SQL | AnyColumn,
+  idColumn: AnyColumn,
+  before: ActivityCursor | undefined,
+  kindOrKinds: string | string[],
+): SQL | undefined {
+  if (!before) return undefined;
+  const colon = before.id.indexOf(':');
+  const kind = colon >= 0 ? before.id.slice(0, colon) : '';
+  const entityId = colon >= 0 ? before.id.slice(colon + 1) : before.id;
+  const kinds = Array.isArray(kindOrKinds) ? kindOrKinds : [kindOrKinds];
+  if (kinds.includes(kind) && entityId.length > 0) {
+    return sql`(${timeExpr}, ${idColumn}) < (${before.createdAt}, ${entityId})`;
+  }
+  return sql`${timeExpr} < ${before.createdAt}`;
+}
 
 const CONTRIB_BODY: Record<string, string> = {
   word_image: 'Menambah foto',
@@ -60,7 +83,10 @@ const isFulfilledLemmaSql = sql`exists (
 export class ActivityRepositoryImpl implements ActivityRepository {
   constructor(private readonly db: AppDatabase) {}
 
-  async listRecentWords(limit: number): Promise<ActivityItem[]> {
+  async listRecentWords(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]> {
     const approvedAtExpr = sql`COALESCE(${words.verifiedAt}, ${words.createdAt})`;
     const rows = await this.db
       .select({
@@ -76,7 +102,12 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       .from(words)
       .leftJoin(users, eq(users.id, words.createdBy))
       .where(
-        and(isNull(words.deletedAt), eq(words.status, 'published'), feedSafeUsageLabelsSql()),
+        and(
+          isNull(words.deletedAt),
+          eq(words.status, 'published'),
+          feedSafeUsageLabelsSql(),
+          keysetBefore(approvedAtExpr, words.id, before, 'word'),
+        ),
       )
       .orderBy(desc(approvedAtExpr), desc(words.id))
       .limit(limit);
@@ -110,7 +141,10 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     });
   }
 
-  async listRecentComments(limit: number): Promise<ActivityItem[]> {
+  async listRecentComments(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]> {
     const rows = await this.db
       .select({
         id: comments.id,
@@ -132,6 +166,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           isNull(comments.deletedAt),
           isNull(words.deletedAt),
           eq(words.status, 'published'),
+          keysetBefore(comments.createdAt, comments.id, before, 'comment'),
         ),
       )
       .orderBy(desc(comments.createdAt), desc(comments.id))
@@ -160,7 +195,10 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     });
   }
 
-  async listRecentVotes(limit: number): Promise<ActivityItem[]> {
+  async listRecentVotes(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]> {
     const occurredAt = sql`COALESCE(${votes.updatedAt}, ${votes.createdAt})`;
     const rows = await this.db
       .select({
@@ -177,7 +215,12 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       })
       .from(votes)
       .innerJoin(users, eq(users.id, votes.userId))
-      .where(isNull(users.deletedAt))
+      .where(
+        and(
+          isNull(users.deletedAt),
+          keysetBefore(occurredAt, votes.id, before, 'vote'),
+        ),
+      )
       .orderBy(desc(occurredAt), desc(votes.id))
       .limit(limit);
 
@@ -218,7 +261,10 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     });
   }
 
-  async listRecentDiscussions(limit: number): Promise<ActivityItem[]> {
+  async listRecentDiscussions(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]> {
     const rows = await this.db
       .select({
         id: discussions.id,
@@ -231,7 +277,12 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       })
       .from(discussions)
       .leftJoin(users, eq(users.id, discussions.userId))
-      .where(eq(discussions.status, 'published'))
+      .where(
+        and(
+          eq(discussions.status, 'published'),
+          keysetBefore(discussions.createdAt, discussions.id, before, 'discussion'),
+        ),
+      )
       .orderBy(desc(discussions.createdAt), desc(discussions.id))
       .limit(limit);
 
@@ -262,6 +313,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   async listRecentApprovedContributions(
     entityTypes: Array<'word_image' | 'word_audio' | 'pronunciation' | 'example'>,
     limit: number,
+    before?: ActivityCursor,
   ): Promise<ActivityItem[]> {
     if (entityTypes.length === 0) return [];
 
@@ -283,6 +335,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           inArray(contributions.status, ['approved', 'corrected']),
           isNull(contributions.deletedAt),
           inArray(contributions.entityType, entityTypes),
+          keysetBefore(contributions.createdAt, contributions.id, before, entityTypes),
         ),
       )
       .orderBy(desc(contributions.createdAt), desc(contributions.id))
@@ -319,7 +372,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     });
   }
 
-  async listRecentVisibleSearchMisses(limit: number): Promise<ActivityItem[]> {
+  async listRecentVisibleSearchMisses(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]> {
+    const occurredAt = sql`COALESCE(${searchMisses.lastSearchedAt}, ${searchMisses.createdAt})`;
     const rows = await this.db
       .select({
         id: searchMisses.id,
@@ -334,10 +391,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           isNull(searchMisses.deletedAt),
           eq(searchMisses.isVisible, true),
           // Arah lemma: belum ada kata published. Translation: tetap tampilkan
-          // (fulfilifikasi penuh mirip repo search-miss; V1 cukup skip lemma fulfilled).
+          // (klasifikasi penuh mirip repo search-miss; V1 cukup skip lemma fulfilled).
           sql`NOT (
             ${searchMisses.direction} = 'lemma' AND ${isFulfilledLemmaSql}
           )`,
+          keysetBefore(occurredAt, searchMisses.id, before, 'search_miss'),
         ),
       )
       .orderBy(desc(searchMisses.lastSearchedAt), desc(searchMisses.id))
@@ -357,7 +415,10 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     }));
   }
 
-  async listRecentWelcomes(limit: number): Promise<ActivityItem[]> {
+  async listRecentWelcomes(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]> {
     // Tampil setelah akun terverifikasi (OTP email atau OAuth langsung verified).
     // Urut createdAt: waktu daftar; filter emailVerified menutup akun belum OTP.
     const rows = await this.db
@@ -376,6 +437,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           eq(users.isActive, true),
           isNull(users.deletedAt),
           ne(users.id, ANONIM_USER_ID),
+          keysetBefore(users.createdAt, users.id, before, 'welcome'),
         ),
       )
       .orderBy(desc(users.createdAt), desc(users.id))

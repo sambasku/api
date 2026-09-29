@@ -71,6 +71,11 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `CLIENT_MISMATCH` | 400 | `client_id` login bukan first-party / tidak cocok `client_type` |
 | `INSUFFICIENT_SCOPE` | 403 | Token third-party kurang scope untuk endpoint write |
 | `CANNOT_DEACTIVATE_SELF` | 403 | Admin mencoba mengubah status aktif akunnya sendiri |
+| `CONTRIBUTION_NOT_ALLOWED` | 403 | `can_contribute=false` - UGC tulis (kata/media/usul/komentar/diskusi) ditolak |
+| `CONTRIBUTION_MUTED` | 403 | Mute sementara abuse (`contribute_muted_until` masih aktif) |
+| `ANON_CONTRIBUTION_MUTED` | 403 | Mute sementara kontribusi tamu per IP atau `X-Device-Id` |
+| `ACCOUNT_INACTIVE` | 403 | Akun `is_active=false` saat tulis UGC (cek live DB, bukan hanya JWT) |
+| `UGC_INPUT_REJECTED` | 400 | Teks UGC ditolak heuristik (spam/asal-asalan/duplikat) |
 | `BUG_REPORT_NOT_FOUND` | 404 | Laporan masalah tidak ditemukan / sudah selesai (resolve admin) |
 | `DISCUSSION_NOT_FOUND` | 404 | Diskusi tidak ditemukan / tidak boleh diakses |
 | `DISCUSSION_REPLY_NOT_FOUND` | 404 | Balasan diskusi tidak ditemukan |

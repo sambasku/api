@@ -4,6 +4,9 @@ import type { UserRepository } from '@/modules/auth/domain/repositories/user.rep
 import type { UserRole } from '@/modules/auth/domain/entities/user.entity';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
+import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
+import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import type {
   NewDiscussion,
   Discussion,
@@ -63,16 +66,28 @@ export class CreateDiscussionUseCase {
     private readonly userRepo?: UserRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
+    private readonly abuse?: RecordAbuseSignalUseCase,
   ) {}
 
   async execute(cmd: CreateDiscussionCommand): Promise<Discussion> {
-    const trimmed = cmd.body.trim();
-    if (trimmed.length < 1) {
+    await assertCanContribute(cmd.userId);
+
+    const raw = cmd.body.trim();
+    if (raw.length < 1) {
       throw new ValidationError([{ field: 'body', message: 'Deskripsi wajib diisi' }]);
     }
-    if (trimmed.length > 1000) {
+    if (raw.length > 1000) {
       throw new ValidationError([{ field: 'body', message: 'Deskripsi maksimal 1000 karakter' }]);
     }
+
+    const trimmed = await assertUgcTextQualityWithStrike(raw, {
+      userId: cmd.userId,
+      abuse: this.abuse,
+      entityType: 'discussion',
+      requestId: cmd.requestId,
+      field: 'body',
+      minMeaningfulChars: 2,
+    });
 
     const linkUrl = normalizeLinkUrl(cmd.linkUrl);
 

@@ -36,6 +36,16 @@ export interface DiscussionRoutesDeps {
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Gate azp + scope discussion.write pada tulis. */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  onUgcRateLimited?: (userId: string) => void | Promise<void>;
+}
+
+function ugcRateLimitedHook(
+  onUgcRateLimited?: (userId: string) => void | Promise<void>,
+) {
+  return async (c: { get: (k: 'user') => { user_id: string } | undefined }) => {
+    const uid = c.get('user')?.user_id;
+    if (uid && onUgcRateLimited) await onUgcRateLimited(uid);
+  };
 }
 
 const tokenUserLimit = rateLimit({
@@ -52,36 +62,48 @@ const tokenIpLimit = rateLimit({
   keyFn: (c) => `th-tok:ip:${clientIpKey(c)}`,
 });
 
-const submitUserLimit = rateLimit({
-  points: 10,
-  duration: 3600,
-  keyFn: (c) => {
-    const uid = (c as { get: (k: 'user') => { user_id: string } | undefined }).get('user')?.user_id;
-    return uid ? `th-submit:user:${uid}` : '';
-  },
-});
+function submitUserLimit(onUgcRateLimited?: (userId: string) => void | Promise<void>) {
+  return rateLimit({
+    points: 10,
+    duration: 3600,
+    keyFn: (c) => {
+      const uid = (c as { get: (k: 'user') => { user_id: string } | undefined }).get('user')?.user_id;
+      return uid ? `th-submit:user:${uid}` : '';
+    },
+    onLimited: ugcRateLimitedHook(onUgcRateLimited),
+  });
+}
 
-const replyUserLimit = rateLimit({
-  points: 30,
-  duration: 3600,
-  keyFn: (c) => {
-    const uid = (c as { get: (k: 'user') => { user_id: string } | undefined }).get('user')?.user_id;
-    return uid ? `th-reply:user:${uid}` : '';
-  },
-});
+function replyUserLimit(onUgcRateLimited?: (userId: string) => void | Promise<void>) {
+  return rateLimit({
+    points: 30,
+    duration: 3600,
+    keyFn: (c) => {
+      const uid = (c as { get: (k: 'user') => { user_id: string } | undefined }).get('user')?.user_id;
+      return uid ? `th-reply:user:${uid}` : '';
+    },
+    onLimited: ugcRateLimitedHook(onUgcRateLimited),
+  });
+}
 
-const replyAudioUserLimit = rateLimit({
-  points: 30,
-  duration: 60,
-  keyFn: (c) => {
-    const uid = (c as { get: (k: 'user') => { user_id: string } | undefined }).get('user')?.user_id;
-    return uid ? `th-reply-audio:user:${uid}` : '';
-  },
-});
+function replyAudioUserLimit(onUgcRateLimited?: (userId: string) => void | Promise<void>) {
+  return rateLimit({
+    points: 30,
+    duration: 60,
+    keyFn: (c) => {
+      const uid = (c as { get: (k: 'user') => { user_id: string } | undefined }).get('user')?.user_id;
+      return uid ? `th-reply-audio:user:${uid}` : '';
+    },
+    onLimited: ugcRateLimitedHook(onUgcRateLimited),
+  });
+}
 
 export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   const routes = createOpenApiApp();
   const writeClient = deps.requireApprovedClient ? [deps.requireApprovedClient] : [];
+  const submitLimit = submitUserLimit(deps.onUgcRateLimited);
+  const replyLimit = replyUserLimit(deps.onUgcRateLimited);
+  const replyAudioLimit = replyAudioUserLimit(deps.onUgcRateLimited);
 
   routes.use('/upload-token', deps.authenticate, ...writeClient, tokenUserLimit, tokenIpLimit);
   routes.use('/', async (c, next) => {
@@ -95,7 +117,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   });
   routes.use('/', async (c, next) => {
     if (c.req.method !== 'POST') return next();
-    return submitUserLimit(c, next);
+    return submitLimit(c, next);
   });
   routes.use('/my', deps.authenticate);
   routes.use('/:id', deps.optionalAuthenticate);
@@ -103,7 +125,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     '/:id/audio',
     deps.authenticate,
     ...writeClient,
-    replyAudioUserLimit,
+    replyAudioLimit,
     bodyLimit({
       maxSize: 6 * 1024 * 1024,
       onError: (c) =>
@@ -121,7 +143,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     '/:id/replies/audio',
     deps.authenticate,
     ...writeClient,
-    replyAudioUserLimit,
+    replyAudioLimit,
     bodyLimit({
       maxSize: 6 * 1024 * 1024,
       onError: (c) =>
@@ -135,7 +157,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
         ),
     }),
   );
-  routes.use('/:id/replies', deps.authenticate, ...writeClient, replyUserLimit);
+  routes.use('/:id/replies', deps.authenticate, ...writeClient, replyLimit);
   routes.use('/replies/:id', deps.authenticate, ...writeClient);
 
   const uploadTokenRoute = createRoute({
