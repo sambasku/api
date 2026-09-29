@@ -35,12 +35,19 @@ export const activityItemSchema = z.object({
     'example',
     'search_miss',
     'welcome',
+    'card_share',
+    'suggestion',
   ]),
   created_at: z.string(),
   actor: activityActorSchema,
   body: z.string(),
   subtitle: z.string().nullable(),
   target: activityTargetSchema,
+});
+
+export const recordCardShareResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ recorded: z.boolean() }),
 });
 
 export const listActivityResponseSchema = z.object({

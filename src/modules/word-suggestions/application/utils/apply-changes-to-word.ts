@@ -15,6 +15,23 @@ import {
 } from '@/shared/database/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 
+/** Foto utama terhapus tanpa pengganti: foto tersisa paling lama jadi utama. */
+async function ensurePrimaryImage(wordId: string): Promise<void> {
+  const active = and(eq(wordImages.wordId, wordId), isNull(wordImages.deletedAt));
+  const primary = await db.query.wordImages.findFirst({
+    where: and(active, eq(wordImages.isPrimary, true)),
+    columns: { id: true },
+  });
+  if (primary) return;
+  const oldest = await db.query.wordImages.findFirst({
+    where: active,
+    orderBy: (w, { asc }) => [asc(w.createdAt)],
+    columns: { id: true },
+  });
+  if (!oldest) return;
+  await db.update(wordImages).set({ isPrimary: true }).where(eq(wordImages.id, oldest.id));
+}
+
 export interface ApplyResult {
   applied: boolean;
   changesApplied: number;
@@ -48,7 +65,7 @@ export async function applyChangesToWord(
 
   const word = await db.query.words.findFirst({
     where: and(eq(words.id, suggestion.wordId), isNull(words.deletedAt)),
-    columns: { id: true, lemma: true, notes: true },
+    columns: { id: true, lemma: true, notes: true, isVerified: true },
   });
 
   if (!word) throw new NotFoundError('WORD_NOT_FOUND', 'Kata tidak ditemukan');
@@ -132,6 +149,27 @@ export async function applyChangesToWord(
           }
           if (mc.translations && mc.translations.length > 0) {
             for (const t of mc.translations) {
+              // Kata belum terverifikasi: padanan bahasa yang sama diganti di baris
+              // yang sama (restoreBaseline mengembalikan lewat id). Terverifikasi: tambah.
+              if (!word.isVerified) {
+                const current = await db.query.meaningTranslations.findFirst({
+                  where: and(
+                    eq(meaningTranslations.meaningId, mc.meaningId),
+                    eq(meaningTranslations.languageId, t.languageId),
+                    isNull(meaningTranslations.deletedAt),
+                  ),
+                });
+                if (current) {
+                  if (current.translationText !== t.translationText) {
+                    await db
+                      .update(meaningTranslations)
+                      .set({ translationText: t.translationText, updatedAt: new Date() })
+                      .where(eq(meaningTranslations.id, current.id));
+                    changesApplied++;
+                  }
+                  continue;
+                }
+              }
               const exists = await db.query.meaningTranslations.findFirst({
                 where: and(
                   eq(meaningTranslations.meaningId, mc.meaningId),
@@ -363,6 +401,7 @@ export async function applyChangesToWord(
         changesApplied++;
       }
     }
+    if (imageAudit.removed.length > 0) await ensurePrimaryImage(word.id);
     newAudit.images = imageAudit;
   }
 

@@ -33,4 +33,18 @@ export interface ActivityRepository {
     limit: number,
     before?: ActivityCursor,
   ): Promise<ActivityItem[]>;
+  listRecentCardShares(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]>;
+  /** Usulan yang sudah tayang (disetujui, atau tayang dulu via baseline). */
+  listRecentAppliedSuggestions(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]>;
+  /** Catat share kartu; `duplicate` jika user+kata sudah tercatat dalam 24 jam. */
+  recordCardShare(
+    userId: string,
+    wordId: string,
+  ): Promise<'recorded' | 'duplicate' | 'word_not_found'>;
 }

@@ -9,7 +9,9 @@ export type ActivityKind =
   | 'pronunciation'
   | 'example'
   | 'search_miss'
-  | 'welcome';
+  | 'welcome'
+  | 'card_share'
+  | 'suggestion';
 
 export interface ActivityActor {
   username: string | null;

@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull, inArray, lt, asc } from 'drizzle-orm';
+import { eq, and, desc, isNull, inArray, notInArray, lt, asc, or } from 'drizzle-orm';
 import { db } from '@/shared/database/drizzle/client';
 import {
   words,
@@ -26,6 +26,12 @@ import type {
 } from '../domain/entities/word-suggestion.entity';
 import { NotFoundError, ForbiddenError, BadRequestError, ConflictError } from '@/shared/errors/app-error';
 import { verifyProposedChanges } from '../application/utils/verify-proposed-changes';
+import { isRevertibleForApplyPending } from '../application/utils/suggestion-category-shape';
+import {
+  LEGACY_REASON_CODES,
+  REASON_CODE_LABELS,
+  isSuggestionCategory,
+} from '../domain/entities/word-suggestion.entity';
 import { applyChangesToWord } from '../application/utils/apply-changes-to-word';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import {
@@ -75,7 +81,7 @@ async function captureBaseline(
   isVerified: boolean,
 ) {
   const meaningRows = await db
-    .select({ id: meanings.id, definition: meanings.definition })
+    .select({ id: meanings.id, definition: meanings.definition, wordClassId: meanings.wordClassId })
     .from(meanings)
     .where(and(eq(meanings.wordId, wordId), isNull(meanings.deletedAt)));
   const meaningIds = meaningRows.map((m) => m.id);
@@ -96,6 +102,7 @@ async function captureBaseline(
     meanings: meaningRows.map((m) => ({
       id: m.id,
       definition: m.definition,
+      wordClassId: m.wordClassId as string | null | undefined,
       translations: translationRows
         .filter((t) => t.meaningId === m.id)
         .map((t) => ({ id: t.id, translationText: t.translationText })),
@@ -103,29 +110,174 @@ async function captureBaseline(
   };
 }
 
-async function restoreBaseline(wordId: string, raw: unknown): Promise<void> {
+const STALE_MESSAGE = 'Data kata sudah berubah. Muat ulang lalu coba lagi.';
+
+/**
+ * ID makna/foto/relasi/variasi yang diubah atau dihapus harus masih milik
+ * kata ini. Tanpa ini ID basi dilewati diam-diam saat apply (nol perubahan).
+ * Ubah makna yang isinya sama persis dengan data sekarang juga ditolak.
+ */
+async function assertProposedTargetsCurrent(wordId: string, c: ProposedChanges): Promise<void> {
+  const stale = () => new ConflictError('SUGGESTION_STALE_DATA', STALE_MESSAGE);
+
+  const meaningIds = [
+    ...new Set((c.meanings ?? []).filter((m) => m.meaningId).map((m) => m.meaningId!)),
+  ];
+  if (meaningIds.length > 0) {
+    const rows = await db
+      .select({ id: meanings.id, definition: meanings.definition, wordClassId: meanings.wordClassId })
+      .from(meanings)
+      .where(
+        and(inArray(meanings.id, meaningIds), eq(meanings.wordId, wordId), isNull(meanings.deletedAt)),
+      );
+    if (rows.length !== meaningIds.length) throw stale();
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const translations = await db
+      .select({
+        meaningId: meaningTranslations.meaningId,
+        languageId: meaningTranslations.languageId,
+        translationText: meaningTranslations.translationText,
+      })
+      .from(meaningTranslations)
+      .where(
+        and(inArray(meaningTranslations.meaningId, meaningIds), isNull(meaningTranslations.deletedAt)),
+      );
+    for (const mc of c.meanings ?? []) {
+      if (mc.action !== 'update' || !mc.meaningId) continue;
+      const cur = byId.get(mc.meaningId)!;
+      const changed =
+        (mc.definition !== undefined && mc.definition.trim() !== (cur.definition ?? '').trim()) ||
+        (mc.wordClassId !== undefined && mc.wordClassId !== cur.wordClassId) ||
+        (mc.translations ?? []).some(
+          (t) =>
+            !translations.some(
+              (x) =>
+                x.meaningId === mc.meaningId &&
+                x.languageId === t.languageId &&
+                x.translationText.trim() === t.translationText.trim(),
+            ),
+        );
+      if (!changed) {
+        throw new BadRequestError('SUGGESTION_NO_CHANGES', 'Tidak ada yang berubah dari data sekarang', [
+          { field: 'meanings', message: 'Isi masih sama dengan data sekarang' },
+        ]);
+      }
+    }
+  }
+
+  const imageIds = [
+    ...new Set(
+      (c.images ?? [])
+        .filter((i) => (i.action === 'remove' || i.action === 'set_primary') && i.imageId)
+        .map((i) => i.imageId!),
+    ),
+  ];
+  if (imageIds.length > 0) {
+    const rows = await db
+      .select({ id: wordImages.id })
+      .from(wordImages)
+      .where(
+        and(inArray(wordImages.id, imageIds), eq(wordImages.wordId, wordId), isNull(wordImages.deletedAt)),
+      );
+    if (rows.length !== imageIds.length) throw stale();
+  }
+
+  for (const rel of c.relations ?? []) {
+    if (rel.action !== 'remove') continue;
+    const [row] = await db
+      .select({ id: lexicalRelations.id })
+      .from(lexicalRelations)
+      .where(
+        and(
+          eq(lexicalRelations.sourceWordId, wordId),
+          eq(lexicalRelations.targetWordId, rel.wordId),
+          eq(lexicalRelations.relationType, rel.relationType),
+          isNull(lexicalRelations.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) throw stale();
+  }
+
+  for (const v of c.variants ?? []) {
+    if (v.action !== 'remove') continue;
+    const [row] = await db
+      .select({ id: wordVariants.id })
+      .from(wordVariants)
+      .where(
+        and(
+          eq(wordVariants.wordId, wordId),
+          eq(wordVariants.form, v.form.trim()),
+          isNull(wordVariants.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) throw stale();
+  }
+}
+
+/**
+ * Kembalikan hanya field yang disentuh usulan ini. Usulan lain (kategori
+ * berbeda) bisa tayang bersamaan di kata yang sama. `is_verified` tidak
+ * disentuh: apply_pending tidak mengubahnya, dan menimpanya balik bisa
+ * mencabut verifikasi dari usulan lain yang sudah disetujui.
+ */
+export async function restoreBaseline(
+  wordId: string,
+  raw: unknown,
+  proposed: ProposedChanges,
+): Promise<void> {
   const snap = raw as Awaited<ReturnType<typeof captureBaseline>> | null;
   if (!snap || typeof snap !== 'object' || !snap.lemma) return;
-  await db
-    .update(words)
-    .set({
-      lemma: snap.lemma,
-      notes: snap.notes,
-      isVerified: snap.isVerified,
-      updatedAt: new Date(),
-    })
-    .where(eq(words.id, wordId));
-  for (const meaning of snap.meanings ?? []) {
+
+  const wordPatch: { lemma?: string; notes?: string | null } = {};
+  if (proposed.lemma !== undefined) wordPatch.lemma = snap.lemma;
+  if (proposed.notes !== undefined) wordPatch.notes = snap.notes;
+  if (Object.keys(wordPatch).length > 0) {
     await db
-      .update(meanings)
-      .set({ definition: meaning.definition, updatedAt: new Date() })
-      .where(eq(meanings.id, meaning.id));
-    for (const translation of meaning.translations ?? []) {
+      .update(words)
+      .set({ ...wordPatch, updatedAt: new Date() })
+      .where(eq(words.id, wordId));
+  }
+
+  const snapById = new Map((snap.meanings ?? []).map((m) => [m.id, m]));
+  for (const mc of proposed.meanings ?? []) {
+    if (mc.action !== 'update' || !mc.meaningId) continue;
+    const meaning = snapById.get(mc.meaningId);
+    if (!meaning) continue;
+
+    const patch: { definition?: string; wordClassId?: string | null } = {};
+    if (mc.definition !== undefined) patch.definition = meaning.definition;
+    // Snapshot lama belum menyimpan kelas kata: lewati.
+    if (mc.wordClassId !== undefined && meaning.wordClassId !== undefined) {
+      patch.wordClassId = meaning.wordClassId;
+    }
+    if (Object.keys(patch).length > 0) {
+      await db
+        .update(meanings)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(meanings.id, meaning.id));
+    }
+
+    if (!mc.translations?.length) continue;
+    const keepIds = meaning.translations.map((t) => t.id);
+    for (const translation of meaning.translations) {
       await db
         .update(meaningTranslations)
         .set({ translationText: translation.translationText, updatedAt: new Date() })
         .where(eq(meaningTranslations.id, translation.id));
     }
+    // Padanan yang baru ditambahkan usulan ini (tidak ada di snapshot).
+    await db
+      .update(meaningTranslations)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(meaningTranslations.meaningId, meaning.id),
+          isNull(meaningTranslations.deletedAt),
+          keepIds.length > 0 ? notInArray(meaningTranslations.id, keepIds) : undefined,
+        ),
+      );
   }
 }
 
@@ -241,7 +393,29 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
   };
 }
 
-function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot): DiffResult {
+async function relationLemmas(
+  proposed: ProposedChanges,
+  current: CurrentWordSnapshot,
+): Promise<Map<string, string>> {
+  const known = new Map(current.relations.map((relation) => [relation.wordId, relation.lemma]));
+  const missing = [
+    ...new Set(
+      (proposed.relations ?? [])
+        .map((relation) => relation.wordId)
+        .filter((wordId) => !known.get(wordId)),
+    ),
+  ];
+  if (missing.length === 0) return known;
+
+  const rows = await db
+    .select({ id: words.id, lemma: words.lemma })
+    .from(words)
+    .where(inArray(words.id, missing));
+  for (const row of rows) known.set(row.id, row.lemma);
+  return known;
+}
+
+async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot): Promise<DiffResult> {
   const lemma: DiffResult['lemma'] = {
     current: current.lemma,
     proposed: proposed.lemma ?? null,
@@ -278,19 +452,20 @@ function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot): Dif
   }
 
   const curCats = new Set(current.categoryIds);
+  const lemmaOf = await relationLemmas(proposed, current);
   const relAdded = (proposed.relations ?? [])
     .filter((r) => r.action === 'add')
     .map((r) => ({
       relationType: r.relationType,
       wordId: r.wordId,
-      lemma: current.relations.find((c) => c.wordId === r.wordId)?.lemma,
+      lemma: lemmaOf.get(r.wordId),
     }));
   const relRemoved = (proposed.relations ?? [])
     .filter((r) => r.action === 'remove')
     .map((r) => ({
       relationType: r.relationType,
       wordId: r.wordId,
-      lemma: current.relations.find((c) => c.wordId === r.wordId)?.lemma,
+      lemma: lemmaOf.get(r.wordId),
     }));
 
   return {
@@ -339,6 +514,15 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     private readonly imageStorage: ImageStoragePort,
   ) {}
 
+  async getWordUsageLabels(wordId: string): Promise<string[]> {
+    const [row] = await db
+      .select({ usageLabels: words.usageLabels })
+      .from(words)
+      .where(eq(words.id, wordId))
+      .limit(1);
+    return Array.isArray(row?.usageLabels) ? (row.usageLabels as string[]) : [];
+  }
+
   async createSuggestion(
     userId: string,
     wordId: string,
@@ -380,6 +564,9 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       );
     }
 
+    // Kategori: satu pending per kata per kategori. Kode lama (campuran)
+    // menahan dan tertahan oleh semua usulan.
+    const isCategory = isSuggestionCategory(reasonCode);
     const [open] = await db
       .select({ id: wordEditSuggestions.id })
       .from(wordEditSuggestions)
@@ -388,20 +575,33 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           eq(wordEditSuggestions.wordId, wordId),
           eq(wordEditSuggestions.status, 'pending'),
           isNull(wordEditSuggestions.deletedAt),
+          isCategory
+            ? or(
+                eq(wordEditSuggestions.reasonCode, reasonCode),
+                inArray(wordEditSuggestions.reasonCode, [...LEGACY_REASON_CODES]),
+              )
+            : undefined,
         ),
       )
       .limit(1);
     if (open) {
+      const label = isCategory
+        ? `usulan ${REASON_CODE_LABELS[reasonCode as SuggestionReasonCode].toLowerCase()}`
+        : 'usulan';
       throw new ConflictError(
         'SUGGESTION_ALREADY_PENDING',
-        'Kata ini sudah punya usulan yang belum selesai. Tunggu pemeriksaan tim sebelum mengirim usulan lain.',
+        `Kata ini sudah punya ${label} yang belum selesai. Tunggu pemeriksaan tim sebelum mengirim usulan lain.`,
       );
     }
 
+    await assertProposedTargetsCurrent(wordId, proposedChanges);
+
     const selfApply = Boolean(actorRole && isVerifierRole(actorRole));
-    // Kontributor pada kata belum verified: tayang dulu, antrean tetap pending.
+    // Kontributor pada kata belum verified: tayang dulu, antrean tetap pending,
+    // hanya jika penolakan bisa mengembalikan semuanya.
     // Verifikator: skip apply_pending - langsung approve di bawah.
-    const applyPendingNow = !selfApply && !word.isVerified;
+    const applyPendingNow =
+      !selfApply && !word.isVerified && isRevertibleForApplyPending(proposedChanges);
     const baseline = applyPendingNow
       ? await captureBaseline(wordId, word.lemma, word.notes, word.isVerified)
       : null;
@@ -673,7 +873,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         wordLemma: row.lemma,
       },
       currentWord: current,
-      diff: buildDiff(proposed, current),
+      diff: await buildDiff(proposed, current),
     };
   }
 
@@ -802,7 +1002,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     const proposed = asProposed(current.proposedChanges);
     await deleteProposedStagingImages(proposed, this.imageStorage);
     if (current.baselineSnapshot) {
-      await restoreBaseline(current.wordId, current.baselineSnapshot);
+      await restoreBaseline(current.wordId, current.baselineSnapshot, proposed);
       await this.softDeleteAppliedStagingImages(current.wordId, proposed);
     }
 

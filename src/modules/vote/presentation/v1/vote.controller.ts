@@ -7,8 +7,9 @@ import type { GetVoteCountsUseCase } from '../../application/use-cases/get-vote-
 import type { GetMyVotesUseCase } from '../../application/use-cases/get-my-votes.use-case';
 import type { ListMyVoteHistoryUseCase } from '../../application/use-cases/list-my-vote-history.use-case';
 import type { GetVoteDeckUseCase } from '../../application/use-cases/get-vote-deck.use-case';
+import type { SkipVoteDeckWordUseCase } from '../../application/use-cases/skip-vote-deck-word.use-case';
 import type { VoteTarget } from '../../domain/repositories/vote.repository';
-import type { ToggleVoteBody, VoteDeckQuery, VoteHistoryQuery } from './validators/vote.validator';
+import type { SkipVoteDeckBody, ToggleVoteBody, VoteDeckQuery, VoteHistoryQuery } from './validators/vote.validator';
 
 // Semua role boleh vote (08-api-upvote-downvote.md) - tidak ada gate role
 // di controller; 401 sudah ditangani middleware authenticate.
@@ -20,6 +21,7 @@ export class VoteController {
       myVotes: GetMyVotesUseCase;
       history: ListMyVoteHistoryUseCase;
       deck: GetVoteDeckUseCase;
+      skipDeck: SkipVoteDeckWordUseCase;
     },
   ) {}
 
@@ -118,6 +120,26 @@ export class VoteController {
         downvotes: w.downvotes,
       })),
       meta: page.meta,
+    });
+  }
+
+  /** POST /api/v1/votes/skips - lewati kartu deck tanpa vote */
+  async skipDeck(c: Context, body: SkipVoteDeckBody) {
+    const user = this.requireUser(c);
+    await this.deps.skipDeck.skip(user.user_id, body.word_id);
+    return c.json({
+      success: true as const,
+      data: { word_id: body.word_id, skipped: true },
+    });
+  }
+
+  /** DELETE /api/v1/votes/skips/:wordId - undo skip deck */
+  async unskipDeck(c: Context, wordId: string) {
+    const user = this.requireUser(c);
+    await this.deps.skipDeck.unskip(user.user_id, wordId);
+    return c.json({
+      success: true as const,
+      data: { word_id: wordId, skipped: false },
     });
   }
 

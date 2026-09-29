@@ -115,6 +115,39 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
       .set({ avatarUrl: null, emailVerified: true })
       .where(eq(users.id, userId));
     void username;
+
+    const login = await post('/api/v1/auth/login', {
+      email: `act${stamp}@test.com`,
+      password: 'Password123',
+    });
+    token = ((await login.json()) as { data: { access_token: string } }).data.access_token;
+    sharedWordId = wordId;
+  });
+
+  let token = '';
+  let sharedWordId = '';
+
+  it('POST /words/:id/card-shares: 201 lalu 200 (dedupe 24 jam), muncul di feed', async () => {
+    const share = () =>
+      request(`/api/v1/words/${sharedWordId}/card-shares`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}` },
+      });
+    const first = await share();
+    expect(first.status).toBe(201);
+    expect((await first.json()).data.recorded).toBe(true);
+
+    const again = await share();
+    expect(again.status).toBe(200);
+    expect((await again.json()).data.recorded).toBe(false);
+
+    const anon = await request(`/api/v1/words/${sharedWordId}/card-shares`, { method: 'POST' });
+    expect(anon.status).toBe(401);
+
+    const feed = await (await get('/api/v1/activity?limit=50')).json();
+    const shares = feed.data.filter((i: { kind: string }) => i.kind === 'card_share');
+    expect(shares).toHaveLength(1);
+    expect(shares[0].body).toMatch(/^Membagikan kartu · lemmaact/);
   });
 
   it('GET /activity publik 200, tanpa email, search_miss actor null', async () => {

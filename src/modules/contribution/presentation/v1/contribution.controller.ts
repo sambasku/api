@@ -10,6 +10,7 @@ import type {
 } from '../../application/use-cases/review-contribution.use-case';
 import type { CorrectContributionUseCase } from '../../application/use-cases/correct-contribution.use-case';
 import type { ReopenContributionUseCase } from '../../application/use-cases/reopen-contribution.use-case';
+import type { SkipContributionUseCase } from '../../application/use-cases/skip-contribution.use-case';
 import {
   approveContributionSchema,
   type ApproveContributionBody,
@@ -89,6 +90,7 @@ export class ContributionController {
       review: ReviewContributionUseCase;
       correct: CorrectContributionUseCase;
       reopen: ReopenContributionUseCase;
+      skip: SkipContributionUseCase;
       /** provider gambar aktif - untuk mapping koreksi entity word */
       imageProviderName: string;
     },
@@ -105,6 +107,7 @@ export class ContributionController {
       mine: query.mine === true,
       viewerId: actor.userId,
       viewerIsElevated: elevated,
+      hideSkipped: query.hide_skipped === true,
       limit: query.limit,
       cursor: query.cursor,
     });
@@ -228,6 +231,24 @@ export class ContributionController {
       requestId: actor.requestId,
     });
     return decisionResponse(c, outcome);
+  }
+
+  async skip(c: Context, id: string) {
+    const actor = this.requireActor(c);
+    await this.deps.skip.skip(actor.userId, id);
+    return c.json({
+      success: true as const,
+      data: { id, skipped: true },
+    });
+  }
+
+  async unskip(c: Context, id: string) {
+    const actor = this.requireActor(c);
+    await this.deps.skip.unskip(actor.userId, id);
+    return c.json({
+      success: true as const,
+      data: { id, skipped: false },
+    });
   }
 
   async correct(c: Context, id: string, body: CorrectContributionBody) {

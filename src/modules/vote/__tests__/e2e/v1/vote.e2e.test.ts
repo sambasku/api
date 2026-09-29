@@ -390,4 +390,59 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     const body2 = (await deck2.json()) as { data: { id: string }[] };
     expect(body2.data.some((w) => w.id === deckWordId)).toBe(false);
   });
+
+  it('POST /votes/skips: kata hilang dari deck user itu, vote count tidak naik, undo mengembalikan', async () => {
+    const create = await post('/api/v1/admin/words', validWordBody('kata diskip'), adminToken);
+    expect(create.status).toBe(201);
+    const skippedWordId = ((await create.json()) as { data: { word_id: string } }).data.word_id;
+
+    expect((await post('/api/v1/votes/skips', { word_id: skippedWordId })).status).toBe(401);
+
+    const missing = await post(
+      '/api/v1/votes/skips',
+      { word_id: ulid26('01TIDAKADA') },
+      contributorToken,
+    );
+    expect(missing.status).toBe(404);
+
+    const skip = await post('/api/v1/votes/skips', { word_id: skippedWordId }, contributorToken);
+    expect(skip.status).toBe(200);
+    expect(await skip.json()).toMatchObject({
+      success: true,
+      data: { word_id: skippedWordId, skipped: true },
+    });
+    expect((await post('/api/v1/votes/skips', { word_id: skippedWordId }, contributorToken)).status).toBe(200);
+
+    const counts = await get(`/api/v1/votes/counts?targets=word:${skippedWordId}`);
+    expect(await counts.json()).toMatchObject({
+      data: [{ target_type: 'word', target_id: skippedWordId, upvotes: 0, downvotes: 0 }],
+    });
+
+    const deck = await get('/api/v1/votes/deck?limit=20', contributorToken);
+    const deckBody = (await deck.json()) as { data: { id: string }[] };
+    expect(deckBody.data.some((w) => w.id === skippedWordId)).toBe(false);
+
+    const stamp = Date.now();
+    const email = `lain${stamp}@test.com`;
+    await post('/api/v1/auth/register', e2eRegisterBody({ name: `lain${stamp}`, email }));
+    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
+    const { users } = await import('@/shared/database/drizzle/schema');
+    await getTestDb().update(users).set({ emailVerified: true }).where(eq(users.email, email));
+    const otherLogin = await post('/api/v1/auth/login', { email, password: 'Password123' });
+    const otherToken = ((await otherLogin.json()) as { data: { access_token: string } }).data.access_token;
+    const otherDeck = await get('/api/v1/votes/deck?limit=20', otherToken);
+    const otherBody = (await otherDeck.json()) as { data: { id: string }[] };
+    expect(otherBody.data.some((w) => w.id === skippedWordId)).toBe(true);
+
+    const undo = await request(`/api/v1/votes/skips/${skippedWordId}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${contributorToken}` },
+    });
+    expect(undo.status).toBe(200);
+    expect(await undo.json()).toMatchObject({ data: { word_id: skippedWordId, skipped: false } });
+
+    const deckBack = await get('/api/v1/votes/deck?limit=20', contributorToken);
+    const backBody = (await deckBack.json()) as { data: { id: string }[] };
+    expect(backBody.data.some((w) => w.id === skippedWordId)).toBe(true);
+  });
 });

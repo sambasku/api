@@ -164,11 +164,13 @@ import {
 import { WordSuggestionController } from '@/modules/word-suggestions/presentation/v1/word-suggestions.controller';
 import { WordSuggestionRepositoryImpl } from '@/modules/word-suggestions/infrastructure/word-suggestion.repository.impl';
 import { ContributionRepositoryImpl } from '@/modules/contribution/infrastructure/contribution.repository.impl';
+import { UserSkipRepository } from '@/modules/user-skip/infrastructure/user-skip.repository';
 import { ListContributionsUseCase } from '@/modules/contribution/application/use-cases/list-contributions.use-case';
 import { GetContributionDetailUseCase } from '@/modules/contribution/application/use-cases/get-contribution-detail.use-case';
 import { ReviewContributionUseCase } from '@/modules/contribution/application/use-cases/review-contribution.use-case';
 import { CorrectContributionUseCase } from '@/modules/contribution/application/use-cases/correct-contribution.use-case';
 import { ReopenContributionUseCase } from '@/modules/contribution/application/use-cases/reopen-contribution.use-case';
+import { SkipContributionUseCase } from '@/modules/contribution/application/use-cases/skip-contribution.use-case';
 import { ContributionController } from '@/modules/contribution/presentation/v1/contribution.controller';
 import { createContributionRoutes } from '@/modules/contribution/presentation/v1/contribution.routes';
 import { createMyContributionRoutes } from '@/modules/contribution/presentation/v1/my-contribution.routes';
@@ -258,6 +260,7 @@ import { GetVoteCountsUseCase } from '@/modules/vote/application/use-cases/get-v
 import { GetMyVotesUseCase } from '@/modules/vote/application/use-cases/get-my-votes.use-case';
 import { ListMyVoteHistoryUseCase } from '@/modules/vote/application/use-cases/list-my-vote-history.use-case';
 import { GetVoteDeckUseCase } from '@/modules/vote/application/use-cases/get-vote-deck.use-case';
+import { SkipVoteDeckWordUseCase } from '@/modules/vote/application/use-cases/skip-vote-deck-word.use-case';
 import { VoteController } from '@/modules/vote/presentation/v1/vote.controller';
 import { createVoteRoutes } from '@/modules/vote/presentation/v1/vote.routes';
 import { AdminVotesController } from '@/modules/vote/presentation/v1/admin-vote.controller';
@@ -341,7 +344,11 @@ import { createShareRoutes } from '@/modules/share/presentation/v1/share.routes'
 import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
 import { ListActivityUseCase } from '@/modules/activity/application/use-cases/list-activity.use-case';
 import { ActivityController } from '@/modules/activity/presentation/v1/activity.controller';
-import { createActivityRoutes } from '@/modules/activity/presentation/v1/activity.routes';
+import {
+  createActivityRoutes,
+  createCardShareRoutes,
+} from '@/modules/activity/presentation/v1/activity.routes';
+import { RecordCardShareUseCase } from '@/modules/activity/application/use-cases/record-card-share.use-case';
 import { VerifierApplicationRepositoryImpl } from '@/modules/verifier-application/infrastructure/verifier-application.repository.impl';
 import { CreateVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/create-verifier-application.use-case';
 import { GetMyVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/get-my-verifier-application.use-case';
@@ -583,6 +590,7 @@ const onAnonRateLimited = async (ctx: { clientIp: string; deviceId: string | nul
 };
 const publishWord = new PublishWordUseCase(wordRepo, auditRepo);
 const softDeleteWord = new SoftDeleteWordUseCase(wordRepo, auditRepo);
+const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
 const wordController = new WordController({
   create: new CreateWordUseCase(
     wordRepo,
@@ -612,7 +620,7 @@ const wordController = new WordController({
   restoreWord,
   addPronunciation: new AddPronunciationUseCase(wordRepo, auditRepo),
   addWordImage: new AddWordImageUseCase(wordRepo, auditRepo, publicImageStorage.providerName),
-  addExample: new AddExampleUseCase(wordRepo, auditRepo),
+  addExample: new AddExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
   importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo),
   batchContributeWords: new BatchContributeWordsUseCase(
@@ -650,6 +658,7 @@ const wordController = new WordController({
 // 03-api-kontribusi-verifikasi.md). Baca entity word lewat interface
 // WordRepository (batas modul Section 4). ----
 const contributionRepo = new ContributionRepositoryImpl(db);
+const userSkipRepo = new UserSkipRepository(db);
 const contributionController = new ContributionController({
   list: new ListContributionsUseCase(contributionRepo),
   getDetail: new GetContributionDetailUseCase(contributionRepo, wordRepo),
@@ -666,6 +675,7 @@ const contributionController = new ContributionController({
   ),
   correct: new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo, recordInbox),
   reopen: new ReopenContributionUseCase(contributionRepo, auditRepo),
+  skip: new SkipContributionUseCase(contributionRepo, userSkipRepo),
   imageProviderName: publicImageStorage.providerName,
 });
 
@@ -712,6 +722,7 @@ const voteController = new VoteController({
   myVotes: new GetMyVotesUseCase(voteRepo),
   history: new ListMyVoteHistoryUseCase(voteRepo),
   deck: new GetVoteDeckUseCase(voteRepo),
+  skipDeck: new SkipVoteDeckWordUseCase(voteRepo, userSkipRepo),
 });
 
 // Panel moderasi vote (hapus vote spam + reset massal anti-brigading) -
@@ -733,7 +744,6 @@ const dashboardController = new DashboardController({
 
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----
 const commentRepo = new CommentRepositoryImpl(db);
-const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
 const wordCommentPushCooldown = new WordCommentPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
@@ -809,6 +819,7 @@ const suggestionRepo = new WordSuggestionRepositoryImpl(publicImageStorage, imag
 const suggestionController = new WordSuggestionController({
   repository: suggestionRepo,
   inbox: recordInbox,
+  blocklist: commentBlocklistRepo,
 });
 const myContributionController = new MyContributionController({
   listMine: new ListMyContributionsUseCase(contributionRepo, suggestionRepo),
@@ -1217,6 +1228,7 @@ const discussionController = new DiscussionController({
     recordInbox,
     notifyUser,
     recordAbuseSignal,
+    commentBlocklistRepo,
   ),
   listPublished: new ListPublishedDiscussionsUseCase(discussionRepo, voteRepo),
   listMine: new ListMyDiscussionsUseCase(discussionRepo),
@@ -1428,9 +1440,11 @@ app.route(
 // Feed lintas aktivitas publik (37-api-activity-feed.md). Beranda mobile.
 const activityRepo = new ActivityRepositoryImpl(db);
 const activityController = new ActivityController({
-  list: new ListActivityUseCase(activityRepo),
+  list: new ListActivityUseCase(activityRepo, commentBlocklistRepo),
+  recordCardShare: new RecordCardShareUseCase(activityRepo),
 });
 app.route('/api/v1/activity', createActivityRoutes({ controller: activityController }));
+app.route('/api/v1/words', createCardShareRoutes({ controller: activityController, authenticate }));
 
 // Latar kartu share - multi-provider (docs/backlogs/SHARE.md). Publik.
 const shareBackgroundProviders = createShareBackgroundProviderRegistry();

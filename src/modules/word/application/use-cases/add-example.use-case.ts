@@ -4,6 +4,10 @@ import type { WordRepository, ExampleMedia } from '../../domain/repositories/wor
 import { resolveChildPublication } from '../utils/resolve-publication';
 import { assertCanContribute } from '../utils/assert-can-contribute';
 import type { Actor } from './create-word.use-case';
+import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
+import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import { hasFeedExcludedUsageLabels } from '@/shared/constants/usage-labels';
+import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
 
 export interface AddExampleDto {
   sourceLanguageId: string;
@@ -20,6 +24,7 @@ export class AddExampleUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>,
   ) {}
 
   async execute(meaningId: string, dto: AddExampleDto, actor: Actor): Promise<ExampleMedia> {
@@ -28,6 +33,7 @@ export class AddExampleUseCase {
     if (!meaning) {
       throw new NotFoundError('MEANING_NOT_FOUND', 'Makna dengan id tersebut tidak ditemukan');
     }
+    dto = await this.censor(meaning.wordId, dto);
 
     // Bahasa sumber/target harus valid - FK violation di-repository jadi
     // 500 kalau tidak dicek di sini (pola findMissingReferences create-word)
@@ -68,5 +74,30 @@ export class AddExampleUseCase {
     });
 
     return media;
+  }
+
+  /** Aturan sama dengan teks usulan: kata berlabel terlarang tidak disaring. */
+  private async censor(wordId: string, dto: AddExampleDto): Promise<AddExampleDto> {
+    if (!this.blocklist) return dto;
+    const word = await this.wordRepo.findById(wordId);
+    if (hasFeedExcludedUsageLabels(word?.usageLabels)) return dto;
+    const blocked = await this.blocklist.listAllActiveWords();
+    if (blocked.length === 0) return dto;
+
+    const details: { field: string; message: string }[] = [];
+    const censor = (value: string, field: string) => {
+      const filtered = applyBlocklistFilter(value, blocked);
+      if (isHeavyCensor(value, filtered)) {
+        details.push({ field, message: 'Teks mengandung kata yang tidak pantas' });
+      }
+      return filtered;
+    };
+    const out: AddExampleDto = {
+      ...dto,
+      sourceSentence: censor(dto.sourceSentence, 'source_sentence'),
+      targetSentence: dto.targetSentence ? censor(dto.targetSentence, 'target_sentence') : dto.targetSentence,
+    };
+    if (details.length > 0) throw new ValidationError(details);
+    return out;
   }
 }

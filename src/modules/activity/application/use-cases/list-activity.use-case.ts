@@ -1,4 +1,6 @@
 import { ValidationError } from '@/shared/errors/app-error';
+import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import type { ActivityItem } from '../../domain/entities/activity-item.entity';
 import type { ActivityRepository } from '../../domain/repositories/activity.repository';
 import {
@@ -17,14 +19,41 @@ const CONTRIB_ENTITY_TYPES = [
   'example',
 ] as const;
 
+/** Kind dengan teks bebas user di body: disensor saat dibaca. */
+const FREE_TEXT_KINDS = new Set(['comment', 'discussion']);
+
 export type ListActivityPage = {
   items: ActivityItem[];
   nextCursor: string | null;
   hasMore: boolean;
 };
 
+/**
+ * Sensor ulang saat baca: menutup data lama + kata blocklist yang baru ditambah.
+ * Search-miss yang kena blocklist dibuang (term = seluruh isi baris).
+ */
+export function censorFeedItems(items: ActivityItem[], blocked: string[]): ActivityItem[] {
+  if (blocked.length === 0) return items;
+  const out: ActivityItem[] = [];
+  for (const item of items) {
+    if (item.kind === 'search_miss') {
+      if (applyBlocklistFilter(item.body, blocked) === item.body) out.push(item);
+      continue;
+    }
+    out.push(
+      FREE_TEXT_KINDS.has(item.kind)
+        ? { ...item, body: applyBlocklistFilter(item.body, blocked) }
+        : item,
+    );
+  }
+  return out;
+}
+
 export class ListActivityUseCase {
-  constructor(private readonly activityRepo: ActivityRepository) {}
+  constructor(
+    private readonly activityRepo: ActivityRepository,
+    private readonly blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>,
+  ) {}
 
   async execute(
     limit = ACTIVITY_DEFAULT_LIMIT,
@@ -43,8 +72,8 @@ export class ListActivityUseCase {
 
     const perSource = ACTIVITY_PER_SOURCE;
 
-    const [words, comments, votes, discussions, contributions, searchMisses, welcomes] =
-      await Promise.all([
+    const [sources, blocked] = await Promise.all([
+      Promise.all([
         this.activityRepo.listRecentWords(perSource, before),
         this.activityRepo.listRecentComments(perSource, before),
         this.activityRepo.listRecentVotes(perSource, before),
@@ -56,20 +85,17 @@ export class ListActivityUseCase {
         ),
         this.activityRepo.listRecentVisibleSearchMisses(perSource, before),
         this.activityRepo.listRecentWelcomes(perSource, before),
-      ]);
+        this.activityRepo.listRecentCardShares(perSource, before),
+        this.activityRepo.listRecentAppliedSuggestions(perSource, before),
+      ]),
+      this.blocklist?.listAllActiveWords() ?? Promise.resolve([] as string[]),
+    ]);
 
-    const merged = mergeActivityFeed(
-      [
-        ...words,
-        ...comments,
-        ...votes,
-        ...discussions,
-        ...contributions,
-        ...searchMisses,
-        ...welcomes,
-      ],
-      { limit: limit + 1, before },
-    );
+    // Sensor sebelum merge: search-miss yang dibuang tidak ikut memakan slot.
+    const merged = mergeActivityFeed(censorFeedItems(sources.flat(), blocked), {
+      limit: limit + 1,
+      before,
+    });
 
     const hasMore = merged.length > limit;
     const items = hasMore ? merged.slice(0, limit) : merged;

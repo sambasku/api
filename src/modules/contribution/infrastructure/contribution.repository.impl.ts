@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, lt, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   contributionReviews,
   contributions,
@@ -7,6 +7,7 @@ import {
   meaningTranslations,
   pronunciations,
   searchMisses,
+  userSkips,
   users,
   wordAudios,
   wordImages,
@@ -145,6 +146,22 @@ export class ContributionRepositoryImpl implements ContributionRepository {
         ? or(isNull(contributions.reopenedBy), eq(contributions.reopenedBy, filter.viewerId))
         : undefined;
 
+    const hideSkipped =
+      filter.hideSkipped && filter.viewerId
+        ? notExists(
+            this.db
+              .select({ id: userSkips.id })
+              .from(userSkips)
+              .where(
+                and(
+                  eq(userSkips.userId, filter.viewerId),
+                  eq(userSkips.targetType, 'contribution'),
+                  eq(userSkips.targetId, contributions.id),
+                ),
+              ),
+          )
+        : undefined;
+
     const rows = await this.db
       .select(contributionColumns)
       .from(contributions)
@@ -160,6 +177,7 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           filter.cursor ? lt(contributions.id, filter.cursor) : undefined,
           mineScope,
           reopenVisibility,
+          hideSkipped,
         ),
       )
       .orderBy(desc(contributions.id))

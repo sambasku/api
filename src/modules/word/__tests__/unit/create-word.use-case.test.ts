@@ -581,6 +581,96 @@ describe('CreateWordUseCase', () => {
   });
 });
 
+describe('CreateWordUseCase - kualitas teks UGC', () => {
+  const smash = 'ababababababab';
+
+  it('definisi smash tidak menolak submit', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    const result = await useCase.execute(
+      makeDto({
+        meanings: [
+          {
+            wordClassId: '01WORDCLASSESNOMINA000000',
+            definition: smash,
+            orderIndex: 1,
+            translations: [
+              {
+                languageId: '01LANGUAGESINDONESIA00000',
+                translationText: 'makan',
+                translationType: 'direct',
+              },
+            ],
+          },
+        ],
+      }),
+      CONTRIBUTOR,
+    );
+    expect(result.word.lemma).toBe('makatn');
+    expect(wordRepo.saveWithRelations).toHaveBeenCalled();
+  });
+
+  it('terjemahan placeholder "-" lolos (kata belum punya padanan)', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    const result = await useCase.execute(
+      makeDto({
+        meanings: [
+          {
+            wordClassId: '01WORDCLASSESNOMINA000000',
+            definition: '-',
+            isHaveDefinition: false,
+            orderIndex: 1,
+            translations: [
+              {
+                languageId: '01LANGUAGESINDONESIA00000',
+                translationText: '-',
+                translationType: 'direct',
+              },
+            ],
+          },
+        ],
+      }),
+      ADMIN,
+    );
+    expect(result.word.lemma).toBe('makatn');
+    expect(wordRepo.saveWithRelations).toHaveBeenCalled();
+  });
+
+  it('terjemahan smash ditolak walau definisi placeholder', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    await expect(
+      useCase.execute(
+        makeDto({
+          meanings: [
+            {
+              wordClassId: '01WORDCLASSESNOMINA000000',
+              definition: '-',
+              isHaveDefinition: false,
+              orderIndex: 1,
+              translations: [
+                {
+                  languageId: '01LANGUAGESINDONESIA00000',
+                  translationText: smash,
+                  translationType: 'direct',
+                },
+              ],
+            },
+          ],
+        }),
+        CONTRIBUTOR,
+      ),
+    ).rejects.toMatchObject({ errorCode: 'UGC_INPUT_REJECTED' });
+    expect(wordRepo.saveWithRelations).not.toHaveBeenCalled();
+  });
+
+  it('lemma smash tetap ditolak', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    await expect(
+      useCase.execute(makeDto({ lemma: smash }), CONTRIBUTOR),
+    ).rejects.toMatchObject({ errorCode: 'UGC_INPUT_REJECTED' });
+    expect(wordRepo.saveWithRelations).not.toHaveBeenCalled();
+  });
+});
+
 describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
   const MISS_ID = '01JDSEARCHMISS0000000000000';
 

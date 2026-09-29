@@ -362,4 +362,77 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const adminBody = await adminMine.json();
     expect(adminBody.data.some((c: { id: string }) => c.id === item.id)).toBe(false);
   });
+
+  it('skip menyembunyikan usulan hanya untuk reviewer itu; status tetap pending', async () => {
+    const create = await post('/api/v1/admin/words', validWordBody('kata-skip'), contributorToken);
+    expect(create.status).toBe(201);
+    const wordId = ((await create.json()) as { data: { word_id: string } }).data.word_id;
+
+    const list = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word',
+      adminToken,
+    );
+    const item = ((await list.json()) as { data: { id: string; entity_id: string; status: string }[] }).data.find(
+      (c) => c.entity_id === wordId,
+    );
+    expect(item?.status).toBe('pending');
+    if (!item) return;
+
+    expect((await post(`/api/v1/admin/contributions/${item.id}/skip`, {}, contributorToken)).status).toBe(403);
+    expect(
+      (await post(`/api/v1/admin/contributions/${ulid26('01TIDAKADA')}/skip`, {}, adminToken)).status,
+    ).toBe(404);
+
+    const skip = await post(`/api/v1/admin/contributions/${item.id}/skip`, {}, adminToken);
+    expect(skip.status).toBe(200);
+    expect(await skip.json()).toMatchObject({ success: true, data: { id: item.id, skipped: true } });
+    expect((await post(`/api/v1/admin/contributions/${item.id}/skip`, {}, adminToken)).status).toBe(200);
+
+    const hidden = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&hide_skipped=true',
+      adminToken,
+    );
+    const hiddenBody = (await hidden.json()) as { data: { id: string }[] };
+    expect(hiddenBody.data.some((c) => c.id === item.id)).toBe(false);
+
+    const still = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word',
+      adminToken,
+    );
+    const stillItem = ((await still.json()) as { data: { id: string; status: string }[] }).data.find(
+      (c) => c.id === item.id,
+    );
+    expect(stillItem?.status).toBe('pending');
+
+    const stamp = Date.now();
+    const email = `rev${stamp}@test.com`;
+    await post('/api/v1/auth/register', e2eRegisterBody({ name: `rev${stamp}`, email }));
+    await post('/api/v1/auth/verify-email', { email, code: capturedOtpDisplayCode() });
+    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
+    const { users } = await import('@/shared/database/drizzle/schema');
+    await getTestDb().update(users).set({ role: 'reviewer' }).where(eq(users.email, email));
+    const reviewerLogin = await post('/api/v1/auth/login', { email, password: 'Password123' });
+    const reviewerToken = ((await reviewerLogin.json()) as { data: { access_token: string } }).data.access_token;
+
+    const other = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&hide_skipped=true',
+      reviewerToken,
+    );
+    const otherBody = (await other.json()) as { data: { id: string }[] };
+    expect(otherBody.data.some((c) => c.id === item.id)).toBe(true);
+
+    const undo = await request(`/api/v1/admin/contributions/${item.id}/skip`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(undo.status).toBe(200);
+    expect(await undo.json()).toMatchObject({ data: { id: item.id, skipped: false } });
+
+    const back = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&hide_skipped=true',
+      adminToken,
+    );
+    const backBody = (await back.json()) as { data: { id: string }[] };
+    expect(backBody.data.some((c) => c.id === item.id)).toBe(true);
+  });
 });

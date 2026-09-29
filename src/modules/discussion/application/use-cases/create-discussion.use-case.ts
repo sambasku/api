@@ -6,6 +6,9 @@ import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/n
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
+import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
+import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import type {
   NewDiscussion,
@@ -67,6 +70,7 @@ export class CreateDiscussionUseCase {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>,
   ) {}
 
   async execute(cmd: CreateDiscussionCommand): Promise<Discussion> {
@@ -80,7 +84,7 @@ export class CreateDiscussionUseCase {
       throw new ValidationError([{ field: 'body', message: 'Deskripsi maksimal 1000 karakter' }]);
     }
 
-    const trimmed = await assertUgcTextQualityWithStrike(raw, {
+    const quality = await assertUgcTextQualityWithStrike(raw, {
       userId: cmd.userId,
       abuse: this.abuse,
       entityType: 'discussion',
@@ -88,6 +92,13 @@ export class CreateDiscussionUseCase {
       field: 'body',
       minMeaningfulChars: 2,
     });
+    const blocked = (await this.blocklist?.listAllActiveWords()) ?? [];
+    const trimmed = applyBlocklistFilter(quality, blocked);
+    if (isHeavyCensor(quality, trimmed)) {
+      throw new ValidationError([
+        { field: 'body', message: 'Deskripsi mengandung kata yang tidak pantas' },
+      ]);
+    }
 
     const linkUrl = normalizeLinkUrl(cmd.linkUrl);
 

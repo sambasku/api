@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 import {
   comments,
@@ -11,6 +11,8 @@ import {
   users,
   votes,
   wordAudios,
+  wordCardShares,
+  wordEditSuggestions,
   wordImages,
   words,
 } from '@/shared/database/drizzle/schema';
@@ -46,6 +48,8 @@ function keysetBefore(
   return sql`${timeExpr} < ${before.createdAt}`;
 }
 
+const WORD_BOUND_VOTE_TYPES = new Set(['word', 'comment']);
+
 const CONTRIB_BODY: Record<string, string> = {
   word_image: 'Menambah foto',
   word_audio: 'Merekam suara',
@@ -61,6 +65,11 @@ function feedSafeUsageLabelsSql() {
   );
 }
 
+/** Kata tayang yang boleh disebut di feed (bukan berlabel terlarang). */
+function feedVisibleWordSql() {
+  return and(isNull(words.deletedAt), eq(words.status, 'published'), feedSafeUsageLabelsSql());
+}
+
 function snippet(text: string, max = 120): string {
   const t = text.trim();
   if (t.length <= max) return t;
@@ -71,6 +80,17 @@ function searchMissBody(term: string): string {
   const shown = term.trim() || '…';
   return `Mencari "${shown}" - belum ada di kamus. Bantu isi.`;
 }
+
+/** Term sama dengan lemma berlabel terlarang: jangan diiklankan di feed. */
+const matchesExcludedLemmaSql = sql`exists (
+  select 1 from ${words}
+  where lower(${words.lemma}) = lower(${searchMisses.term})
+    and ${words.deletedAt} is null
+    and (${sql.join(
+      FEED_EXCLUDED_USAGE_LABELS.map((label) => sql`${words.usageLabels} LIKE ${`%"${label}"%`}`),
+      sql` or `,
+    )})
+)`;
 
 /** Fulfilled = ada kata published dengan lemma = term (arah lemma). */
 const isFulfilledLemmaSql = sql`exists (
@@ -164,8 +184,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         and(
           eq(comments.status, 'published'),
           isNull(comments.deletedAt),
-          isNull(words.deletedAt),
-          eq(words.status, 'published'),
+          feedVisibleWordSql(),
           keysetBefore(comments.createdAt, comments.id, before, 'comment'),
         ),
       )
@@ -228,7 +247,14 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       rows.map((r) => ({ entityType: r.entityType, entityId: r.entityId })),
     );
 
-    return rows.map((row) => {
+    // Vote ke kata/komentar yang katanya tidak boleh di feed: buang.
+    const visible = rows.filter(
+      (row) =>
+        !WORD_BOUND_VOTE_TYPES.has(row.entityType) ||
+        previewMap.has(`${row.entityType}:${row.entityId}`),
+    );
+
+    return visible.map((row) => {
       const username = publicAccountName(row.username, row.authorDeletedAt);
       const displayName = publicAccountDisplayName(
         row.displayName,
@@ -345,7 +371,10 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       rows.map((r) => ({ entityType: r.entityType, entityId: r.entityId })),
     );
 
-    return rows.map((row) => {
+    // Induk kata tidak boleh di feed (berlabel terlarang / turun / hapus): buang.
+    const visible = rows.filter((row) => parents.has(`${row.entityType}:${row.entityId}`));
+
+    return visible.map((row) => {
       const username = publicAccountName(row.username, row.authorDeletedAt);
       const displayName = publicAccountDisplayName(
         row.displayName,
@@ -395,6 +424,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           sql`NOT (
             ${searchMisses.direction} = 'lemma' AND ${isFulfilledLemmaSql}
           )`,
+          sql`NOT ${matchesExcludedLemmaSql}`,
           keysetBefore(occurredAt, searchMisses.id, before, 'search_miss'),
         ),
       )
@@ -466,6 +496,139 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     });
   }
 
+  async listRecentCardShares(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]> {
+    const rows = await this.db
+      .select({
+        id: wordCardShares.id,
+        wordId: wordCardShares.wordId,
+        createdAt: wordCardShares.createdAt,
+        lemma: words.lemma,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(wordCardShares)
+      .innerJoin(words, eq(words.id, wordCardShares.wordId))
+      .innerJoin(users, eq(users.id, wordCardShares.userId))
+      .where(
+        and(
+          isNull(users.deletedAt),
+          feedVisibleWordSql(),
+          keysetBefore(wordCardShares.createdAt, wordCardShares.id, before, 'card_share'),
+        ),
+      )
+      .orderBy(desc(wordCardShares.createdAt), desc(wordCardShares.id))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      id: `card_share:${row.id}`,
+      kind: 'card_share' as const,
+      createdAt: row.createdAt,
+      actor: {
+        username: row.username,
+        displayName: row.displayName ?? row.username,
+        avatarUrl: row.avatarUrl ?? null,
+      },
+      body: `Membagikan kartu · ${row.lemma}`,
+      subtitle: row.lemma,
+      target: { type: 'word', id: row.wordId },
+    }));
+  }
+
+  async listRecentAppliedSuggestions(
+    limit: number,
+    before?: ActivityCursor,
+  ): Promise<ActivityItem[]> {
+    // Tayang dulu (baseline) sejak dibuat; sisanya sejak disetujui.
+    const appliedAt = sql`CASE WHEN ${wordEditSuggestions.baselineSnapshot} IS NOT NULL
+      THEN ${wordEditSuggestions.createdAt}
+      ELSE ${wordEditSuggestions.reviewedAt} END`;
+    const rows = await this.db
+      .select({
+        id: wordEditSuggestions.id,
+        wordId: wordEditSuggestions.wordId,
+        createdAt: wordEditSuggestions.createdAt,
+        reviewedAt: wordEditSuggestions.reviewedAt,
+        hasBaseline: sql<number>`${wordEditSuggestions.baselineSnapshot} IS NOT NULL`,
+        lemma: words.lemma,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(wordEditSuggestions)
+      .innerJoin(words, eq(words.id, wordEditSuggestions.wordId))
+      .innerJoin(users, eq(users.id, wordEditSuggestions.userId))
+      .where(
+        and(
+          isNull(wordEditSuggestions.deletedAt),
+          isNull(users.deletedAt),
+          or(
+            and(
+              inArray(wordEditSuggestions.status, ['approved', 'corrected']),
+              isNotNull(wordEditSuggestions.reviewedAt),
+            ),
+            and(
+              eq(wordEditSuggestions.status, 'pending'),
+              isNotNull(wordEditSuggestions.baselineSnapshot),
+            ),
+          ),
+          feedVisibleWordSql(),
+          keysetBefore(appliedAt, wordEditSuggestions.id, before, 'suggestion'),
+        ),
+      )
+      .orderBy(desc(appliedAt), desc(wordEditSuggestions.id))
+      .limit(limit);
+
+    // Hanya aksi + lemma: teks bebas usulan tidak pernah masuk feed.
+    return rows.map((row) => ({
+      id: `suggestion:${row.id}`,
+      kind: 'suggestion' as const,
+      createdAt: row.hasBaseline ? row.createdAt : (row.reviewedAt ?? row.createdAt),
+      actor: {
+        username: row.username,
+        displayName: row.displayName ?? row.username,
+        avatarUrl: row.avatarUrl ?? null,
+      },
+      body: `Mengusulkan perubahan · ${row.lemma}`,
+      subtitle: row.lemma,
+      target: { type: 'word', id: row.wordId },
+    }));
+  }
+
+  async recordCardShare(
+    userId: string,
+    wordId: string,
+  ): Promise<'recorded' | 'duplicate' | 'word_not_found'> {
+    const [word] = await this.db
+      .select({ id: words.id })
+      .from(words)
+      .where(and(eq(words.id, wordId), isNull(words.deletedAt), eq(words.status, 'published')))
+      .limit(1);
+    if (!word) return 'word_not_found';
+
+    // ponytail: cek-lalu-insert tanpa unique index; dua tap bersamaan bisa
+    // mencatat dua baris. Dampak cuma baris feed ganda. Upgrade: kolom hari + unique.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [recent] = await this.db
+      .select({ id: wordCardShares.id })
+      .from(wordCardShares)
+      .where(
+        and(
+          eq(wordCardShares.userId, userId),
+          eq(wordCardShares.wordId, wordId),
+          gt(wordCardShares.createdAt, since),
+        ),
+      )
+      .limit(1);
+    if (recent) return 'duplicate';
+
+    await this.db.insert(wordCardShares).values({ userId, wordId });
+    return 'recorded';
+  }
+
   private async attachWordSenses(wordIds: string[]): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     if (wordIds.length === 0) return out;
@@ -509,7 +672,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       const rows = await this.db
         .select({ id: words.id, lemma: words.lemma })
         .from(words)
-        .where(inArray(words.id, wordIds));
+        .where(and(inArray(words.id, wordIds), feedVisibleWordSql()));
       for (const r of rows) out.set(`word:${r.id}`, { label: r.lemma, wordId: r.id });
     }
 
@@ -519,7 +682,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         .select({ id: comments.id, lemma: words.lemma, wordId: comments.wordId })
         .from(comments)
         .innerJoin(words, eq(words.id, comments.wordId))
-        .where(inArray(comments.id, commentIds));
+        .where(and(inArray(comments.id, commentIds), feedVisibleWordSql()));
       for (const r of rows) {
         out.set(`comment:${r.id}`, { label: r.lemma, wordId: r.wordId });
       }
@@ -543,7 +706,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         .select({ id: pronunciations.id, lemma: words.lemma, wordId: pronunciations.wordId })
         .from(pronunciations)
         .innerJoin(words, eq(words.id, pronunciations.wordId))
-        .where(inArray(pronunciations.id, pronunciationIds));
+        .where(and(inArray(pronunciations.id, pronunciationIds), feedVisibleWordSql()));
       for (const r of rows) {
         out.set(`pronunciation:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
       }
@@ -555,7 +718,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         .select({ id: wordImages.id, lemma: words.lemma, wordId: wordImages.wordId })
         .from(wordImages)
         .innerJoin(words, eq(words.id, wordImages.wordId))
-        .where(inArray(wordImages.id, imageIds));
+        .where(and(inArray(wordImages.id, imageIds), feedVisibleWordSql()));
       for (const r of rows) out.set(`word_image:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
     }
 
@@ -565,7 +728,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         .select({ id: wordAudios.id, lemma: words.lemma, wordId: wordAudios.wordId })
         .from(wordAudios)
         .innerJoin(words, eq(words.id, wordAudios.wordId))
-        .where(inArray(wordAudios.id, audioIds));
+        .where(and(inArray(wordAudios.id, audioIds), feedVisibleWordSql()));
       for (const r of rows) out.set(`word_audio:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
     }
 
@@ -576,7 +739,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         .from(examples)
         .innerJoin(meanings, eq(meanings.id, examples.meaningId))
         .innerJoin(words, eq(words.id, meanings.wordId))
-        .where(inArray(examples.id, exampleIds));
+        .where(and(inArray(examples.id, exampleIds), feedVisibleWordSql()));
       for (const r of rows) out.set(`example:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
     }
 

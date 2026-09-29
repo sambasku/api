@@ -132,6 +132,24 @@ export const voteDeckQuerySchema = z.object({
 
 export type VoteDeckQuery = z.infer<typeof voteDeckQuerySchema>;
 
+export const skipVoteDeckSchema = z.object({
+  word_id: opaqueId,
+});
+
+export type SkipVoteDeckBody = z.infer<typeof skipVoteDeckSchema>;
+
+export const skipVoteDeckParamsSchema = z.object({
+  wordId: opaqueId,
+});
+
+export const skipVoteDeckResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    word_id: z.string(),
+    skipped: z.boolean(),
+  }),
+});
+
 export const voteDeckResponseSchema = z.object({
   success: z.literal(true),
   data: z.array(

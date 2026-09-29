@@ -97,6 +97,9 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `WORD_NOT_PUBLISHED` | 400 | Usul edit hanya untuk kata berstatus published |
 | `CANNOT_SUGGEST_OWN_WORD` | 403 | Kontributor tidak boleh mengusulkan edit pada kata buatannya sendiri |
 | `INVALID_SUGGESTION_CHANGES` | 400 | proposed_changes kosong / tidak valid |
+| `SUGGESTION_ALREADY_PENDING` | 409 | Kata ini masih punya usulan pending di kategori yang sama |
+| `SUGGESTION_STALE_DATA` | 409 | Makna/foto/relasi/variasi yang dirujuk usulan sudah berubah; muat ulang detail |
+| `SUGGESTION_NO_CHANGES` | 400 | Update makna isinya sama dengan yang tayang |
 | `RATE_LIMITED` | 429 | Terlalu banyak percobaan (lihat tabel limit di api-base-stack.md Section 15). Resend OTP: 1/2 menit per IP, dan cooldown 2 menit per email |
 | `INTERNAL_ERROR` | 500 | Error tak terduga (bug, koneksi DB putus, dst) |
 | `UPSTREAM_CAPACITY` | 503 | Kapasitas runtime habis, bukan bug: batas subrequest / CPU Workers terlampaui. SATU-SATUNYA kode yang memicu circuit breaker klien pindah tier (lihat `docs/backlogs/FAILOVER.md`). Hanya muncul di tier 1 (Workers); tier 2/3 proses Node tanpa batas subrequest |

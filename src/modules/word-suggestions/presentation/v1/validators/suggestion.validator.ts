@@ -9,7 +9,10 @@ import type {
   ProposedChanges,
   SuggestionReasonCode,
 } from '../../../domain/entities/word-suggestion.entity';
-import { composeReasonDisplay } from '../../../domain/entities/word-suggestion.entity';
+import {
+  SUGGESTION_REASON_CODES,
+  composeReasonDisplay,
+} from '../../../domain/entities/word-suggestion.entity';
 
 const ulid = opaqueId;
 const wordClassId = choiceId('Kelas kata');
@@ -28,16 +31,10 @@ const meaningChangeSchema = z.object({
       }),
     )
     .optional(),
+  // Contoh tidak pernah diterapkan lewat usulan; tolak supaya tidak hilang diam-diam.
   examples: z
-    .array(
-      z.object({
-        source_language_id: ulid,
-        source_sentence: z.string().max(2000),
-        target_language_id: ulid.optional(),
-        target_sentence: z.string().max(2000).optional(),
-        source_type: z.string().max(100).optional(),
-      }),
-    )
+    .array(z.unknown())
+    .max(0, 'Contoh kalimat ditambahkan lewat menu Tambah contoh, bukan usulan perubahan')
     .optional(),
 });
 
@@ -130,14 +127,7 @@ const proposedChangesObjectSchema = z
     }
   });
 
-export const suggestionReasonCodeSchema = z.enum([
-  'typo',
-  'inaccurate_definition',
-  'missing_example',
-  'missing_relation',
-  'image_issue',
-  'other',
-]);
+export const suggestionReasonCodeSchema = z.enum(SUGGESTION_REASON_CODES);
 
 export const createSuggestionSchema = z
   .object({
@@ -204,13 +194,6 @@ export function mapProposedChanges(
         languageId: t.language_id,
         translationText: t.translation_text,
         translationType: t.translation_type,
-      })),
-      examples: m.examples?.map((e) => ({
-        sourceLanguageId: e.source_language_id,
-        sourceSentence: e.source_sentence,
-        targetLanguageId: e.target_language_id,
-        targetSentence: e.target_sentence,
-        sourceType: e.source_type,
       })),
     })),
     categoryIdsToAdd: raw.category_ids_to_add,
