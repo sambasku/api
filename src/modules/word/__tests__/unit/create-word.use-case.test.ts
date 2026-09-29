@@ -609,6 +609,32 @@ describe('CreateWordUseCase - kualitas teks UGC', () => {
     expect(wordRepo.saveWithRelations).toHaveBeenCalled();
   });
 
+  it('terjemahan placeholder "-" lolos (kata belum punya padanan)', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    const result = await useCase.execute(
+      makeDto({
+        meanings: [
+          {
+            wordClassId: '01WORDCLASSESNOMINA000000',
+            definition: '-',
+            isHaveDefinition: false,
+            orderIndex: 1,
+            translations: [
+              {
+                languageId: '01LANGUAGESINDONESIA00000',
+                translationText: '-',
+                translationType: 'direct',
+              },
+            ],
+          },
+        ],
+      }),
+      ADMIN,
+    );
+    expect(result.word.lemma).toBe('makatn');
+    expect(wordRepo.saveWithRelations).toHaveBeenCalled();
+  });
+
   it('terjemahan smash ditolak walau definisi placeholder', async () => {
     const { useCase, wordRepo } = makeDeps();
     await expect(

@@ -286,6 +286,8 @@ export class CreateWordUseCase {
       for (const [i, meaning] of (dto.meanings ?? []).entries()) {
         // Penjelasan arti opsional (termasuk teks KBBI) tidak memblokir submit.
         for (const [j, tr] of meaning.translations.entries()) {
+          // Placeholder "-" (belum ada padanan) bukan teks UGC.
+          if (isPlaceholderMeaningText(tr.translationText)) continue;
           await assertUgcTextQualityWithAnonStrike(tr.translationText, {
             clientIp,
             deviceId: actor.deviceId,
@@ -311,6 +313,8 @@ export class CreateWordUseCase {
     for (const [i, meaning] of (dto.meanings ?? []).entries()) {
       // Penjelasan arti opsional (termasuk teks KBBI) tidak memblokir submit.
       for (const [j, tr] of meaning.translations.entries()) {
+        // Placeholder "-" (belum ada padanan) bukan teks UGC.
+        if (isPlaceholderMeaningText(tr.translationText)) continue;
         await assertUgcTextQualityWithStrike(tr.translationText, {
           userId: actor.userId,
           abuse: this.abuse,
