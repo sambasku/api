@@ -6,6 +6,7 @@ const importSessionItemSchema = z.object({
   outcome: z.enum(['created', 'meanings_added', 'skipped', 'invalid']),
   meanings_added: z.number().int().min(0),
   message: z.string().trim().max(2000).optional(),
+  word_id: opaqueId.optional(),
 });
 
 const supportTypeSchema = z.enum(['web', 'book', 'article', 'other']);
@@ -68,6 +69,17 @@ export const importSessionResponseSchema = z.object({
     items: z.array(importSessionItemSchema),
     created_at: z.string(),
     finished_at: z.string().nullable(),
+    rolled_back_at: z.string().nullable(),
+    rolled_back_by: z.string().nullable(),
+  }),
+});
+
+export const rollbackImportSessionResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    session_id: z.string(),
+    deleted_count: z.number().int().min(0),
+    session: importSessionResponseSchema.shape.data,
   }),
 });
 

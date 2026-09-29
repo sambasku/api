@@ -7,6 +7,8 @@ export type WordImportSessionItem = {
   outcome: 'created' | 'meanings_added' | 'skipped' | 'invalid';
   meanings_added: number;
   message?: string;
+  /** Id kata baru (outcome created) - untuk audit/rollback. */
+  word_id?: string;
 };
 
 export type WordImportSession = {
@@ -36,6 +38,8 @@ export type WordImportSession = {
   items: WordImportSessionItem[];
   createdAt: Date;
   finishedAt: Date | null;
+  rolledBackAt: Date | null;
+  rolledBackBy: string | null;
 };
 
 export type NewWordImportSession = {

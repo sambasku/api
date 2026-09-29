@@ -25,7 +25,13 @@ export class ImportWordsUseCase {
   ) {}
 
   async execute(
-    input: { mode: 'validate' | 'commit'; items: ImportWordInput[]; attributed_to?: string },
+    input: {
+      mode: 'validate' | 'commit';
+      items: ImportWordInput[];
+      attributed_to?: string;
+      /** Opsional: tautkan kata baru ke sesi impor (rollback batch). */
+      import_session_id?: string;
+    },
     actor: Actor,
   ): Promise<ImportWordsResult> {
     if (input.items.length > 5) {
@@ -37,7 +43,9 @@ export class ImportWordsUseCase {
     const writeActorId = await resolveImportAttributedTo(this.users, input.attributed_to);
     const items: ImportWordResult[] = [];
     for (const item of input.items) {
-      items.push(await this.one(item, actor, writeActorId, refs, input.mode));
+      items.push(
+        await this.one(item, actor, writeActorId, refs, input.mode, input.import_session_id),
+      );
     }
     return { items };
   }
@@ -72,6 +80,7 @@ export class ImportWordsUseCase {
     writeActorId: string,
     refs: { languageId: string; translationLanguageId: string; dialectId?: string; wordClassId: string },
     mode: 'validate' | 'commit',
+    importSessionId?: string,
   ): Promise<ImportWordResult> {
     const lemma = item.lemma.trim();
     const meanings = item.meanings
@@ -142,6 +151,7 @@ export class ImportWordsUseCase {
           usageLabels: [],
           status: publication.status,
           isVerified: publication.isVerified,
+          ...(importSessionId ? { importSessionId } : {}),
         },
         writeActorId,
       );
@@ -152,6 +162,7 @@ export class ImportWordsUseCase {
         is_verified: word.isVerified,
         meanings_added: unique.length,
         meanings_skipped: item.meanings.length - unique.length,
+        word_id: word.id,
       };
     }
 

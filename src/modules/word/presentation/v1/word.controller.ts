@@ -19,6 +19,8 @@ import type { AddWordImageUseCase } from '../../application/use-cases/add-word-i
 import type { AddExampleUseCase } from '../../application/use-cases/add-example.use-case';
 import type { AddMeaningUseCase } from '../../application/use-cases/add-meaning.use-case';
 import type { ImportWordsUseCase } from '../../application/use-cases/import-words.use-case';
+import type { BatchContributeWordsUseCase } from '../../application/use-cases/batch-contribute-words.use-case';
+import type { RollbackWordImportSessionUseCase } from '../../application/use-cases/rollback-word-import-session.use-case';
 import type {
   ClaimWordImportSessionUseCase,
   GetWordImportSessionUseCase,
@@ -35,6 +37,7 @@ import type {
   ListLatestWordsQueryBody,
 } from './validators/create-word.validator';
 import type { ImportWordsBody } from './validators/import-words.validator';
+import type { BatchContributeWordsBody } from './validators/batch-contribute-words.validator';
 import type {
   ClaimImportSessionBody,
   ListImportSessionsQuery,
@@ -100,10 +103,12 @@ export class WordController {
       addExample: AddExampleUseCase;
       addMeaning: AddMeaningUseCase;
       importWords: ImportWordsUseCase;
+      batchContributeWords: BatchContributeWordsUseCase;
       saveImportSession: SaveWordImportSessionUseCase;
       listImportSessions: ListWordImportSessionsUseCase;
       getImportSession: GetWordImportSessionUseCase;
       claimImportSession: ClaimWordImportSessionUseCase;
+      rollbackImportSession: RollbackWordImportSessionUseCase;
       uploadPronunciationAudio: UploadPronunciationAudioUseCase;
       deletePronunciationAudio: DeletePronunciationAudioUseCase;
       listWordClasses: () => Promise<WordClassSummary[]>;
@@ -180,6 +185,18 @@ export class WordController {
     return c.json({ success: true as const, data: result }, body.mode === 'commit' ? 201 : 200);
   }
 
+  async batchContributeWords(c: Context, body: BatchContributeWordsBody) {
+    const ctx = c as Context<{ Variables: AppVariables }>;
+    const authUser = ctx.get('user');
+    const triggeredBy = authUser?.user_id ?? ANONIM_USER_ID;
+    const result = await this.deps.batchContributeWords.execute({
+      rows: body.rows,
+      contributorName: body.contributor_name,
+      triggeredBy,
+    });
+    return c.json({ success: true as const, data: result }, 201);
+  }
+
   async saveImportSession(c: Context, body: SaveImportSessionBody) {
     const actor = (c as Context<{ Variables: AppVariables }>).get('user');
     if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
@@ -238,6 +255,25 @@ export class WordController {
     return c.json({ success: true as const, data: this.toImportSessionData(session) });
   }
 
+  async rollbackImportSession(c: Context, id: string) {
+    const actor = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
+    const result = await this.deps.rollbackImportSession.execute({
+      sessionId: id,
+      actorId: actor.user_id,
+      requestId,
+    });
+    return c.json({
+      success: true as const,
+      data: {
+        session_id: result.session_id,
+        deleted_count: result.deleted_count,
+        session: this.toImportSessionData(result.session),
+      },
+    });
+  }
+
   private toImportSessionData(session: {
     id: string;
     triggeredBy: string;
@@ -262,9 +298,17 @@ export class WordController {
     duplicatesCount: number;
     meaningsAddedCount: number;
     invalidCount: number;
-    items: { lemma: string; outcome: 'created' | 'meanings_added' | 'skipped' | 'invalid'; meanings_added: number; message?: string }[];
+    items: {
+      lemma: string;
+      outcome: 'created' | 'meanings_added' | 'skipped' | 'invalid';
+      meanings_added: number;
+      message?: string;
+      word_id?: string;
+    }[];
     createdAt: Date;
     finishedAt: Date | null;
+    rolledBackAt: Date | null;
+    rolledBackBy: string | null;
   }) {
     return {
       id: session.id,
@@ -294,6 +338,8 @@ export class WordController {
       items: session.items,
       created_at: session.createdAt.toISOString(),
       finished_at: session.finishedAt?.toISOString() ?? null,
+      rolled_back_at: session.rolledBackAt?.toISOString() ?? null,
+      rolled_back_by: session.rolledBackBy,
     };
   }
 

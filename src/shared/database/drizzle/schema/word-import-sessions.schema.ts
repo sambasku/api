@@ -35,6 +35,9 @@ export const wordImportSessions = sqliteTable(
     itemsJson: text('items_json').notNull().default('[]'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     finishedAt: integer('finished_at', { mode: 'timestamp' }),
+    /** Soft-delete massal kata dari sesi ini sudah dijalankan. */
+    rolledBackAt: integer('rolled_back_at', { mode: 'timestamp' }),
+    rolledBackBy: text('rolled_back_by').references(() => users.id),
   },
   (t) => [index('word_import_sessions_finished_id_idx').on(t.finishedAt, t.id)],
 );

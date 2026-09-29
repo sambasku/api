@@ -37,6 +37,7 @@ function parseItems(raw: string): WordImportSessionItem[] {
         outcome: (row.outcome as WordImportSessionItem['outcome']) ?? 'invalid',
         meanings_added: Number(row.meanings_added ?? 0),
         message: typeof row.message === 'string' ? row.message : undefined,
+        word_id: typeof row.word_id === 'string' ? row.word_id : undefined,
       };
     });
   } catch {
@@ -90,6 +91,8 @@ function toEntity(
     items: parseItems(row.itemsJson),
     createdAt: row.createdAt,
     finishedAt: row.finishedAt,
+    rolledBackAt: row.rolledBackAt ?? null,
+    rolledBackBy: row.rolledBackBy ?? null,
   };
 }
 
@@ -331,6 +334,20 @@ export class WordImportSessionRepositoryImpl implements WordImportSessionReposit
 
     const found = await this.findById(input.sessionId);
     if (!found) throw new Error('Import session hilang setelah klaim');
+    return found;
+  }
+
+  async markRolledBack(sessionId: string, actorId: string): Promise<WordImportSession> {
+    const now = new Date();
+    await this.db
+      .update(wordImportSessions)
+      .set({
+        rolledBackAt: now,
+        rolledBackBy: actorId,
+      })
+      .where(and(eq(wordImportSessions.id, sessionId), isNull(wordImportSessions.rolledBackAt)));
+    const found = await this.findById(sessionId);
+    if (!found) throw new Error('Import session hilang setelah rollback');
     return found;
   }
 }

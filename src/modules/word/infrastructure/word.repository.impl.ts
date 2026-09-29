@@ -140,6 +140,7 @@ function toWord(row: typeof words.$inferSelect): Word {
     takedownNote: row.takedownNote,
     takenDownBy: row.takenDownBy,
     takenDownAt: row.takenDownAt,
+    importSessionId: row.importSessionId ?? null,
   };
 }
 
@@ -264,6 +265,7 @@ export class WordRepositoryImpl implements WordRepository {
             isVerified: word.isVerified,
             isCorrected: word.isCorrected ?? false,
             createdBy: actorId,
+            importSessionId: word.importSessionId ?? null,
             ...verificationCols(word.isVerified, actorId),
           })
           .returning();
@@ -2608,6 +2610,17 @@ export class WordRepositoryImpl implements WordRepository {
       .where(and(eq(words.id, id), isNull(words.deletedAt)))
       .returning({ id: words.id });
     return updated.length > 0;
+  }
+
+  async softDeleteByImportSessionId(sessionId: string, actorId: string): Promise<number> {
+    const updated = await this.db
+      .update(words)
+      .set({ deletedAt: new Date(), deletedBy: actorId })
+      .where(
+        and(eq(words.importSessionId, sessionId), isNull(words.deletedAt)),
+      )
+      .returning({ id: words.id });
+    return updated.length;
   }
 
   async takedown(

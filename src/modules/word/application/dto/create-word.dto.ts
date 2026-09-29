@@ -120,4 +120,6 @@ export interface CreateWordDto {
   status: 'draft' | 'published';
   /** Provenance jalur search-miss (12-api) - opsional */
   searchMissId?: string;
+  /** Sesi impor massal yang menciptakan kata (rollback batch). */
+  importSessionId?: string;
 }

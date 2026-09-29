@@ -1,7 +1,8 @@
 name: Seed Account Production (manual)
 
 # Hanya akun default (admin/root/contributor/reviewer).
-# Menimpa password jadi pass1234. TIDAK otomatis saat push/deploy.
+# Insert-only: skip jika username sudah ada (tidak menimpa password/role/email).
+# TIDAK otomatis saat push/deploy.
 #
 # CLI: gh workflow run seed-account-production.yml --ref main -f confirm=true
 #
@@ -11,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Centang untuk seed akun PRODUCTION (menimpa password jadi pass1234)'
+        description: 'Centang untuk seed akun PRODUCTION (insert-only; skip user yang sudah ada)'
         type: boolean
         required: true
         default: false
@@ -50,6 +51,7 @@ jobs:
         run: pnpm seed:accounts
         env:
           NODE_ENV: production
+          SEED_ACCOUNTS_INSERT_ONLY: '1'
           DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
           JWT_PRIVATE_KEY: dummy

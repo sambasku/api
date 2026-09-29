@@ -35,6 +35,8 @@ function baseSession(overrides: Partial<WordImportSession> = {}): WordImportSess
     ],
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     finishedAt: new Date('2026-01-01T00:01:00.000Z'),
+    rolledBackAt: null,
+    rolledBackBy: null,
     ...overrides,
   };
 }
@@ -56,6 +58,7 @@ describe('ClaimWordImportSessionUseCase', () => {
       claim: vi.fn().mockResolvedValue(claimed),
       upsert: vi.fn(),
       list: vi.fn(),
+      markRolledBack: vi.fn(),
     };
     const users = {
       findById: vi.fn().mockResolvedValue({ id: '01USERCLAIMTARGET00000001', isActive: true }),
@@ -87,6 +90,7 @@ describe('ClaimWordImportSessionUseCase', () => {
       claim: vi.fn(),
       upsert: vi.fn(),
       list: vi.fn(),
+      markRolledBack: vi.fn(),
     };
     const users = { findById: vi.fn() };
     const useCase = new ClaimWordImportSessionUseCase(repo, users);
@@ -107,6 +111,7 @@ describe('ClaimWordImportSessionUseCase', () => {
       claim: vi.fn(),
       upsert: vi.fn(),
       list: vi.fn(),
+      markRolledBack: vi.fn(),
     };
     const users = {
       findById: vi.fn().mockResolvedValue({ id: CSV_IMPORTER_USER_ID, isActive: true }),
@@ -128,6 +133,7 @@ describe('ClaimWordImportSessionUseCase', () => {
       claim: vi.fn(),
       upsert: vi.fn(),
       list: vi.fn(),
+      markRolledBack: vi.fn(),
     };
     const useCase = new ClaimWordImportSessionUseCase(repo, { findById: vi.fn() });
     await expect(

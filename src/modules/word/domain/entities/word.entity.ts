@@ -50,6 +50,8 @@ export interface Word {
   takedownNote: string | null;
   takenDownBy: string | null;
   takenDownAt: Date | null;
+  /** Sesi impor yang menciptakan kata ini (null jika bukan dari impor). */
+  importSessionId: string | null;
 }
 
 export interface WordSummary {

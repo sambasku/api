@@ -455,6 +455,12 @@ export interface WordRepository {
   softDelete(id: string, actorId: string): Promise<boolean>;
 
   /**
+   * Soft-delete semua kata aktif yang dibuat oleh sesi impor.
+   * Mengembalikan jumlah baris yang di-soft-delete.
+   */
+  softDeleteByImportSessionId(sessionId: string, actorId: string): Promise<number>;
+
+  /**
    * published → taken_down, simpan alasan. false jika bukan published
    * (race / status lain / sudah dihapus).
    */

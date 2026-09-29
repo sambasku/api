@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { choiceId } from '@/shared/validation/id';
+import { choiceId, opaqueId } from '@/shared/validation/id';
 
 const importMeaningSchema = z
   .object({
@@ -15,6 +15,8 @@ export const importWordsBodySchema = z.object({
   mode: z.enum(['validate', 'commit']),
   /** Opsional: atribusi ke user nyata; kosong = Pengimpor Data CSV. */
   attributed_to: choiceId('User atribusi').optional(),
+  /** Opsional: tautkan kata baru ke sesi impor (untuk rollback). */
+  import_session_id: opaqueId.optional(),
   items: z
     .array(
       z.object({
@@ -41,6 +43,7 @@ export const importWordsResponseSchema = z.object({
         meanings_added: z.number(),
         meanings_skipped: z.number(),
         message: z.string().optional(),
+        word_id: z.string().optional(),
       }),
     ),
   }),

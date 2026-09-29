@@ -39,6 +39,7 @@ import {
   claimImportSessionBodySchema,
   importSessionResponseSchema,
   listImportSessionsQuerySchema,
+  rollbackImportSessionResponseSchema,
   saveImportSessionBodySchema,
 } from './validators/import-session.validator';
 import { bulkWordsBodySchema, bulkWordsResponseSchema } from './validators/bulk-words.validator';
@@ -164,6 +165,19 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
       },
     }),
   );
+  routes.use(
+    '/import-sessions/:id/rollback',
+    deps.authenticate,
+    authorizeRole('admin', 'editor', 'root', 'reviewer'),
+    rateLimit({
+      points: 20,
+      duration: 60,
+      keyFn: (c) => {
+        const user = (c.get('user') as AuthUser | undefined) ?? null;
+        return `word-import-session-rollback:${user?.user_id ?? 'unknown'}`;
+      },
+    }),
+  );
 
   const saveImportSessionRoute = createRoute({
     method: 'post',
@@ -234,11 +248,31 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
       409: { description: 'Sudah diatribusikan / target tidak valid', content: json(errorResponseSchema) },
     },
   });
+  const rollbackImportSessionRoute = createRoute({
+    method: 'post',
+    path: '/import-sessions/{id}/rollback',
+    tags: ['Words', 'Admin'],
+    summary:
+      'Tarik semua kata dari sesi impor (soft-delete by import_session_id). Idempotent.',
+    request: { params: z.object({ id: opaqueId }) },
+    responses: {
+      200: {
+        description: 'Hasil rollback',
+        content: json(rollbackImportSessionResponseSchema),
+      },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Role tidak diizinkan', content: json(errorResponseSchema) },
+      404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
   routes.openapi(saveImportSessionRoute, (c) => deps.controller.saveImportSession(c, c.req.valid('json')) as never);
   routes.openapi(listImportSessionsRoute, (c) => deps.controller.listImportSessions(c, c.req.valid('query')) as never);
   routes.openapi(getImportSessionRoute, (c) => deps.controller.getImportSession(c, c.req.param('id')) as never);
   routes.openapi(claimImportSessionRoute, (c) =>
     deps.controller.claimImportSession(c, c.req.param('id'), c.req.valid('json')) as never,
+  );
+  routes.openapi(rollbackImportSessionRoute, (c) =>
+    deps.controller.rollbackImportSession(c, c.req.param('id')) as never,
   );
 
   // Mass-action (checkbox panel Kata) - literal SEBELUM /:id

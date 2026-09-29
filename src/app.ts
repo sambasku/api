@@ -130,6 +130,8 @@ import { RestoreWordUseCase } from '@/modules/word/application/use-cases/restore
 import { AddPronunciationUseCase } from '@/modules/word/application/use-cases/add-pronunciation.use-case';
 import { AddMeaningUseCase } from '@/modules/word/application/use-cases/add-meaning.use-case';
 import { ImportWordsUseCase } from '@/modules/word/application/use-cases/import-words.use-case';
+import { BatchContributeWordsUseCase } from '@/modules/word/application/use-cases/batch-contribute-words.use-case';
+import { RollbackWordImportSessionUseCase } from '@/modules/word/application/use-cases/rollback-word-import-session.use-case';
 import {
   ClaimWordImportSessionUseCase,
   GetWordImportSessionUseCase,
@@ -569,10 +571,20 @@ const wordController = new WordController({
   addExample: new AddExampleUseCase(wordRepo, auditRepo),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
   importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo),
+  batchContributeWords: new BatchContributeWordsUseCase(
+    wordRepo,
+    languageRepo,
+    wordImportSessionRepo,
+  ),
   saveImportSession: new SaveWordImportSessionUseCase(wordImportSessionRepo, userRepo),
   listImportSessions: new ListWordImportSessionsUseCase(wordImportSessionRepo),
   getImportSession: new GetWordImportSessionUseCase(wordImportSessionRepo),
   claimImportSession: new ClaimWordImportSessionUseCase(wordImportSessionRepo, userRepo),
+  rollbackImportSession: new RollbackWordImportSessionUseCase(
+    wordImportSessionRepo,
+    wordRepo,
+    auditRepo,
+  ),
   uploadPronunciationAudio: new UploadPronunciationAudioUseCase(
     wordRepo,
     pronunciationStorage,

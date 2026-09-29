@@ -31,6 +31,7 @@ function makeWord(overrides: Partial<Word> = {}): Word {
     takedownNote: null,
     takenDownBy: null,
     takenDownAt: null,
+    importSessionId: null,
     ...overrides,
   };
 }
