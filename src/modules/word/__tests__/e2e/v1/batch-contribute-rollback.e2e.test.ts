@@ -79,7 +79,8 @@ describe.skipIf(!hasTestDb)('Batch contribute + import session rollback E2E', ()
   });
 
   it('batch anon → published + session; rollback soft-delete; idempotent', async () => {
-    const lemma = `batch-e2e-${Date.now()}`;
+    // Angka panjang di lemma kena heuristik "terlalu banyak simbol atau angka".
+    const lemma = 'lemabatche2erollback';
     const create = await post('/api/v1/contributions/words/batch', {
       contributor_name: 'Penutur E2E',
       rows: [{ sambas: lemma, indonesia: 'arti batch' }],

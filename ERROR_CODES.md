@@ -26,7 +26,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `LAST_AUTH_METHOD` | 409 | Lepas provider OAuth padahal itu satu-satunya cara masuk (belum punya password) |
 | `FORBIDDEN` | 403 | Role tidak diizinkan akses endpoint |
 | `NOT_FOUND` | 404 | Route/endpoint tidak ditemukan (via `app.notFound`) |
-| `USER_NOT_FOUND` | 404 | User tidak ditemukan (profil publik by username; akun soft-deleted / nonaktif; update role admin; user id tidak ada) |
+| `USER_NOT_FOUND` | 404 | User tidak ditemukan (profil publik by username; akun soft-deleted / nonaktif; update role admin; cabut mute abuse; user id tidak ada) |
 | `WORD_NOT_FOUND` | 404 | Kata tidak ditemukan by id (modul word - belum implement; toggle bookmark kata tidak ada / sudah dihapus) |
 | `MEANING_NOT_FOUND` | 404 | Makna tidak ditemukan by id (kontribusi contoh kalimat) |
 | `CONTRIBUTION_NOT_FOUND` | 404 | Kontribusi tidak ditemukan by id (antrean review) |

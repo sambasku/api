@@ -23,6 +23,9 @@ describe('RecordAnonAbuseSignalUseCase', () => {
     setMutedUntil: vi.fn().mockImplementation(async (subject, until) => {
       mutes.set(`${subject.kind}:${subject.key}`, until);
     }),
+    listEvents: vi.fn(),
+    listActiveMutes: vi.fn(),
+    deleteMute: vi.fn(),
   };
 
   beforeEach(() => {

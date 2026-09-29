@@ -204,6 +204,9 @@ import { AuditLogRepositoryImpl } from '@/modules/audit/infrastructure/audit-log
 import { ListAuditLogsUseCase } from '@/modules/audit/application/use-cases/list-audit-logs.use-case';
 import { AuditController } from '@/modules/audit/presentation/v1/audit.controller';
 import { createAuditRoutes } from '@/modules/audit/presentation/v1/audit.routes';
+import { AbuseController } from '@/modules/abuse/presentation/v1/abuse.controller';
+import { createAbuseRoutes } from '@/modules/abuse/presentation/v1/abuse.routes';
+import { LiftAbuseMuteUseCase } from '@/modules/abuse/application/use-cases/lift-abuse-mute.use-case';
 import { createImageStorage } from '@/modules/image/infrastructure/image-storage.factory';
 import { CreateUploadCredentialsUseCase } from '@/modules/image/application/use-cases/create-upload-credentials.use-case';
 import { ImageController } from '@/modules/image/presentation/v1/image.controller';
@@ -1314,6 +1317,14 @@ app.route(
   '/api/v1/admin/contribution-access',
   createContributionAccessRoutes({ controller: adminUsersController, authenticate }),
 );
+
+// Monitoring ledger abuse UGC (akun + anon) - hanya admin & root
+const abuseController = new AbuseController({
+  abuseRepo: ugcAbuseEventRepo,
+  anonRepo: ugcAnonAbuseRepo,
+  lift: new LiftAbuseMuteUseCase(ugcAbuseEventRepo, ugcAnonAbuseRepo, userRepo, auditRepo),
+});
+app.route('/api/v1/admin/abuse', createAbuseRoutes({ controller: abuseController, authenticate }));
 
 const verifierApplicationRepo = new VerifierApplicationRepositoryImpl(db);
 const verifierApplicationController = new VerifierApplicationController({

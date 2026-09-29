@@ -1,5 +1,6 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
-import { ugcAbuseEvents } from '@/shared/database/drizzle/schema';
+import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
+import { ugcAbuseEvents, users } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { generateId } from '@/shared/utils/ulid';
 
@@ -11,7 +12,9 @@ export type UgcAbuseSignal =
   | 'contribution_spam_reject'
   | 'policy_mute'
   | 'policy_pause'
-  | 'policy_deactivate';
+  | 'policy_deactivate'
+  /** Admin cabut mute - bobot negatif menetralkan skor rolling. */
+  | 'admin_lift';
 
 export const UGC_ABUSE_WEIGHTS: Record<UgcAbuseSignal, number> = {
   input_rejected: 1,
@@ -22,6 +25,7 @@ export const UGC_ABUSE_WEIGHTS: Record<UgcAbuseSignal, number> = {
   policy_mute: 0,
   policy_pause: 0,
   policy_deactivate: 0,
+  admin_lift: 0,
 };
 
 export interface UgcAbuseEvent {
@@ -44,6 +48,12 @@ export interface RecordUgcAbuseEventInput {
   meta?: Record<string, unknown> | null;
 }
 
+export interface UgcAbuseEventWithUser extends UgcAbuseEvent {
+  username: string | null;
+  userCanContribute: boolean | null;
+  userMutedUntil: Date | null;
+}
+
 export interface UgcAbuseEventRepository {
   record(input: RecordUgcAbuseEventInput): Promise<UgcAbuseEvent>;
   sumWeightSince(userId: string, since: Date): Promise<number>;
@@ -52,6 +62,12 @@ export interface UgcAbuseEventRepository {
     userId: string,
     opts: { limit: number; cursor?: string },
   ): Promise<{ items: UgcAbuseEvent[]; nextCursor: string | null; hasMore: boolean }>;
+  listAll(opts: {
+    signal?: string;
+    userName?: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: UgcAbuseEventWithUser[]; nextCursor: string | null; hasMore: boolean }>;
   findRecentBodyHashes(userId: string, since: Date, limit?: number): Promise<string[]>;
 }
 
@@ -145,6 +161,47 @@ export class UgcAbuseEventRepositoryImpl implements UgcAbuseEventRepository {
     return {
       items: page.map(toEntity),
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
+      hasMore,
+    };
+  }
+
+  // id ULID time-sortable: cursor `id < ?` = terbaru dulu (pola audit log).
+  async listAll(opts: {
+    signal?: string;
+    userName?: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: UgcAbuseEventWithUser[]; nextCursor: string | null; hasMore: boolean }> {
+    const term = opts.userName?.replace(/[\\%_]/g, '\\$&');
+    const rows = await this.db
+      .select({
+        event: ugcAbuseEvents,
+        username: users.username,
+        canContribute: users.canContribute,
+        mutedUntil: users.contributeMutedUntil,
+      })
+      .from(ugcAbuseEvents)
+      .leftJoin(users, eq(ugcAbuseEvents.userId, users.id))
+      .where(
+        and(
+          opts.signal ? eq(ugcAbuseEvents.signal, opts.signal) : undefined,
+          term ? ilikeCompat(users.username, `%${term}%`) : undefined,
+          opts.cursor ? lt(ugcAbuseEvents.id, opts.cursor) : undefined,
+        ),
+      )
+      .orderBy(desc(ugcAbuseEvents.id))
+      .limit(opts.limit + 1);
+
+    const hasMore = rows.length > opts.limit;
+    const page = hasMore ? rows.slice(0, opts.limit) : rows;
+    return {
+      items: page.map((r) => ({
+        ...toEntity(r.event),
+        username: r.username ?? null,
+        userCanContribute: r.canContribute ?? null,
+        userMutedUntil: r.mutedUntil ?? null,
+      })),
+      nextCursor: hasMore && page.length > 0 ? page[page.length - 1].event.id : null,
       hasMore,
     };
   }

@@ -17,6 +17,7 @@ describe('RecordAbuseSignalUseCase policy', () => {
     sumWeightSince: vi.fn(),
     countSignalSince: vi.fn().mockResolvedValue(0),
     listByUser: vi.fn(),
+    listAll: vi.fn(),
     findRecentBodyHashes: vi.fn(),
   };
 

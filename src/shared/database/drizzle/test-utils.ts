@@ -35,6 +35,10 @@ import {
   discussions,
   userConsents,
   users,
+  ugcAbuseEvents,
+  ugcAnonAbuseEvents,
+  ugcAnonMutes,
+  databaseBackupLogs,
   verifierApplications,
   votes,
   wordAudios,
@@ -226,6 +230,11 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     dialects,
     languages,
     wordImportSessions,
+    // Ledger abuse (FK user_id) + backup logs - sebelum users
+    ugcAbuseEvents,
+    ugcAnonAbuseEvents,
+    ugcAnonMutes,
+    databaseBackupLogs,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,

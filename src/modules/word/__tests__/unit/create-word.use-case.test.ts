@@ -650,7 +650,7 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
           meanings: [
             {
               wordClassId: '01WORDCLASSESNOMINA000000',
-              definition: 'x',
+              definition: 'arti lain',
               orderIndex: 1,
               translations: [
                 { languageId: '01LANGUAGESINDONESIA00000', translationText: 'minum', translationType: 'direct' },

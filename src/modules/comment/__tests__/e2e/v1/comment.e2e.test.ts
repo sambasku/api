@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { config } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { e2eRegisterBody } from '@/shared/testing/e2e-auth';
@@ -99,6 +99,21 @@ describe.skipIf(!hasTestDb)('Comment E2E v1 - post-moderation (09 doc)', () => {
     );
     const { data } = await create.json();
     wordId = data.word_id as string;
+  });
+
+  // Satu takedown berbobot 3 langsung mute penulis (score >= 3 / 24 jam).
+  // File ini berbagi satu kontributor; reset gerbang antar test supaya
+  // skenario berikutnya tidak ketiban CONTRIBUTION_MUTED.
+  beforeEach(async () => {
+    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
+    const { users, ugcAbuseEvents } = await import('@/shared/database/drizzle/schema');
+    const db = getTestDb();
+    await db.delete(ugcAbuseEvents);
+    await db.update(users).set({
+      contributeMutedUntil: null,
+      canContribute: true,
+      isActive: true,
+    });
   });
 
   it('ALUR: POST → published langsung + vote; takedown → body null di publik', async () => {
