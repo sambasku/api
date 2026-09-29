@@ -1,12 +1,22 @@
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
-import { BadGatewayError, ServiceUnavailableError } from '@/shared/errors/app-error';
+import {
+  BadGatewayError,
+  ConflictError,
+  ServiceUnavailableError,
+} from '@/shared/errors/app-error';
 import { env } from '@/shared/config/env';
+import { logger } from '@/shared/logging/logger';
 import { parseGithubRepoUrl } from '@/modules/word/application/utils/github-repo-url';
 import type { GithubActionsDispatchPort } from '../ports/github-actions-dispatch.port';
+import type { DatabaseBackupLogRepository } from '../../domain/repositories/database-backup-log.repository';
 
 const WORKFLOW_FILE = 'backup-release.yml';
 const REF = 'main';
 const DEFAULT_SQLITE_REPO_URL = 'https://github.com/sambasku/sqlite';
+
+/** Baris aktif lebih tua dari ini dianggap workflow tidak pernah melapor balik. */
+export const BACKUP_STALE_MS = 30 * 60 * 1000;
+export const BACKUP_STALE_MESSAGE = 'Timeout - workflow tidak melapor';
 
 export interface TriggerSqliteBackupInput {
   dryRun: boolean;
@@ -16,10 +26,9 @@ export interface TriggerSqliteBackupInput {
 
 export interface TriggerSqliteBackupResult {
   accepted: true;
-  workflow: string;
-  ref: string;
+  log_id: string;
+  status: 'processing';
   dry_run: boolean;
-  html_url: string;
 }
 
 /**
@@ -30,10 +39,15 @@ function resolveGithubToken(): string | undefined {
   return env.PUBLIC_IMAGE_GITHUB_TOKEN || env.PRONUNCIACION_GITHUB_TOKEN || undefined;
 }
 
+/**
+ * Insert log `pending` -> dispatch workflow (bawa log_id) -> `processing`.
+ * CI sqlite meng-UPDATE baris yang sama ke succeeded/failed saat selesai.
+ */
 export class TriggerSqliteBackupUseCase {
   constructor(
     private readonly dispatch: GithubActionsDispatchPort,
     private readonly users: UserRepository,
+    private readonly logs: DatabaseBackupLogRepository,
   ) {}
 
   async execute(input: TriggerSqliteBackupInput): Promise<TriggerSqliteBackupResult> {
@@ -57,9 +71,26 @@ export class TriggerSqliteBackupUseCase {
       );
     }
 
+    await this.logs.failStale(new Date(Date.now() - BACKUP_STALE_MS), BACKUP_STALE_MESSAGE);
+    if (await this.logs.findActive()) {
+      throw new ConflictError(
+        'SQLITE_BACKUP_IN_PROGRESS',
+        'Backup lain masih berjalan - tunggu sampai selesai',
+      );
+    }
+
     const user = await this.users.findById(input.actorUserId);
     const username = user?.username ?? null;
     const triggerSource = input.triggerSource ?? 'console';
+
+    const log = await this.logs.create({
+      triggeredByUserId: input.actorUserId,
+      triggeredByUsername: username,
+      triggerSource,
+      dryRun: input.dryRun,
+      status: 'pending',
+      timeStart: new Date(),
+    });
 
     try {
       await this.dispatch.workflowDispatch({
@@ -72,23 +103,27 @@ export class TriggerSqliteBackupUseCase {
           triggered_by_user_id: input.actorUserId,
           triggered_by_username: username ?? '',
           trigger_source: triggerSource,
+          log_id: log.id,
         },
         token,
       });
     } catch (err) {
-      if (err instanceof BadGatewayError || err instanceof ServiceUnavailableError) throw err;
-      throw new BadGatewayError(
-        'SQLITE_BACKUP_UPSTREAM',
-        'Gagal memicu workflow backup di GitHub',
-      );
+      const upstream =
+        err instanceof BadGatewayError || err instanceof ServiceUnavailableError
+          ? err
+          : new BadGatewayError('SQLITE_BACKUP_UPSTREAM', 'Gagal memicu workflow backup di GitHub');
+      logger.error({ err, logId: log.id }, 'Dispatch backup DB gagal');
+      await this.logs.updateStatus(log.id, 'failed', upstream.message);
+      throw upstream;
     }
+
+    await this.logs.updateStatus(log.id, 'processing');
 
     return {
       accepted: true,
-      workflow: WORKFLOW_FILE,
-      ref: REF,
+      log_id: log.id,
+      status: 'processing',
       dry_run: input.dryRun,
-      html_url: `https://github.com/${owner}/${repo}/actions/workflows/${WORKFLOW_FILE}`,
     };
   }
 }

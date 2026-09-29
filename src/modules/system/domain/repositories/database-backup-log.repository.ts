@@ -1,4 +1,5 @@
-export type DatabaseBackupLogStatus = 'running' | 'succeeded' | 'failed';
+/** `running` = legacy (sebelum API insert di awal); sekarang pending -> processing -> final. */
+export type DatabaseBackupLogStatus = 'pending' | 'processing' | 'running' | 'succeeded' | 'failed';
 export type DatabaseBackupTriggerSource = 'console' | 'schedule' | 'manual';
 
 export interface DatabaseBackupLog {
@@ -35,6 +36,21 @@ export interface DatabaseBackupLogPage {
   hasMore: boolean;
 }
 
+export interface CreateDatabaseBackupLogInput {
+  triggeredByUserId: string | null;
+  triggeredByUsername: string | null;
+  triggerSource: DatabaseBackupTriggerSource;
+  dryRun: boolean;
+  status: DatabaseBackupLogStatus;
+  timeStart: Date;
+}
+
 export interface DatabaseBackupLogRepository {
   list(filter: DatabaseBackupLogFilter): Promise<DatabaseBackupLogPage>;
+  create(input: CreateDatabaseBackupLogInput): Promise<DatabaseBackupLog>;
+  updateStatus(id: string, status: DatabaseBackupLogStatus, errorMessage?: string): Promise<void>;
+  /** Baris terbaru yang masih pending/processing/running. */
+  findActive(): Promise<DatabaseBackupLog | null>;
+  /** Tandai failed baris aktif yang dibuat sebelum `olderThan`. */
+  failStale(olderThan: Date, errorMessage: string): Promise<void>;
 }

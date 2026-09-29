@@ -971,7 +971,7 @@ app.route(
 const githubActionsDispatch = new GithubActionsDispatchService();
 const databaseBackupLogRepo = new DatabaseBackupLogRepositoryImpl(db);
 const systemDatabaseController = new SystemDatabaseController({
-  trigger: new TriggerSqliteBackupUseCase(githubActionsDispatch, userRepo),
+  trigger: new TriggerSqliteBackupUseCase(githubActionsDispatch, userRepo, databaseBackupLogRepo),
   list: new ListDatabaseBackupLogsUseCase(databaseBackupLogRepo),
 });
 app.route(
