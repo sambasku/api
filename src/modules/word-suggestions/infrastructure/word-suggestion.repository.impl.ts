@@ -393,7 +393,29 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
   };
 }
 
-function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot): DiffResult {
+async function relationLemmas(
+  proposed: ProposedChanges,
+  current: CurrentWordSnapshot,
+): Promise<Map<string, string>> {
+  const known = new Map(current.relations.map((relation) => [relation.wordId, relation.lemma]));
+  const missing = [
+    ...new Set(
+      (proposed.relations ?? [])
+        .map((relation) => relation.wordId)
+        .filter((wordId) => !known.get(wordId)),
+    ),
+  ];
+  if (missing.length === 0) return known;
+
+  const rows = await db
+    .select({ id: words.id, lemma: words.lemma })
+    .from(words)
+    .where(inArray(words.id, missing));
+  for (const row of rows) known.set(row.id, row.lemma);
+  return known;
+}
+
+async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot): Promise<DiffResult> {
   const lemma: DiffResult['lemma'] = {
     current: current.lemma,
     proposed: proposed.lemma ?? null,
@@ -430,19 +452,20 @@ function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot): Dif
   }
 
   const curCats = new Set(current.categoryIds);
+  const lemmaOf = await relationLemmas(proposed, current);
   const relAdded = (proposed.relations ?? [])
     .filter((r) => r.action === 'add')
     .map((r) => ({
       relationType: r.relationType,
       wordId: r.wordId,
-      lemma: current.relations.find((c) => c.wordId === r.wordId)?.lemma,
+      lemma: lemmaOf.get(r.wordId),
     }));
   const relRemoved = (proposed.relations ?? [])
     .filter((r) => r.action === 'remove')
     .map((r) => ({
       relationType: r.relationType,
       wordId: r.wordId,
-      lemma: current.relations.find((c) => c.wordId === r.wordId)?.lemma,
+      lemma: lemmaOf.get(r.wordId),
     }));
 
   return {
@@ -850,7 +873,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         wordLemma: row.lemma,
       },
       currentWord: current,
-      diff: buildDiff(proposed, current),
+      diff: await buildDiff(proposed, current),
     };
   }
 
