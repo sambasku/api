@@ -33,6 +33,7 @@ export const activityItemSchema = z.object({
     'pronunciation',
     'example',
     'search_miss',
+    'welcome',
   ]),
   created_at: z.string(),
   actor: activityActorSchema,

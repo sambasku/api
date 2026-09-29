@@ -41,6 +41,9 @@ describe('ListActivityUseCase', () => {
           actor: null,
         },
       ]),
+      listRecentWelcomes: vi.fn().mockResolvedValue([
+        item('welcome', 'u1', '2026-09-28T07:00:00.000Z'),
+      ]),
     };
 
     const useCase = new ListActivityUseCase(repo);
@@ -52,8 +55,10 @@ describe('ListActivityUseCase', () => {
       'word',
       'word_image',
       'search_miss',
+      'welcome',
     ]);
     expect(repo.listRecentWords).toHaveBeenCalled();
     expect(repo.listRecentApprovedContributions).toHaveBeenCalled();
+    expect(repo.listRecentWelcomes).toHaveBeenCalled();
   });
 });

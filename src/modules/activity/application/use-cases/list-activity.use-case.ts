@@ -19,7 +19,7 @@ export class ListActivityUseCase {
   async execute(limit = ACTIVITY_DEFAULT_LIMIT): Promise<ActivityItem[]> {
     const perSource = ACTIVITY_PER_SOURCE;
 
-    const [words, comments, votes, discussions, contributions, searchMisses] =
+    const [words, comments, votes, discussions, contributions, searchMisses, welcomes] =
       await Promise.all([
         this.activityRepo.listRecentWords(perSource),
         this.activityRepo.listRecentComments(perSource),
@@ -30,10 +30,19 @@ export class ListActivityUseCase {
           perSource * CONTRIB_ENTITY_TYPES.length,
         ),
         this.activityRepo.listRecentVisibleSearchMisses(perSource),
+        this.activityRepo.listRecentWelcomes(perSource),
       ]);
 
     return mergeActivityFeed(
-      [...words, ...comments, ...votes, ...discussions, ...contributions, ...searchMisses],
+      [
+        ...words,
+        ...comments,
+        ...votes,
+        ...discussions,
+        ...contributions,
+        ...searchMisses,
+        ...welcomes,
+      ],
       { limit },
     );
   }

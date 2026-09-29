@@ -25,7 +25,8 @@ export function createActivityRoutes(deps: { controller: ActivityController }) {
     summary: 'Feed lintas aktivitas publik (beranda)',
     description:
       'Gabungan kata baru, komentar, vote, diskusi, kontribusi media, ' +
-      'dan search-miss tayang. Tanpa auth. V1 tanpa cursor; limit 1-50 (default 20).',
+      'search-miss tayang, dan selamat datang akun terverifikasi. ' +
+      'Tanpa auth. V1 tanpa cursor; limit 1-50 (default 20).',
     request: { query: listActivityQuerySchema },
     responses: {
       200: {

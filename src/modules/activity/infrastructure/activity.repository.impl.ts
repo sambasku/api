@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   comments,
   contributions,
@@ -14,6 +14,7 @@ import {
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
 import {
   publicAccountDisplayName,
@@ -24,9 +25,9 @@ import type { ActivityRepository } from '../domain/repositories/activity.reposit
 
 const CONTRIB_BODY: Record<string, string> = {
   word_image: 'Menambah foto',
-  word_audio: 'Merekam audio',
-  pronunciation: 'Menambah pelafalan',
-  example: 'Menambah contoh',
+  word_audio: 'Merekam suara',
+  pronunciation: 'Menambah cara baca',
+  example: 'Menambah contoh kalimat',
 };
 
 function feedSafeUsageLabelsSql() {
@@ -45,7 +46,7 @@ function snippet(text: string, max = 120): string {
 
 function searchMissBody(term: string): string {
   const shown = term.trim() || '…';
-  return `mencari ${shown} tapi tidak terdapat. Bantu isi.`;
+  return `Mencari "${shown}" - belum ada di kamus. Bantu isi.`;
 }
 
 /** Fulfilled = ada kata published dengan lemma = term (arah lemma). */
@@ -103,7 +104,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
               }
             : null,
         body: sense ? `${row.lemma} · ${snippet(sense, 80)}` : row.lemma,
-        subtitle: 'Kata baru',
+        subtitle: 'Baru ditambahkan',
         target: { type: 'word', id: row.id },
       };
     });
@@ -152,7 +153,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           displayName,
           avatarUrl: row.authorDeletedAt ? null : (row.avatarUrl ?? null),
         },
-        body: snippet(row.body || '(kosong)'),
+        body: snippet(row.body || '…'),
         subtitle: row.lemma,
         target: { type: 'word', id: row.wordId },
       };
@@ -192,8 +193,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         row.authorDeletedAt,
       );
       const preview = previewMap.get(`${row.entityType}:${row.entityId}`);
-      const voteLabel = row.value >= 0 ? 'Vote naik' : 'Vote turun';
-      const targetLabel = preview?.label || row.entityType;
+      const targetLabel = preview?.label || 'entri kamus';
+      const body =
+        row.value >= 0
+          ? `Menyukai ${targetLabel}`
+          : `Kurang setuju dengan ${targetLabel}`;
       return {
         id: `vote:${row.id}`,
         kind: 'vote' as const,
@@ -203,8 +207,8 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           displayName,
           avatarUrl: row.avatarUrl ?? null,
         },
-        body: `${voteLabel} · ${targetLabel}`,
-        subtitle: row.entityType,
+        body,
+        subtitle: null,
         target: preview?.wordId
           ? { type: 'word', id: preview.wordId }
           : row.entityType === 'discussion'
@@ -248,8 +252,8 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           displayName,
           avatarUrl: row.authorDeletedAt ? null : (row.avatarUrl ?? null),
         },
-        body: bodyRaw ? snippet(bodyRaw) : '(diskusi tanpa teks)',
-        subtitle: 'Diskusi',
+        body: bodyRaw ? snippet(bodyRaw) : 'Membuka ruang diskusi',
+        subtitle: null,
         target: { type: 'discussion', id: row.id },
       };
     });
@@ -345,12 +349,59 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       createdAt: row.lastSearchedAt ?? row.createdAt,
       actor: null,
       body: searchMissBody(row.term),
-      subtitle: 'Pencarian kosong',
+      subtitle: null,
       target: {
         type: 'search_miss',
         id: row.id,
       },
     }));
+  }
+
+  async listRecentWelcomes(limit: number): Promise<ActivityItem[]> {
+    // Tampil setelah akun terverifikasi (OTP email atau OAuth langsung verified).
+    // Urut createdAt: waktu daftar; filter emailVerified menutup akun belum OTP.
+    const rows = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        createdAt: users.createdAt,
+        deletedAt: users.deletedAt,
+      })
+      .from(users)
+      .where(
+        and(
+          eq(users.emailVerified, true),
+          eq(users.isActive, true),
+          isNull(users.deletedAt),
+          ne(users.id, ANONIM_USER_ID),
+        ),
+      )
+      .orderBy(desc(users.createdAt), desc(users.id))
+      .limit(limit);
+
+    return rows.map((row) => {
+      const username = publicAccountName(row.username, row.deletedAt);
+      const displayName = publicAccountDisplayName(
+        row.displayName,
+        row.username,
+        row.deletedAt,
+      );
+      return {
+        id: `welcome:${row.id}`,
+        kind: 'welcome' as const,
+        createdAt: row.createdAt,
+        actor: {
+          username,
+          displayName,
+          avatarUrl: row.deletedAt ? null : (row.avatarUrl ?? null),
+        },
+        body: 'Bergabung di SambasKu',
+        subtitle: 'Selamat datang',
+        target: { type: 'user', id: row.id },
+      };
+    });
   }
 
   private async attachWordSenses(wordIds: string[]): Promise<Map<string, string>> {

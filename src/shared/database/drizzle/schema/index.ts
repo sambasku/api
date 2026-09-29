@@ -45,3 +45,4 @@ export * from './app-settings.schema';
 export * from './legal-documents.schema';
 export * from './user-consents.schema';
 export * from './api-clients.schema';
+export * from './database-backup-logs.schema';

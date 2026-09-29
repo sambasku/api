@@ -68,6 +68,11 @@ const envSchema = z.object({
   PRONUNCIACION_GITHUB_TOKEN: z.string().optional(),
   PRONUNCIACION_GITHUB_URL: z.url().optional(),
 
+  // Target repo backup (non-secret). Token trigger = PUBLIC_IMAGE_GITHUB_TOKEN
+  // (fallback PRONUNCIACION_GITHUB_TOKEN) - PAT asset yang sudah ada, harus
+  // punya Actions write di repo sqlite.
+  SQLITE_BACKUP_GITHUB_URL: z.url().optional(),
+
   // KBBI lemma lookup (docs/api/13-api-kbbi-lemma-definition.md).
   // Pola sama IMAGE_PROVIDER + IMAGEKIT_*: pilih provider, kredensial/URL
   // spesifik per vendor. Default provider = raf555.

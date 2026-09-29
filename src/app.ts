@@ -27,6 +27,12 @@ import {
 } from '@/modules/developer-oauth/application/use-cases/admin-api-client.use-cases';
 import { AdminApiClientController } from '@/modules/developer-oauth/presentation/v1/admin-api-client.controller';
 import { createAdminApiClientRoutes } from '@/modules/developer-oauth/presentation/v1/admin-api-client.routes';
+import { GithubActionsDispatchService } from '@/modules/system/infrastructure/github-actions-dispatch';
+import { DatabaseBackupLogRepositoryImpl } from '@/modules/system/infrastructure/database-backup-log.repository.impl';
+import { TriggerSqliteBackupUseCase } from '@/modules/system/application/use-cases/trigger-sqlite-backup.use-case';
+import { ListDatabaseBackupLogsUseCase } from '@/modules/system/application/use-cases/list-database-backup-logs.use-case';
+import { SystemDatabaseController } from '@/modules/system/presentation/v1/system-database.controller';
+import { createSystemDatabaseRoutes } from '@/modules/system/presentation/v1/system-database.routes';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { UserRepositoryImpl } from '@/modules/auth/infrastructure/user.repository.impl';
 import { RefreshTokenRepositoryImpl } from '@/modules/auth/infrastructure/refresh-token.repository.impl';
@@ -899,6 +905,17 @@ const adminApiClientController = new AdminApiClientController({
 app.route(
   '/api/v1/admin/api-clients',
   createAdminApiClientRoutes({ controller: adminApiClientController, authenticate }),
+);
+
+const githubActionsDispatch = new GithubActionsDispatchService();
+const databaseBackupLogRepo = new DatabaseBackupLogRepositoryImpl(db);
+const systemDatabaseController = new SystemDatabaseController({
+  trigger: new TriggerSqliteBackupUseCase(githubActionsDispatch, userRepo),
+  list: new ListDatabaseBackupLogsUseCase(databaseBackupLogRepo),
+});
+app.route(
+  '/api/v1/admin/system/database',
+  createSystemDatabaseRoutes({ controller: systemDatabaseController, authenticate }),
 );
 
 // Modul word - admin (write) + publik (read)

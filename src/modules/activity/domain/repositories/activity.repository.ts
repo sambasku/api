@@ -11,4 +11,6 @@ export interface ActivityRepository {
     limit: number,
   ): Promise<ActivityItem[]>;
   listRecentVisibleSearchMisses(limit: number): Promise<ActivityItem[]>;
+  /** Akun terverifikasi (setelah OTP / OAuth) - baris selamat datang. */
+  listRecentWelcomes(limit: number): Promise<ActivityItem[]>;
 }

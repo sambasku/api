@@ -8,7 +8,8 @@ export type ActivityKind =
   | 'word_audio'
   | 'pronunciation'
   | 'example'
-  | 'search_miss';
+  | 'search_miss'
+  | 'welcome';
 
 export interface ActivityActor {
   username: string | null;

@@ -109,8 +109,11 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
       lastSearchedAt: new Date(),
     });
 
-    // pastikan username ada di DB (register sudah set)
-    await db.update(users).set({ avatarUrl: null }).where(eq(users.id, userId));
+    // pastikan username ada di DB (register sudah set) + verified supaya welcome masuk
+    await db
+      .update(users)
+      .set({ avatarUrl: null, emailVerified: true })
+      .where(eq(users.id, userId));
     void username;
   });
 
@@ -124,6 +127,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         kind: string;
         actor: { username: string | null; email?: string } | null;
         body: string;
+        subtitle: string | null;
       }>;
       meta: { limit: number };
     };
@@ -142,9 +146,15 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     const miss = body.data.find((i) => i.kind === 'search_miss');
     expect(miss).toBeTruthy();
     expect(miss!.actor).toBeNull();
-    expect(miss!.body).toMatch(/mencari .+ Bantu isi/);
+    expect(miss!.body).toMatch(/Mencari ".+" - belum ada/);
 
     const vote = body.data.find((i) => i.kind === 'vote');
     expect(vote?.actor?.username).toBeTruthy();
+
+    const welcome = body.data.find((i) => i.kind === 'welcome');
+    expect(welcome).toBeTruthy();
+    expect(welcome!.body).toBe('Bergabung di SambasKu');
+    expect(welcome!.subtitle).toBe('Selamat datang');
+    expect(welcome!.actor?.username).toBeTruthy();
   });
 });
