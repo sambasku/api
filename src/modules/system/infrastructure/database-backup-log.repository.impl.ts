@@ -1,12 +1,16 @@
-import { desc, lt } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import { databaseBackupLogs } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
+  CreateDatabaseBackupLogInput,
   DatabaseBackupLog,
   DatabaseBackupLogFilter,
   DatabaseBackupLogPage,
   DatabaseBackupLogRepository,
+  DatabaseBackupLogStatus,
 } from '../domain/repositories/database-backup-log.repository';
+
+const ACTIVE_STATUSES = ['pending', 'processing', 'running'];
 
 function toEntity(row: typeof databaseBackupLogs.$inferSelect): DatabaseBackupLog {
   return {
@@ -52,5 +56,51 @@ export class DatabaseBackupLogRepositoryImpl implements DatabaseBackupLogReposit
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
       hasMore,
     };
+  }
+
+  async create(input: CreateDatabaseBackupLogInput): Promise<DatabaseBackupLog> {
+    const [row] = await this.db.insert(databaseBackupLogs).values(input).returning();
+    return toEntity(row);
+  }
+
+  async updateStatus(
+    id: string,
+    status: DatabaseBackupLogStatus,
+    errorMessage?: string,
+  ): Promise<void> {
+    const now = new Date();
+    const final = status === 'succeeded' || status === 'failed';
+    await this.db
+      .update(databaseBackupLogs)
+      .set({
+        status,
+        updatedAt: now,
+        ...(final ? { timeEnd: now } : {}),
+        ...(errorMessage !== undefined ? { errorMessage } : {}),
+      })
+      .where(eq(databaseBackupLogs.id, id));
+  }
+
+  async findActive(): Promise<DatabaseBackupLog | null> {
+    const [row] = await this.db
+      .select()
+      .from(databaseBackupLogs)
+      .where(inArray(databaseBackupLogs.status, ACTIVE_STATUSES))
+      .orderBy(desc(databaseBackupLogs.createdAt))
+      .limit(1);
+    return row ? toEntity(row) : null;
+  }
+
+  async failStale(olderThan: Date, errorMessage: string): Promise<void> {
+    const now = new Date();
+    await this.db
+      .update(databaseBackupLogs)
+      .set({ status: 'failed', errorMessage, updatedAt: now, timeEnd: now })
+      .where(
+        and(
+          inArray(databaseBackupLogs.status, ACTIVE_STATUSES),
+          lt(databaseBackupLogs.createdAt, olderThan),
+        ),
+      );
   }
 }

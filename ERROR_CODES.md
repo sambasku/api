@@ -107,7 +107,8 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `PRONUNCIACION_UPLOAD_UNAVAILABLE` | 503 | Provider audio pelafalan belum dikonfigurasi / token GitHub invalid (`PRONUNCIACION_GITHUB_*`) |
 | `PRONUNCIACION_UPLOAD_FAILED` | 502 | Upload ke GitHub Contents API gagal (network / 5xx) |
 | `SQLITE_BACKUP_UNAVAILABLE` | 503 | Token asset GitHub kosong (`PUBLIC_IMAGE_GITHUB_TOKEN` / `PRONUNCIACION_GITHUB_TOKEN`); trigger backup dimatikan |
-| `SQLITE_BACKUP_UPSTREAM` | 502 | GitHub Actions menolak / gagal `workflow_dispatch` backup |
+| `SQLITE_BACKUP_UPSTREAM` | 502 | GitHub Actions menolak / gagal `workflow_dispatch` backup (baris log ikut ditandai `failed`) |
+| `SQLITE_BACKUP_IN_PROGRESS` | 409 | Masih ada log backup `pending` / `processing` (< 30 menit); tunggu selesai |
 | `WORD_AUDIO_NOT_FOUND` | 404 | Audio pelafalan tidak ditemukan / sudah soft-deleted |
 | `EXAMPLE_NOT_FOUND` | 404 | Contoh kalimat tidak ditemukan pada kata (upload audio example) |
 | `DIALECT_NOT_FOUND` | 404 | Dialek tidak ditemukan (upload audio) |

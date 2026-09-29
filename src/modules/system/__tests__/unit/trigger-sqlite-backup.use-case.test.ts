@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadGatewayError, ServiceUnavailableError } from '@/shared/errors/app-error';
+import {
+  BadGatewayError,
+  ConflictError,
+  ServiceUnavailableError,
+} from '@/shared/errors/app-error';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { GithubActionsDispatchPort } from '../../application/ports/github-actions-dispatch.port';
+import type { DatabaseBackupLogRepository } from '../../domain/repositories/database-backup-log.repository';
 import { TriggerSqliteBackupUseCase } from '../../application/use-cases/trigger-sqlite-backup.use-case';
 
 const envState = vi.hoisted(() => ({
@@ -21,6 +26,15 @@ describe('TriggerSqliteBackupUseCase', () => {
   const users = {
     findById: vi.fn(),
   } as unknown as UserRepository;
+  const logs = {
+    list: vi.fn(),
+    create: vi.fn(),
+    updateStatus: vi.fn(),
+    findActive: vi.fn(),
+    failStale: vi.fn(),
+  } as unknown as DatabaseBackupLogRepository;
+
+  const makeUc = () => new TriggerSqliteBackupUseCase(dispatch, users, logs);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,23 +45,39 @@ describe('TriggerSqliteBackupUseCase', () => {
       id: '01USER',
       username: 'admin',
     } as never);
+    vi.mocked(logs.findActive).mockResolvedValue(null);
+    vi.mocked(logs.create).mockResolvedValue({ id: '01LOG' } as never);
+    vi.mocked(dispatch.workflowDispatch).mockResolvedValue(undefined);
   });
 
   it('503 jika token image dan audio kosong', async () => {
     envState.PUBLIC_IMAGE_GITHUB_TOKEN = undefined;
     envState.PRONUNCIACION_GITHUB_TOKEN = undefined;
-    const uc = new TriggerSqliteBackupUseCase(dispatch, users);
     await expect(
-      uc.execute({ dryRun: false, actorUserId: '01USER' }),
+      makeUc().execute({ dryRun: false, actorUserId: '01USER' }),
     ).rejects.toBeInstanceOf(ServiceUnavailableError);
     expect(dispatch.workflowDispatch).not.toHaveBeenCalled();
+    expect(logs.create).not.toHaveBeenCalled();
   });
 
-  it('pakai PUBLIC_IMAGE_GITHUB_TOKEN untuk dispatch', async () => {
-    const uc = new TriggerSqliteBackupUseCase(dispatch, users);
-    const result = await uc.execute({ dryRun: true, actorUserId: '01USER' });
-    expect(result.accepted).toBe(true);
-    expect(result.dry_run).toBe(true);
+  it('insert pending -> dispatch dengan log_id -> processing', async () => {
+    const result = await makeUc().execute({ dryRun: true, actorUserId: '01USER' });
+    expect(result).toEqual({
+      accepted: true,
+      log_id: '01LOG',
+      status: 'processing',
+      dry_run: true,
+    });
+    expect(logs.failStale).toHaveBeenCalled();
+    expect(logs.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'pending',
+        dryRun: true,
+        triggeredByUserId: '01USER',
+        triggeredByUsername: 'admin',
+        triggerSource: 'console',
+      }),
+    );
     expect(dispatch.workflowDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         owner: 'sambasku',
@@ -58,26 +88,37 @@ describe('TriggerSqliteBackupUseCase', () => {
           triggered_by_user_id: '01USER',
           triggered_by_username: 'admin',
           trigger_source: 'console',
+          log_id: '01LOG',
         }),
       }),
     );
+    expect(logs.updateStatus).toHaveBeenCalledWith('01LOG', 'processing');
   });
 
   it('fallback ke PRONUNCIACION_GITHUB_TOKEN jika image kosong', async () => {
     envState.PUBLIC_IMAGE_GITHUB_TOKEN = undefined;
     envState.PRONUNCIACION_GITHUB_TOKEN = 'ghp_audio';
-    const uc = new TriggerSqliteBackupUseCase(dispatch, users);
-    await uc.execute({ dryRun: false, actorUserId: '01USER' });
+    await makeUc().execute({ dryRun: false, actorUserId: '01USER' });
     expect(dispatch.workflowDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ token: 'ghp_audio' }),
     );
   });
 
-  it('502 jika dispatch melempar', async () => {
+  it('502 jika dispatch melempar, log ditandai failed', async () => {
     vi.mocked(dispatch.workflowDispatch).mockRejectedValue(new Error('network'));
-    const uc = new TriggerSqliteBackupUseCase(dispatch, users);
     await expect(
-      uc.execute({ dryRun: false, actorUserId: '01USER' }),
+      makeUc().execute({ dryRun: false, actorUserId: '01USER' }),
     ).rejects.toBeInstanceOf(BadGatewayError);
+    expect(logs.updateStatus).toHaveBeenCalledWith('01LOG', 'failed', expect.any(String));
+    expect(logs.updateStatus).not.toHaveBeenCalledWith('01LOG', 'processing');
+  });
+
+  it('409 jika masih ada backup aktif, tanpa insert/dispatch', async () => {
+    vi.mocked(logs.findActive).mockResolvedValue({ id: '01OLD', status: 'processing' } as never);
+    await expect(
+      makeUc().execute({ dryRun: false, actorUserId: '01USER' }),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(logs.create).not.toHaveBeenCalled();
+    expect(dispatch.workflowDispatch).not.toHaveBeenCalled();
   });
 });
