@@ -25,7 +25,8 @@ export interface GetDiscussionDetailResult {
  * Admin memakai endpoint terpisah.
  *
  * Vote: pertanyaan = upvotes saja (upvote-only); balasan = up+down.
- * Urutan reply: pinned → net desc → created_at desc.
+ * Urutan reply: created_at naik, seri dipecah id naik.
+ * Sematan dan skor vote tidak mengubah posisi.
  */
 export class GetDiscussionDetailUseCase {
   constructor(
@@ -78,17 +79,10 @@ export class GetDiscussionDetailUseCase {
       return { ...r, upvotes: v.upvotes, downvotes: v.downvotes };
     });
 
-    const pinnedId = help.pinnedReplyId;
     withVotes.sort((a, b) => {
-      const aPinned = pinnedId != null && a.id === pinnedId;
-      const bPinned = pinnedId != null && b.id === pinnedId;
-      if (aPinned !== bPinned) return aPinned ? -1 : 1;
-
-      const netA = a.upvotes - a.downvotes;
-      const netB = b.upvotes - b.downvotes;
-      if (netA !== netB) return netB - netA;
-
-      return b.createdAt.getTime() - a.createdAt.getTime();
+      const timeCmp = a.createdAt.getTime() - b.createdAt.getTime();
+      if (timeCmp !== 0) return timeCmp;
+      return a.id.localeCompare(b.id);
     });
 
     return {

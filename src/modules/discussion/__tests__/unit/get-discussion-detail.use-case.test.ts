@@ -86,29 +86,29 @@ function makeVoteRepo(counts = new Map<string, { upvotes: number; downvotes: num
 }
 
 describe('GetDiscussionDetailUseCase', () => {
-  it('published → replies di-enrich upvotes/downvotes + diurutkan pinned/net/created', async () => {
-    const olderHigh = makeReply(R1, {
-      body: 'tinggi',
+  it('published → replies di-enrich upvotes/downvotes + diurutkan created_at naik', async () => {
+    const sameTimeLowId = makeReply(R1, {
+      body: 'seri-awal',
       createdAt: new Date('2026-09-24T01:00:00Z'),
     });
-    const newerLow = makeReply(R2, {
-      body: 'rendah',
-      createdAt: new Date('2026-09-24T02:00:00Z'),
-    });
-    const pinned = makeReply(R3, {
-      body: 'pinned',
+    const oldestHighScore = makeReply(R2, {
+      body: 'paling-lama',
       createdAt: new Date('2026-09-24T00:30:00Z'),
+    });
+    const pinnedLater = makeReply(R3, {
+      body: 'pinned',
+      createdAt: new Date('2026-09-24T01:00:00Z'),
     });
 
     const counts = new Map([
-      [`discussion_reply:${R1}`, { upvotes: 5, downvotes: 0 }],
-      [`discussion_reply:${R2}`, { upvotes: 1, downvotes: 0 }],
+      [`discussion_reply:${R1}`, { upvotes: 1, downvotes: 0 }],
+      [`discussion_reply:${R2}`, { upvotes: 5, downvotes: 0 }],
       [`discussion_reply:${R3}`, { upvotes: 0, downvotes: 0 }],
     ]);
 
     const repo = makeRepo({
       findById: vi.fn().mockResolvedValue(makeHelp({ pinnedReplyId: R3 })),
-      listReplies: vi.fn().mockResolvedValue([olderHigh, newerLow, pinned]),
+      listReplies: vi.fn().mockResolvedValue([sameTimeLowId, oldestHighScore, pinnedLater]),
     });
     const voteRepo = makeVoteRepo(counts);
     const uc = new GetDiscussionDetailUseCase(repo, voteRepo);
@@ -121,10 +121,10 @@ describe('GetDiscussionDetailUseCase', () => {
       { entityType: 'discussion_reply', entityId: R2 },
       { entityType: 'discussion_reply', entityId: R3 },
     ]);
-    expect(result.replies.map((r) => r.id)).toEqual([R3, R1, R2]);
-    expect(result.replies[0]).toMatchObject({ id: R3, upvotes: 0, downvotes: 0 });
-    expect(result.replies[1]).toMatchObject({ id: R1, upvotes: 5, downvotes: 0 });
-    expect(result.replies[2]).toMatchObject({ id: R2, upvotes: 1, downvotes: 0 });
+    expect(result.replies.map((r) => r.id)).toEqual([R2, R1, R3]);
+    expect(result.replies[0]).toMatchObject({ id: R2, upvotes: 5, downvotes: 0 });
+    expect(result.replies[1]).toMatchObject({ id: R1, upvotes: 1, downvotes: 0 });
+    expect(result.replies[2]).toMatchObject({ id: R3, upvotes: 0, downvotes: 0 });
     expect(result.discussion.upvotes).toBe(0);
   });
 
