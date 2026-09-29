@@ -237,7 +237,8 @@ export interface VoteRepository {
   listByUser(userId: string, opts: VoteHistoryListOptions): Promise<VoteHistoryListResult>;
 
   /**
-   * Antrean kata published yang user belum vote (34-api-vote-deck.md).
+   * Antrean kata published yang user belum vote dan belum skip
+   * (34-api-vote-deck.md).
    * Urut total vote Asc, lalu approved_at Asc, id Asc. LIMIT+1 has_more.
    */
   listDeckWords(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;

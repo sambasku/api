@@ -28,6 +28,11 @@ export const listContributionsQuerySchema = z.object({
     .transform((v) => v === true || v === 'true' || v === '1'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().length(26).optional(),
+  /** true = sembunyikan item yang user auth sudah skip (antrean mobile) */
+  hide_skipped: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === true || v === 'true' || v === '1'),
 });
 
 export type ListContributionsQueryBody = z.infer<typeof listContributionsQuerySchema>;
@@ -233,4 +238,12 @@ export const myContributionDetailParamsSchema = z.object({
 export const myContributionDetailResponseSchema = z.object({
   success: z.literal(true),
   data: mySubmissionItemSchema,
+});
+
+export const skipContributionResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    id: z.string(),
+    skipped: z.boolean(),
+  }),
 });

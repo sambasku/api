@@ -24,6 +24,8 @@ export interface ContributionListFilter {
   viewerId?: string;
   /** admin|root melihat semua reopened claim di antrean global. */
   viewerIsElevated?: boolean;
+  /** true = sembunyikan kontribusi yang viewer ini sudah skip. */
+  hideSkipped?: boolean;
   limit: number;
   /** cursor-based (Section 13): ULID id item terakhir halaman sebelumnya */
   cursor?: string;

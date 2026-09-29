@@ -15,6 +15,11 @@ import {
 } from './validators/suggestion.validator';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { ValidationError } from '@/shared/errors/app-error';
+import { hasFeedExcludedUsageLabels } from '@/shared/constants/usage-labels';
+import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
+import { composeReasonDisplay } from '../../domain/entities/word-suggestion.entity';
+import { checkSuggestionCategoryShape } from '../../application/utils/suggestion-category-shape';
+import { censorSuggestionText } from '../../application/utils/suggestion-blocklist';
 
 type ApproveSuggestionBody = {
   comment?: string;
@@ -90,6 +95,7 @@ async function parseApproveSuggestionPayload(c: Context): Promise<{
 export interface WordSuggestionControllerDeps {
   repository: WordSuggestionRepositoryImpl;
   inbox?: RecordInboxNotificationUseCase;
+  blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>;
 }
 
 export class WordSuggestionController {
@@ -97,8 +103,27 @@ export class WordSuggestionController {
 
   async createSuggestion(c: Context, body: CreateSuggestionRequest, userId: string, wordId: string, actorRole?: string) {
     await assertCanContribute(userId);
-    const proposed = mapProposedChanges(body.proposed_changes);
-    const { reasonCode, reasonDisplay } = resolveReasonFields(body);
+    const { reasonCode, reasonText } = resolveReasonFields(body);
+    let proposed = mapProposedChanges(body.proposed_changes);
+
+    const shapeIssues = checkSuggestionCategoryShape(reasonCode, proposed);
+    if (shapeIssues.length > 0) throw new ValidationError(shapeIssues);
+
+    let finalReasonText = reasonText;
+    // Kata berlabel kasar/tabu/seksual/diskriminatif memang isi kamus dan
+    // tidak pernah tampil di feed: tidak disaring.
+    if (this.deps.blocklist) {
+      const labels = await this.deps.repository.getWordUsageLabels(wordId);
+      if (!hasFeedExcludedUsageLabels(labels)) {
+        const blocked = await this.deps.blocklist.listAllActiveWords();
+        const censored = censorSuggestionText(proposed, reasonText, blocked);
+        if (censored.issues.length > 0) throw new ValidationError(censored.issues);
+        proposed = censored.changes;
+        finalReasonText = censored.reasonText;
+      }
+    }
+    const reasonDisplay = composeReasonDisplay(reasonCode, finalReasonText);
+
     const suggestion = await this.deps.repository.createSuggestion(
       userId,
       wordId,

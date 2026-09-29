@@ -1,6 +1,8 @@
 import type { Context } from 'hono';
+import type { AuthUser } from '@/shared/types';
 import type { ActivityItem } from '../../domain/entities/activity-item.entity';
 import type { ListActivityUseCase } from '../../application/use-cases/list-activity.use-case';
+import type { RecordCardShareUseCase } from '../../application/use-cases/record-card-share.use-case';
 import type { ListActivityQuery } from './validators/activity.validator';
 
 function toWire(item: ActivityItem) {
@@ -22,7 +24,9 @@ function toWire(item: ActivityItem) {
 }
 
 export class ActivityController {
-  constructor(private readonly deps: { list: ListActivityUseCase }) {}
+  constructor(
+    private readonly deps: { list: ListActivityUseCase; recordCardShare: RecordCardShareUseCase },
+  ) {}
 
   async list(c: Context, query: ListActivityQuery) {
     const page = await this.deps.list.execute(query.limit, query.cursor);
@@ -35,5 +39,11 @@ export class ActivityController {
         has_more: page.hasMore,
       },
     });
+  }
+
+  async recordCardShare(c: Context, wordId: string) {
+    const user = c.get('user') as AuthUser;
+    const { recorded } = await this.deps.recordCardShare.execute(user.user_id, wordId);
+    return c.json({ success: true as const, data: { recorded } }, recorded ? 201 : 200);
   }
 }

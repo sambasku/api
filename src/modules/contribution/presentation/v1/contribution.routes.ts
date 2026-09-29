@@ -5,6 +5,7 @@ import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
+import { opaqueId } from '@/shared/validation/id';
 import type { AppVariables } from '@/shared/types';
 import type { ContributionController } from './contribution.controller';
 import {
@@ -15,6 +16,7 @@ import {
   listContributionsResponseSchema,
   rejectContributionSchema,
   reviewDecisionResponseSchema,
+  skipContributionResponseSchema,
 } from './validators/contribution.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -39,6 +41,7 @@ export function createContributionRoutes(deps: ContributionRoutesDeps) {
   routes.use('/:id/reject', ...reviewer);
   routes.use('/:id/correct', ...reviewer);
   routes.use('/:id/reopen', ...reviewer);
+  routes.use('/:id/skip', ...reviewer);
 
   const listRoute = createRoute({
     method: 'get',
@@ -143,12 +146,47 @@ export function createContributionRoutes(deps: ContributionRoutesDeps) {
     },
   });
 
+  const skipRoute = createRoute({
+    method: 'post',
+    path: '/:id/skip',
+    tags: ['Contributions', 'Admin'],
+    summary:
+      'Lewati kontribusi untuk verifikator ini - status tetap pending, tidak menulis review. Idempoten',
+    request: {
+      params: z.object({ id: opaqueId }),
+    },
+    responses: {
+      200: { description: 'Skip tercatat', content: json(skipContributionResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan verifikator', content: json(errorResponseSchema) },
+      404: { description: 'Kontribusi tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const unskipRoute = createRoute({
+    method: 'delete',
+    path: '/:id/skip',
+    tags: ['Contributions', 'Admin'],
+    summary: 'Batalkan skip kontribusi untuk verifikator ini - idempoten bila kontribusi ada',
+    request: {
+      params: z.object({ id: opaqueId }),
+    },
+    responses: {
+      200: { description: 'Skip dihapus', content: json(skipContributionResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan verifikator', content: json(errorResponseSchema) },
+      404: { description: 'Kontribusi tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
   routes.openapi(detailRoute, (c) => deps.controller.detail(c, c.req.param('id')) as never);
   routes.openapi(approveRoute, (c) => deps.controller.approve(c, c.req.param('id')) as never);
   routes.openapi(rejectRoute, (c) => deps.controller.reject(c, c.req.param('id'), c.req.valid('json')) as never);
   routes.openapi(correctRoute, (c) => deps.controller.correct(c, c.req.param('id'), c.req.valid('json')) as never);
   routes.openapi(reopenRoute, (c) => deps.controller.reopen(c, c.req.param('id')) as never);
+  routes.openapi(skipRoute, (c) => deps.controller.skip(c, c.req.valid('param').id) as never);
+  routes.openapi(unskipRoute, (c) => deps.controller.unskip(c, c.req.valid('param').id) as never);
 
   return routes;
 }

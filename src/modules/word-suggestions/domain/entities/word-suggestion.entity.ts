@@ -8,15 +8,56 @@ export type VariantAction = 'add' | 'remove';
 export type ImageAction = 'add' | 'remove' | 'set_primary';
 export type RelationType = 'synonym' | 'antonym' | 'has_component' | 'derived_from';
 
+/** Kategori usulan: bentuk proposed_changes dikunci per kategori. */
+export const SUGGESTION_CATEGORY_CODES = [
+  'change_meaning',
+  'change_word_class',
+  'add_meaning',
+  'add_photo',
+  'change_photo',
+  'synonym',
+  'antonym',
+  'spelling_variant',
+  'lemma_notes',
+] as const;
+
+export type SuggestionCategoryCode = (typeof SUGGESTION_CATEGORY_CODES)[number];
+
+/** Kode alasan lama: payload boleh campuran, tanpa aturan bentuk. */
+export const LEGACY_REASON_CODES = [
+  'typo',
+  'inaccurate_definition',
+  'missing_example',
+  'missing_relation',
+  'image_issue',
+  'other',
+] as const;
+
 export type SuggestionReasonCode =
-  | 'typo'
-  | 'inaccurate_definition'
-  | 'missing_example'
-  | 'missing_relation'
-  | 'image_issue'
-  | 'other';
+  | SuggestionCategoryCode
+  | (typeof LEGACY_REASON_CODES)[number];
+
+export const SUGGESTION_REASON_CODES = [
+  ...SUGGESTION_CATEGORY_CODES,
+  ...LEGACY_REASON_CODES,
+] as const;
+
+const CATEGORY_SET = new Set<string>(SUGGESTION_CATEGORY_CODES);
+
+export function isSuggestionCategory(code: string): code is SuggestionCategoryCode {
+  return CATEGORY_SET.has(code);
+}
 
 export const REASON_CODE_LABELS: Record<SuggestionReasonCode, string> = {
+  change_meaning: 'Ubah makna',
+  change_word_class: 'Ubah kelas kata',
+  add_meaning: 'Tambah makna',
+  add_photo: 'Tambah foto',
+  change_photo: 'Ubah foto',
+  synonym: 'Sinonim',
+  antonym: 'Antonim',
+  spelling_variant: 'Variasi penulisan',
+  lemma_notes: 'Lemma atau catatan',
   typo: 'Kesalahan penulisan',
   inaccurate_definition: 'Definisi kurang tepat',
   missing_example: 'Kurang contoh',
@@ -73,21 +114,12 @@ export interface MeaningChange {
   wordClassId?: string;
   definition?: string;
   translations?: TranslationChange[];
-  examples?: ExampleChange[];
 }
 
 export interface TranslationChange {
   languageId: string;
   translationText: string;
   translationType?: string;
-}
-
-export interface ExampleChange {
-  sourceLanguageId: string;
-  sourceSentence: string;
-  targetLanguageId?: string;
-  targetSentence?: string;
-  sourceType?: string;
 }
 
 export interface RelationChange {

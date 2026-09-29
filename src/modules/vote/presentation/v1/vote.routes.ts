@@ -16,6 +16,9 @@ import {
   voteDeckResponseSchema,
   voteHistoryQuerySchema,
   voteHistoryResponseSchema,
+  skipVoteDeckParamsSchema,
+  skipVoteDeckResponseSchema,
+  skipVoteDeckSchema,
 } from './validators/vote.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -79,6 +82,21 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
       },
     }),
   );
+  // Skip deck: login + azp gate + 60/menit per user (tulis, sama tier toggle)
+  const skipGuards = [
+    deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    rateLimit({
+      points: 60,
+      duration: 60,
+      keyFn: (c) => {
+        const user = (c.get('user') as AuthUser | undefined) ?? null;
+        return `vote-skip:${user?.user_id ?? 'unknown'}`;
+      },
+    }),
+  ];
+  routes.use('/skips', ...skipGuards);
+  routes.use('/skips/:wordId', ...skipGuards);
 
   const toggleRoute = createRoute({
     method: 'post',
@@ -146,6 +164,39 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
     },
   });
 
+  const skipDeckRoute = createRoute({
+    method: 'post',
+    path: '/skips',
+    tags: ['Votes'],
+    summary: 'Lewati kartu deck tanpa menulis vote - idempoten, kata hilang dari deck user ini',
+    request: {
+      body: { content: json(skipVoteDeckSchema) },
+    },
+    responses: {
+      200: { description: 'Skip tercatat', content: json(skipVoteDeckResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      404: { description: 'Kata tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Terlalu banyak skip (60/menit per user)', content: json(errorResponseSchema) },
+    },
+  });
+
+  const unskipDeckRoute = createRoute({
+    method: 'delete',
+    path: '/skips/:wordId',
+    tags: ['Votes'],
+    summary: 'Batalkan skip kartu deck - idempoten, kata boleh muncul lagi',
+    request: {
+      params: skipVoteDeckParamsSchema,
+    },
+    responses: {
+      200: { description: 'Skip dihapus', content: json(skipVoteDeckResponseSchema) },
+      400: { description: 'ID tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      429: { description: 'Terlalu banyak permintaan (60/menit per user)', content: json(errorResponseSchema) },
+    },
+  });
+
   const myRoute = createRoute({
     method: 'get',
     path: '/my',
@@ -165,6 +216,8 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
   routes.openapi(countsRoute, (c) => deps.controller.counts(c, c.req.valid('query')) as never);
   routes.openapi(historyRoute, (c) => deps.controller.history(c, c.req.valid('query')) as never);
   routes.openapi(deckRoute, (c) => deps.controller.deck(c, c.req.valid('query')) as never);
+  routes.openapi(skipDeckRoute, (c) => deps.controller.skipDeck(c, c.req.valid('json')) as never);
+  routes.openapi(unskipDeckRoute, (c) => deps.controller.unskipDeck(c, c.req.valid('param').wordId) as never);
   routes.openapi(myRoute, (c) => deps.controller.my(c, c.req.valid('query')) as never);
 
   return routes;

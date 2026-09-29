@@ -30,9 +30,41 @@ function emptyRepo(overrides: Partial<ActivityRepository> = {}): ActivityReposit
     listRecentApprovedContributions: vi.fn().mockResolvedValue([]),
     listRecentVisibleSearchMisses: vi.fn().mockResolvedValue([]),
     listRecentWelcomes: vi.fn().mockResolvedValue([]),
+    listRecentCardShares: vi.fn().mockResolvedValue([]),
+    listRecentAppliedSuggestions: vi.fn().mockResolvedValue([]),
+    recordCardShare: vi.fn().mockResolvedValue('recorded'),
     ...overrides,
   };
 }
+
+describe('ListActivityUseCase - sensor blocklist', () => {
+  it('sensor komentar, buang search-miss kena blocklist, sertakan share + usulan', async () => {
+    const repo = emptyRepo({
+      listRecentComments: vi.fn().mockResolvedValue([
+        { ...item('comment', 'c1', '2026-09-28T11:00:00.000Z'), body: 'dasar bodoh kau' },
+      ]),
+      listRecentVisibleSearchMisses: vi.fn().mockResolvedValue([
+        { ...item('search_miss', 's1', '2026-09-28T10:00:00.000Z'), body: 'Mencari "bodoh"' },
+        { ...item('search_miss', 's2', '2026-09-28T09:00:00.000Z'), body: 'Mencari "pinggan"' },
+      ]),
+      listRecentCardShares: vi.fn().mockResolvedValue([
+        item('card_share', 'k1', '2026-09-28T08:00:00.000Z'),
+      ]),
+      listRecentAppliedSuggestions: vi.fn().mockResolvedValue([
+        item('suggestion', 'g1', '2026-09-28T07:00:00.000Z'),
+      ]),
+    });
+    const blocklist = { listAllActiveWords: vi.fn().mockResolvedValue(['bodoh']) };
+    const page = await new ListActivityUseCase(repo, blocklist).execute(20);
+    expect(page.items.map((i) => i.id)).toEqual([
+      'comment:c1',
+      'search_miss:s2',
+      'card_share:k1',
+      'suggestion:g1',
+    ]);
+    expect(page.items[0].body).not.toContain('bodoh');
+  });
+});
 
 describe('ListActivityUseCase', () => {
   it('menggabungkan semua sumber lalu cap', async () => {

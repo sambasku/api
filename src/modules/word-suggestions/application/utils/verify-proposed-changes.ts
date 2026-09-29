@@ -155,6 +155,15 @@ export function verifyProposedChanges(changes: ProposedChanges): {
         message: 'Maksimal satu gambar is_primary=true di batch add',
       });
     }
+    const removed = new Set(
+      changes.images.filter((i) => i.action === 'remove' && i.imageId).map((i) => i.imageId),
+    );
+    if (changes.images.some((i) => i.action === 'set_primary' && removed.has(i.imageId))) {
+      errors.push({
+        field: 'images',
+        message: 'Foto yang dihapus tidak bisa sekaligus dijadikan utama',
+      });
+    }
   }
 
   return { valid: errors.length === 0, errors };

@@ -284,17 +284,7 @@ export class CreateWordUseCase {
         minMeaningfulChars: 1,
       });
       for (const [i, meaning] of (dto.meanings ?? []).entries()) {
-        if (meaning.isHaveDefinition === false || isPlaceholderMeaningText(meaning.definition)) {
-          continue;
-        }
-        await assertUgcTextQualityWithAnonStrike(meaning.definition, {
-          clientIp,
-          deviceId: actor.deviceId,
-          abuse: this.anonAbuse,
-          entityType: 'word',
-          field: `meanings.${i}.definition`,
-          minMeaningfulChars: 2,
-        });
+        // Penjelasan arti opsional (termasuk teks KBBI) tidak memblokir submit.
         for (const [j, tr] of meaning.translations.entries()) {
           await assertUgcTextQualityWithAnonStrike(tr.translationText, {
             clientIp,
@@ -319,17 +309,7 @@ export class CreateWordUseCase {
     });
 
     for (const [i, meaning] of (dto.meanings ?? []).entries()) {
-      if (meaning.isHaveDefinition === false || isPlaceholderMeaningText(meaning.definition)) {
-        continue;
-      }
-      await assertUgcTextQualityWithStrike(meaning.definition, {
-        userId: actor.userId,
-        abuse: this.abuse,
-        entityType: 'word',
-        requestId: actor.requestId,
-        field: `meanings.${i}.definition`,
-        minMeaningfulChars: 2,
-      });
+      // Penjelasan arti opsional (termasuk teks KBBI) tidak memblokir submit.
       for (const [j, tr] of meaning.translations.entries()) {
         await assertUgcTextQualityWithStrike(tr.translationText, {
           userId: actor.userId,

@@ -35,6 +35,7 @@ import {
   discussions,
   userConsents,
   users,
+  userSkips,
   ugcAbuseEvents,
   ugcAnonAbuseEvents,
   ugcAnonMutes,
@@ -48,6 +49,7 @@ import {
   wordImages,
   wordImportSessions,
   wordReports,
+  wordCardShares,
   wordVariants,
   words,
 } from './schema';
@@ -192,6 +194,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
   for (const table of [
     auditLogs,
     wordReports,
+    wordCardShares,
     bugReports,
     discussionReplies,
     discussions,
@@ -199,6 +202,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     contributions,
     wordEditSuggestions,
     votes,
+    userSkips,
     commentBlocklistWords,
     comments,
     bookmarks,

@@ -9,6 +9,7 @@ import {
   discussionReplies,
   discussions,
   users,
+  userSkips,
   votes,
   wordImages,
   words,
@@ -716,7 +717,7 @@ export class VoteRepositoryImpl implements VoteRepository {
   }
 
   /**
-   * Antrean deck: published + feed-safe + user belum vote.
+   * Antrean deck: published + feed-safe + user belum vote dan belum skip.
    * Urut totalVotes ASC, approvedAt ASC, id ASC.
    */
   async listDeckWords(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult> {
@@ -741,6 +742,19 @@ export class VoteRepositoryImpl implements VoteRepository {
             eq(votes.userId, userId),
             eq(votes.entityType, 'word'),
             eq(votes.entityId, words.id),
+          ),
+        ),
+    );
+
+    const userNotSkipped = notExists(
+      this.db
+        .select({ id: userSkips.id })
+        .from(userSkips)
+        .where(
+          and(
+            eq(userSkips.userId, userId),
+            eq(userSkips.targetType, 'word'),
+            eq(userSkips.targetId, words.id),
           ),
         ),
     );
@@ -781,6 +795,7 @@ export class VoteRepositoryImpl implements VoteRepository {
           eq(words.status, 'published'),
           feedSafe,
           userNotVoted,
+          userNotSkipped,
           cursorClause,
         ),
       )
