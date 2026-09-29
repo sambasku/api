@@ -170,6 +170,7 @@ export async function applyCommaSplitLemmaInTx(
         definition: definitionText,
         isHaveDefinition: hasDefinition,
         isHaveTranslation: true,
+        meaningSource: override.meaningSource,
         orderIndex: 0,
         notes: null,
         status: firstMeaning?.status ?? source.status,

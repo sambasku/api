@@ -17,6 +17,7 @@ function campaign(partial: Partial<NotificationCampaign> = {}): NotificationCamp
     templateId: null,
     title: 'Hallo',
     body: 'Isi pengumuman',
+    imageUrl: null,
     deepLinkKind: 'none',
     deepLinkValue: null,
     audienceType: 'selected',
@@ -73,6 +74,118 @@ describe('CreateCampaignDraftUseCase', () => {
     });
     expect(repo.insertRecipients).toHaveBeenCalled();
     expect(result?.targetedUsers).toBe(2);
+  });
+
+  it('snapshots image_url from template when omitted', async () => {
+    const created = campaign({
+      imageUrl: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/campaigns/x.webp',
+    });
+    const repo = {
+      findTemplateById: vi.fn().mockResolvedValue({
+        id: '01TEMPLATE0000000000000001',
+        name: 'T',
+        title: 'Dari template',
+        body: 'Body template',
+        imageUrl: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/campaigns/x.webp',
+        deepLinkKind: 'none',
+        deepLinkValue: null,
+        createdBy: '01USER00000000000000000001',
+        createdAt: new Date(),
+        updatedAt: null,
+        deletedAt: null,
+      }),
+      createCampaign: vi.fn().mockResolvedValue(created),
+      countUsersWithActiveDevices: vi.fn().mockResolvedValue(10),
+      setTargetedUsers: vi.fn(),
+      findCampaignById: vi.fn().mockResolvedValue(created),
+    } as unknown as NotificationCampaignRepository;
+    const uc = new CreateCampaignDraftUseCase(repo);
+    await uc.execute({
+      templateId: '01TEMPLATE0000000000000001',
+      audienceType: 'all',
+      createdBy: '01USER00000000000000000001',
+    });
+    expect(repo.createCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Dari template',
+        body: 'Body template',
+        imageUrl: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/campaigns/x.webp',
+      }),
+    );
+  });
+});
+
+describe('ProcessCampaignDeliveryUseCase selected with image', () => {
+  it('passes imageUrl to inbox and push', async () => {
+    const imageUrl =
+      'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/campaigns/x.webp';
+    const c = campaign({
+      status: 'sending',
+      audienceType: 'selected',
+      imageUrl,
+    });
+    const repo = {
+      findCampaignById: vi
+        .fn()
+        .mockResolvedValueOnce(c)
+        .mockResolvedValue({ ...c, status: 'completed' }),
+      listPendingRecipients: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: '01REC000000000000000000001',
+            campaignId: c.id,
+            userId: '01USER00000000000000000002',
+            status: 'pending',
+            error: null,
+            createdAt: new Date(),
+            updatedAt: null,
+          },
+        ])
+        .mockResolvedValueOnce([]),
+      updateRecipientStatus: vi.fn(),
+      incrementCampaignStats: vi.fn(),
+      updateCampaignStatus: vi.fn(),
+      countRecipientsByStatus: vi.fn().mockResolvedValue({
+        pending: 0,
+        sent: 1,
+        failed: 0,
+        skipped_no_token: 0,
+      }),
+    } as unknown as NotificationCampaignRepository;
+
+    const notificationRepo = {
+      create: vi.fn(),
+      createMany: vi.fn(),
+    } as unknown as NotificationRepository;
+
+    const deviceTokenRepo = {
+      listActiveFcmTokensByUserId: vi.fn().mockResolvedValue(['token-a']),
+    } as unknown as DeviceTokenRepository;
+
+    const pushSender: PushSenderPort = {
+      isConfigured: true,
+      send: vi.fn().mockResolvedValue({ success: ['token-a'], failed: [] }),
+      sendToTopic: vi.fn(),
+    };
+
+    const uc = new ProcessCampaignDeliveryUseCase(
+      repo,
+      notificationRepo,
+      deviceTokenRepo,
+      pushSender,
+    );
+    await uc.execute({ campaignId: c.id });
+    expect(notificationRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ imageUrl }),
+    );
+    expect(pushSender.send).toHaveBeenCalledWith(
+      ['token-a'],
+      expect.objectContaining({
+        imageUrl,
+        data: expect.objectContaining({ image_url: imageUrl }),
+      }),
+    );
   });
 });
 

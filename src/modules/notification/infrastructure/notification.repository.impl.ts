@@ -4,6 +4,7 @@ import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
   InboxNotification,
   InboxNotificationType,
+  NotificationActionKind,
   NotificationTargetKind,
 } from '../domain/entities/notification.entity';
 import type {
@@ -13,6 +14,13 @@ import type {
   NotificationRepository,
 } from '../domain/repositories/notification.repository';
 
+const conflictTarget = [
+  notifications.userId,
+  notifications.type,
+  notifications.targetKind,
+  notifications.targetId,
+] as const;
+
 function toEntity(row: typeof notifications.$inferSelect): InboxNotification {
   return {
     id: row.id,
@@ -20,10 +28,27 @@ function toEntity(row: typeof notifications.$inferSelect): InboxNotification {
     type: row.type as InboxNotificationType,
     title: row.title,
     body: row.body,
+    imageUrl: row.imageUrl ?? null,
     targetKind: row.targetKind as NotificationTargetKind,
     targetId: row.targetId,
+    actionKind: (row.actionKind as NotificationActionKind | null) ?? null,
+    actionValue: row.actionValue ?? null,
     readAt: row.readAt,
     createdAt: row.createdAt,
+  };
+}
+
+function rowValues(input: CreateInboxNotificationInput) {
+  return {
+    userId: input.userId,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    imageUrl: input.imageUrl ?? null,
+    targetKind: input.targetKind,
+    targetId: input.targetId,
+    actionKind: input.actionKind ?? null,
+    actionValue: input.actionValue ?? null,
   };
 }
 
@@ -33,36 +58,16 @@ export class NotificationRepositoryImpl implements NotificationRepository {
   async create(input: CreateInboxNotificationInput): Promise<void> {
     await this.db
       .insert(notifications)
-      .values({
-        userId: input.userId,
-        type: input.type,
-        title: input.title,
-        body: input.body,
-        targetKind: input.targetKind,
-        targetId: input.targetId,
-      })
-      .onConflictDoNothing({
-        target: [notifications.userId, notifications.targetKind, notifications.targetId],
-      });
+      .values(rowValues(input))
+      .onConflictDoNothing({ target: [...conflictTarget] });
   }
 
   async createMany(inputs: CreateInboxNotificationInput[]): Promise<number> {
     if (inputs.length === 0) return 0;
     const inserted = await this.db
       .insert(notifications)
-      .values(
-        inputs.map((input) => ({
-          userId: input.userId,
-          type: input.type,
-          title: input.title,
-          body: input.body,
-          targetKind: input.targetKind,
-          targetId: input.targetId,
-        })),
-      )
-      .onConflictDoNothing({
-        target: [notifications.userId, notifications.targetKind, notifications.targetId],
-      })
+      .values(inputs.map(rowValues))
+      .onConflictDoNothing({ target: [...conflictTarget] })
       .returning({ id: notifications.id });
     return inserted.length;
   }
@@ -71,21 +76,18 @@ export class NotificationRepositoryImpl implements NotificationRepository {
     await this.db
       .insert(notifications)
       .values({
-        userId: input.userId,
-        type: input.type,
-        title: input.title,
-        body: input.body,
-        targetKind: input.targetKind,
-        targetId: input.targetId,
+        ...rowValues(input),
         readAt: null,
         createdAt: new Date(),
       })
       .onConflictDoUpdate({
-        target: [notifications.userId, notifications.targetKind, notifications.targetId],
+        target: [...conflictTarget],
         set: {
-          type: input.type,
           title: input.title,
           body: input.body,
+          imageUrl: input.imageUrl ?? null,
+          actionKind: input.actionKind ?? null,
+          actionValue: input.actionValue ?? null,
           readAt: null,
           createdAt: new Date(),
         },

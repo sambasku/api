@@ -50,6 +50,7 @@ function toUserEntity(row: UserRow): User {
     role: row.role as User['role'],
     isActive: row.isActive,
     canContribute: row.canContribute,
+    contributeMutedUntil: row.contributeMutedUntil ?? null,
     emailVerified: row.emailVerified,
     avatarUrl: row.avatarUrl ?? null,
     avatarProvider: row.avatarProvider ?? null,

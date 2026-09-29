@@ -87,10 +87,52 @@ export function createAdminUserRoutes(deps: AdminUserRoutesDeps) {
         description: 'Hak kontribusi diperbarui',
         content: json(z.object({
           success: z.literal(true),
-          data: z.object({ id: z.string(), can_contribute: z.boolean() }),
+          data: z.object({
+            id: z.string(),
+            can_contribute: z.boolean(),
+            contribute_muted_until: z.null(),
+          }),
         })),
       },
       400: { description: 'User tidak ditemukan atau user sistem anonim', content: json(errorResponseSchema) },
+    },
+  });
+
+  const listAbuseEventsRoute = createRoute({
+    method: 'get',
+    path: '/:id/abuse-events',
+    tags: ['Admin Users'],
+    summary: 'Riwayat sinyal abuse UGC user (admin & root)',
+    request: {
+      params: z.object({ id: opaqueId }),
+      query: z.object({
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+        cursor: z.string().length(26).optional(),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Daftar event abuse',
+        content: json(z.object({
+          success: z.literal(true),
+          data: z.array(z.object({
+            id: z.string(),
+            signal: z.string(),
+            weight: z.number().int(),
+            entity_type: z.string().nullable(),
+            entity_id: z.string().nullable(),
+            meta: z.record(z.string(), z.unknown()).nullable(),
+            created_at: z.string(),
+          })),
+          meta: z.object({
+            limit: z.number().int(),
+            next_cursor: z.string().nullable(),
+            has_more: z.boolean(),
+          }),
+        })),
+      },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Role tidak diizinkan', content: json(errorResponseSchema) },
     },
   });
 
@@ -133,6 +175,9 @@ export function createAdminUserRoutes(deps: AdminUserRoutesDeps) {
 
   routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
   routes.openapi(createRouteDef, (c) => deps.controller.create(c, c.req.valid('json')) as never);
+  routes.openapi(listAbuseEventsRoute, (c) =>
+    deps.controller.listAbuseEvents(c, c.req.valid('param').id, c.req.valid('query')) as never,
+  );
   routes.openapi(setActiveRoute, (c) =>
     deps.controller.setActive(c, c.req.valid('param').id, c.req.valid('json').is_active) as never,
   );
@@ -173,7 +218,11 @@ export function createContributionAccessRoutes(deps: AdminUserRoutesDeps) {
         description: 'Hak kontribusi diperbarui',
         content: json(z.object({
           success: z.literal(true),
-          data: z.object({ id: z.string(), can_contribute: z.boolean() }),
+          data: z.object({
+            id: z.string(),
+            can_contribute: z.boolean(),
+            contribute_muted_until: z.null(),
+          }),
         })),
       },
       400: { description: 'User tidak ditemukan atau user sistem anonim', content: json(errorResponseSchema) },

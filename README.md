@@ -72,7 +72,7 @@ pnpm test
 | `pnpm test:unit` / `test:integration` / `test:e2e`   | Test per lapisan                                       |
 | `pnpm typecheck`                                       | `tsc --noEmit`                                         |
 | `pnpm seed`                                            | Lokal: accounts + reference                            |
-| `pnpm seed:accounts`                                   | Akun default saja (menimpa password → pass1234)        |
+| `pnpm seed:accounts`                                   | Akun default (upsert; prod CI: insert-only via env)    |
 | `pnpm seed:reference`                                  | Referensi + user sistem (insert-if-missing)            |
 | `pnpm drizzle-kit generate --name=…`                   | Generate migration SQL dari perubahan schema           |
 | `pnpm db:migrate`                                      | Apply migration (libsql; error terlihat di CI)         |
@@ -132,6 +132,7 @@ gh workflow run seed-account-staging.yml --ref staging -f confirm=true
 ```
 
 Production: `seed-reference-production.yml` / `seed-account-production.yml` (`--ref main`).
+`seed-account-production` insert-only (`SEED_ACCOUNTS_INSERT_ONLY=1`) - tidak menimpa user yang sudah ada.
 
 ## Audio pelafalan (GitHub asset repo)
 
@@ -293,7 +294,7 @@ src/
 ├── modules/auth/          # fitur auth (domain → application → infrastructure → presentation/v1)
 ├── shared/                # lintas modul: db (libSQL), middlewares, errors, config, logging
 ├── scripts/seed.ts            # orkestrasi lokal (accounts + reference)
-├── scripts/seed-accounts.ts   # akun default (reset password)
+├── scripts/seed-accounts.ts   # akun default (upsert; insert-only via env)
 ├── scripts/seed-reference.ts  # referensi + user sistem (insert-if-missing)
 ├── app.ts                 # composition root (dibagi 2 runtime)
 └── main.ts / worker.ts    # entry Node (@hono/node-server) / Cloudflare Workers

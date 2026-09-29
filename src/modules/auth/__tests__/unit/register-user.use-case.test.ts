@@ -4,9 +4,11 @@ import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { EmailVerificationOtpRepository } from '../../domain/repositories/email-verification-otp.repository';
 import type { PasswordHasherPort } from '../../application/ports/password-hasher.port';
 import type { MailerPort } from '../../application/ports/mailer.port';
+import type { EmailDomainVerifierPort } from '../../application/ports/email-domain-verifier.port';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
+import { ValidationError } from '@/shared/errors/app-error';
 
 const activeConsents = [
   { documentType: 'terms' as const, documentVersion: '2026-09-26' },
@@ -17,6 +19,7 @@ function makeDeps(overrides: {
   findByUsername?: unknown;
   findByEmail?: unknown;
   findByPhone?: unknown;
+  emailDomainVerifier?: EmailDomainVerifierPort;
 } = {}) {
   const userRepo = {
     findById: vi.fn(),
@@ -72,6 +75,9 @@ function makeDeps(overrides: {
     findLatestByUser: vi.fn(),
     deleteByUserId: vi.fn(),
   } as unknown as UserConsentRepository;
+  const emailDomainVerifier = overrides.emailDomainVerifier ?? {
+    assertReachable: vi.fn().mockResolvedValue(undefined),
+  };
   return {
     userRepo,
     hasher,
@@ -80,6 +86,7 @@ function makeDeps(overrides: {
     mailer,
     settingsRepo,
     consentRepo,
+    emailDomainVerifier,
     useCase: new RegisterUserUseCase(
       userRepo,
       hasher,
@@ -88,6 +95,7 @@ function makeDeps(overrides: {
       mailer,
       settingsRepo,
       consentRepo,
+      emailDomainVerifier,
     ),
   };
 }
@@ -152,5 +160,30 @@ describe('RegisterUserUseCase', () => {
       }),
     ).rejects.toMatchObject({ errorCode: 'CONSENT_REQUIRED' });
     expect(userRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('domain email tidak reachable → VALIDATION_ERROR, tanpa save', async () => {
+    const emailDomainVerifier: EmailDomainVerifierPort = {
+      assertReachable: vi.fn().mockRejectedValue(
+        new ValidationError([
+          { field: 'email', message: 'Domain email tidak valid atau tidak dapat dijangkau' },
+        ]),
+      ),
+    };
+    const { useCase, userRepo, mailer } = makeDeps({ emailDomainVerifier });
+
+    await expect(
+      useCase.execute({
+        name: 'Budi',
+        email: 'budi@zzznorecord.invalid',
+        phone: null,
+        password: 'Password123',
+        consents: activeConsents,
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    expect(emailDomainVerifier.assertReachable).toHaveBeenCalledWith('zzznorecord.invalid');
+    expect(userRepo.save).not.toHaveBeenCalled();
+    expect(mailer.sendVerificationOtpEmail).not.toHaveBeenCalled();
   });
 });

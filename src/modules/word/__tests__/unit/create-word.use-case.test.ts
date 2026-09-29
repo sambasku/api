@@ -68,6 +68,7 @@ function makeWord(overrides: Partial<Word> = {}): Word {
     takedownNote: null,
     takenDownBy: null,
     takenDownAt: null,
+    importSessionId: null,
     ...overrides,
   };
 }
@@ -100,6 +101,8 @@ function makeDeps(missing: Partial<MissingReferences> = {}, duplicate = false, i
     findDuplicate: vi.fn().mockImplementation((_lang: string, lemma: string) =>
       Promise.resolve(inlineDuplicate ? lemma === 'ngamakn' : duplicate),
     ),
+    findPublishedDuplicateMeaning: vi.fn().mockResolvedValue(null),
+    findLanguageIdByCode: vi.fn().mockResolvedValue(null),
     findById: vi.fn().mockImplementation((id: string) =>
       Promise.resolve(makeWord({ id, status: 'published', isVerified: true })),
     ),
@@ -202,6 +205,31 @@ describe('CreateWordUseCase', () => {
           'Lemma ini sudah ada. Saat ditayangkan, makna digabung otomatis ke entri yang sudah tayang.',
       },
     ]);
+  });
+
+  it('exact lemma + makna published → 409 DUPLICATE_MEANING, tidak insert', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    (wordRepo.findLanguageIdByCode as ReturnType<typeof vi.fn>).mockResolvedValue(
+      '01LANGUAGESINDONESIA00000',
+    );
+    (wordRepo.findPublishedDuplicateMeaning as ReturnType<typeof vi.fn>).mockResolvedValue({
+      wordId: '01WORDULIDEXIST0000000000',
+      meaningId: '01MEANINGULIDEXIST000000',
+      lemma: 'makatn',
+      definition: 'Aktivitas memasukkan makanan ke mulut',
+      translationText: 'makan',
+    });
+
+    await expect(useCase.execute(makeDto(), CONTRIBUTOR)).rejects.toMatchObject({
+      errorCode: 'DUPLICATE_MEANING',
+      statusCode: 409,
+      data: expect.objectContaining({
+        word_id: '01WORDULIDEXIST0000000000',
+        meaning_id: '01MEANINGULIDEXIST000000',
+        lemma: 'makatn',
+      }),
+    });
+    expect(wordRepo.saveWithRelations).not.toHaveBeenCalled();
   });
 
   it('duplikat lemma + published → auto-merge ke kembaran tayang', async () => {
@@ -622,7 +650,7 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
           meanings: [
             {
               wordClassId: '01WORDCLASSESNOMINA000000',
-              definition: 'x',
+              definition: 'arti lain',
               orderIndex: 1,
               translations: [
                 { languageId: '01LANGUAGESINDONESIA00000', translationText: 'minum', translationType: 'direct' },

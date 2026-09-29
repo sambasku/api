@@ -16,6 +16,11 @@ import {
   CSV_IMPORTER_USER_ID,
   CSV_IMPORTER_USERNAME,
 } from '@/shared/constants/csv-importer';
+import {
+  GITHUB_ACTIONS_EMAIL,
+  GITHUB_ACTIONS_USER_ID,
+  GITHUB_ACTIONS_USERNAME,
+} from '@/shared/constants/github-actions';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
@@ -126,6 +131,28 @@ export async function seedReference(): Promise<void> {
     })
     .where(eq(users.id, CSV_IMPORTER_USER_ID));
   logger.info(`Seed referensi: user sistem ${CSV_IMPORTER_EMAIL}`);
+
+  await db
+    .insert(users)
+    .values({
+      id: GITHUB_ACTIONS_USER_ID,
+      username: GITHUB_ACTIONS_USERNAME,
+      displayName: GITHUB_ACTIONS_USERNAME,
+      email: GITHUB_ACTIONS_EMAIL,
+      passwordHash: await hasher.hash(crypto.randomUUID()),
+      role: 'contributor',
+      emailVerified: true,
+    })
+    .onConflictDoNothing({ target: users.id });
+  await db
+    .update(users)
+    .set({
+      username: GITHUB_ACTIONS_USERNAME,
+      displayName: GITHUB_ACTIONS_USERNAME,
+      email: GITHUB_ACTIONS_EMAIL,
+    })
+    .where(eq(users.id, GITHUB_ACTIONS_USER_ID));
+  logger.info(`Seed referensi: user sistem ${GITHUB_ACTIONS_EMAIL}`);
 
   for (const lang of SEED_LANGUAGES) {
     await db.insert(languages).values({ ...lang }).onConflictDoNothing({ target: languages.code });

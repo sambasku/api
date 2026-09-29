@@ -106,6 +106,8 @@ const meaningInputObjectSchema = z.object({
   is_have_definition: z.boolean().default(true),
   // false = sengaja tanpa padanan (definisi uraian sudah cukup)
   is_have_translation: z.boolean().default(true),
+  // Provenance: ketik manual | pilih KBBI | diubah setelah KBBI
+  meaning_source: z.enum(['manual', 'kbbi', 'kbbi_edited']).default('manual'),
   order_index: z.coerce.number().int().min(1).default(1),
   translations: z.array(meaningTranslationItemSchema).default([]),
   examples: z
@@ -462,6 +464,8 @@ const wordDetailAudioSchema = z.object({
   duration_ms: z.number().int().nullable(),
   is_primary: z.boolean(),
   mime_type: z.string(),
+  // Default true: payload lama tanpa field tetap lolos OpenAPI/client
+  is_verified: z.boolean().optional().default(true),
 });
 
 export const wordDetailResponseSchema = z.object({
@@ -512,6 +516,7 @@ export const wordDetailResponseSchema = z.object({
         // CTA "Bantu definisi" dari flag ini, bukan dari teks
         is_have_definition: z.boolean(),
         is_have_translation: z.boolean(),
+        meaning_source: z.enum(['manual', 'kbbi', 'kbbi_edited']).optional().default('manual'),
         order_index: z.number().int(),
         translations: z.array(
           z.object({

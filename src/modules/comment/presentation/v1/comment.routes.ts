@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
@@ -24,6 +25,8 @@ export interface CommentRoutesDeps {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Gate azp + scope comment.write pada tulis komentar. */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Best-effort strike saat rate limit tulis UGC. */
+  onUgcRateLimited?: (userId: string) => void | Promise<void>;
 }
 
 const ulid26 = z.string().length(26);
@@ -43,7 +46,26 @@ export function createWordCommentRoutes(deps: CommentRoutesDeps) {
     '/:wordId/comments',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
-    wordCommentLimiter(),
+    wordCommentLimiter(deps.onUgcRateLimited),
+  );
+  routes.on(
+    'post',
+    '/:wordId/comments/audio',
+    deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    wordCommentLimiter(deps.onUgcRateLimited),
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) =>
+        c.json(
+          {
+            success: false as const,
+            error_code: 'AUDIO_TOO_LARGE',
+            message: 'File audio terlalu besar (maks 5 MB)',
+          },
+          400,
+        ),
+    }),
   );
 
   const listRoute = createRoute({
@@ -80,8 +102,42 @@ export function createWordCommentRoutes(deps: CommentRoutesDeps) {
     },
   });
 
+  const createCommentAudioRoute = createRoute({
+    method: 'post',
+    path: '/:wordId/comments/audio',
+    tags: ['Comments'],
+    summary: 'Komentar dengan rekaman suara (multipart; publish langsung)',
+    request: {
+      params: z.object({ wordId: ulid26 }),
+      body: {
+        content: {
+          'multipart/form-data': {
+            schema: z.object({
+              audio: z.any().openapi({ type: 'string', format: 'binary' }),
+              body: z.string().max(1000).optional(),
+              duration_ms: z.coerce.number().int().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      201: { description: 'Komentar suara tersimpan', content: json(createCommentResponseSchema) },
+      400: { description: 'File/MIME tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      404: { description: 'Kata tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Kata belum tayang', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+      503: { description: 'Storage audio belum dikonfigurasi', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(listRoute, (c) =>
     deps.controller.listByWord(c, c.req.param('wordId'), c.req.valid('query')) as never,
+  );
+  // Audio sebelum POST JSON comments agar path spesifik menang
+  routes.openapi(createCommentAudioRoute, (c) =>
+    deps.controller.createAudio(c, c.req.param('wordId')) as never,
   );
   routes.openapi(createCommentRoute, (c) =>
     deps.controller.create(c, c.req.param('wordId'), c.req.valid('json')) as never,
@@ -131,7 +187,7 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
     '/:id',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
-    wordCommentLimiter(),
+    wordCommentLimiter(deps.onUgcRateLimited),
   );
 
   const deleteRoute = createRoute({
@@ -155,13 +211,19 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
   return routes;
 }
 
-function wordCommentLimiter() {
+function wordCommentLimiter(onUgcRateLimited?: (userId: string) => void | Promise<void>) {
   return rateLimit({
     points: 30,
     duration: 60,
     keyFn: (c) => {
       const user = (c.get('user') as AuthUser | undefined) ?? null;
       return `comment-write:${user?.user_id ?? 'unknown'}`;
+    },
+    onLimited: async (c) => {
+      const user = (c.get('user') as AuthUser | undefined) ?? null;
+      if (user?.user_id && onUgcRateLimited) {
+        await onUgcRateLimited(user.user_id);
+      }
     },
   });
 }

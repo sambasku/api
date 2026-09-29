@@ -21,8 +21,11 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     userId: AUTHOR,
     username: 'budi',
     displayName: 'budi',
+    avatarUrl: null,
+    userRole: 'contributor',
     body: 'halo',
     bodyOriginal: null,
+    audio: null,
     status: 'published',
     reviewedBy: null,
     reviewedAt: null,
@@ -157,11 +160,14 @@ describe('CreateCommentUseCase', () => {
         userId: OWNER,
         title: 'Komentar baru',
         body: expectedBody,
-        data: {
+        actorId: AUTHOR,
+        data: expect.objectContaining({
           type: 'word_comment',
           target_kind: 'word',
           target_id: WORD,
-        },
+          action_kind: 'word',
+          action_value: WORD,
+        }),
       }),
     );
   });

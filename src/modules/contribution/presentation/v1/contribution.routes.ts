@@ -38,12 +38,13 @@ export function createContributionRoutes(deps: ContributionRoutesDeps) {
   routes.use('/:id/approve', ...reviewer);
   routes.use('/:id/reject', ...reviewer);
   routes.use('/:id/correct', ...reviewer);
+  routes.use('/:id/reopen', ...reviewer);
 
   const listRoute = createRoute({
     method: 'get',
     path: '/',
     tags: ['Contributions', 'Admin'],
-    summary: 'Antrean review kontribusi (filter status/entity_type) - cursor pagination',
+    summary: 'Antrean review kontribusi (filter status/entity_type/mine) - cursor pagination',
     request: { query: listContributionsQuerySchema },
     responses: {
       200: { description: 'Daftar kontribusi', content: json(listContributionsResponseSchema) },
@@ -124,11 +125,30 @@ export function createContributionRoutes(deps: ContributionRoutesDeps) {
     },
   });
 
+  const reopenRoute = createRoute({
+    method: 'post',
+    path: '/:id/reopen',
+    tags: ['Contributions', 'Admin'],
+    summary:
+      'Buka ulang keputusan review (append-only) - status pending + soft-claim reopened_by',
+    request: {
+      params: z.object({ id: z.string().length(26) }),
+    },
+    responses: {
+      200: { description: 'Kontribusi dibuka ulang', content: json(reviewDecisionResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan pemilik keputusan / bukan verifikator', content: json(errorResponseSchema) },
+      404: { description: 'Kontribusi tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Tidak bisa dibuka ulang (pending / merge)', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
   routes.openapi(detailRoute, (c) => deps.controller.detail(c, c.req.param('id')) as never);
   routes.openapi(approveRoute, (c) => deps.controller.approve(c, c.req.param('id')) as never);
   routes.openapi(rejectRoute, (c) => deps.controller.reject(c, c.req.param('id'), c.req.valid('json')) as never);
   routes.openapi(correctRoute, (c) => deps.controller.correct(c, c.req.param('id'), c.req.valid('json')) as never);
+  routes.openapi(reopenRoute, (c) => deps.controller.reopen(c, c.req.param('id')) as never);
 
   return routes;
 }

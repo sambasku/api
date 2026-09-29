@@ -16,6 +16,8 @@ export interface User {
   role: UserRole;
   isActive: boolean;
   canContribute: boolean;
+  /** Mute sementara; null = tidak di-mute. */
+  contributeMutedUntil: Date | null;
   emailVerified: boolean;
   avatarUrl: string | null;
   avatarProvider: string | null;

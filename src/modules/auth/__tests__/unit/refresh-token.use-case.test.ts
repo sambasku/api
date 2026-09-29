@@ -19,6 +19,7 @@ function user(): User {
     role: 'contributor',
     isActive: true,
     canContribute: true,
+    contributeMutedUntil: null,
     emailVerified: true,
     avatarUrl: null,
     avatarProvider: null,

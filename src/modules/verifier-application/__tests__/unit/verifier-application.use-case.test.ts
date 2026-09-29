@@ -74,7 +74,8 @@ function makeApproveExtras() {
     }),
   } as unknown as UserRepository;
   const mailer = { sendVerifierApprovedEmail: vi.fn().mockResolvedValue(undefined) };
-  return { userRepo, mailer };
+  const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+  return { userRepo, mailer, inbox };
 }
 
 const submit = {
@@ -169,7 +170,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
     const refreshTokenRepo = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
     const auditRepo = { record: vi.fn().mockResolvedValue(undefined) };
     const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
-    const { userRepo, mailer } = makeApproveExtras();
+    const { userRepo, mailer, inbox } = makeApproveExtras();
     const useCase = new ApproveVerifierApplicationUseCase(
       appRepo,
       refreshTokenRepo as never,
@@ -177,6 +178,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
       notifyUser as never,
       userRepo,
       mailer as never,
+      inbox as never,
     );
     const result = await useCase.execute({
       applicationId: APP_ID,
@@ -186,11 +188,24 @@ describe('ApproveVerifierApplicationUseCase', () => {
     expect(result).toEqual({ id: APP_ID, status: 'approved', role: 'reviewer' });
     expect(appRepo.approveAtomically).toHaveBeenCalledWith(APP_ID, ADMIN);
     expect(refreshTokenRepo.revokeAllForUser).toHaveBeenCalledWith(USER);
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER,
+        type: 'verifier_application_approved',
+        targetKind: 'verifier_application',
+        targetId: APP_ID,
+      }),
+    );
     expect(notifyUser.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER,
         title: 'Selamat, Anda jadi verifikator',
         body: 'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.',
+        data: expect.objectContaining({
+          type: 'verifier_application_approved',
+          title: 'Selamat, Anda jadi verifikator',
+          body: expect.any(String),
+        }),
       }),
     );
     expect(mailer.sendVerifierApprovedEmail).toHaveBeenCalledWith('budi@test.com', 'Budi');
@@ -204,7 +219,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
           new ConflictError('APPLICATION_ALREADY_REVIEWED', 'Pengajuan sudah memiliki keputusan'),
         ),
     });
-    const { userRepo, mailer } = makeApproveExtras();
+    const { userRepo, mailer, inbox } = makeApproveExtras();
     const useCase = new ApproveVerifierApplicationUseCase(
       appRepo,
       { revokeAllForUser: vi.fn() } as never,
@@ -212,6 +227,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
       { execute: vi.fn() } as never,
       userRepo,
       mailer as never,
+      inbox as never,
     );
     await expect(
       useCase.execute({ applicationId: APP_ID, actorId: ADMIN, actorRole: 'admin' }),
@@ -225,7 +241,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
         .mockRejectedValue(new ForbiddenError('ALREADY_VERIFIER', 'Pemohon bukan lagi kontributor')),
     });
     const refreshTokenRepo = { revokeAllForUser: vi.fn() };
-    const { userRepo, mailer } = makeApproveExtras();
+    const { userRepo, mailer, inbox } = makeApproveExtras();
     const useCase = new ApproveVerifierApplicationUseCase(
       appRepo,
       refreshTokenRepo as never,
@@ -233,6 +249,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
       { execute: vi.fn() } as never,
       userRepo,
       mailer as never,
+      inbox as never,
     );
     await expect(
       useCase.execute({ applicationId: APP_ID, actorId: ADMIN, actorRole: 'admin' }),
@@ -246,7 +263,13 @@ describe('RejectVerifierApplicationUseCase', () => {
     const appRepo = makeAppRepo();
     const auditRepo = { record: vi.fn().mockResolvedValue(undefined) };
     const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
-    const useCase = new RejectVerifierApplicationUseCase(appRepo, auditRepo as never, notifyUser as never);
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const useCase = new RejectVerifierApplicationUseCase(
+      appRepo,
+      auditRepo as never,
+      notifyUser as never,
+      inbox as never,
+    );
     const result = await useCase.execute({
       applicationId: APP_ID,
       actorId: ADMIN,
@@ -254,6 +277,26 @@ describe('RejectVerifierApplicationUseCase', () => {
     });
     expect(result.status).toBe('rejected');
     expect(appRepo.markRejected).toHaveBeenCalledWith(APP_ID, ADMIN, 'HP tidak bisa dihubungi');
-    expect(notifyUser.execute).toHaveBeenCalled();
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER,
+        type: 'verifier_application_rejected',
+        targetKind: 'verifier_application',
+        targetId: APP_ID,
+        body: 'Pengajuan ditolak: HP tidak bisa dihubungi',
+      }),
+    );
+    expect(notifyUser.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER,
+        title: 'Pengajuan verifikator ditolak',
+        body: 'Pengajuan ditolak: HP tidak bisa dihubungi',
+        data: expect.objectContaining({
+          type: 'verifier_application_rejected',
+          title: 'Pengajuan verifikator ditolak',
+          body: 'Pengajuan ditolak: HP tidak bisa dihubungi',
+        }),
+      }),
+    );
   });
 });

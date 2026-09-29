@@ -5,6 +5,7 @@ import type { DeviceTokenRepository } from '@/modules/device/domain/repositories
 import type { PushSenderPort } from '@/modules/device/application/ports/push-sender.port';
 import {
   buildCampaignPushData,
+  campaignInboxAction,
   CAMPAIGN_CHUNK_SIZE,
   CAMPAIGN_FCM_TOPIC,
   CAMPAIGN_MAX_CHUNKS_PER_RUN,
@@ -30,6 +31,7 @@ export class CreateCampaignDraftUseCase {
     templateId?: string | null;
     title?: string;
     body?: string;
+    imageUrl?: string | null;
     deepLinkKind?: DeepLinkKind;
     deepLinkValue?: string | null;
     audienceType: CampaignAudienceType;
@@ -39,6 +41,7 @@ export class CreateCampaignDraftUseCase {
   }) {
     let title = input.title?.trim() ?? '';
     let body = input.body?.trim() ?? '';
+    let imageUrl = input.imageUrl?.trim() || null;
     let deepLinkKind: DeepLinkKind = input.deepLinkKind ?? 'none';
     let deepLinkValue = input.deepLinkValue?.trim() || null;
     let templateId: string | null = input.templateId ?? null;
@@ -50,6 +53,7 @@ export class CreateCampaignDraftUseCase {
       }
       if (!title) title = template.title;
       if (!body) body = template.body;
+      if (input.imageUrl === undefined) imageUrl = template.imageUrl;
       if (!input.deepLinkKind) deepLinkKind = template.deepLinkKind;
       if (input.deepLinkValue === undefined) deepLinkValue = template.deepLinkValue;
     }
@@ -75,6 +79,7 @@ export class CreateCampaignDraftUseCase {
       templateId,
       title,
       body,
+      imageUrl,
       deepLinkKind,
       deepLinkValue,
       audienceType: input.audienceType,
@@ -281,6 +286,7 @@ export class ProcessCampaignDeliveryUseCase {
       const ok = await this.pushSender.sendToTopic(CAMPAIGN_FCM_TOPIC, {
         title: current.title,
         body: current.body,
+        imageUrl: current.imageUrl ?? undefined,
         data: buildCampaignPushData(current),
       });
       if (!ok && this.pushSender.isConfigured) {
@@ -317,14 +323,20 @@ export class ProcessCampaignDeliveryUseCase {
       }
 
       const written = await this.notificationRepo.createMany(
-        userIds.map((userId) => ({
-          userId,
-          type: 'campaign' as const,
-          title: current.title,
-          body: current.body,
-          targetKind: 'campaign' as const,
-          targetId: current.id,
-        })),
+        userIds.map((userId) => {
+          const action = campaignInboxAction(current);
+          return {
+            userId,
+            type: 'campaign' as const,
+            title: current.title,
+            body: current.body,
+            imageUrl: current.imageUrl,
+            targetKind: 'campaign' as const,
+            targetId: current.id,
+            actionKind: action.actionKind,
+            actionValue: action.actionValue,
+          };
+        }),
       );
       await this.repo.incrementCampaignStats(current.id, { inboxWritten: written });
       await this.repo.updateCampaignStatus(current.id, 'sending', {
@@ -362,19 +374,24 @@ export class ProcessCampaignDeliveryUseCase {
         }
 
         try {
+          const action = campaignInboxAction(campaign);
           await this.notificationRepo.create({
             userId: recipient.userId,
             type: 'campaign',
             title: campaign.title,
             body: campaign.body,
+            imageUrl: campaign.imageUrl,
             targetKind: 'campaign',
             targetId: campaign.id,
+            actionKind: action.actionKind,
+            actionValue: action.actionValue,
           });
           await this.repo.incrementCampaignStats(campaign.id, { inboxWritten: 1 });
 
           const result = await this.pushSender.send(tokens, {
             title: campaign.title,
             body: campaign.body,
+            imageUrl: campaign.imageUrl ?? undefined,
             data: buildCampaignPushData(campaign),
           });
           if (result.success.length > 0) {

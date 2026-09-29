@@ -38,7 +38,7 @@ async function fetchImageBytes(url: string): Promise<{ bytes: Uint8Array; mimeTy
   };
 }
 
-/** ImageKit staging → GitHub publik (pola approve translation-help). */
+/** ImageKit staging → GitHub publik (pola approve discussion). */
 export async function promoteWordImageFromStaging(
   staging: StagingWordImage,
   publicImageStorage: PublicImageStoragePort,

@@ -53,7 +53,7 @@ export function createPublicImageRoutes(deps: {
     method: 'post',
     path: '/',
     tags: ['Images'],
-    summary: 'Upload gambar kata ke penyimpanan publik (GitHub) - multipart field `file`',
+    summary: 'Upload gambar publik (kata atau campaign) ke GitHub - multipart field `file`',
     request: { query: uploadPublicImageQuerySchema },
     responses: {
       201: { description: 'Gambar tersimpan', content: json(uploadPublicImageResponseSchema) },
@@ -64,7 +64,9 @@ export function createPublicImageRoutes(deps: {
     },
   });
 
-  routes.openapi(uploadRoute, (c) => deps.controller.upload(c) as never);
+  routes.openapi(uploadRoute, (c) =>
+    deps.controller.upload(c, c.req.valid('query')) as never,
+  );
 
   return routes;
 }

@@ -30,6 +30,7 @@ const adminUserWireSchema = z.object({
   role: z.enum(['contributor', 'editor', 'reviewer', 'admin', 'root']),
   is_active: z.boolean(),
   can_contribute: z.boolean(),
+  contribute_muted_until: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });

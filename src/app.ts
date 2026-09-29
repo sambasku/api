@@ -27,6 +27,12 @@ import {
 } from '@/modules/developer-oauth/application/use-cases/admin-api-client.use-cases';
 import { AdminApiClientController } from '@/modules/developer-oauth/presentation/v1/admin-api-client.controller';
 import { createAdminApiClientRoutes } from '@/modules/developer-oauth/presentation/v1/admin-api-client.routes';
+import { GithubActionsDispatchService } from '@/modules/system/infrastructure/github-actions-dispatch';
+import { DatabaseBackupLogRepositoryImpl } from '@/modules/system/infrastructure/database-backup-log.repository.impl';
+import { TriggerSqliteBackupUseCase } from '@/modules/system/application/use-cases/trigger-sqlite-backup.use-case';
+import { ListDatabaseBackupLogsUseCase } from '@/modules/system/application/use-cases/list-database-backup-logs.use-case';
+import { SystemDatabaseController } from '@/modules/system/presentation/v1/system-database.controller';
+import { createSystemDatabaseRoutes } from '@/modules/system/presentation/v1/system-database.routes';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { UserRepositoryImpl } from '@/modules/auth/infrastructure/user.repository.impl';
 import { RefreshTokenRepositoryImpl } from '@/modules/auth/infrastructure/refresh-token.repository.impl';
@@ -34,6 +40,7 @@ import { PasswordResetTokenRepositoryImpl } from '@/modules/auth/infrastructure/
 import { JwtTokenService } from '@/modules/auth/infrastructure/jwt-token.service';
 import { Pbkdf2PasswordService } from '@/modules/auth/infrastructure/pbkdf2-password.service';
 import { createMailer } from '@/modules/auth/infrastructure/mailer.factory';
+import { createEmailDomainVerifier } from '@/modules/auth/infrastructure/email-domain-verifier.factory';
 import { EmailVerificationOtpRepositoryImpl } from '@/modules/auth/infrastructure/email-verification-otp.repository.impl';
 import { RegisterUserUseCase } from '@/modules/auth/application/use-cases/register-user.use-case';
 import { AppSettingsRepositoryImpl } from '@/modules/legal/infrastructure/app-settings.repository.impl';
@@ -98,6 +105,7 @@ import { AdminUsersController } from '@/modules/auth/presentation/v1/admin-user.
 import { SetCanContributeUseCase } from '@/modules/auth/application/use-cases/set-can-contribute.use-case';
 import { CreateAdminUserUseCase } from '@/modules/auth/application/use-cases/create-admin-user.use-case';
 import { SetUserActiveUseCase } from '@/modules/auth/application/use-cases/set-user-active.use-case';
+import { ListUserAbuseEventsUseCase } from '@/modules/auth/application/use-cases/list-user-abuse-events.use-case';
 import { createAdminUserRoutes, createContributionAccessRoutes } from '@/modules/auth/presentation/v1/admin-user.routes';
 import { WordRepositoryImpl } from '@/modules/word/infrastructure/word.repository.impl';
 import { CreateWordUseCase } from '@/modules/word/application/use-cases/create-word.use-case';
@@ -123,7 +131,10 @@ import { RestoreWordUseCase } from '@/modules/word/application/use-cases/restore
 import { AddPronunciationUseCase } from '@/modules/word/application/use-cases/add-pronunciation.use-case';
 import { AddMeaningUseCase } from '@/modules/word/application/use-cases/add-meaning.use-case';
 import { ImportWordsUseCase } from '@/modules/word/application/use-cases/import-words.use-case';
+import { BatchContributeWordsUseCase } from '@/modules/word/application/use-cases/batch-contribute-words.use-case';
+import { RollbackWordImportSessionUseCase } from '@/modules/word/application/use-cases/rollback-word-import-session.use-case';
 import {
+  ClaimWordImportSessionUseCase,
   GetWordImportSessionUseCase,
   ListWordImportSessionsUseCase,
   SaveWordImportSessionUseCase,
@@ -157,9 +168,12 @@ import { ListContributionsUseCase } from '@/modules/contribution/application/use
 import { GetContributionDetailUseCase } from '@/modules/contribution/application/use-cases/get-contribution-detail.use-case';
 import { ReviewContributionUseCase } from '@/modules/contribution/application/use-cases/review-contribution.use-case';
 import { CorrectContributionUseCase } from '@/modules/contribution/application/use-cases/correct-contribution.use-case';
+import { ReopenContributionUseCase } from '@/modules/contribution/application/use-cases/reopen-contribution.use-case';
 import { ContributionController } from '@/modules/contribution/presentation/v1/contribution.controller';
 import { createContributionRoutes } from '@/modules/contribution/presentation/v1/contribution.routes';
 import { createMyContributionRoutes } from '@/modules/contribution/presentation/v1/my-contribution.routes';
+import { createDuplicateConfirmRoutes } from '@/modules/contribution/presentation/v1/duplicate-confirm.routes';
+import { ConfirmDuplicateMeaningUseCase } from '@/modules/contribution/application/use-cases/confirm-duplicate-meaning.use-case';
 import { MyContributionController } from '@/modules/contribution/presentation/v1/my-contribution.controller';
 import { ListMyContributionsUseCase } from '@/modules/contribution/application/use-cases/list-my-contributions.use-case';
 import { GetMyContributionDetailUseCase } from '@/modules/contribution/application/use-cases/get-my-contribution-detail.use-case';
@@ -190,6 +204,9 @@ import { AuditLogRepositoryImpl } from '@/modules/audit/infrastructure/audit-log
 import { ListAuditLogsUseCase } from '@/modules/audit/application/use-cases/list-audit-logs.use-case';
 import { AuditController } from '@/modules/audit/presentation/v1/audit.controller';
 import { createAuditRoutes } from '@/modules/audit/presentation/v1/audit.routes';
+import { AbuseController } from '@/modules/abuse/presentation/v1/abuse.controller';
+import { createAbuseRoutes } from '@/modules/abuse/presentation/v1/abuse.routes';
+import { LiftAbuseMuteUseCase } from '@/modules/abuse/application/use-cases/lift-abuse-mute.use-case';
 import { createImageStorage } from '@/modules/image/infrastructure/image-storage.factory';
 import { CreateUploadCredentialsUseCase } from '@/modules/image/application/use-cases/create-upload-credentials.use-case';
 import { ImageController } from '@/modules/image/presentation/v1/image.controller';
@@ -213,22 +230,24 @@ import { ResolveBugReportUseCase } from '@/modules/bug-report/application/use-ca
 import { BugReportController } from '@/modules/bug-report/presentation/v1/bug-report.controller';
 import { createBugReportRoutes } from '@/modules/bug-report/presentation/v1/bug-report.routes';
 import { createAdminBugReportRoutes } from '@/modules/bug-report/presentation/v1/admin-bug-report.routes';
-import { TranslationHelpRepositoryImpl } from '@/modules/translation-help/infrastructure/translation-help.repository.impl';
-import { CreateTranslationHelpUseCase } from '@/modules/translation-help/application/use-cases/create-translation-help.use-case';
-import { ListPublishedTranslationHelpsUseCase } from '@/modules/translation-help/application/use-cases/list-published-translation-helps.use-case';
-import { ListMyTranslationHelpsUseCase } from '@/modules/translation-help/application/use-cases/list-my-translation-helps.use-case';
-import { GetTranslationHelpDetailUseCase } from '@/modules/translation-help/application/use-cases/get-translation-help-detail.use-case';
-import { ListAdminTranslationHelpsUseCase } from '@/modules/translation-help/application/use-cases/list-admin-translation-helps.use-case';
-import { ApproveTranslationHelpUseCase } from '@/modules/translation-help/application/use-cases/approve-translation-help.use-case';
-import { RejectTranslationHelpUseCase } from '@/modules/translation-help/application/use-cases/reject-translation-help.use-case';
-import { TakedownTranslationHelpUseCase } from '@/modules/translation-help/application/use-cases/takedown-translation-help.use-case';
-import { CreateTranslationHelpReplyUseCase } from '@/modules/translation-help/application/use-cases/create-translation-help-reply.use-case';
-import { DeleteTranslationHelpReplyUseCase } from '@/modules/translation-help/application/use-cases/delete-translation-help-reply.use-case';
-import { PinTranslationHelpReplyUseCase } from '@/modules/translation-help/application/use-cases/pin-translation-help-reply.use-case';
-import { TakedownTranslationHelpReplyUseCase } from '@/modules/translation-help/application/use-cases/takedown-translation-help-reply.use-case';
-import { TranslationHelpController } from '@/modules/translation-help/presentation/v1/translation-help.controller';
-import { createTranslationHelpRoutes } from '@/modules/translation-help/presentation/v1/translation-help.routes';
-import { createAdminTranslationHelpRoutes } from '@/modules/translation-help/presentation/v1/admin-translation-help.routes';
+import { DiscussionRepositoryImpl } from '@/modules/discussion/infrastructure/discussion.repository.impl';
+import { CreateDiscussionUseCase } from '@/modules/discussion/application/use-cases/create-discussion.use-case';
+import { ListPublishedDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-published-discussions.use-case';
+import { ListMyDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-my-discussions.use-case';
+import { GetDiscussionDetailUseCase } from '@/modules/discussion/application/use-cases/get-discussion-detail.use-case';
+import { ListAdminDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-admin-discussions.use-case';
+import { ApproveDiscussionUseCase } from '@/modules/discussion/application/use-cases/approve-discussion.use-case';
+import { RejectDiscussionUseCase } from '@/modules/discussion/application/use-cases/reject-discussion.use-case';
+import { TakedownDiscussionUseCase } from '@/modules/discussion/application/use-cases/takedown-discussion.use-case';
+import { CreateDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/create-discussion-reply.use-case';
+import { CreateDiscussionReplyAudioUseCase } from '@/modules/discussion/application/use-cases/create-discussion-reply-audio.use-case';
+import { AttachDiscussionAudioUseCase } from '@/modules/discussion/application/use-cases/attach-discussion-audio.use-case';
+import { DeleteDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/delete-discussion-reply.use-case';
+import { PinDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/pin-discussion-reply.use-case';
+import { TakedownDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/takedown-discussion-reply.use-case';
+import { DiscussionController } from '@/modules/discussion/presentation/v1/discussion.controller';
+import { createDiscussionRoutes } from '@/modules/discussion/presentation/v1/discussion.routes';
+import { createAdminDiscussionRoutes } from '@/modules/discussion/presentation/v1/admin-discussion.routes';
 import { DashboardController } from '@/modules/dashboard/presentation/v1/dashboard.controller';
 import { createDashboardRoutes } from '@/modules/dashboard/presentation/v1/dashboard.routes';
 import { GetDashboardStatsUseCase } from '@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case';
@@ -250,6 +269,7 @@ import { ResetVotesByClientUseCase } from '@/modules/vote/application/use-cases/
 import { GetTopTargetVotesUseCase } from '@/modules/vote/application/use-cases/get-top-target-votes.use-case';
 import { CommentRepositoryImpl } from '@/modules/comment/infrastructure/comment.repository.impl';
 import { CreateCommentUseCase } from '@/modules/comment/application/use-cases/create-comment.use-case';
+import { CreateCommentAudioUseCase } from '@/modules/comment/application/use-cases/create-comment-audio.use-case';
 import { ListWordCommentsUseCase } from '@/modules/comment/application/use-cases/list-word-comments.use-case';
 import { DeleteCommentUseCase } from '@/modules/comment/application/use-cases/delete-comment.use-case';
 import { ListAdminCommentsUseCase } from '@/modules/comment/application/use-cases/list-admin-comments.use-case';
@@ -302,6 +322,8 @@ import { NotificationPushCooldownRepositoryImpl } from '@/modules/notification/i
 import { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
 import { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
+import { DiscussionReplyPushCooldownGate } from '@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate';
+import { WordVotePushCooldownGate } from '@/modules/notification/application/use-cases/word-vote-push-cooldown-gate';
 import { ListMyNotificationsUseCase } from '@/modules/notification/application/use-cases/list-my-notifications.use-case';
 import { GetUnreadNotificationCountUseCase } from '@/modules/notification/application/use-cases/get-unread-notification-count.use-case';
 import { MarkNotificationReadUseCase } from '@/modules/notification/application/use-cases/mark-notification-read.use-case';
@@ -316,6 +338,10 @@ import { createShareBackgroundProviderRegistry, listShareBackgroundProviderInfos
 import { ListShareBackgroundsUseCase } from '@/modules/share/application/use-cases/list-share-backgrounds.use-case';
 import { ShareController } from '@/modules/share/presentation/v1/share.controller';
 import { createShareRoutes } from '@/modules/share/presentation/v1/share.routes';
+import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
+import { ListActivityUseCase } from '@/modules/activity/application/use-cases/list-activity.use-case';
+import { ActivityController } from '@/modules/activity/presentation/v1/activity.controller';
+import { createActivityRoutes } from '@/modules/activity/presentation/v1/activity.routes';
 import { VerifierApplicationRepositoryImpl } from '@/modules/verifier-application/infrastructure/verifier-application.repository.impl';
 import { CreateVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/create-verifier-application.use-case';
 import { GetMyVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/get-my-verifier-application.use-case';
@@ -351,6 +377,17 @@ import {
   createAdminNotificationCampaignRoutes,
   createAdminNotificationTemplateRoutes,
 } from '@/modules/notification-campaign/presentation/v1/notification-campaign.routes';
+import { UgcAbuseEventRepositoryImpl } from '@/shared/moderation/ugc-abuse-event.repository';
+import {
+  RecordAbuseSignalUseCase,
+  safeRecordAbuseSignal,
+} from '@/shared/moderation/record-abuse-signal.use-case';
+import { UgcAnonAbuseRepositoryImpl } from '@/shared/moderation/ugc-anon-abuse.repository';
+import {
+  RecordAnonAbuseSignalUseCase,
+  assertAnonWriteAllowed,
+  safeRecordAnonAbuseSignal,
+} from '@/shared/moderation/record-anon-abuse-signal.use-case';
 
 // ---- Composition root: rakit semua dependency (manual DI, api-base-stack.md Section 2) ----
 bindCanContributeLookup(lookupCanContribute);
@@ -373,6 +410,7 @@ const hasher = new Pbkdf2PasswordService();
 // Email: Resend (HTTP) kalau RESEND_API_KEY ter-set - jalur Cloudflare
 // Workers; selain itu SMTP (Node). Keduanya implements MailerPort.
 const mailer = createMailer();
+const emailDomainVerifier = createEmailDomainVerifier();
 const identityRepo = new AuthIdentityRepositoryImpl(db);
 
 // ---- Modul audit (Section 21) - direkspos ke use case modul lain ----
@@ -392,6 +430,7 @@ const controller = new AuthController({
     mailer,
     appSettingsRepo,
     userConsentRepo,
+    emailDomainVerifier,
   ),
   login: new LoginUserUseCase(
     userRepo,
@@ -491,8 +530,8 @@ const requireContributeWriteIfAuthed = createRequireApprovedClientMiddleware(api
   scope: 'contribute.write',
   allowMissingUser: true,
 });
-const requireTranslationHelpWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'translation_help.write',
+const requireDiscussionWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
+  scope: 'discussion.write',
 });
 const requireBookmarkWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
   scope: 'bookmark.write',
@@ -519,10 +558,39 @@ const publicImageStorage = createPublicImageStorage();
 // dari SearchWordsUseCase lewat interface modul search-miss (Section 4)
 const searchMissRepo = new SearchMissRepositoryImpl(db);
 const languageRepo = new LanguageRepositoryImpl(db);
+const ugcAbuseEventRepo = new UgcAbuseEventRepositoryImpl(db);
+const recordAbuseSignal = new RecordAbuseSignalUseCase(
+  ugcAbuseEventRepo,
+  userRepo,
+  refreshTokenRepo,
+  auditRepo,
+  recordInbox,
+);
+const ugcAnonAbuseRepo = new UgcAnonAbuseRepositoryImpl(db);
+const recordAnonAbuseSignal = new RecordAnonAbuseSignalUseCase(ugcAnonAbuseRepo);
+const onUgcRateLimited = async (userId: string) => {
+  await safeRecordAbuseSignal(recordAbuseSignal, {
+    userId,
+    signal: 'rate_lockout',
+  });
+};
+const onAnonRateLimited = async (ctx: { clientIp: string; deviceId: string | null }) => {
+  await safeRecordAnonAbuseSignal(recordAnonAbuseSignal, {
+    clientIp: ctx.clientIp,
+    deviceId: ctx.deviceId,
+    signal: 'rate_lockout',
+  });
+};
 const publishWord = new PublishWordUseCase(wordRepo, auditRepo);
 const softDeleteWord = new SoftDeleteWordUseCase(wordRepo, auditRepo);
 const wordController = new WordController({
-  create: new CreateWordUseCase(wordRepo, auditRepo, searchMissRepo),
+  create: new CreateWordUseCase(
+    wordRepo,
+    auditRepo,
+    searchMissRepo,
+    recordAbuseSignal,
+    recordAnonAbuseSignal,
+  ),
   update: new UpdateWordUseCase(wordRepo, auditRepo),
   getById: new GetWordByIdUseCase(wordRepo),
   getByLemma: new GetWordByLemmaUseCase(wordRepo),
@@ -546,10 +614,22 @@ const wordController = new WordController({
   addWordImage: new AddWordImageUseCase(wordRepo, auditRepo, publicImageStorage.providerName),
   addExample: new AddExampleUseCase(wordRepo, auditRepo),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
-  importWords: new ImportWordsUseCase(wordRepo, languageRepo),
-  saveImportSession: new SaveWordImportSessionUseCase(wordImportSessionRepo),
+  importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo),
+  batchContributeWords: new BatchContributeWordsUseCase(
+    wordRepo,
+    languageRepo,
+    wordImportSessionRepo,
+    recordAnonAbuseSignal,
+  ),
+  saveImportSession: new SaveWordImportSessionUseCase(wordImportSessionRepo, userRepo),
   listImportSessions: new ListWordImportSessionsUseCase(wordImportSessionRepo),
   getImportSession: new GetWordImportSessionUseCase(wordImportSessionRepo),
+  claimImportSession: new ClaimWordImportSessionUseCase(wordImportSessionRepo, userRepo),
+  rollbackImportSession: new RollbackWordImportSessionUseCase(
+    wordImportSessionRepo,
+    wordRepo,
+    auditRepo,
+  ),
   uploadPronunciationAudio: new UploadPronunciationAudioUseCase(
     wordRepo,
     pronunciationStorage,
@@ -563,6 +643,7 @@ const wordController = new WordController({
   listWordClasses: () => wordRepo.listWordClasses(),
   // Stempel provider gambar kata = GitHub publik (bukan ImageKit)
   imageProviderName: publicImageStorage.providerName,
+  assertAnonWriteAllowed: (ctx) => assertAnonWriteAllowed(ugcAnonAbuseRepo, ctx),
 });
 
 // ---- Modul contribution - antrean review (Section 22 approval gate,
@@ -581,8 +662,10 @@ const contributionController = new ContributionController({
     notifyUser,
     recordInbox,
     new ReviewPushCooldownGate(appSettingsRepo, notificationPushCooldownRepo),
+    recordAbuseSignal,
   ),
   correct: new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo, recordInbox),
+  reopen: new ReopenContributionUseCase(contributionRepo, auditRepo),
   imageProviderName: publicImageStorage.providerName,
 });
 
@@ -612,8 +695,19 @@ const categoryController = new CategoryController({
 // pada word & children-nya. TANPA audit per vote (volume tinggi, bukan
 // aksi admin - lihat KEPUTUSAN PRODUK di doc). ----
 const voteRepo = new VoteRepositoryImpl(db);
+const wordVotePushCooldown = new WordVotePushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
+const toggleVoteUseCase = new ToggleVoteUseCase(
+  voteRepo,
+  userRepo,
+  recordInbox,
+  notifyUser,
+  wordVotePushCooldown,
+);
 const voteController = new VoteController({
-  toggle: new ToggleVoteUseCase(voteRepo),
+  toggle: toggleVoteUseCase,
   counts: new GetVoteCountsUseCase(voteRepo),
   myVotes: new GetMyVotesUseCase(voteRepo),
   history: new ListMyVoteHistoryUseCase(voteRepo),
@@ -644,6 +738,10 @@ const wordCommentPushCooldown = new WordCommentPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
 );
+const discussionReplyPushCooldown = new DiscussionReplyPushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
 const commentController = new CommentController({
   create: new CreateCommentUseCase(
     commentRepo,
@@ -654,12 +752,25 @@ const commentController = new CommentController({
     recordInbox,
     notifyUser,
     wordCommentPushCooldown,
+    recordAbuseSignal,
+  ),
+  createAudio: new CreateCommentAudioUseCase(
+    commentRepo,
+    wordRepo,
+    pronunciationStorage,
+    auditRepo,
+    commentBlocklistRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    wordCommentPushCooldown,
+    recordAbuseSignal,
   ),
   listByWord: new ListWordCommentsUseCase(commentRepo, voteRepo),
   delete: new DeleteCommentUseCase(commentRepo, auditRepo),
   listAdmin: new ListAdminCommentsUseCase(commentRepo),
   listMine: new ListMyCommentsUseCase(commentRepo),
-  takedown: new TakedownCommentUseCase(commentRepo, auditRepo),
+  takedown: new TakedownCommentUseCase(commentRepo, auditRepo, recordAbuseSignal),
   uncensor: new UncensorCommentUseCase(commentRepo, auditRepo),
 });
 const commentBlocklistController = new CommentBlocklistController({
@@ -703,6 +814,12 @@ const myContributionController = new MyContributionController({
   listMine: new ListMyContributionsUseCase(contributionRepo, suggestionRepo),
   getMine: new GetMyContributionDetailUseCase(contributionRepo, suggestionRepo),
 });
+
+const confirmDuplicateMeaning = new ConfirmDuplicateMeaningUseCase(
+  wordRepo,
+  toggleVoteUseCase,
+  auditRepo,
+);
 
 // ---- HTTP app ----
 export const app = createOpenApiApp();
@@ -851,6 +968,17 @@ app.route(
   createAdminApiClientRoutes({ controller: adminApiClientController, authenticate }),
 );
 
+const githubActionsDispatch = new GithubActionsDispatchService();
+const databaseBackupLogRepo = new DatabaseBackupLogRepositoryImpl(db);
+const systemDatabaseController = new SystemDatabaseController({
+  trigger: new TriggerSqliteBackupUseCase(githubActionsDispatch, userRepo),
+  list: new ListDatabaseBackupLogsUseCase(databaseBackupLogRepo),
+});
+app.route(
+  '/api/v1/admin/system/database',
+  createSystemDatabaseRoutes({ controller: systemDatabaseController, authenticate }),
+);
+
 // Modul word - admin (write) + publik (read)
 app.route('/api/v1/admin/words', createAdminWordRoutes({ controller: wordController, authenticate }));
 // Kontribusi media (pronounce/gambar/contoh) DI-MOUNT SEBELUM public routes -
@@ -872,6 +1000,7 @@ app.route(
     controller: commentController,
     authenticate,
     requireApprovedClient: requireCommentWriteClient,
+    onUgcRateLimited,
   }),
 );
 const setWordImageContentWarnings = new SetWordImageContentWarningsUseCase(wordRepo, auditRepo);
@@ -929,6 +1058,7 @@ app.route(
     controller: commentController,
     authenticate,
     requireApprovedClient: requireCommentWriteClient,
+    onUgcRateLimited,
   }),
 );
 
@@ -1008,19 +1138,28 @@ app.route('/api/v1/admin/votes', createAdminVoteRoutes({ controller: adminVotesC
 // Antrean review kontribusi - hanya verifikator (Section 22)
 app.route('/api/v1/admin/contributions', createContributionRoutes({ controller: contributionController, authenticate }));
 
-// Submit kata TANPA login (publik, tanpa limit) - atribusi ke user sistem
-// Anonim, otomatis pending_review (03-api-kontribusi-verifikasi.md)
+// Submit kata publik - rate limit IP/device untuk tamu; mute per sumber
+// (bukan ANONIM_USER_ID). Login → assertCanContribute.
 app.route(
   '/api/v1/contributions',
   createAnonContributionRoutes({
     controller: wordController,
     optionalAuthenticate,
     requireApprovedClient: requireContributeWriteIfAuthed,
+    onAnonRateLimited,
   }),
 );
 app.route(
   '/api/v1/contributions',
   createMyContributionRoutes({ controller: myContributionController, authenticate }),
+);
+app.route(
+  '/api/v1/contributions',
+  createDuplicateConfirmRoutes({
+    confirmDuplicate: confirmDuplicateMeaning,
+    authenticate,
+    requireApprovedClient: requireVoteWriteClient,
+  }),
 );
 
 // Search miss - beranda publik (peluang kontribusi) + panel admin
@@ -1069,50 +1208,89 @@ app.route(
   createAdminBugReportRoutes({ controller: bugReportController, authenticate }),
 );
 
-const translationHelpRepo = new TranslationHelpRepositoryImpl(db);
-const translationHelpController = new TranslationHelpController({
-  create: new CreateTranslationHelpUseCase(translationHelpRepo, auditRepo),
-  listPublished: new ListPublishedTranslationHelpsUseCase(translationHelpRepo, voteRepo),
-  listMine: new ListMyTranslationHelpsUseCase(translationHelpRepo),
-  getDetail: new GetTranslationHelpDetailUseCase(translationHelpRepo, voteRepo),
-  listAdmin: new ListAdminTranslationHelpsUseCase(translationHelpRepo),
-  approve: new ApproveTranslationHelpUseCase(
-    translationHelpRepo,
+const discussionRepo = new DiscussionRepositoryImpl(db);
+const discussionController = new DiscussionController({
+  create: new CreateDiscussionUseCase(
+    discussionRepo,
+    auditRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    recordAbuseSignal,
+  ),
+  listPublished: new ListPublishedDiscussionsUseCase(discussionRepo, voteRepo),
+  listMine: new ListMyDiscussionsUseCase(discussionRepo),
+  getDetail: new GetDiscussionDetailUseCase(discussionRepo, voteRepo),
+  listAdmin: new ListAdminDiscussionsUseCase(discussionRepo),
+  approve: new ApproveDiscussionUseCase(
+    discussionRepo,
     publicImageStorage,
     imageStorage,
     auditRepo,
     recordInbox,
   ),
-  reject: new RejectTranslationHelpUseCase(
-    translationHelpRepo,
+  reject: new RejectDiscussionUseCase(
+    discussionRepo,
     imageStorage,
     auditRepo,
     recordInbox,
+    pronunciationStorage,
   ),
-  takedown: new TakedownTranslationHelpUseCase(translationHelpRepo, auditRepo, recordInbox),
-  createReply: new CreateTranslationHelpReplyUseCase(
-    translationHelpRepo,
+  takedown: new TakedownDiscussionUseCase(
+    discussionRepo,
+    auditRepo,
+    recordInbox,
+    pronunciationStorage,
+  ),
+  createReply: new CreateDiscussionReplyUseCase(
+    discussionRepo,
     auditRepo,
     commentBlocklistRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    discussionReplyPushCooldown,
+    recordAbuseSignal,
   ),
-  deleteReply: new DeleteTranslationHelpReplyUseCase(translationHelpRepo, auditRepo),
-  pinReply: new PinTranslationHelpReplyUseCase(translationHelpRepo, auditRepo),
-  takedownReply: new TakedownTranslationHelpReplyUseCase(translationHelpRepo, auditRepo),
+  createReplyAudio: new CreateDiscussionReplyAudioUseCase(
+    discussionRepo,
+    pronunciationStorage,
+    auditRepo,
+    commentBlocklistRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    discussionReplyPushCooldown,
+    recordAbuseSignal,
+  ),
+  attachAudio: new AttachDiscussionAudioUseCase(
+    discussionRepo,
+    pronunciationStorage,
+    auditRepo,
+  ),
+  deleteReply: new DeleteDiscussionReplyUseCase(
+    discussionRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
+  pinReply: new PinDiscussionReplyUseCase(discussionRepo, auditRepo),
+  takedownReply: new TakedownDiscussionReplyUseCase(discussionRepo, auditRepo),
   imageController,
 });
 app.route(
-  '/api/v1/translation-helps',
-  createTranslationHelpRoutes({
-    controller: translationHelpController,
+  '/api/v1/discussions',
+  createDiscussionRoutes({
+    controller: discussionController,
     authenticate,
     optionalAuthenticate,
-    requireApprovedClient: requireTranslationHelpWriteClient,
+    requireApprovedClient: requireDiscussionWriteClient,
+    onUgcRateLimited,
   }),
 );
 app.route(
-  '/api/v1/admin/translation-helps',
-  createAdminTranslationHelpRoutes({
-    controller: translationHelpController,
+  '/api/v1/admin/discussions',
+  createAdminDiscussionRoutes({
+    controller: discussionController,
     authenticate,
   }),
 );
@@ -1132,12 +1310,21 @@ const adminUsersController = new AdminUsersController({
   setCanContribute: new SetCanContributeUseCase(userRepo, auditRepo, recordInbox),
   createUser: new CreateAdminUserUseCase(userRepo, hasher, auditRepo),
   setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
+  listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
 });
 app.route('/api/v1/admin/users', createAdminUserRoutes({ controller: adminUsersController, authenticate }));
 app.route(
   '/api/v1/admin/contribution-access',
   createContributionAccessRoutes({ controller: adminUsersController, authenticate }),
 );
+
+// Monitoring ledger abuse UGC (akun + anon) - hanya admin & root
+const abuseController = new AbuseController({
+  abuseRepo: ugcAbuseEventRepo,
+  anonRepo: ugcAnonAbuseRepo,
+  lift: new LiftAbuseMuteUseCase(ugcAbuseEventRepo, ugcAnonAbuseRepo, userRepo, auditRepo),
+});
+app.route('/api/v1/admin/abuse', createAbuseRoutes({ controller: abuseController, authenticate }));
 
 const verifierApplicationRepo = new VerifierApplicationRepositoryImpl(db);
 const verifierApplicationController = new VerifierApplicationController({
@@ -1153,8 +1340,14 @@ const verifierApplicationController = new VerifierApplicationController({
     notifyUser,
     userRepo,
     mailer,
+    recordInbox,
   ),
-  reject: new RejectVerifierApplicationUseCase(verifierApplicationRepo, auditRepo, notifyUser),
+  reject: new RejectVerifierApplicationUseCase(
+    verifierApplicationRepo,
+    auditRepo,
+    notifyUser,
+    recordInbox,
+  ),
 });
 app.route(
   '/api/v1/verifier-applications',
@@ -1232,7 +1425,13 @@ app.route(
   createLemmaDefinitionRoutes({ controller: lemmaDefinitionController }),
 );
 
-// Latar kartu share - proxy Unsplash (docs/backlogs/SHARE.md). Publik.
+// Feed lintas aktivitas publik (37-api-activity-feed.md). Beranda mobile.
+const activityRepo = new ActivityRepositoryImpl(db);
+const activityController = new ActivityController({
+  list: new ListActivityUseCase(activityRepo),
+});
+app.route('/api/v1/activity', createActivityRoutes({ controller: activityController }));
+
 // Latar kartu share - multi-provider (docs/backlogs/SHARE.md). Publik.
 const shareBackgroundProviders = createShareBackgroundProviderRegistry();
 const shareController = new ShareController({

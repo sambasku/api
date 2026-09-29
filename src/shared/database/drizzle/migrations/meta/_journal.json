@@ -211,6 +211,118 @@
       "when": 1792900000000,
       "tag": "0029_word-comment-push-cooldown",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1793000000000,
+      "tag": "0030_contribution-reopened-by",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1793100000000,
+      "tag": "0031_notification-vote-action",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1793200000000,
+      "tag": "0032_rename-translation-helps-to-discussions",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1793300000000,
+      "tag": "0033_discussions-link-url",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1793400000000,
+      "tag": "0034_meanings-meaning-source",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1793500000000,
+      "tag": "0035_word-import-support-attribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1793600000000,
+      "tag": "0036_word-import-session-claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1793700000000,
+      "tag": "0037_discussion-reply-audio",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1793800000000,
+      "tag": "0038_notification-campaign-image-url",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1793900000000,
+      "tag": "0039_discussion-topic-audio",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1794000000000,
+      "tag": "0040_comment-audio",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1794100000000,
+      "tag": "0041_database-backup-logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1794200000000,
+      "tag": "0042_word-import-session-rollback",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1794300000000,
+      "tag": "0043_ugc-abuse",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1794400000000,
+      "tag": "0044_ugc-anon-abuse",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1794500000000,
+      "tag": "0045_contribution-guest-display-name",
+      "breakpoints": true
     }
   ]
 }

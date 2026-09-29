@@ -6,7 +6,11 @@ import { logger } from '@/shared/logging/logger';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
-/** Akun login default - domain @sambasku.com (lihat api-base-stack.md). Seed menimpa password jadi pass1234. */
+/**
+ * Akun login default - domain @sambasku.com (lihat api-base-stack.md).
+ * Default: upsert menimpa password jadi pass1234.
+ * SEED_ACCOUNTS_INSERT_ONLY=1: insert saja, skip jika username sudah ada.
+ */
 const SEED_USERS = [
   { username: 'admin', email: 'admin@sambasku.com', role: 'admin' },
   { username: 'root', email: 'root@sambasku.com', role: 'root' },
@@ -16,15 +20,32 @@ const SEED_USERS = [
 
 const SEED_PASSWORD = 'pass1234';
 
-/** Seed akun default (upsert by username: email/password/role). Tidak menyentuh user sistem / referensi. */
+/** Seed akun default. Default upsert by username; insert-only jika SEED_ACCOUNTS_INSERT_ONLY=1. */
 export async function seedAccounts(): Promise<void> {
+  const insertOnly = process.env.SEED_ACCOUNTS_INSERT_ONLY === '1';
   const hasher = new Pbkdf2PasswordService();
   const passwordHash = await hasher.hash(SEED_PASSWORD);
 
   for (const user of SEED_USERS) {
+    const values = { ...user, passwordHash, emailVerified: true, displayName: user.username };
+
+    if (insertOnly) {
+      const result = await db
+        .insert(users)
+        .values(values)
+        .onConflictDoNothing({ target: users.username });
+      const inserted = Number(result.rowsAffected ?? 0) > 0;
+      if (inserted) {
+        logger.info(`Seeded user ${user.email} (role: ${user.role})`);
+      } else {
+        logger.info(`Skipped existing user ${user.email}`);
+      }
+      continue;
+    }
+
     await db
       .insert(users)
-      .values({ ...user, passwordHash, emailVerified: true, displayName: user.username })
+      .values(values)
       .onConflictDoUpdate({
         target: users.username,
         set: {

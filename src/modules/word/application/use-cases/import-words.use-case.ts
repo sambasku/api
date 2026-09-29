@@ -1,8 +1,9 @@
 import { BadRequestError } from '@/shared/errors/app-error';
-import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import type { LanguageRepository } from '@/modules/language/domain/repositories/language.repository';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { Actor } from './create-word.use-case';
+import type { UserLookupPort } from '../ports/user-lookup.port';
+import { resolveImportAttributedTo } from '../utils/resolve-import-attribution';
 import {
   decideImportPublication,
   meaningFingerprint,
@@ -20,21 +21,31 @@ export class ImportWordsUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly languageRepo: LanguageRepository,
+    private readonly users: UserLookupPort,
   ) {}
 
   async execute(
-    input: { mode: 'validate' | 'commit'; items: ImportWordInput[] },
+    input: {
+      mode: 'validate' | 'commit';
+      items: ImportWordInput[];
+      attributed_to?: string;
+      /** Opsional: tautkan kata baru ke sesi impor (rollback batch). */
+      import_session_id?: string;
+    },
     actor: Actor,
   ): Promise<ImportWordsResult> {
     if (input.items.length > 5) {
       throw new BadRequestError('IMPORT_TOO_LARGE', 'Maksimal 5 kata per permintaan');
     }
     const refs = await this.resolveRefs();
-    // Atribusi data ke user sistem; role login tetap untuk aturan tayang/verifikasi.
-    const writeActorId = CSV_IMPORTER_USER_ID;
+    // Default Pengimpor CSV; opsional override ke user yang dipilih admin.
+    // Role login tetap untuk aturan tayang/verifikasi.
+    const writeActorId = await resolveImportAttributedTo(this.users, input.attributed_to);
     const items: ImportWordResult[] = [];
     for (const item of input.items) {
-      items.push(await this.one(item, actor, writeActorId, refs, input.mode));
+      items.push(
+        await this.one(item, actor, writeActorId, refs, input.mode, input.import_session_id),
+      );
     }
     return { items };
   }
@@ -69,6 +80,7 @@ export class ImportWordsUseCase {
     writeActorId: string,
     refs: { languageId: string; translationLanguageId: string; dialectId?: string; wordClassId: string },
     mode: 'validate' | 'commit',
+    importSessionId?: string,
   ): Promise<ImportWordResult> {
     const lemma = item.lemma.trim();
     const meanings = item.meanings
@@ -139,6 +151,7 @@ export class ImportWordsUseCase {
           usageLabels: [],
           status: publication.status,
           isVerified: publication.isVerified,
+          ...(importSessionId ? { importSessionId } : {}),
         },
         writeActorId,
       );
@@ -149,6 +162,7 @@ export class ImportWordsUseCase {
         is_verified: word.isVerified,
         meanings_added: unique.length,
         meanings_skipped: item.meanings.length - unique.length,
+        word_id: word.id,
       };
     }
 

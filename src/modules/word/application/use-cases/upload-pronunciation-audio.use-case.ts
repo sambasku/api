@@ -7,7 +7,10 @@ import {
   clampDurationMs,
   validateAudioFile,
 } from '../utils/validate-audio-file';
-import { resolveChildPublication } from '../utils/resolve-publication';
+import {
+  isVerifierRole,
+  resolveChildPublication,
+} from '../utils/resolve-publication';
 import { assertCanContribute } from '../utils/assert-can-contribute';
 import type { Actor } from './create-word.use-case';
 
@@ -84,7 +87,12 @@ export class UploadPronunciationAudioUseCase {
     });
 
     const existingCount = await this.wordRepo.countWordAudios(wordId, exampleId);
-    const publication = resolveChildPublication(actor.role);
+    // Pre-moderasi audio: kontributor → pending_review (belum tayang publik).
+    // Verifikator tetap published + verified via resolveChildPublication.
+    // Jangan pakai resolveChildPublication untuk non-verifier (itu me-publish).
+    const publication = isVerifierRole(actor.role)
+      ? resolveChildPublication(actor.role)
+      : { status: 'pending_review' as const, isVerified: false, needsReview: true };
 
     const media = await this.wordRepo.addWordAudio(
       wordId,

@@ -21,6 +21,11 @@ export const listContributionsQuerySchema = z.object({
   entity_type: entityTypeSchema.optional(),
   action: z.string().trim().min(1).optional(),
   word_id: opaqueId.optional(),
+  /** true = riwayat verifikasi milik user auth (bukan antrean global) */
+  mine: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === true || v === 'true' || v === '1'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().length(26).optional(),
 });
@@ -60,6 +65,8 @@ export const approveContributionSchema = z
 export type ApproveContributionBody = z.infer<typeof approveContributionSchema>;
 export const rejectContributionSchema = z.object({
   comment: z.string().trim().min(1, 'Alasan penolakan wajib diisi').max(2000),
+  /** spam = sinyal abuse otomatis ke penulis kontribusi. */
+  reason_code: z.enum(['spam', 'other']).optional(),
 });
 
 // Koreksi - discriminated union pada entity_type. Varian 'word' memakai
@@ -126,6 +133,10 @@ const contributionItemSchema = z.object({
   search_miss_id: z.string().nullable().optional(),
   search_miss_term: z.string().nullable().optional(),
   search_miss_direction: z.enum(['lemma', 'translation']).nullable().optional(),
+  reopened_by: z.string().nullable().optional(),
+  review_status: contributionStatusSchema.nullable().optional(),
+  review_comment: z.string().nullable().optional(),
+  reviewed_at: z.string().nullable().optional(),
 });
 
 export const listContributionsResponseSchema = z.object({
@@ -138,18 +149,19 @@ export const listContributionsResponseSchema = z.object({
   }),
 });
 
+const reviewRowSchema = z.object({
+  reviewer_id: z.string().nullable(),
+  status: contributionStatusSchema,
+  comment: z.string().nullable(),
+  created_at: z.string(),
+});
+
 export const contributionDetailResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     contribution: contributionItemSchema,
-    review: z
-      .object({
-        reviewer_id: z.string().nullable(),
-        status: contributionStatusSchema,
-        comment: z.string().nullable(),
-        created_at: z.string(),
-      })
-      .nullable(),
+    review: reviewRowSchema.nullable(),
+    prior_reviews: z.array(reviewRowSchema).optional(),
     // payload polymorphic per entity_type - bentuknya didokumentasikan di
     // docs/api/03-api-kontribusi-verifikasi.md (word detail / child + parent)
     entity: z.any(),
@@ -164,6 +176,7 @@ export const reviewDecisionResponseSchema = z.object({
     entity_id: z.string(),
     status: z.enum(['pending', 'approved', 'rejected', 'corrected']),
     is_corrected: z.boolean().optional(),
+    reopened_by: z.string().nullable().optional(),
     /** Set saat makna digabung ke lemma published yang sudah ada (12-api §8) */
     merged_into_word_id: z.string().optional(),
   }),

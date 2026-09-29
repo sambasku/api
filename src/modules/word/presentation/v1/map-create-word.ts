@@ -25,6 +25,7 @@ export function toCreateWordDto(body: CreateWordBody, imageProviderName: string)
       definition: m.definition,
       isHaveDefinition: m.is_have_definition ?? true,
       isHaveTranslation: m.is_have_translation ?? true,
+      meaningSource: m.meaning_source ?? 'manual',
       orderIndex: m.order_index ?? i + 1,
       translations: (m.translations ?? []).map((t) => ({
         languageId: t.language_id,
@@ -117,6 +118,7 @@ function toInlineWordDto(w: InlineWordBody, imageProviderName: string): InlineWo
       definition: m.definition,
       isHaveDefinition: m.is_have_definition ?? true,
       isHaveTranslation: m.is_have_translation ?? true,
+      meaningSource: m.meaning_source ?? 'manual',
       orderIndex: m.order_index ?? i + 1,
       translations: (m.translations ?? []).map((t) => ({
         languageId: t.language_id,

@@ -68,6 +68,7 @@ function makeDetail(overrides: Partial<WordDetail> = {}): WordDetail {
     takedownNote: null,
     takenDownBy: null,
     takenDownAt: null,
+    importSessionId: null,
     meanings: [
       {
         id: '01MEANINGULID0000000000000',
@@ -77,6 +78,7 @@ function makeDetail(overrides: Partial<WordDetail> = {}): WordDetail {
         definition: 'definisi lama',
         isHaveDefinition: true,
         isHaveTranslation: true,
+        meaningSource: 'manual',
         orderIndex: 1,
         notes: null,
         translations: [],
@@ -120,6 +122,7 @@ function makeWord(overrides: Partial<Word> = {}): Word {
     takedownNote: null,
     takenDownBy: null,
     takenDownAt: null,
+    importSessionId: null,
     ...overrides,
   };
 }

@@ -1,0 +1,134 @@
+import { describe, expect, it, vi } from 'vitest';
+import { ValidationError } from '@/shared/errors/app-error';
+import type { ActivityItem } from '../../domain/entities/activity-item.entity';
+import type { ActivityRepository } from '../../domain/repositories/activity.repository';
+import { encodeActivityCursor } from '../../domain/merge-activity';
+import { ListActivityUseCase } from '../../application/use-cases/list-activity.use-case';
+
+function item(
+  kind: ActivityItem['kind'],
+  id: string,
+  at: string,
+): ActivityItem {
+  return {
+    id: `${kind}:${id}`,
+    kind,
+    createdAt: new Date(at),
+    actor: { username: 'u', displayName: 'U', avatarUrl: null },
+    body: kind,
+    subtitle: null,
+    target: null,
+  };
+}
+
+function emptyRepo(overrides: Partial<ActivityRepository> = {}): ActivityRepository {
+  return {
+    listRecentWords: vi.fn().mockResolvedValue([]),
+    listRecentComments: vi.fn().mockResolvedValue([]),
+    listRecentVotes: vi.fn().mockResolvedValue([]),
+    listRecentDiscussions: vi.fn().mockResolvedValue([]),
+    listRecentApprovedContributions: vi.fn().mockResolvedValue([]),
+    listRecentVisibleSearchMisses: vi.fn().mockResolvedValue([]),
+    listRecentWelcomes: vi.fn().mockResolvedValue([]),
+    ...overrides,
+  };
+}
+
+describe('ListActivityUseCase', () => {
+  it('menggabungkan semua sumber lalu cap', async () => {
+    const repo = emptyRepo({
+      listRecentWords: vi.fn().mockResolvedValue([
+        item('word', 'w1', '2026-09-28T10:00:00.000Z'),
+      ]),
+      listRecentComments: vi.fn().mockResolvedValue([
+        item('comment', 'c1', '2026-09-28T11:00:00.000Z'),
+      ]),
+      listRecentVotes: vi.fn().mockResolvedValue([
+        item('vote', 'v1', '2026-09-28T12:00:00.000Z'),
+      ]),
+      listRecentApprovedContributions: vi.fn().mockResolvedValue([
+        item('word_image', 'i1', '2026-09-28T09:00:00.000Z'),
+      ]),
+      listRecentVisibleSearchMisses: vi.fn().mockResolvedValue([
+        {
+          ...item('search_miss', 's1', '2026-09-28T08:00:00.000Z'),
+          actor: null,
+        },
+      ]),
+      listRecentWelcomes: vi.fn().mockResolvedValue([
+        item('welcome', 'u1', '2026-09-28T07:00:00.000Z'),
+      ]),
+    });
+
+    const useCase = new ListActivityUseCase(repo);
+    const page = await useCase.execute(20);
+
+    expect(page.items.map((r) => r.kind)).toEqual([
+      'vote',
+      'comment',
+      'word',
+      'word_image',
+      'search_miss',
+      'welcome',
+    ]);
+    expect(page.hasMore).toBe(false);
+    expect(page.nextCursor).toBeNull();
+    expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined);
+    expect(repo.listRecentApprovedContributions).toHaveBeenCalled();
+    expect(repo.listRecentWelcomes).toHaveBeenCalled();
+  });
+
+  it('cursor rusak → ValidationError', async () => {
+    const useCase = new ListActivityUseCase(emptyRepo());
+    await expect(useCase.execute(20, 'bukan-cursor')).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it('halaman berikutnya meneruskan before ke repo', async () => {
+    const cursor = encodeActivityCursor({
+      createdAt: new Date('2026-09-28T12:00:00.000Z'),
+      id: 'vote:v1',
+    });
+    const repo = emptyRepo({
+      listRecentVotes: vi.fn().mockResolvedValue([
+        item('vote', 'v0', '2026-09-28T11:00:00.000Z'),
+      ]),
+    });
+    const useCase = new ListActivityUseCase(repo);
+    const page = await useCase.execute(20, cursor);
+
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].id).toBe('vote:v0');
+    expect(repo.listRecentVotes).toHaveBeenCalledWith(
+      8,
+      expect.objectContaining({
+        id: 'vote:v1',
+        createdAt: expect.any(Date),
+      }),
+    );
+  });
+
+  it('has_more + next_cursor saat pool melebihi limit', async () => {
+    const votes = Array.from({ length: 4 }, (_, i) =>
+      item('vote', `v${i}`, `2026-09-28T${String(20 - i).padStart(2, '0')}:00:00.000Z`),
+    );
+    const comments = Array.from({ length: 4 }, (_, i) =>
+      item(
+        'comment',
+        `c${i}`,
+        `2026-09-28T${String(15 - i).padStart(2, '0')}:00:00.000Z`,
+      ),
+    );
+    const repo = emptyRepo({
+      listRecentVotes: vi.fn().mockResolvedValue(votes),
+      listRecentComments: vi.fn().mockResolvedValue(comments),
+    });
+    const useCase = new ListActivityUseCase(repo);
+    const page = await useCase.execute(5);
+
+    expect(page.items).toHaveLength(5);
+    expect(page.hasMore).toBe(true);
+    expect(page.nextCursor).toBeTruthy();
+  });
+});

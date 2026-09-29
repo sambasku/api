@@ -22,6 +22,7 @@ function makeDeps(overrides: {
         displayName: user.username,
         bio: null,
         canContribute: true,
+        contributeMutedUntil: null,
         avatarUrl: null,
         avatarProvider: null,
         avatarProviderFileId: null,

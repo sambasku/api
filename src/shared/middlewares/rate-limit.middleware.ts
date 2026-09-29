@@ -7,6 +7,8 @@ interface RateLimitOpts {
   points: number;
   duration: number; // detik
   keyFn?: (c: Context) => string;
+  /** Dipanggil saat bucket habis (sebelum response 429). Best-effort. */
+  onLimited?: (c: Context, key: string) => void | Promise<void>;
 }
 
 // Key default per-IP: Cloudflare Workers menyediakan cf-connecting-ip
@@ -37,6 +39,13 @@ export function rateLimit(opts: RateLimitOpts) {
       await limiter.consume(key);
       await next();
     } catch {
+      if (opts.onLimited) {
+        try {
+          await opts.onLimited(c, key);
+        } catch {
+          // best-effort
+        }
+      }
       c.header('Retry-After', String(opts.duration));
       return c.json(
         {

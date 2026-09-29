@@ -19,7 +19,10 @@ import type { AddWordImageUseCase } from '../../application/use-cases/add-word-i
 import type { AddExampleUseCase } from '../../application/use-cases/add-example.use-case';
 import type { AddMeaningUseCase } from '../../application/use-cases/add-meaning.use-case';
 import type { ImportWordsUseCase } from '../../application/use-cases/import-words.use-case';
+import type { BatchContributeWordsUseCase } from '../../application/use-cases/batch-contribute-words.use-case';
+import type { RollbackWordImportSessionUseCase } from '../../application/use-cases/rollback-word-import-session.use-case';
 import type {
+  ClaimWordImportSessionUseCase,
   GetWordImportSessionUseCase,
   ListWordImportSessionsUseCase,
   SaveWordImportSessionUseCase,
@@ -34,10 +37,13 @@ import type {
   ListLatestWordsQueryBody,
 } from './validators/create-word.validator';
 import type { ImportWordsBody } from './validators/import-words.validator';
+import type { BatchContributeWordsBody } from './validators/batch-contribute-words.validator';
 import type {
+  ClaimImportSessionBody,
   ListImportSessionsQuery,
   SaveImportSessionBody,
 } from './validators/import-session.validator';
+import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import type { BulkWordsBody } from './validators/bulk-words.validator';
 import type { UpdateWordBody } from './validators/update-word.validator';
 import type { TakedownWordBody } from '@/modules/word-report/presentation/v1/validators/word-report.validator';
@@ -49,6 +55,11 @@ import type {
 } from './validators/word-media.validator';
 import { toCreateWordDto, toUpdateWordDto } from './map-create-word';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import {
+  clientIpKey,
+  normalizedDeviceId,
+} from '@/shared/middlewares/rate-limit.middleware';
+import type { AnonClientContext } from '@/shared/moderation/record-anon-abuse-signal.use-case';
 import type { LatestWordSummary, WordClassSummary, WordDetail } from '../../domain/entities/word.entity';
 import { mapPublicWordImageUrl } from './map-word-image-url';
 import type { ListAdminWordsUseCase } from '../../application/use-cases/list-admin-words.use-case';
@@ -97,14 +108,19 @@ export class WordController {
       addExample: AddExampleUseCase;
       addMeaning: AddMeaningUseCase;
       importWords: ImportWordsUseCase;
+      batchContributeWords: BatchContributeWordsUseCase;
       saveImportSession: SaveWordImportSessionUseCase;
       listImportSessions: ListWordImportSessionsUseCase;
       getImportSession: GetWordImportSessionUseCase;
+      claimImportSession: ClaimWordImportSessionUseCase;
+      rollbackImportSession: RollbackWordImportSessionUseCase;
       uploadPronunciationAudio: UploadPronunciationAudioUseCase;
       deletePronunciationAudio: DeletePronunciationAudioUseCase;
       listWordClasses: () => Promise<WordClassSummary[]>;
       /** provider gambar aktif - dari composition root, bukan hardcode */
       imageProviderName: string;
+      /** Soft-mute IP/device untuk kontribusi tanpa login. */
+      assertAnonWriteAllowed?: (ctx: AnonClientContext) => Promise<void>;
     },
   ) {}
 
@@ -176,13 +192,38 @@ export class WordController {
     return c.json({ success: true as const, data: result }, body.mode === 'commit' ? 201 : 200);
   }
 
+  async batchContributeWords(c: Context, body: BatchContributeWordsBody) {
+    const ctx = c as Context<{ Variables: AppVariables }>;
+    const authUser = ctx.get('user');
+    const triggeredBy = authUser?.user_id ?? ANONIM_USER_ID;
+    const clientIp = clientIpKey(c);
+    const deviceId = normalizedDeviceId(c);
+    if (!authUser) {
+      await this.deps.assertAnonWriteAllowed?.({ clientIp, deviceId });
+    }
+    const result = await this.deps.batchContributeWords.execute({
+      rows: body.rows,
+      contributorName: body.contributor_name,
+      triggeredBy,
+      clientIp,
+      deviceId,
+    });
+    return c.json({ success: true as const, data: result }, 201);
+  }
+
   async saveImportSession(c: Context, body: SaveImportSessionBody) {
     const actor = (c as Context<{ Variables: AppVariables }>).get('user');
     if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
     const session = await this.deps.saveImportSession.execute({
       id: body.id,
       triggeredBy: actor.user_id,
+      attributedTo: body.attributed_to,
       sourceLabel: body.source_label,
+      supportName: body.support_name,
+      supportType: body.support_type,
+      supportAddress: body.support_address,
+      supportTitle: body.support_title,
+      supportDesc: body.support_desc,
       status: body.status,
       total: body.total,
       createdCount: body.created_count,
@@ -199,6 +240,7 @@ export class WordController {
     const page = await this.deps.listImportSessions.execute({
       limit,
       cursor: query.cursor,
+      q: query.q,
     });
     return c.json({
       success: true as const,
@@ -216,6 +258,36 @@ export class WordController {
     return c.json({ success: true as const, data: this.toImportSessionData(session) });
   }
 
+  async claimImportSession(c: Context, id: string, body: ClaimImportSessionBody) {
+    const actor = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const session = await this.deps.claimImportSession.execute({
+      sessionId: id,
+      attributedTo: body.attributed_to,
+      claimedBy: actor.user_id,
+    });
+    return c.json({ success: true as const, data: this.toImportSessionData(session) });
+  }
+
+  async rollbackImportSession(c: Context, id: string) {
+    const actor = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
+    const result = await this.deps.rollbackImportSession.execute({
+      sessionId: id,
+      actorId: actor.user_id,
+      requestId,
+    });
+    return c.json({
+      success: true as const,
+      data: {
+        session_id: result.session_id,
+        deleted_count: result.deleted_count,
+        session: this.toImportSessionData(result.session),
+      },
+    });
+  }
+
   private toImportSessionData(session: {
     id: string;
     triggeredBy: string;
@@ -225,15 +297,32 @@ export class WordController {
     attributedToUsername: string | null;
     attributedToDisplayName: string | null;
     sourceLabel: string | null;
+    supportName: string | null;
+    supportType: 'web' | 'book' | 'article' | 'other' | null;
+    supportAddress: string | null;
+    supportTitle: string | null;
+    supportDesc: string | null;
+    claimedBy: string | null;
+    claimedByUsername: string | null;
+    claimedByDisplayName: string | null;
+    claimedAt: Date | null;
     status: 'running' | 'completed' | 'cancelled' | 'failed';
     total: number;
     createdCount: number;
     duplicatesCount: number;
     meaningsAddedCount: number;
     invalidCount: number;
-    items: { lemma: string; outcome: 'created' | 'meanings_added' | 'skipped' | 'invalid'; meanings_added: number; message?: string }[];
+    items: {
+      lemma: string;
+      outcome: 'created' | 'meanings_added' | 'skipped' | 'invalid';
+      meanings_added: number;
+      message?: string;
+      word_id?: string;
+    }[];
     createdAt: Date;
     finishedAt: Date | null;
+    rolledBackAt: Date | null;
+    rolledBackBy: string | null;
   }) {
     return {
       id: session.id,
@@ -244,6 +333,16 @@ export class WordController {
       attributed_to_username: session.attributedToUsername,
       attributed_to_display_name: session.attributedToDisplayName,
       source_label: session.sourceLabel,
+      support_name: session.supportName,
+      support_type: session.supportType,
+      support_address: session.supportAddress,
+      support_title: session.supportTitle,
+      support_desc: session.supportDesc,
+      claimed_by: session.claimedBy,
+      claimed_by_username: session.claimedByUsername,
+      claimed_by_display_name: session.claimedByDisplayName,
+      claimed_at: session.claimedAt?.toISOString() ?? null,
+      can_claim: session.attributedTo === CSV_IMPORTER_USER_ID,
       status: session.status,
       total: session.total,
       created_count: session.createdCount,
@@ -253,6 +352,8 @@ export class WordController {
       items: session.items,
       created_at: session.createdAt.toISOString(),
       finished_at: session.finishedAt?.toISOString() ?? null,
+      rolled_back_at: session.rolledBackAt?.toISOString() ?? null,
+      rolled_back_by: session.rolledBackBy,
     };
   }
 
@@ -387,6 +488,7 @@ export class WordController {
         // 17: false = placeholder "-" - client menurunkan CTA "Bantu definisi"
         is_have_definition: m.isHaveDefinition,
         is_have_translation: m.isHaveTranslation,
+        meaning_source: m.meaningSource,
         order_index: m.orderIndex,
         translations: m.translations.map((t) => ({
           language_id: t.languageId,
@@ -409,6 +511,7 @@ export class WordController {
             duration_ms: a.durationMs,
             is_primary: a.isPrimary,
             mime_type: a.mimeType,
+            is_verified: a.isVerified ?? false,
           })),
         })),
       })),
@@ -458,6 +561,7 @@ export class WordController {
         duration_ms: a.durationMs,
         is_primary: a.isPrimary,
         mime_type: a.mimeType,
+        is_verified: a.isVerified ?? false,
       })),
       related_words: word.relatedWords.map((rel) => ({
         word_id: rel.wordId,
@@ -753,19 +857,44 @@ export class WordController {
    * - Dengan Bearer valid (optionalAuth) → atribusi ke user login
    *   (role dari JWT). Status tetap dipaksa 'published' (= kirim review);
    *   contributor/role non-verifier → pending_review via resolvePublication.
+   * - contributor_name opsional (tamu) → contributions.guest_display_name.
    */
-  async createAnon(c: Context, body: Omit<CreateWordBody, 'status'>) {
+  async createAnon(
+    c: Context,
+    body: Omit<CreateWordBody, 'status'> & { contributor_name?: string },
+  ) {
     const ctx = c as Context<{ Variables: AppVariables }>;
     const requestId = ctx.get('requestId');
     const authUser = ctx.get('user');
+    const clientIp = clientIpKey(c);
+    const deviceId = normalizedDeviceId(c);
     const actor = authUser
       ? { userId: authUser.user_id, role: authUser.role, requestId }
-      : { userId: ANONIM_USER_ID, role: 'contributor' as const, requestId };
+      : {
+          userId: ANONIM_USER_ID,
+          role: 'contributor' as const,
+          requestId,
+          clientIp,
+          deviceId,
+        };
 
-    const { word, warnings, inlineCreatedWords, inlineWarnings, searchMissId } = await this.deps.create.execute(
-      toCreateWordDto({ ...body, status: 'published' }, this.deps.imageProviderName),
-      actor,
+    if (!authUser) {
+      await this.deps.assertAnonWriteAllowed?.({ clientIp, deviceId });
+    }
+
+    const { contributor_name: contributorName, ...wordFields } = body;
+    // Nama teks bebas hanya untuk tamu; user login pakai display_name akun.
+    const guestName = !authUser ? contributorName?.trim() || null : null;
+    const dto = toCreateWordDto(
+      { ...wordFields, status: 'published' },
+      this.deps.imageProviderName,
     );
+    if (guestName) {
+      dto.guestDisplayName = guestName;
+    }
+
+    const { word, warnings, inlineCreatedWords, inlineWarnings, searchMissId } =
+      await this.deps.create.execute(dto, actor);
 
     return c.json(
       {

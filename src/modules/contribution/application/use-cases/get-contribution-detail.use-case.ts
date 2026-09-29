@@ -5,7 +5,10 @@ import type { ContributionRepository } from '../../domain/repositories/contribut
 
 export interface ContributionDetail {
   contribution: Contribution;
+  /** Keputusan terkini; null jika status pending (meski prior_reviews ada). */
   review: ContributionReview | null;
+  /** Jejak append-only, terbaru dulu. */
+  priorReviews: ContributionReview[];
   /** payload utuh entity - word: WordDetail semua status; anak: row + parent */
   entity: unknown;
 }
@@ -25,7 +28,9 @@ export class GetContributionDetailUseCase {
       throw new NotFoundError('CONTRIBUTION_NOT_FOUND', 'Kontribusi dengan id tersebut tidak ditemukan');
     }
 
-    const review = await this.contributionRepo.findReview(id);
+    const priorReviews = await this.contributionRepo.listReviews(id);
+    // Saat pending (termasuk setelah reopen), UI decide aktif → review null.
+    const review = contribution.status === 'pending' ? null : (priorReviews[0] ?? null);
 
     let entity: unknown;
     if (contribution.entityType === 'word') {
@@ -34,6 +39,6 @@ export class GetContributionDetailUseCase {
       entity = await this.contributionRepo.findChildWithParent(contribution.entityType, contribution.entityId);
     }
 
-    return { contribution, review, entity };
+    return { contribution, review, priorReviews, entity };
   }
 }

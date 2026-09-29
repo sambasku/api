@@ -1,7 +1,11 @@
 export type ReviewPushCooldownChannel = 'contribution_approved' | 'contribution_rejected';
 
-/** Channel push yang di-throttle (review + diskusi komentar). */
-export type NotificationPushCooldownChannel = ReviewPushCooldownChannel | 'word_comment';
+/** Channel push yang di-throttle (review + diskusi komentar + vote kosakata). */
+export type NotificationPushCooldownChannel =
+  | ReviewPushCooldownChannel
+  | 'word_comment'
+  | 'word_vote'
+  | 'discussion_reply';
 
 export interface NotificationPushCooldown {
   userId: string;

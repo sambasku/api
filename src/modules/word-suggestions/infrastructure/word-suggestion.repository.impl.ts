@@ -27,6 +27,7 @@ import type {
 import { NotFoundError, ForbiddenError, BadRequestError, ConflictError } from '@/shared/errors/app-error';
 import { verifyProposedChanges } from '../application/utils/verify-proposed-changes';
 import { applyChangesToWord } from '../application/utils/apply-changes-to-word';
+import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import {
   deleteProposedStagingImages,
   prepareProposedImagesForApprove,
@@ -344,6 +345,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     proposedChanges: ProposedChanges,
     reason: string,
     reasonCode: string,
+    actorRole?: string,
   ): Promise<WordEditSuggestion> {
     const [word] = await db
       .select({
@@ -396,8 +398,13 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       );
     }
 
-    const applyNow = !word.isVerified;
-    const baseline = applyNow ? await captureBaseline(wordId, word.lemma, word.notes, word.isVerified) : null;
+    const selfApply = Boolean(actorRole && isVerifierRole(actorRole));
+    // Kontributor pada kata belum verified: tayang dulu, antrean tetap pending.
+    // Verifikator: skip apply_pending - langsung approve di bawah.
+    const applyPendingNow = !selfApply && !word.isVerified;
+    const baseline = applyPendingNow
+      ? await captureBaseline(wordId, word.lemma, word.notes, word.isVerified)
+      : null;
 
     const [suggestion] = await db
       .insert(wordEditSuggestions)
@@ -412,17 +419,60 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       })
       .returning();
 
-    if (applyNow) {
+    let finalStatus: SuggestionStatus = 'pending';
+    let reviewedBy: string | null = null;
+    let reviewedAt: Date | null = null;
+
+    if (selfApply) {
+      // applyChangesToWord mensyaratkan status pending, jadi insert dulu pending
+      // lalu approve. Kalau apply/verify gagal: soft-delete supaya tidak
+      // meninggalkan orphan pending di antrean.
+      try {
+        const prepared = await prepareProposedImagesForApprove(proposedChanges, {
+          publicImageStorage: this.publicImageStorage,
+          imageStorage: this.imageStorage,
+        });
+        await applyChangesToWord(suggestion.id, userId, 'approve', undefined, prepared);
+        // applyChangesToWord tidak set is_verified; verifikator = self-review (Section 22 parity).
+        await db
+          .update(words)
+          .set({
+            isVerified: true,
+            verifiedBy: userId,
+            verifiedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(words.id, wordId));
+        finalStatus = 'approved';
+        reviewedBy = userId;
+        reviewedAt = new Date();
+      } catch (err) {
+        await db
+          .update(wordEditSuggestions)
+          .set({
+            deletedAt: new Date(),
+            deletedBy: userId,
+            updatedAt: new Date(),
+          })
+          .where(eq(wordEditSuggestions.id, suggestion.id));
+        throw err;
+      }
+    } else if (applyPendingNow) {
       await applyChangesToWord(suggestion.id, userId, 'apply_pending');
     }
 
     await db.insert(auditLogs).values({
       userId,
-      action: 'create',
+      action: selfApply ? 'approve' : 'create',
       entityType: 'word_suggestion',
       entityId: suggestion.id,
       oldData: null,
-      newData: { word_id: wordId, status: 'pending', reason_code: reasonCode },
+      newData: {
+        word_id: wordId,
+        status: finalStatus,
+        reason_code: reasonCode,
+        ...(selfApply ? { self_applied: true } : {}),
+      },
       requestId: null,
       sourceContributionId: suggestion.id,
     });
@@ -435,9 +485,9 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       proposedChanges,
       reason: suggestion.reason,
       reasonCode: (suggestion.reasonCode ?? 'other') as SuggestionReasonCode,
-      status: suggestion.status as SuggestionStatus,
-      reviewedBy: suggestion.reviewedBy,
-      reviewedAt: suggestion.reviewedAt,
+      status: finalStatus,
+      reviewedBy,
+      reviewedAt,
       reviewComment: suggestion.reviewComment,
       createdAt: suggestion.createdAt,
       updatedAt: suggestion.updatedAt,
@@ -1047,10 +1097,16 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     const labelMap = await getUserPublicLabels([...new Set(userIds)]);
 
     const mapped: ChangeHistoryItem[] = rows.map((r) => {
-      const type: 'direct_edit' | 'suggest_edit' = r.sourceContributionId
-        ? 'suggest_edit'
-        : 'direct_edit';
-      const changes = this._extractChanges(r.oldData, r.newData);
+      const type: ChangeHistoryItem['type'] =
+        r.action === 'duplicate_vote'
+          ? 'duplicate_vote'
+          : r.sourceContributionId
+            ? 'suggest_edit'
+            : 'direct_edit';
+      const changes =
+        r.action === 'duplicate_vote'
+          ? this._extractDuplicateVoteChanges(r.newData)
+          : this._extractChanges(r.oldData, r.newData);
       let source: SuggestionSource | null = null;
       if (r.sourceContributionId && suggestionMap[r.sourceContributionId]) {
         const sug = suggestionMap[r.sourceContributionId];
@@ -1090,6 +1146,41 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null,
       hasMore,
     };
+  }
+
+  private _extractDuplicateVoteChanges(newData: unknown): ChangeHistoryItem['changes'] {
+    const n = (newData ?? {}) as Record<string, unknown>;
+    const value = n.value === -1 || n.value === '-1' ? -1 : 1;
+    const arah = value === 1 ? 'Mendukung' : 'Tidak mendukung';
+    const definition = typeof n.definition === 'string' ? n.definition : '-';
+    const translation =
+      typeof n.translation_text === 'string' ? n.translation_text : '-';
+    return [
+      {
+        entity: 'meaning',
+        field: 'duplicate_vote',
+        oldValue: null,
+        newValue: value,
+        displayOld: '-',
+        displayNew: arah,
+      },
+      {
+        entity: 'meaning',
+        field: 'definition',
+        oldValue: null,
+        newValue: definition,
+        displayOld: '-',
+        displayNew: definition,
+      },
+      {
+        entity: 'meaning',
+        field: 'translation_text',
+        oldValue: null,
+        newValue: translation,
+        displayOld: '-',
+        displayNew: translation,
+      },
+    ];
   }
 
   private _extractChanges(oldData: unknown, newData: unknown): ChangeHistoryItem['changes'] {

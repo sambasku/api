@@ -24,6 +24,8 @@ export class CommentRepositoryImpl implements CommentRepository {
         comment: comments,
         username: users.username,
         displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        userRole: users.role,
         authorDeletedAt: users.deletedAt,
         wordLemma: words.lemma,
       })
@@ -37,7 +39,17 @@ export class CommentRepositoryImpl implements CommentRepository {
     userId: string;
     body: string;
     bodyOriginal?: string | null;
+    audio?: {
+      url: string;
+      mimeType: string;
+      fileSize: number;
+      durationMs: number | null;
+      provider: string;
+      providerFileId: string;
+      sha: string | null;
+    } | null;
   }): Promise<Comment> {
+    const audio = data.audio ?? null;
     const [row] = await this.db
       .insert(comments)
       .values({
@@ -45,10 +57,21 @@ export class CommentRepositoryImpl implements CommentRepository {
         userId: data.userId,
         body: data.body,
         bodyOriginal: data.bodyOriginal ?? null,
+        audioUrl: audio?.url ?? null,
+        audioMimeType: audio?.mimeType ?? null,
+        audioFileSize: audio?.fileSize ?? null,
+        audioDurationMs: audio?.durationMs ?? null,
+        audioProvider: audio?.provider ?? null,
+        audioProviderFileId: audio?.providerFileId ?? null,
+        audioSha: audio?.sha ?? null,
         status: 'published',
       })
       .returning();
-    return this.toComment(row, null, null, null);
+    const created = await this.findById(row.id);
+    if (!created) {
+      return this.toComment(row, null, null, null, null, null);
+    }
+    return created;
   }
 
   async listByWord(wordId: string, params: ListCommentsParams): Promise<CursorPage<Comment>> {
@@ -70,6 +93,8 @@ export class CommentRepositoryImpl implements CommentRepository {
           row.comment,
           publicAccountName(row.username, row.authorDeletedAt),
           publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
+          row.authorDeletedAt ? null : (row.avatarUrl ?? null),
+          row.authorDeletedAt ? null : (row.userRole ?? null),
           row.wordLemma,
         )
       : null;
@@ -137,7 +162,14 @@ export class CommentRepositoryImpl implements CommentRepository {
     const hasMore = rows.length > params.limit;
     const page = hasMore ? rows.slice(0, params.limit) : rows;
     const items = page.map((row) =>
-      this.toComment(row.comment, null, null, row.wordDeletedAt ? null : row.wordLemma),
+      this.toComment(
+        row.comment,
+        null,
+        null,
+        null,
+        null,
+        row.wordDeletedAt ? null : row.wordLemma,
+      ),
     );
     return { items, nextCursor: hasMore ? items[items.length - 1].id : null, hasMore };
   }
@@ -200,6 +232,8 @@ export class CommentRepositoryImpl implements CommentRepository {
         r.comment,
         publicAccountName(r.username, r.authorDeletedAt),
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+        r.authorDeletedAt ? null : (r.avatarUrl ?? null),
+        r.authorDeletedAt ? null : (r.userRole ?? null),
         r.wordLemma,
       ),
     );
@@ -210,8 +244,17 @@ export class CommentRepositoryImpl implements CommentRepository {
     row: typeof comments.$inferSelect,
     username: string | null,
     displayName: string | null,
+    avatarUrl: string | null,
+    userRole: string | null,
     wordLemma: string | null,
   ): Comment {
+    const hasAudio =
+      typeof row.audioUrl === 'string' &&
+      row.audioUrl.length > 0 &&
+      typeof row.audioMimeType === 'string' &&
+      typeof row.audioProvider === 'string' &&
+      typeof row.audioProviderFileId === 'string';
+
     return {
       id: row.id,
       wordId: row.wordId,
@@ -219,8 +262,21 @@ export class CommentRepositoryImpl implements CommentRepository {
       userId: row.userId,
       username,
       displayName,
+      avatarUrl,
+      userRole,
       body: row.body,
       bodyOriginal: row.bodyOriginal ?? null,
+      audio: hasAudio
+        ? {
+            url: row.audioUrl as string,
+            mimeType: row.audioMimeType as string,
+            fileSize: row.audioFileSize ?? 0,
+            durationMs: row.audioDurationMs ?? null,
+            provider: row.audioProvider as string,
+            providerFileId: row.audioProviderFileId as string,
+            sha: row.audioSha ?? null,
+          }
+        : null,
       status: row.status as CommentStatus,
       reviewedBy: row.reviewedBy,
       reviewedAt: row.reviewedAt,

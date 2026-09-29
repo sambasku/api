@@ -30,6 +30,9 @@ export const meanings = sqliteTable(
     // false = kontributor sengaja tidak mengisi padanan kata Indonesia
     // (definisi uraian sudah ada; padanan bisa dilengkapi nanti).
     isHaveTranslation: integer('is_have_translation', { mode: 'boolean' }).notNull().default(true),
+    // Provenance padanan/definisi: manual | kbbi | kbbi_edited (form kontribusi).
+    // Default manual untuk data lama / request tanpa field.
+    meaningSource: text('meaning_source').notNull().default('manual'),
     orderIndex: integer('order_index').notNull().default(0),
     notes: text('notes'),
     // Gerbang publikasi anak (17-api-usul-definisi.md, preseden examples):

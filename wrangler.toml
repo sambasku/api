@@ -51,6 +51,8 @@ PUBLIC_IMAGE_PROVIDER = "github"
 PUBLIC_IMAGE_GITHUB_URL = "https://github.com/sambasku/images"
 PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/sambasku/audios"
+# Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
+SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
 # Gate JWT azp pada write (false = grace / backward-compat token tanpa azp).
 OAUTH_REQUIRE_AZP = "false"
 
@@ -98,6 +100,8 @@ PUBLIC_IMAGE_PROVIDER = "github"
 PUBLIC_IMAGE_GITHUB_URL = "https://github.com/coem/staging-images"
 PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/coem/staging-audios"
+# Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
+SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
 # Gate JWT azp pada write (false = grace / backward-compat token tanpa azp).
 OAUTH_REQUIRE_AZP = "false"
 

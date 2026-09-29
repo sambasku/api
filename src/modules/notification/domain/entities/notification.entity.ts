@@ -8,18 +8,32 @@ export type InboxNotificationType =
   | 'word_taken_down'
   | 'contribution_paused'
   | 'contribution_resumed'
-  | 'translation_help_approved'
-  | 'translation_help_rejected'
-  | 'translation_help_taken_down'
+  | 'discussion_pending_review'
+  | 'discussion_approved'
+  | 'discussion_rejected'
+  | 'discussion_taken_down'
+  | 'discussion_reply'
   | 'word_comment'
-  | 'campaign';
+  | 'word_vote'
+  | 'campaign'
+  | 'verifier_application_approved'
+  | 'verifier_application_rejected';
 
 export type NotificationTargetKind =
   | 'contribution'
   | 'suggestion'
   | 'word'
-  | 'translation_help'
-  | 'campaign';
+  | 'discussion'
+  | 'campaign'
+  | 'verifier_application';
+
+/** CTA tap (#19). Null = fallback ke target_kind/target_id. */
+export type NotificationActionKind =
+  | 'word'
+  | 'contribution'
+  | 'suggestion'
+  | 'discussion'
+  | 'url';
 
 export interface InboxNotification {
   id: string;
@@ -27,8 +41,11 @@ export interface InboxNotification {
   type: InboxNotificationType;
   title: string;
   body: string;
+  imageUrl: string | null;
   targetKind: NotificationTargetKind;
   targetId: string;
+  actionKind: NotificationActionKind | null;
+  actionValue: string | null;
   readAt: Date | null;
   createdAt: Date;
 }
@@ -80,28 +97,53 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
         title: 'Kontribusi dibuka lagi',
         body: 'Kamu bisa mengirim usulan lagi.',
       };
-    case 'translation_help_approved':
+    case 'discussion_pending_review':
       return {
-        title: 'Bantuan terjemahan tayang',
-        body: 'Permintaan bantuanmu sudah diperiksa dan tayang di feed.',
+        title: 'Diskusi menunggu tinjauan',
+        body: 'Ada diskusi baru yang menunggu pemeriksaan.',
       };
-    case 'translation_help_rejected':
+    case 'discussion_approved':
       return {
-        title: 'Bantuan terjemahan ditolak',
-        body: 'Permintaan bantuanmu ditolak. Buka riwayat untuk melihat alasan.',
+        title: 'Diskusi tayang',
+        body: 'Diskusimu sudah diperiksa dan tayang di feed.',
       };
-    case 'translation_help_taken_down':
+    case 'discussion_rejected':
       return {
-        title: 'Bantuan terjemahan ditarik',
-        body: 'Permintaan bantuanmu ditarik dari feed.',
+        title: 'Diskusi ditolak',
+        body: 'Diskusimu ditolak. Buka riwayat untuk melihat alasan.',
+      };
+    case 'discussion_taken_down':
+      return {
+        title: 'Diskusi ditarik',
+        body: 'Diskusimu ditarik dari feed.',
+      };
+    case 'discussion_reply':
+      return {
+        title: 'Balasan baru',
+        body: 'Ada balasan baru di Ruang Diskusi.',
       };
     case 'word_comment':
       return {
         title: 'Komentar baru',
         body: 'Ada komentar baru di diskusi kosakata.',
       };
+    case 'word_vote':
+      return {
+        title: 'Vote baru',
+        body: 'Ada penilaian baru pada kosakatamu.',
+      };
     case 'campaign':
       // Title/body campaign selalu dari snapshot admin (bukan copy bawaan).
       return { title: 'Pengumuman', body: '' };
+    case 'verifier_application_approved':
+      return {
+        title: 'Selamat, Anda jadi verifikator',
+        body: 'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.',
+      };
+    case 'verifier_application_rejected':
+      return {
+        title: 'Pengajuan verifikator ditolak',
+        body: 'Pengajuan ditolak. Buka profil untuk memperbaiki.',
+      };
   }
 }

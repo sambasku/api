@@ -1,5 +1,9 @@
 import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import {
+  RecordAbuseSignalUseCase,
+  safeRecordAbuseSignal,
+} from '@/shared/moderation/record-abuse-signal.use-case';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 
@@ -14,6 +18,7 @@ export class TakedownCommentUseCase {
   constructor(
     private readonly commentRepo: CommentRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly abuse?: RecordAbuseSignalUseCase,
   ) {}
 
   async execute(cmd: TakedownCommentCommand): Promise<Comment> {
@@ -38,6 +43,15 @@ export class TakedownCommentUseCase {
       oldData: { status: comment.status },
       newData: { status: 'taken_down' },
       requestId: cmd.requestId ?? null,
+    });
+
+    await safeRecordAbuseSignal(this.abuse, {
+      userId: comment.userId,
+      signal: 'comment_takedown',
+      entityType: 'comment',
+      entityId: comment.id,
+      requestId: cmd.requestId,
+      systemActorId: cmd.reviewerId,
     });
 
     const updated = await this.commentRepo.findById(cmd.commentId);

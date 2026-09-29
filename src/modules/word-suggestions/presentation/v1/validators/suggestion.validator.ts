@@ -244,7 +244,7 @@ export const createSuggestionResponseSchema = z.object({
     suggestion_id: z.string().length(26),
     word_id: z.string().length(26),
     word_lemma: z.string(),
-    status: z.literal('pending'),
+    status: z.enum(['pending', 'approved']),
     created_at: z.string(),
     message: z.string(),
   }),
@@ -428,7 +428,7 @@ export const changeHistoryResponseSchema = z.object({
         username: z.string().nullable(),
         display_name: z.string().nullable(),
       }),
-      type: z.enum(['direct_edit', 'suggest_edit']),
+      type: z.enum(['direct_edit', 'suggest_edit', 'duplicate_vote']),
       changes: z.array(
         z.object({
           entity: z.string(),

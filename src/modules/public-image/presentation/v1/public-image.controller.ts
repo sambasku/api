@@ -2,11 +2,15 @@ import type { Context } from 'hono';
 import { BadRequestError } from '@/shared/errors/app-error';
 import type { UploadPublicImageUseCase } from '../../application/use-cases/upload-public-image.use-case';
 import { MAX_IMAGE_BYTES } from '../../application/utils/validate-image-file';
+import type { uploadPublicImageQuerySchema } from './validators/public-image.validator';
+import type { z } from 'zod';
+
+type UploadQuery = z.infer<typeof uploadPublicImageQuerySchema>;
 
 export class PublicImageController {
   constructor(private readonly deps: { uploadPublicImage: UploadPublicImageUseCase }) {}
 
-  async upload(c: Context) {
+  async upload(c: Context, query: UploadQuery) {
     const contentLength = Number(c.req.header('content-length') ?? 0);
     if (contentLength > MAX_IMAGE_BYTES + 1024 * 1024) {
       throw new BadRequestError('IMAGE_TOO_LARGE', 'File gambar terlalu besar (maks 5 MB)', [
@@ -28,6 +32,7 @@ export class PublicImageController {
       bytes,
       mimeType: file.type || null,
       filename: file.name || null,
+      purpose: query.purpose,
     });
 
     return c.json(

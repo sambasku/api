@@ -21,8 +21,19 @@ export const contributions = sqliteTable(
     // 'approved'); baris lama di-backfill 'approved' lewat migration
     status: text('status').notNull().default('pending'),
     description: text('description'),
+    /**
+     * Nama tampilan opsional dari tamu (tanpa akun) - atribusi teks bebas.
+     * user_id tetap Anonim; antrean memakai ini sebagai contributor_display_name.
+     */
+    guestDisplayName: text('guest_display_name'),
     // Provenance jalur search-miss (12-api) - nullable: kontribusi biasa OK
     searchMissId: text('search_miss_id').references(() => searchMisses.id),
+    /**
+     * Soft-claim setelah reopen: pending + reopened_by dipegang verifikator
+     * yang membuka ulang. Antrean global Menunggu mengecualikan baris ini
+     * kecuali viewer = reopened_by atau admin/root. Di-clear saat decide.
+     */
+    reopenedBy: text('reopened_by').references(() => users.id),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
     deletedBy: text('deleted_by').references(() => users.id),
@@ -32,5 +43,6 @@ export const contributions = sqliteTable(
     index('contributions_entity_idx').on(t.entityType, t.entityId),
     index('contributions_status_idx').on(t.status),
     index('contributions_search_miss_idx').on(t.searchMissId),
+    index('contributions_status_reopened_by_idx').on(t.status, t.reopenedBy),
   ],
 );

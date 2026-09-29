@@ -16,8 +16,19 @@ function makeDeps(wordExists = true) {
     isCorrected: false,
   };
   const wordRepo = {
-    findById: vi.fn().mockResolvedValue(wordExists ? { id: 'w', status: 'published' } : null),
+    findById: vi.fn().mockResolvedValue(
+      wordExists
+        ? {
+            id: 'w',
+            languageId: '01JDSBSLANGSBS000000000000',
+            lemma: 'makatn',
+            status: 'published',
+          }
+        : null,
+    ),
     addMeaning: vi.fn().mockResolvedValue(media),
+    findPublishedDuplicateMeaning: vi.fn().mockResolvedValue(null),
+    findLanguageIdByCode: vi.fn().mockResolvedValue(null),
   } as unknown as WordRepository;
   const auditRepo = {
     record: vi.fn().mockResolvedValue(undefined),

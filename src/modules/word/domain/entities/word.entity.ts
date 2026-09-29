@@ -50,6 +50,8 @@ export interface Word {
   takedownNote: string | null;
   takenDownBy: string | null;
   takenDownAt: Date | null;
+  /** Sesi impor yang menciptakan kata ini (null jika bukan dari impor). */
+  importSessionId: string | null;
 }
 
 export interface WordSummary {
@@ -139,7 +141,8 @@ export interface WordDetail extends Word {
     isPrimary: boolean;
     mimeType: string;
     status?: ChildStatus;
-    isVerified?: boolean;
+    /** selalu diisi agar klien bisa badge Menunggu pengecekan */
+    isVerified: boolean;
     isCorrected?: boolean;
   }[];
   /** relasi keluar (mis. peribahasa → komponen; kata → sinonim/antonim) */

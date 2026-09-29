@@ -26,7 +26,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `LAST_AUTH_METHOD` | 409 | Lepas provider OAuth padahal itu satu-satunya cara masuk (belum punya password) |
 | `FORBIDDEN` | 403 | Role tidak diizinkan akses endpoint |
 | `NOT_FOUND` | 404 | Route/endpoint tidak ditemukan (via `app.notFound`) |
-| `USER_NOT_FOUND` | 404 | User tidak ditemukan (profil publik by username; akun soft-deleted / nonaktif; update role admin; user id tidak ada) |
+| `USER_NOT_FOUND` | 404 | User tidak ditemukan (profil publik by username; akun soft-deleted / nonaktif; update role admin; cabut mute abuse; user id tidak ada) |
 | `WORD_NOT_FOUND` | 404 | Kata tidak ditemukan by id (modul word - belum implement; toggle bookmark kata tidak ada / sudah dihapus) |
 | `MEANING_NOT_FOUND` | 404 | Makna tidak ditemukan by id (kontribusi contoh kalimat) |
 | `CONTRIBUTION_NOT_FOUND` | 404 | Kontribusi tidak ditemukan by id (antrean review) |
@@ -71,16 +71,25 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `CLIENT_MISMATCH` | 400 | `client_id` login bukan first-party / tidak cocok `client_type` |
 | `INSUFFICIENT_SCOPE` | 403 | Token third-party kurang scope untuk endpoint write |
 | `CANNOT_DEACTIVATE_SELF` | 403 | Admin mencoba mengubah status aktif akunnya sendiri |
+| `CONTRIBUTION_NOT_ALLOWED` | 403 | `can_contribute=false` - UGC tulis (kata/media/usul/komentar/diskusi) ditolak |
+| `CONTRIBUTION_MUTED` | 403 | Mute sementara abuse (`contribute_muted_until` masih aktif) |
+| `ANON_CONTRIBUTION_MUTED` | 403 | Mute sementara kontribusi tamu per IP atau `X-Device-Id` |
+| `ACCOUNT_INACTIVE` | 403 | Akun `is_active=false` saat tulis UGC (cek live DB, bukan hanya JWT) |
+| `UGC_INPUT_REJECTED` | 400 | Teks UGC ditolak heuristik (spam/asal-asalan/duplikat) |
 | `BUG_REPORT_NOT_FOUND` | 404 | Laporan masalah tidak ditemukan / sudah selesai (resolve admin) |
-| `TRANSLATION_HELP_NOT_FOUND` | 404 | Bantuan terjemahan tidak ditemukan / tidak boleh diakses |
-| `TRANSLATION_HELP_REPLY_NOT_FOUND` | 404 | Balasan bantuan terjemahan tidak ditemukan |
-| `TRANSLATION_HELP_NOT_PUBLISHED` | 409 | Balasan hanya untuk bantuan yang sudah tayang |
+| `DISCUSSION_NOT_FOUND` | 404 | Diskusi tidak ditemukan / tidak boleh diakses |
+| `DISCUSSION_REPLY_NOT_FOUND` | 404 | Balasan diskusi tidak ditemukan |
+| `DISCUSSION_NOT_PUBLISHED` | 409 | Balasan hanya untuk diskusi yang sudah tayang |
+| `DISCUSSION_NOT_PENDING` | 409 | Audio opening hanya untuk diskusi pending_review |
 | `VERIFIER_APPLICATION_NOT_FOUND` | 404 | Pengajuan verifikator tidak ada (GET me belum apply; detail admin id tidak dikenal) |
 | `VERIFIER_APPLICATION_NOT_REJECTED` | 409 | PATCH me hanya boleh jika status rejected |
 | `ALREADY_VERIFIER` | 403 | POST/PATCH pengajuan oleh user yang role-nya bukan contributor; juga approve jika pemohon sudah bukan contributor |
 | `APPLICATION_ALREADY_EXISTS` | 409 | POST pengajuan padahal user sudah punya baris verifier_applications |
 | `APPLICATION_ALREADY_REVIEWED` | 409 | Approve/reject pengajuan yang statusnya bukan pending |
 | `CONTRIBUTION_ALREADY_REVIEWED` | 409 | Kontribusi sudah punya keputusan (approve/reject/correct), termasuk dua verifikator yang mengirim bersamaan |
+| `CONTRIBUTION_NOT_REOPENABLE` | 409 | Kontribusi masih pending / belum ada keputusan, atau tidak bisa dibuka ulang (mis. kata hasil merge lemma) |
+| `DUPLICATE_MEANING` | 409 | Submit kata/makna exact-match lemma + definition + terjemahan Indonesia yang sudah tayang - klien minta vote via duplicate-confirm |
+| `CONTRIBUTION_REOPEN_FORBIDDEN` | 403 | Hanya reviewer keputusan terkini (atau admin/root) yang boleh membuka ulang |
 | `WORD_ALREADY_VERIFIED` | 409 | Verify dipanggil pada kata yang sudah `is_verified = true` (tanpa audit baru) |
 | `WORD_ALREADY_UNVERIFIED` | 409 | Unverify dipanggil pada kata yang sudah `is_verified = false` (tanpa audit baru) |
 | `SUGGESTION_NOT_FOUND` | 404 | Usulan perubahan kata tidak ditemukan |
@@ -97,6 +106,8 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `IMAGE_TOO_LARGE` | 400 | File gambar melebihi 5 MB |
 | `PRONUNCIACION_UPLOAD_UNAVAILABLE` | 503 | Provider audio pelafalan belum dikonfigurasi / token GitHub invalid (`PRONUNCIACION_GITHUB_*`) |
 | `PRONUNCIACION_UPLOAD_FAILED` | 502 | Upload ke GitHub Contents API gagal (network / 5xx) |
+| `SQLITE_BACKUP_UNAVAILABLE` | 503 | Token asset GitHub kosong (`PUBLIC_IMAGE_GITHUB_TOKEN` / `PRONUNCIACION_GITHUB_TOKEN`); trigger backup dimatikan |
+| `SQLITE_BACKUP_UPSTREAM` | 502 | GitHub Actions menolak / gagal `workflow_dispatch` backup |
 | `WORD_AUDIO_NOT_FOUND` | 404 | Audio pelafalan tidak ditemukan / sudah soft-deleted |
 | `EXAMPLE_NOT_FOUND` | 404 | Contoh kalimat tidak ditemukan pada kata (upload audio example) |
 | `DIALECT_NOT_FOUND` | 404 | Dialek tidak ditemukan (upload audio) |

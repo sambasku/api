@@ -9,12 +9,19 @@ export const OTP_CODE_LENGTH = 8;
 export const STAGING_OTP_CODE = '11111111';
 
 /**
+ * Baca NODE_ENV runtime tanpa menarik parse Zod `env.ts` (unit test use-case
+ * tanpa dotenv), dan tanpa `process.env.NODE_ENV` literal (wrangler/esbuild
+ * meng-inline jadi `"production"` → cabang staging jadi `if (false)`).
+ */
+function runtimeNodeEnv(): string | undefined {
+  return process.env[['NODE', 'ENV'].join('_')];
+}
+
+/**
  * 8 karakter 0-9A-Z, tanpa bias modulo. Staging: selalu STAGING_OTP_CODE.
- * Baca process.env.NODE_ENV langsung supaya utils ini tidak menarik
- * parse Zod env (unit test use-case tetap jalan tanpa dotenv).
  */
 export function generateOtpCode(): string {
-  if (process.env.NODE_ENV === 'staging') return STAGING_OTP_CODE;
+  if (runtimeNodeEnv() === 'staging') return STAGING_OTP_CODE;
 
   const n = OTP_ALPHABET.length;
   const limit = Math.floor(256 / n) * n;

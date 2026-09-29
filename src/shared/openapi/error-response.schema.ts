@@ -10,6 +10,8 @@ export const errorResponseSchema = z.object({
     z.array(z.object({ field: z.string(), message: z.string() })),
     z.null(),
   ]),
+  /** Opsional - mis. DUPLICATE_MEANING membawa word_id / meaning_id. */
+  data: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;

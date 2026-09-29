@@ -26,6 +26,7 @@ export interface ImportWordResult {
   meanings_added: number;
   meanings_skipped: number;
   message?: string;
+  word_id?: string;
 }
 
 const VERIFIER_ROLES = new Set(['admin', 'root', 'reviewer']);

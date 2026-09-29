@@ -27,6 +27,10 @@ import {
 } from '@/shared/constants/deleted-account';
 import { ConflictError, ValidationError } from '@/shared/errors/app-error';
 import { wordImageIsAutoVerified } from '../domain/word-image-provider';
+import {
+  isPlaceholderMeaningText,
+  normalizeMeaningText,
+} from '../application/utils/normalize-meaning-text';
 import { publishOrMergeMeaningsInTx } from './publish-or-merge-meanings';
 import { mergeDuplicateWordsInTx } from './merge-duplicate-words';
 import {
@@ -48,6 +52,7 @@ import type {
   ListAtoZParams,
   ListLatestParams,
   MissingReferences,
+  PublishedDuplicateMeaning,
   PronunciationMedia,
   ReferenceCheck,
   ResolvedInlineRelation,
@@ -135,6 +140,7 @@ function toWord(row: typeof words.$inferSelect): Word {
     takedownNote: row.takedownNote,
     takenDownBy: row.takenDownBy,
     takenDownAt: row.takenDownAt,
+    importSessionId: row.importSessionId ?? null,
   };
 }
 
@@ -259,6 +265,7 @@ export class WordRepositoryImpl implements WordRepository {
             isVerified: word.isVerified,
             isCorrected: word.isCorrected ?? false,
             createdBy: actorId,
+            importSessionId: word.importSessionId ?? null,
             ...verificationCols(word.isVerified, actorId),
           })
           .returning();
@@ -276,6 +283,9 @@ export class WordRepositoryImpl implements WordRepository {
           action: 'create',
           status: contributionStatusOf(word.status, word.isVerified),
           ...(word.searchMissId ? { searchMissId: word.searchMissId } : {}),
+          ...(word.guestDisplayName?.trim()
+            ? { guestDisplayName: word.guestDisplayName.trim() }
+            : {}),
         });
 
         return toWord(wordRow);
@@ -340,6 +350,9 @@ export class WordRepositoryImpl implements WordRepository {
           action: 'create',
           status: contributionStatusOf(word.status, word.isVerified),
           ...(word.searchMissId ? { searchMissId: word.searchMissId } : {}),
+          ...(word.guestDisplayName?.trim()
+            ? { guestDisplayName: word.guestDisplayName.trim() }
+            : {}),
         });
 
         // 2) tiap kata inline
@@ -440,6 +453,136 @@ export class WordRepositoryImpl implements WordRepository {
       )
       .limit(1);
     return !!row;
+  }
+
+  async findPublishedDuplicateMeaning(params: {
+    languageId: string;
+    lemma: string;
+    definition: string;
+    translationText: string;
+  }): Promise<PublishedDuplicateMeaning | null> {
+    if (
+      isPlaceholderMeaningText(params.definition) ||
+      isPlaceholderMeaningText(params.translationText)
+    ) {
+      return null;
+    }
+    const wantDef = normalizeMeaningText(params.definition);
+    const wantTr = normalizeMeaningText(params.translationText);
+
+    const rows = await this.db
+      .select({
+        wordId: words.id,
+        lemma: words.lemma,
+        meaningId: meanings.id,
+        definition: meanings.definition,
+        translationText: meaningTranslations.translationText,
+      })
+      .from(words)
+      .innerJoin(meanings, eq(meanings.wordId, words.id))
+      .innerJoin(
+        meaningTranslations,
+        and(
+          eq(meaningTranslations.meaningId, meanings.id),
+          isNull(meaningTranslations.deletedAt),
+        ),
+      )
+      .innerJoin(languages, eq(languages.id, meaningTranslations.languageId))
+      .where(
+        and(
+          eq(words.languageId, params.languageId),
+          sql`lower(${words.lemma}) = lower(${params.lemma.trim()})`,
+          eq(words.status, 'published'),
+          isNull(words.deletedAt),
+          eq(meanings.status, 'published'),
+          isNull(meanings.deletedAt),
+          eq(meanings.isHaveDefinition, true),
+          eq(meanings.isHaveTranslation, true),
+          eq(languages.code, 'id'),
+          ne(meanings.definition, '-'),
+          ne(meaningTranslations.translationText, '-'),
+        ),
+      );
+
+    for (const row of rows) {
+      if (
+        normalizeMeaningText(row.definition) === wantDef &&
+        normalizeMeaningText(row.translationText) === wantTr
+      ) {
+        return {
+          wordId: row.wordId,
+          meaningId: row.meaningId,
+          lemma: row.lemma,
+          definition: row.definition,
+          translationText: row.translationText,
+        };
+      }
+    }
+    return null;
+  }
+
+  async findLanguageIdByCode(code: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: languages.id })
+      .from(languages)
+      .where(and(eq(languages.code, code), isNull(languages.deletedAt)))
+      .limit(1);
+    return row?.id ?? null;
+  }
+
+  async findPublishedMeaningForDuplicateConfirm(
+    wordId: string,
+    meaningId: string,
+  ): Promise<{
+    wordId: string;
+    meaningId: string;
+    lemma: string;
+    definition: string;
+    translationText: string | null;
+  } | null> {
+    const [row] = await this.db
+      .select({
+        wordId: words.id,
+        meaningId: meanings.id,
+        lemma: words.lemma,
+        definition: meanings.definition,
+      })
+      .from(meanings)
+      .innerJoin(words, eq(words.id, meanings.wordId))
+      .where(
+        and(
+          eq(meanings.id, meaningId),
+          eq(meanings.wordId, wordId),
+          eq(meanings.status, 'published'),
+          isNull(meanings.deletedAt),
+          eq(words.status, 'published'),
+          isNull(words.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!row) return null;
+
+    const [idTr] = await this.db
+      .select({ translationText: meaningTranslations.translationText })
+      .from(meaningTranslations)
+      .innerJoin(languages, eq(languages.id, meaningTranslations.languageId))
+      .where(
+        and(
+          eq(meaningTranslations.meaningId, meaningId),
+          eq(languages.code, 'id'),
+          isNull(meaningTranslations.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return {
+      wordId: row.wordId,
+      meaningId: row.meaningId,
+      lemma: row.lemma,
+      definition: row.definition,
+      translationText: idTr?.translationText ?? null,
+    };
   }
 
   async findActiveByLemma(
@@ -771,6 +914,7 @@ export class WordRepositoryImpl implements WordRepository {
         definition: m.definition,
         isHaveDefinition: m.isHaveDefinition,
         isHaveTranslation: m.isHaveTranslation,
+        meaningSource: (m.meaningSource as 'manual' | 'kbbi' | 'kbbi_edited') ?? 'manual',
         orderIndex: m.orderIndex,
         notes: m.notes,
         translations: translationRows
@@ -794,10 +938,11 @@ export class WordRepositoryImpl implements WordRepository {
                 durationMs: a.durationMs,
                 isPrimary: a.isPrimary,
                 mimeType: a.mimeType,
+                // Publik butuh is_verified untuk badge Menunggu pengecekan
+                isVerified: a.isVerified,
                 ...(includeAll
                   ? {
                       status: a.status as ChildStatus,
-                      isVerified: a.isVerified,
                       isCorrected: a.isCorrected,
                     }
                   : {}),
@@ -862,10 +1007,11 @@ export class WordRepositoryImpl implements WordRepository {
             durationMs: a.durationMs,
             isPrimary: a.isPrimary,
             mimeType: a.mimeType,
+            // Publik butuh is_verified untuk badge Menunggu pengecekan
+            isVerified: a.isVerified,
             ...(includeAll
               ? {
                   status: a.status as ChildStatus,
-                  isVerified: a.isVerified,
                   isCorrected: a.isCorrected,
                 }
               : {}),
@@ -2066,6 +2212,7 @@ export class WordRepositoryImpl implements WordRepository {
       definition: string;
       isHaveDefinition?: boolean;
       isHaveTranslation?: boolean;
+      meaningSource?: 'manual' | 'kbbi' | 'kbbi_edited';
       translations: { languageId: string; translationText: string; translationType: string }[];
       status: ChildStatus | 'draft';
       isVerified: boolean;
@@ -2089,6 +2236,7 @@ export class WordRepositoryImpl implements WordRepository {
             definition: data.definition,
             isHaveDefinition: data.isHaveDefinition ?? true,
             isHaveTranslation: data.isHaveTranslation ?? data.translations.length > 0,
+            meaningSource: data.meaningSource ?? 'manual',
             orderIndex: (last?.maxOrder ?? 0) + 1,
             status: data.status,
             isVerified: data.isVerified,
@@ -2217,6 +2365,7 @@ export class WordRepositoryImpl implements WordRepository {
               definition: m.definition,
               isHaveDefinition: m.isHaveDefinition,
               isHaveTranslation: m.isHaveTranslation,
+              meaningSource: m.meaningSource ?? 'manual',
               orderIndex: idx,
               notes: m.notes,
               createdBy: actorId,
@@ -2469,6 +2618,17 @@ export class WordRepositoryImpl implements WordRepository {
     return updated.length > 0;
   }
 
+  async softDeleteByImportSessionId(sessionId: string, actorId: string): Promise<number> {
+    const updated = await this.db
+      .update(words)
+      .set({ deletedAt: new Date(), deletedBy: actorId })
+      .where(
+        and(eq(words.importSessionId, sessionId), isNull(words.deletedAt)),
+      )
+      .returning({ id: words.id });
+    return updated.length;
+  }
+
   async takedown(
     id: string,
     data: { actorId: string; reasonCode: string; note: string | null },
@@ -2611,6 +2771,7 @@ export class WordRepositoryImpl implements WordRepository {
           definition: meaning.definition,
           isHaveDefinition: meaning.isHaveDefinition ?? true,
           isHaveTranslation: meaning.isHaveTranslation ?? meaning.translations.length > 0,
+          meaningSource: meaning.meaningSource ?? 'manual',
           orderIndex: meaning.orderIndex,
           status: childStatusOf(word.status),
           isVerified: word.isVerified,

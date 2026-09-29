@@ -30,6 +30,7 @@ export interface NotificationTemplate {
   name: string;
   title: string;
   body: string;
+  imageUrl: string | null;
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
   createdBy: string;
@@ -43,6 +44,7 @@ export interface NotificationCampaign {
   templateId: string | null;
   title: string;
   body: string;
+  imageUrl: string | null;
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
   audienceType: CampaignAudienceType;
@@ -74,6 +76,7 @@ export function buildCampaignPushData(campaign: {
   id: string;
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
+  imageUrl?: string | null;
 }): Record<string, string> {
   const data: Record<string, string> = {
     type: 'campaign',
@@ -81,9 +84,14 @@ export function buildCampaignPushData(campaign: {
     target_kind: 'campaign',
     target_id: campaign.id,
   };
+  if (campaign.imageUrl) {
+    data.image_url = campaign.imageUrl;
+  }
   if (campaign.deepLinkKind && campaign.deepLinkKind !== 'none' && campaign.deepLinkValue) {
     data.deep_link_kind = campaign.deepLinkKind;
     data.deep_link_value = campaign.deepLinkValue;
+    data.action_kind = campaign.deepLinkKind === 'url' ? 'url' : campaign.deepLinkKind;
+    data.action_value = campaign.deepLinkValue;
     if (campaign.deepLinkKind === 'word') {
       data.target_kind = 'word';
       data.target_id = campaign.deepLinkValue;
@@ -98,4 +106,25 @@ export function buildCampaignPushData(campaign: {
     }
   }
   return data;
+}
+
+/** Map deep link campaign → kolom action_* inbox. */
+export function campaignInboxAction(campaign: {
+  deepLinkKind: DeepLinkKind;
+  deepLinkValue: string | null;
+}): { actionKind: 'word' | 'contribution' | 'suggestion' | 'url' | null; actionValue: string | null } {
+  if (
+    !campaign.deepLinkKind ||
+    campaign.deepLinkKind === 'none' ||
+    !campaign.deepLinkValue
+  ) {
+    return { actionKind: null, actionValue: null };
+  }
+  if (campaign.deepLinkKind === 'url') {
+    return { actionKind: 'url', actionValue: campaign.deepLinkValue };
+  }
+  return {
+    actionKind: campaign.deepLinkKind,
+    actionValue: campaign.deepLinkValue,
+  };
 }

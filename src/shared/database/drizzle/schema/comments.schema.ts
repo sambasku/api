@@ -19,6 +19,13 @@ export const comments = sqliteTable(
     body: text('body').notNull(),
     /** Teks asli sebelum blocklist; null jika tidak disensor / sudah di-uncensor */
     bodyOriginal: text('body_original'),
+    audioUrl: text('audio_url'),
+    audioMimeType: text('audio_mime_type'),
+    audioFileSize: integer('audio_file_size'),
+    audioDurationMs: integer('audio_duration_ms'),
+    audioProvider: text('audio_provider'),
+    audioProviderFileId: text('audio_provider_file_id'),
+    audioSha: text('audio_sha'),
     // published | taken_down | deleted_by_author
     status: text('status').notNull().default('published'),
     reviewedBy: text('reviewed_by').references(() => users.id),

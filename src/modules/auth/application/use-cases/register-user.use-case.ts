@@ -11,6 +11,7 @@ import type { User } from '../../domain/entities/user.entity';
 import type { RegisterDto } from '../dto/register.dto';
 import type { PasswordHasherPort } from '../ports/password-hasher.port';
 import type { MailerPort } from '../ports/mailer.port';
+import type { EmailDomainVerifierPort } from '../ports/email-domain-verifier.port';
 import { formatOtpDisplay, generateOtpCode, hashOtp, OTP_TTL_MS } from '../utils/otp';
 import { allocateUniqueUsername } from '../utils/username-slug';
 
@@ -23,11 +24,15 @@ export class RegisterUserUseCase {
     private readonly mailer: MailerPort,
     private readonly settingsRepo: AppSettingsRepository,
     private readonly consentRepo: UserConsentRepository,
+    private readonly emailDomainVerifier: EmailDomainVerifierPort,
   ) {}
 
   async execute(dto: RegisterDto, requestId?: string | null): Promise<User> {
     const email = Email.create(dto.email);
     Password.create(dto.password);
+
+    const domain = email.value.split('@')[1];
+    if (domain) await this.emailDomainVerifier.assertReachable(domain);
 
     const active = await this.settingsRepo.getLegalActiveVersions();
     assertConsentsMatchActiveVersions(dto.consents, active);

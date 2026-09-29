@@ -69,10 +69,17 @@ export class BadRequestError extends AppError {
 export class ConflictError extends AppError {
   statusCode = 409;
   errorCode: string;
+  /** Payload opsional (mis. DUPLICATE_MEANING: word_id / meaning_id). */
+  data: Record<string, unknown> | null;
   // errorCode bisa dioverride untuk kode spesifik: EMAIL_ALREADY_EXISTS, dst
-  constructor(errorCode = 'CONFLICT', message = 'Konflik data') {
+  constructor(
+    errorCode = 'CONFLICT',
+    message = 'Konflik data',
+    data: Record<string, unknown> | null = null,
+  ) {
     super(message);
     this.errorCode = errorCode;
+    this.data = data;
   }
 }
 

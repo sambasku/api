@@ -24,6 +24,12 @@ import {
   DUPLICATE_LEMMA_PENDING_MERGE,
   DUPLICATE_LEMMA_USE_TAB,
 } from '../utils/duplicate-lemma-warning';
+import { throwDuplicateMeaningConflict } from '../utils/throw-duplicate-meaning-conflict';
+import { isPlaceholderMeaningText } from '../utils/normalize-meaning-text';
+import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
+import { assertUgcTextQualityWithAnonStrike } from '@/shared/moderation/assert-ugc-text-quality-with-anon-strike';
+import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
+import type { RecordAnonAbuseSignalUseCase } from '@/shared/moderation/record-anon-abuse-signal.use-case';
 
 export interface InlineCreatedResult {
   /** skema, urut sesuai request - diteruskan ke respons (04) */
@@ -44,6 +50,9 @@ export interface Actor {
   role: string;
   /** dari requestIdMiddleware - menyambung audit DB ↔ log aplikasi (Section 14 & 21) */
   requestId?: string | null;
+  /** Konteks abuse anon (IP / X-Device-Id). Hanya relevan untuk ANONIM. */
+  clientIp?: string | null;
+  deviceId?: string | null;
 }
 
 export class CreateWordUseCase {
@@ -51,10 +60,13 @@ export class CreateWordUseCase {
     private readonly wordRepo: WordRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly searchMissRepo?: SearchMissRepository,
+    private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly anonAbuse?: RecordAnonAbuseSignalUseCase,
   ) {}
 
   async execute(dto: CreateWordDto, actor: Actor): Promise<CreateWordResult> {
     await assertCanContribute(actor.userId);
+    await this.assertUgcTextQuality(dto, actor);
     // 0a. Provenance search-miss (12-api) - sebelum insert
     await this.assertSearchMissProvenance(dto);
 
@@ -109,6 +121,10 @@ export class CreateWordUseCase {
     });
     const details = mapMissingToDetails(dto, missing);
     if (details.length > 0) throw new ValidationError(details);
+
+    // 1b. Exact lemma + makna (definition + terjemahan ID) yang sudah tayang
+    //     → 409 DUPLICATE_MEANING (modal vote), bukan insert baru.
+    await this.assertNoDuplicatePublishedMeaning(dto);
 
     // 2. Cek duplikat - warning, bukan error (induk + tiap lemma inline).
     //    Copy + auto-merge published dijalankan SETELAH save (butuh id baru).
@@ -226,7 +242,107 @@ export class CreateWordUseCase {
     };
   }
 
+  /**
+   * Exact match lemma + definition + terjemahan Indonesia pada kata
+   * published → 409 DUPLICATE_MEANING (jangan insert).
+   */
+  private async assertNoDuplicatePublishedMeaning(dto: CreateWordDto): Promise<void> {
+    const indonesianLanguageId = await this.wordRepo.findLanguageIdByCode('id');
+    if (!indonesianLanguageId) return;
+
+    for (const meaning of dto.meanings) {
+      if (meaning.isHaveDefinition === false || meaning.isHaveTranslation === false) {
+        continue;
+      }
+      if (isPlaceholderMeaningText(meaning.definition)) continue;
+      const idTranslation = meaning.translations.find(
+        (t) => t.languageId === indonesianLanguageId,
+      );
+      if (!idTranslation || isPlaceholderMeaningText(idTranslation.translationText)) {
+        continue;
+      }
+      const match = await this.wordRepo.findPublishedDuplicateMeaning({
+        languageId: dto.languageId,
+        lemma: dto.lemma,
+        definition: meaning.definition,
+        translationText: idTranslation.translationText,
+      });
+      if (match) throwDuplicateMeaningConflict(match);
+    }
+  }
+
   /** Validasi miss aktif + soft-check term (12-api). No-op kalau field absen. */
+  private async assertUgcTextQuality(dto: CreateWordDto, actor: Actor): Promise<void> {
+    if (actor.userId === ANONIM_USER_ID) {
+      const clientIp = actor.clientIp?.trim() || 'unknown';
+      await assertUgcTextQualityWithAnonStrike(dto.lemma, {
+        clientIp,
+        deviceId: actor.deviceId,
+        abuse: this.anonAbuse,
+        entityType: 'word',
+        field: 'lemma',
+        minMeaningfulChars: 1,
+      });
+      for (const [i, meaning] of (dto.meanings ?? []).entries()) {
+        if (meaning.isHaveDefinition === false || isPlaceholderMeaningText(meaning.definition)) {
+          continue;
+        }
+        await assertUgcTextQualityWithAnonStrike(meaning.definition, {
+          clientIp,
+          deviceId: actor.deviceId,
+          abuse: this.anonAbuse,
+          entityType: 'word',
+          field: `meanings.${i}.definition`,
+          minMeaningfulChars: 2,
+        });
+        for (const [j, tr] of meaning.translations.entries()) {
+          await assertUgcTextQualityWithAnonStrike(tr.translationText, {
+            clientIp,
+            deviceId: actor.deviceId,
+            abuse: this.anonAbuse,
+            entityType: 'word',
+            field: `meanings.${i}.translations.${j}.translation_text`,
+            minMeaningfulChars: 1,
+          });
+        }
+      }
+      return;
+    }
+
+    await assertUgcTextQualityWithStrike(dto.lemma, {
+      userId: actor.userId,
+      abuse: this.abuse,
+      entityType: 'word',
+      requestId: actor.requestId,
+      field: 'lemma',
+      minMeaningfulChars: 1,
+    });
+
+    for (const [i, meaning] of (dto.meanings ?? []).entries()) {
+      if (meaning.isHaveDefinition === false || isPlaceholderMeaningText(meaning.definition)) {
+        continue;
+      }
+      await assertUgcTextQualityWithStrike(meaning.definition, {
+        userId: actor.userId,
+        abuse: this.abuse,
+        entityType: 'word',
+        requestId: actor.requestId,
+        field: `meanings.${i}.definition`,
+        minMeaningfulChars: 2,
+      });
+      for (const [j, tr] of meaning.translations.entries()) {
+        await assertUgcTextQualityWithStrike(tr.translationText, {
+          userId: actor.userId,
+          abuse: this.abuse,
+          entityType: 'word',
+          requestId: actor.requestId,
+          field: `meanings.${i}.translations.${j}.translation_text`,
+          minMeaningfulChars: 1,
+        });
+      }
+    }
+  }
+
   private async assertSearchMissProvenance(dto: CreateWordDto): Promise<void> {
     if (!dto.searchMissId) return;
     if (!this.searchMissRepo) {

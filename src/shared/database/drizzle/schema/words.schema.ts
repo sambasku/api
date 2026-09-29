@@ -4,6 +4,7 @@ import { generateId } from '@/shared/utils/ulid';
 import type { UsageLabel } from '@/shared/constants/usage-labels';
 import { languages } from './languages.schema';
 import { users } from './users.schema';
+import { wordImportSessions } from './word-import-sessions.schema';
 
 // 'draft' | 'pending_review' | 'published' | 'rejected' - alur per role
 // ada di resolvePublication (docs/api/03-api-kontribusi-verifikasi.md)
@@ -50,6 +51,8 @@ export const words = sqliteTable(
     takedownNote: text('takedown_note'),
     takenDownBy: text('taken_down_by').references(() => users.id),
     takenDownAt: integer('taken_down_at', { mode: 'timestamp' }),
+    /** Sesi impor massal yang menciptakan kata ini (untuk rollback batch). */
+    importSessionId: text('import_session_id').references(() => wordImportSessions.id),
   },
   (t) => [
     index('words_language_lemma_idx').on(t.languageId, t.lemma),
@@ -60,5 +63,6 @@ export const words = sqliteTable(
     index('words_lemma_az_idx').on(sql`lower(${t.lemma})`, t.id),
     // Feed beranda: published terbaru (verified_at DESC, id DESC).
     index('words_published_recent_idx').on(t.status, t.verifiedAt, t.id),
+    index('words_import_session_id_idx').on(t.importSessionId),
   ],
 );

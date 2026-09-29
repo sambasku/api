@@ -13,6 +13,8 @@ export interface Meaning {
   isHaveDefinition: boolean;
   /** false = tanpa padanan kata Indonesia */
   isHaveTranslation: boolean;
+  /** Provenance: manual | kbbi | kbbi_edited */
+  meaningSource: 'manual' | 'kbbi' | 'kbbi_edited';
   orderIndex: number;
   notes: string | null;
 }
@@ -41,7 +43,8 @@ export interface MeaningDetail extends Meaning {
       isPrimary: boolean;
       mimeType: string;
       status?: import('./word.entity').ChildStatus;
-      isVerified?: boolean;
+      /** selalu diisi agar klien bisa badge Menunggu pengecekan */
+      isVerified: boolean;
       isCorrected?: boolean;
     }[];
     /** terisi saat includeAllStatuses (layar review); publik selalu published */

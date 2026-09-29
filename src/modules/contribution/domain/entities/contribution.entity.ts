@@ -18,7 +18,7 @@ export interface Contribution {
   id: string;
   userId: string;
   contributorUsername: string | null;
-  /** Nama tampilan kontributor; fallback username. */
+  /** Nama tampilan kontributor; prefer guest_display_name, lalu display_name, lalu username. */
   contributorDisplayName: string | null;
   entityType: ContributionEntityType;
   entityId: string;
@@ -35,6 +35,15 @@ export interface Contribution {
    * word → lemma entity; anak (pronunciation/image/example/meaning) → lemma parent.
    */
   wordLemma: string | null;
+  /** Soft-claim setelah reopen; null = bebas di antrean global. */
+  reopenedBy: string | null;
+  /**
+   * Keputusan review terkini (enrich list mine / antrean reviewed).
+   * Null jika belum ada keputusan atau status masih pending tanpa history.
+   */
+  latestReviewStatus?: ContributionStatus | null;
+  latestReviewComment?: string | null;
+  latestReviewedAt?: Date | null;
 }
 
 /** Satu baris "Kontribusi Saya" - gabungan contributions + word_edit_suggestions. */
