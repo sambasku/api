@@ -196,7 +196,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       const targetLabel = preview?.label || 'entri kamus';
       const body =
         row.value >= 0
-          ? `Menyukai ${targetLabel}`
+          ? `Setuju dengan ${targetLabel}`
           : `Kurang setuju dengan ${targetLabel}`;
       return {
         id: `vote:${row.id}`,
