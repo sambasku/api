@@ -205,6 +205,25 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     expect((await get(`/api/v1/words/${body.data.word_id}`)).status).toBe(404);
   });
 
+  it('ANONIM + contributor_name → guest_display_name di antrean (username tetap anonim)', async () => {
+    const res = await post('/api/v1/contributions/words', {
+      ...validWordBody('kata dengan nama tamu'),
+      contributor_name: '  Budi Penutur  ',
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+
+    const list = await get('/api/v1/admin/contributions?status=pending&entity_type=word', adminToken);
+    const item = (await list.json()).data.find(
+      (c: { entity_id: string }) => c.entity_id === body.data.word_id,
+    );
+    expect(item).toMatchObject({
+      contributor_username: 'anonim',
+      contributor_display_name: 'Budi Penutur',
+      status: 'pending',
+    });
+  });
+
   it('LOGIN: submit via /contributions/words + Bearer → atribusi user real (bukan anonim)', async () => {
     const res = await post(
       '/api/v1/contributions/words',

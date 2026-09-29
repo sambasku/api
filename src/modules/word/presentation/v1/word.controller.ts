@@ -883,7 +883,8 @@ export class WordController {
     }
 
     const { contributor_name: contributorName, ...wordFields } = body;
-    const guestName = contributorName?.trim() || null;
+    // Nama teks bebas hanya untuk tamu; user login pakai display_name akun.
+    const guestName = !authUser ? contributorName?.trim() || null : null;
     const dto = toCreateWordDto(
       { ...wordFields, status: 'published' },
       this.deps.imageProviderName,
