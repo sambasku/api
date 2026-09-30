@@ -16,9 +16,9 @@ export function accountDeletionEmailHtml(displayCode: string, pageUrl: string): 
   return brandedCodeEmailHtml({
     title: 'Kode hapus akun SambasKu',
     eyebrow: 'Hapus akun',
-    intro: 'Masukkan 8 karakter 0-9A-Z di halaman hapus akun',
+    intro: 'Masukkan 6 karakter 0-9A-Z di halaman hapus akun',
     code: displayCode,
-    note: 'Berlaku 10 menit. Format tampilan XXXX-XXXX.',
+    note: 'Berlaku 10 menit. Format tampilan XXX-YYY.',
     detail: DETAIL,
     action: { href: pageUrl, label: 'Buka halaman hapus akun' },
     footer: 'Abaikan email ini jika Anda tidak meminta penghapusan akun di SambasKu.',

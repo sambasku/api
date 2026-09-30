@@ -33,7 +33,7 @@ describe('ResendMailerService', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const mailer = new ResendMailerService();
-    await mailer.sendVerificationOtpEmail('user@example.com', '1111-1111');
+    await mailer.sendVerificationOtpEmail('user@example.com', '111-111');
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

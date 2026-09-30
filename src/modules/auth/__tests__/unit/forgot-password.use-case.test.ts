@@ -72,7 +72,7 @@ describe('ForgotPasswordUseCase', () => {
     expect(mailer.sendResetPasswordEmail).toHaveBeenCalledWith(
       'budi@test.com',
       expect.stringMatching(/^https:\/\/app\.test\/reset-password\?token=/),
-      expect.stringMatching(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/),
+      expect.stringMatching(/^[0-9A-Z]{3}-[0-9A-Z]{3}$/),
     );
   });
 });
