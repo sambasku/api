@@ -28,6 +28,8 @@ export const users = sqliteTable(
     /** Mute sementara dari policy abuse; null = tidak di-mute. */
     contributeMutedUntil: integer('contribute_muted_until', { mode: 'timestamp' }),
     emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
+    /** Waktu akun terverifikasi (OTP sukses); null = belum / data lama. */
+    emailVerifiedAt: integer('email_verified_at', { mode: 'timestamp' }),
     // Avatar publik (GitHub sambasku/images). Null = belum set.
     avatarUrl: text('avatar_url'),
     avatarProvider: text('avatar_provider'),
