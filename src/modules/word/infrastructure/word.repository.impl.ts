@@ -2522,7 +2522,13 @@ export class WordRepositoryImpl implements WordRepository {
             updatedBy: actorId,
             updatedAt: now,
             verifiedBy: word.isVerified ? sql`COALESCE(${words.verifiedBy}, ${actorId})` : null,
-            verifiedAt: word.isVerified ? sql`COALESCE(${words.verifiedAt}, ${now})` : null,
+            // PENTING: `sql` mentah MELALUI encoder `mode: 'timestamp'`, jadi
+            // `Date` di dalamnya ter-bind sebagai epoch MILLISECONDS dan kolom
+            // jadi year 50000-an - baris itu lalu mengikat permanen di atas
+            // feed. #47: bind epoch SECONDS secara eksplisit, bukan Date.
+            verifiedAt: word.isVerified
+              ? sql`COALESCE(${words.verifiedAt}, ${Math.floor(now.getTime() / 1000)})`
+              : null,
           })
           .where(and(eq(words.id, id), isNull(words.deletedAt)))
           .returning();

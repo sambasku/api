@@ -194,4 +194,114 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     expect(welcome!.subtitle).toBe('Selamat datang');
     expect(welcome!.actor?.username).toBeTruthy();
   });
+
+  it('welcome diurut dari waktu verifikasi, bukan waktu daftar (#47)', async () => {
+    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
+    const { users: usersTable } = await import('@/shared/database/drizzle/schema');
+    const db = getTestDb();
+    const stamp = Date.now();
+
+    // Daftar 10 hari lalu, email baru diverifikasi sekarang.
+    const reg = await post(
+      '/api/v1/auth/register',
+      e2eRegisterBody({ name: `wel${stamp}`, email: `wel${stamp}@test.com` }),
+    );
+    const regBody = (await reg.json()) as { data: { user_id: string; username: string } };
+    const lateUserId = regBody.data.user_id;
+    await db
+      .update(usersTable)
+      .set({
+        createdAt: new Date(stamp - 10 * 24 * 60 * 60 * 1000),
+        emailVerified: true,
+        // +60s: kolom integer ber-granularitas detik; seluruh fixture e2e
+        // berjalan < 1 detik sehingga new Date() bisa tie lalu kalah id-sort.
+        emailVerifiedAt: new Date(stamp + 60_000),
+      })
+      .where(eq(usersTable.id, lateUserId));
+
+    // Semua aktivitas lain (kata/komentar/vote/share) berumur < 10 hari:
+    // lebih baru dari createdAt user ini tapi lebih lama dari verifikasinya.
+    const feed = (await (
+      await get('/api/v1/activity?limit=50')
+    ).json()) as { data: Array<{ kind: string; actor: { username: string | null } | null }> };
+    expect(feed.data[0]?.kind).toBe('welcome');
+    expect(feed.data[0]?.actor?.username).toBe(regBody.data.username);
+  });
+
+  it('cursor tidak mengulang baris di halaman berikutnya (#47)', async () => {
+    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
+    const { users: usersTable } = await import('@/shared/database/drizzle/schema');
+    const db = getTestDb();
+    const base = Date.now();
+
+    // Fixture e2e lain semuanya lahir dalam <1 detik, jadi tidak bisa menguji
+    // keyset. Tiga user dengan detik verifikasi berbeda supaya ada "halaman
+    // kedua" yang benar-benar lebih lama.
+    const seeded: string[] = [];
+    for (const [i, offsetSec] of [30, 20, 10].entries()) {
+      const reg = await post(
+        '/api/v1/auth/register',
+        e2eRegisterBody({ name: `cur${base}${i}`, email: `cur${base}${i}@test.com` }),
+      );
+      const regBody = (await reg.json()) as { data: { user_id: string } };
+      await db
+        .update(usersTable)
+        .set({
+          emailVerified: true,
+          emailVerifiedAt: new Date(base - offsetSec * 1000),
+        })
+        .where(eq(usersTable.id, regBody.data.user_id));
+      seeded.push(regBody.data.user_id);
+    }
+
+    const seen: string[] = [];
+    const times: number[] = [];
+    let cursor: string | null = null;
+    let pages = 0;
+
+    // Terus sampai habis atau 6 halaman (guard kalau ada loop tak berujung).
+    do {
+      const url: string = `/api/v1/activity?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+      const body = (await (await get(url)).json()) as {
+        success: boolean;
+        data: Array<{ id: string; created_at: string }>;
+        meta: { next_cursor: string | null; has_more: boolean };
+      };
+      expect(body.success).toBe(true);
+      for (const item of body.data) {
+        seen.push(item.id);
+        times.push(Date.parse(item.created_at));
+      }
+      cursor = body.meta.next_cursor;
+      pages += 1;
+    } while (cursor && pages < 6);
+
+    // Ketiga user 반드시 muncul, dan butuh >1 halaman pada limit 2.
+    expect(pages).toBeGreaterThan(1);
+    for (const id of seeded) {
+      expect(seen).toContain(`welcome:${id}`);
+    }
+    // Kursor yang terikat milidetik membuat `ts < ms` selalu benar, sehingga
+    // setiap halaman mengulang isi halaman sebelumnya.
+    expect(new Set(seen).size).toBe(seen.length);
+    // Dan tidak boleh ada lompatan waktu ke belakang antar halaman.
+    expect(times).toEqual([...times].sort((a, b) => b - a));
+  });
+
+  it('setiap created_at dalam rentang waktu yang masuk akal (#47)', async () => {
+    const body = (await (await get('/api/v1/activity?limit=50')).json()) as {
+      data: Array<{ id: string; created_at: string }>;
+    };
+    expect(body.data.length).toBeGreaterThan(0);
+
+    const ms = body.data.map((i) => Date.parse(i.created_at));
+    for (const [i, t] of ms.entries()) {
+      expect(Number.isNaN(t), `${body.data[i]!.id} punya created_at tak bisa diparse`).toBe(false);
+      // 1e10 detik = tahun 2286. Di atas itu berarti ada yang menulis epoch ms.
+      expect(t / 1000, `${body.data[i]!.id} di luar rentang detik`).toBeLessThan(1e10);
+    }
+    // Feed harus benar-benar menurun, tidak hanya "semuanya masuk rentang".
+    const sorted = [...ms].sort((a, b) => b - a);
+    expect(ms).toEqual(sorted);
+  });
 });

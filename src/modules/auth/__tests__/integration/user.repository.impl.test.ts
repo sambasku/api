@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { config } from 'dotenv';
+import { eq } from 'drizzle-orm';
 import { getTestDb } from '@/shared/database/drizzle/test-client';
+import { users } from '@/shared/database/drizzle/schema';
 
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
 import { UserRepositoryImpl } from '../../infrastructure/user.repository.impl';
@@ -29,6 +31,8 @@ describe.skipIf(!hasTestDb)('UserRepositoryImpl', () => {
     const saved = await repo.save({ username: 'siti', email: 'siti@test.com', phone: null, passwordHash: 'hash' });
     await repo.markEmailVerified(saved.id);
     expect((await repo.findById(saved.id))?.emailVerified).toBe(true);
+    const [row] = await db.select().from(users).where(eq(users.id, saved.id)).limit(1);
+    expect(row?.emailVerifiedAt).toBeInstanceOf(Date); // timeline welcome feed (#47)
   });
 
   it('findByUsername dan findById mengembalikan user yang sama', async () => {
