@@ -75,7 +75,7 @@ describe('ResendOtpUseCase', () => {
     expect(mailer.sendVerificationOtpEmail).not.toHaveBeenCalled();
   });
 
-  it('belum verified: ganti OTP dan kirim tampilan XXXX-XXXX', async () => {
+  it('belum verified: ganti OTP dan kirim tampilan XXX-YYY', async () => {
     const { useCase, otpRepo, mailer } = makeDeps(makeUser());
     await useCase.execute('budi@test.com');
     expect(otpRepo.replaceForUser).toHaveBeenCalledWith(
@@ -83,7 +83,7 @@ describe('ResendOtpUseCase', () => {
     );
     expect(mailer.sendVerificationOtpEmail).toHaveBeenCalledWith(
       'budi@test.com',
-      expect.stringMatching(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/),
+      expect.stringMatching(/^[0-9A-Z]{3}-[0-9A-Z]{3}$/),
     );
   });
 

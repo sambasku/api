@@ -78,7 +78,7 @@ describe('ResetPasswordUseCase', () => {
 
   it('sukses lewat email+kode OTP (jalur aplikasi)', async () => {
     const userId = '01TESTULIDUSERID00000000';
-    const code = 'A4K9M2XP';
+    const code = 'A4K9M2';
     const { useCase, userRepo, resetTokenRepo } = makeDeps(
       makeRecord({ tokenHash: hashOtp(userId, code) }),
     );
@@ -89,7 +89,7 @@ describe('ResetPasswordUseCase', () => {
 
     await useCase.execute({
       email: 'budi@test.com',
-      code: 'A4K9-M2XP',
+      code: 'A4K-9M2',
       newPassword: 'PasswordBaru1',
     });
 

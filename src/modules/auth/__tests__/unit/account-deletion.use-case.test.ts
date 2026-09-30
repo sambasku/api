@@ -141,7 +141,7 @@ describe('AccountDeletionUseCase', () => {
     expect(deletionTokens.create).toHaveBeenCalled();
     expect(mailer.sendAccountDeletionEmail).toHaveBeenCalledWith(
       'tester@test.com',
-      expect.stringMatching(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/),
+      expect.stringMatching(/^[0-9A-Z]{3}-[0-9A-Z]{3}$/),
       'https://sambasku.test/hapus-akun',
     );
   });

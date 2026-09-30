@@ -178,7 +178,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     method: 'post',
     path: '/verify-email',
     tags: ['Auth'],
-    summary: 'Verifikasi email dengan OTP 8 karakter 0-9A-Z, lalu terbitkan JWT seperti login',
+    summary: 'Verifikasi email dengan OTP 6 karakter 0-9A-Z, lalu terbitkan JWT seperti login',
     request: { body: { content: json(verifyEmailSchema) } },
     responses: {
       200: { description: 'Email terverifikasi + token', content: json(verifyEmailResponseSchema) },

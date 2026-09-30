@@ -8,15 +8,15 @@ import {
 } from '../../infrastructure/otp-email-logo';
 
 describe('otp email template', () => {
-  it('teks memuat kode XXXX-XXXX', () => {
-    expect(otpEmailText('A4K9-M2XP')).toContain('A4K9-M2XP');
+  it('teks memuat kode XXX-YYY', () => {
+    expect(otpEmailText('A4K-9M2')).toContain('A4K-9M2');
   });
 
   it('html memuat kode dan avatar CID persegi', () => {
-    const html = otpEmailHtml('A4K9-M2XP');
-    expect(html).toContain('A4K9-M2XP');
-    expect(html).toContain('8 karakter 0-9A-Z');
-    expect(html).toContain('XXXX-XXXX');
+    const html = otpEmailHtml('A4K-9M2');
+    expect(html).toContain('A4K-9M2');
+    expect(html).toContain('6 karakter 0-9A-Z');
+    expect(html).toContain('XXX-YYY');
     expect(html).toContain(`cid:${OTP_EMAIL_LOGO_CONTENT_ID}`);
     expect(html).toContain('width="96"');
     expect(html).toContain('height="96"');

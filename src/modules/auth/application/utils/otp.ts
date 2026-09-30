@@ -4,9 +4,9 @@ export const OTP_TTL_MS = 10 * 60 * 1000;
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RESEND_COOLDOWN_MS = 2 * 60 * 1000;
 export const OTP_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-export const OTP_CODE_LENGTH = 8;
-/** OTP tetap di staging (hemat Resend; input tampilan 1111-1111). */
-export const STAGING_OTP_CODE = '11111111';
+export const OTP_CODE_LENGTH = 6;
+/** OTP tetap di staging (hemat Resend; input tampilan 111-111). */
+export const STAGING_OTP_CODE = '111111';
 
 /**
  * Baca NODE_ENV runtime tanpa menarik parse Zod `env.ts` (unit test use-case
@@ -18,7 +18,7 @@ function runtimeNodeEnv(): string | undefined {
 }
 
 /**
- * 8 karakter 0-9A-Z, tanpa bias modulo. Staging: selalu STAGING_OTP_CODE.
+ * 6 karakter 0-9A-Z, tanpa bias modulo. Staging: selalu STAGING_OTP_CODE.
  */
 export function generateOtpCode(): string {
   if (runtimeNodeEnv() === 'staging') return STAGING_OTP_CODE;
@@ -39,7 +39,7 @@ export function generateOtpCode(): string {
 }
 
 export function formatOtpDisplay(code: string): string {
-  return `${code.slice(0, 4)}-${code.slice(4)}`;
+  return `${code.slice(0, 3)}-${code.slice(3)}`;
 }
 
 export function normalizeOtpCode(raw: string): string | null {
