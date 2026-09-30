@@ -4,7 +4,7 @@ import { otpEmailHtml } from '../../infrastructure/otp-email';
 import { resetPasswordEmailHtml } from '../../infrastructure/reset-password-email';
 import { verifierApprovedEmailHtml } from '../../infrastructure/verifier-approved-email';
 
-const CODE = 'AB12-CD34';
+const CODE = 'AB1-2C3';
 
 describe('branded email templates', () => {
   it('hapus akun memakai kartu yang sama dengan verifikasi dan reset password', () => {

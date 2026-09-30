@@ -6,19 +6,19 @@ import {
 import { OTP_EMAIL_LOGO_CONTENT_ID } from '../../infrastructure/otp-email-logo';
 
 describe('reset-password-email', () => {
-  it('teks memuat kode XXXX-XXXX tanpa tautan', () => {
-    const text = resetPasswordEmailText('A4K9-M2XP');
-    expect(text).toContain('A4K9-M2XP');
+  it('teks memuat kode XXX-YYY tanpa tautan', () => {
+    const text = resetPasswordEmailText('A4K-9M2');
+    expect(text).toContain('A4K-9M2');
     expect(text).toContain('10 menit');
     expect(text).toContain('aplikasi');
     expect(text).not.toContain('http');
   });
 
   it('html memuat kode dan avatar CID, tanpa tombol tautan', () => {
-    const html = resetPasswordEmailHtml('A4K9-M2XP');
-    expect(html).toContain('A4K9-M2XP');
-    expect(html).toContain('8 karakter 0-9A-Z');
-    expect(html).toContain('XXXX-XXXX');
+    const html = resetPasswordEmailHtml('A4K-9M2');
+    expect(html).toContain('A4K-9M2');
+    expect(html).toContain('6 karakter 0-9A-Z');
+    expect(html).toContain('XXX-YYY');
     expect(html).toContain(`cid:${OTP_EMAIL_LOGO_CONTENT_ID}`);
     expect(html).toContain('width="96"');
     expect(html).not.toContain('Atur password baru');

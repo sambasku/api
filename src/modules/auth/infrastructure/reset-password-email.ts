@@ -11,9 +11,9 @@ export function resetPasswordEmailHtml(displayCode: string): string {
   return brandedCodeEmailHtml({
     title: 'Reset password SambasKu',
     eyebrow: 'Reset password',
-    intro: 'Masukkan 8 karakter 0-9A-Z di aplikasi',
+    intro: 'Masukkan 6 karakter 0-9A-Z di aplikasi',
     code: displayCode,
-    note: 'Berlaku 10 menit. Format tampilan XXXX-XXXX.',
+    note: 'Berlaku 10 menit. Format tampilan XXX-YYY.',
     footer: 'Abaikan email ini jika Anda tidak meminta reset password di SambasKu.',
   });
 }

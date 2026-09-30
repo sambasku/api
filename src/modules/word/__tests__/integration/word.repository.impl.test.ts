@@ -17,7 +17,7 @@ import {
   wordClasses,
   words,
 } from '@/shared/database/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
 import { WordRepositoryImpl } from '../../infrastructure/word.repository.impl';
 import { decodeLatestCursor, decodeListCursor } from '../../domain/repositories/word.repository';
@@ -231,6 +231,56 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
     const word = await repo.saveWithRelations(baseWord({ lemma: 'makatn' }), ACTOR);
     expect(await repo.findDuplicate(SMB, 'makatn', word.id)).toBe(false); // diri sendiri
     expect(await repo.findDuplicate(SMB, 'makatn')).toBe(true); // tanpa exclude (perilaku create)
+  });
+
+  it('updateWithRelations: verified_at disimpan epoch DETIK, bukan milidetik (#47)', async () => {
+    // `verifiedAt` diisi lewat `sql` mentah (COALESCE), yang MELALUI encoder
+    // `mode: 'timestamp'`. Kalau `Date` ikut di-bind di sana, tersimpan
+    // sebagai ms -> kolom terbaca tahun 50.000-an -> baris itu mengikat
+    // permanen di puncak feed.
+    const word = await repo.saveWithRelations(
+      baseWord({ isVerified: false, status: 'draft' }),
+      ACTOR,
+    );
+    expect(word.isVerified).toBe(false);
+
+    await repo.updateWithRelations(
+      word.id,
+      baseWord({ lemma: 'makatn', isVerified: true, status: 'published' }),
+      ACTOR,
+    );
+
+    const [row] = await db.select().from(words).where(eq(words.id, word.id));
+    expect(row!.isVerified).toBe(true);
+    expect(row!.verifiedAt).not.toBeNull();
+    // Kalau ms, year-nya 50.000-an.
+    expect(row!.verifiedAt!.getUTCFullYear()).toBeLessThan(2300);
+
+    // Cek juga nilai mentahnya: kolom harus detik, bukan ms.
+    const raw = await getTestDb().run(
+      sql`SELECT verified_at AS v FROM words WHERE id = ${word.id}`,
+    );
+    const stored = Number((raw.rows[0] as unknown as { v: number }).v);
+    expect(stored).toBeLessThan(1e10);
+  });
+
+  it('updateWithRelations: verified_at lama tidak ditimpa saat edit ulang', async () => {
+    const word = await repo.saveWithRelations(
+      baseWord({ isVerified: true, status: 'published' }),
+      ACTOR,
+    );
+    const first = (await db.select().from(words).where(eq(words.id, word.id)))[0]!;
+    const original = first.verifiedAt!;
+
+    await new Promise((r) => setTimeout(r, 1100)); // lewat 1 detik
+    await repo.updateWithRelations(
+      word.id,
+      baseWord({ lemma: 'makatn', isVerified: true, status: 'published' }),
+      ACTOR,
+    );
+
+    const after = (await db.select().from(words).where(eq(words.id, word.id)))[0]!;
+    expect(after.verifiedAt!.getTime()).toBe(original.getTime());
   });
 
   it('updateWithRelations: replace children lama → baru + baris contributions update', async () => {

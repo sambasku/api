@@ -58,7 +58,7 @@ function eyebrowRow(label: string): string {
           </tr>`;
 }
 
-/** Kartu kode 8 karakter - dipakai verifikasi, reset password, dan hapus akun. */
+/** Kartu kode 6 karakter - dipakai verifikasi, reset password, dan hapus akun. */
 export function brandedCodeEmailHtml(input: {
   title: string;
   eyebrow: string;

@@ -13,9 +13,9 @@ export function otpEmailHtml(displayCode: string): string {
   return brandedCodeEmailHtml({
     title: 'Kode verifikasi SambasKu',
     eyebrow: 'Verifikasi akun',
-    intro: 'Masukkan 8 karakter 0-9A-Z di aplikasi',
+    intro: 'Masukkan 6 karakter 0-9A-Z di aplikasi',
     code: displayCode,
-    note: 'Berlaku 10 menit. Format tampilan XXXX-XXXX.',
+    note: 'Berlaku 10 menit. Format tampilan XXX-YYY.',
     footer: 'Jangan bagikan kode ini. Abaikan email ini jika Anda tidak mendaftar di SambasKu.',
   });
 }

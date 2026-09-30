@@ -78,7 +78,7 @@ export class UserRepositoryImpl implements UserRepository {
   async markEmailVerified(id: string): Promise<void> {
     await this.db
       .update(users)
-      .set({ emailVerified: true, updatedAt: new Date() })
+      .set({ emailVerified: true, emailVerifiedAt: new Date(), updatedAt: new Date() })
       .where(eq(users.id, id));
   }
 

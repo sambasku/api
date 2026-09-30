@@ -42,10 +42,54 @@ function keysetBefore(
   const kind = colon >= 0 ? before.id.slice(0, colon) : '';
   const entityId = colon >= 0 ? before.id.slice(colon + 1) : before.id;
   const kinds = Array.isArray(kindOrKinds) ? kindOrKinds : [kindOrKinds];
+  // WAJIB konversi ke epoch SECONDS: `timeExpr` dibandingkan dalam detik, tapi
+  // `sql` mentah ter-bind `Date` sebagai MILLISECONDS. Kalau tidak, `ts < ms`
+  // selalu benar -> halaman 2 mengulang baris halaman 1 (infinite scroll).
+  const beforeSeconds = Math.floor(before.createdAt.getTime() / 1000);
   if (kinds.includes(kind) && entityId.length > 0) {
-    return sql`(${timeExpr}, ${idColumn}) < (${before.createdAt}, ${entityId})`;
+    return sql`(${timeExpr}, ${idColumn}) < (${beforeSeconds}, ${entityId})`;
   }
-  return sql`${timeExpr} < ${before.createdAt}`;
+  return sql`${timeExpr} < ${beforeSeconds}`;
+}
+
+/**
+ * Batas atas timestamp yang masih waras. Kolom `mode: 'timestamp'` di Drizzle
+ * menyimpan epoch SECONDS, jadi 1e10 = tahun 2286 - jauh di atas horizon data
+ * mana pun. Nilai di atas itu berarti ada yang menulis epoch MILLISECONDS
+ * (#47): `ORDER BY` mengikat baris itu di puncak feed, keyset ikut condong, dan
+ * klien merender diff negatif "baru".
+ *
+ * Sengaja lebih ketat dari trigger migrasi `0049_timestamp-unit-repair` (1e11):
+ * trigger hanya menyaring penulisan, batas feed tidak boleh ikut bergeser
+ * diam-diam. Selisih keduanya justru dipakai test untuk membuktikan guard feed
+ * bekerja sendiri, bukan cuma trigger.
+ */
+const MAX_PLAUSIBLE_TS_S = 10_000_000_000;
+
+/** Kolom tanggal, atau NULL kalau nilainya di luar rentang yang masuk akal. */
+function saneTs(column: SQL | AnyColumn): SQL<number> {
+  return sql`case when ${column} is not null and ${column} < ${MAX_PLAUSIBLE_TS_S} then ${column} end`;
+}
+
+/**
+ * "Waktu aksi" sebuah baris untuk feed: kolom pertama yang bernilai waras.
+ * Dipakai SERENTAK untuk `ORDER BY` dan keyset supaya keduanya tidak pernah
+ * berbeda — kalau beda, halaman berikutnya melompati atau mengulang baris.
+ * NULL berarti semua kolom timestamp-nya rusak; pemanggil wajib memfilter.
+ *
+ * Hasinya epoch SECONDS (satuan kolomnya), jadi wajib lewat [secondsToDate].
+ */
+function occurredAtSql(...columns: Array<SQL | AnyColumn>): SQL<number> {
+  if (columns.length === 1) return saneTs(columns[0]!);
+  return sql`coalesce(${sql.join(columns.map(saneTs), sql`, `)})`;
+}
+
+/**
+ * Ekspresi `mode: 'timestamp'` tidak ikut di-decode Drizzle saat di-select
+ * sebagai `SQL` mentah, jadi nilainya masih epoch SECONDS.
+ */
+function secondsToDate(seconds: number | null): Date {
+  return new Date((seconds ?? 0) * 1000);
 }
 
 const WORD_BOUND_VOTE_TYPES = new Set(['word', 'comment']);
@@ -107,13 +151,12 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     limit: number,
     before?: ActivityCursor,
   ): Promise<ActivityItem[]> {
-    const approvedAtExpr = sql`COALESCE(${words.verifiedAt}, ${words.createdAt})`;
+    const occurredAt = occurredAtSql(words.verifiedAt, words.createdAt);
     const rows = await this.db
       .select({
         id: words.id,
         lemma: words.lemma,
-        verifiedAt: words.verifiedAt,
-        createdAt: words.createdAt,
+        occurredAt,
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
@@ -126,10 +169,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           isNull(words.deletedAt),
           eq(words.status, 'published'),
           feedSafeUsageLabelsSql(),
-          keysetBefore(approvedAtExpr, words.id, before, 'word'),
+          isNotNull(occurredAt),
+          keysetBefore(occurredAt, words.id, before, 'word'),
         ),
       )
-      .orderBy(desc(approvedAtExpr), desc(words.id))
+      .orderBy(desc(occurredAt), desc(words.id))
       .limit(limit);
 
     const senses = await this.attachWordSenses(rows.map((r) => r.id));
@@ -145,7 +189,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       return {
         id: `word:${row.id}`,
         kind: 'word' as const,
-        createdAt: row.verifiedAt ?? row.createdAt,
+        createdAt: secondsToDate(row.occurredAt),
         actor:
           username || displayName
             ? {
@@ -165,12 +209,13 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     limit: number,
     before?: ActivityCursor,
   ): Promise<ActivityItem[]> {
+    const occurredAt = occurredAtSql(comments.createdAt);
     const rows = await this.db
       .select({
         id: comments.id,
         body: comments.body,
         wordId: comments.wordId,
-        createdAt: comments.createdAt,
+        occurredAt,
         lemma: words.lemma,
         username: users.username,
         displayName: users.displayName,
@@ -185,10 +230,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           eq(comments.status, 'published'),
           isNull(comments.deletedAt),
           feedVisibleWordSql(),
-          keysetBefore(comments.createdAt, comments.id, before, 'comment'),
+          isNotNull(occurredAt),
+          keysetBefore(occurredAt, comments.id, before, 'comment'),
         ),
       )
-      .orderBy(desc(comments.createdAt), desc(comments.id))
+      .orderBy(desc(occurredAt), desc(comments.id))
       .limit(limit);
 
     return rows.map((row) => {
@@ -201,7 +247,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       return {
         id: `comment:${row.id}`,
         kind: 'comment' as const,
-        createdAt: row.createdAt,
+        createdAt: secondsToDate(row.occurredAt),
         actor: {
           username,
           displayName,
@@ -218,15 +264,14 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     limit: number,
     before?: ActivityCursor,
   ): Promise<ActivityItem[]> {
-    const occurredAt = sql`COALESCE(${votes.updatedAt}, ${votes.createdAt})`;
+    const occurredAt = occurredAtSql(votes.updatedAt, votes.createdAt);
     const rows = await this.db
       .select({
         id: votes.id,
         entityType: votes.entityType,
         entityId: votes.entityId,
         value: votes.value,
-        createdAt: votes.createdAt,
-        updatedAt: votes.updatedAt,
+        occurredAt,
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
@@ -237,6 +282,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       .where(
         and(
           isNull(users.deletedAt),
+          isNotNull(occurredAt),
           keysetBefore(occurredAt, votes.id, before, 'vote'),
         ),
       )
@@ -270,7 +316,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       return {
         id: `vote:${row.id}`,
         kind: 'vote' as const,
-        createdAt: row.updatedAt ?? row.createdAt,
+        createdAt: secondsToDate(row.occurredAt),
         actor: {
           username,
           displayName,
@@ -291,11 +337,12 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     limit: number,
     before?: ActivityCursor,
   ): Promise<ActivityItem[]> {
+    const occurredAt = occurredAtSql(discussions.createdAt);
     const rows = await this.db
       .select({
         id: discussions.id,
         body: discussions.body,
-        createdAt: discussions.createdAt,
+        occurredAt,
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
@@ -306,10 +353,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       .where(
         and(
           eq(discussions.status, 'published'),
-          keysetBefore(discussions.createdAt, discussions.id, before, 'discussion'),
+          isNotNull(occurredAt),
+          keysetBefore(occurredAt, discussions.id, before, 'discussion'),
         ),
       )
-      .orderBy(desc(discussions.createdAt), desc(discussions.id))
+      .orderBy(desc(occurredAt), desc(discussions.id))
       .limit(limit);
 
     return rows.map((row) => {
@@ -323,7 +371,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       return {
         id: `discussion:${row.id}`,
         kind: 'discussion' as const,
-        createdAt: row.createdAt,
+        createdAt: secondsToDate(row.occurredAt),
         actor: {
           username,
           displayName,
@@ -343,12 +391,13 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   ): Promise<ActivityItem[]> {
     if (entityTypes.length === 0) return [];
 
+    const occurredAt = occurredAtSql(contributions.createdAt);
     const rows = await this.db
       .select({
         id: contributions.id,
         entityType: contributions.entityType,
         entityId: contributions.entityId,
-        createdAt: contributions.createdAt,
+        occurredAt,
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
@@ -361,10 +410,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           inArray(contributions.status, ['approved', 'corrected']),
           isNull(contributions.deletedAt),
           inArray(contributions.entityType, entityTypes),
-          keysetBefore(contributions.createdAt, contributions.id, before, entityTypes),
+          isNotNull(occurredAt),
+          keysetBefore(occurredAt, contributions.id, before, entityTypes),
         ),
       )
-      .orderBy(desc(contributions.createdAt), desc(contributions.id))
+      .orderBy(desc(occurredAt), desc(contributions.id))
       .limit(limit);
 
     const parents = await this.resolveContributionParents(
@@ -388,7 +438,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       return {
         id: `${kind}:${row.id}`,
         kind,
-        createdAt: row.createdAt,
+        createdAt: secondsToDate(row.occurredAt),
         actor: {
           username,
           displayName,
@@ -405,14 +455,14 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     limit: number,
     before?: ActivityCursor,
   ): Promise<ActivityItem[]> {
-    const occurredAt = sql`COALESCE(${searchMisses.lastSearchedAt}, ${searchMisses.createdAt})`;
+    // Aksi = pencarian terakhir. Sama persis untuk ORDER BY dan keyset.
+    const occurredAt = occurredAtSql(searchMisses.lastSearchedAt, searchMisses.createdAt);
     const rows = await this.db
       .select({
         id: searchMisses.id,
         term: searchMisses.term,
         direction: searchMisses.direction,
-        createdAt: searchMisses.createdAt,
-        lastSearchedAt: searchMisses.lastSearchedAt,
+        occurredAt,
       })
       .from(searchMisses)
       .where(
@@ -425,16 +475,17 @@ export class ActivityRepositoryImpl implements ActivityRepository {
             ${searchMisses.direction} = 'lemma' AND ${isFulfilledLemmaSql}
           )`,
           sql`NOT ${matchesExcludedLemmaSql}`,
+          isNotNull(occurredAt),
           keysetBefore(occurredAt, searchMisses.id, before, 'search_miss'),
         ),
       )
-      .orderBy(desc(searchMisses.lastSearchedAt), desc(searchMisses.id))
+      .orderBy(desc(occurredAt), desc(searchMisses.id))
       .limit(limit);
 
     return rows.map((row) => ({
       id: `search_miss:${row.id}`,
       kind: 'search_miss' as const,
-      createdAt: row.lastSearchedAt ?? row.createdAt,
+      createdAt: secondsToDate(row.occurredAt),
       actor: null,
       body: searchMissBody(row.term),
       subtitle: null,
@@ -450,14 +501,16 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     before?: ActivityCursor,
   ): Promise<ActivityItem[]> {
     // Tampil setelah akun terverifikasi (OTP email atau OAuth langsung verified).
-    // Urut createdAt: waktu daftar; filter emailVerified menutup akun belum OTP.
+    // Timeline aksi "bergabung" = waktu verifikasi; OAuth/legacy tanpa kolom
+    // itu jatuh ke createdAt (mereka memang verified saat daftar/backfill).
+    const occurredAt = occurredAtSql(users.emailVerifiedAt, users.createdAt);
     const rows = await this.db
       .select({
         id: users.id,
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
-        createdAt: users.createdAt,
+        occurredAt,
         deletedAt: users.deletedAt,
       })
       .from(users)
@@ -467,10 +520,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           eq(users.isActive, true),
           isNull(users.deletedAt),
           ne(users.id, ANONIM_USER_ID),
-          keysetBefore(users.createdAt, users.id, before, 'welcome'),
+          isNotNull(occurredAt),
+          keysetBefore(occurredAt, users.id, before, 'welcome'),
         ),
       )
-      .orderBy(desc(users.createdAt), desc(users.id))
+      .orderBy(desc(occurredAt), desc(users.id))
       .limit(limit);
 
     return rows.map((row) => {
@@ -483,7 +537,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       return {
         id: `welcome:${row.id}`,
         kind: 'welcome' as const,
-        createdAt: row.createdAt,
+        createdAt: secondsToDate(row.occurredAt),
         actor: {
           username,
           displayName,
@@ -500,11 +554,12 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     limit: number,
     before?: ActivityCursor,
   ): Promise<ActivityItem[]> {
+    const occurredAt = occurredAtSql(wordCardShares.createdAt);
     const rows = await this.db
       .select({
         id: wordCardShares.id,
         wordId: wordCardShares.wordId,
-        createdAt: wordCardShares.createdAt,
+        occurredAt,
         lemma: words.lemma,
         username: users.username,
         displayName: users.displayName,
@@ -517,16 +572,17 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         and(
           isNull(users.deletedAt),
           feedVisibleWordSql(),
-          keysetBefore(wordCardShares.createdAt, wordCardShares.id, before, 'card_share'),
+          isNotNull(occurredAt),
+          keysetBefore(occurredAt, wordCardShares.id, before, 'card_share'),
         ),
       )
-      .orderBy(desc(wordCardShares.createdAt), desc(wordCardShares.id))
+      .orderBy(desc(occurredAt), desc(wordCardShares.id))
       .limit(limit);
 
     return rows.map((row) => ({
       id: `card_share:${row.id}`,
       kind: 'card_share' as const,
-      createdAt: row.createdAt,
+      createdAt: secondsToDate(row.occurredAt),
       actor: {
         username: row.username,
         displayName: row.displayName ?? row.username,
@@ -546,13 +602,13 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     const appliedAt = sql`CASE WHEN ${wordEditSuggestions.baselineSnapshot} IS NOT NULL
       THEN ${wordEditSuggestions.createdAt}
       ELSE ${wordEditSuggestions.reviewedAt} END`;
+    // Sama persis untuk ORDER BY dan keyset.
+    const occurredAt = occurredAtSql(appliedAt);
     const rows = await this.db
       .select({
         id: wordEditSuggestions.id,
         wordId: wordEditSuggestions.wordId,
-        createdAt: wordEditSuggestions.createdAt,
-        reviewedAt: wordEditSuggestions.reviewedAt,
-        hasBaseline: sql<number>`${wordEditSuggestions.baselineSnapshot} IS NOT NULL`,
+        occurredAt,
         lemma: words.lemma,
         username: users.username,
         displayName: users.displayName,
@@ -576,17 +632,18 @@ export class ActivityRepositoryImpl implements ActivityRepository {
             ),
           ),
           feedVisibleWordSql(),
-          keysetBefore(appliedAt, wordEditSuggestions.id, before, 'suggestion'),
+          isNotNull(occurredAt),
+          keysetBefore(occurredAt, wordEditSuggestions.id, before, 'suggestion'),
         ),
       )
-      .orderBy(desc(appliedAt), desc(wordEditSuggestions.id))
+      .orderBy(desc(occurredAt), desc(wordEditSuggestions.id))
       .limit(limit);
 
     // Hanya aksi + lemma: teks bebas usulan tidak pernah masuk feed.
     return rows.map((row) => ({
       id: `suggestion:${row.id}`,
       kind: 'suggestion' as const,
-      createdAt: row.hasBaseline ? row.createdAt : (row.reviewedAt ?? row.createdAt),
+      createdAt: secondsToDate(row.occurredAt),
       actor: {
         username: row.username,
         displayName: row.displayName ?? row.username,
