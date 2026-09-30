@@ -78,7 +78,9 @@ export function buildOpenverseSearchUrl(
   url.searchParams.set('page_size', perPage);
   url.searchParams.set('mature', 'false');
   url.searchParams.set('license', OPENVERSE_SAFE_LICENSES);
-  url.searchParams.set('unstable__include_sensitive_results', 'false');
+  // Jangan kirim unstable__include_sensitive_results bersama mature.
+  // Openverse menolak keduanya sekaligus (HTTP 400). Filter sensitivity
+  // tetap di mapOpenversePhoto.
   const aspect = mapAspect(orientation);
   if (aspect) url.searchParams.set('aspect_ratio', aspect);
   return url;

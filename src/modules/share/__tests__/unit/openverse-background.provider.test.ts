@@ -6,13 +6,13 @@ import {
 } from '../../infrastructure/openverse-background.provider';
 
 describe('buildOpenverseSearchUrl', () => {
-  it('selalu mature=false + license CC + tanpa sensitive', () => {
+  it('selalu mature=false + license CC, tanpa param sensitive', () => {
     const url = buildOpenverseSearchUrl('makan', 1, '12');
     expect(url.searchParams.get('mature')).toBe('false');
     expect(url.searchParams.get('license')).toBe(OPENVERSE_SAFE_LICENSES);
-    expect(url.searchParams.get('unstable__include_sensitive_results')).toBe(
-      'false',
-    );
+    expect(
+      url.searchParams.get('unstable__include_sensitive_results'),
+    ).toBeNull();
   });
 });
 
