@@ -8,6 +8,8 @@
 #        npx wrangler secret put JWT_PRIVATE_KEY       # PEM
 #        npx wrangler secret put JWT_PUBLIC_KEY        # PEM
 #        npx wrangler secret put RESEND_API_KEY        # opsional
+#        npx wrangler secret put PIXABAY_API_KEY       # latar share
+#        npx wrangler secret put UNSPLASH_ACCESS_KEY   # latar share (Access Key, bukan Secret Key)
 #        npx wrangler secret put PRONUNCIACION_GITHUB_TOKEN
 #        npx wrangler secret put PUBLIC_IMAGE_GITHUB_TOKEN
 #        …
@@ -118,4 +120,6 @@ crons = ["* * * * *"]
 #   npx wrangler secret put JWT_PUBLIC_KEY --env staging
 #   npx wrangler secret put PUBLIC_IMAGE_GITHUB_TOKEN --env staging
 #   npx wrangler secret put PRONUNCIACION_GITHUB_TOKEN --env staging
+#   npx wrangler secret put PIXABAY_API_KEY --env staging
+#   npx wrangler secret put UNSPLASH_ACCESS_KEY --env staging
 #   … (Resend, ImageKit, OAuth, FCM - sama seperti sebelumnya)
