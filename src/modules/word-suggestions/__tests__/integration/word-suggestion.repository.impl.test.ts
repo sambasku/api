@@ -249,7 +249,7 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
 
     const items = await feed.listRecentAppliedSuggestions(10);
     expect(items).toHaveLength(1);
-    expect(items[0].body).toBe('Mengusulkan perubahan · kete');
+    expect(items[0].body).toBe('Mengusulkan perubahan · "kete"');
 
     await db.update(words).set({ usageLabels: ['kasar'] }).where(eq(words.id, WORD));
     expect(await feed.listRecentAppliedSuggestions(10)).toHaveLength(0);
