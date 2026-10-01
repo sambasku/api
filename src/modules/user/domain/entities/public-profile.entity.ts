@@ -26,7 +26,11 @@ export interface PublicUserRow {
   avatarUrl: string | null;
 }
 
-export type PublicActivityKind = 'contribution' | 'comment' | 'verification';
+export type PublicActivityKind =
+  | 'contribution'
+  | 'comment'
+  | 'verification'
+  | 'vote';
 
 export interface PublicActivityItem {
   kind: PublicActivityKind;

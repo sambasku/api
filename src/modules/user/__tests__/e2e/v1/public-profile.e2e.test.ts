@@ -15,6 +15,7 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
   let app: any;
   let reviewerUsername: string;
   let contributorUsername: string;
+  let stamp: number;
 
   const request = (path: string, init: RequestInit = {}) =>
     app.request(path, {
@@ -29,9 +30,8 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, contributions, contributionReviews } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { users, contributions, contributionReviews, votes, words } =
+      await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -48,7 +48,7 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     const appModule = await import('@/app');
     app = appModule.app;
 
-    const stamp = Date.now();
+    stamp = Date.now();
     reviewerUsername = `rev${stamp}`;
     contributorUsername = `kon${stamp}`;
 
@@ -80,6 +80,35 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
       contributionId,
       reviewerId,
       status: 'approved',
+    });
+
+    // Kata feed-visible + vote: item `vote` harus muncul di aktivitas publik.
+    const { languages } = await import('@/shared/database/drizzle/schema');
+    const [lang] = await db.select().from(languages).limit(1);
+    const languageId = lang?.id ?? ulid26('01E2ELANGPROF');
+    if (!lang) {
+      await db
+        .insert(languages)
+        .values({ id: languageId, code: 'sbb', name: 'Sambas' });
+    }
+    const wordId = ulid26(`01E2EWORD${stamp}`);
+    await db.insert(words).values({
+      id: wordId,
+      lemma: `lemmaprof${stamp}`,
+      languageId,
+      status: 'published',
+      isVerified: true,
+      verifiedAt: new Date(),
+      createdBy: reviewerId,
+      wordType: 'word',
+    });
+    // Downvote contributor: harus keluar summary "perlu dicek ulang".
+    await db.insert(votes).values({
+      id: ulid26(`01E2EVOT${stamp}`),
+      userId: contributorId,
+      entityType: 'word',
+      entityId: wordId,
+      value: -1,
     });
   });
 
@@ -129,7 +158,9 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     expect(body.data.items.length).toBeGreaterThanOrEqual(1);
     const item = body.data.items[0];
     expect(item).toMatchObject({
-      kind: expect.stringMatching(/^(contribution|comment|verification)$/),
+      kind: expect.stringMatching(
+        /^(contribution|comment|verification|vote)$/,
+      ),
       occurred_at: expect.any(String),
       summary: expect.any(String),
     });
@@ -137,6 +168,20 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     expect(item).toHaveProperty('lemma');
     expect(item).not.toHaveProperty('user_id');
     expect(item).not.toHaveProperty('email');
+  });
+
+  it('GET /users/:username/activity → vote downvote contributor muncul', async () => {
+    const res = await get(`/api/v1/users/${contributorUsername}/activity`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const vote = body.data.items.find(
+      (entry: { kind: string }) => entry.kind === 'vote',
+    );
+    expect(vote).toBeTruthy();
+    expect(vote.summary).toContain('"');
+    expect(vote.summary).toMatch(/perlu dicek ulang$/);
+    expect(vote.lemma).toBe(`lemmaprof${stamp}`);
+    expect(vote.word_id).toBeTruthy();
   });
 
   it('GET username acak → 404 USER_NOT_FOUND', async () => {

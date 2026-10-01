@@ -7,6 +7,7 @@ import {
   meanings,
   pronunciations,
   users,
+  votes,
   wordAudios,
   wordImages,
   words,
@@ -216,6 +217,89 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         wordId: parent?.wordId ?? null,
         lemma,
         summary: lemma ? `Memverifikasi ${label}: ${lemma}` : `Memverifikasi ${label}`,
+      };
+    });
+  }
+
+  async listRecentVotes(
+    userId: string,
+    limit: number,
+  ): Promise<PublicActivityItem[]> {
+    // Vote publik user, hanya target bersistem kata (word/comment) yang
+    // katanya masih feed-visible: navigasi tetap menuju halaman kata.
+    // Target lain (discussion, discussion_reply) tidak punya lemma - dibuang.
+    // ponytail: dua query terpisah (vote word vs vote comment) lalu merge -
+    // target polymorphic tanpa FK tidak bisa satu FROM bersih.
+    // Upgrade: kolom word_id denormalized di votes.
+    // Epoch SECONDS (satuan kolom Drizzle mode:'timestamp'); NULL dibuang.
+    const occurredAt = sql<number>`coalesce(${votes.updatedAt}, ${votes.createdAt})`;
+    const orderBy = [desc(occurredAt), desc(votes.id)];
+    const select = {
+      id: votes.id,
+      value: votes.value,
+      occurredAt,
+      lemma: words.lemma,
+      wordId: words.id,
+    };
+
+    const wordVotes = await this.db
+      .select(select)
+      .from(votes)
+      .innerJoin(
+        words,
+        and(eq(votes.entityType, 'word'), eq(words.id, votes.entityId)),
+      )
+      .where(
+        and(
+          eq(votes.userId, userId),
+          eq(votes.entityType, 'word'),
+          isNull(words.deletedAt),
+          eq(words.status, 'published'),
+        ),
+      )
+      .orderBy(...orderBy)
+      .limit(limit);
+
+    const commentVotes = await this.db
+      .select(select)
+      .from(votes)
+      .innerJoin(
+        comments,
+        and(eq(votes.entityType, 'comment'), eq(comments.id, votes.entityId)),
+      )
+      .innerJoin(words, eq(words.id, comments.wordId))
+      .where(
+        and(
+          eq(votes.userId, userId),
+          eq(votes.entityType, 'comment'),
+          isNull(words.deletedAt),
+          eq(words.status, 'published'),
+        ),
+      )
+      .orderBy(...orderBy)
+      .limit(limit);
+
+    const merged = [...wordVotes, ...commentVotes]
+      .sort((a, b) => {
+        const t = b.occurredAt - a.occurredAt;
+        if (t !== 0) return t;
+        return b.id.localeCompare(a.id);
+      })
+      .slice(0, limit);
+
+    return merged.map((row) => {
+      const quoted = `"${row.lemma}"`;
+      // Copy identik dengan feed beranda: mobile membaca arah vote dari
+      // akhiran body ("perlu dicek ulang" = down, selain itu up).
+      return {
+        kind: 'vote' as const,
+        occurredAt: new Date(row.occurredAt * 1000),
+        wordId: row.wordId,
+        lemma: row.lemma,
+        summary:
+          row.value >= 0
+            ? `${quoted} sudah pas`
+            : `${quoted} perlu dicek ulang`,
       };
     });
   }

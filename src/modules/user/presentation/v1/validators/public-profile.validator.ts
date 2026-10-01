@@ -27,7 +27,7 @@ export const publicActivityResponseSchema = z.object({
   data: z.object({
     items: z.array(
       z.object({
-        kind: z.enum(['contribution', 'comment', 'verification']),
+        kind: z.enum(['contribution', 'comment', 'verification', 'vote']),
         occurred_at: z.string(),
         word_id: z.string().nullable(),
         lemma: z.string().nullable(),

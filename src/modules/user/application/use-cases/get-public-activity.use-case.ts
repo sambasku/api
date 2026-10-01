@@ -15,13 +15,14 @@ export class GetPublicActivityUseCase {
       throw new NotFoundError('USER_NOT_FOUND', 'User tidak ditemukan');
     }
 
-    const [contributions, comments, verifications] = await Promise.all([
-      this.publicUserRepo.listRecentApprovedContributions(user.id, PER_SOURCE),
-      this.publicUserRepo.listRecentPublishedComments(user.id, PER_SOURCE),
-      this.publicUserRepo.listRecentVerifications(user.id, PER_SOURCE),
-    ]);
+  const [contributions, comments, verifications, votes] = await Promise.all([
+    this.publicUserRepo.listRecentApprovedContributions(user.id, PER_SOURCE),
+    this.publicUserRepo.listRecentPublishedComments(user.id, PER_SOURCE),
+    this.publicUserRepo.listRecentVerifications(user.id, PER_SOURCE),
+    this.publicUserRepo.listRecentVotes(user.id, PER_SOURCE),
+  ]);
 
-    return [...contributions, ...comments, ...verifications]
+  return [...contributions, ...comments, ...verifications, ...votes]
       .sort((a, b) => {
         const t = b.occurredAt.getTime() - a.occurredAt.getTime();
         if (t !== 0) return t;

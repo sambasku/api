@@ -24,4 +24,6 @@ export interface PublicUserRepository {
   listRecentApprovedContributions(userId: string, limit: number): Promise<PublicActivityItem[]>;
   listRecentPublishedComments(userId: string, limit: number): Promise<PublicActivityItem[]>;
   listRecentVerifications(userId: string, limit: number): Promise<PublicActivityItem[]>;
+  /** Vote user ke word/comment yang masih feed-visible (26-api-my-votes). */
+  listRecentVotes(userId: string, limit: number): Promise<PublicActivityItem[]>;
 }

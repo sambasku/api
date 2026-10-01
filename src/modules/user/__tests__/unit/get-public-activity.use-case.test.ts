@@ -12,7 +12,7 @@ describe('GetPublicActivityUseCase', () => {
     await expect(uc.execute('tidakada')).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('merge 3 sumber, urut occurred_at desc, potong 20', async () => {
+  it('merge 4 sumber, urut occurred_at desc, potong 20', async () => {
     const now = Date.now();
     const repo = {
       findPublicByUsername: vi.fn().mockResolvedValue({
@@ -49,10 +49,23 @@ describe('GetPublicActivityUseCase', () => {
           summary: 'Memverifikasi Kata: nasi',
         },
       ]),
+      listRecentVotes: vi.fn().mockResolvedValue([
+        {
+          kind: 'vote',
+          occurredAt: new Date(now - 2000),
+          wordId: 'w2',
+          lemma: 'nasi',
+          summary: '"nasi" perlu dicek ulang',
+        },
+      ]),
     } as unknown as PublicUserRepository;
-
     const items = await new GetPublicActivityUseCase(repo).execute('budi');
-    expect(items).toHaveLength(3);
-    expect(items.map((i) => i.kind)).toEqual(['comment', 'verification', 'contribution']);
+    expect(items).toHaveLength(4);
+    expect(items.map((i) => i.kind)).toEqual([
+      'comment',
+      'verification',
+      'contribution',
+      'vote',
+    ]);
   });
 });
