@@ -13,6 +13,7 @@ import { requestDb } from '@/shared/middlewares/request-db.middleware';
 import {
   createAuthenticateMiddleware,
   createOptionalAuthenticateMiddleware,
+  createSoftAuthenticateMiddleware,
   scheduleAuthenticatedSideEffect,
 } from '@/shared/middlewares/authenticate.middleware';
 import { createTouchLastSeen } from '@/modules/auth/infrastructure/touch-last-seen';
@@ -522,6 +523,13 @@ const authenticate = createAuthenticateMiddleware(
 const optionalAuthenticate = createOptionalAuthenticateMiddleware(
   (token) => tokenService.verifyAccessToken(token),
   onAuthenticated,
+);
+/**
+ * Feed beranda: token sah → bisa sembunyikan karya sendiri; token apa pun
+ * selain itu tetap dapat feed publik. Tidak 401, dan tanpa presence touch.
+ */
+const softAuthenticate = createSoftAuthenticateMiddleware((token) =>
+  tokenService.verifyAccessToken(token),
 );
 const requireVoteWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
   scope: 'vote.write',
@@ -1443,7 +1451,10 @@ const activityController = new ActivityController({
   list: new ListActivityUseCase(activityRepo, commentBlocklistRepo),
   recordCardShare: new RecordCardShareUseCase(activityRepo),
 });
-app.route('/api/v1/activity', createActivityRoutes({ controller: activityController }));
+app.route(
+  '/api/v1/activity',
+  createActivityRoutes({ controller: activityController, softAuthenticate }),
+);
 app.route('/api/v1/words', createCardShareRoutes({ controller: activityController, authenticate }));
 
 // Latar kartu share - multi-provider (docs/backlogs/SHARE.md). Publik.

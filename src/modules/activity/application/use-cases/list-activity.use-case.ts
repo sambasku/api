@@ -49,16 +49,22 @@ export function censorFeedItems(items: ActivityItem[], blocked: string[]): Activ
   return out;
 }
 
+export type ListActivityInput = {
+  limit?: number;
+  cursor?: string;
+  /** Buang baris milik user ini. `undefined` = feed publik utuh (tamu). */
+  excludeUserId?: string;
+};
+
 export class ListActivityUseCase {
   constructor(
     private readonly activityRepo: ActivityRepository,
     private readonly blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>,
   ) {}
 
-  async execute(
-    limit = ACTIVITY_DEFAULT_LIMIT,
-    cursor?: string,
-  ): Promise<ListActivityPage> {
+  async execute(input: ListActivityInput): Promise<ListActivityPage> {
+    const { limit = ACTIVITY_DEFAULT_LIMIT, cursor, excludeUserId } = input;
+
     let before: ActivityCursor | undefined;
     if (cursor) {
       try {
@@ -74,19 +80,21 @@ export class ListActivityUseCase {
 
     const [sources, blocked] = await Promise.all([
       Promise.all([
-        this.activityRepo.listRecentWords(perSource, before),
-        this.activityRepo.listRecentComments(perSource, before),
-        this.activityRepo.listRecentVotes(perSource, before),
-        this.activityRepo.listRecentDiscussions(perSource, before),
+        this.activityRepo.listRecentWords(perSource, before, excludeUserId),
+        this.activityRepo.listRecentComments(perSource, before, excludeUserId),
+        this.activityRepo.listRecentVotes(perSource, before, excludeUserId),
+        this.activityRepo.listRecentDiscussions(perSource, before, excludeUserId),
         this.activityRepo.listRecentApprovedContributions(
           [...CONTRIB_ENTITY_TYPES],
           perSource * CONTRIB_ENTITY_TYPES.length,
           before,
+          excludeUserId,
         ),
+        // Tanpa penyaringan: search-miss tidak punya kolom user (actor null).
         this.activityRepo.listRecentVisibleSearchMisses(perSource, before),
-        this.activityRepo.listRecentWelcomes(perSource, before),
-        this.activityRepo.listRecentCardShares(perSource, before),
-        this.activityRepo.listRecentAppliedSuggestions(perSource, before),
+        this.activityRepo.listRecentWelcomes(perSource, before, excludeUserId),
+        this.activityRepo.listRecentCardShares(perSource, before, excludeUserId),
+        this.activityRepo.listRecentAppliedSuggestions(perSource, before, excludeUserId),
       ]),
       this.blocklist?.listAllActiveWords() ?? Promise.resolve([] as string[]),
     ]);

@@ -61,6 +61,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     const regBody = await reg.json();
     const userId = regBody.data.user_id as string;
     const username = regBody.data.username as string;
+    ownUsername = username;
 
     const [lang] = await db.select().from(languages).limit(1);
     const languageId = lang?.id ?? ulid26('01E2ELANGACT');
@@ -126,6 +127,8 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
 
   let token = '';
   let sharedWordId = '';
+  /** Username user fixture utama; dipakai assertion `exclude_self`. */
+  let ownUsername = '';
 
   it('POST /words/:id/card-shares: 201 lalu 200 (dedupe 24 jam), muncul di feed', async () => {
     const share = () =>
@@ -303,5 +306,86 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     // Feed harus benar-benar menurun, tidak hanya "semuanya masuk rentang".
     const sorted = [...ms].sort((a, b) => b - a);
     expect(ms).toEqual(sorted);
+  });
+
+  describe('exclude_self (feed beranda)', () => {
+    const feedUsernames = async (url: string, bearer?: string) => {
+      const res = await request(url, bearer ? { headers: { authorization: `Bearer ${bearer}` } } : {});
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        data: Array<{ kind: string; actor: { username: string | null } | null }>;
+      };
+      return {
+        res,
+        usernames: body.data.map((i) => i.actor?.username ?? null),
+        kinds: body.data.map((i) => i.kind),
+      };
+    };
+
+    it('tanpa flag: karya sendiri tetap muncul (back-compat)', async () => {
+      const { usernames } = await feedUsernames('/api/v1/activity?limit=50', token);
+      expect(usernames).toContain(ownUsername);
+    });
+
+    it('login + flag: tidak ada baris milik sendiri', async () => {
+      const { usernames, res } = await feedUsernames(
+        '/api/v1/activity?limit=50&exclude_self=true',
+        token,
+      );
+      expect(usernames).not.toContain(ownUsername);
+      // Response jadi per-identitas: cache per URL saja tidak boleh dipakai.
+      expect(res.headers.get('vary')).toContain('Authorization');
+    });
+
+    it('tamu + flag: 200 dan feed tetap publik penuh (bukan gate)', async () => {
+      const { usernames } = await feedUsernames(
+        '/api/v1/activity?limit=50&exclude_self=true',
+      );
+      // Fixture utama ikut terlihat - tanpa token sah tidak ada yang bisa disaring.
+      expect(usernames).toContain(ownUsername);
+    });
+
+    it('token basi + flag: 200 dengan feed lengkap, bukan 401', async () => {
+      const { usernames } = await feedUsernames(
+        '/api/v1/activity?limit=50&exclude_self=true',
+        'bukan-token-yang-sah',
+      );
+      // Soft-auth menelan token buruk. Kalau ini 401, Home error total padahal
+      // feed publiknya tetap bisa dibaca.
+      expect(usernames).toContain(ownUsername);
+    });
+
+    it('flag tetap menyaring lebih dari comment/vote/welcome', async () => {
+      const { kinds, usernames } = await feedUsernames(
+        '/api/v1/activity?limit=50&exclude_self=true',
+        token,
+      );
+      // Tidak ada baris sendiri di jenis mana pun, termasuk welcome.
+      expect(usernames).not.toContain(ownUsername);
+      // Dan feed tidak jadi kosong / tidak kehilangan semua jenis.
+      expect(kinds.length).toBeGreaterThan(0);
+      expect(new Set(kinds).size).toBeGreaterThan(1);
+    });
+
+    it('flag tidak membuat halaman NEXT kosong', async () => {
+      const first = (await (
+        await request('/api/v1/activity?limit=2&exclude_self=true', {
+          headers: { authorization: `Bearer ${token}` },
+        })
+      ).json()) as { meta: { next_cursor: string | null } };
+
+      if (!first.meta.next_cursor) return; // fixture tipis: tidak ada halaman 2
+      const second = (await (
+        await request(
+          `/api/v1/activity?limit=2&cursor=${encodeURIComponent(first.meta.next_cursor)}`,
+          { headers: { authorization: `Bearer ${token}` } },
+        )
+      ).json()) as { data: Array<{ actor: { username: string | null } | null }> };
+
+      expect(second.data.length).toBeGreaterThan(0);
+      for (const item of second.data) {
+        expect(item.actor?.username ?? null).not.toBe(ownUsername);
+      }
+    });
   });
 });

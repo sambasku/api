@@ -114,6 +114,32 @@ function feedVisibleWordSql() {
   return and(isNull(words.deletedAt), eq(words.status, 'published'), feedSafeUsageLabelsSql());
 }
 
+/**
+ * Buang baris milik `excludeUserId` dari sebuah sumber.
+ *
+ * `undefined` → tak ada penyaringan (feed publik utuh, termasuk untuk tamu).
+ *
+ * Kolom yang `.notNull()` aman pakai `ne` biasa. Kolom yang nullable perlu
+ * `or(isNull(...))`: `NULL <> 'x'`evaluate jadi NULL, bukan true, jadi kata
+ * impor sistem (`words.createdBy` null) ikut lenyap tanpa sengaja.
+ */
+function notSelfSql(
+  column: AnyColumn,
+  excludeUserId: string | undefined,
+): SQL | undefined {
+  if (!excludeUserId) return undefined;
+  return ne(column, excludeUserId);
+}
+
+/** Sama seperti [notSelfSql], untuk kolom sumber yang boleh null. */
+function notSelfOrNullSql(
+  column: AnyColumn,
+  excludeUserId: string | undefined,
+): SQL | undefined {
+  if (!excludeUserId) return undefined;
+  return or(isNull(column), ne(column, excludeUserId));
+}
+
 /** Lemma di body feed selalu dikutip (sama seperti `Mencari "…"`); mobile menebalkannya. */
 function quoted(lemma: string): string {
   return `"${lemma}"`;
@@ -155,6 +181,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   async listRecentWords(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     const occurredAt = occurredAtSql(words.verifiedAt, words.createdAt);
     const rows = await this.db
@@ -174,6 +201,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           isNull(words.deletedAt),
           eq(words.status, 'published'),
           feedSafeUsageLabelsSql(),
+          notSelfOrNullSql(words.createdBy, excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, words.id, before, 'word'),
         ),
@@ -215,6 +243,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   async listRecentComments(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     const occurredAt = occurredAtSql(comments.createdAt);
     const rows = await this.db
@@ -237,6 +266,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           eq(comments.status, 'published'),
           isNull(comments.deletedAt),
           feedVisibleWordSql(),
+          notSelfSql(comments.userId, excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, comments.id, before, 'comment'),
         ),
@@ -270,6 +300,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   async listRecentVotes(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     const occurredAt = occurredAtSql(votes.updatedAt, votes.createdAt);
     const rows = await this.db
@@ -289,6 +320,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       .where(
         and(
           isNull(users.deletedAt),
+          notSelfSql(votes.userId, excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, votes.id, before, 'vote'),
         ),
@@ -349,6 +381,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   async listRecentDiscussions(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     const occurredAt = occurredAtSql(discussions.createdAt);
     const rows = await this.db
@@ -366,6 +399,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       .where(
         and(
           eq(discussions.status, 'published'),
+          notSelfSql(discussions.userId, excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, discussions.id, before, 'discussion'),
         ),
@@ -401,6 +435,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     entityTypes: Array<'word_image' | 'word_audio' | 'pronunciation' | 'example'>,
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     if (entityTypes.length === 0) return [];
 
@@ -423,6 +458,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           inArray(contributions.status, ['approved', 'corrected']),
           isNull(contributions.deletedAt),
           inArray(contributions.entityType, entityTypes),
+          notSelfSql(contributions.userId, excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, contributions.id, before, entityTypes),
         ),
@@ -464,6 +500,9 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     });
   }
 
+  // Tidak menerima `excludeUserId` (port juga tidak): search-miss tidak punya
+  // kolom user sama sekali, `actor` selalu null ("Seseorang"), jadi tidak pernah
+  // bisa jadi "karya sendiri".
   async listRecentVisibleSearchMisses(
     limit: number,
     before?: ActivityCursor,
@@ -512,6 +551,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   async listRecentWelcomes(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     // Tampil setelah akun terverifikasi (OTP email atau OAuth langsung verified).
     // Timeline aksi "bergabung" = waktu verifikasi; OAuth/legacy tanpa kolom
@@ -533,6 +573,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           eq(users.isActive, true),
           isNull(users.deletedAt),
           ne(users.id, ANONIM_USER_ID),
+          notSelfSql(users.id, excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, users.id, before, 'welcome'),
         ),
@@ -566,6 +607,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   async listRecentCardShares(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     const occurredAt = occurredAtSql(wordCardShares.createdAt);
     const rows = await this.db
@@ -585,6 +627,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         and(
           isNull(users.deletedAt),
           feedVisibleWordSql(),
+          notSelfSql(wordCardShares.userId, excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, wordCardShares.id, before, 'card_share'),
         ),
@@ -610,6 +653,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
   async listRecentAppliedSuggestions(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     // Tayang dulu (baseline) sejak dibuat; sisanya sejak disetujui.
     const appliedAt = sql`CASE WHEN ${wordEditSuggestions.baselineSnapshot} IS NOT NULL
@@ -645,6 +689,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
             ),
           ),
           feedVisibleWordSql(),
+          notSelfSql(wordEditSuggestions.userId, excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, wordEditSuggestions.id, before, 'suggestion'),
         ),

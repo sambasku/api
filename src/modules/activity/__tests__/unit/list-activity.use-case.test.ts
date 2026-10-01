@@ -55,7 +55,7 @@ describe('ListActivityUseCase - sensor blocklist', () => {
       ]),
     });
     const blocklist = { listAllActiveWords: vi.fn().mockResolvedValue(['bodoh']) };
-    const page = await new ListActivityUseCase(repo, blocklist).execute(20);
+    const page = await new ListActivityUseCase(repo, blocklist).execute({ limit: 20 });
     expect(page.items.map((i) => i.id)).toEqual([
       'comment:c1',
       'search_miss:s2',
@@ -93,7 +93,7 @@ describe('ListActivityUseCase', () => {
     });
 
     const useCase = new ListActivityUseCase(repo);
-    const page = await useCase.execute(20);
+    const page = await useCase.execute({ limit: 20 });
 
     expect(page.items.map((r) => r.kind)).toEqual([
       'vote',
@@ -105,14 +105,14 @@ describe('ListActivityUseCase', () => {
     ]);
     expect(page.hasMore).toBe(false);
     expect(page.nextCursor).toBeNull();
-    expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined);
+    expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined, undefined);
     expect(repo.listRecentApprovedContributions).toHaveBeenCalled();
     expect(repo.listRecentWelcomes).toHaveBeenCalled();
   });
 
   it('cursor rusak → ValidationError', async () => {
     const useCase = new ListActivityUseCase(emptyRepo());
-    await expect(useCase.execute(20, 'bukan-cursor')).rejects.toBeInstanceOf(
+    await expect(useCase.execute({ limit: 20, cursor: 'bukan-cursor' })).rejects.toBeInstanceOf(
       ValidationError,
     );
   });
@@ -128,7 +128,7 @@ describe('ListActivityUseCase', () => {
       ]),
     });
     const useCase = new ListActivityUseCase(repo);
-    const page = await useCase.execute(20, cursor);
+    const page = await useCase.execute({ limit: 20, cursor });
 
     expect(page.items).toHaveLength(1);
     expect(page.items[0].id).toBe('vote:v0');
@@ -138,6 +138,7 @@ describe('ListActivityUseCase', () => {
         id: 'vote:v1',
         createdAt: expect.any(Date),
       }),
+      undefined,
     );
   });
 
@@ -157,10 +158,58 @@ describe('ListActivityUseCase', () => {
       listRecentComments: vi.fn().mockResolvedValue(comments),
     });
     const useCase = new ListActivityUseCase(repo);
-    const page = await useCase.execute(5);
+    const page = await useCase.execute({ limit: 5 });
 
     expect(page.items).toHaveLength(5);
     expect(page.hasMore).toBe(true);
     expect(page.nextCursor).toBeTruthy();
+  });
+});
+
+describe('ListActivityUseCase - excludeUserId diteruskan ke semua sumber', () => {
+  it('meneruskan excludeUserId ke 8 sumber yang punya kolom user', async () => {
+    const repo = emptyRepo();
+    await new ListActivityUseCase(repo).execute({
+      limit: 20,
+      excludeUserId: '01SELF',
+    });
+
+    expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined, '01SELF');
+    expect(repo.listRecentComments).toHaveBeenCalledWith(8, undefined, '01SELF');
+    expect(repo.listRecentVotes).toHaveBeenCalledWith(8, undefined, '01SELF');
+    expect(repo.listRecentDiscussions).toHaveBeenCalledWith(8, undefined, '01SELF');
+    expect(repo.listRecentWelcomes).toHaveBeenCalledWith(8, undefined, '01SELF');
+    expect(repo.listRecentCardShares).toHaveBeenCalledWith(8, undefined, '01SELF');
+    expect(repo.listRecentAppliedSuggestions).toHaveBeenCalledWith(
+      8,
+      undefined,
+      '01SELF',
+    );
+    expect(repo.listRecentApprovedContributions).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Number),
+      undefined,
+      '01SELF',
+    );
+  });
+
+  it('search-miss TIDAK diberi excludeUserId (kolom user tidak ada)', async () => {
+    const repo = emptyRepo();
+    await new ListActivityUseCase(repo).execute({
+      limit: 20,
+      excludeUserId: '01SELF',
+    });
+
+    // Kalau argumen ketiga ikut dikirim, panggilan 2-argumen ini akan gagal.
+    expect(repo.listRecentVisibleSearchMisses).toHaveBeenCalledWith(8, undefined);
+  });
+
+  it('tanpa excludeUserId → undefined di semua sumber (feed publik utuh)', async () => {
+    const repo = emptyRepo();
+    await new ListActivityUseCase(repo).execute({ limit: 20 });
+
+    expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined, undefined);
+    expect(repo.listRecentComments).toHaveBeenCalledWith(8, undefined, undefined);
+    expect(repo.listRecentWelcomes).toHaveBeenCalledWith(8, undefined, undefined);
   });
 });

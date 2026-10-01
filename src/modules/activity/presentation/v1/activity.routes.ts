@@ -18,9 +18,15 @@ const json = <T extends z.ZodType>(schema: T) => ({
 });
 
 /** GET /api/v1/activity - feed lintas aktivitas publik (37-api). */
-export function createActivityRoutes(deps: { controller: ActivityController }) {
+export function createActivityRoutes(deps: {
+  controller: ActivityController;
+  softAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 100, duration: 60 }));
+  // Setelah rateLimit supaya kuota tamu 100/menit/IP tetap terukur untuk semua,
+  // termasuk yang tidak mengirim token sama sekali.
+  routes.use('/', deps.softAuthenticate);
 
   const listRoute = createRoute({
     method: 'get',
@@ -30,7 +36,10 @@ export function createActivityRoutes(deps: { controller: ActivityController }) {
     description:
       'Gabungan kata baru, komentar, vote, diskusi, kontribusi media, ' +
       'search-miss tayang, dan selamat datang akun terverifikasi. ' +
-      'Tanpa auth. Cursor opaque (created_at + id); limit 1-50 (default 20).',
+      'Auth opsional (tidak pernah 401). Cursor opaque (created_at + id); ' +
+      'limit 1-50 (default 20). ' +
+      '`exclude_self=true` membuang baris milik user yang sedang login; ' +
+      'tanpa token sah flag diabaikan dan feed tetap publik penuh.',
     request: { query: listActivityQuerySchema },
     responses: {
       200: {

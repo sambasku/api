@@ -108,6 +108,42 @@ export function createOptionalAuthenticateMiddleware(
   });
 }
 
+/**
+ * Auth "lunak": Bearer valid → set `user`; apa pun yang lain (tanpa header,
+ * token rusak, token kedaluarsa) → lanjut sebagai tamu. **Tidak pernah 401.**
+ *
+ * Beda dari [createOptionalAuthenticateMiddleware] yang sengaja 401 di token
+ * buruk: itu untuk endpoint yang atribusi loginnya wajib benar (kontribusi
+ * anonim, laporan bug). Yang ini untuk endpoint yang tetap berguna sebagai
+ * tamu - hanya lebih kaya saat login, tidak pernah lebih buruk.
+ *
+ * Dipakai `GET /activity` + query `exclude_self`. Token basi di sana akan
+ * memicu refresh + retry lalu 401 apa adanya, sehingga Home error total -
+ * padahal feed publiknya tetap bisa dibaca. Di sini token basi hanya berarti
+ * "tampilkan feed lengkap".
+ *
+ * Sengaja tidak menerima `onAuthenticated`: feed adalah baca tinggi frekuensi,
+ * presence harus tetap digerakkan aksi nyata, bukan sekadar membuka beranda.
+ */
+export function createSoftAuthenticateMiddleware(verifyAccessToken: VerifyFn) {
+  return createMiddleware<{ Variables: AppVariables }>(async (c, next) => {
+    const header = c.req.header('Authorization') ?? '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : undefined;
+    if (!token) {
+      await next();
+      return;
+    }
+
+    try {
+      applyUser(c, await verifyAccessToken(token));
+    } catch {
+      // Sengaja ditelan. Route ini tidak butuh identitas - tanpa token sah
+      // pemanggil tetap dapat feed publik, hanya tanpa penyaringan `exclude_self`.
+    }
+    await next();
+  });
+}
+
 /** Export untuk wiring composition root - schedule touch di background. */
 export function scheduleAuthenticatedSideEffect(
   c: Context,
