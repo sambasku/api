@@ -13,8 +13,14 @@ export class ShareController {
     private deps: {
       listBackgrounds: ListShareBackgroundsUseCase;
       listProviders: () => ShareBackgroundProviderInfo[];
+      trackUnsplashDownload: (id: string) => Promise<boolean>;
     },
   ) {}
+
+  async trackUnsplashDownload(c: Context, id: string) {
+    const tracked = await this.deps.trackUnsplashDownload(id);
+    return c.json({ success: true as const, data: { tracked } });
+  }
 
   async backgrounds(
     c: Context,

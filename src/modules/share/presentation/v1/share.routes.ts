@@ -8,6 +8,8 @@ import {
   listShareBackgroundProvidersResponseSchema,
   listShareBackgroundsQuerySchema,
   listShareBackgroundsResponseSchema,
+  trackUnsplashDownloadBodySchema,
+  trackUnsplashDownloadResponseSchema,
 } from './validators/share-backgrounds.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -53,6 +55,32 @@ export function createShareRoutes(deps: { controller: ShareController }) {
       },
       429: { description: 'Rate limit', content: json(errorResponseSchema) },
     },
+  });
+
+  const trackUnsplashDownloadRoute = createRoute({
+    method: 'post',
+    path: '/backgrounds/unsplash/download',
+    tags: ['Share'],
+    summary: 'Catat download foto Unsplash yang dipilih user',
+    description:
+      'Wajib menurut Unsplash API Guidelines: dipanggil saat user memilih foto ' +
+      'Unsplash di Media Explorer. Proxy ke `GET /photos/{id}/download` ' +
+      '(Access Key tetap di server). `tracked:false` bila kunci belum di-set ' +
+      'atau upstream gagal.',
+    request: { body: { content: json(trackUnsplashDownloadBodySchema) } },
+    responses: {
+      200: {
+        description: 'Hasil pelacakan',
+        content: json(trackUnsplashDownloadResponseSchema),
+      },
+      400: { description: 'ID foto tidak valid', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(trackUnsplashDownloadRoute, (c) => {
+    const { id } = c.req.valid('json');
+    return deps.controller.trackUnsplashDownload(c, id) as never;
   });
 
   routes.openapi(backgroundsRoute, (c) => {

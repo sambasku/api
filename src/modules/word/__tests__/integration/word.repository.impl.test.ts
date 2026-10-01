@@ -431,6 +431,25 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
     expect(await db.select().from(wordCategories).where(eq(wordCategories.wordId, word.id))).toHaveLength(1);
   });
 
+  it('updateWithRelations: atribusi foto stock bertahan saat form edit tidak mengirimnya', async () => {
+    const image = {
+      url: 'https://images.unsplash.com/photo-1',
+      provider: 'unsplash',
+      providerFileId: 'abc',
+      isPrimary: true,
+    };
+    const attribution = { name: 'Ada', url: 'https://unsplash.com/@ada' };
+    const word = await repo.saveWithRelations(
+      baseWord({ images: [{ ...image, attribution }] }),
+      ACTOR,
+    );
+
+    await repo.updateWithRelations(word.id, baseWord({ images: [image] }), ACTOR);
+
+    const detail = await repo.findDetailById(word.id);
+    expect(detail?.images[0]?.attribution).toEqual(attribution);
+  });
+
   it('saveWithRelations + findDetailById: gambar contoh tersimpan (provider-agnostic)', async () => {
     const word = await repo.saveWithRelations(
       baseWord({
@@ -458,6 +477,7 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
         altText: 'Orang sedang makan',
         isPrimary: true,
         contentWarnings: [],
+        attribution: null,
         // ImageKit staging tidak auto-verified; kata induk juga belum verified
         isVerified: false,
       },

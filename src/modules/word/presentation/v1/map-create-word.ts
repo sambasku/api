@@ -4,7 +4,10 @@ import type {
   MeaningOverrideDto,
 } from '../../application/dto/create-word.dto';
 import type { UpdateWordDto } from '../../application/dto/update-word.dto';
-import { resolveWordImageProvider } from '../../domain/word-image-provider';
+import {
+  resolveWordImageProvider,
+  stockImageAttribution,
+} from '../../domain/word-image-provider';
 import type { CreateWordBody } from './validators/create-word.validator';
 import type { UpdateWordBody } from './validators/update-word.validator';
 
@@ -57,15 +60,19 @@ export function toCreateWordDto(body: CreateWordBody, imageProviderName: string)
       notes: v.notes,
     })),
     pronunciation: body.pronunciation,
-    images: body.images?.map((img) => ({
-      url: img.url,
-      provider: resolveWordImageProvider(img.provider, imageProviderName),
-      providerFileId: img.provider_file_id,
-      sha: img.sha ?? null,
-      altText: img.alt_text,
-      isPrimary: img.is_primary,
-      contentWarnings: img.content_warnings ?? [],
-    })),
+    images: body.images?.map((img) => {
+      const provider = resolveWordImageProvider(img.provider, imageProviderName);
+      return {
+        url: img.url,
+        provider,
+        providerFileId: img.provider_file_id,
+        sha: img.sha ?? null,
+        altText: img.alt_text,
+        isPrimary: img.is_primary,
+        contentWarnings: img.content_warnings ?? [],
+        attribution: stockImageAttribution(provider, img.attribution),
+      };
+    }),
     status: body.status,
     ...(body.search_miss_id ? { searchMissId: body.search_miss_id } : {}),
   };
@@ -143,15 +150,19 @@ function toInlineWordDto(w: InlineWordBody, imageProviderName: string): InlineWo
       notes: v.notes,
     })),
     pronunciation: w.pronunciation,
-    images: w.images?.map((img) => ({
-      url: img.url,
-      provider: resolveWordImageProvider(img.provider, imageProviderName),
-      providerFileId: img.provider_file_id,
-      sha: img.sha ?? null,
-      altText: img.alt_text,
-      isPrimary: img.is_primary,
-      contentWarnings: img.content_warnings ?? [],
-    })),
+    images: w.images?.map((img) => {
+      const provider = resolveWordImageProvider(img.provider, imageProviderName);
+      return {
+        url: img.url,
+        provider,
+        providerFileId: img.provider_file_id,
+        sha: img.sha ?? null,
+        altText: img.alt_text,
+        isPrimary: img.is_primary,
+        contentWarnings: img.content_warnings ?? [],
+        attribution: stockImageAttribution(provider, img.attribution),
+      };
+    }),
     status: w.status,
   };
 }

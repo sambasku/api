@@ -7,6 +7,7 @@ import type {
 } from '../application/ports/share-background-provider.port';
 
 const UNSPLASH_SEARCH_URL = 'https://api.unsplash.com/search/photos';
+const UNSPLASH_PHOTOS_URL = 'https://api.unsplash.com/photos';
 const FETCH_TIMEOUT_MS = 8_000;
 const POPULAR_FALLBACK_QUERY = 'nature';
 
@@ -80,6 +81,31 @@ export class UnsplashBackgroundProvider implements ShareBackgroundProviderPort {
     }
 
     return mapUnsplashSearch(body);
+  }
+
+  /**
+   * GET /photos/:id/download - menaikkan counter Downloads di Unsplash.
+   * Gagal tidak dilempar: pelacakan tidak boleh menghalangi user.
+   */
+  async trackDownload(id: string): Promise<boolean> {
+    const key = this.accessKey.trim();
+    if (!key) return false;
+    try {
+      const res = await fetch(
+        `${UNSPLASH_PHOTOS_URL}/${encodeURIComponent(id)}/download`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Client-ID ${key}`,
+          },
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        },
+      );
+      return res.ok;
+    } catch {
+      return false;
+    }
   }
 }
 

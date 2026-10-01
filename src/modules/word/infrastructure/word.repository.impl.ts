@@ -74,6 +74,7 @@ import {
   USAGE_LABEL_SET,
 } from '@/shared/constants/usage-labels';
 import type { ImageContentWarning } from '@/shared/constants/image-content-warnings';
+import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
 import { IMAGE_CONTENT_WARNING_SET } from '@/shared/constants/image-content-warnings';
 
 function toUsageLabels(raw: unknown): UsageLabel[] {
@@ -991,6 +992,7 @@ export class WordRepositoryImpl implements WordRepository {
         altText: i.altText,
         isPrimary: i.isPrimary,
         contentWarnings: toContentWarnings(i.contentWarnings),
+        attribution: i.attribution ?? null,
         isVerified: i.isVerified,
         ...(includeAll
           ? { status: i.status as ChildStatus, isCorrected: i.isCorrected }
@@ -1938,6 +1940,7 @@ export class WordRepositoryImpl implements WordRepository {
       altText?: string | null;
       isPrimary: boolean;
       contentWarnings?: ImageContentWarning[];
+      attribution?: WordImageAttribution | null;
       status: ChildStatus;
       isVerified: boolean;
     },
@@ -1956,6 +1959,7 @@ export class WordRepositoryImpl implements WordRepository {
             altText: data.altText ?? null,
             isPrimary: data.isPrimary,
             contentWarnings: data.contentWarnings ?? [],
+            attribution: data.attribution ?? null,
             status: data.status,
             isVerified: data.isVerified,
             createdBy: actorId,
@@ -2577,11 +2581,33 @@ export class WordRepositoryImpl implements WordRepository {
         await tx.delete(wordCategories).where(eq(wordCategories.wordId, id));
         await tx.delete(lexicalRelations).where(eq(lexicalRelations.sourceWordId, id));
         await tx.delete(wordVariants).where(eq(wordVariants.wordId, id));
+        // Form edit (console) tidak mengirim atribusi: pertahankan kredit lama
+        // per (provider, provider_file_id) agar PUT full-replace tidak menghapusnya.
+        const prevAttribution = new Map(
+          (
+            await tx
+              .select({
+                provider: wordImages.provider,
+                providerFileId: wordImages.providerFileId,
+                attribution: wordImages.attribution,
+              })
+              .from(wordImages)
+              .where(eq(wordImages.wordId, id))
+          ).map((r) => [`${r.provider}:${r.providerFileId}`, r.attribution]),
+        );
         await tx.delete(wordImages).where(eq(wordImages.wordId, id));
         await tx.delete(pronunciations).where(eq(pronunciations.wordId, id));
 
         // Insert children baru (pola sama dengan saveWithRelations)
-        await this.insertChildren(tx, id, word, actorId);
+        const wordWithAttribution: WordToSave = {
+          ...word,
+          images: word.images?.map((img) => ({
+            ...img,
+            attribution:
+              img.attribution ?? prevAttribution.get(`${img.provider}:${img.providerFileId}`) ?? null,
+          })),
+        };
+        await this.insertChildren(tx, id, wordWithAttribution, actorId);
         await this.restoreWordAudios(tx, id, audioSnapshots);
 
         // Catat kontribusi update - status antrean turunan dari status entity
@@ -2871,6 +2897,7 @@ export class WordRepositoryImpl implements WordRepository {
           altText: img.altText ?? null,
           isPrimary: img.isPrimary ?? false,
           contentWarnings: img.contentWarnings ?? [],
+          attribution: img.attribution ?? null,
           status: childStatusOf(word.status),
           // Stock/github auto-verified; ImageKit staging menunggu tinjauan
           isVerified: wordImageIsAutoVerified(img.provider) || word.isVerified,

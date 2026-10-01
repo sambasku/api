@@ -1,5 +1,6 @@
 import type { UsageLabel } from '@/shared/constants/usage-labels';
 import type { ImageContentWarning } from '@/shared/constants/image-content-warnings';
+import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
 
 // Entitas domain - murni TypeScript, tidak tahu Drizzle/HTTP
 // Section 22 (approval gate): pending_review/rejected hanya di-set sistem
@@ -126,6 +127,8 @@ export interface WordDetail extends Word {
     isPrimary: boolean;
     /** Peringatan visual per foto (closed enum). */
     contentWarnings: ImageContentWarning[];
+    /** Kredit foto stock; null untuk upload user / baris lama. */
+    attribution?: WordImageAttribution | null;
     status?: ChildStatus;
     /** selalu diisi agar mapper publik bisa redact staging ImageKit */
     isVerified: boolean;

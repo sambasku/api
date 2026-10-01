@@ -1454,6 +1454,8 @@ const shareController = new ShareController({
     env.SHARE_BACKGROUNDS_CACHE_TTL_SECONDS,
   ),
   listProviders: () => listShareBackgroundProviderInfos(shareBackgroundProviders),
+  trackUnsplashDownload: async (id) =>
+    (await shareBackgroundProviders.get('unsplash')?.trackDownload?.(id)) ?? false,
 });
 app.route('/api/v1/share', createShareRoutes({ controller: shareController }));
 

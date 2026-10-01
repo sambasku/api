@@ -546,6 +546,9 @@ export class WordController {
           content_warnings: img.contentWarnings ?? [],
           // Publik juga butuh is_verified agar klien blur/pending tanpa tebak placehold.co
           is_verified: img.isVerified ?? false,
+          // Hanya baris stock yang punya atribusi, jadi provider di sini aman
+          // untuk publik (staging imagekit tidak pernah ikut terekspos).
+          attribution: img.attribution ? { ...img.attribution, provider: img.provider } : null,
           ...(opts.redactStagingImages
             ? {}
             : {
@@ -978,6 +981,7 @@ export class WordController {
           altText: body.alt_text,
           isPrimary: body.is_primary,
           contentWarnings: body.content_warnings ?? [],
+          attribution: body.attribution,
         },
         actor,
       ),

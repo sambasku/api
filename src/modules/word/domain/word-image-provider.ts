@@ -1,3 +1,5 @@
+import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
+
 /**
  * Provider gambar kata: upload storage aktif (github/imagekit) ATAU stock
  * Media Explorer (pixabay/openverse/unsplash). Client boleh kirim provider stock
@@ -60,6 +62,14 @@ export function resolveWordImageProvider(
     return 'imagekit';
   }
   return activeStorageProvider;
+}
+
+/** Atribusi hanya disimpan untuk provider stock; selain itu dibuang. */
+export function stockImageAttribution(
+  provider: string,
+  attribution: WordImageAttribution | undefined,
+): WordImageAttribution | null {
+  return attribution && isStockWordImageProvider(provider) ? attribution : null;
 }
 
 /** Gambar stock / sudah di GitHub publik dianggap aman tanpa gate staging. */

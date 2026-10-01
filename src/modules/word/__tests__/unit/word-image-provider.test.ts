@@ -3,6 +3,7 @@ import {
   isAllowedStockImageUrl,
   isStockWordImageProvider,
   resolveWordImageProvider,
+  stockImageAttribution,
 } from '../../domain/word-image-provider';
 import { wordImageInputSchema } from '../../presentation/v1/validators/word-image-input';
 
@@ -57,5 +58,35 @@ describe('wordImageInputSchema', () => {
       provider_file_id: 'assets/words/01.jpg',
     });
     expect(parsed.provider).toBeUndefined();
+  });
+
+  it('menerima atribusi stock dan menolak URL atribusi non-https', () => {
+    const base = {
+      url: 'https://images.unsplash.com/photo-1',
+      provider: 'unsplash',
+      provider_file_id: 'abc',
+    };
+    const parsed = wordImageInputSchema.parse({
+      ...base,
+      attribution: { name: 'Ada', url: 'https://unsplash.com/@ada' },
+    });
+    expect(parsed.attribution?.name).toBe('Ada');
+    expect(
+      wordImageInputSchema.safeParse({
+        ...base,
+        attribution: { name: 'Ada', url: 'http://unsplash.com/@ada' },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('stockImageAttribution', () => {
+  const attribution = { name: 'Ada', license: 'CC BY 2.0' };
+
+  it('disimpan untuk provider stock, dibuang untuk upload user', () => {
+    expect(stockImageAttribution('openverse', attribution)).toEqual(attribution);
+    expect(stockImageAttribution('github', attribution)).toBeNull();
+    expect(stockImageAttribution('imagekit', attribution)).toBeNull();
+    expect(stockImageAttribution('pixabay', undefined)).toBeNull();
   });
 });

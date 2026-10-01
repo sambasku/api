@@ -351,6 +351,13 @@
       "when": 1794900000000,
       "tag": "0049_timestamp-unit-repair",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1795000000000,
+      "tag": "0050_word-image-attribution",
+      "breakpoints": true
     }
   ]
 }
