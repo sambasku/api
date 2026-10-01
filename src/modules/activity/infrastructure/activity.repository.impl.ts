@@ -114,6 +114,11 @@ function feedVisibleWordSql() {
   return and(isNull(words.deletedAt), eq(words.status, 'published'), feedSafeUsageLabelsSql());
 }
 
+/** Lemma di body feed selalu dikutip (sama seperti `Mencari "…"`); mobile menebalkannya. */
+function quoted(lemma: string): string {
+  return `"${lemma}"`;
+}
+
 function snippet(text: string, max = 120): string {
   const t = text.trim();
   if (t.length <= max) return t;
@@ -122,7 +127,7 @@ function snippet(text: string, max = 120): string {
 
 function searchMissBody(term: string): string {
   const shown = term.trim() || '…';
-  return `Mencari "${shown}" - belum ada di kamus. Bantu isi.`;
+  return `Mencari "${shown}" - belum ada di kamus.`;
 }
 
 /** Term sama dengan lemma berlabel terlarang: jangan diiklankan di feed. */
@@ -198,7 +203,9 @@ export class ActivityRepositoryImpl implements ActivityRepository {
                 avatarUrl: row.authorDeletedAt ? null : (row.avatarUrl ?? null),
               }
             : null,
-        body: sense ? `${row.lemma} · ${snippet(sense, 80)}` : row.lemma,
+        body: sense
+          ? `${quoted(row.lemma)} · ${snippet(sense, 80)}`
+          : quoted(row.lemma),
         subtitle: 'Baru ditambahkan',
         target: { type: 'word', id: row.id },
       };
@@ -308,14 +315,17 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         row.authorDeletedAt,
       );
       const preview = previewMap.get(`${row.entityType}:${row.entityId}`);
-      const targetLabel =
-        preview?.label ||
-        (row.entityType === 'discussion' ? 'diskusi' : 'entri kamus');
-      // Netral, bukan vonis. Mobile membaca arah ikon dari akhiran ini.
+      const targetLabel = preview?.label
+        ? quoted(preview.label)
+        : row.entityType === 'discussion'
+          ? 'Diskusi'
+          : 'Entri kamus';
+      // Netral, bukan vonis; nama actor sudah jadi subjek di atas body.
+      // Mobile membaca arah ikon dari akhiran ini.
       const body =
         row.value >= 0
-          ? `Menandai ${targetLabel} sudah pas`
-          : `Menandai ${targetLabel} perlu dicek ulang`;
+          ? `${targetLabel} sudah pas`
+          : `${targetLabel} perlu dicek ulang`;
       return {
         id: `vote:${row.id}`,
         kind: 'vote' as const,
@@ -447,7 +457,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
           displayName,
           avatarUrl: row.authorDeletedAt ? null : (row.avatarUrl ?? null),
         },
-        body: lemma ? `${action} · ${lemma}` : action,
+        body: lemma ? `${action} · ${quoted(lemma)}` : action,
         subtitle: lemma ?? null,
         target: parent?.wordId ? { type: 'word', id: parent.wordId } : null,
       };
@@ -591,7 +601,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         displayName: row.displayName ?? row.username,
         avatarUrl: row.avatarUrl ?? null,
       },
-      body: `Membagikan kartu · ${row.lemma}`,
+      body: `Membagikan kartu · ${quoted(row.lemma)}`,
       subtitle: row.lemma,
       target: { type: 'word', id: row.wordId },
     }));
@@ -652,7 +662,7 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         displayName: row.displayName ?? row.username,
         avatarUrl: row.avatarUrl ?? null,
       },
-      body: `Mengusulkan perubahan · ${row.lemma}`,
+      body: `Mengusulkan perubahan · ${quoted(row.lemma)}`,
       subtitle: row.lemma,
       target: { type: 'word', id: row.wordId },
     }));
