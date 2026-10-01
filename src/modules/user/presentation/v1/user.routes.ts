@@ -75,20 +75,18 @@ export function createPublicUserRoutes(deps: { controller: UserController }) {
     },
   });
 
-  routes.openapi(
-    activityRoute,
-    (c) =>
-      deps.controller.publicActivity(
-        c,
-        c.req.valid('param').username,
-        c.req.valid('query'),
-      ) as never,
+  routes.openapi(suggestRoute, (c) =>
+    deps.controller.suggestMention(c, c.req.valid('query').q) as never,
   );
   routes.openapi(profileRoute, (c) =>
     deps.controller.publicProfile(c, c.req.valid('param').username) as never,
   );
-  routes.openapi(suggestRoute, (c) =>
-    deps.controller.suggestMention(c, c.req.valid('query').q) as never,
+  routes.openapi(activityRoute, (c) =>
+    deps.controller.publicActivity(
+      c,
+      c.req.valid('param').username,
+      c.req.valid('query'),
+    ) as never,
   );
 
   return routes;
