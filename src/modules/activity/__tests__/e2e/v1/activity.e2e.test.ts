@@ -147,7 +147,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     const feed = await (await get('/api/v1/activity?limit=50')).json();
     const shares = feed.data.filter((i: { kind: string }) => i.kind === 'card_share');
     expect(shares).toHaveLength(1);
-    expect(shares[0].body).toMatch(/^Membagikan kartu · lemmaact/);
+    expect(shares[0].body).toMatch(/^Membagikan kartu · "lemmaact/);
   });
 
   it('GET /activity publik 200, tanpa email, search_miss actor null', async () => {
