@@ -249,7 +249,7 @@ export class AuthController {
     );
     return c.json({
       success: true as const,
-      data: { message: 'Password berhasil diubah. Silakan login kembali.' },
+      data: { message: 'Password sudah berubah nih. Login lagi ya.' },
     });
   }
 

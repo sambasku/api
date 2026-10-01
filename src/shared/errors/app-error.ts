@@ -11,7 +11,7 @@ export class ValidationError extends AppError {
   constructor(
     public details: { field: string; message: string }[],
   ) {
-    super('Data yang dikirim tidak valid');
+    super('Data yang dikirim belum sesuai');
   }
 }
 
@@ -28,7 +28,7 @@ export class UnauthorizedError extends AppError {
   statusCode = 401;
   errorCode: string;
   // errorCode bisa dioverride untuk kode spesifik: INVALID_CREDENTIALS, TOKEN_EXPIRED
-  constructor(errorCode = 'UNAUTHORIZED', message = 'Tidak terautentikasi') {
+  constructor(errorCode = 'UNAUTHORIZED', message = 'Kamu belum login') {
     super(message);
     this.errorCode = errorCode;
   }
@@ -40,7 +40,7 @@ export class ForbiddenError extends AppError {
   details: { field: string; message: string }[] | null;
   constructor(
     errorCode = 'FORBIDDEN',
-    message = 'Tidak diizinkan',
+      message = 'Akses ini terbatas',
     details: { field: string; message: string }[] | null = null,
   ) {
     super(message);
@@ -57,7 +57,7 @@ export class BadRequestError extends AppError {
   // SEARCH_MISS_TERM_MISMATCH, dll
   constructor(
     errorCode = 'BAD_REQUEST',
-    message = 'Permintaan tidak valid',
+      message = 'Data yang dikirim belum sesuai',
     details: { field: string; message: string }[] | null = null,
   ) {
     super(message);
@@ -87,7 +87,7 @@ export class RateLimitedError extends AppError {
   statusCode = 429;
   errorCode = 'RATE_LIMITED';
   constructor(
-    message = 'Terlalu banyak percobaan, coba lagi nanti',
+    message = 'Kebanyakan permintaan, coba lagi nanti ya.',
     public retryAfterSeconds = 120,
   ) {
     super(message);

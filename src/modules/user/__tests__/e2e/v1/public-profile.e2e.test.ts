@@ -110,6 +110,27 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
       entityId: wordId,
       value: -1,
     });
+    // Insert 3 more votes untuk test pagination (limit=1 butuh 4 item → 3 halaman, halaman 2 has_more=false).
+    for (let i = 1; i <= 3; i++) {
+      const wId = ulid26(`01E2EWORD${stamp}V${i}`);
+      await db.insert(words).values({
+        id: wId,
+        lemma: `lemmaprof${stamp}v${i}`,
+        languageId,
+        status: 'published',
+        isVerified: true,
+        verifiedAt: new Date(),
+        createdBy: reviewerId,
+        wordType: 'word',
+      });
+      await db.insert(votes).values({
+        id: ulid26(`01E2EVOT${stamp}V${i}`),
+        userId: contributorId,
+        entityType: 'word',
+        entityId: wId,
+        value: 1,
+      });
+    }
   });
 
   it('GET /api/v1/users/anonim → 200, is_verifier false, stats 0', async () => {
@@ -174,14 +195,71 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     const res = await get(`/api/v1/users/${contributorUsername}/activity`);
     expect(res.status).toBe(200);
     const body = await res.json();
+    // Cari vote dengan lemma asli (downvote) - bukan yang di-insert untuk pagination.
     const vote = body.data.items.find(
-      (entry: { kind: string }) => entry.kind === 'vote',
+      (entry: { kind: string; lemma: string }) =>
+        entry.kind === 'vote' && entry.lemma === `lemmaprof${stamp}`,
     );
     expect(vote).toBeTruthy();
     expect(vote.summary).toContain('"');
     expect(vote.summary).toMatch(/perlu dicek ulang$/);
     expect(vote.lemma).toBe(`lemmaprof${stamp}`);
     expect(vote.word_id).toBeTruthy();
+  });
+
+  it('GET /users/:username/activity?kind=vote&limit=1 → meta cursor + halaman 2', async () => {
+    // Halaman 1
+    const res1 = await get(
+      `/api/v1/users/${contributorUsername}/activity?kind=vote&limit=1`,
+    );
+    expect(res1.status).toBe(200);
+    const body1 = await res1.json();
+    expect(body1.data.items).toHaveLength(1);
+    expect(body1.meta).toMatchObject({
+      limit: 1,
+      next_cursor: expect.any(String),
+      has_more: true,
+    });
+    const cursor1 = body1.meta.next_cursor;
+    expect(cursor1).toBeTruthy();
+
+    // Halaman 2 pakai cursor (ada 4 total vote → halaman 2 masih has_more=true)
+    const res2 = await get(
+      `/api/v1/users/${contributorUsername}/activity?kind=vote&limit=1&cursor=${cursor1}`,
+    );
+    expect(res2.status).toBe(200);
+    const body2 = await res2.json();
+    expect(body2.data.items).toHaveLength(1);
+    expect(body2.meta.has_more).toBe(true); // 4 total, limit=1 → page 2 of 4
+    expect(body2.meta.next_cursor).toBeTruthy();
+
+    // Tidak duplikat
+    expect(body2.data.items[0].id).not.toBe(body1.data.items[0].id);
+  });
+
+  it('GET /users/:username/activity?kind=comment → filter kind', async () => {
+    const res = await get(
+      `/api/v1/users/${contributorUsername}/activity?kind=comment`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.items.length).toBeGreaterThanOrEqual(0);
+    for (const item of body.data.items) {
+      expect(item.kind).toBe('comment');
+    }
+    expect(body.meta).toBeDefined();
+  });
+
+  it('GET /users/:username/activity?kind=contribution → filter kind', async () => {
+    const res = await get(
+      `/api/v1/users/${contributorUsername}/activity?kind=contribution`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    for (const item of body.data.items) {
+      expect(item.kind).toBe('contribution');
+    }
+    expect(body.meta).toBeDefined();
   });
 
   it('GET username acak → 404 USER_NOT_FOUND', async () => {

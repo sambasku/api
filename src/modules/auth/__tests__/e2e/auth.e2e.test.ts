@@ -55,7 +55,7 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
     expect(body).toEqual({
       success: false,
       error_code: 'NOT_FOUND',
-      message: 'Route tidak ditemukan',
+      message: 'Route-nya tidak ketemu, coba cek lagi ya.',
       details: null,
     });
   });
@@ -357,7 +357,7 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       success: true,
-      data: { message: 'Password berhasil diubah. Silakan login kembali.' },
+      data: { message: 'Password sudah berubah nih. Login lagi ya.' },
     });
 
     // Semua session ter-revoke: refresh token lama ditolak

@@ -3,6 +3,8 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import { extractMentions } from '@/modules/comment/application/utils/extract-mentions';
+import { findMentionableUsers } from '@/modules/user/application/utils/find-mentionable-users';
 import { resolveDiscussionNotifyRecipients } from '@/modules/comment/application/utils/resolve-discussion-notify-recipients';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
@@ -26,6 +28,7 @@ export interface CreateDiscussionReplyCommand {
 
 const SNIPPET_MAX = 80;
 const REPLY_TITLE = 'Balasan baru';
+const DISCUSSION_MENTION_TITLE = 'Kamu disebut di diskusi';
 
 function truncateSnippet(text: string, max = SNIPPET_MAX): string {
   const trimmed = text.trim().replace(/\s+/g, ' ');
@@ -126,7 +129,94 @@ export class CreateDiscussionReplyUseCase {
       replyBody: reply.body,
     });
 
+    await this.notifyMentionedUsers({
+      discussionId: cmd.discussionId,
+      topicBody: discussion.body,
+      actorId: cmd.userId,
+      replyBody: reply.body,
+    });
+
     return (await this.repo.findReplyById(reply.id)) ?? reply;
+  }
+
+  /**
+   * Mention (@username) di balasan diskusi: tipe `discussion_mention`.
+   * Inbox refreshOnConflict = false (tidak menimpa notif balasan),
+   * push TANPA cooldown (sinyal kuat).
+   */
+  private async notifyMentionedUsers(input: {
+    discussionId: string;
+    topicBody: string | null;
+    actorId: string;
+    replyBody: string;
+  }): Promise<void> {
+    if (!this.inbox && !this.notifyUser) return;
+    if (!this.userRepo) return;
+
+    try {
+      const usernames = extractMentions(input.replyBody);
+      if (usernames.length === 0) return;
+
+      const mentioned = await findMentionableUsers(
+        (username) => this.userRepo!.findByUsername(username),
+        usernames,
+      );
+      if (mentioned.length === 0) return;
+
+      let actorName = 'Seseorang';
+      const actor = await this.userRepo.findById(input.actorId);
+      if (actor) actorName = actor.displayName?.trim() || actor.username;
+
+      const topicLabel = truncateSnippet(input.topicBody?.trim() || 'Ruang Diskusi');
+      const snippet = truncateSnippet(input.replyBody);
+      const body = `${actorName} menyebutmu di diskusi "${topicLabel}": ${snippet}`;
+
+      for (const user of mentioned) {
+        if (user.id === input.actorId) continue;
+
+        if (this.inbox) {
+          await this.inbox.execute({
+            userId: user.id,
+            type: 'discussion_mention',
+            targetKind: 'discussion',
+            targetId: input.discussionId,
+            actorId: input.actorId,
+            title: DISCUSSION_MENTION_TITLE,
+            body,
+            refreshOnConflict: false,
+            actionKind: 'discussion',
+            actionValue: input.discussionId,
+          });
+        }
+        if (this.notifyUser) {
+          // Push mention tanpa cooldown.
+          await this.notifyUser.execute({
+            userId: user.id,
+            title: DISCUSSION_MENTION_TITLE,
+            body,
+            actorId: input.actorId,
+            data: {
+              type: 'discussion_mention',
+              target_kind: 'discussion',
+              target_id: input.discussionId,
+              action_kind: 'discussion',
+              action_value: input.discussionId,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          time: new Date().toISOString(),
+          msg: 'discussion mention notify failed',
+          discussion_id: input.discussionId,
+          actor_id: input.actorId,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 
   private async notifyThreadParticipants(input: {

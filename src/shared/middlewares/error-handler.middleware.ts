@@ -67,7 +67,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
       {
         success: false as const,
         error_code: 'VALIDATION_ERROR',
-        message: 'Beberapa input tidak valid. Silakan periksa kembali.',
+        message: 'Beberapa isian belum sesuai, coba periksa lagi ya.',
         details,
       },
       400,
@@ -84,7 +84,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
       {
         success: false as const,
         error_code: 'UPSTREAM_CAPACITY',
-        message: 'Layanan sedang penuh, silakan coba lagi',
+        message: 'Lagi ramai nih, coba sebentar lagi ya.',
         details: null,
       },
       503,
@@ -97,7 +97,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
     {
       success: false as const,
       error_code: 'INTERNAL_ERROR',
-      message: 'Terjadi kesalahan pada server',
+      message: 'Ada masalah di server, coba sebentar lagi ya.',
       details: null,
     },
     500,

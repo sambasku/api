@@ -199,11 +199,11 @@ describe('ApproveVerifierApplicationUseCase', () => {
     expect(notifyUser.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER,
-        title: 'Selamat, Anda jadi verifikator',
-        body: 'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.',
+        title: 'Selamat, kamu jadi verifikator',
+        body: 'Pengajuanmu disetujui. Keluar lalu masuk lagi ya, biar peran Verifikator aktif di aplikasi.',
         data: expect.objectContaining({
           type: 'verifier_application_approved',
-          title: 'Selamat, Anda jadi verifikator',
+          title: 'Selamat, kamu jadi verifikator',
           body: expect.any(String),
         }),
       }),

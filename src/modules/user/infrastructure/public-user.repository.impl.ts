@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import {
   comments,
   contributionReviews,
@@ -14,7 +14,9 @@ import {
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
+  MentionUserRow,
   PublicActivityItem,
+  PublicActivityPage,
   PublicProfileStats,
   PublicUserRow,
 } from '../domain/entities/public-profile.entity';
@@ -28,6 +30,27 @@ const ENTITY_LABEL: Record<string, string> = {
   word_audio: 'Audio',
   example: 'Contoh',
 };
+
+/** Param list aktivitas per kategori: keyset cursor ULID (id < cursor). */
+interface RecentListParams {
+  limit: number;
+  cursor?: string;
+}
+
+/** Slice pasangan (id, item) (limit + 1) jadi halaman + keyset cursor. */
+function toPage(
+  rows: Array<{ id: string; item: PublicActivityItem }>,
+  limit: number,
+): PublicActivityPage {
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return {
+    items: page.map((row) => row.item),
+    nextCursor: hasMore && last ? last.id : null,
+    hasMore,
+  };
+}
 
 export class PublicUserRepositoryImpl implements PublicUserRepository {
   constructor(private readonly db: AppDatabase) {}
@@ -58,6 +81,34 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           avatarUrl: row.avatarUrl ?? null,
         }
       : null;
+  }
+
+  /** Prefix-search username untuk autocomplete mention. Kolom publik saja. */
+  async suggestByUsernamePrefix(prefix: string, limit: number): Promise<MentionUserRow[]> {
+    const rows = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(users)
+      .where(
+        and(
+          sql`${users.username} LIKE ${prefix} || '%'`,
+          isNull(users.deletedAt),
+          eq(users.isActive, true),
+        ),
+      )
+      .orderBy(users.username)
+      .limit(limit);
+
+    return rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.displayName || row.username,
+      avatarUrl: row.avatarUrl ?? null,
+    }));
   }
 
   async countApprovedContributions(userId: string): Promise<number> {
@@ -113,8 +164,9 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
 
   async listRecentApprovedContributions(
     userId: string,
-    limit: number,
-  ): Promise<PublicActivityItem[]> {
+    { limit, cursor }: RecentListParams,
+  ): Promise<PublicActivityPage> {
+    // limit + 1 = deteksi hasMore tanpa count terpisah.
     const rows = await this.db
       .select({
         id: contributions.id,
@@ -128,31 +180,38 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           eq(contributions.userId, userId),
           inArray(contributions.status, ['approved', 'corrected']),
           isNull(contributions.deletedAt),
+          cursor ? lt(contributions.id, cursor) : undefined,
         ),
       )
-      .orderBy(desc(contributions.createdAt), desc(contributions.id))
-      .limit(limit);
+      .orderBy(desc(contributions.id))
+      .limit(limit + 1);
 
     const resolved = await this.resolveContributionParents(rows);
-
-    return rows.map((row) => {
-      const parent = resolved.get(`${row.entityType}:${row.entityId}`);
-      const label = ENTITY_LABEL[row.entityType] ?? row.entityType;
-      const lemma = parent?.lemma ?? null;
-      return {
-        kind: 'contribution' as const,
-        occurredAt: row.createdAt,
-        wordId: parent?.wordId ?? null,
-        lemma,
-        summary: lemma ? `${label}: ${lemma}` : label,
-      };
-    });
+    return toPage(
+      rows.map((row) => {
+        const parent = resolved.get(`${row.entityType}:${row.entityId}`);
+        const label = ENTITY_LABEL[row.entityType] ?? row.entityType;
+        const lemma = parent?.lemma ?? null;
+        return {
+          id: row.id,
+          item: {
+            kind: 'contribution' as const,
+            id: row.id,
+            occurredAt: row.createdAt,
+            wordId: parent?.wordId ?? null,
+            lemma,
+            summary: lemma ? `${label}: ${lemma}` : label,
+          },
+        };
+      }),
+      limit,
+    );
   }
 
   async listRecentPublishedComments(
     userId: string,
-    limit: number,
-  ): Promise<PublicActivityItem[]> {
+    { limit, cursor }: RecentListParams,
+  ): Promise<PublicActivityPage> {
     const rows = await this.db
       .select({
         id: comments.id,
@@ -168,24 +227,36 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           eq(comments.userId, userId),
           eq(comments.status, 'published'),
           isNull(comments.deletedAt),
+          cursor ? lt(comments.id, cursor) : undefined,
         ),
       )
-      .orderBy(desc(comments.createdAt), desc(comments.id))
-      .limit(limit);
+      .orderBy(desc(comments.id))
+      .limit(limit + 1);
 
-    return rows.map((row) => {
-      const snippet = row.body.length > 120 ? `${row.body.slice(0, 117)}…` : row.body;
-      return {
-        kind: 'comment' as const,
-        occurredAt: row.createdAt,
-        wordId: row.wordId,
-        lemma: row.lemma,
-        summary: snippet,
-      };
-    });
+    return toPage(
+      rows.map((row) => {
+        const snippet =
+          row.body.length > 120 ? `${row.body.slice(0, 117)}…` : row.body;
+        return {
+          id: row.id,
+          item: {
+            kind: 'comment' as const,
+            id: row.id,
+            occurredAt: row.createdAt,
+            wordId: row.wordId,
+            lemma: row.lemma,
+            summary: snippet,
+          },
+        };
+      }),
+      limit,
+    );
   }
 
-  async listRecentVerifications(userId: string, limit: number): Promise<PublicActivityItem[]> {
+  async listRecentVerifications(
+    userId: string,
+    { limit, cursor }: RecentListParams,
+  ): Promise<PublicActivityPage> {
     const rows = await this.db
       .select({
         id: contributionReviews.id,
@@ -200,44 +271,51 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           eq(contributionReviews.reviewerId, userId),
           ne(contributionReviews.status, 'pending'),
           isNull(contributionReviews.deletedAt),
+          cursor ? lt(contributionReviews.id, cursor) : undefined,
         ),
       )
-      .orderBy(desc(contributionReviews.createdAt), desc(contributionReviews.id))
-      .limit(limit);
+      .orderBy(desc(contributionReviews.id))
+      .limit(limit + 1);
 
     const resolved = await this.resolveContributionParents(rows);
-
-    return rows.map((row) => {
-      const parent = resolved.get(`${row.entityType}:${row.entityId}`);
-      const label = ENTITY_LABEL[row.entityType] ?? row.entityType;
-      const lemma = parent?.lemma ?? null;
-      return {
-        kind: 'verification' as const,
-        occurredAt: row.createdAt,
-        wordId: parent?.wordId ?? null,
-        lemma,
-        summary: lemma ? `Memverifikasi ${label}: ${lemma}` : `Memverifikasi ${label}`,
-      };
-    });
+    return toPage(
+      rows.map((row) => {
+        const parent = resolved.get(`${row.entityType}:${row.entityId}`);
+        const label = ENTITY_LABEL[row.entityType] ?? row.entityType;
+        const lemma = parent?.lemma ?? null;
+        return {
+          id: row.id,
+          item: {
+            kind: 'verification' as const,
+            id: row.id,
+            occurredAt: row.createdAt,
+            wordId: parent?.wordId ?? null,
+            lemma,
+            summary: lemma
+              ? `Memverifikasi ${label}: ${lemma}`
+              : `Memverifikasi ${label}`,
+          },
+        };
+      }),
+      limit,
+    );
   }
 
   async listRecentVotes(
     userId: string,
-    limit: number,
-  ): Promise<PublicActivityItem[]> {
+    { limit, cursor }: RecentListParams,
+  ): Promise<PublicActivityPage> {
     // Vote publik user, hanya target bersistem kata (word/comment) yang
     // katanya masih feed-visible: navigasi tetap menuju halaman kata.
     // Target lain (discussion, discussion_reply) tidak punya lemma - dibuang.
     // ponytail: dua query terpisah (vote word vs vote comment) lalu merge -
     // target polymorphic tanpa FK tidak bisa satu FROM bersih.
     // Upgrade: kolom word_id denormalized di votes.
-    // Epoch SECONDS (satuan kolom Drizzle mode:'timestamp'); NULL dibuang.
-    const occurredAt = sql<number>`coalesce(${votes.updatedAt}, ${votes.createdAt})`;
-    const orderBy = [desc(occurredAt), desc(votes.id)];
     const select = {
       id: votes.id,
       value: votes.value,
-      occurredAt,
+      updatedAt: votes.updatedAt,
+      createdAt: votes.createdAt,
       lemma: words.lemma,
       wordId: words.id,
     };
@@ -255,10 +333,11 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           eq(votes.entityType, 'word'),
           isNull(words.deletedAt),
           eq(words.status, 'published'),
+          cursor ? lt(votes.id, cursor) : undefined,
         ),
       )
-      .orderBy(...orderBy)
-      .limit(limit);
+      .orderBy(desc(votes.id))
+      .limit(limit + 1);
 
     const commentVotes = await this.db
       .select(select)
@@ -274,34 +353,39 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           eq(votes.entityType, 'comment'),
           isNull(words.deletedAt),
           eq(words.status, 'published'),
+          cursor ? lt(votes.id, cursor) : undefined,
         ),
       )
-      .orderBy(...orderBy)
-      .limit(limit);
+      .orderBy(desc(votes.id))
+      .limit(limit + 1);
 
+    // Merge dua sumber id-desc, tetap keyset by id (ULID monotonic = urut waktu).
     const merged = [...wordVotes, ...commentVotes]
-      .sort((a, b) => {
-        const t = b.occurredAt - a.occurredAt;
-        if (t !== 0) return t;
-        return b.id.localeCompare(a.id);
-      })
-      .slice(0, limit);
+      .sort((a, b) => b.id.localeCompare(a.id))
+      .slice(0, limit + 1);
 
-    return merged.map((row) => {
-      const quoted = `"${row.lemma}"`;
-      // Copy identik dengan feed beranda: mobile membaca arah vote dari
-      // akhiran body ("perlu dicek ulang" = down, selain itu up).
-      return {
-        kind: 'vote' as const,
-        occurredAt: new Date(row.occurredAt * 1000),
-        wordId: row.wordId,
-        lemma: row.lemma,
-        summary:
-          row.value >= 0
-            ? `${quoted} sudah pas`
-            : `${quoted} perlu dicek ulang`,
-      };
-    });
+    return toPage(
+      merged.map((row) => {
+        const quoted = `"${row.lemma}"`;
+        // Copy identik dengan feed beranda: mobile membaca arah vote dari
+        // akhiran body ("perlu dicek ulang" = down, selain itu up).
+        return {
+          id: row.id,
+          item: {
+            kind: 'vote' as const,
+            id: row.id,
+            occurredAt: row.updatedAt ?? row.createdAt,
+            wordId: row.wordId,
+            lemma: row.lemma,
+            summary:
+              row.value >= 0
+                ? `${quoted} sudah pas`
+                : `${quoted} perlu dicek ulang`,
+          },
+        };
+      }),
+      limit,
+    );
   }
 
   private async resolveContributionParents(
@@ -329,7 +413,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         .from(pronunciations)
         .innerJoin(words, eq(pronunciations.wordId, words.id))
         .where(inArray(pronunciations.id, pronIds));
-      for (const r of rows) out.set(`pronunciation:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
+      for (const r of rows)
+        out.set(`pronunciation:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
     }
 
     const imageIds = idsOf('word_image');
@@ -339,7 +424,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         .from(wordImages)
         .innerJoin(words, eq(wordImages.wordId, words.id))
         .where(inArray(wordImages.id, imageIds));
-      for (const r of rows) out.set(`word_image:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
+      for (const r of rows)
+        out.set(`word_image:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
     }
 
     const audioIds = idsOf('word_audio');
@@ -349,7 +435,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         .from(wordAudios)
         .innerJoin(words, eq(wordAudios.wordId, words.id))
         .where(inArray(wordAudios.id, audioIds));
-      for (const r of rows) out.set(`word_audio:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
+      for (const r of rows)
+        out.set(`word_audio:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
     }
 
     const meaningIds = idsOf('meaning');
@@ -359,7 +446,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         .from(meanings)
         .innerJoin(words, eq(meanings.wordId, words.id))
         .where(inArray(meanings.id, meaningIds));
-      for (const r of rows) out.set(`meaning:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
+      for (const r of rows)
+        out.set(`meaning:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
     }
 
     const exampleIds = idsOf('example');
@@ -370,7 +458,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         .innerJoin(meanings, eq(examples.meaningId, meanings.id))
         .innerJoin(words, eq(meanings.wordId, words.id))
         .where(inArray(examples.id, exampleIds));
-      for (const r of rows) out.set(`example:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
+      for (const r of rows)
+        out.set(`example:${r.id}`, { lemma: r.lemma, wordId: r.wordId });
     }
 
     return out;

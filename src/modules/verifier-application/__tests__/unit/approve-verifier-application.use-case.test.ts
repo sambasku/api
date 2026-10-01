@@ -104,7 +104,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
         userId: USER_ID,
         data: expect.objectContaining({
           type: 'verifier_application_approved',
-          title: 'Selamat, Anda jadi verifikator',
+          title: 'Selamat, kamu jadi verifikator',
           body: expect.any(String),
         }),
       }),

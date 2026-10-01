@@ -12,7 +12,7 @@ export function createOpenApiApp() {
           {
             success: false as const,
             error_code: 'VALIDATION_ERROR',
-            message: 'Data yang dikirim tidak valid',
+            message: 'Beberapa isian belum sesuai, coba periksa lagi ya.',
             details: (result.error as z.ZodError).issues.map((issue) => ({
               field: issue.path.join('.'),
               message: issue.message,

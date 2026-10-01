@@ -9,6 +9,9 @@ import type { AppVariables } from '@/shared/types';
 import type { UserController } from './user.controller';
 import {
   avatarUploadResponseSchema,
+  mentionSuggestQuerySchema,
+  mentionSuggestResponseSchema,
+  publicActivityQuerySchema,
   publicActivityResponseSchema,
   publicProfileParamsSchema,
   publicProfileResponseSchema,
@@ -31,7 +34,10 @@ export function createPublicUserRoutes(deps: { controller: UserController }) {
     path: '/:username/activity',
     tags: ['Users'],
     summary: 'Aktivitas publik terbaru by username (tanpa auth)',
-    request: { params: publicProfileParamsSchema },
+    request: {
+      params: publicProfileParamsSchema,
+      query: publicActivityQuerySchema,
+    },
     responses: {
       200: { description: 'Daftar aktivitas', content: json(publicActivityResponseSchema) },
       400: { description: 'Username tidak valid', content: json(errorResponseSchema) },
@@ -52,11 +58,37 @@ export function createPublicUserRoutes(deps: { controller: UserController }) {
     },
   });
 
-  routes.openapi(activityRoute, (c) =>
-    deps.controller.publicActivity(c, c.req.valid('param').username) as never,
+  const suggestRoute = createRoute({
+    method: 'get',
+    path: '/suggest',
+    tags: ['Users'],
+    summary: 'Saran username untuk mention (tanpa auth, tanpa PII)',
+    request: {
+      query: mentionSuggestQuerySchema,
+    },
+    responses: {
+      200: {
+        description: 'Daftar user',
+        content: json(mentionSuggestResponseSchema),
+      },
+      400: { description: 'Query kurang dari 2 karakter', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(
+    activityRoute,
+    (c) =>
+      deps.controller.publicActivity(
+        c,
+        c.req.valid('param').username,
+        c.req.valid('query'),
+      ) as never,
   );
   routes.openapi(profileRoute, (c) =>
     deps.controller.publicProfile(c, c.req.valid('param').username) as never,
+  );
+  routes.openapi(suggestRoute, (c) =>
+    deps.controller.suggestMention(c, c.req.valid('query').q) as never,
   );
 
   return routes;

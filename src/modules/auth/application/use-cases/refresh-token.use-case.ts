@@ -74,7 +74,7 @@ export class RefreshTokenUseCase {
     if (!client || client.status !== 'approved') {
       throw new ForbiddenError(
         'CLIENT_NOT_ALLOWED',
-        'Sesi dari aplikasi tidak diizinkan. Silakan keluar dan masuk lagi.',
+        'Aplikasi ini belum diizinkan. Coba keluar lalu masuk lagi ya.',
       );
     }
     const scopes =

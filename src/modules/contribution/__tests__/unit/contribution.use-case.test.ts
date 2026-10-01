@@ -235,7 +235,7 @@ describe('ReviewContributionUseCase', () => {
       expect.objectContaining({
         userId: '01CONTRIBUTORULID0000000000',
         title: 'Kontribusi ditolak',
-        body: 'Usulan Anda ditolak. Buka Kontribusi Saya untuk melihat alasan.',
+        body: 'Usulanmu ditolak. Buka Kontribusi Saya untuk lihat alasannya.',
         actorId: ACTOR.userId,
         data: expect.objectContaining({
           type: 'contribution_rejected',

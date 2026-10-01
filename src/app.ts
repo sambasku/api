@@ -1,3 +1,4 @@
+import { SuggestMentionUsersUseCase } from "./modules/user/application/use-cases/suggest-mention-users.use-case";
 import { apiReference } from '@scalar/hono-api-reference';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
@@ -810,6 +811,7 @@ const publicUserRepo = new PublicUserRepositoryImpl(db);
 const userController = new UserController({
   getPublicProfile: new GetPublicProfileUseCase(publicUserRepo),
   getPublicActivity: new GetPublicActivityUseCase(publicUserRepo),
+  suggestMention: new SuggestMentionUsersUseCase(publicUserRepo),
   uploadAvatar: new UploadAvatarUseCase(userRepo, publicImageStorage),
   deleteAvatar: new DeleteAvatarUseCase(userRepo, publicImageStorage),
   getMyProfile: new GetMyProfileUseCase(userRepo),
@@ -851,7 +853,7 @@ app.notFound((c) =>
     {
       success: false as const,
       error_code: 'NOT_FOUND',
-      message: 'Route tidak ditemukan',
+      message: 'Route-nya tidak ketemu, coba cek lagi ya.',
       details: null,
     },
     404,

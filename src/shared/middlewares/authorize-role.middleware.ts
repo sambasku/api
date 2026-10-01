@@ -11,7 +11,7 @@ export function authorizeRole(...allowedRoles: string[]) {
         {
           success: false as const,
           error_code: 'FORBIDDEN',
-          message: 'Role tidak diizinkan mengakses endpoint ini',
+          message: 'Kamu belum punya akses untuk fitur ini.',
           details: null,
         },
         403,
