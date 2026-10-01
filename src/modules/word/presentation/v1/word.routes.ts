@@ -52,6 +52,13 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export interface WordRoutesDeps {
   controller: WordController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /**
+   * Auth "lunak" (tidak pernah 401). WAJIB diisi untuk `createPublicWordRoutes`:
+   * dipakai HANYA di `/search` supaya pencarian kosong bisa mencatat siapa yang
+   * memicu search miss (feed `exclude_self`). Tanpa ini `viewerId` selalu
+   * undefined dan tidak ada searcher yang tercatat.
+   */
+  softAuthenticate?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 // POST /api/v1/admin/words - authenticate + authorizeRole + rate limit 30/menit
@@ -635,6 +642,14 @@ export function createPublicWordRoutes(deps: WordRoutesDeps) {
   const routes = createOpenApiApp();
 
   routes.use('*', rateLimit({ points: 100, duration: 60 }));
+
+  // Hanya /search: mengaktifkan atribusi "siapa yang memicu search miss".
+  // Setelah rateLimit supaya kuota tamu tetap terukur untuk semua. Token
+  // rusak/kedaluarsa tidak 401 (soft auth) - response tetap sama, hanya
+  // `viewerId` yang kosong.
+  if (deps.softAuthenticate) {
+    routes.use('/search', deps.softAuthenticate);
+  }
 
   // 18-api-list-words.md: daftar semua kata A-Z (browsing, bukan pencarian).
   // Literal '/' didaftarkan SEBELUM '/:id' (pola '/search').

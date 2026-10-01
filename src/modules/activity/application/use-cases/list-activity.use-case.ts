@@ -90,8 +90,9 @@ export class ListActivityUseCase {
           before,
           excludeUserId,
         ),
-        // Tanpa penyaringan: search-miss tidak punya kolom user (actor null).
-        this.activityRepo.listRecentVisibleSearchMisses(perSource, before),
+        // Tanpa penyaringan blocklist, tapi tetap sertakan excludeUserId: miss
+        // yang pernah dicari viewer sendiri disembunyikan juga.
+        this.activityRepo.listRecentVisibleSearchMisses(perSource, before, excludeUserId),
         this.activityRepo.listRecentWelcomes(perSource, before, excludeUserId),
         this.activityRepo.listRecentCardShares(perSource, before, excludeUserId),
         this.activityRepo.listRecentAppliedSuggestions(perSource, before, excludeUserId),

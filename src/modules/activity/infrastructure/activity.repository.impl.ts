@@ -8,6 +8,7 @@ import {
   meanings,
   pronunciations,
   searchMisses,
+  searchMissSearchers,
   users,
   votes,
   wordAudios,
@@ -138,6 +139,63 @@ function notSelfOrNullSql(
 ): SQL | undefined {
   if (!excludeUserId) return undefined;
   return or(isNull(column), ne(column, excludeUserId));
+}
+
+/**
+ * Buang baris yang "menyebut" karya sendiri: vote orang lain atas kata milik
+ * `excludeUserId`.
+ *
+ * Bedanya dari [notSelfSql]: yang dicek bukan pelaku (sudah ditangani
+ * `notSelfSql(votes.userId)`) tapi TARGET vote. Vote di feed hanya bermakna
+ * kalau target-nya kata/komentar milik orang lain - kalau target-nya kata saya,
+ * baris itu bicara tentang kata saya, bukan tentang aksi orang lain.
+ *
+ * Dibangun sebagai subquery EXISTS, bukan join, supaya baris yang terbuang tidak
+ * memakan `limit` (alasan yang sama seperti penyaringan sumber lain: penyaringan
+ * wajib di SQL, bukan setelah query).
+ *
+ * `entity_type` vote polymorphic dan target TANPA FK (lihat votes.schema.ts),
+ * jadi setiap jenis punya resolusi sendiri. Jenis yang tidak ada di sini
+ * (discussion, discussion_reply) tidak pernah menyebut kata, jadi tidak perlu.
+ */
+function notMyWordVoteSql(excludeUserId: string | undefined): SQL | undefined {
+  if (!excludeUserId) return undefined;
+
+  // Target vote yang-owner-nya bisa dicek ke `words.created_by`:
+  // - word:          words.id
+  // - comment:       comments.word_id
+  // - meaning:       meanings.word_id
+  // - example:       examples -> meanings -> word_id
+  // - pronunciation / word_image / word_audio: word_id langsung
+  const myWordVote = sql`exists (
+    select 1 from ${words} w
+    where w.created_by = ${excludeUserId}
+      and (
+        (${votes.entityType} = 'word' and w.id = ${votes.entityId})
+        or (${votes.entityType} = 'comment' and w.id = (
+          select c.word_id from ${comments} c where c.id = ${votes.entityId}
+        ))
+        or (${votes.entityType} = 'meaning' and w.id = (
+          select m.word_id from ${meanings} m where m.id = ${votes.entityId}
+        ))
+        or (${votes.entityType} = 'example' and w.id = (
+          select m2.word_id from ${examples} e
+          inner join ${meanings} m2 on m2.id = e.meaning_id
+          where e.id = ${votes.entityId}
+        ))
+        or (${votes.entityType} = 'pronunciation' and w.id = (
+          select p.word_id from ${pronunciations} p where p.id = ${votes.entityId}
+        ))
+        or (${votes.entityType} = 'word_image' and w.id = (
+          select i.word_id from ${wordImages} i where i.id = ${votes.entityId}
+        ))
+        or (${votes.entityType} = 'word_audio' and w.id = (
+          select au.word_id from ${wordAudios} au where au.id = ${votes.entityId}
+        ))
+      )
+  )`;
+
+  return sql`not ${myWordVote}`;
 }
 
 /** Lemma di body feed selalu dikutip (sama seperti `Mencari "…"`); mobile menebalkannya. */
@@ -321,6 +379,9 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         and(
           isNull(users.deletedAt),
           notSelfSql(votes.userId, excludeUserId),
+          // Vote orang lain atas kata milik sendiri: soal feed "karya orang
+          // lain", vote di kata saya bukan termasuk.
+          notMyWordVoteSql(excludeUserId),
           isNotNull(occurredAt),
           keysetBefore(occurredAt, votes.id, before, 'vote'),
         ),
@@ -500,12 +561,16 @@ export class ActivityRepositoryImpl implements ActivityRepository {
     });
   }
 
-  // Tidak menerima `excludeUserId` (port juga tidak): search-miss tidak punya
-  // kolom user sama sekali, `actor` selalu null ("Seseorang"), jadi tidak pernah
-  // bisa jadi "karya sendiri".
+  /**
+   * Search-miss tayang. `excludeUserId` membuang miss yang pernah dicari user
+   * itu: miss tidak punya "pemilik" (satu baris dipakai bersama semua orang
+   * yang mencari istilah sama), tapi pemicunya bisa dilacak lewat tabel
+   * `search_miss_searchers`. Tanpa flag, feed publik utuh seperti sebelumnya.
+   */
   async listRecentVisibleSearchMisses(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]> {
     // Aksi = pencarian terakhir. Sama persis untuk ORDER BY dan keyset.
     const occurredAt = occurredAtSql(searchMisses.lastSearchedAt, searchMisses.createdAt);
@@ -527,6 +592,15 @@ export class ActivityRepositoryImpl implements ActivityRepository {
             ${searchMisses.direction} = 'lemma' AND ${isFulfilledLemmaSql}
           )`,
           sql`NOT ${matchesExcludedLemmaSql}`,
+          // Miss yang pernah dicari viewer sendiri disembunyikan. EXISTS (bukan
+          // join) supaya tidak menggandakan baris miss.
+          excludeUserId
+            ? sql`not exists (
+                select 1 from ${searchMissSearchers} sms
+                where sms.search_miss_id = ${searchMisses.id}
+                  and sms.user_id = ${excludeUserId}
+              )`
+            : undefined,
           isNotNull(occurredAt),
           keysetBefore(occurredAt, searchMisses.id, before, 'search_miss'),
         ),

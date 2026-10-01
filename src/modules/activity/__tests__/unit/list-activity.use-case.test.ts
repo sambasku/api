@@ -193,15 +193,18 @@ describe('ListActivityUseCase - excludeUserId diteruskan ke semua sumber', () =>
     );
   });
 
-  it('search-miss TIDAK diberi excludeUserId (kolom user tidak ada)', async () => {
+  it('search-miss ikut menerima excludeUserId (sembunyikan miss yang dicari sendiri)', async () => {
     const repo = emptyRepo();
     await new ListActivityUseCase(repo).execute({
       limit: 20,
       excludeUserId: '01SELF',
     });
 
-    // Kalau argumen ketiga ikut dikirim, panggilan 2-argumen ini akan gagal.
-    expect(repo.listRecentVisibleSearchMisses).toHaveBeenCalledWith(8, undefined);
+    expect(repo.listRecentVisibleSearchMisses).toHaveBeenCalledWith(
+      8,
+      undefined,
+      '01SELF',
+    );
   });
 
   it('tanpa excludeUserId → undefined di semua sumber (feed publik utuh)', async () => {
@@ -211,5 +214,12 @@ describe('ListActivityUseCase - excludeUserId diteruskan ke semua sumber', () =>
     expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined, undefined);
     expect(repo.listRecentComments).toHaveBeenCalledWith(8, undefined, undefined);
     expect(repo.listRecentWelcomes).toHaveBeenCalledWith(8, undefined, undefined);
+    // Search-miss tanpa flag harus tetap feed publik penuh - searcher yang
+    // tercatat tidak boleh membuat miss hilang untuk semua orang.
+    expect(repo.listRecentVisibleSearchMisses).toHaveBeenCalledWith(
+      8,
+      undefined,
+      undefined,
+    );
   });
 });

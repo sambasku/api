@@ -31,6 +31,7 @@ import {
   pronunciations,
   refreshTokens,
   searchMisses,
+  searchMissSearchers,
   discussionReplies,
   discussions,
   userConsents,
@@ -223,6 +224,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     refreshTokens,
     authIdentities,
     emailVerificationOtps,
+    // Anak search_misses (FK) - wajib sebelum search_misses di bawah.
+    searchMissSearchers,
     searchMisses,
     wordCategories,
     wordImages,

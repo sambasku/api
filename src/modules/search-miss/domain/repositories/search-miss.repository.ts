@@ -22,8 +22,19 @@ export interface SearchMissUpdatePatch {
 // (modul word) untuk mencatat pencarian kosong, dan dipakai modul sendiri
 // untuk endpoint beranda + panel admin.
 export interface SearchMissRepository {
-  /** Upsert istilah: hit_count + 1 kalau sudah pernah dicari. Best-effort. */
-  record(input: { term: string; direction: SearchMissDirection }): Promise<void>;
+  /**
+   * Upsert istilah: hit_count + 1 kalau sudah pernah dicari. Best-effort.
+   *
+   * `searcherId` (opsional) = user yang sedang login. Dicatat di tabel
+   * `search_miss_searchers` supaya feed `exclude_self` bisa menyembunyikan
+   * miss yang dipicu user tersebut. Tanpa id (tamu) tidak ada yang dicatat:
+   * miss tetap muncul untuk semua, seperti sebelumnya.
+   */
+  record(input: {
+    term: string;
+    direction: SearchMissDirection;
+    searcherId?: string;
+  }): Promise<void>;
   /** Load miss aktif (deleted_at IS NULL). Null kalau tidak ada / dismissed. */
   findById(id: string): Promise<SearchMiss | null>;
   list(filter: SearchMissListFilter): Promise<CursorPage<SearchMiss>>;

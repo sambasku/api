@@ -39,9 +39,14 @@ export interface ActivityRepository {
     before?: ActivityCursor,
     excludeUserId?: string,
   ): Promise<ActivityItem[]>;
+  /**
+   * Search-miss tayang. `excludeUserId` membuang miss yang pernah dicari user
+   * itu (bukan "karya" - miss milik bersama, tapi pemicunya adalah viewer).
+   */
   listRecentVisibleSearchMisses(
     limit: number,
     before?: ActivityCursor,
+    excludeUserId?: string,
   ): Promise<ActivityItem[]>;
   /** Akun terverifikasi (setelah OTP / OAuth) - baris selamat datang. */
   listRecentWelcomes(

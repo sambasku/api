@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { logger } from '@/shared/logging/logger';
 import { UnauthorizedError, BadRequestError } from '@/shared/errors/app-error';
-import type { AppVariables } from '@/shared/types';
+import type { AppVariables, AuthUser } from '@/shared/types';
 import type { CreateWordUseCase } from '../../application/use-cases/create-word.use-case';
 import type { UpdateWordUseCase } from '../../application/use-cases/update-word.use-case';
 import type { GetWordByIdUseCase } from '../../application/use-cases/get-word-by-id.use-case';
@@ -589,6 +589,9 @@ export class WordController {
   }
 
   async search(c: Context, query: SearchWordsQueryBody) {
+    // Soft auth (sudah dipasang di route): tanpa token tetap tamu, tidak 401.
+    // Id-nya hanya dipakai untuk mencatat siapa yang memicu search miss.
+    const viewerId = (c.get('user') as AuthUser | undefined)?.user_id;
     const { items, meta } = await this.deps.search.execute({
       q: query.q,
       limit: query.limit,
@@ -597,6 +600,7 @@ export class WordController {
       translationLanguageId: query.translation_language_id,
       wordType: query.word_type,
       isVerified: query.is_verified,
+      viewerId,
     });
     setPublicWordReadCache(c);
     return c.json({

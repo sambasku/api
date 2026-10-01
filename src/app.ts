@@ -1035,7 +1035,10 @@ const wordReportController = new WordReportController({
   ),
 });
 app.route('/api/v1/words', createWordReportRoutes({ controller: wordReportController, authenticate }));
-app.route('/api/v1/words', createPublicWordRoutes({ controller: wordController, authenticate }));
+app.route(
+  '/api/v1/words',
+  createPublicWordRoutes({ controller: wordController, authenticate, softAuthenticate }),
+);
 app.route('/api/v1/words', createWordHistoryRoutes({ controller: suggestionController, authenticate }));
 app.route(
   '/api/v1/words',
