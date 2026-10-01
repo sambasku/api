@@ -5,7 +5,7 @@ import {
   USAGE_LABELS,
   hasConflictingUsageLabels,
 } from '@/shared/constants/usage-labels';
-import { wordImageInputSchema } from './word-image-input';
+import { wordImageAttributionSchema, wordImageInputSchema } from './word-image-input';
 
 export const ulid = opaqueId;
 const wordClassId = choiceId('Kelas kata');
@@ -556,6 +556,10 @@ export const wordDetailResponseSchema = z.object({
         sha: z.string().nullable().optional(),
         alt_text: z.string().nullable(),
         is_primary: z.boolean(),
+        attribution: wordImageAttributionSchema
+          .extend({ provider: z.string() })
+          .nullable()
+          .optional(),
       }),
     ),
     audios: z.array(wordDetailAudioSchema),

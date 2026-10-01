@@ -1,5 +1,6 @@
 import type { UsageLabel } from '@/shared/constants/usage-labels';
 import type { ImageContentWarning } from '@/shared/constants/image-content-warnings';
+import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
 
 export interface CreateWordTranslationDto {
   languageId: string;
@@ -44,6 +45,8 @@ export interface CreateWordImageDto {
   isPrimary?: boolean;
   /** Peringatan visual per foto (bukan usage_labels kata). */
   contentWarnings?: ImageContentWarning[];
+  /** Kredit foto stock; null untuk upload user. */
+  attribution?: WordImageAttribution | null;
 }
 
 export type WordType = 'word' | 'idiom' | 'peribahasa' | 'ungkapan';

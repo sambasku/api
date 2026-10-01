@@ -28,6 +28,19 @@ export const contentWarningsField = z
     }
   });
 
+const httpsUrl = z
+  .url('URL atribusi tidak valid')
+  .refine((u) => u.startsWith('https://'), 'URL atribusi wajib https');
+
+/** Kredit foto stock dari Media Explorer; dibuang di mapper bila bukan stock. */
+export const wordImageAttributionSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  url: httpsUrl.optional(),
+  license: z.string().trim().max(40).optional(),
+  license_url: httpsUrl.optional(),
+  source: z.string().trim().max(60).optional(),
+});
+
 /**
  * Item images[] / body add-word-image.
  * `provider` opsional: stock → disimpan apa adanya; imagekit → staging;
@@ -42,6 +55,7 @@ export const wordImageInputSchema = z
     alt_text: z.string().trim().max(500).optional(),
     is_primary: z.boolean().default(false),
     content_warnings: contentWarningsField,
+    attribution: wordImageAttributionSchema.optional(),
   })
   .superRefine((img, ctx) => {
     if (!img.provider || !isStockWordImageProvider(img.provider)) return;

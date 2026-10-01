@@ -10,8 +10,20 @@ import type {
 const OPENVERSE_IMAGES_URL = 'https://api.openverse.org/v1/images/';
 const FETCH_TIMEOUT_MS = 8_000;
 const FALLBACK_QUERY = 'indonesia';
-/** CC0 / Public Domain + BY + BY-SA + BY-NC (always-on). */
-export const OPENVERSE_SAFE_LICENSES = 'cc0,pdm,by,by-sa,by-nc';
+/**
+ * CC0 / Public Domain + BY saja (always-on). BY-SA menular ke kartu share
+ * (karya turunan), BY-NC bentrok dengan donasi/monetisasi.
+ */
+export const OPENVERSE_SAFE_LICENSES = 'cc0,pdm,by';
+const ALLOWED_LICENSES = new Set(OPENVERSE_SAFE_LICENSES.split(','));
+
+/** `by` + `2.0` → `CC BY 2.0`; `cc0` → `CC0 1.0`; `pdm` → `Public Domain Mark 1.0`. */
+export function openverseLicenseLabel(license: string, version: string): string {
+  const v = version ? ` ${version}` : '';
+  if (license === 'cc0') return `CC0${v}`;
+  if (license === 'pdm') return `Public Domain Mark${v}`;
+  return `CC ${license.toUpperCase()}${v}`;
+}
 
 export class OpenverseBackgroundProvider implements ShareBackgroundProviderPort {
   readonly providerId = 'openverse' as const;
@@ -112,6 +124,12 @@ export function mapOpenversePhoto(raw: unknown): ShareBackgroundItem | null {
   const sensitivity = hit.unstable__sensitivity;
   if (Array.isArray(sensitivity) && sensitivity.length > 0) return null;
 
+  // Upstream bisa mengabaikan filter; lisensi tak dikenal = tak bisa diatribusi.
+  const license = typeof hit.license === 'string' ? hit.license : '';
+  if (!ALLOWED_LICENSES.has(license)) return null;
+  const licenseVersion =
+    typeof hit.license_version === 'string' ? hit.license_version : '';
+
   const id = hit.id != null ? String(hit.id) : '';
   const url = typeof hit.url === 'string' ? hit.url : '';
   const photographer =
@@ -138,5 +156,12 @@ export function mapOpenversePhoto(raw: unknown): ShareBackgroundItem | null {
     height,
     duration_seconds: 0,
     mime_type: 'image/jpeg',
+    license: openverseLicenseLabel(license, licenseVersion),
+    ...(typeof hit.license_url === 'string' && hit.license_url
+      ? { license_url: hit.license_url }
+      : {}),
+    ...(typeof hit.source === 'string' && hit.source
+      ? { source: hit.source }
+      : {}),
   };
 }

@@ -11,6 +11,7 @@ import type {
 import type { CreateWordDto, RelationType } from '../../application/dto/create-word.dto';
 import type { MeaningMedia } from '../entities/meaning.entity';
 import type { ImageContentWarning } from '@/shared/constants/image-content-warnings';
+import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
 
 // status & isVerified & isCorrected di-override use case
 // (Section 22 - approval gate; resolvePublication)
@@ -507,6 +508,7 @@ export interface WordRepository {
       altText?: string | null;
       isPrimary: boolean;
       contentWarnings?: ImageContentWarning[];
+      attribution?: WordImageAttribution | null;
       status: ChildStatus;
       isVerified: boolean;
     },

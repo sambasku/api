@@ -44,6 +44,11 @@ export interface ShareBackgroundItem {
   height: number;
   duration_seconds: number;
   mime_type: string;
+  /** Openverse (CC): label lisensi, mis. `CC BY 2.0`. Wajib di kredit. */
+  license?: string;
+  license_url?: string;
+  /** Openverse: sumber asli, mis. `flickr`. */
+  source?: string;
 }
 
 export type ShareBackgroundSort = 'relevant' | 'popular';
@@ -60,6 +65,8 @@ export interface ShareBackgroundProviderPort {
     sort?: ShareBackgroundSort,
     options?: ShareBackgroundSearchOptions,
   ): Promise<ShareBackgroundItem[]>;
+  /** Unsplash: wajib dipanggil saat user memilih foto (API Guidelines). */
+  trackDownload?(id: string): Promise<boolean>;
 }
 
 export interface ShareBackgroundProviderInfo {

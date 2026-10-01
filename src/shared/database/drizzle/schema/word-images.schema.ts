@@ -2,6 +2,7 @@ import { sqliteTable, text, integer, index, unique } from 'drizzle-orm/sqlite-co
 import { generateId } from '@/shared/utils/ulid';
 import { words } from './words.schema';
 import { users } from './users.schema';
+import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
 
 // Gambar contoh per kata - referensi ke file di provider eksternal
 // (ImageKit via ImageStoragePort). Provider-agnostic: kolom `provider`
@@ -25,6 +26,8 @@ export const wordImages = sqliteTable(
       .$type<string[]>()
       .notNull()
       .default([]),
+    /** Kredit foto stock (JSON WordImageAttribution); null untuk upload user. */
+    attribution: text('attribution', { mode: 'json' }).$type<WordImageAttribution>(),
     // Approval gate (Section 22) - kontribusi mandiri: pending sampai
     // disetujui verifikator; identitas reviewer ada di contribution_reviews
     status: text('status').notNull().default('published'),

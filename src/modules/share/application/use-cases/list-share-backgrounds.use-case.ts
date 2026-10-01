@@ -31,7 +31,7 @@ interface CacheEntry {
 
 const DEFAULT_LIMIT = 3;
 /** Bump saat policy safe-search berubah agar cache lama tidak tersaji. */
-const CACHE_KEY_PREFIX = 'v2';
+const CACHE_KEY_PREFIX = 'v3';
 
 function isKnownProvider(id: string): id is ShareBackgroundProviderId {
   return (SHARE_BACKGROUND_PROVIDER_IDS as readonly string[]).includes(id);

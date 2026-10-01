@@ -44,6 +44,9 @@ const backgroundItemSchema = z.object({
   height: z.number().int(),
   duration_seconds: z.number().int(),
   mime_type: z.string(),
+  license: z.string().optional(),
+  license_url: z.string().optional(),
+  source: z.string().optional(),
 });
 
 export const listShareBackgroundsResponseSchema = z.object({
@@ -57,6 +60,18 @@ export const listShareBackgroundsResponseSchema = z.object({
     media: z.enum(SHARE_MEDIA_KINDS),
     items: z.array(backgroundItemSchema),
   }),
+});
+
+export const trackUnsplashDownloadBodySchema = z.object({
+  id: z
+    .string('Foto wajib dipilih')
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/, 'Foto tidak valid. Pilih ulang dari daftar.'),
+});
+
+export const trackUnsplashDownloadResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ tracked: z.boolean() }),
 });
 
 export const listShareBackgroundProvidersResponseSchema = z.object({

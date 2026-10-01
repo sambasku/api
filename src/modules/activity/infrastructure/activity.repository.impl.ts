@@ -308,11 +308,14 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         row.authorDeletedAt,
       );
       const preview = previewMap.get(`${row.entityType}:${row.entityId}`);
-      const targetLabel = preview?.label || 'entri kamus';
+      const targetLabel =
+        preview?.label ||
+        (row.entityType === 'discussion' ? 'diskusi' : 'entri kamus');
+      // Netral, bukan vonis. Mobile membaca arah ikon dari akhiran ini.
       const body =
         row.value >= 0
-          ? `Setuju dengan ${targetLabel}`
-          : `Kurang setuju dengan ${targetLabel}`;
+          ? `Menandai ${targetLabel} sudah pas`
+          : `Menandai ${targetLabel} perlu dicek ulang`;
       return {
         id: `vote:${row.id}`,
         kind: 'vote' as const,
