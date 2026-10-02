@@ -55,8 +55,10 @@ PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/sambasku/audios"
 # Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
 SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
-# Gate JWT azp pada write (false = grace / backward-compat token tanpa azp).
-OAUTH_REQUIRE_AZP = "false"
+# Gate JWT azp pada write (true = ketat: token tanpa azp -> CLIENT_REQUIRED).
+# Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
+# -> client paksa re-login. Cutover lewat redeploy.
+OAUTH_REQUIRE_AZP = "true"
 
 [observability]
 enabled = true
@@ -104,8 +106,10 @@ PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/coem/staging-audios"
 # Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
 SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
-# Gate JWT azp pada write (false = grace / backward-compat token tanpa azp).
-OAUTH_REQUIRE_AZP = "false"
+# Gate JWT azp pada write (true = ketat: token tanpa azp -> CLIENT_REQUIRED).
+# Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
+# -> client paksa re-login. Cutover lewat redeploy.
+OAUTH_REQUIRE_AZP = "true"
 
 [env.staging.observability]
 enabled = true
