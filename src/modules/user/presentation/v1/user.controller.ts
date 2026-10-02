@@ -4,6 +4,7 @@ import type { AppVariables } from '@/shared/types';
 import type { GetPublicProfileUseCase } from '../../application/use-cases/get-public-profile.use-case';
 import type { GetPublicActivityUseCase } from '../../application/use-cases/get-public-activity.use-case';
 import type { SuggestMentionUsersUseCase } from '../../application/use-cases/suggest-mention-users.use-case';
+import type { MentionUserRow } from '../../domain/entities/public-profile.entity';
 import type { UploadAvatarUseCase } from '../../application/use-cases/upload-avatar.use-case';
 import type { DeleteAvatarUseCase } from '../../application/use-cases/delete-avatar.use-case';
 import type {
@@ -106,6 +107,11 @@ export class UserController {
         })),
       },
     });
+  }
+
+  /** Internal method untuk routes cache - return raw items. */
+  async suggestMentionInternal(q: string): Promise<MentionUserRow[]> {
+    return this.deps.suggestMention.execute(q);
   }
 
   async updateMyProfile(c: Context, body: UpdateMyProfileBody) {
