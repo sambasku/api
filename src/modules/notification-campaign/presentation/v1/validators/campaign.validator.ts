@@ -9,6 +9,56 @@ export const deepLinkKindSchema = z.enum([
   'none',
 ]);
 
+/** Host yang boleh dipakai deep_link_kind=url. Sinkron dengan mobile:
+ *  lib/core/services/notification_navigation.dart - kAllowedNotificationHosts. */
+const ALLOWED_DEEP_LINK_HOSTS = new Set([
+  'sambasku.com',
+  'sambasku-web-staging.iamutaki.com',
+  'play.google.com',
+]);
+
+function refineDeepLinkUrl<
+  T extends {
+    deep_link_kind?: string | null;
+    deep_link_value?: string | null;
+  },
+>(schema: z.ZodType<T>) {
+  return schema.superRefine((v, ctx) => {
+    if (v.deep_link_kind !== 'url') return;
+    const raw = v.deep_link_value?.trim();
+    if (raw == null || raw === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['deep_link_value'],
+        message: 'URL deep link wajib diisi untuk kind url',
+      });
+      return;
+    }
+    let host: string;
+    try {
+      const u = new URL(raw);
+      if (u.protocol !== 'https:') throw new Error('bukan https');
+      host = u.host.toLowerCase();
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['deep_link_value'],
+        message: 'URL deep link harus HTTPS yang valid',
+      });
+      return;
+    }
+    if (!ALLOWED_DEEP_LINK_HOSTS.has(host)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['deep_link_value'],
+        message:
+          'Host URL deep link tidak diizinkan. Gunakan sambasku.com, ' +
+          'sambasku-web-staging.iamutaki.com, atau play.google.com',
+      });
+    }
+  });
+}
+
 export const audienceTypeSchema = z.enum(['all', 'selected']);
 
 export const campaignStatusSchema = z.enum([
@@ -42,27 +92,31 @@ const imageUrlSchema = z
   .nullable()
   .optional();
 
-export const createTemplateBodySchema = z.object({
-  name: z
-    .string({ error: 'Nama template wajib diisi' })
-    .trim()
-    .min(1, 'Nama template wajib diisi')
-    .max(100, 'Nama template maksimal 100 karakter'),
-  title: titleSchema,
-  body: bodySchema,
-  image_url: imageUrlSchema,
-  deep_link_kind: deepLinkKindSchema.default('none'),
-  deep_link_value: z.string().trim().max(500).nullable().optional(),
-});
+export const createTemplateBodySchema = refineDeepLinkUrl(
+  z.object({
+    name: z
+      .string({ error: 'Nama template wajib diisi' })
+      .trim()
+      .min(1, 'Nama template wajib diisi')
+      .max(100, 'Nama template maksimal 100 karakter'),
+    title: titleSchema,
+    body: bodySchema,
+    image_url: imageUrlSchema,
+    deep_link_kind: deepLinkKindSchema.default('none'),
+    deep_link_value: z.string().trim().max(500).nullable().optional(),
+  }),
+);
 
-export const updateTemplateBodySchema = z.object({
-  name: z.string().trim().min(1).max(100).optional(),
-  title: titleSchema.optional(),
-  body: bodySchema.optional(),
-  image_url: imageUrlSchema,
-  deep_link_kind: deepLinkKindSchema.optional(),
-  deep_link_value: z.string().trim().max(500).nullable().optional(),
-});
+export const updateTemplateBodySchema = refineDeepLinkUrl(
+  z.object({
+    name: z.string().trim().min(1).max(100).optional(),
+    title: titleSchema.optional(),
+    body: bodySchema.optional(),
+    image_url: imageUrlSchema,
+    deep_link_kind: deepLinkKindSchema.optional(),
+    deep_link_value: z.string().trim().max(500).nullable().optional(),
+  }),
+);
 
 export const listTemplatesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -99,21 +153,23 @@ export const listTemplatesResponseSchema = z.object({
   }),
 });
 
-export const createCampaignBodySchema = z
-  .object({
-    template_id: opaqueId.nullable().optional(),
-    title: titleSchema.optional(),
-    body: bodySchema.optional(),
-    image_url: imageUrlSchema,
-    deep_link_kind: deepLinkKindSchema.optional(),
-    deep_link_value: z.string().trim().max(500).nullable().optional(),
-    audience_type: audienceTypeSchema,
-    user_ids: z.array(opaqueId).max(500).optional(),
-    send_at: z.string().datetime({ offset: true }).nullable().optional(),
-  })
-  .refine((v) => v.template_id || (v.title && v.body), {
-    message: 'Pilih template atau isi judul dan body',
-  });
+export const createCampaignBodySchema = refineDeepLinkUrl(
+  z
+    .object({
+      template_id: opaqueId.nullable().optional(),
+      title: titleSchema.optional(),
+      body: bodySchema.optional(),
+      image_url: imageUrlSchema,
+      deep_link_kind: deepLinkKindSchema.optional(),
+      deep_link_value: z.string().trim().max(500).nullable().optional(),
+      audience_type: audienceTypeSchema,
+      user_ids: z.array(opaqueId).max(500).optional(),
+      send_at: z.string().datetime({ offset: true }).nullable().optional(),
+    })
+    .refine((v) => v.template_id || (v.title && v.body), {
+      message: 'Pilih template atau isi judul dan body',
+    }),
+);
 
 export const listCampaignsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
