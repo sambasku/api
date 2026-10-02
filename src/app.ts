@@ -1325,7 +1325,7 @@ app.route(
   createAdminWordReportRoutes({ controller: wordReportController, authenticate }),
 );
 
-// Statistik dashboard - semua role yang login (dashboard = halaman pertama konsol)
+// Statistik dashboard - hanya admin, root & reviewer (issue #33)
 app.route('/api/v1/admin/dashboard', createDashboardRoutes({ controller: dashboardController, authenticate }));
 
 // ---- Admin users (Package A): list user + ubah role, hanya admin & root ----

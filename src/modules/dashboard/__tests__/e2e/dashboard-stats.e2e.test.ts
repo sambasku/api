@@ -170,13 +170,12 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
     expect(typeof d.verifier_applications.rejected).toBe('number');
   });
 
-  it('contributor (login) juga boleh akses - dashboard adalah halaman pertama semua role', async () => {
+  it('contributor (login) → 403 (agregat admin, issue #33)', async () => {
     const res = await request('/api/v1/admin/dashboard/stats', {
       headers: { authorization: `Bearer ${contributorToken}` },
     });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error_code).toBe('FORBIDDEN');
   });
 
   it('tanpa token → 401', async () => {
