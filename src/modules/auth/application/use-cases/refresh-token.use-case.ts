@@ -6,6 +6,7 @@ import { generateToken, hashToken } from '../utils/token';
 import type { ApiClientRepository } from '@/modules/developer-oauth/domain/repositories/api-client.repository';
 import { FIRST_PARTY_SCOPE_STRING } from '@/modules/developer-oauth/domain/entities/api-client.entity';
 import { derivePrimaryRole } from '@/shared/utils/derive-primary-role';
+import { env } from '@/shared/config/env';
 
 export interface RefreshResult {
   accessToken: string;
@@ -65,7 +66,16 @@ export class RefreshTokenUseCase {
     clientId: string | null,
   ): Promise<{ clientId: string | null; scopes: string | null }> {
     if (!clientId) {
-      // Token legacy tanpa client_id - biarkan JWT tanpa azp (OAUTH_REQUIRE_AZP=false)
+      // Mode ketat (issue #31): sesi legacy tanpa client_id dihentikan di
+      // refresh supaya client logout bersih, bukan meneruskan token tanpa azp
+      // yang pasti gagal 401 CLIENT_REQUIRED di gate write.
+      if (env.OAUTH_REQUIRE_AZP) {
+        throw new UnauthorizedError(
+          'SESSION_STALE',
+          'Sesi sudah kadaluarsa. Silakan masuk lagi ya.',
+        );
+      }
+      // Grace: token legacy tetap tanpa azp (OAUTH_REQUIRE_AZP=false)
       return { clientId: null, scopes: null };
     }
     if (!this.apiClients) {
