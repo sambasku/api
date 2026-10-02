@@ -23,21 +23,22 @@ const json = <T extends z.ZodType>(schema: T) => ({
 
 export interface BugReportRoutesDeps {
   controller: BugReportController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
+const tokenUserLimit = rateLimit({
+  points: 20,
+  duration: 3600,
+  keyFn: (c) => {
+    const uid = (c as { get: (k: 'user') => { user_id: string } | undefined }).get('user')?.user_id;
+    return uid ? `bug-tok:user:${uid}` : '';
+  },
+});
 const tokenIpLimit = rateLimit({
   points: 40,
   duration: 3600,
   keyFn: (c) => `bug-tok:ip:${clientIpKey(c)}`,
-});
-const tokenDeviceLimit = rateLimit({
-  points: 20,
-  duration: 3600,
-  keyFn: (c) => {
-    const d = normalizedDeviceId(c);
-    return d ? `bug-tok:dev:${d}` : '';
-  },
 });
 
 const submitUserLimit = rateLimit({
@@ -65,7 +66,7 @@ const submitDeviceLimit = rateLimit({
 export function createBugReportRoutes(deps: BugReportRoutesDeps) {
   const routes = createOpenApiApp();
 
-  routes.use('/upload-token', tokenIpLimit, tokenDeviceLimit);
+  routes.use('/upload-token', deps.authenticate, tokenUserLimit, tokenIpLimit);
 
   routes.use('/', deps.optionalAuthenticate);
   routes.use('/', async (c, next) => {
@@ -88,7 +89,7 @@ export function createBugReportRoutes(deps: BugReportRoutesDeps) {
     method: 'get',
     path: '/upload-token',
     tags: ['Bug Reports'],
-    summary: 'Kredensial direct-upload ImageKit, folder hanya /bug-reports (publik)',
+    summary: 'Kredensial direct-upload ImageKit (wajib login), folder hanya /bug-reports',
     request: { query: bugReportUploadTokenQuerySchema },
     responses: {
       200: {
@@ -97,6 +98,10 @@ export function createBugReportRoutes(deps: BugReportRoutesDeps) {
       },
       400: {
         description: 'Folder bukan /bug-reports',
+        content: json(errorResponseSchema),
+      },
+      401: {
+        description: 'Bearer tidak ada/invalid',
         content: json(errorResponseSchema),
       },
       429: { description: 'Rate limit', content: json(errorResponseSchema) },

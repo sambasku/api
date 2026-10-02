@@ -1252,7 +1252,7 @@ const bugReportController = new BugReportController({
 });
 app.route(
   '/api/v1/bug-reports',
-  createBugReportRoutes({ controller: bugReportController, optionalAuthenticate }),
+  createBugReportRoutes({ controller: bugReportController, optionalAuthenticate, authenticate }),
 );
 app.route(
   '/api/v1/admin/bug-reports',
