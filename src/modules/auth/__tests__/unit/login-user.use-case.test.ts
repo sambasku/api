@@ -15,6 +15,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     email: 'budi@test.com',
     phone: null,
     passwordHash: 'argon2id$hash',
+    roles: ['contributor'],
     role: 'contributor',
     isActive: true,
     emailVerified: true,
@@ -116,6 +117,7 @@ describe('LoginUserUseCase', () => {
       id: '01TESTULIDUSERID00000000',
       username: 'budi',
       displayName: 'tester',
+      roles: ['contributor'],
       role: 'contributor',
       avatarUrl: null,
     });

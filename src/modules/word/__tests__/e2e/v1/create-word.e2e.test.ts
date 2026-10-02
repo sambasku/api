@@ -84,9 +84,7 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses, categories } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { categories, languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -119,7 +117,8 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
       email: `kon${stamp}@test.com`,
       code: capturedOtpDisplayCode(),
     });
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, `adm${stamp}@test.com`));
+    const [__uid_121] = await db.select({ id: users.id }).from(users).where(eq(users.email, `adm${stamp}@test.com`)).limit(1);
+    if (__uid_121) await db.insert(userRoles).values({ userId: __uid_121.id, role: 'admin' }).onConflictDoNothing();
 
     adminToken = await login(`adm${stamp}@test.com`);
     contributorToken = await login(`kon${stamp}@test.com`);

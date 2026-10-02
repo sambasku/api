@@ -37,6 +37,7 @@ export class UserController {
         username: profile.username,
         display_name: profile.displayName,
         bio: profile.bio,
+        roles: profile.roles,
         role: profile.role,
         is_verifier: profile.isVerifier,
         joined_at: profile.joinedAt.toISOString(),

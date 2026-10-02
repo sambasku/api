@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
+import { userRoles } from '@/shared/database/drizzle/schema';
 import {
   comments,
   contributionReviews,
@@ -13,6 +14,7 @@ import {
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
+import { derivePrimaryRole } from '@/shared/utils/derive-primary-role';
 import type {
   MentionUserRow,
   PublicActivityItem,
@@ -62,25 +64,29 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         username: users.username,
         displayName: users.displayName,
         bio: users.bio,
-        role: users.role,
         joinedAt: users.createdAt,
         avatarUrl: users.avatarUrl,
       })
       .from(users)
       .where(and(eq(users.username, username), isNull(users.deletedAt), eq(users.isActive, true)))
       .limit(1);
+    if (!row) return null;
+    const roles = await this.db
+      .select({ role: userRoles.role })
+      .from(userRoles)
+      .where(eq(userRoles.userId, row.id));
+    const roleList = roles.map((r) => r.role);
 
-    return row
-      ? {
-          id: row.id,
-          username: row.username,
-          displayName: row.displayName || row.username,
-          bio: row.bio ?? null,
-          role: row.role,
-          joinedAt: row.joinedAt,
-          avatarUrl: row.avatarUrl ?? null,
-        }
-      : null;
+    return {
+      id: row.id,
+      username: row.username,
+      displayName: row.displayName || row.username,
+      bio: row.bio ?? null,
+      roles: roleList,
+      role: derivePrimaryRole(roleList),
+      joinedAt: row.joinedAt,
+      avatarUrl: row.avatarUrl ?? null,
+    };
   }
 
   /** Prefix-search username untuk autocomplete mention. Kolom publik saja. */

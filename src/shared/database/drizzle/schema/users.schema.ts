@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex, index, primaryKey } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 
 // Sesuai tabel `users` di docs/dbdiagram.dbml
@@ -19,8 +19,9 @@ export const users = sqliteTable(
     phone: text('phone'),
     // NULLABLE (Section 23): user OAuth-only tidak punya password.
     passwordHash: text('password_hash'),
-    // administrator | editor | reviewer | contributor
-    role: text('role').notNull().default('contributor'),
+    // Role dipindah ke tabel junction `user_roles` (0052) - satu user bisa
+    // pegang banyak role. Field `role` di wire API tetap dikirim (deprecated,
+    // derived tertinggi dari roles).
     isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
     // false = akun boleh masuk dan membaca, tetapi tidak boleh mengirim UGC tulis
     // (kata/media/usul ubah, komentar, diskusi). Admin "Hentikan kontribusi".
@@ -44,5 +45,22 @@ export const users = sqliteTable(
   (t) => [
     uniqueIndex('users_phone_unique').on(t.phone).where(sql`phone is not null`),
     index('users_last_seen_at_idx').on(t.lastSeenAt),
+  ],
+);
+
+// Junction multi role (0052). PK composite (user_id, role) = satu role sekali
+// per user; index user_id untuk attach saat load, index role untuk filter/list.
+export const userRoles = sqliteTable(
+  'user_roles',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.role] }),
+    index('user_roles_user_id_idx').on(t.userId),
+    index('user_roles_role_idx').on(t.role),
   ],
 );

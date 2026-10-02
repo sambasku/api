@@ -11,7 +11,7 @@ import { isVerifierRole } from '../utils/resolve-publication';
  */
 export function assertContributorWordImageProvider(
   provider: string,
-  role: string,
+  role: string | string[],
 ): void {
   if (isVerifierRole(role)) return;
   if (provider === 'imagekit' || isStockWordImageProvider(provider)) return;

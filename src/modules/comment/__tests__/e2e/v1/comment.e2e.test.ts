@@ -42,9 +42,7 @@ describe.skipIf(!hasTestDb)('Comment E2E v1 - post-moderation (09 doc)', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses, categories } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { users, languages, wordClasses, categories, userRoles } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -67,7 +65,8 @@ describe.skipIf(!hasTestDb)('Comment E2E v1 - post-moderation (09 doc)', () => {
       }));
     }
     await db.update(users).set({ emailVerified: true });
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, `adm${stamp}@test.com`));
+    const [__uid_69] = await db.select({ id: users.id }).from(users).where(eq(users.email, `adm${stamp}@test.com`)).limit(1);
+    if (__uid_69) await db.insert(userRoles).values({ userId: __uid_69.id, role: 'admin' }).onConflictDoNothing();
 
     const login = async (email: string) => {
       const res = await post('/api/v1/auth/login', { email, password: 'Password123' });
@@ -106,7 +105,7 @@ describe.skipIf(!hasTestDb)('Comment E2E v1 - post-moderation (09 doc)', () => {
   // skenario berikutnya tidak ketiban CONTRIBUTION_MUTED.
   beforeEach(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, ugcAbuseEvents } = await import('@/shared/database/drizzle/schema');
+    const { ugcAbuseEvents, users } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     await db.delete(ugcAbuseEvents);
     await db.update(users).set({

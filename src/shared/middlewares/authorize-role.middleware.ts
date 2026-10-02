@@ -2,11 +2,13 @@ import { createMiddleware } from 'hono/factory';
 import type { AppVariables } from '@/shared/types';
 
 // Factory: authorizeRole('admin', 'editor') - dipakai proteksi endpoint
-// modul lain (misal POST /api/v1/admin/words dari modul word)
+// modul lain (misal POST /api/v1/admin/words dari modul word).
+// Multi role: user lolos bila punya SALAH SATU role yang diizinkan.
 export function authorizeRole(...allowedRoles: string[]) {
   return createMiddleware<{ Variables: AppVariables }>(async (c, next) => {
     const user = c.get('user');
-    if (!user || !allowedRoles.includes(user.role)) {
+    const hasAny = user?.roles.some((r) => allowedRoles.includes(r)) ?? false;
+    if (!user || !hasAny) {
       return c.json(
         {
           success: false as const,

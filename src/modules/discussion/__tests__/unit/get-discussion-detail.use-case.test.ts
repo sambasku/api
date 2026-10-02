@@ -20,6 +20,7 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     userId: USER,
     username: 'peminta',
     displayName: 'peminta',
+    avatarUrl: null,
     body: 'Apa arti ini?',
     linkUrl: null,
     images: [],

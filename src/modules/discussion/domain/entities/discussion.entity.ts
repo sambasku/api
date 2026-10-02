@@ -20,6 +20,8 @@ export interface Discussion {
   username: string | null;
   /** Nama tampilan publik; fallback username. */
   displayName: string | null;
+  /** Avatar publik pembuka thread; null jika penulis hilang / tanpa foto. */
+  avatarUrl: string | null;
   body: string | null;
   /** Tautan https luar (opsional). */
   linkUrl: string | null;

@@ -61,9 +61,7 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses, categories } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { categories, languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -88,7 +86,8 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
         email: `dshkon${stamp}@test.com`,
     }));
     await db.update(users).set({ emailVerified: true });
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, `dshadm${stamp}@test.com`));
+    const [__uid_90] = await db.select({ id: users.id }).from(users).where(eq(users.email, `dshadm${stamp}@test.com`)).limit(1);
+    if (__uid_90) await db.insert(userRoles).values({ userId: __uid_90.id, role: 'admin' }).onConflictDoNothing();
 
     adminToken = await login(`dshadm${stamp}@test.com`);
     contributorToken = await login(`dshkon${stamp}@test.com`);
@@ -151,7 +150,7 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
     expect(d.users.active).toBe(2);
     expect(typeof d.users.online_recently).toBe('number');
     expect(d.users.by_role.admin).toBe(1);
-    expect(d.users.by_role.contributor).toBe(1);
+    expect(d.users.by_role.contributor).toBe(2);
 
     expect(typeof d.activity.audit_logs_last_7_days).toBe('number');
 

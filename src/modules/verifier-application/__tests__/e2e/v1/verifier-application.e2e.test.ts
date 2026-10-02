@@ -55,7 +55,7 @@ describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users } = await import('@/shared/database/drizzle/schema');
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -76,7 +76,8 @@ describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
         email: contributorEmail,
     }));
     await post('/api/v1/auth/verify-email', { email: contributorEmail, code: capturedOtpDisplayCode() });
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, adminEmail));
+    const [__uid_78] = await db.select({ id: users.id }).from(users).where(eq(users.email, adminEmail)).limit(1);
+    if (__uid_78) await db.insert(userRoles).values({ userId: __uid_78.id, role: 'admin' }).onConflictDoNothing();
 
     const login = async (email: string) => {
       const res = await post('/api/v1/auth/login', { email, password: 'Password123' });
@@ -153,10 +154,11 @@ describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
     });
 
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users } = await import('@/shared/database/drizzle/schema');
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const [user] = await db.select().from(users).where(eq(users.email, contributorEmail)).limit(1);
-    expect(user.role).toBe('reviewer');
+    const roles = await db.select().from(userRoles).where(eq(userRoles.userId, user!.id));
+    expect(roles.map((r) => r.role)).toContain('reviewer');
 
     const detail = await get(`/api/v1/admin/verifier-applications/${applicationId}`, adminToken);
     expect(detail.status).toBe(200);

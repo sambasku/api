@@ -3,19 +3,25 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { User, UserRole } from '../../domain/entities/user.entity';
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { RefreshTokenRepository } from '../../domain/repositories/refresh-token.repository';
+import { derivePrimaryRole } from '../../domain/entities/user.entity';
 
 export interface UpdateUserRoleCommand {
   targetUserId: string;
-  newRole: UserRole;
+  /** Set role baru (replace semua). Minimal satu, tanpa root. */
+  newRoles: UserRole[];
   actorId: string;
-  actorRole: User['role'];
+  actorRoles: string[];
   requestId?: string | null;
 }
 
 export interface UpdateUserRoleResult {
   id: string;
+  /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: User['role'];
+  roles: User['roles'];
 }
+
+const allowedRolesForAdmin: User['role'][] = ['contributor', 'editor', 'reviewer', 'admin'];
 
 // Urutan guard: SELALU check security boundary terdalam duluan.
 export class UpdateUserRoleUseCase {
@@ -32,7 +38,7 @@ export class UpdateUserRoleUseCase {
     }
 
     // Guard 1: tidak boleh ubah ROLE user yang ROLEnya root (security boundary)
-    if (target.role === 'root') {
+    if (target.roles.includes('root')) {
       throw new ForbiddenError(
         'CANNOT_CHANGE_ROOT',
         'Tidak diizinkan mengubah user dengan peran root',
@@ -48,24 +54,26 @@ export class UpdateUserRoleUseCase {
     }
 
     // Guard 3: root role hanya boleh di-set via SQL seed, tidak via endpoint
-    if (cmd.newRole === 'root') {
+    if (cmd.newRoles.includes('root')) {
       throw new BadRequestError(
         'INVALID_ROLE',
         'Peran root tidak dapat diatur via panel admin',
       );
     }
 
-    const allowedRolesForAdmin: User['role'][] = ['contributor', 'editor', 'reviewer', 'admin'];
-    if (!allowedRolesForAdmin.includes(cmd.newRole)) {
+    const roles = [...new Set(cmd.newRoles)];
+    if (roles.length === 0 || roles.some((r) => !allowedRolesForAdmin.includes(r))) {
       throw new BadRequestError('INVALID_ROLE', 'Peran baru tidak valid');
     }
 
-    if (cmd.newRole === target.role) {
-      return { id: target.id, role: target.role };
+    const prevRoles = target.roles;
+    const sameSet =
+      roles.length === prevRoles.length && roles.every((r) => prevRoles.includes(r));
+    if (sameSet) {
+      return { id: target.id, role: target.role, roles: target.roles };
     }
-    const prevRole = target.role;
 
-    await this.userRepo.updateRole(target.id, cmd.newRole);
+    await this.userRepo.setRoles(target.id, roles);
     await this.refreshTokenRepo.revokeAllForUser(target.id);
 
     // Best-effort (tidak throw): audit log tidak boleh bikin request gagal.
@@ -74,11 +82,11 @@ export class UpdateUserRoleUseCase {
       action: 'update',
       entityType: 'user',
       entityId: target.id,
-      oldData: { role: prevRole },
-      newData: { role: cmd.newRole },
+      oldData: { roles: prevRoles },
+      newData: { roles },
       requestId: cmd.requestId ?? null,
     });
 
-    return { id: target.id, role: cmd.newRole };
+    return { id: target.id, role: derivePrimaryRole(roles), roles };
   }
 }

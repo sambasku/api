@@ -11,11 +11,13 @@ const WORD = { id: '01WORDULID000000000000000', lemma: 'makatn' } as {
 
 const CONTRIBUTOR = {
   userId: '01CONTRIBUTORULID0000000',
+  roles: ['contributor'],
   role: 'contributor',
   requestId: null,
 };
 const ADMIN = {
   userId: '01ADMINULID00000000000000',
+  roles: ['admin'],
   role: 'admin',
   requestId: null,
 };

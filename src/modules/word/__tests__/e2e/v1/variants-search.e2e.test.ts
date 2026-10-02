@@ -38,9 +38,7 @@ describe.skipIf(!hasTestDb)('Variasi Penulisan E2E v1 (11 doc) - search + valida
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses, categories } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { categories, languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -61,7 +59,9 @@ describe.skipIf(!hasTestDb)('Variasi Penulisan E2E v1 (11 doc) - search + valida
         name: `adm${stamp}`,
         email: email,
     }));
-    await db.update(users).set({ role: 'admin', emailVerified: true }).where(eq(users.email, email));
+    await db.update(users).set({emailVerified: true}).where(eq(users.email, email));
+    const [__uid_64] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (__uid_64) await db.insert(userRoles).values({ userId: __uid_64.id, role: 'admin' }).onConflictDoNothing();
 
     // User sistem Anonim - penampung kontribusi tanpa login (03 doc)
     await db.insert(users).values({
@@ -69,7 +69,6 @@ describe.skipIf(!hasTestDb)('Variasi Penulisan E2E v1 (11 doc) - search + valida
       username: ANONIM_USERNAME,
       email: ANONIM_EMAIL,
       passwordHash: 'bukan-hash-login',
-      role: 'contributor',
     });
 
     const login = await post('/api/v1/auth/login', { email, password: 'Password123' });

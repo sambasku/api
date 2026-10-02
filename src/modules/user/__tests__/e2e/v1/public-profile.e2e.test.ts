@@ -30,7 +30,7 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, contributions, contributionReviews, votes, words } =
+    const { users, contributions, contributionReviews, votes, words, userRoles } =
       await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
@@ -42,7 +42,6 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
       displayName: ANONIM_USERNAME,
       email: ANONIM_EMAIL,
       passwordHash: 'bukan-hash-login',
-      role: 'contributor',
     });
 
     const appModule = await import('@/app');
@@ -65,7 +64,8 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     const reviewerId = revBody.data.user_id as string;
     const contributorId = konBody.data.user_id as string;
 
-    await db.update(users).set({ role: 'reviewer' }).where(eq(users.id, reviewerId));
+    const [__uid_66] = await db.select({ id: users.id }).from(users).where(eq(users.id, reviewerId)).limit(1);
+    if (__uid_66) await db.insert(userRoles).values({ userId: __uid_66.id, role: 'reviewer' }).onConflictDoNothing();
 
     const contributionId = ulid26(`01E2ECON${stamp}`);
     await db.insert(contributions).values({

@@ -5,6 +5,9 @@ import type { AppVariables } from '@/shared/types';
 
 export interface AccessTokenPayload {
   user_id: string; // ULID
+  /** Semua role dari token. Sumber kebenaran otorisasi. */
+  roles: string[];
+  /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: string;
   azp?: string;
   scope?: string;
@@ -34,6 +37,8 @@ function scheduleBackground(c: Context, task: Promise<unknown>) {
 function applyUser(c: Context<{ Variables: AppVariables }>, payload: AccessTokenPayload) {
   c.set('user', {
     user_id: payload.user_id,
+    roles: payload.roles,
+    // @deprecated wire compat - derived tertinggi (baca roles)
     role: payload.role,
     azp: payload.azp,
     scope: payload.scope,

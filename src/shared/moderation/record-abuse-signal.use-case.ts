@@ -172,7 +172,7 @@ export class RecordAbuseSignalUseCase {
 
     // Root tidak di-auto-deactivate (parity SetUserActive).
     const user = await this.userRepo.findById(userId);
-    if (!user || user.role === 'root') return;
+    if (!user || user.roles.includes('root')) return;
 
     await this.userRepo.setIsActive(userId, false);
     await this.refreshTokenRepo.revokeAllForUser(userId);

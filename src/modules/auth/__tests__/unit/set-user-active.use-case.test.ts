@@ -19,6 +19,7 @@ function user(partial: Partial<User> = {}): User {
     email: 'siti@test.com',
     phone: null,
     passwordHash: 'hash',
+    roles: ['contributor'],
     role: 'contributor',
     isActive: true,
     canContribute: true,

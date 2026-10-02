@@ -24,6 +24,8 @@ export const loginResponseSchema = z.object({
       id: z.string(), // ULID
       username: z.string(),
       display_name: z.string(),
+      roles: z.array(z.string()).min(1),
+      /** @deprecated Derived tertinggi dari roles (wire compat, baca roles). */
       role: z.string(),
       avatar_url: z.string().url().nullable(),
     }),

@@ -47,6 +47,7 @@ export class VerifierApplicationController {
     const row = await this.deps.create.execute({
       userId: user.user_id,
       role: user.role,
+      roles: user.roles,
       phone: body.phone,
       address: body.address,
       socialLinks: body.social_links,
@@ -65,6 +66,7 @@ export class VerifierApplicationController {
     const row = await this.deps.resubmit.execute({
       userId: user.user_id,
       role: user.role,
+      roles: user.roles,
       phone: body.phone,
       address: body.address,
       socialLinks: body.social_links,
@@ -119,7 +121,7 @@ export class VerifierApplicationController {
     const result = await this.deps.approve.execute({
       applicationId: id,
       actorId: user.user_id,
-      actorRole: user.role,
+      actorRoles: user.roles,
       requestId: this.requestId(c),
     });
     return c.json({ success: true as const, data: result });

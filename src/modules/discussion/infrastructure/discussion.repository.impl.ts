@@ -93,12 +93,14 @@ function toDiscussion(
   row: DiscussionRow,
   username: string | null,
   displayName: string | null,
+  avatarUrl: string | null,
 ): Discussion {
   return {
     id: row.id,
     userId: row.userId,
     username,
     displayName,
+    avatarUrl,
     body: row.body,
     linkUrl: row.linkUrl ?? null,
     images: asImages(row.images),
@@ -170,7 +172,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         status: 'pending_review',
       })
       .returning();
-    return toDiscussion(row, null, null);
+    return toDiscussion(row, null, null, null);
   }
 
   async findById(id: string): Promise<Discussion | null> {
@@ -179,6 +181,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         discussion: discussions,
         username: users.username,
         displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
         authorDeletedAt: users.deletedAt,
       })
       .from(discussions)
@@ -190,6 +193,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
       row.discussion,
       publicAccountName(row.username, row.authorDeletedAt),
       publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
+      row.authorDeletedAt ? null : (row.avatarUrl ?? null),
     );
   }
 
@@ -203,6 +207,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         discussion: discussions,
         username: users.username,
         displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
         authorDeletedAt: users.deletedAt,
       })
       .from(discussions)
@@ -224,6 +229,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         r.discussion,
         publicAccountName(r.username, r.authorDeletedAt),
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+        r.authorDeletedAt ? null : (r.avatarUrl ?? null),
       ),
     );
     return {
@@ -263,6 +269,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         discussion: discussions,
         username: users.username,
         displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
         authorDeletedAt: users.deletedAt,
         upvotes: upvoteExpr,
       })
@@ -285,6 +292,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         r.discussion,
         publicAccountName(r.username, r.authorDeletedAt),
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+        r.authorDeletedAt ? null : (r.avatarUrl ?? null),
       ),
     );
 
@@ -390,7 +398,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
-        userRole: users.role,
+        userRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${users.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
         authorDeletedAt: users.deletedAt,
       })
       .from(discussionReplies)
@@ -414,7 +422,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
-        userRole: users.role,
+        userRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${users.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
         authorDeletedAt: users.deletedAt,
       })
       .from(discussionReplies)

@@ -121,7 +121,7 @@ describe.skipIf(!hasTestDb)('Admin create user E2E', () => {
   beforeAll(async () => {
     const { capturedOtpDisplayCode } = await import('@/shared/testing/e2e-auth');
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users } = await import('@/shared/database/drizzle/schema');
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const { eq } = await import('drizzle-orm');
     const appModule = await import('@/app');
     app = appModule.app;
@@ -150,7 +150,8 @@ describe.skipIf(!hasTestDb)('Admin create user E2E', () => {
     }
 
     const db = getTestDb();
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, adminEmail));
+    const [__uid_152] = await db.select({ id: users.id }).from(users).where(eq(users.email, adminEmail)).limit(1);
+    if (__uid_152) await db.insert(userRoles).values({ userId: __uid_152.id, role: 'admin' }).onConflictDoNothing();
 
     const login = async (email: string) => {
       const res = await request('/api/v1/auth/login', {
@@ -173,6 +174,7 @@ describe.skipIf(!hasTestDb)('Admin create user E2E', () => {
     email,
     password: 'Password123',
     confirm_password: 'Password123',
+    roles: ['contributor'],
     role: 'contributor',
     is_active: isActive,
   });

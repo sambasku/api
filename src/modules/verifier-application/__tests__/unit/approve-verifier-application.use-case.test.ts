@@ -22,6 +22,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     email: 'siti@test.com',
     phone: null,
     passwordHash: null,
+    roles: ['reviewer'],
     role: 'reviewer',
     isActive: true,
     canContribute: true,
@@ -82,7 +83,7 @@ function makeUseCase(user: User | null, mailerRejects = false) {
 const cmd = {
   applicationId: APP_ID,
   actorId: '01ADMIN000000000000000000',
-  actorRole: 'admin',
+  actorRoles: ['admin'],
 };
 
 describe('ApproveVerifierApplicationUseCase', () => {

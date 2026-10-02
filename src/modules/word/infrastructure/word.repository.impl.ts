@@ -672,11 +672,11 @@ export class WordRepositoryImpl implements WordRepository {
         word: words,
         verifierUsername: verifierUsers.username,
         verifierDisplayName: verifierUsers.displayName,
-        verifierRole: verifierUsers.role,
+        verifierRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${verifierUsers.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
         verifierDeletedAt: verifierUsers.deletedAt,
         creatorUsername: creatorUsers.username,
         creatorDisplayName: creatorUsers.displayName,
-        creatorRole: creatorUsers.role,
+        creatorRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${creatorUsers.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
         creatorDeletedAt: creatorUsers.deletedAt,
       })
       .from(words)

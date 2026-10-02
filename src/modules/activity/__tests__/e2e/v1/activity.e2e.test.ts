@@ -44,7 +44,6 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
       displayName: ANONIM_USERNAME,
       email: ANONIM_EMAIL,
       passwordHash: 'bukan-hash-login',
-      role: 'contributor',
     });
 
     const appModule = await import('@/app');

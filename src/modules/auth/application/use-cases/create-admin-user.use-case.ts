@@ -14,7 +14,7 @@ export interface CreateAdminUserCommand {
   email: string;
   phone: string | null;
   password: string;
-  role: UserRole;
+  roles: UserRole[];
   isActive: boolean;
   actorId: string;
   requestId?: string | null;
@@ -28,8 +28,11 @@ export class CreateAdminUserUseCase {
   ) {}
 
   async execute(cmd: CreateAdminUserCommand): Promise<User> {
-    if (cmd.role === 'root' || !ASSIGNABLE_ADMIN_ROLES.includes(cmd.role as AssignableAdminRole)) {
+    if (cmd.roles.some((r) => !ASSIGNABLE_ADMIN_ROLES.includes(r as AssignableAdminRole))) {
       throw new BadRequestError('INVALID_ROLE', 'Peran root tidak dapat diatur via panel admin');
+    }
+    if (cmd.roles.length === 0) {
+      throw new BadRequestError('INVALID_ROLE', 'Minimal satu peran');
     }
 
     const email = Email.create(cmd.email);
@@ -52,7 +55,7 @@ export class CreateAdminUserUseCase {
       phone: cmd.phone,
       passwordHash,
       emailVerified: true,
-      role: cmd.role,
+      roles: [...new Set(cmd.roles)],
       isActive: cmd.isActive,
     });
 
@@ -65,6 +68,7 @@ export class CreateAdminUserUseCase {
         username: user.username,
         email: user.email,
         phone: user.phone,
+        roles: user.roles,
         role: user.role,
         is_active: user.isActive,
         email_verified: true,

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
 import { capturedOtpDisplayCode, e2eRegisterBody} from '@/shared/testing/e2e-auth';
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 const { parsed } = config({ path: '.env.test', quiet: true });
 const hasTestDb = !!parsed?.DATABASE_URL;
@@ -35,7 +35,7 @@ describe.skipIf(!hasTestDb)('Word report E2E', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses } = await import('@/shared/database/drizzle/schema');
+    const { languages, wordClasses, userRoles } = await import('@/shared/database/drizzle/schema');
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     const db = getTestDb();
     await truncateAll(db);
@@ -59,7 +59,7 @@ describe.skipIf(!hasTestDb)('Word report E2E', () => {
       }));
       await post('/api/v1/auth/verify-email', { email, code: capturedOtpDisplayCode() });
       if (role !== 'contributor') {
-        await db.update(users).set({ role }).where(eq(users.email, email));
+        await db.insert(userRoles).values({ userId: sql`(SELECT id FROM users WHERE email = email)`, role }).onConflictDoNothing();
       }
     }
     const login = async (email: string) =>

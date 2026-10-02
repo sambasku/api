@@ -19,6 +19,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     email: 'budi@example.com',
     phone: null,
     passwordHash: null,
+    roles: ['contributor'],
     role: 'contributor',
     isActive: true,
     emailVerified: true,
@@ -139,6 +140,7 @@ describe('LoginWithFacebookUseCase', () => {
       id: '01TESTFACEBOOKUSER0000001',
       username: 'budi',
       displayName: 'budi',
+      roles: ['contributor'],
       role: 'contributor',
       avatarUrl: null,
     });

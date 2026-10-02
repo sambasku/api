@@ -5,6 +5,7 @@ import type { TokenServicePort } from '../ports/token-service.port';
 import { generateToken, hashToken } from '../utils/token';
 import type { ApiClientRepository } from '@/modules/developer-oauth/domain/repositories/api-client.repository';
 import { FIRST_PARTY_SCOPE_STRING } from '@/modules/developer-oauth/domain/entities/api-client.entity';
+import { derivePrimaryRole } from '@/shared/utils/derive-primary-role';
 
 export interface RefreshResult {
   accessToken: string;
@@ -46,7 +47,7 @@ export class RefreshTokenUseCase {
       if (!withinRotationGrace(record.rotatedAt)) {
         throw new UnauthorizedError('UNAUTHORIZED', 'Refresh token tidak valid');
       }
-      return this.issue(user.id, user.role, user.username, clientClaims);
+      return this.issue(user.id, user.roles, user.username, clientClaims);
     }
 
     const rotated = await this.refreshTokenRepo.markRotated(record.tokenHash);
@@ -57,7 +58,7 @@ export class RefreshTokenUseCase {
       }
     }
 
-    return this.issue(user.id, user.role, user.username, clientClaims);
+    return this.issue(user.id, user.roles, user.username, clientClaims);
   }
 
   private async resolveClientClaims(
@@ -86,7 +87,7 @@ export class RefreshTokenUseCase {
 
   private async issue(
     userId: string,
-    role: string,
+    roles: string[],
     username: string,
     client: { clientId: string | null; scopes: string | null },
   ): Promise<RefreshResult> {
@@ -100,7 +101,9 @@ export class RefreshTokenUseCase {
 
     const accessToken = await this.tokenService.generateAccessToken({
       user_id: userId,
-      role,
+      roles,
+      // @deprecated derived tertinggi - wire compat client lama
+      role: derivePrimaryRole(roles),
       username,
       ...(client.clientId ? { azp: client.clientId } : {}),
       ...(client.scopes ? { scope: client.scopes } : {}),

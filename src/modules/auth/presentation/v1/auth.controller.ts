@@ -360,6 +360,7 @@ export class AuthController {
       id: result.user.id,
       username: result.user.username,
       display_name: result.user.displayName,
+      roles: result.user.roles,
       role: result.user.role,
       avatar_url: result.user.avatarUrl,
     };

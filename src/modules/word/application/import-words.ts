@@ -31,8 +31,10 @@ export interface ImportWordResult {
 
 const VERIFIER_ROLES = new Set(['admin', 'root', 'reviewer']);
 
-export function canVerifyImport(role: string): boolean {
-  return VERIFIER_ROLES.has(role);
+/** Multi role: terima satu role atau array (interseksi). */
+export function canVerifyImport(role: string | string[]): boolean {
+  const roles = Array.isArray(role) ? role : [role];
+  return roles.some((r) => VERIFIER_ROLES.has(r));
 }
 
 /** Sidik makna: definisi dan padanan yang memang diisi, huruf kecil. */
@@ -61,12 +63,14 @@ export function normalizeLemma(lemma: string): string {
 export function decideImportPublication(input: {
   verify: boolean;
   verified: boolean;
-  role: string;
+  role?: string | string[];
+  roles?: string[];
   parentStatus: WordStatus | null;
 }): { status: 'draft' | 'published'; isVerified: boolean; forcedDraft: boolean } {
+  const role = input.roles ?? input.role ?? [];
   const parentBlocks =
     input.parentStatus !== null && input.parentStatus !== 'published';
-  if (parentBlocks || !input.verify || !canVerifyImport(input.role)) {
+  if (parentBlocks || !input.verify || !canVerifyImport(role)) {
     return { status: 'draft', isVerified: false, forcedDraft: parentBlocks };
   }
   return { status: 'published', isVerified: input.verified, forcedDraft: false };

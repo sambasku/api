@@ -8,8 +8,7 @@ import {
   meanings,
   users,
   wordEditSuggestions,
-  words,
-} from '@/shared/database/drizzle/schema';
+  words, userRoles } from '@/shared/database/drizzle/schema';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
 import { WordSuggestionRepositoryImpl } from '../../infrastructure/word-suggestion.repository.impl';
 import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
@@ -36,16 +35,23 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl.createSuggestion', () 
   beforeEach(async () => {
     await truncateAll(db);
     await db.insert(users).values([
-      { id: OWNER, username: 'owner', email: 'owner@test.com', passwordHash: 'x', role: 'contributor' },
+      { id: OWNER, username: 'owner', email: 'owner@test.com', passwordHash: 'x' },
       {
         id: KONTRIBUTOR,
         username: 'kontributor',
         email: 'kon@test.com',
         passwordHash: 'x',
-        role: 'contributor',
       },
-      { id: REVIEWER, username: 'reviewer', email: 'rev@test.com', passwordHash: 'x', role: 'reviewer' },
+      { id: REVIEWER, username: 'reviewer', email: 'rev@test.com', passwordHash: 'x' },
     ]);
+    await db
+      .insert(userRoles)
+      .values([
+        { userId: OWNER, role: 'contributor' },
+        { userId: KONTRIBUTOR, role: 'contributor' },
+        { userId: REVIEWER, role: 'reviewer' },
+      ])
+      .onConflictDoNothing();
     await db.insert(languages).values({ id: SMB, code: 'smb', name: 'Sambas' });
     await db.insert(words).values({
       id: WORD,
@@ -149,10 +155,18 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
   beforeEach(async () => {
     await truncateAll(db);
     await db.insert(users).values([
-      { id: OWNER, username: 'owner', email: 'owner@test.com', passwordHash: 'x', role: 'contributor' },
-      { id: KONTRIBUTOR, username: 'kontributor', email: 'kon@test.com', passwordHash: 'x', role: 'contributor' },
-      { id: REVIEWER, username: 'reviewer', email: 'rev@test.com', passwordHash: 'x', role: 'reviewer' },
+      { id: OWNER, username: 'owner', email: 'owner@test.com', passwordHash: 'x' },
+      { id: KONTRIBUTOR, username: 'kontributor', email: 'kon@test.com', passwordHash: 'x' },
+      { id: REVIEWER, username: 'reviewer', email: 'rev@test.com', passwordHash: 'x' },
     ]);
+    await db
+      .insert(userRoles)
+      .values([
+        { userId: OWNER, role: 'contributor' },
+        { userId: KONTRIBUTOR, role: 'contributor' },
+        { userId: REVIEWER, role: 'reviewer' },
+      ])
+      .onConflictDoNothing();
     await db.insert(languages).values({ id: SMB, code: 'smb', name: 'Sambas' });
     await db.insert(words).values([
       { id: WORD, languageId: SMB, lemma: 'kete', notes: 'lama', status: 'published', isVerified: false, createdBy: OWNER },

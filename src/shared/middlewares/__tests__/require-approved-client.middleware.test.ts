@@ -31,6 +31,7 @@ describe('createRequireApprovedClientMiddleware', () => {
   it('OAUTH_REQUIRE_AZP=true tanpa azp → CLIENT_REQUIRED', async () => {
     const app = makeApp(repo, { scope: 'vote.write' }, {
       user_id: 'u1',
+      roles: ['contributor'],
       role: 'contributor',
     });
     const res = await app.request('/');
@@ -48,6 +49,7 @@ describe('createRequireApprovedClientMiddleware', () => {
   it('allowMissingUser dengan user tanpa azp → CLIENT_REQUIRED', async () => {
     const app = makeApp(repo, { scope: 'contribute.write', allowMissingUser: true }, {
       user_id: 'u1',
+      roles: ['contributor'],
       role: 'contributor',
     });
     const res = await app.request('/');

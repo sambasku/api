@@ -8,6 +8,8 @@ export interface PublicProfile {
   username: string;
   displayName: string;
   bio: string | null;
+  roles: string[];
+  /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: string;
   isVerifier: boolean;
   joinedAt: Date;
@@ -21,6 +23,8 @@ export interface PublicUserRow {
   username: string;
   displayName: string;
   bio: string | null;
+  roles: string[];
+  /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: string;
   joinedAt: Date;
   avatarUrl: string | null;

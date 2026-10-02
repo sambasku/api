@@ -132,8 +132,8 @@ function makeDeps(missing: Partial<MissingReferences> = {}, duplicate = false, i
   };
 }
 
-const ADMIN = { userId: '01TESTULIDUSERID00000000', role: 'admin' };
-const CONTRIBUTOR = { userId: '01TESTULIDUSERID00000000', role: 'contributor' };
+const ADMIN = { roles: ['admin'], userId: '01TESTULIDUSERID00000000', role: 'admin' };
+const CONTRIBUTOR = { roles: ['contributor'], userId: '01TESTULIDUSERID00000000', role: 'contributor' };
 
 describe('CreateWordUseCase', () => {
   it('admin + status published → langsung published', async () => {
@@ -161,6 +161,7 @@ describe('CreateWordUseCase', () => {
     const { useCase } = makeDeps();
     const result = await useCase.execute(makeDto({ status: 'published' }), {
       userId: '01TESTULIDUSERID00000000',
+      roles: ['reviewer'],
       role: 'reviewer',
     });
     expect(result.word.status).toBe('published');

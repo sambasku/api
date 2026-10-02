@@ -80,6 +80,7 @@ function makeApproveExtras() {
 
 const submit = {
   userId: USER,
+  roles: ['contributor'],
   role: 'contributor',
   phone: '6281234567890',
   address: 'Jl. Merdeka No. 1, Sambas',
@@ -89,7 +90,7 @@ const submit = {
 describe('CreateVerifierApplicationUseCase', () => {
   it('bukan contributor → 403 ALREADY_VERIFIER', async () => {
     const useCase = new CreateVerifierApplicationUseCase(makeAppRepo(), makeUserRepo());
-    await expect(useCase.execute({ ...submit, role: 'reviewer' })).rejects.toMatchObject({
+    await expect(useCase.execute({ ...submit, roles: ['reviewer'], role: 'reviewer' })).rejects.toMatchObject({
       errorCode: 'ALREADY_VERIFIER',
       statusCode: 403,
     });
@@ -183,7 +184,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
     const result = await useCase.execute({
       applicationId: APP_ID,
       actorId: ADMIN,
-      actorRole: 'admin',
+      actorRoles: ['admin'],
     });
     expect(result).toEqual({ id: APP_ID, status: 'approved', role: 'reviewer' });
     expect(appRepo.approveAtomically).toHaveBeenCalledWith(APP_ID, ADMIN);
@@ -230,7 +231,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
       inbox as never,
     );
     await expect(
-      useCase.execute({ applicationId: APP_ID, actorId: ADMIN, actorRole: 'admin' }),
+      useCase.execute({ applicationId: APP_ID, actorId: ADMIN, actorRoles: ['admin'] }),
     ).rejects.toMatchObject({ errorCode: 'APPLICATION_ALREADY_REVIEWED', statusCode: 409 });
   });
 
@@ -252,7 +253,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
       inbox as never,
     );
     await expect(
-      useCase.execute({ applicationId: APP_ID, actorId: ADMIN, actorRole: 'admin' }),
+      useCase.execute({ applicationId: APP_ID, actorId: ADMIN, actorRoles: ['admin'] }),
     ).rejects.toMatchObject({ errorCode: 'ALREADY_VERIFIER', statusCode: 403 });
     expect(refreshTokenRepo.revokeAllForUser).not.toHaveBeenCalled();
   });

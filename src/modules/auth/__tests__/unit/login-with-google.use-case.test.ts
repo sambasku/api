@@ -19,6 +19,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     email: 'budi@gmail.com',
     phone: null,
     passwordHash: null,
+    roles: ['contributor'],
     role: 'contributor',
     isActive: true,
     emailVerified: true,
@@ -140,6 +141,7 @@ describe('LoginWithGoogleUseCase', () => {
       id: '01TESTGOOGLEUSER000000001',
       username: 'budi',
       displayName: 'budi',
+      roles: ['contributor'],
       role: 'contributor',
       avatarUrl: null,
     });

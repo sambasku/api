@@ -4,6 +4,7 @@ import {
   bugReports,
   comments,
   contributions,
+  userRoles,
   users,
   verifierApplications,
   votes,
@@ -156,6 +157,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
       commentDailyRows,
       newUserDailyRows,
       userByRole,
+      usersActive,
       usersOnlineRecently,
       auditLast7Days,
       bugByStatus,
@@ -220,11 +222,24 @@ export class DashboardRepositoryImpl implements DashboardRepository {
         .where(and(isNull(users.deletedAt), gte(users.createdAt, windowStart)))
         .groupBy(userDayExpr),
 
+      // Multi role: hitung per role dari junction. Count user per role =
+      // banyak user yang PUNYA role itu (satu user bisa masuk >1 role).
       this.db
-        .select({ status: users.role, count: sql<number>`count(*)`.mapWith(Number) })
-        .from(users)
+        .select({
+          status: userRoles.role,
+          count: sql<number>`count(DISTINCT ${users.id})`.mapWith(Number),
+        })
+        .from(userRoles)
+        .innerJoin(users, eq(users.id, userRoles.userId))
         .where(and(isNull(users.deletedAt), eq(users.isActive, true)))
-        .groupBy(users.role),
+        .groupBy(userRoles.role),
+
+      // Active = jumlah user aktif, bukan jumlah baris role (satu user
+      // multi role jangan dihitung dua kali).
+      this.db
+        .select({ count: sql<number>`count(*)`.mapWith(Number) })
+        .from(users)
+        .where(and(isNull(users.deletedAt), eq(users.isActive, true))),
 
       this.db
         .select({ count: sql<number>`count(*)`.mapWith(Number) })
@@ -281,7 +296,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
         byStatus: contributionCounts as Record<ContributionStatusKey, number>,
       },
       users: {
-        active: totalOf(roleCounts),
+        active: countOf(usersActive),
         onlineRecently: countOf(usersOnlineRecently),
         byRole: roleCounts as Record<AppRoleKey, number>,
       },

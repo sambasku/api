@@ -29,6 +29,8 @@ export const publicProfileResponseSchema = z.object({
     username: z.string(),
     display_name: z.string(),
     bio: z.string().nullable(),
+    roles: z.array(z.string()).min(1),
+    /** @deprecated Derived tertinggi dari roles (wire compat, baca roles). */
     role: z.string(),
     is_verifier: z.boolean(),
     joined_at: z.string(),

@@ -99,6 +99,7 @@ export class RegisterUserUseCase {
         username: user.username,
         email: user.email,
         phone: user.phone,
+        roles: user.roles,
         role: user.role,
         consents: {
           terms: byType.get('terms'),

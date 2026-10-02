@@ -36,7 +36,7 @@ function makeDeps(wordExists = true) {
   return { wordRepo, auditRepo, useCase: new AddMeaningUseCase(wordRepo, auditRepo), media };
 }
 
-const ACTOR = { userId: '01JDUSERKONTRIB0000000000A', role: 'contributor' };
+const ACTOR = { roles: ['contributor'], userId: '01JDUSERKONTRIB0000000000A', role: 'contributor' };
 const WORD_ID = '01JDWORDMAKATN0000000000A';
 const DTO = {
   definition: 'definisi baru',
@@ -61,7 +61,7 @@ describe('AddMeaningUseCase', () => {
 
   it('role admin → publication published + verified (resolveChildPublication)', async () => {
     const { useCase, wordRepo } = makeDeps();
-    await useCase.execute(WORD_ID, DTO, { userId: '01JDUSERADMIN00000000000A', role: 'admin' });
+    await useCase.execute(WORD_ID, DTO, { roles: ['admin'], userId: '01JDUSERADMIN00000000000A', role: 'admin' });
 
     expect(wordRepo.addMeaning).toHaveBeenCalledWith(
       WORD_ID,

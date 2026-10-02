@@ -47,7 +47,7 @@ describe('word-suggestions routes auth wiring', () => {
       ) => c.json({ success: true }, 201),
     );
     const authenticate = createMiddleware(async (c, next) => {
-      c.set('user', { user_id: USER_ID, role: 'contributor' });
+      c.set('user', { user_id: USER_ID, roles: ['contributor'], role: 'contributor' });
       await next();
     });
     const app = createWordSuggestionRoutes({

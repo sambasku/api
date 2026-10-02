@@ -9,7 +9,7 @@ import type { VerifierApplicationRepository } from '../../domain/repositories/ve
 export interface ApproveVerifierApplicationCommand {
   applicationId: string;
   actorId: string;
-  actorRole: string;
+  actorRoles: string[];
   requestId?: string | null;
 }
 

@@ -57,6 +57,8 @@ const adminVoteWireSchema = z.object({
   id: z.string().length(26),
   voter_id: z.string().length(26),
   voter_username: z.string(),
+  voter_display_name: z.string().nullable(),
+  voter_avatar_url: z.string().nullable(),
   voter_email: z.string().email(),
   target_type: VoteTargetTypeZodEnum,
   target_id: z.string().length(26),

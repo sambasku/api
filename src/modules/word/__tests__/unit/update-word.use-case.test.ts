@@ -156,7 +156,7 @@ function makeDeps(
   };
 }
 
-const ADMIN = { userId: '01TESTULIDUSERID00000000', role: 'admin', requestId: 'req-1' };
+const ADMIN = { roles: ['admin'], userId: '01TESTULIDUSERID00000000', role: 'admin', requestId: 'req-1' };
 
 describe('UpdateWordUseCase', () => {
   it('happy path: updateWithRelations membawa publication + is_corrected lama; audit update old→new', async () => {

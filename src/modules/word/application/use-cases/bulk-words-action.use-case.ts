@@ -47,7 +47,7 @@ export class BulkWordsActionUseCase {
     action: BulkWordsAction;
     ids: string[];
     actorId: string;
-    actorRole: string;
+    actorRoles: string[];
     requestId?: string | null;
   }): Promise<BulkWordsActionResult> {
     if (cmd.ids.length === 0) {
@@ -65,7 +65,7 @@ export class BulkWordsActionUseCase {
 
     if (
       (cmd.action === 'publish' || cmd.action === 'unpublish') &&
-      !PUBLISH_ROLES.has(cmd.actorRole)
+      !cmd.actorRoles.some((r) => PUBLISH_ROLES.has(r))
     ) {
       throw new ForbiddenError(
         'FORBIDDEN',
