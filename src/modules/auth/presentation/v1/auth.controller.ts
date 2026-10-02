@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
-import { UnauthorizedError } from '@/shared/errors/app-error';
+import { ForbiddenError, UnauthorizedError } from '@/shared/errors/app-error';
+import { browserSignalHeaders, isBrowserClient } from './refresh-channel';
 import type { AppVariables } from '@/shared/types';
 import type { RegisterUserUseCase } from '../../application/use-cases/register-user.use-case';
 import type { LoginUserUseCase, LoginResult } from '../../application/use-cases/login-user.use-case';
@@ -101,7 +102,24 @@ export class AuthController {
     );
   }
 
+  /**
+   * Gerbang kanal token (issue #34): klien browser dilarang memakai jalur
+   * body - refresh token harus tetap di cookie httpOnly yang tak
+   * terjangkau JavaScript. Jalur body hanya untuk app native.
+   */
+  private assertNotBrowserBodyChannel(c: Context): void {
+    if (isBrowserClient(browserSignalHeaders(c))) {
+      throw new ForbiddenError(
+        'REFRESH_CHANNEL_NOT_ALLOWED',
+        'Browser wajib memakai cookie. Jalur body hanya untuk aplikasi native.',
+      );
+    }
+  }
+
   async login(c: Context, body: LoginBody) {
+    if (body.client_type === 'mobile') {
+      this.assertNotBrowserBodyChannel(c);
+    }
     const meta = await this.loginMetaWithClient(c, body.client_type, body.client_id);
     const result = await this.deps.login.execute(body, meta);
     return this.loginJson(c, body.client_type, result);
@@ -157,6 +175,10 @@ export class AuthController {
   }
 
   async refresh(c: Context, body: { refresh_token?: string } = {}) {
+    if (body.refresh_token) {
+      // Jalur body = app native. Browser (XSS threat) wajib cookie.
+      this.assertNotBrowserBodyChannel(c);
+    }
     const tokens =
       body.refresh_token !== undefined
         ? body.refresh_token
@@ -189,6 +211,9 @@ export class AuthController {
   }
 
   async logout(c: Context, body: { refresh_token?: string } = {}) {
+    if (body.refresh_token) {
+      this.assertNotBrowserBodyChannel(c);
+    }
     const tokens =
       body.refresh_token !== undefined
         ? body.refresh_token

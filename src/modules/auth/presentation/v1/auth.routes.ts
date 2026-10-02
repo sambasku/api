@@ -210,6 +210,11 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     responses: {
       200: { description: 'Access token baru', content: json(refreshResponseSchema) },
       401: { description: 'Refresh token tidak valid/kadaluarsa', content: json(errorResponseSchema) },
+      403: {
+        description:
+          'Gerbang kanal (issue #34): request dari browser (header Origin / UA browser) memakai jalur body. Browser wajib cookie httpOnly.',
+        content: json(errorResponseSchema),
+      },
     },
   });
 
