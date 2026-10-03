@@ -1,9 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
+
+const { envState } = vi.hoisted(() => ({
+  envState: {
+    OAUTH_REQUIRE_AZP: false as boolean,
+  },
+}));
+
+vi.mock('@/shared/config/env', () => ({
+  env: envState,
+}));
+
 import { RefreshTokenUseCase, REFRESH_ROTATION_GRACE_MS } from '../../application/use-cases/refresh-token.use-case';
 import type { RefreshTokenRecord, RefreshTokenRepository } from '../../domain/repositories/refresh-token.repository';
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { TokenServicePort } from '../../application/ports/token-service.port';
 import type { User } from '../../domain/entities/user.entity';
+import { env } from '@/shared/config/env';
 
 const USER_ID = '01TESTULIDUSERID00000000';
 
@@ -21,6 +33,7 @@ function user(): User {
     isActive: true,
     canContribute: true,
     contributeMutedUntil: null,
+    readContributionGuideAt: null,
     emailVerified: true,
     avatarUrl: null,
     avatarProvider: null,
@@ -108,5 +121,17 @@ describe('RefreshTokenUseCase', () => {
     const result = await useCase.execute('token-lama');
     expect(result.refreshToken).toHaveLength(96);
     expect(refreshTokenRepo.create).toHaveBeenCalledOnce();
+  });
+
+  it('OAUTH_REQUIRE_AZP=true: record tanpa clientId → SESSION_STALE, bukan token baru tanpa azp', async () => {
+    env.OAUTH_REQUIRE_AZP = true;
+    try {
+      const { useCase } = make(record()); // record() default clientId: null (kasus legacy)
+      await expect(useCase.execute('token-legacy')).rejects.toMatchObject({
+        errorCode: 'SESSION_STALE',
+      });
+    } finally {
+      env.OAUTH_REQUIRE_AZP = false;
+    }
   });
 });

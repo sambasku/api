@@ -73,7 +73,7 @@ const envSchema = z.object({
   // punya Actions write di repo sqlite.
   SQLITE_BACKUP_GITHUB_URL: z.url().optional(),
 
-  // KBBI lemma lookup (docs/api/13-api-kbbi-lemma-definition.md).
+  // KBBI lemma lookup.
   // Pola sama IMAGE_PROVIDER + IMAGEKIT_*: pilih provider, kredensial/URL
   // spesifik per vendor. Default provider = raf555.
   // KBBI_PROVIDER=none (atau kosong) → 503 LEMMA_DEFINITION_PROVIDER_UNAVAILABLE.
@@ -81,7 +81,7 @@ const envSchema = z.object({
   RAF555_BASE_URL: z.string().optional(), // default https://kbbi.raf555.dev di factory
   LEMMA_DEFINITION_CACHE_TTL_SECONDS: z.coerce.number().default(3600),
 
-  // Unsplash / Pixabay - latar kartu share (docs/api/22-api-share-backgrounds.md).
+  // Unsplash / Pixabay - latar kartu share.
   // Tanpa key → provider terkait degraded (items []).
   UNSPLASH_ACCESS_KEY: z.string().optional(),
   PIXABAY_API_KEY: z.string().optional(),
@@ -93,6 +93,27 @@ const envSchema = z.object({
   FIREBASE_PROJECT_ID: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
+
+  // Trafik Web console (GA4 Data API + Search Console API), opsional.
+  // Satu service account untuk keduanya; tanpa kredensial → status
+  // not_configured di GET /api/v1/admin/web-analytics/*, API tidak crash.
+  // Private key PEM boleh pakai \\n. GA4_PROPERTY_ID = angka, bukan G-XXXX.
+  GOOGLE_ANALYTICS_SA_EMAIL: z.string().optional(),
+  GOOGLE_ANALYTICS_SA_PRIVATE_KEY: z.string().optional(),
+  GA4_PROPERTY_ID: z.string().optional(),
+  SEARCH_CONSOLE_SITE_URL: z.string().optional(), // sc-domain:sambasku.com | https://sambasku.com/
+  GA4_CACHE_TTL_SECONDS: z.coerce.number().default(1800),
+  SEARCH_CONSOLE_CACHE_TTL_SECONDS: z.coerce.number().default(21_600),
+  // Statistik Play Console (export CSV GCS), opsional. Satu service account
+  // dengan GA4; kosong = status not_configured di GET /admin/play-analytics/*.
+  PLAY_STATS_GCS_BUCKET: z.string().optional(),
+  PLAY_STATS_GCS_PREFIX: z.string().optional(),
+  PLAY_CACHE_TTL_SECONDS: z.coerce.number().default(21_600),
+  // Data palsu untuk preview UI lokal; diabaikan saat NODE_ENV=production.
+  WEB_ANALYTICS_FAKE: z
+    .string()
+    .optional()
+    .transform((v) => ['true', '1', 'yes'].includes((v ?? '').trim().toLowerCase())),
 
   APP_URL: z.url().default('http://localhost:5173'), // legacy; prefer WEB_APP_URL
   // Basis link user-facing (email reset / hapus akun / deep link HTTPS).

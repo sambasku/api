@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { sqliteTable, text, integer, uniqueIndex, index, primaryKey } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 
-// Sesuai tabel `users` di docs/dbdiagram.dbml
+// Sesuai tabel `users` di DBML sumber
 export const users = sqliteTable(
   'users',
   {
@@ -31,6 +31,8 @@ export const users = sqliteTable(
     emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
     /** Waktu akun terverifikasi (OTP sukses); null = belum / data lama. */
     emailVerifiedAt: integer('email_verified_at', { mode: 'timestamp' }),
+    /** Waktu user tap "Mengerti" di guide swipe halaman kontribusi; null = belum baca. */
+    readContributionGuideAt: integer('read_contribution_guide_at', { mode: 'timestamp' }),
     // Avatar publik (GitHub sambasku/images). Null = belum set.
     avatarUrl: text('avatar_url'),
     avatarProvider: text('avatar_provider'),

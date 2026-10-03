@@ -30,6 +30,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     deletedAt: null,
     canContribute: true,
     contributeMutedUntil: null,
+    readContributionGuideAt: null,
     ...overrides,
   };
 }

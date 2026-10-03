@@ -8,6 +8,7 @@ export interface MyProfileResult {
   displayName: string;
   bio: string | null;
   avatarUrl: string | null;
+  hasReadContributionGuide: boolean;
 }
 
 function toMyProfile(user: User): MyProfileResult {
@@ -16,6 +17,7 @@ function toMyProfile(user: User): MyProfileResult {
     displayName: user.displayName,
     bio: user.bio,
     avatarUrl: user.avatarUrl,
+    hasReadContributionGuide: user.readContributionGuideAt !== null,
   };
 }
 
@@ -43,6 +45,9 @@ export class UpdateMyProfileUseCase {
     const updated = await this.userRepo.updateProfile(userId, {
       ...(dto.displayName !== undefined ? { displayName: dto.displayName } : {}),
       ...(dto.bio !== undefined ? { bio: dto.bio } : {}),
+      ...(dto.hasReadContributionGuide === true && user.readContributionGuideAt === null
+        ? { readContributionGuideAt: new Date() }
+        : {}),
     });
 
     return toMyProfile(updated);

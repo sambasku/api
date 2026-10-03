@@ -256,6 +256,14 @@ import { DashboardController } from '@/modules/dashboard/presentation/v1/dashboa
 import { createDashboardRoutes } from '@/modules/dashboard/presentation/v1/dashboard.routes';
 import { GetDashboardStatsUseCase } from '@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case';
 import { DashboardRepositoryImpl } from '@/modules/dashboard/infrastructure/dashboard.repository.impl';
+import { WebAnalyticsController } from '@/modules/web-analytics/presentation/v1/web-analytics.controller';
+import { createWebAnalyticsRoutes } from '@/modules/web-analytics/presentation/v1/web-analytics.routes';
+import { GetWebAnalyticsUseCase } from '@/modules/web-analytics/application/use-cases/get-web-analytics.use-case';
+import { createWebAnalyticsProviders } from '@/modules/web-analytics/infrastructure/web-analytics-providers.factory';
+import { PlayAnalyticsController } from '@/modules/play-analytics/presentation/v1/play-analytics.controller';
+import { createPlayAnalyticsRoutes } from '@/modules/play-analytics/presentation/v1/play-analytics.routes';
+import { GetPlayAnalyticsUseCase } from '@/modules/play-analytics/application/use-cases/get-play-analytics.use-case';
+import { createPlayAnalyticsProviders } from '@/modules/play-analytics/infrastructure/play-analytics-providers.factory';
 import { VoteRepositoryImpl } from '@/modules/vote/infrastructure/vote.repository.impl';
 import { ToggleVoteUseCase } from '@/modules/vote/application/use-cases/toggle-vote.use-case';
 import { GetVoteCountsUseCase } from '@/modules/vote/application/use-cases/get-vote-counts.use-case';
@@ -749,6 +757,25 @@ const adminVotesController = new AdminVotesController({
 // dari modul lain supaya agregasi ringan tidak membebani repositori domain. ----
 const dashboardController = new DashboardController({
   getStats: new GetDashboardStatsUseCase(new DashboardRepositoryImpl(db)),
+});
+
+// ---- Modul web-analytics - Trafik Web console (GA4 + Search Console via
+// service account). Provider terpisah dari dashboard internal. ----
+const webAnalyticsController = new WebAnalyticsController({
+  getReport: new GetWebAnalyticsUseCase({
+    ...createWebAnalyticsProviders(env),
+    ga4CacheTtlSeconds: env.GA4_CACHE_TTL_SECONDS,
+    searchConsoleCacheTtlSeconds: env.SEARCH_CONSOLE_CACHE_TTL_SECONDS,
+  }),
+});
+
+// ---- Modul play-analytics - statistik Play Store console (export CSV GCS
+// via service account yang sama dengan GA4). ----
+const playAnalyticsController = new PlayAnalyticsController({
+  getReport: new GetPlayAnalyticsUseCase({
+    ...createPlayAnalyticsProviders(env),
+    cacheTtlSeconds: env.PLAY_CACHE_TTL_SECONDS,
+  }),
 });
 
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----
@@ -1328,6 +1355,18 @@ app.route(
 // Statistik dashboard - hanya admin, root & reviewer (issue #33)
 app.route('/api/v1/admin/dashboard', createDashboardRoutes({ controller: dashboardController, authenticate }));
 
+// Trafik Web (GA4 + Search Console) - hanya admin & root
+app.route(
+  '/api/v1/admin/web-analytics',
+  createWebAnalyticsRoutes({ controller: webAnalyticsController, authenticate }),
+);
+
+// Play Store (export CSV GCS) - hanya admin & root
+app.route(
+  '/api/v1/admin/play-analytics',
+  createPlayAnalyticsRoutes({ controller: playAnalyticsController, authenticate }),
+);
+
 // ---- Admin users (Package A): list user + ubah role, hanya admin & root ----
 const adminUsersController = new AdminUsersController({
   list: new ListAdminUsersUseCase(userRepo),
@@ -1437,7 +1476,7 @@ export async function runDueNotificationCampaigns(): Promise<{ processed: number
 }
 
 // Lookup definisi lemma (KBBI via port) - prefill field definition di form
-// form kontribusi web (anonim). Tidak menulis DB. docs/api/13-api-kbbi-lemma-definition.md
+// form kontribusi web (anonim). Tidak menulis DB.
 const lemmaDefinitionRegistry = createLemmaDefinitionProviderRegistry();
 const lemmaDefinitionController = new LemmaDefinitionController({
   lookup: new LookupLemmaDefinitionUseCase(
@@ -1462,7 +1501,7 @@ app.route(
 );
 app.route('/api/v1/words', createCardShareRoutes({ controller: activityController, authenticate }));
 
-// Latar kartu share - multi-provider (docs/backlogs/SHARE.md). Publik.
+// Latar kartu share - multi-provider multi-provider. Publik.
 const shareBackgroundProviders = createShareBackgroundProviderRegistry();
 const shareController = new ShareController({
   listBackgrounds: new ListShareBackgroundsUseCase(

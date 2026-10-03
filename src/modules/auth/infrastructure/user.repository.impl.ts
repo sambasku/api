@@ -43,6 +43,7 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     canContribute: row.canContribute,
     contributeMutedUntil: row.contributeMutedUntil ?? null,
     emailVerified: row.emailVerified,
+    readContributionGuideAt: row.readContributionGuideAt ?? null,
     avatarUrl: row.avatarUrl ?? null,
     avatarProvider: row.avatarProvider ?? null,
     avatarProviderFileId: row.avatarProviderFileId ?? null,
@@ -319,13 +320,16 @@ export class UserRepositoryImpl implements UserRepository {
 
   async updateProfile(
     id: string,
-    data: { displayName?: string; bio?: string | null },
+    data: { displayName?: string; bio?: string | null; readContributionGuideAt?: Date },
   ): Promise<User> {
     const [updated] = await this.db
       .update(users)
       .set({
         ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
         ...(data.bio !== undefined ? { bio: data.bio } : {}),
+        ...(data.readContributionGuideAt !== undefined
+          ? { readContributionGuideAt: data.readContributionGuideAt }
+          : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(users.id, id), isNull(users.deletedAt)))

@@ -88,6 +88,7 @@ export class UserController {
         display_name: profile.displayName,
         bio: profile.bio,
         avatar_url: profile.avatarUrl,
+        has_read_contribution_guide: profile.hasReadContributionGuide,
       },
     });
   }
@@ -121,6 +122,7 @@ export class UserController {
     const profile = await this.deps.updateMyProfile.execute(user.user_id, {
       displayName: body.display_name,
       bio: body.bio,
+      hasReadContributionGuide: body.has_read_contribution_guide,
     });
     return c.json({
       success: true as const,
@@ -129,6 +131,7 @@ export class UserController {
         display_name: profile.displayName,
         bio: profile.bio,
         avatar_url: profile.avatarUrl,
+        has_read_contribution_guide: profile.hasReadContributionGuide,
       },
     });
   }

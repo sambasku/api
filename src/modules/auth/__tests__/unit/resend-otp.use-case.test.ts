@@ -29,6 +29,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     ...overrides,
     canContribute: overrides.canContribute ?? true,
     contributeMutedUntil: overrides.contributeMutedUntil ?? null,
+    readContributionGuideAt: overrides.readContributionGuideAt ?? null,
   };
 }
 
