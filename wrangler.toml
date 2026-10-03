@@ -61,7 +61,7 @@ SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
 OAUTH_REQUIRE_AZP = "true"
 GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gserviceaccount.com"
 GA4_PROPERTY_ID="556164988"
-SEARCH_CONSOLE_SITE_URL="https://sambasku.com/"
+SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 
 [observability]
 enabled = true
@@ -115,7 +115,7 @@ SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
 OAUTH_REQUIRE_AZP = "true"
 GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gserviceaccount.com"
 GA4_PROPERTY_ID="556164988"
-SEARCH_CONSOLE_SITE_URL="https://sambasku.com/"
+SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 
 [env.staging.observability]
 enabled = true
