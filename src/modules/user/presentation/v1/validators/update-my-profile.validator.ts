@@ -15,10 +15,16 @@ export const updateMyProfileSchema = z
       .nullable()
       .optional()
       .transform((v) => (v === '' ? null : v)),
+    // Guide sekali jalan: hanya boleh true, tidak bisa di-reset ke belum baca.
+    has_read_contribution_guide: z.literal(true).optional(),
   })
-  .refine((body) => body.display_name !== undefined || body.bio !== undefined, {
-    message: 'Minimal satu field (display_name atau bio) harus diisi',
-  });
+  .refine(
+    (body) =>
+      body.display_name !== undefined ||
+      body.bio !== undefined ||
+      body.has_read_contribution_guide !== undefined,
+    { message: 'Minimal satu field (display_name, bio, atau has_read_contribution_guide) harus diisi' },
+  );
 
 export type UpdateMyProfileBody = z.infer<typeof updateMyProfileSchema>;
 
@@ -29,5 +35,6 @@ export const myProfileResponseSchema = z.object({
     display_name: z.string(),
     bio: z.string().nullable(),
     avatar_url: z.string().url().nullable(),
+    has_read_contribution_guide: z.boolean(),
   }),
 });

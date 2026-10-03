@@ -135,6 +135,11 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `SEARCH_CONSOLE_PERMISSION_DENIED` | 200 (`search_console.error_code`) | Google balas 401/403 (service account belum jadi user properti Search Console) |
 | `SEARCH_CONSOLE_RATE_LIMITED` | 200 (`search_console.error_code`) | Kuota Search Console API habis (Google 429) |
 | `SEARCH_CONSOLE_UPSTREAM_ERROR` | 200 (`search_console.error_code`) | Search Console API 5xx / respons tidak terbaca |
+| `PLAY_NOT_CONFIGURED` | 200 (`play.error_code`) | `PLAY_STATS_GCS_BUCKET` / `GOOGLE_ANALYTICS_SA_*` belum di-set; `GET /admin/play-analytics/*` status `not_configured` |
+| `PLAY_PERMISSION_DENIED` | 200 (`play.error_code`) | GCS balas 401/403 (service account tidak punya akses bucket export / private key ditolak) |
+| `PLAY_RATE_LIMITED` | 200 (`play.error_code`) | Kuota Google Cloud Storage habis (429) |
+| `PLAY_UPSTREAM_ERROR` | 200 (`play.error_code`) | GCS 5xx / CSV tidak terbaca |
+| `PLAY_NETWORK_ERROR` | 200 (`play.error_code`) | Server gagal menghubungi GCS (timeout 10 dtk / koneksi putus) |
 | `SEARCH_CONSOLE_NETWORK_ERROR` | 200 (`search_console.error_code`) | Server gagal menghubungi Google Search Console |
 | `TEMPLATE_NOT_FOUND` | 404 | Template notifikasi campaign tidak ditemukan / sudah dihapus |
 | `CAMPAIGN_NOT_FOUND` | 404 | Campaign notifikasi tidak ditemukan |

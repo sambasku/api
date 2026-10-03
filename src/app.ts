@@ -260,6 +260,10 @@ import { WebAnalyticsController } from '@/modules/web-analytics/presentation/v1/
 import { createWebAnalyticsRoutes } from '@/modules/web-analytics/presentation/v1/web-analytics.routes';
 import { GetWebAnalyticsUseCase } from '@/modules/web-analytics/application/use-cases/get-web-analytics.use-case';
 import { createWebAnalyticsProviders } from '@/modules/web-analytics/infrastructure/web-analytics-providers.factory';
+import { PlayAnalyticsController } from '@/modules/play-analytics/presentation/v1/play-analytics.controller';
+import { createPlayAnalyticsRoutes } from '@/modules/play-analytics/presentation/v1/play-analytics.routes';
+import { GetPlayAnalyticsUseCase } from '@/modules/play-analytics/application/use-cases/get-play-analytics.use-case';
+import { createPlayAnalyticsProviders } from '@/modules/play-analytics/infrastructure/play-analytics-providers.factory';
 import { VoteRepositoryImpl } from '@/modules/vote/infrastructure/vote.repository.impl';
 import { ToggleVoteUseCase } from '@/modules/vote/application/use-cases/toggle-vote.use-case';
 import { GetVoteCountsUseCase } from '@/modules/vote/application/use-cases/get-vote-counts.use-case';
@@ -762,6 +766,15 @@ const webAnalyticsController = new WebAnalyticsController({
     ...createWebAnalyticsProviders(env),
     ga4CacheTtlSeconds: env.GA4_CACHE_TTL_SECONDS,
     searchConsoleCacheTtlSeconds: env.SEARCH_CONSOLE_CACHE_TTL_SECONDS,
+  }),
+});
+
+// ---- Modul play-analytics - statistik Play Store console (export CSV GCS
+// via service account yang sama dengan GA4). ----
+const playAnalyticsController = new PlayAnalyticsController({
+  getReport: new GetPlayAnalyticsUseCase({
+    ...createPlayAnalyticsProviders(env),
+    cacheTtlSeconds: env.PLAY_CACHE_TTL_SECONDS,
   }),
 });
 
@@ -1346,6 +1359,12 @@ app.route('/api/v1/admin/dashboard', createDashboardRoutes({ controller: dashboa
 app.route(
   '/api/v1/admin/web-analytics',
   createWebAnalyticsRoutes({ controller: webAnalyticsController, authenticate }),
+);
+
+// Play Store (export CSV GCS) - hanya admin & root
+app.route(
+  '/api/v1/admin/play-analytics',
+  createPlayAnalyticsRoutes({ controller: playAnalyticsController, authenticate }),
 );
 
 // ---- Admin users (Package A): list user + ubah role, hanya admin & root ----

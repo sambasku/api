@@ -44,6 +44,8 @@ export interface User {
   /** Mute sementara; null = tidak di-mute. */
   contributeMutedUntil: Date | null;
   emailVerified: boolean;
+  /** Waktu tap "Mengerti" di guide swipe halaman kontribusi; null = belum. */
+  readContributionGuideAt: Date | null;
   avatarUrl: string | null;
   avatarProvider: string | null;
   avatarProviderFileId: string | null;
