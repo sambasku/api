@@ -1,5 +1,5 @@
 // Entitas domain - murni TypeScript, tidak tahu Drizzle/HTTP
-// docs/api/17-api-suggest-edit-word.md
+
 
 export type SuggestionStatus = 'pending' | 'approved' | 'rejected' | 'corrected';
 export type ChangeAction = 'update' | 'add' | 'delete';

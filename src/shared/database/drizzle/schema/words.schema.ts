@@ -7,7 +7,7 @@ import { users } from './users.schema';
 import { wordImportSessions } from './word-import-sessions.schema';
 
 // 'draft' | 'pending_review' | 'published' | 'rejected' - alur per role
-// ada di resolvePublication (docs/api/03-api-kontribusi-verifikasi.md)
+// ada di resolvePublication
 export const words = sqliteTable(
   'words',
   {

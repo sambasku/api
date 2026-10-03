@@ -281,7 +281,7 @@ export interface WordAuditSnapshot {
 
 // saveWithRelations & saveWithInlineRelations DIJAMIN atomik (satu
 // db.transaction) - use case tidak perlu tahu soal transaction
-// (docs/api/01-api-tambah-kata.md & 04-api-sinonim-inline.md).
+//
 export interface WordRepository {
   saveWithRelations(word: WordToSave, actorId: string): Promise<Word>;
   /**

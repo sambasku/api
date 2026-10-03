@@ -1,82 +1,9 @@
 import { logger } from '@/shared/logging/logger';
+import { getGoogleAccessToken } from '@/shared/google/service-account-token';
 import type { PushMessage, PushSendResult, PushSenderPort } from '../application/ports/push-sender.port';
 
-function pemToArrayBuffer(pem: string): ArrayBuffer {
-  const b64 = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
-    .replace(/-----END PRIVATE KEY-----/g, '')
-    .replace(/\\n/g, '')
-    .replace(/\s/g, '');
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-function base64url(data: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < data.length; i++) {
-    binary += String.fromCharCode(data[i]!);
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function encodeBase64url(str: string): string {
-  return base64url(new TextEncoder().encode(str));
-}
-
-async function signRs256(data: string, privateKeyPem: string): Promise<string> {
-  const keyData = pemToArrayBuffer(privateKeyPem);
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    keyData,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign(
-    { name: 'RSASSA-PKCS1-v1_5' },
-    key,
-    new TextEncoder().encode(data),
-  );
-  return base64url(new Uint8Array(signature));
-}
-
-async function getFcmAccessToken(clientEmail: string, privateKey: string): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const claim = {
-    iss: clientEmail,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now,
-  };
-  const signingInput = `${encodeBase64url(JSON.stringify(header))}.${encodeBase64url(JSON.stringify(claim))}`;
-  const signature = await signRs256(signingInput, privateKey);
-  const jwt = `${signingInput}.${signature}`;
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
-  const data = (await res.json()) as {
-    access_token?: string;
-    error?: string;
-    error_description?: string;
-  };
-  if (!data.access_token) {
-    throw new Error(
-      `FCM OAuth gagal (status=${res.status}): ${data.error ?? 'unknown'} ${data.error_description ?? ''}`,
-    );
-  }
-  return data.access_token;
+function getFcmAccessToken(clientEmail: string, privateKey: string): Promise<string> {
+  return getGoogleAccessToken({ clientEmail, privateKey }, 'https://www.googleapis.com/auth/firebase.messaging');
 }
 
 async function pushOne(

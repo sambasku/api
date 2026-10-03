@@ -6,7 +6,7 @@ export interface AccessTokenPayload {
   role: string;
   // Klaim identitas tambahan (opsional, backward-compatible): dipakai admin
   // saat restore sesi (decode JWT) untuk menampilkan nama user tanpa
-  // bergantung cache sessionStorage (yang per-tab - lihat docs/api/auth).
+  // bergantung cache sessionStorage (yang per-tab).
   username?: string;
   /** Authorized party = api_clients.client_id */
   azp?: string;

@@ -168,7 +168,7 @@ export const contributionDetailResponseSchema = z.object({
     review: reviewRowSchema.nullable(),
     prior_reviews: z.array(reviewRowSchema).optional(),
     // payload polymorphic per entity_type - bentuknya didokumentasikan di
-    // docs/api/03-api-kontribusi-verifikasi.md (word detail / child + parent)
+    // word detail / child + parent
     entity: z.any(),
   }),
 });

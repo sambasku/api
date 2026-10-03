@@ -6,7 +6,6 @@ export const MENTION_SUGGEST_LIMIT = 10;
 export class SuggestMentionUsersUseCase {
   constructor(private readonly publicUserRepo: PublicUserRepository) {}
 
-  /** Autocomplete mention @username (38-api-mention.md). Tanpa PII. */
   async execute(prefix: string): Promise<MentionUserRow[]> {
     const clean = prefix.trim().toLowerCase();
     if (clean.length < 2) return [];
