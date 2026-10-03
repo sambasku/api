@@ -59,6 +59,9 @@ SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
 # Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
 # -> client paksa re-login. Cutover lewat redeploy.
 OAUTH_REQUIRE_AZP = "true"
+GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gserviceaccount.com"
+GA4_PROPERTY_ID="556164988"
+SEARCH_CONSOLE_SITE_URL="https://sambasku.com/"
 
 [observability]
 enabled = true
@@ -110,6 +113,9 @@ SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
 # Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
 # -> client paksa re-login. Cutover lewat redeploy.
 OAUTH_REQUIRE_AZP = "true"
+GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gserviceaccount.com"
+GA4_PROPERTY_ID="556164988"
+SEARCH_CONSOLE_SITE_URL="https://sambasku.com/"
 
 [env.staging.observability]
 enabled = true

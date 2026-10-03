@@ -5,7 +5,6 @@ import { words } from './words.schema';
 
 /** Usulan perubahan pada kata existing dari user (kontributor+).
  *  Diproses lewat moderasi admin (approve/reject/correct) - lihat
- *  docs/api/17-api-suggest-edit-word.md.
  *
  *  proposed_changes: JSON sesuai struktur di doc 17.
  *  status: 'pending' | 'approved' | 'rejected' | 'corrected'

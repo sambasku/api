@@ -6,10 +6,9 @@
 
 Backend API Kamus Digital Sambas-Indonesia.
 
-Stack & konvensi mengikuti `docs/api/api-base-stack.md` - Hono + Drizzle ORM +
-**Turso (libSQL / SQLite)**, clean architecture feature-based
-(`src/modules/<fitur>/`). Dokumentasi API interaktif di `GET /docs` (Scalar)
-saat server jalan. Keputusan migrasi Neon → Turso: `docs/api/ADR-turso.md`.
+Stack: Hono + Drizzle ORM + **Turso (libSQL / SQLite)**, clean architecture
+feature-based (`src/modules/<fitur>/`). Dokumentasi API interaktif di
+`GET /docs` (Scalar) saat server jalan.
 
 ## Database (tanpa Docker)
 
@@ -120,8 +119,7 @@ test (file SQLite) → migrate Turso → `wrangler deploy --env staging`.
 Secret Worker (JWT, dll.) tidak ikut CI - `wrangler deploy` mempertahankan
 secret yang sudah terpasang. Vars non-secret (termasuk
 `OAUTH_REQUIRE_AZP=false` default / grace) ada di `wrangler.toml`
-`[vars]` / `[env.staging.vars]` - lihat
-`docs/api/35-api-oauth-client-azp.md`. Seed manual (staging):
+`[vars]` / `[env.staging.vars]`. Seed manual (staging):
 
 ```bash
 # Aman diulang - Anonim, Pengimpor Data CSV, bahasa/dialek/kelas/kategori
@@ -144,7 +142,7 @@ README asset (asal audio, struktur path, URL raw):
 [`pronunciation/README.md`](../pronunciation/README.md) ·
 [raw di GitHub](https://github.com/sambasku/audios/blob/main/README.md).
 
-Kontrak API lengkap: `docs/api/29-api-pronunciation-audio.md`.
+Record metadata + URL audio tersimpan di tabel `word_audios`.
 
 ### Env (lokal / Workers)
 
@@ -303,5 +301,3 @@ src/
 Migrasi Postgres lama (arsip, jangan di-apply):  
 `src/shared/database/drizzle/migrations-pg-archive/`.  
 Lineage aktif: `migrations/0000_init-turso.sql`.
-
-Detail lengkap: `docs/api/api-base-stack.md` · `docs/api/ADR-turso.md`.

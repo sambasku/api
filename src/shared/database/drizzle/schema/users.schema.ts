@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { sqliteTable, text, integer, uniqueIndex, index, primaryKey } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 
-// Sesuai tabel `users` di docs/dbdiagram.dbml
+// Sesuai tabel `users` di DBML sumber
 export const users = sqliteTable(
   'users',
   {
