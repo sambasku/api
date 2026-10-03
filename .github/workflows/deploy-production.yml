@@ -41,6 +41,7 @@ jobs:
             echo "JWT_PRIVATE_KEY=\"$(cat jwt_private.pem)\""
             echo "JWT_PUBLIC_KEY=\"$(cat jwt_public.pem)\""
             echo "CORS_ALLOWED_ORIGINS=http://localhost:5173"
+            echo "OAUTH_REQUIRE_AZP=true"
           } > .env.test
           rm jwt_private.pem jwt_public.pem
       - run: pnpm db:migrate

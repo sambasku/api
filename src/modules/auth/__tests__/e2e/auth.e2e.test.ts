@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { config } from 'dotenv';
 import { capturedOtpDisplayCode } from '@/shared/testing/e2e-auth';
-import { REFRESH_ROTATION_GRACE_MS } from '../../application/use-cases/refresh-token.use-case';
 
 // Pastikan .env.test (DB test) dipakai SEBELUM app di-import -
 // .env dev tidak boleh pernah tersentuh dari test (api-base-stack.md Section 10)
@@ -13,6 +12,11 @@ if (parsed?.DATABASE_URL) process.env.DATABASE_URL = parsed.DATABASE_URL;
 async function refreshAfterGrace(
   run: () => Promise<{ status: number }>,
 ): Promise<{ status: number }> {
+  // Dynamic import: modul use-case kini import env.ts (issue #31) yang
+  // mem-parse schema saat load - harus SETELAH dotenv .env.test di bawah.
+  const { REFRESH_ROTATION_GRACE_MS } = await import(
+    '../../application/use-cases/refresh-token.use-case'
+  );
   const later = Date.now() + REFRESH_ROTATION_GRACE_MS + 1_000;
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(later);
@@ -286,6 +290,22 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
     expect(body.data.refresh_token).toBeDefined();
     // klien mobile tidak mengandalkan cookie
     expect(res.headers.getSetCookie().length).toBe(0);
+  });
+
+  const decodeJwtClaims = (token: string) =>
+    JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+
+  it('MOBILE: login mode ketat → JWT ber-azp sambasku-mobile + scope penuh', async () => {
+    const email = unique();
+    await registerAndVerify(email);
+    const res = await client.api.v1.auth.login.$post(
+      { json: { email, password: 'Password123', client_type: 'mobile' } },
+      { headers: xff() },
+    );
+    expect(res.status).toBe(200);
+    const claims = decodeJwtClaims((await res.json()).data.access_token);
+    expect(claims.azp).toBe('sambasku-mobile');
+    expect(claims.scope).toContain('vote.write');
   });
 
   it('MOBILE: refresh via body → token rotasi di body, token lama mati setelah grace', async () => {
