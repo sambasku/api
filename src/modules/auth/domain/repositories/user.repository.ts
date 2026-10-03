@@ -38,6 +38,6 @@ export interface UserRepository {
   clearAvatar(id: string): Promise<void>;
   updateProfile(
     id: string,
-    data: { displayName?: string; bio?: string | null },
+    data: { displayName?: string; bio?: string | null; readContributionGuideAt?: Date },
   ): Promise<User>;
 }

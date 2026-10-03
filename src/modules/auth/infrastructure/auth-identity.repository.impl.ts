@@ -63,6 +63,7 @@ function toUserEntity(row: UserRow, roles: User['roles']): User {
     canContribute: row.canContribute,
     contributeMutedUntil: row.contributeMutedUntil ?? null,
     emailVerified: row.emailVerified,
+    readContributionGuideAt: row.readContributionGuideAt ?? null,
     avatarUrl: row.avatarUrl ?? null,
     avatarProvider: row.avatarProvider ?? null,
     avatarProviderFileId: row.avatarProviderFileId ?? null,

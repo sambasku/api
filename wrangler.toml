@@ -61,7 +61,10 @@ SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
 OAUTH_REQUIRE_AZP = "true"
 GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gserviceaccount.com"
 GA4_PROPERTY_ID="556164988"
-SEARCH_CONSOLE_SITE_URL="https://sambasku.com/"
+SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
+# Statistik Play Console (export CSV GCS). Isi PLAY_STATS_GCS_BUCKET via
+# `npx wrangler secret put PLAY_STATS_GCS_BUCKET` ATAU langsung di sini.
+PLAY_STATS_GCS_PREFIX = ""
 
 [observability]
 enabled = true
@@ -115,7 +118,8 @@ SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
 OAUTH_REQUIRE_AZP = "true"
 GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gserviceaccount.com"
 GA4_PROPERTY_ID="556164988"
-SEARCH_CONSOLE_SITE_URL="https://sambasku.com/"
+SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
+PLAY_STATS_GCS_PREFIX = ""
 
 [env.staging.observability]
 enabled = true

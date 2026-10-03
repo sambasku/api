@@ -33,6 +33,7 @@ function user(): User {
     isActive: true,
     canContribute: true,
     contributeMutedUntil: null,
+    readContributionGuideAt: null,
     emailVerified: true,
     avatarUrl: null,
     avatarProvider: null,

@@ -31,6 +31,8 @@ export const users = sqliteTable(
     emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
     /** Waktu akun terverifikasi (OTP sukses); null = belum / data lama. */
     emailVerifiedAt: integer('email_verified_at', { mode: 'timestamp' }),
+    /** Waktu user tap "Mengerti" di guide swipe halaman kontribusi; null = belum baca. */
+    readContributionGuideAt: integer('read_contribution_guide_at', { mode: 'timestamp' }),
     // Avatar publik (GitHub sambasku/images). Null = belum set.
     avatarUrl: text('avatar_url'),
     avatarProvider: text('avatar_provider'),

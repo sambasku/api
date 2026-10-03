@@ -104,6 +104,11 @@ const envSchema = z.object({
   SEARCH_CONSOLE_SITE_URL: z.string().optional(), // sc-domain:sambasku.com | https://sambasku.com/
   GA4_CACHE_TTL_SECONDS: z.coerce.number().default(1800),
   SEARCH_CONSOLE_CACHE_TTL_SECONDS: z.coerce.number().default(21_600),
+  // Statistik Play Console (export CSV GCS), opsional. Satu service account
+  // dengan GA4; kosong = status not_configured di GET /admin/play-analytics/*.
+  PLAY_STATS_GCS_BUCKET: z.string().optional(),
+  PLAY_STATS_GCS_PREFIX: z.string().optional(),
+  PLAY_CACHE_TTL_SECONDS: z.coerce.number().default(21_600),
   // Data palsu untuk preview UI lokal; diabaikan saat NODE_ENV=production.
   WEB_ANALYTICS_FAKE: z
     .string()
