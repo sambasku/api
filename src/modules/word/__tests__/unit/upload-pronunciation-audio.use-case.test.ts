@@ -32,7 +32,7 @@ function makeDeps() {
     findDialectCode: vi.fn(),
     countWordAudios: vi.fn().mockResolvedValue(0),
     addWordAudio: vi.fn().mockImplementation(
-      (_wid: string, data: { status: string; isVerified: boolean; speakerName: string | null }) =>
+      (_wid: string, data: { status: string; isVerified: boolean; speakerName: string | null; speakerConsent: boolean }) =>
         Promise.resolve({
           id: '01AUDIOULID000000000000000',
           wordId: WORD.id,
@@ -43,6 +43,7 @@ function makeDeps() {
           fileSize: SAMPLE_BYTES.length,
           durationMs: null,
           speakerName: data.speakerName,
+          speakerConsent: data.speakerConsent,
           isPrimary: true,
           status: data.status,
           isVerified: data.isVerified,
@@ -89,6 +90,7 @@ describe('UploadPronunciationAudioUseCase', () => {
         mimeType: 'audio/mp4',
         filename: 'a.m4a',
         speakerName: 'Ali',
+        speakerConsent: true,
       },
       CONTRIBUTOR,
     );
@@ -100,6 +102,7 @@ describe('UploadPronunciationAudioUseCase', () => {
         status: 'pending_review',
         isVerified: false,
         speakerName: 'Ali',
+        speakerConsent: true,
       }),
       CONTRIBUTOR.userId,
     );
@@ -109,22 +112,34 @@ describe('UploadPronunciationAudioUseCase', () => {
     const { wordRepo, useCase } = makeUseCase();
     const media = await useCase.execute(
       WORD.id,
-      { bytes: SAMPLE_BYTES, mimeType: 'audio/mp4', filename: 'a.m4a' },
+      { bytes: SAMPLE_BYTES, mimeType: 'audio/mp4', filename: 'a.m4a', speakerConsent: true },
       CONTRIBUTOR,
     );
     expect(media.speakerName).toBeNull();
     expect(wordRepo.addWordAudio).toHaveBeenCalledWith(
       WORD.id,
-      expect.objectContaining({ speakerName: null, status: 'pending_review' }),
+      expect.objectContaining({ speakerName: null, speakerConsent: true, status: 'pending_review' }),
       CONTRIBUTOR.userId,
     );
+  });
+
+  it('tanpa speaker_consent → ditolak VALIDATION_ERROR', async () => {
+    const { wordRepo, useCase } = makeUseCase();
+    await expect(
+      useCase.execute(
+        WORD.id,
+        { bytes: SAMPLE_BYTES, mimeType: 'audio/mp4', filename: 'a.m4a' },
+        CONTRIBUTOR,
+      ),
+    ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
+    expect(wordRepo.addWordAudio).not.toHaveBeenCalled();
   });
 
   it('admin → published + verified', async () => {
     const { useCase } = makeUseCase();
     const media = await useCase.execute(
       WORD.id,
-      { bytes: SAMPLE_BYTES, mimeType: 'audio/mp4', filename: 'a.m4a' },
+      { bytes: SAMPLE_BYTES, mimeType: 'audio/mp4', filename: 'a.m4a', speakerConsent: true },
       ADMIN,
     );
     expect(media.status).toBe('published');

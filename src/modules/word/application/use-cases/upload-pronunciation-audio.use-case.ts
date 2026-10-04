@@ -1,4 +1,5 @@
 import { NotFoundError } from '@/shared/errors/app-error';
+import { ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { PronunciationStoragePort } from '../ports/pronunciation-storage.port';
 import type { WordAudioMedia, WordRepository } from '../../domain/repositories/word.repository';
@@ -21,6 +22,8 @@ export interface UploadPronunciationAudioDto {
   dialectId?: string | null;
   exampleId?: string | null;
   speakerName?: string | null;
+  /** PDP Pasal 8: wajib true, ditolak kalau tidak ada. */
+  speakerConsent?: boolean;
   durationMs?: unknown;
 }
 
@@ -71,6 +74,11 @@ export class UploadPronunciationAudioUseCase {
       mimeType: dto.mimeType,
       filename: dto.filename,
     });
+    if (dto.speakerConsent !== true) {
+      throw new ValidationError([
+        { field: 'speaker_consent', message: 'Penutur harus setuju suaranya dipublikasikan' },
+      ]);
+    }
     const durationMs = clampDurationMs(dto.durationMs);
     const speakerName = dto.speakerName?.trim() || null;
 
@@ -107,6 +115,7 @@ export class UploadPronunciationAudioUseCase {
         fileSize: uploaded.size,
         durationMs,
         speakerName,
+        speakerConsent: true,
         isPrimary: existingCount === 0,
         ...publication,
       },

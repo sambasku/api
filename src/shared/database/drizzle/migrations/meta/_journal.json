@@ -379,6 +379,13 @@
       "when": 1795030000000,
       "tag": "0053_user-read-contribution-guide",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1795140000000,
+      "tag": "0054_word-audios-speaker-consent",
+      "breakpoints": true
     }
   ]
 }

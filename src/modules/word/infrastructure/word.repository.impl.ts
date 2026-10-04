@@ -192,6 +192,7 @@ function toWordAudio(row: typeof wordAudios.$inferSelect): WordAudioMedia {
     fileSize: row.fileSize,
     durationMs: row.durationMs,
     speakerName: row.speakerName,
+    speakerConsent: row.speakerConsent,
     isPrimary: row.isPrimary,
     status: row.status as ChildStatus,
     isVerified: row.isVerified,
@@ -2061,6 +2062,7 @@ export class WordRepositoryImpl implements WordRepository {
       fileSize: number;
       durationMs?: number | null;
       speakerName?: string | null;
+      speakerConsent: boolean;
       isPrimary: boolean;
       status: ChildStatus;
       isVerified: boolean;
@@ -2083,6 +2085,7 @@ export class WordRepositoryImpl implements WordRepository {
             fileSize: data.fileSize,
             durationMs: data.durationMs ?? null,
             speakerName: data.speakerName ?? null,
+            speakerConsent: data.speakerConsent,
             isPrimary: data.isPrimary,
             status: data.status,
             isVerified: data.isVerified,
