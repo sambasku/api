@@ -55,8 +55,16 @@ PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/sambasku/audios"
 # Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
 SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
-# Gate JWT azp pada write (false = grace / backward-compat token tanpa azp).
-OAUTH_REQUIRE_AZP = "false"
+# Gate JWT azp pada write (true = ketat: token tanpa azp -> CLIENT_REQUIRED).
+# Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
+# -> client paksa re-login. Cutover lewat redeploy.
+OAUTH_REQUIRE_AZP = "true"
+GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gserviceaccount.com"
+GA4_PROPERTY_ID="556164988"
+SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
+# Statistik Play Console (export CSV GCS). Isi PLAY_STATS_GCS_BUCKET via
+# `npx wrangler secret put PLAY_STATS_GCS_BUCKET` ATAU langsung di sini.
+PLAY_STATS_GCS_PREFIX = ""
 
 [observability]
 enabled = true
@@ -104,8 +112,14 @@ PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/coem/staging-audios"
 # Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
 SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
-# Gate JWT azp pada write (false = grace / backward-compat token tanpa azp).
-OAUTH_REQUIRE_AZP = "false"
+# Gate JWT azp pada write (true = ketat: token tanpa azp -> CLIENT_REQUIRED).
+# Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
+# -> client paksa re-login. Cutover lewat redeploy.
+OAUTH_REQUIRE_AZP = "true"
+GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gserviceaccount.com"
+GA4_PROPERTY_ID="556164988"
+SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
+PLAY_STATS_GCS_PREFIX = ""
 
 [env.staging.observability]
 enabled = true

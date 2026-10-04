@@ -14,6 +14,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     email: 'budi@test.com',
     phone: null,
     passwordHash: 'argon2id$hash',
+    roles: ['contributor'],
     role: 'contributor',
     isActive: true,
     emailVerified: true,
@@ -27,6 +28,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     ...overrides,
     canContribute: overrides.canContribute ?? true,
     contributeMutedUntil: overrides.contributeMutedUntil ?? null,
+    readContributionGuideAt: overrides.readContributionGuideAt ?? null,
   };
 }
 

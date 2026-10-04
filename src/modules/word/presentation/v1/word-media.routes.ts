@@ -99,6 +99,7 @@ export function createWordMediaRoutes(deps: WordMediaRoutesDeps) {
               dialect_id: z.string().length(26).optional(),
               example_id: z.string().length(26).optional(),
               speaker_name: z.string().max(255).optional(),
+              speaker_consent: z.union([z.boolean(), z.string()]).optional(),
               duration_ms: z.coerce.number().int().optional(),
             }),
           },

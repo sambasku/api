@@ -43,7 +43,7 @@ describe('BulkWordsActionUseCase', () => {
       action: 'delete',
       ids: ['01AAAAAAAAAAAAAAAAAAAAAAAA', '01BBBBBBBBBBBBBBBBBBBBBBBB'],
       actorId: '01ADMIN',
-      actorRole: 'admin',
+      actorRoles: ['admin'],
     });
     expect(result.succeeded).toBe(2);
     expect(result.failed).toBe(0);
@@ -71,7 +71,7 @@ describe('BulkWordsActionUseCase', () => {
         '01MISSING__________________',
       ],
       actorId: '01ADMIN',
-      actorRole: 'reviewer',
+      actorRoles: ['reviewer'],
     });
 
     expect(result.succeeded).toBe(2);
@@ -111,7 +111,7 @@ describe('BulkWordsActionUseCase', () => {
       action: 'unpublish',
       ids: ['01DOWN_____________________', '01OK_______________________'],
       actorId: '01ADMIN',
-      actorRole: 'admin',
+      actorRoles: ['admin'],
     });
 
     expect(result.succeeded).toBe(1);
@@ -129,7 +129,7 @@ describe('BulkWordsActionUseCase', () => {
         action: 'publish',
         ids: ['01AAAAAAAAAAAAAAAAAAAAAAAA'],
         actorId: '01EDITOR',
-        actorRole: 'editor',
+        actorRoles: ['editor'],
       }),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
@@ -140,7 +140,7 @@ describe('BulkWordsActionUseCase', () => {
       action: 'delete',
       ids: ['01AAAAAAAAAAAAAAAAAAAAAAAA'],
       actorId: '01EDITOR',
-      actorRole: 'editor',
+      actorRoles: ['editor'],
     });
     expect(deleteWord.execute).toHaveBeenCalled();
   });
@@ -152,7 +152,7 @@ describe('BulkWordsActionUseCase', () => {
       action: 'delete',
       ids: [id, id],
       actorId: '01ADMIN',
-      actorRole: 'admin',
+      actorRoles: ['admin'],
     });
     expect(deleteWord.execute).toHaveBeenCalledTimes(1);
   });
@@ -164,7 +164,7 @@ describe('BulkWordsActionUseCase', () => {
         action: 'delete',
         ids: [],
         actorId: '01ADMIN',
-        actorRole: 'admin',
+        actorRoles: ['admin'],
       }),
     ).rejects.toMatchObject({ errorCode: 'WORDS_BULK_EMPTY' });
 
@@ -175,7 +175,7 @@ describe('BulkWordsActionUseCase', () => {
           `01${String(i).padStart(24, '0')}`,
         ),
         actorId: '01ADMIN',
-        actorRole: 'admin',
+        actorRoles: ['admin'],
       }),
     ).rejects.toMatchObject({ errorCode: 'WORDS_BULK_TOO_LARGE' });
   });

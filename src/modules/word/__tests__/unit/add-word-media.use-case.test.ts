@@ -21,8 +21,8 @@ const NO_MISSING: MissingReferences = {
 
 const WORD = { id: '01WORDULID000000000000000', lemma: 'makatn' } as { id: string; lemma: string };
 
-const CONTRIBUTOR = { userId: '01CONTRIBUTORULID0000000', role: 'contributor', requestId: null };
-const ADMIN = { userId: '01ADMINULID00000000000000', role: 'admin', requestId: null };
+const CONTRIBUTOR = { roles: ['contributor'], userId: '01CONTRIBUTORULID0000000', role: 'contributor', requestId: null };
+const ADMIN = { roles: ['admin'], userId: '01ADMINULID00000000000000', role: 'admin', requestId: null };
 
 function makeDeps() {
   const wordRepo = {

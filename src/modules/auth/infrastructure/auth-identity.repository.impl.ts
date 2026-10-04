@@ -1,8 +1,9 @@
 import { and, eq, isNull } from 'drizzle-orm';
-import { authIdentities, users } from '@/shared/database/drizzle/schema';
+import { authIdentities, userRoles, users } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
 import { ConflictError } from '@/shared/errors/app-error';
+import { ROLE_RANK, derivePrimaryRole } from '../domain/entities/user.entity';
 import type { NewUser, User } from '../domain/entities/user.entity';
 import type { AuthIdentity, NewAuthIdentity } from '../domain/entities/auth-identity.entity';
 import type {
@@ -38,7 +39,15 @@ function providerAlreadyLinkedConflict(provider: string): ConflictError {
   );
 }
 
-function toUserEntity(row: UserRow): User {
+async function loadRoles(db: AppDatabase, userId: string): Promise<User['roles']> {
+  const rows = await db.select({ role: userRoles.role }).from(userRoles).where(eq(userRoles.userId, userId));
+  return rows.map((r) => r.role as User['role']);
+}
+
+function toUserEntity(row: UserRow, roles: User['roles']): User {
+  const sorted = [...roles].sort(
+    (a, b) => ROLE_RANK[b] - ROLE_RANK[a],
+  );
   return {
     id: row.id,
     username: row.username,
@@ -47,11 +56,14 @@ function toUserEntity(row: UserRow): User {
     email: row.email,
     phone: row.phone,
     passwordHash: row.passwordHash,
-    role: row.role as User['role'],
+    roles: sorted,
+    // @deprecated wire compat - derived tertinggi
+    role: derivePrimaryRole(sorted),
     isActive: row.isActive,
     canContribute: row.canContribute,
     contributeMutedUntil: row.contributeMutedUntil ?? null,
     emailVerified: row.emailVerified,
+    readContributionGuideAt: row.readContributionGuideAt ?? null,
     avatarUrl: row.avatarUrl ?? null,
     avatarProvider: row.avatarProvider ?? null,
     avatarProviderFileId: row.avatarProviderFileId ?? null,
@@ -197,7 +209,7 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
           })
           .returning();
         return {
-          user: toUserEntity(userRow),
+          user: toUserEntity(userRow, await loadRoles(this.db, userRow.id)),
           identity: toIdentityEntity(idRow),
           created: true,
         };
@@ -215,7 +227,7 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
           .where(eq(users.id, existing.userId))
           .limit(1);
         if (!userRow) throw err;
-        return { user: toUserEntity(userRow), identity: existing, created: false };
+        return { user: toUserEntity(userRow, await loadRoles(this.db, userRow.id)), identity: existing, created: false };
       }
       if (haystack.includes('users_email_unique') || haystack.includes('email')) {
         throw new ConflictError(

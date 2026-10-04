@@ -139,9 +139,9 @@ export class ReviewContributionUseCase {
         await this.notifyUser.execute({
           userId: outcome.contributorUserId,
           title: approved ? 'Kontribusi disetujui' : 'Kontribusi ditolak',
-          body: approved
-            ? 'Usulan Anda telah disetujui dan dipublikasikan.'
-            : 'Usulan Anda ditolak. Buka Kontribusi Saya untuk melihat alasan.',
+            body: approved
+              ? 'Usulanmu sudah disetujui dan tayang di kamus.'
+              : 'Usulanmu ditolak. Buka Kontribusi Saya untuk lihat alasannya.',
           actorId: cmd.actorId,
           data: {
             type: approved ? 'contribution_approved' : 'contribution_rejected',

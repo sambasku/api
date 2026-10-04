@@ -64,6 +64,7 @@ export interface DashboardStats {
      * (bukan heartbeat realtime).
      */
     onlineRecently: number;
+    /** Count user per role dari junction user_roles (multi role: user bisa masuk >1 role). */
     byRole: Record<AppRoleKey, number>;
   };
   activity: {

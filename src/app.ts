@@ -1,3 +1,4 @@
+import { SuggestMentionUsersUseCase } from "./modules/user/application/use-cases/suggest-mention-users.use-case";
 import { apiReference } from '@scalar/hono-api-reference';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
@@ -13,6 +14,7 @@ import { requestDb } from '@/shared/middlewares/request-db.middleware';
 import {
   createAuthenticateMiddleware,
   createOptionalAuthenticateMiddleware,
+  createSoftAuthenticateMiddleware,
   scheduleAuthenticatedSideEffect,
 } from '@/shared/middlewares/authenticate.middleware';
 import { createTouchLastSeen } from '@/modules/auth/infrastructure/touch-last-seen';
@@ -254,6 +256,14 @@ import { DashboardController } from '@/modules/dashboard/presentation/v1/dashboa
 import { createDashboardRoutes } from '@/modules/dashboard/presentation/v1/dashboard.routes';
 import { GetDashboardStatsUseCase } from '@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case';
 import { DashboardRepositoryImpl } from '@/modules/dashboard/infrastructure/dashboard.repository.impl';
+import { WebAnalyticsController } from '@/modules/web-analytics/presentation/v1/web-analytics.controller';
+import { createWebAnalyticsRoutes } from '@/modules/web-analytics/presentation/v1/web-analytics.routes';
+import { GetWebAnalyticsUseCase } from '@/modules/web-analytics/application/use-cases/get-web-analytics.use-case';
+import { createWebAnalyticsProviders } from '@/modules/web-analytics/infrastructure/web-analytics-providers.factory';
+import { PlayAnalyticsController } from '@/modules/play-analytics/presentation/v1/play-analytics.controller';
+import { createPlayAnalyticsRoutes } from '@/modules/play-analytics/presentation/v1/play-analytics.routes';
+import { GetPlayAnalyticsUseCase } from '@/modules/play-analytics/application/use-cases/get-play-analytics.use-case';
+import { createPlayAnalyticsProviders } from '@/modules/play-analytics/infrastructure/play-analytics-providers.factory';
 import { VoteRepositoryImpl } from '@/modules/vote/infrastructure/vote.repository.impl';
 import { ToggleVoteUseCase } from '@/modules/vote/application/use-cases/toggle-vote.use-case';
 import { GetVoteCountsUseCase } from '@/modules/vote/application/use-cases/get-vote-counts.use-case';
@@ -523,6 +533,13 @@ const optionalAuthenticate = createOptionalAuthenticateMiddleware(
   (token) => tokenService.verifyAccessToken(token),
   onAuthenticated,
 );
+/**
+ * Feed beranda: token sah → bisa sembunyikan karya sendiri; token apa pun
+ * selain itu tetap dapat feed publik. Tidak 401, dan tanpa presence touch.
+ */
+const softAuthenticate = createSoftAuthenticateMiddleware((token) =>
+  tokenService.verifyAccessToken(token),
+);
 const requireVoteWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
   scope: 'vote.write',
 });
@@ -742,6 +759,25 @@ const dashboardController = new DashboardController({
   getStats: new GetDashboardStatsUseCase(new DashboardRepositoryImpl(db)),
 });
 
+// ---- Modul web-analytics - Trafik Web console (GA4 + Search Console via
+// service account). Provider terpisah dari dashboard internal. ----
+const webAnalyticsController = new WebAnalyticsController({
+  getReport: new GetWebAnalyticsUseCase({
+    ...createWebAnalyticsProviders(env),
+    ga4CacheTtlSeconds: env.GA4_CACHE_TTL_SECONDS,
+    searchConsoleCacheTtlSeconds: env.SEARCH_CONSOLE_CACHE_TTL_SECONDS,
+  }),
+});
+
+// ---- Modul play-analytics - statistik Play Store console (export CSV GCS
+// via service account yang sama dengan GA4). ----
+const playAnalyticsController = new PlayAnalyticsController({
+  getReport: new GetPlayAnalyticsUseCase({
+    ...createPlayAnalyticsProviders(env),
+    cacheTtlSeconds: env.PLAY_CACHE_TTL_SECONDS,
+  }),
+});
+
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----
 const commentRepo = new CommentRepositoryImpl(db);
 const wordCommentPushCooldown = new WordCommentPushCooldownGate(
@@ -802,6 +838,7 @@ const publicUserRepo = new PublicUserRepositoryImpl(db);
 const userController = new UserController({
   getPublicProfile: new GetPublicProfileUseCase(publicUserRepo),
   getPublicActivity: new GetPublicActivityUseCase(publicUserRepo),
+  suggestMention: new SuggestMentionUsersUseCase(publicUserRepo),
   uploadAvatar: new UploadAvatarUseCase(userRepo, publicImageStorage),
   deleteAvatar: new DeleteAvatarUseCase(userRepo, publicImageStorage),
   getMyProfile: new GetMyProfileUseCase(userRepo),
@@ -843,7 +880,7 @@ app.notFound((c) =>
     {
       success: false as const,
       error_code: 'NOT_FOUND',
-      message: 'Route tidak ditemukan',
+      message: 'Route-nya tidak ketemu, coba cek lagi ya.',
       details: null,
     },
     404,
@@ -1027,7 +1064,10 @@ const wordReportController = new WordReportController({
   ),
 });
 app.route('/api/v1/words', createWordReportRoutes({ controller: wordReportController, authenticate }));
-app.route('/api/v1/words', createPublicWordRoutes({ controller: wordController, authenticate }));
+app.route(
+  '/api/v1/words',
+  createPublicWordRoutes({ controller: wordController, authenticate, softAuthenticate }),
+);
 app.route('/api/v1/words', createWordHistoryRoutes({ controller: suggestionController, authenticate }));
 app.route(
   '/api/v1/words',
@@ -1212,7 +1252,7 @@ const bugReportController = new BugReportController({
 });
 app.route(
   '/api/v1/bug-reports',
-  createBugReportRoutes({ controller: bugReportController, optionalAuthenticate }),
+  createBugReportRoutes({ controller: bugReportController, optionalAuthenticate, authenticate }),
 );
 app.route(
   '/api/v1/admin/bug-reports',
@@ -1312,8 +1352,20 @@ app.route(
   createAdminWordReportRoutes({ controller: wordReportController, authenticate }),
 );
 
-// Statistik dashboard - semua role yang login (dashboard = halaman pertama konsol)
+// Statistik dashboard - hanya admin, root & reviewer (issue #33)
 app.route('/api/v1/admin/dashboard', createDashboardRoutes({ controller: dashboardController, authenticate }));
+
+// Trafik Web (GA4 + Search Console) - hanya admin & root
+app.route(
+  '/api/v1/admin/web-analytics',
+  createWebAnalyticsRoutes({ controller: webAnalyticsController, authenticate }),
+);
+
+// Play Store (export CSV GCS) - hanya admin & root
+app.route(
+  '/api/v1/admin/play-analytics',
+  createPlayAnalyticsRoutes({ controller: playAnalyticsController, authenticate }),
+);
 
 // ---- Admin users (Package A): list user + ubah role, hanya admin & root ----
 const adminUsersController = new AdminUsersController({
@@ -1424,7 +1476,7 @@ export async function runDueNotificationCampaigns(): Promise<{ processed: number
 }
 
 // Lookup definisi lemma (KBBI via port) - prefill field definition di form
-// form kontribusi web (anonim). Tidak menulis DB. docs/api/13-api-kbbi-lemma-definition.md
+// form kontribusi web (anonim). Tidak menulis DB.
 const lemmaDefinitionRegistry = createLemmaDefinitionProviderRegistry();
 const lemmaDefinitionController = new LemmaDefinitionController({
   lookup: new LookupLemmaDefinitionUseCase(
@@ -1443,10 +1495,13 @@ const activityController = new ActivityController({
   list: new ListActivityUseCase(activityRepo, commentBlocklistRepo),
   recordCardShare: new RecordCardShareUseCase(activityRepo),
 });
-app.route('/api/v1/activity', createActivityRoutes({ controller: activityController }));
+app.route(
+  '/api/v1/activity',
+  createActivityRoutes({ controller: activityController, softAuthenticate }),
+);
 app.route('/api/v1/words', createCardShareRoutes({ controller: activityController, authenticate }));
 
-// Latar kartu share - multi-provider (docs/backlogs/SHARE.md). Publik.
+// Latar kartu share - multi-provider multi-provider. Publik.
 const shareBackgroundProviders = createShareBackgroundProviderRegistry();
 const shareController = new ShareController({
   listBackgrounds: new ListShareBackgroundsUseCase(

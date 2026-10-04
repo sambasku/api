@@ -3,7 +3,7 @@ import { brandedCodeEmailHtml } from './branded-email';
 export function resetPasswordEmailText(displayCode: string): string {
   return (
     `Kode reset password SambasKu (berlaku 10 menit): ${displayCode}\n\n` +
-    'Masukkan kode ini di aplikasi. Abaikan email ini jika Anda tidak meminta reset password.'
+    'Masukkan kode ini di aplikasi. Abaikan email ini jika kamu tidak meminta reset password.'
   );
 }
 
@@ -14,6 +14,6 @@ export function resetPasswordEmailHtml(displayCode: string): string {
     intro: 'Masukkan 6 karakter 0-9A-Z di aplikasi',
     code: displayCode,
     note: 'Berlaku 10 menit. Format tampilan XXX-YYY.',
-    footer: 'Abaikan email ini jika Anda tidak meminta reset password di SambasKu.',
+    footer: 'Abaikan email ini jika kamu tidak meminta reset password di SambasKu.',
   });
 }

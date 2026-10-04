@@ -52,7 +52,7 @@ const base = {
   email: 'Siti@Test.com',
   phone: null as string | null,
   password: 'Password123',
-  role: 'editor' as const,
+  roles: ['editor' as const],
   isActive: true,
   actorId: ACTOR,
 };
@@ -70,7 +70,8 @@ describe('CreateAdminUserUseCase', () => {
       phone: null,
       passwordHash: 'argon2id$hash',
       emailVerified: true,
-      role: 'editor',
+      roles: ['editor'],
+
       isActive: true,
     });
     expect(user.emailVerified).toBe(true);
@@ -83,7 +84,8 @@ describe('CreateAdminUserUseCase', () => {
         entityId: user.id,
         newData: expect.objectContaining({
           email: 'siti@test.com',
-          role: 'editor',
+          roles: ['editor'],
+
           is_active: true,
           via: 'admin',
         }),
@@ -95,14 +97,14 @@ describe('CreateAdminUserUseCase', () => {
 
   it('menyimpan user nonaktif bila admin mematikan status', async () => {
     const { useCase, userRepo } = makeDeps();
-    const user = await useCase.execute({ ...base, isActive: false, role: 'contributor' });
-    expect(userRepo.save).toHaveBeenCalledWith(expect.objectContaining({ isActive: false, role: 'contributor' }));
+    const user = await useCase.execute({ ...base, isActive: false, roles: ['contributor'] });
+    expect(userRepo.save).toHaveBeenCalledWith(expect.objectContaining({ isActive: false, roles: ['contributor'] }));
     expect(user.isActive).toBe(false);
   });
 
   it('menolak peran root', async () => {
     const { useCase, userRepo } = makeDeps();
-    await expect(useCase.execute({ ...base, role: 'root' })).rejects.toBeInstanceOf(BadRequestError);
+    await expect(useCase.execute({ ...base, roles: ['root'] })).rejects.toBeInstanceOf(BadRequestError);
     expect(userRepo.save).not.toHaveBeenCalled();
   });
 

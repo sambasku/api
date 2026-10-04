@@ -25,6 +25,10 @@ export const wordAudios = sqliteTable(
     fileSize: integer('file_size').notNull(),
     durationMs: integer('duration_ms'),
     speakerName: text('speaker_name'),
+    /** PDP Pasal 8: consent eksplisit penutur suara, diminta saat upload. */
+    speakerConsent: integer('speaker_consent', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
     status: text('status').notNull().default('published'),
     isVerified: integer('is_verified', { mode: 'boolean' }).notNull().default(false),

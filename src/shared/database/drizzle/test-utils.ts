@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import type { AppDatabase } from './client';
 import { ensureTestDbReady } from './test-client';
 import {
@@ -31,9 +32,11 @@ import {
   pronunciations,
   refreshTokens,
   searchMisses,
+  searchMissSearchers,
   discussionReplies,
   discussions,
   userConsents,
+  userRoles,
   users,
   userSkips,
   ugcAbuseEvents,
@@ -223,6 +226,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     refreshTokens,
     authIdentities,
     emailVerificationOtps,
+    // Anak search_misses (FK) - wajib sebelum search_misses di bawah.
+    searchMissSearchers,
     searchMisses,
     wordCategories,
     wordImages,
@@ -244,10 +249,21 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     legalDocuments,
     appSettings,
     apiClients,
+    userRoles,
     users,
   ]) {
     await db.delete(table);
   }
 
   await reseedTestReferenceData(db);
+}
+
+/** Set roles user di fixture test (multi role, junction user_roles). */
+export async function setRoles(db: AppDatabase, userId: string, roles: string[]): Promise<void> {
+  await db.delete(userRoles).where(eq(userRoles.userId, userId));
+  if (roles.length === 0) return;
+  await db
+    .insert(userRoles)
+    .values(roles.map((role) => ({ userId, role })))
+    .onConflictDoNothing();
 }

@@ -2,6 +2,7 @@
   "name": "sambasku-api",
   "version": "0.1.0",
   "description": "Backend API Kamus Digital Sambas-Indonesia",
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "private": true,
   "engines": {

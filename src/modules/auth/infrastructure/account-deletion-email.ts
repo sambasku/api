@@ -8,8 +8,8 @@ export function accountDeletionEmailText(displayCode: string, pageUrl: string): 
     `Kode hapus akun SambasKu (berlaku 10 menit): ${displayCode}\n\n` +
     `${DETAIL}\n\n` +
     `Halaman: ${pageUrl}\n\n` +
-    'Abaikan email ini jika Anda tidak meminta penghapusan akun di SambasKu.'
-  );
+    'Abaikan email ini jika kamu tidak meminta penghapusan akun di SambasKu.'
+);
 }
 
 export function accountDeletionEmailHtml(displayCode: string, pageUrl: string): string {
@@ -21,6 +21,6 @@ export function accountDeletionEmailHtml(displayCode: string, pageUrl: string): 
     note: 'Berlaku 10 menit. Format tampilan XXX-YYY.',
     detail: DETAIL,
     action: { href: pageUrl, label: 'Buka halaman hapus akun' },
-    footer: 'Abaikan email ini jika Anda tidak meminta penghapusan akun di SambasKu.',
+    footer: 'Abaikan email ini jika kamu tidak meminta penghapusan akun di SambasKu.',
   });
 }

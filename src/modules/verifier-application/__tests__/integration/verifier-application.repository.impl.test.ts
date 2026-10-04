@@ -142,7 +142,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
       phone: '6281888000002',
       passwordHash: 'hash',
     });
-    await users.updateRole(editor.id, 'editor');
+    await users.setRoles(editor.id, ['editor']);
 
     const editorApp = await repo.create({
       userId: editor.id,

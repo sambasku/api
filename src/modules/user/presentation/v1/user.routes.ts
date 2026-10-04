@@ -9,6 +9,9 @@ import type { AppVariables } from '@/shared/types';
 import type { UserController } from './user.controller';
 import {
   avatarUploadResponseSchema,
+  mentionSuggestQuerySchema,
+  mentionSuggestResponseSchema,
+  publicActivityQuerySchema,
   publicActivityResponseSchema,
   publicProfileParamsSchema,
   publicProfileResponseSchema,
@@ -22,6 +25,28 @@ const json = <T extends z.ZodType>(schema: T) => ({
   'application/json': { schema },
 });
 
+// Cache suggest 10 detik (in-memory, single instance - ganti Redis saat multi-instance)
+interface SuggestCacheEntry {
+  data: Array<{ id: string; username: string; display_name: string; avatar_url: string | null }>;
+  expires: number;
+}
+const suggestCache = new Map<string, SuggestCacheEntry>();
+const SUGGEST_CACHE_TTL_MS = 10_000;
+
+function getCachedSuggest(key: string): SuggestCacheEntry['data'] | null {
+  const entry = suggestCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    suggestCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedSuggest(key: string, data: SuggestCacheEntry['data']): void {
+  suggestCache.set(key, { data, expires: Date.now() + SUGGEST_CACHE_TTL_MS });
+}
+
 export function createPublicUserRoutes(deps: { controller: UserController }) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 100, duration: 60 }));
@@ -31,7 +56,10 @@ export function createPublicUserRoutes(deps: { controller: UserController }) {
     path: '/:username/activity',
     tags: ['Users'],
     summary: 'Aktivitas publik terbaru by username (tanpa auth)',
-    request: { params: publicProfileParamsSchema },
+    request: {
+      params: publicProfileParamsSchema,
+      query: publicActivityQuerySchema,
+    },
     responses: {
       200: { description: 'Daftar aktivitas', content: json(publicActivityResponseSchema) },
       400: { description: 'Username tidak valid', content: json(errorResponseSchema) },
@@ -52,11 +80,69 @@ export function createPublicUserRoutes(deps: { controller: UserController }) {
     },
   });
 
-  routes.openapi(activityRoute, (c) =>
-    deps.controller.publicActivity(c, c.req.valid('param').username) as never,
-  );
+  const suggestRoute = createRoute({
+    method: 'get',
+    path: '/suggest',
+    tags: ['Users'],
+    summary: 'Saran username untuk mention (tanpa auth, tanpa PII)',
+    request: {
+      query: mentionSuggestQuerySchema,
+    },
+    responses: {
+      200: {
+        description: 'Daftar user',
+        content: json(mentionSuggestResponseSchema),
+      },
+    },
+  });
+
+  routes.openapi(suggestRoute, async (c) => {
+    const q = c.req.valid('query').q;
+    const cacheKey = `suggest:${q.toLowerCase()}`;
+
+    const cached = getCachedSuggest(cacheKey);
+    if (cached) {
+      return c.json({
+        success: true as const,
+        data: { items: cached },
+      });
+    }
+
+    try {
+      const items = await deps.controller.suggestMentionInternal(q);
+      const serialized = items.map((item) => ({
+        id: item.id,
+        username: item.username,
+        display_name: item.displayName,
+        avatar_url: item.avatarUrl ?? null,
+      }));
+      setCachedSuggest(cacheKey, serialized);
+      return c.json({
+        success: true as const,
+        data: { items: serialized },
+      });
+    } catch (err) {
+      console.warn(JSON.stringify({
+        level: 'warn',
+        msg: 'mention suggest error',
+        query: q,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      return c.json({
+        success: true as const,
+        data: { items: [] },
+      });
+    }
+  });
   routes.openapi(profileRoute, (c) =>
     deps.controller.publicProfile(c, c.req.valid('param').username) as never,
+  );
+  routes.openapi(activityRoute, (c) =>
+    deps.controller.publicActivity(
+      c,
+      c.req.valid('param').username,
+      c.req.valid('query'),
+    ) as never,
   );
 
   return routes;

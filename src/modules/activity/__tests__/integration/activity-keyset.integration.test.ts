@@ -50,7 +50,6 @@ describe.skipIf(!hasTestDb)('ActivityRepositoryImpl - keyset cursor (integration
         displayName: 'Keyset User',
         email: 'keyset@test.com',
         passwordHash: 'x',
-        role: 'contributor',
       })
       .returning();
 

@@ -3,6 +3,20 @@ import { z } from 'zod';
 export const listActivityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().min(1).optional(),
+  /**
+   * true = buang baris milik user yang sedang login (feed beranda mobile).
+   *
+   * Hanya berlaku bila pemanggil terautentikasi. Tanpa Bearer, feed tetap
+   * publik penuh - flag ini bukan gate.
+   *
+   * Bentuk union (bukan `z.coerce.boolean()`) mengikuti
+   * `contribution.validator.ts`: `Boolean("false") === true` akan membaca
+   * `?exclude_self=false` sebagai true.
+   */
+  exclude_self: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === true || v === 'true' || v === '1'),
 });
 
 export type ListActivityQuery = z.infer<typeof listActivityQuerySchema>;

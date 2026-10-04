@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { logger } from '@/shared/logging/logger';
 import { UnauthorizedError, BadRequestError } from '@/shared/errors/app-error';
-import type { AppVariables } from '@/shared/types';
+import type { AppVariables, AuthUser } from '@/shared/types';
 import type { CreateWordUseCase } from '../../application/use-cases/create-word.use-case';
 import type { UpdateWordUseCase } from '../../application/use-cases/update-word.use-case';
 import type { GetWordByIdUseCase } from '../../application/use-cases/get-word-by-id.use-case';
@@ -131,7 +131,7 @@ export class WordController {
 
     const { word, warnings, inlineCreatedWords, inlineWarnings, searchMissId } = await this.deps.create.execute(
       toCreateWordDto(body, this.deps.imageProviderName),
-      { userId: actor.user_id, role: actor.role, requestId },
+      { userId: actor.user_id, role: actor.role, roles: actor.roles, requestId },
     );
 
     // Event bisnis + request_id menyambung log & jejak audit (Section 14)
@@ -187,6 +187,7 @@ export class WordController {
     const result = await this.deps.importWords.execute(body, {
       userId: actor.user_id,
       role: actor.role,
+      roles: actor.roles,
       requestId,
     });
     return c.json({ success: true as const, data: result }, body.mode === 'commit' ? 201 : 200);
@@ -415,7 +416,7 @@ export class WordController {
     const { word, warnings } = await this.deps.update.execute(
       id,
       toUpdateWordDto(body, this.deps.imageProviderName),
-      { userId: actor.user_id, role: actor.role, requestId },
+      { userId: actor.user_id, role: actor.role, roles: actor.roles, requestId },
     );
 
     logger.info(
@@ -589,6 +590,9 @@ export class WordController {
   }
 
   async search(c: Context, query: SearchWordsQueryBody) {
+    // Soft auth (sudah dipasang di route): tanpa token tetap tamu, tidak 401.
+    // Id-nya hanya dipakai untuk mencatat siapa yang memicu search miss.
+    const viewerId = (c.get('user') as AuthUser | undefined)?.user_id;
     const { items, meta } = await this.deps.search.execute({
       q: query.q,
       limit: query.limit,
@@ -597,6 +601,7 @@ export class WordController {
       translationLanguageId: query.translation_language_id,
       wordType: query.word_type,
       isVerified: query.is_verified,
+      viewerId,
     });
     setPublicWordReadCache(c);
     return c.json({
@@ -872,10 +877,11 @@ export class WordController {
     const clientIp = clientIpKey(c);
     const deviceId = normalizedDeviceId(c);
     const actor = authUser
-      ? { userId: authUser.user_id, role: authUser.role, requestId }
+      ? { userId: authUser.user_id, role: authUser.role, roles: authUser.roles, requestId }
       : {
           userId: ANONIM_USER_ID,
           role: 'contributor' as const,
+          roles: ['contributor'],
           requestId,
           clientIp,
           deviceId,
@@ -1036,6 +1042,7 @@ export class WordController {
           dialectId: strField(body['dialect_id']),
           exampleId: strField(body['example_id']),
           speakerName: strField(body['speaker_name']),
+          speakerConsent: body['speaker_consent']?.toString() === 'true',
           durationMs: body['duration_ms'],
         },
         actor,
@@ -1055,6 +1062,7 @@ export class WordController {
           file_size: media.fileSize,
           duration_ms: media.durationMs,
           speaker_name: media.speakerName,
+          speaker_consent: media.speakerConsent,
           is_primary: media.isPrimary,
           status: media.status,
           is_verified: media.isVerified,
@@ -1185,7 +1193,7 @@ export class WordController {
         action: body.action,
         ids: body.ids,
         actorId: actor.userId,
-        actorRole: actor.role,
+        actorRoles: actor.roles,
         requestId: actor.requestId,
       });
 
@@ -1206,12 +1214,12 @@ export class WordController {
   /** Ambil user + requestId dari context, lempar 401 kalau tidak ada token */
   private async withActor<T>(
     c: Context,
-    fn: (actor: { userId: string; role: string; requestId?: string | null }) => Promise<T>,
+    fn: (actor: { userId: string; role: string; roles: string[]; requestId?: string | null }) => Promise<T>,
   ): Promise<T> {
     const actor = (c as Context<{ Variables: AppVariables }>).get('user');
     if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
     const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
-    return fn({ userId: actor.user_id, role: actor.role, requestId });
+    return fn({ userId: actor.user_id, role: actor.role, roles: actor.roles, requestId });
   }
 
   async wordClasses(c: Context) {

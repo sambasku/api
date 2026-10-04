@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { e2eRegisterBody } from '@/shared/testing/e2e-auth';
 
 // Pastikan .env.test (DB test) dipakai SEBELUM app di-import (Section 10)
@@ -40,7 +40,7 @@ describe.skipIf(!hasTestDb)('Add Meaning E2E v1 - kontribusi definisi (17 doc)',
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses } = await import('@/shared/database/drizzle/schema');
+    const { languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     const db = getTestDb();
     await truncateAll(db);
@@ -63,7 +63,7 @@ describe.skipIf(!hasTestDb)('Add Meaning E2E v1 - kontribusi definisi (17 doc)',
           email: email,
       }));
       if (role !== 'contributor') {
-        await db.update(users).set({ role }).where(eq(users.email, email));
+        await db.insert(userRoles).values({ userId: sql`(SELECT id FROM users WHERE email = email)`, role }).onConflictDoNothing();
       }
     }
     await db.update(users).set({ emailVerified: true });

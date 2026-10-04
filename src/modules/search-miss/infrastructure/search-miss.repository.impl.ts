@@ -3,6 +3,7 @@ import {
   meaningTranslations,
   meanings,
   searchMisses,
+  searchMissSearchers,
   wordVariants,
   words,
 } from '@/shared/database/drizzle/schema';
@@ -61,10 +62,17 @@ const isFulfilledSql = sql`(
 export class SearchMissRepositoryImpl implements SearchMissRepository {
   constructor(private readonly db: AppDatabase) {}
 
-  async record(input: { term: string; direction: SearchMissDirection }): Promise<void> {
+  async record(input: {
+    term: string;
+    direction: SearchMissDirection;
+    searcherId?: string;
+  }): Promise<void> {
     const term = normalizeTerm(input.term);
     if (!term) return;
-    await this.db
+    // `returning` dipakai untuk ambil id baris setelah upsert: baik baris baru
+    // maupun baris yang sudah ada (conflict) keduanya mengembalikan id, jadi
+    // pencatatan searcher bisa dilakukan tanpa query kedua.
+    const rows = await this.db
       .insert(searchMisses)
       .values({ term, direction: input.direction })
       // is_visible andalkan DEFAULT false (14-api); jangan set di insert
@@ -79,6 +87,22 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
           deletedBy: null,
           // JANGAN reset is_visible - keputusan admin tetap (14-api §7)
         },
+      })
+      .returning({ id: searchMisses.id });
+
+    const searcherId = input.searcherId;
+    const missId = rows[0]?.id;
+    if (!searcherId || !missId) return;
+
+    // Baris searcher: satu per (miss, user). Pencarian berulang hanya menyentuh
+    // `created_at`, tidak menambah baris - tanpa ini `exclude_self` bocor begitu
+    // user yang sama mencari istilah sama dua kali.
+    await this.db
+      .insert(searchMissSearchers)
+      .values({ searchMissId: missId, userId: searcherId })
+      .onConflictDoUpdate({
+        target: [searchMissSearchers.searchMissId, searchMissSearchers.userId],
+        set: { createdAt: new Date() },
       });
   }
 

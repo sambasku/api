@@ -34,9 +34,7 @@ describe.skipIf(!hasTestDb)('Batch contribute + import session rollback E2E', ()
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses, dialects } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { dialects, languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     const db = getTestDb();
     await truncateAll(db);
@@ -60,7 +58,8 @@ describe.skipIf(!hasTestDb)('Batch contribute + import session rollback E2E', ()
     const email = `adm-batch${stamp}@test.com`;
     await post('/api/v1/auth/register', e2eRegisterBody({ name: `admbatch${stamp}`, email }));
     await post('/api/v1/auth/verify-email', { email, code: capturedOtpDisplayCode() });
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, email));
+    const [__uid_62] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (__uid_62) await db.insert(userRoles).values({ userId: __uid_62.id, role: 'admin' }).onConflictDoNothing();
 
     await db.insert(users).values({
       id: ANONIM_USER_ID,
@@ -68,7 +67,6 @@ describe.skipIf(!hasTestDb)('Batch contribute + import session rollback E2E', ()
       displayName: ANONIM_USERNAME,
       email: ANONIM_EMAIL,
       passwordHash: 'bukan-hash-login',
-      role: 'contributor',
     });
 
     adminToken = (

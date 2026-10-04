@@ -13,3 +13,4 @@ dist/
 local.db
 test.db
 tmp/
+docs/

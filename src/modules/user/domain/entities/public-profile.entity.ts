@@ -8,6 +8,8 @@ export interface PublicProfile {
   username: string;
   displayName: string;
   bio: string | null;
+  roles: string[];
+  /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: string;
   isVerifier: boolean;
   joinedAt: Date;
@@ -21,17 +23,40 @@ export interface PublicUserRow {
   username: string;
   displayName: string;
   bio: string | null;
+  roles: string[];
+  /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: string;
   joinedAt: Date;
   avatarUrl: string | null;
 }
 
-export type PublicActivityKind = 'contribution' | 'comment' | 'verification';
+/** Baris suggest mention (@username autocomplete). Kolom publik minimal. */
+export interface MentionUserRow {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export type PublicActivityKind =
+  | 'contribution'
+  | 'comment'
+  | 'verification'
+  | 'vote';
 
 export interface PublicActivityItem {
+  /** ULID sumber - dipakai sebagai cursor keyset (tidak dibocorkan ke response). */
+  id: string;
   kind: PublicActivityKind;
   occurredAt: Date;
   wordId: string | null;
   lemma: string | null;
   summary: string;
+}
+
+/** Halaman aktivitas (mode cursor): items + meta keyset. */
+export interface PublicActivityPage {
+  items: PublicActivityItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }

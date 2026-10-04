@@ -281,7 +281,7 @@ export interface WordAuditSnapshot {
 
 // saveWithRelations & saveWithInlineRelations DIJAMIN atomik (satu
 // db.transaction) - use case tidak perlu tahu soal transaction
-// (docs/api/01-api-tambah-kata.md & 04-api-sinonim-inline.md).
+//
 export interface WordRepository {
   saveWithRelations(word: WordToSave, actorId: string): Promise<Word>;
   /**
@@ -495,9 +495,7 @@ export interface WordRepository {
       isVerified: boolean;
     },
     actorId: string,
-  ): Promise<PronunciationMedia>;
-
-  /** Insert gambar pada kata existing + baris contributions - satu transaksi */
+  ): Promise<PronunciationMedia>;  /** Insert gambar pada kata existing + baris contributions - satu transaksi */
   addWordImage(
     wordId: string,
     data: {
@@ -558,6 +556,7 @@ export interface WordRepository {
       fileSize: number;
       durationMs?: number | null;
       speakerName?: string | null;
+      speakerConsent: boolean;
       isPrimary: boolean;
       status: ChildStatus;
       isVerified: boolean;
@@ -697,6 +696,7 @@ export interface WordAudioMedia {
   fileSize: number;
   durationMs: number | null;
   speakerName: string | null;
+  speakerConsent: boolean;
   isPrimary: boolean;
   status: ChildStatus;
   isVerified: boolean;

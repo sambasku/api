@@ -21,7 +21,7 @@ describe.skipIf(!hasTestDb)('Image Upload Token E2E', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users } = await import('@/shared/database/drizzle/schema');
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     const db = getTestDb();
     await truncateAll(db);
@@ -39,7 +39,9 @@ describe.skipIf(!hasTestDb)('Image Upload Token E2E', () => {
       })),
       headers: { 'x-forwarded-for': '10.1.0.1' },
     });
-    await db.update(users).set({ role: 'admin', emailVerified: true }).where(eq(users.email, email));
+    await db.update(users).set({emailVerified: true}).where(eq(users.email, email));
+    const [__uid_42] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (__uid_42) await db.insert(userRoles).values({ userId: __uid_42.id, role: 'admin' }).onConflictDoNothing();
     const loginRes = await request('/api/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password: 'Password123' }),

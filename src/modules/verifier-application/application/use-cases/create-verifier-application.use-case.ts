@@ -5,7 +5,9 @@ import type { VerifierApplicationRepository } from '../../domain/repositories/ve
 
 export interface CreateVerifierApplicationCommand {
   userId: string;
+  /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: string;
+  roles: string[];
   phone: string;
   address: string;
   socialLinks: SocialLink[];
@@ -18,7 +20,7 @@ export class CreateVerifierApplicationUseCase {
   ) {}
 
   async execute(cmd: CreateVerifierApplicationCommand): Promise<VerifierApplication> {
-    if (cmd.role !== 'contributor') {
+    if (cmd.roles.some((r) => r !== 'contributor')) {
       throw new ForbiddenError(
         'ALREADY_VERIFIER',
         'Hanya kontributor yang dapat mengajukan jadi verifikator',

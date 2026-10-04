@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { createRoute } from '@hono/zod-openapi';
 import type { z } from 'zod';
+import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
@@ -17,7 +18,12 @@ export function createDashboardRoutes(deps: {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
-  routes.use('*', deps.authenticate, rateLimit({ points: 300, duration: 60 }));
+  routes.use(
+    '*',
+    deps.authenticate,
+    authorizeRole('admin', 'root', 'reviewer'),
+    rateLimit({ points: 300, duration: 60 }),
+  );
 
   const statsRoute = createRoute({
     method: 'get',
@@ -27,6 +33,7 @@ export function createDashboardRoutes(deps: {
     responses: {
       200: { description: 'Statistik dashboard', content: json(dashboardStatsResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Role tidak diizinkan (admin/root/reviewer)', content: json(errorResponseSchema) },
     },
   });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { capturedOtpDisplayCode, e2eRegisterBody} from '@/shared/testing/e2e-auth';
 import { ANONIM_EMAIL, ANONIM_USER_ID, ANONIM_USERNAME } from '@/shared/constants/anonim';
 
@@ -57,7 +57,7 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses } = await import('@/shared/database/drizzle/schema');
+    const { languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     const db = getTestDb();
     await truncateAll(db);
@@ -81,7 +81,7 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
       }));
       await post('/api/v1/auth/verify-email', { email, code: capturedOtpDisplayCode() });
       if (role !== 'contributor') {
-        await db.update(users).set({ role }).where(eq(users.email, email));
+        await db.insert(userRoles).values({ userId: sql`(SELECT id FROM users WHERE email = email)`, role }).onConflictDoNothing();
       }
     }
 
@@ -92,7 +92,6 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
       displayName: ANONIM_USERNAME,
       email: ANONIM_EMAIL,
       passwordHash: 'bukan-hash-login',
-      role: 'contributor',
     });
     const login = async (email: string) =>
       (await (await post('/api/v1/auth/login', { email, password: 'Password123' })).json()).data.access_token;
@@ -409,8 +408,9 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     await post('/api/v1/auth/register', e2eRegisterBody({ name: `rev${stamp}`, email }));
     await post('/api/v1/auth/verify-email', { email, code: capturedOtpDisplayCode() });
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users } = await import('@/shared/database/drizzle/schema');
-    await getTestDb().update(users).set({ role: 'reviewer' }).where(eq(users.email, email));
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
+    const [__uid_411] = await getTestDb().select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (__uid_411) await getTestDb().insert(userRoles).values({ userId: __uid_411.id, role: 'reviewer' }).onConflictDoNothing();
     const reviewerLogin = await post('/api/v1/auth/login', { email, password: 'Password123' });
     const reviewerToken = ((await reviewerLogin.json()) as { data: { access_token: string } }).data.access_token;
 

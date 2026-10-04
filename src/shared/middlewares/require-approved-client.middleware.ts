@@ -53,7 +53,7 @@ export function createRequireApprovedClientMiddleware(
           c,
           401,
           'CLIENT_REQUIRED',
-          'Sesi tanpa client_id. Silakan masuk ulang atau perbarui aplikasi.',
+          'Sesi tanpa client_id. Masuk ulang atau perbarui aplikasi dulu ya.',
         );
       }
       // Grace: map ke scope first-party penuh tanpa azp
@@ -73,7 +73,7 @@ export function createRequireApprovedClientMiddleware(
         c,
         403,
         'CLIENT_NOT_ALLOWED',
-        'Sesi dari aplikasi tidak diizinkan. Silakan keluar dan masuk lagi.',
+        'Aplikasi ini belum diizinkan. Coba keluar lalu masuk lagi ya.',
       );
     }
 

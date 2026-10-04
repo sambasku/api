@@ -22,10 +22,12 @@ function makeUser(overrides: Partial<User> = {}): User {
     email: 'siti@test.com',
     phone: null,
     passwordHash: null,
+    roles: ['reviewer'],
     role: 'reviewer',
     isActive: true,
     canContribute: true,
     contributeMutedUntil: null,
+    readContributionGuideAt: null,
     emailVerified: true,
     avatarUrl: null,
     avatarProvider: null,
@@ -82,7 +84,7 @@ function makeUseCase(user: User | null, mailerRejects = false) {
 const cmd = {
   applicationId: APP_ID,
   actorId: '01ADMIN000000000000000000',
-  actorRole: 'admin',
+  actorRoles: ['admin'],
 };
 
 describe('ApproveVerifierApplicationUseCase', () => {
@@ -104,7 +106,7 @@ describe('ApproveVerifierApplicationUseCase', () => {
         userId: USER_ID,
         data: expect.objectContaining({
           type: 'verifier_application_approved',
-          title: 'Selamat, Anda jadi verifikator',
+          title: 'Selamat, kamu jadi verifikator',
           body: expect.any(String),
         }),
       }),

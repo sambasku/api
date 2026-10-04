@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { e2eRegisterBody } from '@/shared/testing/e2e-auth';
 
 const { parsed } = config({ path: '.env.test', quiet: true });
@@ -30,7 +30,7 @@ describe.skipIf(!hasTestDb)('Comment blocklist bulk + search', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users } = await import('@/shared/database/drizzle/schema');
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -44,7 +44,8 @@ describe.skipIf(!hasTestDb)('Comment blocklist bulk + search', () => {
         name: `blk${stamp}`,
         email: email,
     }));
-    await db.update(users).set({ emailVerified: true, role: 'admin' }).where(eq(users.email, email));
+    await db.update(users).set({ emailVerified: true }).where(eq(users.email, email));
+    await db.insert(userRoles).values({ userId: sql`(SELECT id FROM users WHERE email = ${email})`, role: 'admin' }).onConflictDoNothing();
     const login = await post('/api/v1/auth/login', { email, password: 'Password123' });
     adminToken = ((await login.json()) as { data: { access_token: string } }).data.access_token;
   });

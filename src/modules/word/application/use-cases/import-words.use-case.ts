@@ -108,7 +108,7 @@ export class ImportWordsUseCase {
     const publication = decideImportPublication({
       verify: item.verify,
       verified: item.verified,
-      role: actor.role,
+      roles: actor.roles,
       parentStatus: parent?.status ?? null,
     });
     const forcedNote = publication.forcedDraft

@@ -11,6 +11,12 @@ export interface SearchWordsQuery {
   translationLanguageId?: string;
   wordType?: string;
   isVerified?: boolean;
+  /**
+   * User yang sedang login (soft auth). Kalau ada, pencarian kosong ikut
+   * mencatat siapa pemicunya supaya feed `exclude_self` bisa menyembunyikan
+   * miss itu dari berandanya sendiri. Tanpa id (tamu) tidak ada yang dicatat.
+   */
+  viewerId?: string;
 }
 
 export interface SearchWordsResult extends CursorPage<WordSummary> {
@@ -30,9 +36,13 @@ export class SearchWordsUseCase {
   ) {}
 
   async execute(query: SearchWordsQuery): Promise<SearchWordsResult> {
+    // `viewerId` milik atribusi search-miss, bukan parameter query kata -
+    // dilepas sebelum diteruskan ke repo (query di sini juga jadi argumen REST).
+    const { viewerId, ...wordQuery } = query;
+
     // Publik / dropdown: selalu published saja
     const { items, nextCursor, hasMore } = await this.wordRepo.search({
-      ...query,
+      ...wordQuery,
       published: true,
     });
 
@@ -42,6 +52,7 @@ export class SearchWordsUseCase {
         await this.searchMissRepo.record({
           term: query.q,
           direction: query.searchIn === 'translation' ? 'translation' : 'lemma',
+          searcherId: viewerId,
         });
       } catch (err) {
         logger.warn({ err, q: query.q }, 'gagal mencatat search miss');

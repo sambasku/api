@@ -3,6 +3,8 @@ import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
 import type { AppVariables } from '@/shared/types';
 import type { GetPublicProfileUseCase } from '../../application/use-cases/get-public-profile.use-case';
 import type { GetPublicActivityUseCase } from '../../application/use-cases/get-public-activity.use-case';
+import type { SuggestMentionUsersUseCase } from '../../application/use-cases/suggest-mention-users.use-case';
+import type { MentionUserRow } from '../../domain/entities/public-profile.entity';
 import type { UploadAvatarUseCase } from '../../application/use-cases/upload-avatar.use-case';
 import type { DeleteAvatarUseCase } from '../../application/use-cases/delete-avatar.use-case';
 import type {
@@ -11,12 +13,14 @@ import type {
 } from '../../application/use-cases/update-my-profile.use-case';
 import { MAX_IMAGE_BYTES } from '@/modules/public-image/application/utils/validate-image-file';
 import type { UpdateMyProfileBody } from './validators/update-my-profile.validator';
+import type { PublicActivityQuery } from './validators/public-profile.validator';
 
 export class UserController {
   constructor(
     private readonly deps: {
       getPublicProfile: GetPublicProfileUseCase;
       getPublicActivity: GetPublicActivityUseCase;
+      suggestMention: SuggestMentionUsersUseCase;
       uploadAvatar: UploadAvatarUseCase;
       deleteAvatar: DeleteAvatarUseCase;
       getMyProfile: GetMyProfileUseCase;
@@ -33,6 +37,7 @@ export class UserController {
         username: profile.username,
         display_name: profile.displayName,
         bio: profile.bio,
+        roles: profile.roles,
         role: profile.role,
         is_verifier: profile.isVerifier,
         joined_at: profile.joinedAt.toISOString(),
@@ -46,12 +51,13 @@ export class UserController {
     });
   }
 
-  async publicActivity(c: Context, username: string) {
-    const items = await this.deps.getPublicActivity.execute(username);
+  async publicActivity(c: Context, username: string, query: PublicActivityQuery) {
+    const result = await this.deps.getPublicActivity.execute(username, query);
     return c.json({
       success: true as const,
       data: {
-        items: items.map((item) => ({
+        items: result.items.map((item) => ({
+          id: item.id,
           kind: item.kind,
           occurred_at: item.occurredAt.toISOString(),
           word_id: item.wordId,
@@ -59,9 +65,18 @@ export class UserController {
           summary: item.summary,
         })),
       },
+      // Mode merge (tanpa filter kind) tidak punya cursor - meta diabaikan.
+      ...(result.nextCursor === undefined
+        ? {}
+        : {
+            meta: {
+              limit: query.limit,
+              next_cursor: result.nextCursor,
+              has_more: result.nextCursor !== null,
+            },
+          }),
     });
   }
-
   async getMyProfile(c: Context) {
     const user = (c as Context<{ Variables: AppVariables }>).get('user');
     if (!user) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
@@ -73,8 +88,32 @@ export class UserController {
         display_name: profile.displayName,
         bio: profile.bio,
         avatar_url: profile.avatarUrl,
+        has_read_contribution_guide: profile.hasReadContributionGuide,
       },
     });
+  }
+
+  async suggestMention(c: Context, q: string) {
+    if (q.length < 2) {
+      throw new BadRequestError('VALIDATION_ERROR', 'Query pencarian wajib minimal 2 karakter');
+    }
+    const items = await this.deps.suggestMention.execute(q);
+    return c.json({
+      success: true as const,
+      data: {
+        items: items.map((item) => ({
+          id: item.id,
+          username: item.username,
+          display_name: item.displayName,
+          avatar_url: item.avatarUrl ?? null,
+        })),
+      },
+    });
+  }
+
+  /** Internal method untuk routes cache - return raw items. */
+  async suggestMentionInternal(q: string): Promise<MentionUserRow[]> {
+    return this.deps.suggestMention.execute(q);
   }
 
   async updateMyProfile(c: Context, body: UpdateMyProfileBody) {
@@ -83,6 +122,7 @@ export class UserController {
     const profile = await this.deps.updateMyProfile.execute(user.user_id, {
       displayName: body.display_name,
       bio: body.bio,
+      hasReadContributionGuide: body.has_read_contribution_guide,
     });
     return c.json({
       success: true as const,
@@ -91,6 +131,7 @@ export class UserController {
         display_name: profile.displayName,
         bio: profile.bio,
         avatar_url: profile.avatarUrl,
+        has_read_contribution_guide: profile.hasReadContributionGuide,
       },
     });
   }

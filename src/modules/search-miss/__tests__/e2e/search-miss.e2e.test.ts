@@ -40,7 +40,7 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses } = await import('@/shared/database/drizzle/schema');
+    const { languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     const db = getTestDb();
     await truncateAll(db);
@@ -62,7 +62,8 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
       email: `adm${stamp}@test.com`,
       code: capturedOtpDisplayCode(),
     });
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, `adm${stamp}@test.com`));
+    const [__uid_64] = await db.select({ id: users.id }).from(users).where(eq(users.email, `adm${stamp}@test.com`)).limit(1);
+    if (__uid_64) await db.insert(userRoles).values({ userId: __uid_64.id, role: 'admin' }).onConflictDoNothing();
     adminToken = (
       (await (await post('/api/v1/auth/login', { email: `adm${stamp}@test.com`, password: 'Password123' })).json()).data
     ).access_token;

@@ -17,6 +17,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     email: 'octocat@github.com',
     phone: null,
     passwordHash: null,
+    roles: ['contributor'],
     role: 'contributor',
     isActive: true,
     emailVerified: true,
@@ -29,6 +30,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     deletedAt: null,
     canContribute: true,
     contributeMutedUntil: null,
+    readContributionGuideAt: null,
     ...overrides,
   };
 }

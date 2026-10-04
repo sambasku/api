@@ -116,7 +116,7 @@ export class LoginWithGithubUseCase {
 
   private issue(user: User, meta: LoginMeta): Promise<LoginResult> {
     return issueLoginSession(
-      { id: user.id, username: user.username, displayName: user.displayName, role: user.role, avatarUrl: user.avatarUrl },
+      { id: user.id, username: user.username, displayName: user.displayName, roles: user.roles, avatarUrl: user.avatarUrl },
       {
         tokenService: this.tokenService,
         refreshTokenRepo: this.refreshTokenRepo,

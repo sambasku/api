@@ -192,6 +192,7 @@ function toWordAudio(row: typeof wordAudios.$inferSelect): WordAudioMedia {
     fileSize: row.fileSize,
     durationMs: row.durationMs,
     speakerName: row.speakerName,
+    speakerConsent: row.speakerConsent,
     isPrimary: row.isPrimary,
     status: row.status as ChildStatus,
     isVerified: row.isVerified,
@@ -672,11 +673,11 @@ export class WordRepositoryImpl implements WordRepository {
         word: words,
         verifierUsername: verifierUsers.username,
         verifierDisplayName: verifierUsers.displayName,
-        verifierRole: verifierUsers.role,
+        verifierRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${verifierUsers.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
         verifierDeletedAt: verifierUsers.deletedAt,
         creatorUsername: creatorUsers.username,
         creatorDisplayName: creatorUsers.displayName,
-        creatorRole: creatorUsers.role,
+        creatorRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${creatorUsers.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
         creatorDeletedAt: creatorUsers.deletedAt,
       })
       .from(words)
@@ -2061,6 +2062,7 @@ export class WordRepositoryImpl implements WordRepository {
       fileSize: number;
       durationMs?: number | null;
       speakerName?: string | null;
+      speakerConsent: boolean;
       isPrimary: boolean;
       status: ChildStatus;
       isVerified: boolean;
@@ -2083,6 +2085,7 @@ export class WordRepositoryImpl implements WordRepository {
             fileSize: data.fileSize,
             durationMs: data.durationMs ?? null,
             speakerName: data.speakerName ?? null,
+            speakerConsent: data.speakerConsent,
             isPrimary: data.isPrimary,
             status: data.status,
             isVerified: data.isVerified,

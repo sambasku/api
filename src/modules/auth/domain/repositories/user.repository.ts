@@ -9,9 +9,10 @@ export interface UserRepository {
   updatePassword(id: string, passwordHash: string): Promise<void>;
   markEmailVerified(id: string): Promise<void>;
   list(filter: UserListFilter): Promise<UserListResult>;
-  /** ID user aktif (is_active, belum soft-delete) dengan salah satu role. */
+  /** ID user aktif (is_active, belum soft-delete) yang punya salah satu role. */
   listActiveIdsByRoles(roles: UserRole[]): Promise<string[]>;
-  updateRole(id: string, role: UserRole): Promise<void>;
+  /** Ganti seluruh set role user (replace). Minimal satu role. */
+  setRoles(id: string, roles: UserRole[]): Promise<void>;
   setCanContribute(id: string, canContribute: boolean): Promise<boolean>;
   setContributeMutedUntil(id: string, mutedUntil: Date | null): Promise<boolean>;
   setIsActive(id: string, isActive: boolean): Promise<boolean>;
@@ -37,6 +38,6 @@ export interface UserRepository {
   clearAvatar(id: string): Promise<void>;
   updateProfile(
     id: string,
-    data: { displayName?: string; bio?: string | null },
+    data: { displayName?: string; bio?: string | null; readContributionGuideAt?: Date },
   ): Promise<User>;
 }

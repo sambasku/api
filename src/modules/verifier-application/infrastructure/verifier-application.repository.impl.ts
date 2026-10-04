@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { users, verifierApplications } from '@/shared/database/drizzle/schema';
+import { users, userRoles, verifierApplications } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
 import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/app-error';
@@ -239,7 +239,11 @@ export class VerifierApplicationRepositoryImpl implements VerifierApplicationRep
         .from(users)
         .where(and(eq(users.id, app.userId), isNull(users.deletedAt)))
         .limit(1);
-      if (!user || user.role !== 'contributor') {
+      // Multi role: pemohon masih boleh mengajukan bila cuma pegang contributor.
+      const existingRoles = user
+        ? await tx.select({ role: userRoles.role }).from(userRoles).where(eq(userRoles.userId, user.id))
+        : [];
+      if (!user || existingRoles.some((r) => r.role !== 'contributor')) {
         throw new ForbiddenError('ALREADY_VERIFIER', 'Pemohon bukan lagi kontributor');
       }
 
@@ -254,7 +258,12 @@ export class VerifierApplicationRepositoryImpl implements VerifierApplicationRep
         })
         .where(eq(verifierApplications.id, id))
         .returning();
-      await tx.update(users).set({ role: 'reviewer', updatedAt: now }).where(eq(users.id, user.id));
+      // Additif: tambah reviewer ke roles existing (user masih contributor).
+      await tx
+        .insert(userRoles)
+        .values({ userId: user.id, role: 'reviewer' })
+        .onConflictDoNothing();
+      await tx.update(users).set({ updatedAt: now }).where(eq(users.id, user.id));
       return toEntity(row, user.username);
     });
   }

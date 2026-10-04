@@ -102,7 +102,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `SUGGESTION_NO_CHANGES` | 400 | Update makna isinya sama dengan yang tayang |
 | `RATE_LIMITED` | 429 | Terlalu banyak percobaan (lihat tabel limit di api-base-stack.md Section 15). Resend OTP: 1/2 menit per IP, dan cooldown 2 menit per email |
 | `INTERNAL_ERROR` | 500 | Error tak terduga (bug, koneksi DB putus, dst) |
-| `UPSTREAM_CAPACITY` | 503 | Kapasitas runtime habis, bukan bug: batas subrequest / CPU Workers terlampaui. SATU-SATUNYA kode yang memicu circuit breaker klien pindah tier (lihat `docs/backlogs/FAILOVER.md`). Hanya muncul di tier 1 (Workers); tier 2/3 proses Node tanpa batas subrequest |
+| `UPSTREAM_CAPACITY` | 503 | Kapasitas runtime habis, bukan bug: batas subrequest / CPU Workers terlampaui. SATU-SATUNYA kode yang memicu circuit breaker klien pindah tier (kebijakan failover internal). Hanya muncul di tier 1 (Workers); tier 2/3 proses Node tanpa batas subrequest |
 | `IMAGE_UPLOAD_UNAVAILABLE` | 503 | Provider penyimpanan gambar belum dikonfigurasi (env `IMAGEKIT_*`) |
 | `PUBLIC_IMAGE_UPLOAD_UNAVAILABLE` | 503 | Provider gambar publik belum dikonfigurasi / token GitHub invalid (`PUBLIC_IMAGE_GITHUB_*`) |
 | `PUBLIC_IMAGE_UPLOAD_FAILED` | 502 | Upload gambar publik ke GitHub Contents API gagal |
@@ -126,6 +126,21 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `LEMMA_DEFINITION_PROVIDER_UNAVAILABLE` | 503 | Provider KBBI dinonaktifkan (`KBBI_PROVIDER=none` / `RAF555_BASE_URL=""`) |
 | `SHARE_BACKGROUND_PROVIDER_ERROR` | 502 | Unsplash gagal (timeout / non-OK / payload); endpoint share biasanya swallow → items [] |
 | `SHARE_BACKGROUND_PROVIDER_UNAVAILABLE` | 503 | `UNSPLASH_ACCESS_KEY` kosong (provider internal); endpoint publik tetap 200 + items [] |
+| `GA4_NOT_CONFIGURED` | 200 (`ga4.error_code`) | `GOOGLE_ANALYTICS_SA_*` / `GA4_PROPERTY_ID` belum di-set; `GET /admin/web-analytics/*` status `not_configured` |
+| `GA4_PERMISSION_DENIED` | 200 (`ga4.error_code`) | Google balas 401/403 atau kredensial service account ditolak (belum jadi Viewer property) |
+| `GA4_RATE_LIMITED` | 200 (`ga4.error_code`) | Kuota GA4 Data API habis (Google 429) |
+| `GA4_UPSTREAM_ERROR` | 200 (`ga4.error_code`) | GA4 Data API 5xx / respons tidak terbaca |
+| `GA4_NETWORK_ERROR` | 200 (`ga4.error_code`) | Server gagal menghubungi Google (timeout 10 dtk / koneksi putus) |
+| `SEARCH_CONSOLE_NOT_CONFIGURED` | 200 (`search_console.error_code`) | `GOOGLE_ANALYTICS_SA_*` / `SEARCH_CONSOLE_SITE_URL` belum di-set |
+| `SEARCH_CONSOLE_PERMISSION_DENIED` | 200 (`search_console.error_code`) | Google balas 401/403 (service account belum jadi user properti Search Console) |
+| `SEARCH_CONSOLE_RATE_LIMITED` | 200 (`search_console.error_code`) | Kuota Search Console API habis (Google 429) |
+| `SEARCH_CONSOLE_UPSTREAM_ERROR` | 200 (`search_console.error_code`) | Search Console API 5xx / respons tidak terbaca |
+| `PLAY_NOT_CONFIGURED` | 200 (`play.error_code`) | `PLAY_STATS_GCS_BUCKET` / `GOOGLE_ANALYTICS_SA_*` belum di-set; `GET /admin/play-analytics/*` status `not_configured` |
+| `PLAY_PERMISSION_DENIED` | 200 (`play.error_code`) | GCS balas 401/403 (service account tidak punya akses bucket export / private key ditolak) |
+| `PLAY_RATE_LIMITED` | 200 (`play.error_code`) | Kuota Google Cloud Storage habis (429) |
+| `PLAY_UPSTREAM_ERROR` | 200 (`play.error_code`) | GCS 5xx / CSV tidak terbaca |
+| `PLAY_NETWORK_ERROR` | 200 (`play.error_code`) | Server gagal menghubungi GCS (timeout 10 dtk / koneksi putus) |
+| `SEARCH_CONSOLE_NETWORK_ERROR` | 200 (`search_console.error_code`) | Server gagal menghubungi Google Search Console |
 | `TEMPLATE_NOT_FOUND` | 404 | Template notifikasi campaign tidak ditemukan / sudah dihapus |
 | `CAMPAIGN_NOT_FOUND` | 404 | Campaign notifikasi tidak ditemukan |
 | `CAMPAIGN_NOT_CANCELLABLE` | 400 | Cancel hanya untuk status draft/scheduled |

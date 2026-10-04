@@ -30,7 +30,7 @@ describe.skipIf(!hasTestDb)('Bug report E2E v1 (30 doc)', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users } = await import('@/shared/database/drizzle/schema');
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -52,7 +52,8 @@ describe.skipIf(!hasTestDb)('Bug report E2E v1 (30 doc)', () => {
     }));
     await post('/api/v1/auth/verify-email', { email: contribEmail, code: capturedOtpDisplayCode() });
 
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, adminEmail));
+    const [__uid_54] = await db.select({ id: users.id }).from(users).where(eq(users.email, adminEmail)).limit(1);
+    if (__uid_54) await db.insert(userRoles).values({ userId: __uid_54.id, role: 'admin' }).onConflictDoNothing();
 
     adminToken = (
       await (
@@ -66,14 +67,24 @@ describe.skipIf(!hasTestDb)('Bug report E2E v1 (30 doc)', () => {
     ).data.access_token;
   });
 
-  it('token folder /words → 400 VALIDATION_ERROR', async () => {
-    const res = await request('/api/v1/bug-reports/upload-token?folder=/words');
+  it('token tanpa login → 401 UNAUTHORIZED', async () => {
+    const res = await request('/api/v1/bug-reports/upload-token?folder=/bug-reports');
+    expect(res.status).toBe(401);
+    expect((await res.json()).error_code).toBe('UNAUTHORIZED');
+  });
+
+  it('token login folder /words → 400 VALIDATION_ERROR', async () => {
+    const res = await request('/api/v1/bug-reports/upload-token?folder=/words', {
+      headers: { Authorization: `Bearer ${contributorToken}` },
+    });
     expect(res.status).toBe(400);
     expect((await res.json()).error_code).toBe('VALIDATION_ERROR');
   });
 
-  it('token folder /bug-reports → 200 atau 503 IMAGE_UPLOAD_UNAVAILABLE', async () => {
-    const res = await request('/api/v1/bug-reports/upload-token?folder=/bug-reports');
+  it('token login folder /bug-reports → 200 atau 503 IMAGE_UPLOAD_UNAVAILABLE', async () => {
+    const res = await request('/api/v1/bug-reports/upload-token?folder=/bug-reports', {
+      headers: { Authorization: `Bearer ${contributorToken}` },
+    });
     expect([200, 503]).toContain(res.status);
     const body = await res.json();
     if (res.status === 503) {

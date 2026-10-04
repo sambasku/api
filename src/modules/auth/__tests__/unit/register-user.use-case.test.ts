@@ -37,6 +37,7 @@ function makeDeps(overrides: {
         Promise.resolve({
           id: '01TESTULIDUSERID00000000',
           ...user,
+          roles: ['contributor'],
           role: 'contributor',
           isActive: true,
           emailVerified: user.emailVerified ?? false,

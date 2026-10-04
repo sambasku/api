@@ -9,7 +9,7 @@ import type { VerifierApplicationRepository } from '../../domain/repositories/ve
 export interface ApproveVerifierApplicationCommand {
   applicationId: string;
   actorId: string;
-  actorRole: string;
+  actorRoles: string[];
   requestId?: string | null;
 }
 
@@ -19,9 +19,9 @@ export interface ApproveVerifierApplicationResult {
   role: 'reviewer';
 }
 
-const APPROVE_TITLE = 'Selamat, Anda jadi verifikator';
+const APPROVE_TITLE = 'Selamat, kamu jadi verifikator';
 const APPROVE_BODY =
-  'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.';
+  'Pengajuanmu disetujui. Keluar lalu masuk lagi ya, biar peran Verifikator aktif di aplikasi.';
 
 export class ApproveVerifierApplicationUseCase {
   constructor(

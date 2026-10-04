@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, sql, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
 import {
   publicAccountDisplayName,
   publicAccountName,
@@ -25,7 +25,7 @@ export class CommentRepositoryImpl implements CommentRepository {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
-        userRole: users.role,
+        userRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${users.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
         authorDeletedAt: users.deletedAt,
         wordLemma: words.lemma,
       })

@@ -32,6 +32,7 @@ export class AdminUsersController {
       id: u.id,
       username: u.username,
       email: u.email,
+      roles: u.roles,
       role: u.role,
       is_active: u.isActive,
       can_contribute: u.canContribute,
@@ -98,9 +99,9 @@ export class AdminUsersController {
 
     const result = await this.deps.updateRole.execute({
       targetUserId: targetId,
-      newRole: body.role as UserRole,
+      newRoles: body.roles as UserRole[],
       actorId: user.user_id,
-      actorRole: user.role as UserRole,
+      actorRoles: user.roles,
       requestId,
     });
 
@@ -132,7 +133,7 @@ export class AdminUsersController {
       email: body.email,
       phone: body.phone,
       password: body.password,
-      role: body.role,
+      roles: body.roles,
       isActive: body.is_active,
       actorId: user.user_id,
       requestId: c.get('requestId') ?? null,

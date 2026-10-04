@@ -47,7 +47,10 @@ export interface CreateWordResult extends InlineCreatedResult {
 
 export interface Actor {
   userId: string;
+  /** @deprecated Derived tertinggi dari roles (wire compat). Otorisasi pakai `roles`. */
   role: string;
+  /** Semua role actor (multi role) - sumber kebenaran otorisasi. */
+  roles: string[];
   /** dari requestIdMiddleware - menyambung audit DB ↔ log aplikasi (Section 14 & 21) */
   requestId?: string | null;
   /** Konteks abuse anon (IP / X-Device-Id). Hanya relevan untuk ANONIM. */

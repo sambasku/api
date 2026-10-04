@@ -39,9 +39,7 @@ describe.skipIf(!hasTestDb)('List Words A-Z E2E v1 (18 doc) - GET /api/v1/words'
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses, categories, words } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { users, categories, languages, userRoles, wordClasses, words } = await import('@/shared/database/drizzle/schema');
     db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -62,7 +60,9 @@ describe.skipIf(!hasTestDb)('List Words A-Z E2E v1 (18 doc) - GET /api/v1/words'
         name: `az${stamp}`,
         email: email,
     }));
-    await db.update(users).set({ role: 'admin', emailVerified: true }).where(eq(users.email, email));
+    await db.update(users).set({emailVerified: true}).where(eq(users.email, email));
+    const [__uid_65] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (__uid_65) await db.insert(userRoles).values({ userId: __uid_65.id, role: 'admin' }).onConflictDoNothing();
     const login = await post('/api/v1/auth/login', { email, password: 'Password123' });
     adminToken = ((await login.json()) as { data: { access_token: string } }).data.access_token;
 

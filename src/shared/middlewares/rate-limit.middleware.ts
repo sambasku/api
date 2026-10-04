@@ -51,7 +51,7 @@ export function rateLimit(opts: RateLimitOpts) {
         {
           success: false as const,
           error_code: 'RATE_LIMITED',
-          message: 'Terlalu banyak percobaan, coba lagi nanti',
+          message: 'Kebanyakan permintaan, coba lagi nanti ya.',
           details: null,
         },
         429,

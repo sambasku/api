@@ -2,12 +2,15 @@ import { z } from 'zod';
 import { normalizePhone } from './register.validator';
 
 const ASSIGNABLE_ADMIN_ROLES = ['contributor', 'editor', 'reviewer', 'admin'] as const;
+const ALL_ROLES = ['contributor', 'editor', 'reviewer', 'admin', 'root'] as const;
+const roleEnum = z.enum(ALL_ROLES);
 
 export const listAdminUsersQuerySchema = z.object({
   /** Partial match username ATAU email (case-insensitive ILIKE) */
   q: z.string().max(100).optional(),
-  /** Filter exact role (exclude root dari filter UI, tapi backend allow untuk list) */
-  role: z.enum(['contributor', 'editor', 'reviewer', 'admin', 'root']).optional(),
+  /** Filter exact role (exclude root dari filter UI, tapi backend allow untuk list).
+   * Multi role: cocokkan user yang PUNYA role ini. */
+  role: roleEnum.optional(),
   can_contribute: z
     .enum(['true', 'false'])
     .optional()
@@ -19,7 +22,7 @@ export const listAdminUsersQuerySchema = z.object({
 export type ListAdminUsersQuery = z.infer<typeof listAdminUsersQuerySchema>;
 
 export const updateUserRoleBodySchema = z.object({
-  role: z.enum(['contributor', 'editor', 'reviewer', 'admin']),
+  roles: z.array(z.enum(['contributor', 'editor', 'reviewer', 'admin'])).min(1).max(5),
 });
 export type UpdateUserRoleBody = z.infer<typeof updateUserRoleBodySchema>;
 
@@ -27,7 +30,9 @@ const adminUserWireSchema = z.object({
   id: z.string(),
   username: z.string(),
   email: z.string(),
-  role: z.enum(['contributor', 'editor', 'reviewer', 'admin', 'root']),
+  roles: z.array(roleEnum).min(1),
+  /** @deprecated Derived tertinggi dari roles (wire compat, baca roles). */
+  role: roleEnum,
   is_active: z.boolean(),
   can_contribute: z.boolean(),
   contribute_muted_until: z.string().nullable(),
@@ -52,7 +57,7 @@ export const createAdminUserBodySchema = z
     phone: z.string().max(20).optional(),
     password: z.string().min(8).regex(/[a-zA-Z]/, 'harus mengandung huruf').regex(/[0-9]/, 'harus mengandung angka'),
     confirm_password: z.string(),
-    role: z.enum(ASSIGNABLE_ADMIN_ROLES),
+    roles: z.array(z.enum(ASSIGNABLE_ADMIN_ROLES)).min(1).max(5),
     is_active: z.boolean().default(true),
   })
   .superRefine((d, ctx) => {
@@ -79,7 +84,7 @@ export const createAdminUserBodySchema = z
       phone: phone === '__INVALID__' ? null : phone,
       password: d.password,
       confirm_password: d.confirm_password,
-      role: d.role,
+      roles: [...new Set(d.roles)],
       is_active: d.is_active,
     };
   });
@@ -107,6 +112,8 @@ export const updateUserRoleResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     id: z.string(),
-    role: z.enum(['contributor', 'editor', 'reviewer', 'admin', 'root']),
+    roles: z.array(roleEnum).min(1),
+    /** @deprecated Derived tertinggi dari roles (wire compat, baca roles). */
+    role: roleEnum,
   }),
 });

@@ -22,7 +22,7 @@ describe.skipIf(!hasTestDb)('Audit Logs E2E', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users } = await import('@/shared/database/drizzle/schema');
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -47,7 +47,8 @@ describe.skipIf(!hasTestDb)('Audit Logs E2E', () => {
         body: JSON.stringify({ email, code: capturedOtpDisplayCode() }),
       });
     }
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, `audadm${stamp}@test.com`));
+    const [__uid_49] = await db.select({ id: users.id }).from(users).where(eq(users.email, `audadm${stamp}@test.com`)).limit(1);
+    if (__uid_49) await db.insert(userRoles).values({ userId: __uid_49.id, role: 'admin' }).onConflictDoNothing();
 
     const login = async (email: string) => {
       const res = await request('/api/v1/auth/login', {

@@ -21,6 +21,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     email: 'tester@test.com',
     phone: '6281234567890',
     passwordHash: 'pbkdf2-sha256$lama',
+    roles: ['contributor'],
     role: 'contributor',
     isActive: true,
     emailVerified: true,
@@ -33,6 +34,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     deletedAt: null,
     canContribute: true,
     contributeMutedUntil: null,
+    readContributionGuideAt: null,
     ...overrides,
   };
 }

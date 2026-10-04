@@ -71,9 +71,7 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses, categories } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { categories, languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -103,9 +101,12 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
     await register(voter2Name);
 
     await db.update(users).set({ emailVerified: true });
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, `adm${stamp}@test.com`));
-    await db.update(users).set({ role: 'reviewer' }).where(eq(users.email, `rev${stamp}@test.com`));
-    await db.update(users).set({ role: 'editor' }).where(eq(users.email, `edt${stamp}@test.com`));
+    const [__uid_105] = await db.select({ id: users.id }).from(users).where(eq(users.email, `adm${stamp}@test.com`)).limit(1);
+    if (__uid_105) await db.insert(userRoles).values({ userId: __uid_105.id, role: 'admin' }).onConflictDoNothing();
+    const [__uid_107] = await db.select({ id: users.id }).from(users).where(eq(users.email, `rev${stamp}@test.com`)).limit(1);
+    if (__uid_107) await db.insert(userRoles).values({ userId: __uid_107.id, role: 'reviewer' }).onConflictDoNothing();
+    const [__uid_109] = await db.select({ id: users.id }).from(users).where(eq(users.email, `edt${stamp}@test.com`)).limit(1);
+    if (__uid_109) await db.insert(userRoles).values({ userId: __uid_109.id, role: 'editor' }).onConflictDoNothing();
 
     const login = async (email: string) => {
       const res = await post('/api/v1/auth/login', { email, password: 'Password123' });

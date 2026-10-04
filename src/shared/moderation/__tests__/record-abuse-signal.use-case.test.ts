@@ -29,6 +29,7 @@ describe('RecordAbuseSignalUseCase policy', () => {
     findById: vi.fn().mockResolvedValue({
       id: '01USER',
       role: 'contributor',
+      roles: ['contributor'],
     }),
   };
 

@@ -44,6 +44,8 @@ export interface Vote {
 /** Item hasil join listAdmin votes + users (preview voter, tanpa password_hash). */
 export interface AdminVoteListItem extends Vote {
   voterUsername: string;
+  voterDisplayName: string | null;
+  voterAvatarUrl: string | null;
   voterEmail: string;
   /** Label manusiawi target (body komentar / lemma / dst). Null jika target hilang. */
   targetPreview: string | null;

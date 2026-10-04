@@ -1,4 +1,4 @@
--- Usul perubahan kata existing (docs/api/17-api-suggest-edit-word.md).
+-- Usul perubahan kata existing.
 CREATE TABLE IF NOT EXISTS "word_edit_suggestions" (
   "id" varchar(26) PRIMARY KEY NOT NULL,
   "user_id" varchar(26) NOT NULL,

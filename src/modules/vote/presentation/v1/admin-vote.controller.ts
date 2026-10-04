@@ -45,6 +45,8 @@ export class AdminVotesController {
         id: v.id,
         voter_id: v.userId,
         voter_username: v.voterUsername,
+        voter_display_name: v.voterDisplayName,
+        voter_avatar_url: v.voterAvatarUrl,
         voter_email: v.voterEmail,
         target_type: v.entityType,
         target_id: v.entityId,

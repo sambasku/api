@@ -59,9 +59,7 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, wordClasses, categories } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { categories, languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -86,7 +84,8 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
         email: `kon${stamp}@test.com`,
     }));
     await db.update(users).set({ emailVerified: true });
-    await db.update(users).set({ role: 'admin' }).where(eq(users.email, `adm${stamp}@test.com`));
+    const [__uid_88] = await db.select({ id: users.id }).from(users).where(eq(users.email, `adm${stamp}@test.com`)).limit(1);
+    if (__uid_88) await db.insert(userRoles).values({ userId: __uid_88.id, role: 'admin' }).onConflictDoNothing();
 
     const login = async (email: string) => {
       const res = await post('/api/v1/auth/login', { email, password: 'Password123' });
@@ -227,12 +226,13 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
 
   it('discussion_reply: vote published → 200; taken_down → 404; detail counts', async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { discussions, discussionReplies, users } = await import(
-      '@/shared/database/drizzle/schema'
-    );
+    const { discussionReplies, discussions, userRoles, users } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
 
-    const allUsers = await db.select({ id: users.id, role: users.role }).from(users);
+    const allUsers = await db
+      .select({ id: users.id, role: userRoles.role })
+      .from(users)
+      .leftJoin(userRoles, eq(userRoles.userId, users.id));
     const askerId = allUsers.find((u) => u.role === 'contributor')!.id;
     const adminId = allUsers.find((u) => u.role === 'admin')!.id;
     const discussionId = ulid26('01U2EHELPVOTE');
@@ -303,10 +303,13 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
 
   it('discussion: upvote pertanyaan → 200; downvote → 400; sort popular', async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { discussions, users } = await import('@/shared/database/drizzle/schema');
+    const { discussions, userRoles, users } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
 
-    const allUsers = await db.select({ id: users.id, role: users.role }).from(users);
+    const allUsers = await db
+      .select({ id: users.id, role: userRoles.role })
+      .from(users)
+      .leftJoin(userRoles, eq(userRoles.userId, users.id));
     const askerId = allUsers.find((u) => u.role === 'contributor')!.id;
     const adminId = allUsers.find((u) => u.role === 'admin')!.id;
     const discussionId = ulid26('01U2EHELPASK');

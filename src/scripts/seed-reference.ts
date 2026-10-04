@@ -5,6 +5,7 @@ import {
   categories,
   dialects,
   languages,
+  userRoles,
   users,
   wordClasses,
 } from '@/shared/database/drizzle/schema';
@@ -94,7 +95,6 @@ export async function seedReference(): Promise<void> {
       displayName: ANONIM_USERNAME,
       email: ANONIM_EMAIL,
       passwordHash: await hasher.hash(crypto.randomUUID()),
-      role: 'contributor',
       emailVerified: true,
     })
     .onConflictDoNothing({ target: users.id });
@@ -117,7 +117,6 @@ export async function seedReference(): Promise<void> {
       displayName: CSV_IMPORTER_USERNAME,
       email: CSV_IMPORTER_EMAIL,
       passwordHash: await hasher.hash(crypto.randomUUID()),
-      role: 'contributor',
       emailVerified: true,
     })
     .onConflictDoNothing({ target: users.id });
@@ -140,7 +139,6 @@ export async function seedReference(): Promise<void> {
       displayName: GITHUB_ACTIONS_USERNAME,
       email: GITHUB_ACTIONS_EMAIL,
       passwordHash: await hasher.hash(crypto.randomUUID()),
-      role: 'contributor',
       emailVerified: true,
     })
     .onConflictDoNothing({ target: users.id });
@@ -153,6 +151,13 @@ export async function seedReference(): Promise<void> {
     })
     .where(eq(users.id, GITHUB_ACTIONS_USER_ID));
   logger.info(`Seed referensi: user sistem ${GITHUB_ACTIONS_EMAIL}`);
+
+  // Multi role: user sistem pegang role contributor di junction.
+  const systemUserIds = [ANONIM_USER_ID, CSV_IMPORTER_USER_ID, GITHUB_ACTIONS_USER_ID];
+  await db
+    .insert(userRoles)
+    .values(systemUserIds.map((userId) => ({ userId, role: 'contributor' })))
+    .onConflictDoNothing();
 
   for (const lang of SEED_LANGUAGES) {
     await db.insert(languages).values({ ...lang }).onConflictDoNothing({ target: languages.code });

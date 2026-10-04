@@ -5,8 +5,15 @@ import type { ChildStatus } from '../../domain/entities/word.entity';
 // Kontributor login: published + belum diverifikasi, antrean tetap pending.
 // Tamu (anonymous): pending_review, tidak tayang, antrean pending.
 // Draft: tidak tayang, tidak masuk antrean.
-export function isVerifierRole(role: string): boolean {
-  return ['admin', 'editor', 'root', 'reviewer'].includes(role);
+
+/**
+ * Cek "punya salah satu role verifikator" untuk actor multi role.
+ * Menerima satu role ATAU array roles (interseksi).
+ */
+export function isVerifierRole(role: string | string[]): boolean {
+  const verifier = ['admin', 'editor', 'root', 'reviewer'];
+  const roles = Array.isArray(role) ? role : [role];
+  return roles.some((r) => verifier.includes(r));
 }
 
 export interface PublicationDecision {
@@ -17,7 +24,7 @@ export interface PublicationDecision {
 
 export function resolvePublication(
   requested: 'draft' | 'published',
-  role: string,
+  role: string | string[],
   options?: { anonymous?: boolean },
 ): PublicationDecision {
   if (requested === 'draft') {
@@ -33,7 +40,7 @@ export function resolvePublication(
 }
 
 export function resolveChildPublication(
-  role: string,
+  role: string | string[],
   options?: { anonymous?: boolean },
 ): { status: ChildStatus; isVerified: boolean; needsReview: boolean } {
   const p = resolvePublication('published', role, options);

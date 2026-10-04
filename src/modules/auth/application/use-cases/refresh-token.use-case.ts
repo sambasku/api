@@ -5,6 +5,8 @@ import type { TokenServicePort } from '../ports/token-service.port';
 import { generateToken, hashToken } from '../utils/token';
 import type { ApiClientRepository } from '@/modules/developer-oauth/domain/repositories/api-client.repository';
 import { FIRST_PARTY_SCOPE_STRING } from '@/modules/developer-oauth/domain/entities/api-client.entity';
+import { derivePrimaryRole } from '@/shared/utils/derive-primary-role';
+import { env } from '@/shared/config/env';
 
 export interface RefreshResult {
   accessToken: string;
@@ -46,7 +48,7 @@ export class RefreshTokenUseCase {
       if (!withinRotationGrace(record.rotatedAt)) {
         throw new UnauthorizedError('UNAUTHORIZED', 'Refresh token tidak valid');
       }
-      return this.issue(user.id, user.role, user.username, clientClaims);
+      return this.issue(user.id, user.roles, user.username, clientClaims);
     }
 
     const rotated = await this.refreshTokenRepo.markRotated(record.tokenHash);
@@ -57,14 +59,23 @@ export class RefreshTokenUseCase {
       }
     }
 
-    return this.issue(user.id, user.role, user.username, clientClaims);
+    return this.issue(user.id, user.roles, user.username, clientClaims);
   }
 
   private async resolveClientClaims(
     clientId: string | null,
   ): Promise<{ clientId: string | null; scopes: string | null }> {
     if (!clientId) {
-      // Token legacy tanpa client_id - biarkan JWT tanpa azp (OAUTH_REQUIRE_AZP=false)
+      // Mode ketat (issue #31): sesi legacy tanpa client_id dihentikan di
+      // refresh supaya client logout bersih, bukan meneruskan token tanpa azp
+      // yang pasti gagal 401 CLIENT_REQUIRED di gate write.
+      if (env.OAUTH_REQUIRE_AZP) {
+        throw new UnauthorizedError(
+          'SESSION_STALE',
+          'Sesi sudah kadaluarsa. Silakan masuk lagi ya.',
+        );
+      }
+      // Grace: token legacy tetap tanpa azp (OAUTH_REQUIRE_AZP=false)
       return { clientId: null, scopes: null };
     }
     if (!this.apiClients) {
@@ -74,7 +85,7 @@ export class RefreshTokenUseCase {
     if (!client || client.status !== 'approved') {
       throw new ForbiddenError(
         'CLIENT_NOT_ALLOWED',
-        'Sesi dari aplikasi tidak diizinkan. Silakan keluar dan masuk lagi.',
+        'Aplikasi ini belum diizinkan. Coba keluar lalu masuk lagi ya.',
       );
     }
     const scopes =
@@ -86,7 +97,7 @@ export class RefreshTokenUseCase {
 
   private async issue(
     userId: string,
-    role: string,
+    roles: string[],
     username: string,
     client: { clientId: string | null; scopes: string | null },
   ): Promise<RefreshResult> {
@@ -100,7 +111,9 @@ export class RefreshTokenUseCase {
 
     const accessToken = await this.tokenService.generateAccessToken({
       user_id: userId,
-      role,
+      roles,
+      // @deprecated derived tertinggi - wire compat client lama
+      role: derivePrimaryRole(roles),
       username,
       ...(client.clientId ? { azp: client.clientId } : {}),
       ...(client.scopes ? { scope: client.scopes } : {}),

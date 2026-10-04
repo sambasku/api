@@ -13,7 +13,9 @@ export type InboxNotificationType =
   | 'discussion_rejected'
   | 'discussion_taken_down'
   | 'discussion_reply'
+  | 'discussion_mention'
   | 'word_comment'
+  | 'word_comment_mention'
   | 'word_vote'
   | 'campaign'
   | 'verifier_application_approved'
@@ -122,10 +124,20 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
         title: 'Balasan baru',
         body: 'Ada balasan baru di Ruang Diskusi.',
       };
+    case 'discussion_mention':
+      return {
+        title: 'Kamu disebut di diskusi',
+        body: 'Seseorang menyebutmu di Ruang Diskusi.',
+      };
     case 'word_comment':
       return {
         title: 'Komentar baru',
         body: 'Ada komentar baru di diskusi kosakata.',
+      };
+    case 'word_comment_mention':
+      return {
+        title: 'Kamu disebut di komentar',
+        body: 'Seseorang menyebutmu di komentar kosakata.',
       };
     case 'word_vote':
       return {
@@ -137,8 +149,8 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       return { title: 'Pengumuman', body: '' };
     case 'verifier_application_approved':
       return {
-        title: 'Selamat, Anda jadi verifikator',
-        body: 'Pengajuan Anda disetujui. Silakan keluar lalu masuk kembali agar peran Verifikator aktif di aplikasi.',
+        title: 'Selamat, kamu jadi verifikator',
+        body: 'Pengajuanmu disetujui. Keluar lalu masuk lagi ya, biar peran Verifikator aktif di aplikasi.',
       };
     case 'verifier_application_rejected':
       return {
