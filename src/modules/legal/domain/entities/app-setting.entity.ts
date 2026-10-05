@@ -8,12 +8,20 @@ export const APP_SETTING_KEYS = [
   'notification.review_reject_push_cooldown_minutes',
   'notification.word_comment_push_cooldown_minutes',
   'notification.word_vote_push_cooldown_minutes',
+  'wa.verifier_enabled',
+  'wa.group_cta_url',
 ] as const;
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];
 
 export const LEGAL_TERMS_VERSION_KEY = 'legal.terms_version' as const;
 export const LEGAL_PRIVACY_VERSION_KEY = 'legal.privacy_version' as const;
+
+/** Default link grup WA (diskusi + silaturahmi) untuk CTA pesan WA verifikator. */
+export const DEFAULT_WA_GROUP_CTA_URL =
+  'https://chat.whatsapp.com/Kw64lxFEGXfK5gw6T6GEoN?mode=gi_t';
+export const WA_VERIFIER_ENABLED_KEY = 'wa.verifier_enabled' as const;
+export const WA_GROUP_CTA_URL_KEY = 'wa.group_cta_url' as const;
 
 export const REVIEW_APPROVE_PUSH_COOLDOWN_MINUTES_KEY =
   'notification.review_approve_push_cooldown_minutes' as const;

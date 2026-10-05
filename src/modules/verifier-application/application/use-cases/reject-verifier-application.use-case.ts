@@ -2,6 +2,9 @@ import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { SendVerifierWaNotificationUseCase } from '@/modules/wa/application/use-cases/send-verifier-wa.use-case';
+import { DEFAULT_WA_GROUP_CTA_URL } from '@/modules/legal/domain/entities/app-setting.entity';
 import type { VerifierApplicationRepository } from '../../domain/repositories/verifier-application.repository';
 
 export interface RejectVerifierApplicationCommand {
@@ -34,6 +37,9 @@ export class RejectVerifierApplicationUseCase {
     private readonly auditRepo: AuditLogRepository,
     private readonly notifyUser: NotifyUserUseCase,
     private readonly inbox: RecordInboxNotificationUseCase,
+    private readonly userRepo?: UserRepository,
+    private readonly sendVerifierWa?: SendVerifierWaNotificationUseCase,
+    private readonly readWaSettings?: () => Promise<{ enabled: boolean; ctaUrl: string }>,
   ) {}
 
   async execute(cmd: RejectVerifierApplicationCommand): Promise<RejectVerifierApplicationResult> {
@@ -96,6 +102,37 @@ export class RejectVerifierApplicationUseCase {
       },
     });
 
+    await this.sendWaIfEnabled(row.userId, cmd.comment);
+
     return { id: row.id, status: 'rejected' };
+  }
+
+  /** WA opsional: gagal kirim tidak membatalkan penolakan. */
+  private async sendWaIfEnabled(userId: string, comment: string): Promise<void> {
+    if (!this.userRepo || !this.sendVerifierWa || !this.readWaSettings) return;
+    try {
+      const settings = await this.readWaSettings();
+      if (!settings.enabled) return;
+      const user = await this.userRepo.findById(userId);
+      if (!user) return;
+      // Alasan WA = admin_comment penuh (bukan snippet 180 char push).
+      await this.sendVerifierWa.execute({
+        userId,
+        phone: user.phone,
+        eventKey: 'verifier_application_rejected',
+        displayName: user.displayName.trim() || user.username,
+        detail: comment.trim() || 'Belum ada alasan spesifik, silakan ajukan ulang.',
+        ctaUrl: settings.ctaUrl || DEFAULT_WA_GROUP_CTA_URL,
+      });
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'wa penolakan verifikator gagal dikirim',
+          user_id: userId,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 }

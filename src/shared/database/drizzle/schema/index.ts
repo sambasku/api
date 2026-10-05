@@ -52,3 +52,5 @@ export * from './database-backup-logs.schema';
 export * from './ugc-abuse-events.schema';
 export * from './supabase-health-checks.schema';
 export * from './ugc-anon-abuse.schema';
+export * from './wa-message.schema';
+export * from './email.schema';

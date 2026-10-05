@@ -379,6 +379,12 @@ import { RejectVerifierApplicationUseCase } from '@/modules/verifier-application
 import { VerifierApplicationController } from '@/modules/verifier-application/presentation/v1/verifier-application.controller';
 import { createVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/verifier-application.routes';
 import { createAdminVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/admin-verifier-application.routes';
+import { WaTemplateRepositoryImpl, WaMessageLogRepositoryImpl, WaUsageRepositoryImpl } from '@/modules/wa/infrastructure/wa-message.repository.impl';
+import { KapsoWaSender } from '@/modules/wa/infrastructure/kapso-wa.sender';
+import { SendWaMessageUseCase } from '@/modules/wa/application/use-cases/send-wa-message.use-case';
+import { SendVerifierWaNotificationUseCase } from '@/modules/wa/application/use-cases/send-verifier-wa.use-case';
+import { createWaAdminRoutes } from '@/modules/wa/presentation/v1/wa-admin.routes';
+import { WA_PROVIDERS } from '@/modules/wa/domain/entities/wa-message.entity';
 import { NotificationCampaignRepositoryImpl } from '@/modules/notification-campaign/infrastructure/notification-campaign.repository.impl';
 import {
   CreateNotificationTemplateUseCase,
@@ -1426,6 +1432,23 @@ const abuseController = new AbuseController({
 app.route('/api/v1/admin/abuse', createAbuseRoutes({ controller: abuseController, authenticate }));
 
 const verifierApplicationRepo = new VerifierApplicationRepositoryImpl(db);
+
+// WA (Kapso) - modul notifikasi WhatsApp + admin console (System > WhatsApp).
+const waTemplateRepo = new WaTemplateRepositoryImpl(db);
+const waLogRepo = new WaMessageLogRepositoryImpl(db);
+const waUsageRepo = new WaUsageRepositoryImpl(db);
+const sendWaMessage = new SendWaMessageUseCase(
+  [{ sender: new KapsoWaSender() }],
+  waUsageRepo,
+  waLogRepo,
+  waTemplateRepo,
+  appSettingsRepo,
+);
+const sendVerifierWa = new SendVerifierWaNotificationUseCase(sendWaMessage);
+async function readWaSettings(): Promise<{ enabled: boolean; ctaUrl: string }> {
+  return sendWaMessage.readWaSettings();
+}
+
 const verifierApplicationController = new VerifierApplicationController({
   create: new CreateVerifierApplicationUseCase(verifierApplicationRepo, userRepo),
   getMine: new GetMyVerifierApplicationUseCase(verifierApplicationRepo),
@@ -1440,17 +1463,32 @@ const verifierApplicationController = new VerifierApplicationController({
     userRepo,
     mailer,
     recordInbox,
+    sendVerifierWa,
+    readWaSettings,
   ),
   reject: new RejectVerifierApplicationUseCase(
     verifierApplicationRepo,
     auditRepo,
     notifyUser,
     recordInbox,
+    userRepo,
+    sendVerifierWa,
+    readWaSettings,
   ),
 });
 app.route(
   '/api/v1/verifier-applications',
   createVerifierApplicationRoutes({ controller: verifierApplicationController, authenticate }),
+);
+app.route(
+  '/api/v1/admin/wa',
+  createWaAdminRoutes({
+    templateRepo: waTemplateRepo,
+    usageRepo: waUsageRepo,
+    logRepo: waLogRepo,
+    sendWa: sendWaMessage,
+    authenticate,
+  }),
 );
 app.route(
   '/api/v1/admin/verifier-applications',
@@ -1505,9 +1543,30 @@ app.route(
   }),
 );
 
-/** Dipanggil cron Workers untuk scheduled + lanjutkan chunk sending. */
+/** Dipanggil cron Workers untuk scheduled + lanjutkan chunk sending + reset kuota WA bulanan. */
 export async function runDueNotificationCampaigns(): Promise<{ processed: number }> {
+  await resetWaUsageIfNewPeriod();
   return processDueCampaigns.execute(5);
+}
+
+/**
+ * Cron WA: reset used_count tiap awal bulan (tanggal 1, 00:00:01 WIB).
+ * Idempoten - lazy reset di WaUsageRepository jadi jaring pengaman.
+ */
+async function resetWaUsageIfNewPeriod(): Promise<void> {
+  try {
+    for (const provider of WA_PROVIDERS) {
+      await waUsageRepo.getActive(provider);
+    }
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'reset kuota wa bulanan gagal',
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
 }
 
 // Lookup definisi lemma (KBBI via port) - prefill field definition di form
