@@ -72,7 +72,7 @@ export class QuotaAwareMailer implements MailerPort {
     private readonly logRepo: EmailLogRepository,
   ) {}
 
-  async sendResetPasswordEmail(to: string, resetUrl: string, displayCode: string): Promise<void> {
+  async sendResetPasswordEmail(to: string, _resetUrl: string, displayCode: string): Promise<void> {
     await this.send(
       { to, subject: 'Reset password - SambasKu', text: resetPasswordEmailText(displayCode), html: resetPasswordEmailHtml(displayCode), inlineLogo: EMAIL_LOGO },
       'reset_password',

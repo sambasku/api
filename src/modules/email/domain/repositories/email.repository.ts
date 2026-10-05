@@ -1,8 +1,8 @@
-import type { EmailLog, EmailLogStatus, EmailQuotaWithUsage } from '../entities/email.entity';
+import type { EmailCategory, EmailLog, EmailLogStatus, EmailQuotaWithUsage } from '../entities/email.entity';
 
 export interface EmailLogEntry {
   provider: string;
-  category: string;
+  category: EmailCategory;
   toEmail: string;
   status: EmailLogStatus;
   errorCode?: string | null;
@@ -13,7 +13,7 @@ export interface EmailLogEntry {
 export interface EmailLogListQuery {
   limit?: number;
   cursor?: string | null;
-  status?: string;
+  status?: EmailLogStatus;
   provider?: string;
 }
 

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, unique } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 
 /**
@@ -13,11 +13,13 @@ export const emailQuotas = sqliteTable('email_quotas', {
   manualMonth: text('manual_month').notNull().default(''),
   priority: integer('priority').notNull(),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }),
+  updatedBy: text('updated_by'),
 });
 
 /**
  * Usage per hari per provider (reset bulanan struktural).
- * Unique (provider, day) - overshot kecil (1-2) ditoleransi (ponytail: advisory lock).
+ * Unique (provider, day) - overshot kecil (1-2) ditolerani (ponytail: advisory lock).
  */
 export const emailUsageDaily = sqliteTable('email_usage_daily', {
   id: text('id').primaryKey().$defaultFn(() => generateId()),
@@ -25,7 +27,7 @@ export const emailUsageDaily = sqliteTable('email_usage_daily', {
   day: text('day').notNull(), // 'YYYY-MM-DD' UTC
   sentCount: integer('sent_count').notNull().default(0),
 }, (t) => ({
-  uniqueProviderDay: unique().on(t.provider, t.day),
+  uniqueProviderDay: unique('email_usage_daily_provider_day_unique').on(t.provider, t.day),
 }));
 
 /**
@@ -41,9 +43,14 @@ export const emailLogs = sqliteTable('email_logs', {
     enum: ['otp', 'reset_password', 'account_deletion', 'verifier_approved', 'test'],
   }).notNull(),
   status: text('status', {
-    enum: ['sent', 'failed', 'skipped_quota'],
+    enum: ['sent', 'failed', 'skipped_quota', 'skipped_env'],
   }).notNull(),
   errorCode: text('error_code').default(''),
   errorMessage: text('error_message').default(''),
   providerMessageId: text('provider_message_id').default(''),
 });
+
+/** 'YYYY-MM-DD' UTC - basis baris usage harian. */
+export function emailDayUtc(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}

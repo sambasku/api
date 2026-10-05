@@ -172,8 +172,8 @@ const envSchema = z.object({
   SUPABASE_URL: z.url().optional(),
   SUPABASE_ANON_KEY: z.string().optional(),
 
-  // App URL for the API service (Cloudflare Workers custom domain)
-  APP_URL: z.url().default('http://localhost:5173'),
+  // App URL for the API service (Cloudflare Workers custom domain) - sama
+  // dengan APP_URL di atas (legacy). Tidak ada definisi kedua.
 
   // Gate write: JWT wajib punya claim `azp` (api_clients.client_id).
   // false (default) = grace / backward-compat: token tanpa azp masih lolos
