@@ -211,6 +211,8 @@ export interface SearchParams {
    * - omit  → semua status (belum soft-deleted)
    */
   published?: boolean;
+  /** Panel admin: true = bergambar, false = tanpa gambar, omit = semua. */
+  hasImage?: boolean;
 }
 
 export interface CursorPage<T> {

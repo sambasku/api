@@ -567,6 +567,36 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
     expect(hanyaPb.items.map((w) => w.lemma)).toEqual(['miyang rabong']);
   });
 
+  it('search: filter hasImage (panel admin) - bergambar / tanpa gambar', async () => {
+    const gambar = {
+      url: 'https://ik.imagekit.io/dev/words/bergambar.jpg',
+      provider: 'imagekit',
+      providerFileId: 'file_has_image_test',
+      isPrimary: true,
+    };
+    await repo.saveWithRelations(baseWord({ lemma: 'bergambar', images: [gambar] }), ACTOR);
+    await repo.saveWithRelations(baseWord({ lemma: 'polos' }), ACTOR);
+    // Gambar soft-deleted tidak dihitung sebagai bergambar
+    await repo.saveWithRelations(
+      baseWord({ lemma: 'hapus gambar', images: [{ ...gambar, providerFileId: 'file_dihapus', isPrimary: false }] }),
+      ACTOR,
+    );
+    await db
+      .update(wordImages)
+      .set({ deletedAt: new Date() })
+      .where(eq(wordImages.providerFileId, 'file_dihapus'));
+
+    const bergambar = await repo.search({ q: '', limit: 10, hasImage: true });
+    expect(bergambar.items.map((w) => w.lemma)).toEqual(['bergambar']);
+
+    const polos = await repo.search({ q: '', limit: 10, hasImage: false });
+    expect(polos.items.map((w) => w.lemma).sort()).toEqual(['hapus gambar', 'polos']);
+
+    // omit = semua
+    const semua = await repo.search({ q: '', limit: 10 });
+    expect(semua.items).toHaveLength(3);
+  });
+
   it('findDetailById: lengkap untuk published, null untuk draft', async () => {
     const published = await repo.saveWithRelations(baseWord({ lemma: 'terbit' }), ACTOR);
     await repo.saveWithRelations(baseWord({ lemma: 'konsep', status: 'draft' }), ACTOR);

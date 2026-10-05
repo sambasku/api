@@ -1129,6 +1129,12 @@ export class WordRepositoryImpl implements WordRepository {
         : undefined,
       params.wordType ? eq(words.wordType, params.wordType) : undefined,
       params.isVerified === undefined ? undefined : eq(words.isVerified, params.isVerified),
+      // Admin: filter gambar. EXISTS - satu baris per kata, cursor words.id tetap aman.
+      params.hasImage === undefined
+        ? undefined
+        : params.hasImage
+          ? sql`EXISTS (SELECT 1 FROM ${wordImages} wi WHERE wi.word_id = ${words.id} AND wi.deleted_at IS NULL)`
+          : sql`NOT EXISTS (SELECT 1 FROM ${wordImages} wi WHERE wi.word_id = ${words.id} AND wi.deleted_at IS NULL)`,
       params.cursor ? lt(words.id, params.cursor) : undefined,
     );
 

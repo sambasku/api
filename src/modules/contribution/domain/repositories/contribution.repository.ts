@@ -69,6 +69,13 @@ export interface ExamplePatch {
   notes: string | null;
 }
 
+/** Koreksi makna (17-api-usul-definisi) - terjemahan replace penuh. */
+export interface MeaningPatch {
+  wordClassId: string | null;
+  definition: string;
+  translations: { languageId: string; translationText: string; translationType: string }[];
+}
+
 export interface ReviewCommand {
   contributionId: string;
   decision: ReviewDecision;
@@ -80,6 +87,7 @@ export interface ReviewCommand {
     wordImage?: WordImagePatch;
     wordAudio?: WordAudioPatch;
     example?: ExamplePatch;
+    meaning?: MeaningPatch;
   };
   /**
    * true = caller sudah klaim lewat withPendingLock - jangan claimPending lagi
@@ -102,13 +110,14 @@ export interface ReviewCommand {
 // patch diterapkan, is_corrected=true, tapi status tetap 'pending_review'
 // dan tidak ada keputusan review (kontribusi tetap di antrean).
 export interface ApplyChildCorrectionCommand {
-  entityType: 'pronunciation' | 'word_image' | 'word_audio' | 'example';
+  entityType: 'pronunciation' | 'word_image' | 'word_audio' | 'example' | 'meaning';
   entityId: string;
   actorId: string;
   pronunciation?: PronunciationPatch;
   wordImage?: WordImagePatch;
   wordAudio?: WordAudioPatch;
   example?: ExamplePatch;
+  meaning?: MeaningPatch;
 }
 
 /** Baris entity anak + referensi parent - untuk layar review & snapshot koreksi */

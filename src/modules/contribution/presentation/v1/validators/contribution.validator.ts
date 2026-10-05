@@ -120,6 +120,22 @@ export const correctContributionSchema = z.discriminatedUnion('entity_type', [
     source_type: z.enum(['native_speaker', 'book', 'corpus', 'interview', 'other']).optional(),
     notes: z.string().optional(),
   }),
+  z.object({
+    entity_type: z.literal('meaning'),
+    comment: commentField,
+    publish: publishField,
+    word_class_id: choiceId('Kelas kata').nullable().optional(),
+    definition: z.string().trim().min(1, 'Definisi tidak boleh kosong'),
+    translations: z
+      .array(
+        z.object({
+          language_id: opaqueId,
+          translation_text: z.string().trim().min(1, 'Terjemahan tidak boleh kosong'),
+          translation_type: z.enum(['direct', 'descriptive', 'idiomatic']).default('direct'),
+        }),
+      )
+      .min(1, 'Minimal harus ada 1 terjemahan'),
+  }),
 ]);
 
 export type CorrectContributionBody = z.infer<typeof correctContributionSchema>;

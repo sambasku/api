@@ -631,6 +631,7 @@ export class WordController {
       wordType: query.word_type,
       isVerified: query.is_verified,
       published: query.published,
+      hasImage: query.has_image,
     });
     return c.json({
       success: true as const,

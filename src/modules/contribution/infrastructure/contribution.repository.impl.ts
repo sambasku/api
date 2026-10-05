@@ -30,6 +30,7 @@ import type {
   ChildEntityWithParent,
   ContributionListFilter,
   ContributionRepository,
+  MeaningPatch,
   MyContributionListFilter,
   ReviewCommand,
 } from '../domain/repositories/contribution.repository';
@@ -1101,7 +1102,9 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           ? wordImages.deletedAt
           : cmd.entityType === 'word_audio'
             ? wordAudios.deletedAt
-            : examples.deletedAt,
+            : cmd.entityType === 'meaning'
+              ? meanings.deletedAt
+              : examples.deletedAt,
     );
     const table =
       cmd.entityType === 'pronunciation'
@@ -1110,7 +1113,9 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           ? wordImages
           : cmd.entityType === 'word_audio'
             ? wordAudios
-            : examples;
+            : cmd.entityType === 'meaning'
+              ? meanings
+              : examples;
     const [row] = await tx
       .select({ status: table.status })
       .from(table)
@@ -1216,8 +1221,61 @@ export class ContributionRepositoryImpl implements ContributionRepository {
             .where(and(eq(examples.id, cmd.entityId), isNull(examples.deletedAt)));
           break;
         }
+        case 'meaning': {
+          const p = cmd.meaning;
+          if (!p) throw new Error('patch meaning hilang pada koreksi tanpa publish');
+          await this.applyMeaningPatch(tx, cmd.entityId, p, cmd.actorId, now, {
+            status: nextStatus,
+            isVerified: false,
+          });
+          break;
+        }
       }
     });
+  }
+
+  /**
+   * Tulis patch makna + replace terjemahan (soft-delete lama, insert baru -
+   * jejak audit terjaga). Dipakai applyChildCorrection (status dinamis) dan
+   * reviewMeaning decision 'correct' (published + verified).
+   */
+  private async applyMeaningPatch(
+    tx: Tx,
+    meaningId: string,
+    p: MeaningPatch,
+    actorId: string,
+    now: Date,
+    outcome: { status: 'published' | 'pending_review' | 'rejected'; isVerified: boolean },
+  ): Promise<void> {
+    await tx
+      .update(meanings)
+      .set({
+        wordClassId: p.wordClassId,
+        definition: p.definition,
+        isHaveDefinition: true,
+        isHaveTranslation: p.translations.length > 0,
+        status: outcome.status,
+        isVerified: outcome.isVerified,
+        isCorrected: true,
+        updatedBy: actorId,
+        updatedAt: now,
+      })
+      .where(and(eq(meanings.id, meaningId), isNull(meanings.deletedAt)));
+    // Hard delete (bukan soft): unique (meaningId, languageId, translationText)
+    // akan bentrok saat insert ulang teks yang sama. Audit lewat snapshot
+    // old/new data di audit log use-case (pola updateWithRelations).
+    await tx.delete(meaningTranslations).where(eq(meaningTranslations.meaningId, meaningId));
+    if (p.translations.length > 0) {
+      await tx.insert(meaningTranslations).values(
+        p.translations.map((t) => ({
+          meaningId,
+          languageId: t.languageId,
+          translationText: t.translationText,
+          translationType: t.translationType,
+          createdBy: actorId,
+        })),
+      );
+    }
   }
 
   // Kata: keputusan pada kata ikut memutuskan anak-anaknya (anak yang ikut
@@ -1413,7 +1471,7 @@ export class ContributionRepositoryImpl implements ContributionRepository {
 
   // 17-api-usul-definisi.md: approve → publish + bersihkan placeholder "-"
   // pada kata yang sama (satu tx); reject → status rejected (baris tetap,
-  // preseden reviewPronunciation). 'correct' tidak didukung untuk makna.
+  // preseden reviewPronunciation); correct → patch + publish (pola reviewExample).
   private async reviewMeaning(tx: Tx, entityId: string, cmd: ReviewCommand, now: Date): Promise<void> {
     const where = and(eq(meanings.id, entityId), isNull(meanings.deletedAt));
 
@@ -1426,10 +1484,15 @@ export class ContributionRepositoryImpl implements ContributionRepository {
     }
 
     if (cmd.decision === 'correct') {
-      throw new ConflictError(
-        'CONTRIBUTION_ALREADY_REVIEWED',
-        'Koreksi langsung tidak didukung untuk kontribusi makna - reject + usul ulang',
-      );
+      // Koreksi langsung: patch diterapkan lalu langsung tayang (pola
+      // reviewExample correct). 'correct' tanpa patch → 409.
+      const p = cmd.childPatch?.meaning;
+      if (!p) throw new Error('childPatch.meaning hilang pada decision correct');
+      await this.applyMeaningPatch(tx, entityId, p, cmd.reviewerId, now, {
+        status: 'published',
+        isVerified: true,
+      });
+      return;
     }
 
     // approve

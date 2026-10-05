@@ -327,6 +327,28 @@ export class ContributionController {
       return decisionResponse(c, outcome, true);
     }
 
+    if (body.entity_type === 'meaning') {
+      const outcome = await this.deps.correct.execute({
+        contributionId: id,
+        actorId: actor.userId,
+        requestId: actor.requestId,
+        comment,
+        publish,
+        input: {
+          meaning: {
+            wordClassId: body.word_class_id ?? null,
+            definition: body.definition,
+            translations: body.translations.map((t) => ({
+              languageId: t.language_id,
+              translationText: t.translation_text,
+              translationType: t.translation_type,
+            })),
+          },
+        },
+      });
+      return decisionResponse(c, outcome, true);
+    }
+
     const outcome = await this.deps.correct.execute({
       contributionId: id,
       actorId: actor.userId,

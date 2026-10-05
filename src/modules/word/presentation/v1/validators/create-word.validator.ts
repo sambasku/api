@@ -660,6 +660,8 @@ export const adminListWordsQuerySchema = z.object({
   is_verified: queryBooleanSchema,
   /** true=tayang, false=tidak tayang, omit=semua */
   published: queryBooleanSchema,
+  /** true = bergambar, false = tanpa gambar, omit = semua */
+  has_image: queryBooleanSchema,
 });
 
 /** GET /api/v1/words - daftar semua kata A-Z publik (18-api-list-words.md) */
