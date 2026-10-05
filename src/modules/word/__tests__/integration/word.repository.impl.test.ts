@@ -16,6 +16,7 @@ import {
   users,
   wordClasses,
   words,
+  wordImportSessions,
 } from '@/shared/database/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
@@ -566,6 +567,36 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
     expect(hanyaPb.items.map((w) => w.lemma)).toEqual(['miyang rabong']);
   });
 
+  it('search: filter hasImage (panel admin) - bergambar / tanpa gambar', async () => {
+    const gambar = {
+      url: 'https://ik.imagekit.io/dev/words/bergambar.jpg',
+      provider: 'imagekit',
+      providerFileId: 'file_has_image_test',
+      isPrimary: true,
+    };
+    await repo.saveWithRelations(baseWord({ lemma: 'bergambar', images: [gambar] }), ACTOR);
+    await repo.saveWithRelations(baseWord({ lemma: 'polos' }), ACTOR);
+    // Gambar soft-deleted tidak dihitung sebagai bergambar
+    await repo.saveWithRelations(
+      baseWord({ lemma: 'hapus gambar', images: [{ ...gambar, providerFileId: 'file_dihapus', isPrimary: false }] }),
+      ACTOR,
+    );
+    await db
+      .update(wordImages)
+      .set({ deletedAt: new Date() })
+      .where(eq(wordImages.providerFileId, 'file_dihapus'));
+
+    const bergambar = await repo.search({ q: '', limit: 10, hasImage: true });
+    expect(bergambar.items.map((w) => w.lemma)).toEqual(['bergambar']);
+
+    const polos = await repo.search({ q: '', limit: 10, hasImage: false });
+    expect(polos.items.map((w) => w.lemma).sort()).toEqual(['hapus gambar', 'polos']);
+
+    // omit = semua
+    const semua = await repo.search({ q: '', limit: 10 });
+    expect(semua.items).toHaveLength(3);
+  });
+
   it('findDetailById: lengkap untuk published, null untuk draft', async () => {
     const published = await repo.saveWithRelations(baseWord({ lemma: 'terbit' }), ACTOR);
     await repo.saveWithRelations(baseWord({ lemma: 'konsep', status: 'draft' }), ACTOR);
@@ -583,6 +614,56 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
 
     const draft = await db.select().from(words).where(eq(words.lemma, 'konsep'));
     expect(await repo.findDetailById(draft[0].id)).toBeNull();
+  });
+
+  it('findDetailById: import_source dari word_import_sessions; kata biasa null', async () => {
+    const [session] = await db
+      .insert(wordImportSessions)
+      .values({
+        id: ulid26('01TESTIMPSESSIO'),
+        triggeredBy: ACTOR,
+        attributedTo: ACTOR,
+        status: 'completed',
+        supportName: 'Kamus Basa Sambas',
+        supportType: 'book',
+        supportAddress: 'https://contoh.id/kamus',
+        supportTitle: 'Entri leksikal darek',
+        supportDesc: 'Halaman 45, terbit 2019',
+      })
+      .returning();
+    const imported = await repo.saveWithRelations(
+      baseWord({ lemma: 'impor', importSessionId: session.id }),
+      ACTOR,
+    );
+
+    const detail = await repo.findDetailById(imported.id);
+    expect(detail?.importSource).toEqual({
+      supportName: 'Kamus Basa Sambas',
+      supportType: 'book',
+      supportAddress: 'https://contoh.id/kamus',
+      supportTitle: 'Entri leksikal darek',
+      supportDesc: 'Halaman 45, terbit 2019',
+    });
+
+    // Sesi tanpa support_name → importSource null (tidak ada yang ditampilkan)
+    const [bare] = await db
+      .insert(wordImportSessions)
+      .values({
+        id: ulid26('01TESTIMPSESSIO2'),
+        triggeredBy: ACTOR,
+        attributedTo: ACTOR,
+        status: 'completed',
+      })
+      .returning();
+    const bareWord = await repo.saveWithRelations(
+      baseWord({ lemma: 'impor kosong', importSessionId: bare.id }),
+      ACTOR,
+    );
+    expect((await repo.findDetailById(bareWord.id))?.importSource).toBeNull();
+
+    // Kata biasa tanpa import_session_id
+    const biasa = await repo.saveWithRelations(baseWord({ lemma: 'biasa' }), ACTOR);
+    expect((await repo.findDetailById(biasa.id))?.importSource).toBeNull();
   });
 
   it('search REVERSE (Indonesia→Sambas): cari kata Sambas dari terjemahannya', async () => {

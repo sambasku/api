@@ -109,6 +109,12 @@ const envSchema = z.object({
   PLAY_STATS_GCS_BUCKET: z.string().optional(),
   PLAY_STATS_GCS_PREFIX: z.string().optional(),
   PLAY_CACHE_TTL_SECONDS: z.coerce.number().default(21_600),
+  // Analitik notifikasi (FCM Data API + event GA4 mobile), opsional.
+  // Delivery pakai kredensial FIREBASE_*; open rate pakai service account
+  // GA4 + property GA4 yang ter-link ke project Firebase mobile.
+  // Kosong = property web (GA4_PROPERTY_ID) dipakai.
+  MOBILE_GA4_PROPERTY_ID: z.string().optional(),
+  FCM_CACHE_TTL_SECONDS: z.coerce.number().default(3_600),
   // Data palsu untuk preview UI lokal; diabaikan saat NODE_ENV=production.
   WEB_ANALYTICS_FAKE: z
     .string()
@@ -150,6 +156,14 @@ const envSchema = z.object({
   // kosong = POST /api/v1/auth/facebook → 503 FACEBOOK_AUTH_UNAVAILABLE.
   FACEBOOK_APP_ID: z.string().optional(),
   FACEBOOK_APP_SECRET: z.string().optional(),
+
+  // Supabase keep-alive + ping manual dari console (System > Supabase).
+  // Satu project aktif sekarang; baris log tetap bawa kolom env (default
+  // 'staging') buat pembeda bila nanti ada project kedua. URL = subdomain
+  // .supabase.co, key = publishable/anon (bukan service_role). Kosong =
+  // POST /api/v1/admin/system/supabase/ping → 503 SUPABASE_PING_UNAVAILABLE.
+  SUPABASE_URL: z.url().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
 
   // Gate write: JWT wajib punya claim `azp` (api_clients.client_id).
   // false (default) = grace / backward-compat: token tanpa azp masih lolos

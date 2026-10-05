@@ -157,6 +157,14 @@ export interface WordDetail extends Word {
   verifier: { username: string; displayName: string; role: string } | null;
   /** JOIN users pada words.created_by; username untuk link, displayName untuk label */
   creator: { username: string; displayName: string; role: string } | null;
+  /** Sitasi sumber data impor massal (word_import_sessions); null = bukan hasil impor. */
+  importSource: {
+    supportName: string | null;
+    supportType: 'web' | 'book' | 'article' | 'other' | null;
+    supportAddress: string | null;
+    supportTitle: string | null;
+    supportDesc: string | null;
+  } | null;
 }
 
 export interface WordClassSummary {

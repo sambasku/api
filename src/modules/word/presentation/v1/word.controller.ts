@@ -586,6 +586,17 @@ export class WordController {
         dialect_id: v.dialectId,
         notes: v.notes,
       })),
+      ...(word.importSource
+        ? {
+            import_source: {
+              support_name: word.importSource.supportName,
+              support_type: word.importSource.supportType,
+              support_address: word.importSource.supportAddress,
+              support_title: word.importSource.supportTitle,
+              support_desc: word.importSource.supportDesc,
+            },
+          }
+        : {}),
     };
   }
 
@@ -620,6 +631,7 @@ export class WordController {
       wordType: query.word_type,
       isVerified: query.is_verified,
       published: query.published,
+      hasImage: query.has_image,
     });
     return c.json({
       success: true as const,

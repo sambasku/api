@@ -1,0 +1,107 @@
+name: Supabase Keep-Alive (production)
+
+# Sama seperti staging: cegah Supabase free tier pause project prod yang sepi.
+# Ping /auth/v1/health + catat log ke Turso production (env=production).
+#
+# Secrets GitHub repo sambasku/api (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_PROD_URL          - https://<ref>.supabase.co
+#   SUPABASE_PROD_ANON_KEY     - publishable key prod (bukan service_role!)
+#   SUPABASE_PROD_PROJECT_REF  - ref 22 char (opsional, fallback dari hostname URL)
+#   TURSO_PRODUCTION_DATABASE_URL - libsql://... (target insert log)
+#   TURSO_PRODUCTION_AUTH_TOKEN
+
+on:
+  schedule:
+    - cron: '0 3 * * 1,4' # Senin & Kamis 03:00 UTC, 1 jam setelah staging
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-keepalive-production
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Cek secrets
+        env:
+          SUPABASE_PROD_URL: ${{ secrets.SUPABASE_PROD_URL }}
+          SUPABASE_PROD_ANON_KEY: ${{ secrets.SUPABASE_PROD_ANON_KEY }}
+          DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+        run: |
+          for v in SUPABASE_PROD_URL SUPABASE_PROD_ANON_KEY DATABASE_URL DATABASE_AUTH_TOKEN; do
+            if [ -z "$(eval echo \$$v)" ]; then
+              echo "::error::Secret $v kosong - set di GitHub -> Settings -> Secrets"
+              exit 1
+            fi
+          done
+
+      - name: Ping health check
+        id: ping
+        env:
+          SUPABASE_PROD_URL: ${{ secrets.SUPABASE_PROD_URL }}
+          SUPABASE_PROD_ANON_KEY: ${{ secrets.SUPABASE_PROD_ANON_KEY }}
+        run: |
+          TIME_START=$(date +%s%3N)
+          set +e
+          BODY=$(curl -sS -m 30 -w '\n%{http_code}' \
+            -H "apikey: $SUPABASE_PROD_ANON_KEY" \
+            "$SUPABASE_PROD_URL/auth/v1/health")
+          CURL_EXIT=$?
+          set -e
+          HTTP_STATUS=$(echo "$BODY" | tail -1)
+          echo "http_status=$HTTP_STATUS" >> "$GITHUB_OUTPUT"
+          echo "time_start=$TIME_START" >> "$GITHUB_OUTPUT"
+          if [ "$CURL_EXIT" -ne 0 ] || [ "$HTTP_STATUS" != "200" ]; then
+            echo "::warning::Health check production gagal (HTTP $HTTP_STATUS, curl exit $CURL_EXIT)"
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Record log (sukses)
+        if: success() && steps.ping.outputs.failed == 'false'
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+          ENV_NAME: production
+          PROJECT_LABEL: sambasku-prod
+          PROJECT_REF: ${{ secrets.SUPABASE_PROD_PROJECT_REF }}
+          HTTP_STATUS: ${{ steps.ping.outputs.http_status }}
+          STATUS: ok
+          TIME_START: ${{ steps.ping.outputs.time_start }}
+        run: pnpm exec tsx src/scripts/record-supabase-health.ts
+
+      - name: Record log (gagal)
+        if: steps.ping.outputs.failed == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+          ENV_NAME: production
+          PROJECT_LABEL: sambasku-prod
+          PROJECT_REF: ${{ secrets.SUPABASE_PROD_PROJECT_REF }}
+          HTTP_STATUS: ${{ steps.ping.outputs.http_status }}
+          STATUS: failed
+          TIME_START: ${{ steps.ping.outputs.time_start }}
+          ERROR_MESSAGE: 'Health check gagal - lihat log workflow'
+        run: pnpm exec tsx src/scripts/record-supabase-health.ts
+
+      - name: Gagalkan job bila ping gagal
+        if: steps.ping.outputs.failed == 'true'
+        run: |
+          echo "::error::Ping Supabase production gagal (HTTP ${{ steps.ping.outputs.http_status }}). Kalau project di-pause, unpause dari dashboard."
+          exit 1

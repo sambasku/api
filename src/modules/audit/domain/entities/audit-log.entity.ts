@@ -33,6 +33,8 @@ export interface AuditLogFilter {
   action?: string;
   entityType?: string;
   entityId?: string;
+  /** Filter kata terkait: cocokkan word_id di new_data/old_data (audit anak: meaning, example, dst) */
+  wordId?: string;
   from?: Date;
   to?: Date;
   /** cursor-based (Section 13): ULID id item terakhir halaman sebelumnya */

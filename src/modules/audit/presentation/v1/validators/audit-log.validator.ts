@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { opaqueId } from '@/shared/validation/id';
 
 export const listAuditLogsQuerySchema = z.object({
   user_id: z.string().length(26).optional(),
@@ -7,6 +8,8 @@ export const listAuditLogsQuerySchema = z.object({
   action: z.string().max(50).optional(),
   entity_type: z.string().max(100).optional(),
   entity_id: z.string().length(26).optional(),
+  /** Riwayat per kata: entity_id = wordId atau word_id di old/new_data (audit anak) */
+  word_id: opaqueId.optional(),
   from: z.iso.datetime().optional(),
   to: z.iso.datetime().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),

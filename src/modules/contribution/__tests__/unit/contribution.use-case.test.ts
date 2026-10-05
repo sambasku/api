@@ -762,6 +762,65 @@ describe('CorrectContributionUseCase', () => {
     expect(contributionRepo.review).not.toHaveBeenCalled();
   });
 
+  it('entity meaning + publish=false → applyChildCorrection dengan meaning patch', async () => {
+    const { contributionRepo, wordRepo, auditRepo } = makeDeps();
+    contributionRepo.findById = vi.fn().mockResolvedValue(makeContribution({ entityType: 'meaning' }));
+    contributionRepo.findChildWithParent = vi.fn().mockResolvedValue({
+      id: '01WORDULID000000000000000',
+      wordId: '01WORDPARENT00000000000000',
+      wordLemma: 'idong',
+      data: { definition: 'mata' },
+      status: 'pending_review',
+      isVerified: false,
+      isCorrected: false,
+    });
+    const useCase = new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo as unknown as AuditLogRepository);
+    const meaningPatch = {
+      wordClassId: '01WORDCLASSESESNOMINA000000',
+      definition: 'mata',
+      translations: [{ languageId: '01LANGUAGESINDONESIA00000', translationText: 'mata', translationType: 'direct' }],
+    };
+    const outcome = await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      actorId: ACTOR.userId,
+      comment: null,
+      publish: false,
+      input: { meaning: meaningPatch },
+    });
+    expect(outcome.status).toBe('pending');
+    expect(contributionRepo.applyChildCorrection).toHaveBeenCalledWith(
+      expect.objectContaining({ entityType: 'meaning', meaning: meaningPatch }),
+    );
+    expect(contributionRepo.review).not.toHaveBeenCalled();
+  });
+
+  it('entity meaning + publish=true → review correct dengan childPatch.meaning', async () => {
+    const { contributionRepo, wordRepo, auditRepo } = makeDeps();
+    contributionRepo.findById = vi.fn().mockResolvedValue(makeContribution({ entityType: 'meaning' }));
+    const useCase = new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo as unknown as AuditLogRepository);
+    const outcome = await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      actorId: ACTOR.userId,
+      comment: null,
+      publish: true,
+      input: {
+        meaning: {
+          wordClassId: null,
+          definition: 'mata',
+          translations: [{ languageId: '01LANGUAGESINDONESIA00000', translationText: 'mata', translationType: 'direct' }],
+        },
+      },
+    });
+    expect(outcome.status).toBe('corrected');
+    expect(contributionRepo.review).toHaveBeenCalledWith(
+      expect.objectContaining({
+        decision: 'correct',
+        childPatch: expect.objectContaining({ meaning: expect.objectContaining({ definition: 'mata' }) }),
+      }),
+    );
+    expect(contributionRepo.applyChildCorrection).not.toHaveBeenCalled();
+  });
+
   it('entity_type body tidak cocok → VALIDATION_ERROR', async () => {
     const { contributionRepo, wordRepo, auditRepo } = makeDeps();
     const useCase = new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo as unknown as AuditLogRepository);

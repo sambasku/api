@@ -12,6 +12,7 @@
 #        npx wrangler secret put UNSPLASH_ACCESS_KEY   # latar share (Access Key, bukan Secret Key)
 #        npx wrangler secret put PRONUNCIACION_GITHUB_TOKEN
 #        npx wrangler secret put PUBLIC_IMAGE_GITHUB_TOKEN
+#        npx wrangler secret put SUPABASE_ANON_KEY
 #        …
 #   3. npx wrangler deploy
 #
@@ -65,6 +66,8 @@ SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 # Statistik Play Console (export CSV GCS). Isi PLAY_STATS_GCS_BUCKET via
 # `npx wrangler secret put PLAY_STATS_GCS_BUCKET` ATAU langsung di sini.
 PLAY_STATS_GCS_PREFIX = ""
+SUPABASE_URL="https://wkhlcrxlncflcztptrmg.supabase.co"
+MOBILE_GA4_PROPERTY_ID="555160494"
 
 [observability]
 enabled = true
@@ -120,6 +123,8 @@ GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gservicea
 GA4_PROPERTY_ID="556164988"
 SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 PLAY_STATS_GCS_PREFIX = ""
+SUPABASE_URL="https://wkhlcrxlncflcztptrmg.supabase.co"
+MOBILE_GA4_PROPERTY_ID="555160494"
 
 [env.staging.observability]
 enabled = true
@@ -136,4 +141,5 @@ crons = ["* * * * *"]
 #   npx wrangler secret put PRONUNCIACION_GITHUB_TOKEN --env staging
 #   npx wrangler secret put PIXABAY_API_KEY --env staging
 #   npx wrangler secret put UNSPLASH_ACCESS_KEY --env staging
+#   npx wrangler secret put SUPABASE_ANON_KEY --env staging
 #   … (Resend, ImageKit, OAuth, FCM - sama seperti sebelumnya)

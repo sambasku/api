@@ -13,6 +13,7 @@ import type { ReviewOutcome } from '../../domain/entities/contribution.entity';
 import type {
   ContributionRepository,
   ExamplePatch,
+  MeaningPatch,
   PronunciationPatch,
   WordAudioPatch,
   WordImagePatch,
@@ -25,6 +26,7 @@ export interface CorrectContributionInput {
   wordImage?: WordImagePatch;
   wordAudio?: WordAudioPatch;
   example?: ExamplePatch;
+  meaning?: MeaningPatch;
 }
 
 export interface CorrectContributionCommand {
@@ -74,6 +76,7 @@ export class CorrectContributionUseCase {
       word_image: !!input.wordImage,
       word_audio: !!input.wordAudio,
       example: !!input.example,
+      meaning: !!input.meaning,
     };
     if (!patchPresent[contrib.entityType]) {
       throw new ValidationError([
@@ -94,6 +97,7 @@ export class CorrectContributionUseCase {
         wordImage: input.wordImage,
         wordAudio: input.wordAudio,
         example: input.example,
+        meaning: input.meaning,
       },
     };
 
@@ -129,13 +133,14 @@ export class CorrectContributionUseCase {
     } else {
       // Koreksi saja: patch anak diterapkan tanpa mengubah status kontribusi.
       await this.contributionRepo.applyChildCorrection({
-        entityType: contrib.entityType as 'pronunciation' | 'word_image' | 'word_audio' | 'example',
+        entityType: contrib.entityType as 'pronunciation' | 'word_image' | 'word_audio' | 'example' | 'meaning',
         entityId: contrib.entityId,
         actorId: cmd.actorId,
         pronunciation: input.pronunciation,
         wordImage: input.wordImage,
         wordAudio: input.wordAudio,
         example: input.example,
+        meaning: input.meaning,
       });
       outcome = {
         contributionId: cmd.contributionId,
@@ -184,7 +189,7 @@ export class CorrectContributionUseCase {
       return { lemma: snap.lemma, status: snap.status, is_verified: snap.isVerified };
     }
     const child = await this.contributionRepo.findChildWithParent(
-      entityType as 'pronunciation' | 'word_image' | 'word_audio' | 'example',
+      entityType as 'pronunciation' | 'word_image' | 'word_audio' | 'example' | 'meaning',
       entityId,
     );
     if (!child) return null;
