@@ -12,6 +12,7 @@ export class AuditController {
       action: query.action,
       entityType: query.entity_type,
       entityId: query.entity_id,
+      wordId: query.word_id,
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
       limit: query.limit,

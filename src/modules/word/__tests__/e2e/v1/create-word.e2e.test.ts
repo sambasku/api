@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { capturedOtpDisplayCode, e2eRegisterBody} from '@/shared/testing/e2e-auth';
 
+
 // Pastikan .env.test (DB test) dipakai SEBELUM app di-import (Section 10)
 const { parsed } = config({ path: '.env.test', quiet: true });
 const hasTestDb = !!parsed?.DATABASE_URL;
@@ -62,6 +63,14 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
   let app: any;
   let adminToken: string;
   let contributorToken: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let db: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let users: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let wordImportSessions: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let words: any;
 
   const request = (path: string, init: RequestInit = {}) =>
     app.request(path, {
@@ -84,8 +93,11 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { categories, languages, userRoles, users, wordClasses } = await import('@/shared/database/drizzle/schema');
-    const db = getTestDb();
+    const { categories, languages, userRoles, users: usersSchema, wordClasses, wordImportSessions: sessionsSchema, words: wordsSchema } = await import('@/shared/database/drizzle/schema');
+    db = getTestDb();
+    users = usersSchema;
+    wordImportSessions = sessionsSchema;
+    words = wordsSchema;
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
 
@@ -147,6 +159,43 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     const search = await request('/api/v1/words/search?q=minum');
     const searchBody = await search.json();
     expect(searchBody.data.some((w: { lemma: string }) => w.lemma === 'minum')).toBe(true);
+  });
+
+  it('GET detail kata impor CSV → import_source sitasi; kata biasa tanpa field', async () => {
+    const res = await post('/api/v1/admin/words', validBody({ lemma: 'impor e2e sitasi' }), adminToken);
+    expect(res.status).toBe(201);
+    const wordId = (await res.json()).data.word_id as string;
+
+    const [admin] = await db.select({ id: users.id }).from(users).limit(1);
+    const [session] = await db
+      .insert(wordImportSessions)
+      .values({
+        id: ulid26('01E2EIMPSESSIO'),
+        triggeredBy: admin.id,
+        attributedTo: admin.id,
+        status: 'completed',
+        supportName: 'Kamus E2E',
+        supportType: 'web',
+        supportAddress: 'https://kamus.example',
+      })
+      .returning();
+    await db.update(words).set({ importSessionId: session.id }).where(eq(words.id, wordId));
+
+    const detail = await request(`/api/v1/words/${wordId}`);
+    const body = await detail.json();
+    expect(body.data.import_source).toEqual({
+      support_name: 'Kamus E2E',
+      support_type: 'web',
+      support_address: 'https://kamus.example',
+      support_title: null,
+      support_desc: null,
+    });
+
+    // Kata biasa (tanpa import_session_id) tidak punya field import_source
+    const resPlain = await post('/api/v1/admin/words', validBody({ lemma: 'biasa tanpa sesi' }), adminToken);
+    const plainId = (await resPlain.json()).data.word_id as string;
+    const detailPlain = await request(`/api/v1/words/${plainId}`);
+    expect((await detailPlain.json()).data.import_source).toBeUndefined();
   });
 
   it('POST lemma+makna exact sama dengan published → 409 DUPLICATE_MEANING', async () => {

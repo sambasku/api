@@ -1,0 +1,110 @@
+name: Supabase Keep-Alive (staging)
+
+# Supabase free tier pause project setelah 7 hari tanpa API activity.
+# Ping /auth/v1/health + catat log ke Turso (tabel supabase_health_checks,
+# migrasi API 0056). Riwayat bisa dilihat di Console > System > Supabase.
+#
+# Secrets GitHub repo sambasku/api (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_STAGING_URL       - https://wkhlcrxlncflcztptrmg.supabase.co
+#   SUPABASE_STAGING_ANON_KEY  - publishable key (bukan service_role!)
+#   TURSO_STAGING_DATABASE_URL - libsql://... (target insert log)
+#   TURSO_STAGING_AUTH_TOKEN
+#
+# Catatan: GitHub auto-disable scheduled workflow jika repo default branch
+# tidak ada commit 60 hari. GitHub kirim email notifikasi sebelum disable.
+
+on:
+  schedule:
+    - cron: '0 2 * * 1,4' # Senin & Kamis 02:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-keepalive-staging
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Cek secrets
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+        run: |
+          for v in SUPABASE_STAGING_URL SUPABASE_STAGING_ANON_KEY DATABASE_URL DATABASE_AUTH_TOKEN; do
+            if [ -z "$(eval echo \$$v)" ]; then
+              echo "::error::Secret $v kosong - set di GitHub -> Settings -> Secrets"
+              exit 1
+            fi
+          done
+
+      - name: Ping health check
+        id: ping
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+        run: |
+          TIME_START=$(date +%s%3N)
+          set +e
+          BODY=$(curl -sS -m 30 -w '\n%{http_code}' \
+            -H "apikey: $SUPABASE_STAGING_ANON_KEY" \
+            "$SUPABASE_STAGING_URL/auth/v1/health")
+          CURL_EXIT=$?
+          set -e
+          HTTP_STATUS=$(echo "$BODY" | tail -1)
+          echo "http_status=$HTTP_STATUS" >> "$GITHUB_OUTPUT"
+          echo "time_start=$TIME_START" >> "$GITHUB_OUTPUT"
+          if [ "$CURL_EXIT" -ne 0 ] || [ "$HTTP_STATUS" != "200" ]; then
+            echo "::warning::Health check staging gagal (HTTP $HTTP_STATUS, curl exit $CURL_EXIT)"
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Record log (sukses)
+        if: success() && steps.ping.outputs.failed == 'false'
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+          ENV_NAME: staging
+          PROJECT_LABEL: sambasku-staging
+          PROJECT_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_REF }}
+          HTTP_STATUS: ${{ steps.ping.outputs.http_status }}
+          STATUS: ok
+          TIME_START: ${{ steps.ping.outputs.time_start }}
+        run: pnpm exec tsx src/scripts/record-supabase-health.ts
+
+      - name: Record log (gagal)
+        if: steps.ping.outputs.failed == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+          ENV_NAME: staging
+          PROJECT_LABEL: sambasku-staging
+          PROJECT_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_REF }}
+          HTTP_STATUS: ${{ steps.ping.outputs.http_status }}
+          STATUS: failed
+          TIME_START: ${{ steps.ping.outputs.time_start }}
+          ERROR_MESSAGE: 'Health check gagal - lihat log workflow'
+        run: pnpm exec tsx src/scripts/record-supabase-health.ts
+
+      - name: Gagalkan job bila ping gagal
+        if: steps.ping.outputs.failed == 'true'
+        run: |
+          echo "::error::Ping Supabase staging gagal (HTTP ${{ steps.ping.outputs.http_status }}). Kalau project di-pause, unpause dari dashboard."
+          exit 1

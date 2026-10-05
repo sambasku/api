@@ -19,6 +19,7 @@ import {
   wordAudios,
   wordVariants,
   words,
+  wordImportSessions,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
 import {
@@ -679,10 +680,19 @@ export class WordRepositoryImpl implements WordRepository {
         creatorDisplayName: creatorUsers.displayName,
         creatorRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${creatorUsers.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
         creatorDeletedAt: creatorUsers.deletedAt,
+        sessionSupportName: wordImportSessions.supportName,
+        sessionSupportType: wordImportSessions.supportType,
+        sessionSupportAddress: wordImportSessions.supportAddress,
+        sessionSupportTitle: wordImportSessions.supportTitle,
+        sessionSupportDesc: wordImportSessions.supportDesc,
       })
       .from(words)
       .leftJoin(verifierUsers, eq(words.verifiedBy, verifierUsers.id))
       .leftJoin(creatorUsers, eq(words.createdBy, creatorUsers.id))
+      .leftJoin(
+        wordImportSessions,
+        eq(words.importSessionId, wordImportSessions.id),
+      )
       .where(
         includeAll
           ? and(eq(words.id, id), isNull(words.deletedAt))
@@ -893,6 +903,22 @@ export class WordRepositoryImpl implements WordRepository {
                 joined.creatorDeletedAt,
               )!,
               role: joined.creatorRole,
+            }
+          : null,
+      importSource:
+        wordRow.importSessionId != null && joined.sessionSupportName != null
+          ? {
+              supportName: joined.sessionSupportName,
+              supportType:
+                joined.sessionSupportType === 'web' ||
+                joined.sessionSupportType === 'book' ||
+                joined.sessionSupportType === 'article' ||
+                joined.sessionSupportType === 'other'
+                  ? joined.sessionSupportType
+                  : null,
+              supportAddress: joined.sessionSupportAddress,
+              supportTitle: joined.sessionSupportTitle,
+              supportDesc: joined.sessionSupportDesc,
             }
           : null,
       meanings: meaningRows.map((m) => ({

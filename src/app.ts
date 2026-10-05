@@ -31,10 +31,15 @@ import { AdminApiClientController } from '@/modules/developer-oauth/presentation
 import { createAdminApiClientRoutes } from '@/modules/developer-oauth/presentation/v1/admin-api-client.routes';
 import { GithubActionsDispatchService } from '@/modules/system/infrastructure/github-actions-dispatch';
 import { DatabaseBackupLogRepositoryImpl } from '@/modules/system/infrastructure/database-backup-log.repository.impl';
+import { SupabaseHealthCheckRepositoryImpl } from '@/modules/system/infrastructure/supabase-health-check.repository.impl';
 import { TriggerSqliteBackupUseCase } from '@/modules/system/application/use-cases/trigger-sqlite-backup.use-case';
 import { ListDatabaseBackupLogsUseCase } from '@/modules/system/application/use-cases/list-database-backup-logs.use-case';
+import { ListSupabaseHealthChecksUseCase } from '@/modules/system/application/use-cases/list-supabase-health-checks.use-case';
+import { TriggerSupabaseHealthCheckUseCase } from '@/modules/system/application/use-cases/trigger-supabase-health-check.use-case';
 import { SystemDatabaseController } from '@/modules/system/presentation/v1/system-database.controller';
 import { createSystemDatabaseRoutes } from '@/modules/system/presentation/v1/system-database.routes';
+import { SystemSupabaseController } from '@/modules/system/presentation/v1/system-supabase.controller';
+import { createSystemSupabaseRoutes } from '@/modules/system/presentation/v1/system-supabase.routes';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { UserRepositoryImpl } from '@/modules/auth/infrastructure/user.repository.impl';
 import { RefreshTokenRepositoryImpl } from '@/modules/auth/infrastructure/refresh-token.repository.impl';
@@ -264,6 +269,10 @@ import { PlayAnalyticsController } from '@/modules/play-analytics/presentation/v
 import { createPlayAnalyticsRoutes } from '@/modules/play-analytics/presentation/v1/play-analytics.routes';
 import { GetPlayAnalyticsUseCase } from '@/modules/play-analytics/application/use-cases/get-play-analytics.use-case';
 import { createPlayAnalyticsProviders } from '@/modules/play-analytics/infrastructure/play-analytics-providers.factory';
+import { FcmAnalyticsController } from '@/modules/fcm-analytics/presentation/v1/fcm-analytics.controller';
+import { createFcmAnalyticsRoutes } from '@/modules/fcm-analytics/presentation/v1/fcm-analytics.routes';
+import { GetFcmAnalyticsUseCase } from '@/modules/fcm-analytics/application/use-cases/get-fcm-analytics.use-case';
+import { createFcmAnalyticsProviders } from '@/modules/fcm-analytics/infrastructure/fcm-analytics-providers.factory';
 import { VoteRepositoryImpl } from '@/modules/vote/infrastructure/vote.repository.impl';
 import { ToggleVoteUseCase } from '@/modules/vote/application/use-cases/toggle-vote.use-case';
 import { GetVoteCountsUseCase } from '@/modules/vote/application/use-cases/get-vote-counts.use-case';
@@ -778,6 +787,16 @@ const playAnalyticsController = new PlayAnalyticsController({
   }),
 });
 
+// ---- Modul fcm-analytics - analitik notifikasi push (delivery dari FCM Data
+// API via service account Firebase + open rate dari event notification_open
+// di GA4 property mobile). ----
+const fcmAnalyticsController = new FcmAnalyticsController({
+  getReport: new GetFcmAnalyticsUseCase({
+    ...createFcmAnalyticsProviders(env),
+    cacheTtlSeconds: env.FCM_CACHE_TTL_SECONDS,
+  }),
+});
+
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----
 const commentRepo = new CommentRepositoryImpl(db);
 const wordCommentPushCooldown = new WordCommentPushCooldownGate(
@@ -1025,6 +1044,16 @@ const systemDatabaseController = new SystemDatabaseController({
 app.route(
   '/api/v1/admin/system/database',
   createSystemDatabaseRoutes({ controller: systemDatabaseController, authenticate }),
+);
+
+const supabaseHealthCheckRepo = new SupabaseHealthCheckRepositoryImpl(db);
+const systemSupabaseController = new SystemSupabaseController({
+  list: new ListSupabaseHealthChecksUseCase(supabaseHealthCheckRepo),
+  ping: new TriggerSupabaseHealthCheckUseCase(supabaseHealthCheckRepo),
+});
+app.route(
+  '/api/v1/admin/system/supabase',
+  createSystemSupabaseRoutes({ controller: systemSupabaseController, authenticate }),
 );
 
 // Modul word - admin (write) + publik (read)
@@ -1365,6 +1394,12 @@ app.route(
 app.route(
   '/api/v1/admin/play-analytics',
   createPlayAnalyticsRoutes({ controller: playAnalyticsController, authenticate }),
+);
+
+// Analitik notifikasi (FCM delivery + open rate) - hanya admin & root
+app.route(
+  '/api/v1/admin/fcm-analytics',
+  createFcmAnalyticsRoutes({ controller: fcmAnalyticsController, authenticate }),
 );
 
 // ---- Admin users (Package A): list user + ubah role, hanya admin & root ----

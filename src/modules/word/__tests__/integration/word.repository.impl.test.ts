@@ -16,6 +16,7 @@ import {
   users,
   wordClasses,
   words,
+  wordImportSessions,
 } from '@/shared/database/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
@@ -583,6 +584,56 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
 
     const draft = await db.select().from(words).where(eq(words.lemma, 'konsep'));
     expect(await repo.findDetailById(draft[0].id)).toBeNull();
+  });
+
+  it('findDetailById: import_source dari word_import_sessions; kata biasa null', async () => {
+    const [session] = await db
+      .insert(wordImportSessions)
+      .values({
+        id: ulid26('01TESTIMPSESSIO'),
+        triggeredBy: ACTOR,
+        attributedTo: ACTOR,
+        status: 'completed',
+        supportName: 'Kamus Basa Sambas',
+        supportType: 'book',
+        supportAddress: 'https://contoh.id/kamus',
+        supportTitle: 'Entri leksikal darek',
+        supportDesc: 'Halaman 45, terbit 2019',
+      })
+      .returning();
+    const imported = await repo.saveWithRelations(
+      baseWord({ lemma: 'impor', importSessionId: session.id }),
+      ACTOR,
+    );
+
+    const detail = await repo.findDetailById(imported.id);
+    expect(detail?.importSource).toEqual({
+      supportName: 'Kamus Basa Sambas',
+      supportType: 'book',
+      supportAddress: 'https://contoh.id/kamus',
+      supportTitle: 'Entri leksikal darek',
+      supportDesc: 'Halaman 45, terbit 2019',
+    });
+
+    // Sesi tanpa support_name → importSource null (tidak ada yang ditampilkan)
+    const [bare] = await db
+      .insert(wordImportSessions)
+      .values({
+        id: ulid26('01TESTIMPSESSIO2'),
+        triggeredBy: ACTOR,
+        attributedTo: ACTOR,
+        status: 'completed',
+      })
+      .returning();
+    const bareWord = await repo.saveWithRelations(
+      baseWord({ lemma: 'impor kosong', importSessionId: bare.id }),
+      ACTOR,
+    );
+    expect((await repo.findDetailById(bareWord.id))?.importSource).toBeNull();
+
+    // Kata biasa tanpa import_session_id
+    const biasa = await repo.saveWithRelations(baseWord({ lemma: 'biasa' }), ACTOR);
+    expect((await repo.findDetailById(biasa.id))?.importSource).toBeNull();
   });
 
   it('search REVERSE (Indonesia→Sambas): cari kata Sambas dari terjemahannya', async () => {

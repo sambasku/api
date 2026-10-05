@@ -393,6 +393,13 @@
       "when": 1799160000000,
       "tag": "0055_legal-reconcile-2026-10-04",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1799592000000,
+      "tag": "0056_supabase-health-checks",
+      "breakpoints": true
     }
   ]
 }

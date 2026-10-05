@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, lte, or, sql } from 'drizzle-orm';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { auditLogs, users } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
@@ -50,6 +50,15 @@ export class AuditLogRepositoryImpl implements AuditLogRepository {
       filter.action ? eq(auditLogs.action, filter.action) : undefined,
       filter.entityType ? eq(auditLogs.entityType, filter.entityType) : undefined,
       filter.entityId ? eq(auditLogs.entityId, filter.entityId) : undefined,
+      // Riwayat per kata: audit level word (entity_id = wordId) + audit anak
+      // (meaning, example, dst) yang menyimpan word_id di old_data/new_data.
+      filter.wordId
+        ? or(
+            eq(auditLogs.entityId, filter.wordId),
+            sql`json_extract(${auditLogs.newData}, '$.word_id') = ${filter.wordId}`,
+            sql`json_extract(${auditLogs.oldData}, '$.word_id') = ${filter.wordId}`,
+          )
+        : undefined,
       filter.from ? gte(auditLogs.createdAt, filter.from) : undefined,
       filter.to ? lte(auditLogs.createdAt, filter.to) : undefined,
       filter.cursor ? lt(auditLogs.id, filter.cursor) : undefined,

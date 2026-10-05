@@ -94,6 +94,7 @@ function makeDetail(overrides: Partial<WordDetail> = {}): WordDetail {
     variants: [],
     verifier: null,
     creator: null,
+    importSource: null,
     ...overrides,
   };
 }

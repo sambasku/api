@@ -586,6 +586,17 @@ export class WordController {
         dialect_id: v.dialectId,
         notes: v.notes,
       })),
+      ...(word.importSource
+        ? {
+            import_source: {
+              support_name: word.importSource.supportName,
+              support_type: word.importSource.supportType,
+              support_address: word.importSource.supportAddress,
+              support_title: word.importSource.supportTitle,
+              support_desc: word.importSource.supportDesc,
+            },
+          }
+        : {}),
     };
   }
 
