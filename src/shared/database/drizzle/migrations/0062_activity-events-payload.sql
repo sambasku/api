@@ -1,1 +1,1 @@
-ALTER TABLE `activity_events` ADD `payload` text;--> statement-breakpoint
+ALTER TABLE `activity_events` ADD `payload` text;
