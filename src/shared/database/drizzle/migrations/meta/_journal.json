@@ -428,6 +428,13 @@
       "when": 1799852900000,
       "tag": "0060_app-settings-type-description",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "6",
+      "when": 1799860000000,
+      "tag": "0061_activity-events",
+      "breakpoints": true
     }
   ]
 }

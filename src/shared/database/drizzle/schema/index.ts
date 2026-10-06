@@ -42,6 +42,7 @@ export * from './verifier-applications.schema';
 export * from './bug-reports.schema';
 export * from './word-reports.schema';
 export * from './word-card-shares.schema';
+export * from './activity-events.schema';
 export * from './discussions.schema';
 export * from './word-audios.schema';
 export * from './word-import-sessions.schema';
