@@ -636,6 +636,15 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       })
       .returning();
 
+    // Event feed: user mengusulkan perubahan (suggestion_created)
+    await this.emitEvent({
+      kind: 'suggestion_created',
+      actorId: userId,
+      targetWordId: wordId,
+      targetId: suggestion.id,
+      dedupeKey: `suggestion:${suggestion.id}`,
+    });
+
     let finalStatus: SuggestionStatus = 'pending';
     let reviewedBy: string | null = null;
     let reviewedAt: Date | null = null;
@@ -1106,6 +1115,17 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       newData: { status: 'rejected', comment },
       requestId: null,
       sourceContributionId: id,
+    });
+
+    // Sembunyikan event "mengusulkan perubahan" dari feed: usulan ditolak
+    // = bukan lagi aksi publik (konsisten hide vote retract, AGENTS.md #25).
+    await this.emitEvent({
+      kind: 'suggestion_created',
+      actorId: updated.userId,
+      targetWordId: updated.wordId,
+      targetId: id,
+      hidden: true,
+      dedupeKey: `suggestion:${id}`,
     });
 
     return true;

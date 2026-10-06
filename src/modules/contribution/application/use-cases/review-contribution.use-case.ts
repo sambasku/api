@@ -95,11 +95,37 @@ export class ReviewContributionUseCase {
       await this.wordRepo.softDeleteWordImages(rejectedImageIds);
     }
 
-    // Event feed (AGENTS.md #25): approve = kejadian publik. Actor event =
-    // KONTRIBUTOR (aksinya), bukan reviewer; verifikasi reviewer tercatat
-    // lewat event word_verified di jalur lain.
-    if (this.activityEvents && cmd.decision === 'approve' && contrib) {
-      await this.emitContributionEvents(outcome, contrib.entityType);
+    // Event feed (AGENTS.md #25): approve = kejadian publik. Actor event = KONTRIBUTOR
+    // (aksinya), verifikasi reviewer = event word_verified TERPISAH (#85: dua kejadian,
+    // dua baris). Reject = privat, tapi event contribution_submitted yang sudah tayang
+    // disembunyikan (konsisten hide vote retract).
+    if (this.activityEvents && contrib) {
+      if (cmd.decision === 'approve') {
+        await this.emitContributionEvents(outcome, contrib.entityType);
+        // word baru yang disetujui reviewer = verifikasi (#85)
+        if (contrib.entityType === 'word') {
+          await this.activityEvents.safe({
+            kind: 'word_verified',
+            actorId: cmd.actorId,
+            targetWordId: outcome.mergedIntoWordId ?? outcome.entityId,
+            targetId: outcome.entityId,
+            dedupeKey: `word_verified:${outcome.mergedIntoWordId ?? outcome.entityId}`,
+          });
+        }
+      } else if (cmd.decision === 'reject') {
+        // sembunyikan event "mengusulkan kata baru" yang lama tayang
+        // (hanya entityType word; anak kontribusi tak punya event submitted)
+        if (contrib.entityType === 'word') {
+          await this.activityEvents.safe({
+            kind: 'contribution_submitted',
+            actorId: outcome.contributorUserId,
+            targetWordId: outcome.entityId,
+            targetId: outcome.entityId,
+            hidden: true,
+            dedupeKey: `contribution:${outcome.entityId}`,
+          });
+        }
+      }
     }
 
     await this.auditRepo.record({
@@ -299,7 +325,8 @@ export class ReviewContributionUseCase {
       actorId: outcome.contributorUserId,
       targetWordId: outcome.mergedIntoWordId ?? outcome.entityId,
       targetId: outcome.entityId,
-      dedupeKey: `contrib:${outcome.contributionId}`,
+      // Samakan format dengan backfill section 1 (idempoten lintas jalur).
+      dedupeKey: `contribution:${entityType}:${outcome.entityId}`,
     });
   }
 }

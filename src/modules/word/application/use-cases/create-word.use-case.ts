@@ -3,6 +3,7 @@ import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { SearchMissRepository } from '@/modules/search-miss/domain/repositories/search-miss.repository';
 import { normalizeSearchMissTerm } from '@/modules/search-miss/domain/normalize-term';
+import type { ActivityEventRepository } from '@/modules/activity/domain/repositories/activity-event.repository';
 import type { Word } from '../../domain/entities/word.entity';
 import type {
   MissingReferences,
@@ -65,6 +66,7 @@ export class CreateWordUseCase {
     private readonly searchMissRepo?: SearchMissRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly anonAbuse?: RecordAnonAbuseSignalUseCase,
+    private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
   ) {}
 
   async execute(dto: CreateWordDto, actor: Actor): Promise<CreateWordResult> {
@@ -199,6 +201,25 @@ export class CreateWordUseCase {
         },
         requestId: actor.requestId ?? null,
       });
+    }
+
+    // Event feed: (a) usulan kata baru = contribution_submitted (anonim →
+    // pending_review; kontributor login → published tapi belum verified, masuk
+    // antrean review); (b) create langsung oleh verifikator = word_created.
+    // Draft tidak ber-event. Momen submit, bukan derivasi timestamp (#25).
+    if (this.activityEvents && word.status !== 'draft') {
+      const isSubmission = word.status === 'pending_review' || !word.isVerified;
+      try {
+        await this.activityEvents.append({
+          kind: isSubmission ? 'contribution_submitted' : 'word_created',
+          actorId: actor.userId,
+          targetWordId: word.id,
+          targetId: word.id,
+          dedupeKey: isSubmission ? `contribution:${word.id}` : `word:${word.id}`,
+        });
+      } catch (err) {
+        console.error('[activity-event] create-word append gagal (diabaikan):', err);
+      }
     }
 
     return {

@@ -198,6 +198,27 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
     expect(meaning.definition).toBe('definisi baru');
   });
 
+  it('reject menyembunyikan event suggestion_created dari feed (hide-on-reject)', async () => {
+    const { activityEvents } = await import('@/shared/database/drizzle/schema');
+    const sug = await repo.createSuggestion(KONTRIBUTOR, WORD, { lemma: 'kete3' }, 'x', 'lemma_notes', 'contributor');
+    // event usulan tayang (emit di createSuggestion)
+    const [before] = await db
+      .select()
+      .from(activityEvents)
+      .where(eq(activityEvents.dedupeKey, `suggestion:${sug.id}`));
+    expect(before).toBeDefined();
+    expect(before.hiddenAt).toBeNull();
+
+    await repo.rejectSuggestion(sug.id, REVIEWER, 'salah');
+
+    const [after] = await db
+      .select()
+      .from(activityEvents)
+      .where(eq(activityEvents.dedupeKey, `suggestion:${sug.id}`));
+    expect(after).toBeDefined();
+    expect(after.hiddenAt).not.toBeNull();
+  });
+
   it('kategori sama masih pending ditolak, kategori lain boleh', async () => {
     const changeMeaning = {
       meanings: [{ action: 'update' as const, meaningId: MEANING, definition: 'definisi baru' }],

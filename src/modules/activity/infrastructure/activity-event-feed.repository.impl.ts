@@ -39,6 +39,8 @@ const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   discussion_created: 'discussion',
   suggestion_applied: 'suggestion',
   suggestion_selfapply: 'suggestion',
+  suggestion_created: 'suggestion',
+  contribution_submitted: 'contribution',
   search_miss: 'search_miss',
   user_joined: 'welcome',
   card_shared: 'card_share',
@@ -58,6 +60,8 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   discussion_created: '',
   suggestion_applied: 'Mengusulkan perubahan',
   suggestion_selfapply: 'Melengkapi kata',
+  suggestion_created: 'Mengusulkan perubahan',
+  contribution_submitted: 'Mengusulkan kata baru',
   search_miss: '',
   user_joined: 'Bergabung di SambasKu',
   card_shared: 'Membagikan kartu',
@@ -130,6 +134,8 @@ export class ActivityEventFeedRepositoryImpl {
         'contribution_pron',
         'contribution_example',
         'suggestion_applied',
+        'suggestion_created',
+        'contribution_submitted',
       ],
       comment: ['comment_created'],
       verification: ['word_verified', 'suggestion_selfapply'],
@@ -206,6 +212,10 @@ export class ActivityEventFeedRepositoryImpl {
         return `Usulan perubahan diterima ${q}`.trim();
       case 'suggestion_selfapply':
         return `Melengkapi kata ${q}`.trim();
+      case 'suggestion_created':
+        return `Mengusulkan perubahan ${q}`.trim();
+      case 'contribution_submitted':
+        return `Mengusulkan kata baru ${q}`.trim();
       case 'comment_created':
         return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
       case 'word_verified':
@@ -279,14 +289,18 @@ export class ActivityEventFeedRepositoryImpl {
         targetWordId: activityEvents.targetWordId,
         targetId: activityEvents.targetId,
         occurredAt: activityEvents.occurredAt,
+        // status kata untuk keputusan CTA (pending = tanpa target)
+        wordStatus: words.status,
       })
       .from(activityEvents)
       .leftJoin(
         words,
         and(
           eq(words.id, activityEvents.targetWordId),
-          // hanya kata layak-tayang yang lolos; event tanpa kata ikut (left join)
-          sql`${this.feedSafeWordSql()}`,
+          // hanya kata layak-tayang yang lolos; event tanpa kata ikut (left join).
+          // Kata pending (usulan baru) tetap dijoin supaya lemma kebaca;
+          // event-nya dikecualikan dari filter published lewat join ini.
+          sql`(${this.feedSafeWordSql()} or ${activityEvents.kind} = 'contribution_submitted')`,
       ))
       .where(
         and(
@@ -310,6 +324,7 @@ export class ActivityEventFeedRepositoryImpl {
     targetWordId: string | null;
     targetId: string | null;
     occurredAt: Date;
+    wordStatus: string | null;
   }>): Promise<ActivityItem[]> {
     const out: ActivityItem[] = [];
     for (const row of rows) {
@@ -326,6 +341,7 @@ export class ActivityEventFeedRepositoryImpl {
     targetWordId: string | null;
     targetId: string | null;
     occurredAt: Date;
+    wordStatus: string | null;
   }): Promise<ActivityItem | null> {
     const kind = row.kind as ActivityEventKind;
     const actor = await this.resolveActor(row.actorId);
@@ -344,7 +360,9 @@ export class ActivityEventFeedRepositoryImpl {
 
     const body = this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
-    const target = this.targetFor(kind, row, word);
+    // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
+    // Setelah approve, read-time join published menghidupkan CTA lagi.
+    const target = row.wordStatus && row.wordStatus !== 'published' ? null : this.targetFor(kind, row, word);
     const wire = KIND_TO_WIRE[kind];
 
     return {
@@ -425,6 +443,10 @@ export class ActivityEventFeedRepositoryImpl {
       case 'word_verified':
       case 'suggestion_selfapply':
         return 'Verifikasi';
+      case 'suggestion_created':
+        return 'Usulan baru';
+      case 'contribution_submitted':
+        return 'Usulan kata baru';
       case 'user_joined':
         return 'Selamat datang';
       default:
@@ -446,6 +468,8 @@ export class ActivityEventFeedRepositoryImpl {
       case 'contribution_example':
       case 'suggestion_applied':
       case 'suggestion_selfapply':
+      case 'suggestion_created':
+      case 'contribution_submitted':
       case 'card_shared':
       case 'vote_word':
         return word ? { type: 'word', id: word.id } : null;
