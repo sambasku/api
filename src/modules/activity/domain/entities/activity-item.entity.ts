@@ -11,7 +11,8 @@ export type ActivityKind =
   | 'search_miss'
   | 'welcome'
   | 'card_share'
-  | 'suggestion';
+  | 'suggestion'
+  | 'contribution';
 
 export interface ActivityActor {
   username: string | null;

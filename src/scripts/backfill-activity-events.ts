@@ -149,7 +149,12 @@ async function main() {
   const n1 = await insertAll(contribEvents);
   console.log(`[backfill-activity] kontribusi: ${n1}`);
 
-  // 2. Kata published (word_created oleh pembuat; dedupe per kata)
+  // 2. Kata published (word_created oleh pembuat; dedupe per kata).
+  // Kata hasil kontribusi approved di-skip - section 1 sudah emit word_created
+  // untuk mereka (key beda = dobel baris feed).
+  const contribWordIds = new Set(
+    contribRows.filter((r) => r.entityType === 'word').map((r) => r.entityId),
+  );
   const wordRows = await db
     .select({
       id: words.id,
@@ -160,7 +165,7 @@ async function main() {
     .where(and(eq(words.status, 'published'), isNull(words.deletedAt)));
   const n2 = await insertAll(
     wordRows
-      .filter((r) => r.createdBy)
+      .filter((r) => r.createdBy && !contribWordIds.has(r.id))
       .map((r) => ({
         kind: 'word_created' as const,
         actorId: r.createdBy,
@@ -230,7 +235,9 @@ async function main() {
   const n4 = await insertAll(voteEvents);
   console.log(`[backfill-activity] vote: ${n4}`);
 
-  // 5. Verifikasi kontribusi (reviewer; word_verified dipisah - #85)
+  // 5. Verifikasi kontribusi (reviewer; word_verified dipisah - #85).
+  // dedupeKey = word_verified:{wordId} (sama dengan emitter) - satu baris
+  // verifikasi per kata, reviewer pertama menang (onConflictDoNothing).
   const reviewRows = await db
     .select({
       id: contributionReviews.id,
@@ -245,19 +252,50 @@ async function main() {
       and(
         inArray(contributionReviews.status, ['approved', 'corrected']),
         isNull(contributionReviews.deletedAt),
+        eq(contributions.entityType, 'word'),
       ),
     );
   const n5 = await insertAll(
-    reviewRows.map((r) => ({
-      kind: 'word_verified' as const,
-      actorId: r.reviewerId,
+    reviewRows
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((r) => ({
+        kind: 'word_verified' as const,
+        actorId: r.reviewerId,
+        targetWordId: r.entityId,
+        targetId: r.entityId,
+        occurredAt: r.createdAt,
+        dedupeKey: `word_verified:${r.entityId}`,
+      })),
+  );
+  console.log(`[backfill-activity] verifikasi kontribusi: ${n5}`);
+
+  // 5b. Usulan kata baru masih pending (contribution_submitted; rejected =
+  // tidak tayang, approved = word_created di section 1).
+  const pendingWordRows = await db
+    .select({
+      entityId: contributions.entityId,
+      userId: contributions.userId,
+      createdAt: contributions.createdAt,
+    })
+    .from(contributions)
+    .where(
+      and(
+        eq(contributions.entityType, 'word'),
+        eq(contributions.status, 'pending'),
+        isNull(contributions.deletedAt),
+      ),
+    );
+  const n5b = await insertAll(
+    pendingWordRows.map((r) => ({
+      kind: 'contribution_submitted' as const,
+      actorId: r.userId,
       targetWordId: r.entityId,
       targetId: r.entityId,
       occurredAt: r.createdAt,
-      dedupeKey: `word_verified:${r.entityType}:${r.entityId}:${r.reviewerId}`,
+      dedupeKey: `contribution:${r.entityId}`,
     })),
   );
-  console.log(`[backfill-activity] verifikasi kontribusi: ${n5}`);
+  console.log(`[backfill-activity] usulan kata pending: ${n5b}`);
 
   // 6. Usulan edit diterapkan (pengusul)
   const suggRows = await db
@@ -324,7 +362,7 @@ async function main() {
   );
   console.log(`[backfill-activity] search-miss: ${n8}`);
 
-  const total = n1 + n2 + n3 + n4 + n5 + n6 + n7 + n8;
+  const total = n1 + n2 + n3 + n4 + n5 + n5b + n6 + n7 + n8;
   console.log(`[backfill-activity] selesai: ${total} event baru`);
   await closeDb();
 }

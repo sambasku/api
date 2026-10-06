@@ -51,6 +51,7 @@ export const activityItemSchema = z.object({
     'welcome',
     'card_share',
     'suggestion',
+    'contribution',
   ]),
   created_at: z.string(),
   actor: activityActorSchema,

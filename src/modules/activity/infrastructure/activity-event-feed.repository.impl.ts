@@ -40,6 +40,7 @@ const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   suggestion_applied: 'suggestion',
   suggestion_selfapply: 'suggestion',
   suggestion_created: 'suggestion',
+  contribution_submitted: 'contribution',
   search_miss: 'search_miss',
   user_joined: 'welcome',
   card_shared: 'card_share',
@@ -60,6 +61,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   suggestion_applied: 'Mengusulkan perubahan',
   suggestion_selfapply: 'Melengkapi kata',
   suggestion_created: 'Mengusulkan perubahan',
+  contribution_submitted: 'Mengusulkan kata baru',
   search_miss: '',
   user_joined: 'Bergabung di SambasKu',
   card_shared: 'Membagikan kartu',
@@ -133,6 +135,7 @@ export class ActivityEventFeedRepositoryImpl {
         'contribution_example',
         'suggestion_applied',
         'suggestion_created',
+        'contribution_submitted',
       ],
       comment: ['comment_created'],
       verification: ['word_verified', 'suggestion_selfapply'],
@@ -211,6 +214,8 @@ export class ActivityEventFeedRepositoryImpl {
         return `Melengkapi kata ${q}`.trim();
       case 'suggestion_created':
         return `Mengusulkan perubahan ${q}`.trim();
+      case 'contribution_submitted':
+        return `Mengusulkan kata baru ${q}`.trim();
       case 'comment_created':
         return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
       case 'word_verified':
@@ -432,6 +437,8 @@ export class ActivityEventFeedRepositoryImpl {
         return 'Verifikasi';
       case 'suggestion_created':
         return 'Usulan baru';
+      case 'contribution_submitted':
+        return 'Usulan kata baru';
       case 'user_joined':
         return 'Selamat datang';
       default:
@@ -454,6 +461,7 @@ export class ActivityEventFeedRepositoryImpl {
       case 'suggestion_applied':
       case 'suggestion_selfapply':
       case 'suggestion_created':
+      case 'contribution_submitted':
       case 'card_shared':
       case 'vote_word':
         return word ? { type: 'word', id: word.id } : null;

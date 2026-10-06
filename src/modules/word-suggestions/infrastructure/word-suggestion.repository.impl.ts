@@ -1117,6 +1117,17 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       sourceContributionId: id,
     });
 
+    // Sembunyikan event "mengusulkan perubahan" dari feed: usulan ditolak
+    // = bukan lagi aksi publik (konsisten hide vote retract, AGENTS.md #25).
+    await this.emitEvent({
+      kind: 'suggestion_created',
+      actorId: updated.userId,
+      targetWordId: updated.wordId,
+      targetId: id,
+      hidden: true,
+      dedupeKey: `suggestion:${id}`,
+    });
+
     return true;
   }
 

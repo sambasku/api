@@ -638,6 +638,7 @@ const wordController = new WordController({
     searchMissRepo,
     recordAbuseSignal,
     recordAnonAbuseSignal,
+    activityEventRepo,
   ),
   update: new UpdateWordUseCase(wordRepo, auditRepo),
   getById: new GetWordByIdUseCase(wordRepo),

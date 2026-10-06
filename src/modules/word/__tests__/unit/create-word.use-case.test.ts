@@ -4,6 +4,7 @@ import type { WordRepository, MissingReferences } from '../../domain/repositorie
 import type { CreateWordDto } from '../../application/dto/create-word.dto';
 import type { Word } from '../../domain/entities/word.entity';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 
 // "tidak ada referensi yang hilang" - dialectId false karena memang
 // tidak dikirim (implementasi: tidak ada dialect → tidak dianggap hilang)
@@ -134,6 +135,67 @@ function makeDeps(missing: Partial<MissingReferences> = {}, duplicate = false, i
 
 const ADMIN = { roles: ['admin'], userId: '01TESTULIDUSERID00000000', role: 'admin' };
 const CONTRIBUTOR = { roles: ['contributor'], userId: '01TESTULIDUSERID00000000', role: 'contributor' };
+
+describe('CreateWordUseCase - event feed (AGENTS.md #25)', () => {
+  function makeDepsWithEvents(word: { status: string }) {
+    const base = makeDeps();
+    const append = vi.fn().mockResolvedValue('appended');
+    const useCase = new CreateWordUseCase(
+      base.wordRepo,
+      base.auditRepo as unknown as AuditLogRepository,
+      base.searchMissRepo as never,
+      undefined,
+      undefined,
+      { append },
+    );
+    return { ...base, append, useCase, word };
+  }
+
+  it('kontributor login (published belum verified) → event contribution_submitted', async () => {
+    const { useCase, append } = makeDepsWithEvents({ status: 'pending_review' });
+    await useCase.execute(makeDto({ status: 'published' }), {
+      ...CONTRIBUTOR,
+      userId: '01CONTRIBUTORULID000000000',
+    });
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'contribution_submitted' }),
+    );
+  });
+
+  it('anonim → event contribution_submitted', async () => {
+    const { useCase, append } = makeDepsWithEvents({ status: 'pending_review' });
+    await useCase.execute(
+      makeDto({ status: 'published' }),
+      { ...CONTRIBUTOR, userId: ANONIM_USER_ID },
+    );
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'contribution_submitted' }),
+    );
+  });
+
+  it('create langsung published (verifikator) → event word_created', async () => {
+    const { useCase, append } = makeDepsWithEvents({ status: 'published' });
+    await useCase.execute(makeDto({ status: 'published' }), ADMIN);
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'word_created' }),
+    );
+  });
+
+  it('kegagalan append event tidak membatalkan create', async () => {
+    const base = makeDeps();
+    const append = vi.fn().mockRejectedValue(new Error('db down'));
+    const useCase = new CreateWordUseCase(
+      base.wordRepo,
+      base.auditRepo as unknown as AuditLogRepository,
+      base.searchMissRepo as never,
+      undefined,
+      undefined,
+      { append },
+    );
+    const result = await useCase.execute(makeDto({ status: 'published' }), ADMIN);
+    expect(result.word).toBeDefined();
+  });
+});
 
 describe('CreateWordUseCase', () => {
   it('admin + status published → langsung published', async () => {
