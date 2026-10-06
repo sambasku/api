@@ -361,6 +361,9 @@ import { ListShareBackgroundsUseCase } from '@/modules/share/application/use-cas
 import { ShareController } from '@/modules/share/presentation/v1/share.controller';
 import { createShareRoutes } from '@/modules/share/presentation/v1/share.routes';
 import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
+import { ActivityEventRepositoryImpl } from '@/modules/activity/infrastructure/activity-event.repository.impl';
+import { ActivityEventFeedRepositoryImpl } from '@/modules/activity/infrastructure/activity-event-feed.repository.impl';
+import { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import { ListActivityUseCase } from '@/modules/activity/application/use-cases/list-activity.use-case';
 import { ActivityController } from '@/modules/activity/presentation/v1/activity.controller';
 import {
@@ -447,6 +450,10 @@ const identityRepo = new AuthIdentityRepositoryImpl(db);
 
 // ---- Modul audit (Section 21) - direkspos ke use case modul lain ----
 const auditRepo = new AuditLogRepositoryImpl(db);
+// Event log feed publik (write-through, #86) - dipakai lintas modul.
+const activityEventRepo = new ActivityEventRepositoryImpl(db);
+const activityEvents = new RecordActivityEventUseCase(activityEventRepo);
+const activityEventFeedRepo = new ActivityEventFeedRepositoryImpl(db);
 const appSettingsRepo = new AppSettingsRepositoryImpl(db);
 const legalDocumentRepo = new LegalDocumentRepositoryImpl(db);
 const userConsentRepo = new UserConsentRepositoryImpl(db);
@@ -479,6 +486,7 @@ const controller = new AuthController({
     refreshTokenRepo,
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
+    activityEvents,
   ),
   resendOtp: new ResendOtpUseCase(userRepo, otpRepo, mailer),
   refresh: new RefreshTokenUseCase(
@@ -704,6 +712,7 @@ const contributionController = new ContributionController({
     recordInbox,
     new ReviewPushCooldownGate(appSettingsRepo, notificationPushCooldownRepo),
     recordAbuseSignal,
+    activityEvents,
   ),
   correct: new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo, recordInbox),
   reopen: new ReopenContributionUseCase(contributionRepo, auditRepo),
@@ -715,7 +724,7 @@ const searchMissController = new SearchMissController({
   list: new ListSearchMissesUseCase(searchMissRepo),
   dismiss: new DismissSearchMissUseCase(searchMissRepo, auditRepo),
   bulkDismiss: new BulkDismissSearchMissUseCase(searchMissRepo, auditRepo),
-  update: new UpdateSearchMissUseCase(searchMissRepo, auditRepo),
+  update: new UpdateSearchMissUseCase(searchMissRepo, auditRepo, activityEvents),
   resolve: new ResolveSearchMissUseCase(
     searchMissRepo,
     wordRepo,
@@ -747,6 +756,7 @@ const toggleVoteUseCase = new ToggleVoteUseCase(
   recordInbox,
   notifyUser,
   wordVotePushCooldown,
+  activityEvents,
 );
 const voteController = new VoteController({
   toggle: toggleVoteUseCase,
@@ -824,6 +834,7 @@ const commentController = new CommentController({
     notifyUser,
     wordCommentPushCooldown,
     recordAbuseSignal,
+    activityEvents,
   ),
   createAudio: new CreateCommentAudioUseCase(
     commentRepo,
@@ -862,7 +873,7 @@ const bookmarkController = new BookmarkController({
 const publicUserRepo = new PublicUserRepositoryImpl(db);
 const userController = new UserController({
   getPublicProfile: new GetPublicProfileUseCase(publicUserRepo),
-  getPublicActivity: new GetPublicActivityUseCase(publicUserRepo),
+  getPublicActivity: new GetPublicActivityUseCase(publicUserRepo, activityEventFeedRepo),
   suggestMention: new SuggestMentionUsersUseCase(publicUserRepo),
   uploadAvatar: new UploadAvatarUseCase(userRepo, publicImageStorage),
   deleteAvatar: new DeleteAvatarUseCase(userRepo, publicImageStorage),
@@ -1315,6 +1326,7 @@ const discussionController = new DiscussionController({
     imageStorage,
     auditRepo,
     recordInbox,
+    activityEvents,
   ),
   reject: new RejectDiscussionUseCase(
     discussionRepo,
@@ -1584,10 +1596,11 @@ app.route(
 );
 
 // Feed lintas aktivitas publik (37-api-activity-feed.md). Beranda mobile.
+// Baca dari activity_events (#86); repo lama masih dipakai card-share.
 const activityRepo = new ActivityRepositoryImpl(db);
 const activityController = new ActivityController({
-  list: new ListActivityUseCase(activityRepo, commentBlocklistRepo),
-  recordCardShare: new RecordCardShareUseCase(activityRepo),
+  list: new ListActivityUseCase(activityEventFeedRepo),
+  recordCardShare: new RecordCardShareUseCase(activityRepo, activityEventRepo),
 });
 app.route(
   '/api/v1/activity',

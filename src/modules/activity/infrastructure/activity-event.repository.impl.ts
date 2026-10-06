@@ -1,7 +1,12 @@
 import { and, eq, sql } from 'drizzle-orm';
 import {
   activityEvents,
+  examples,
+  meanings,
+  pronunciations,
   votes,
+  wordAudios,
+  wordImages,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
@@ -13,30 +18,93 @@ import type {
   AppendResult,
 } from '../domain/repositories/activity-event.repository';
 
+/** EntityType kontribusi anak -> wordId induknya. */
+export async function resolveContributionWordId(
+  db: AppDatabase,
+  entityType: string,
+  entityId: string,
+): Promise<string | null> {
+  switch (entityType) {
+    case 'word':
+      return entityId;
+    case 'word_image': {
+      const [r] = await db
+        .select({ wordId: wordImages.wordId })
+        .from(wordImages)
+        .where(eq(wordImages.id, entityId))
+        .limit(1);
+      return r?.wordId ?? null;
+    }
+    case 'word_audio': {
+      const [r] = await db
+        .select({ wordId: wordAudios.wordId })
+        .from(wordAudios)
+        .where(eq(wordAudios.id, entityId))
+        .limit(1);
+      return r?.wordId ?? null;
+    }
+    case 'pronunciation': {
+      const [r] = await db
+        .select({ wordId: pronunciations.wordId })
+        .from(pronunciations)
+        .where(eq(pronunciations.id, entityId))
+        .limit(1);
+      return r?.wordId ?? null;
+    }
+    case 'example': {
+      const [r] = await db
+        .select({ wordId: meanings.wordId })
+        .from(examples)
+        .innerJoin(meanings, eq(meanings.id, examples.meaningId))
+        .where(eq(examples.id, entityId))
+        .limit(1);
+      return r?.wordId ?? null;
+    }
+    default:
+      return null;
+  }
+}
+
 export class ActivityEventRepositoryImpl implements ActivityEventRepository {
   constructor(private readonly db: AppDatabase) {}
 
   async append(input: AppendActivityEventInput): Promise<AppendResult> {
-    try {
-      await this.db
+    return this.db.transaction(async (tx) => {
+      // Kontribusi anak: targetId = id baris anak; wordId induk diresolve di
+      // sini supaya semua caller cukup kirim entityId.
+      let targetWordId = input.targetWordId ?? null;
+      if (targetWordId === null && input.kind.startsWith('contribution_')) {
+        const entityType: Record<string, string> = {
+          contribution_image: 'word_image',
+          contribution_audio: 'word_audio',
+          contribution_pron: 'pronunciation',
+          contribution_example: 'example',
+        };
+        const mapped = entityType[input.kind];
+        if (mapped && input.targetId) {
+          targetWordId = await resolveContributionWordId(tx as unknown as AppDatabase, mapped, input.targetId);
+        }
+      }
+      const rows = await tx
         .insert(activityEvents)
         .values({
           kind: input.kind,
           actorId: input.actorId ?? null,
-          targetWordId: input.targetWordId ?? null,
+          targetWordId,
           targetId: input.targetId ?? null,
           occurredAt: input.occurredAt ?? new Date(),
           dedupeKey: input.dedupeKey ?? null,
+          hiddenAt: input.hidden ? new Date() : null,
         })
-        .onConflictDoNothing({ target: activityEvents.dedupeKey });
-      return 'appended';
-    } catch (err) {
-      // UNIQUE di kolom nullable hanya menyala saat dedupeKey terisi; sisanya
-      // error sungguhan (FK, dsb.) dan harus tetap naik.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (input.dedupeKey && msg.includes('UNIQUE')) return 'duplicate';
-      throw err;
-    }
+        .onConflictDoUpdate({
+          target: activityEvents.dedupeKey,
+          // Re-append event tersembunyi (dedupe key sama) = tampilkan lagi;
+          // waktu kejadian TIDAK di-reset (sejarah beku).
+          set: { hiddenAt: input.hidden ? new Date() : null },
+        })
+        .returning({ id: activityEvents.id });
+      return rows.length > 0 ? 'appended' : 'duplicate';
+    });
   }
 
   async setHidden(

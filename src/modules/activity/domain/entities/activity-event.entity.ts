@@ -81,6 +81,8 @@ export interface AppendActivityEventInput {
   targetWordId?: string | null;
   targetId?: string | null;
   occurredAt?: Date;
-  /** Idempotensi caller; insert bentrok diabaikan (bukan error). */
+  /** Idempotensi caller; insert bentrok = event lama dipakai (upsert hidden). */
   dedupeKey?: string | null;
+  /** true = event dengan dedupeKey sama disembunyikan (mis. miss ditarik). */
+  hidden?: boolean;
 }

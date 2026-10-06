@@ -9,6 +9,7 @@ import { findMentionableUsers } from '@/modules/user/application/utils/find-ment
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
@@ -57,6 +58,7 @@ export class CreateCommentUseCase {
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: WordCommentPushCooldownGate,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(cmd: CreateCommentCommand): Promise<Comment> {
@@ -87,6 +89,15 @@ export class CreateCommentUseCase {
       userId: cmd.userId,
       body: filteredBody,
       bodyOriginal: wasFiltered ? body : null,
+    });
+
+    // Event feed: komentar langsung published (post-moderation).
+    await this.activityEvents?.safe({
+      kind: 'comment_created',
+      actorId: cmd.userId,
+      targetWordId: cmd.wordId,
+      targetId: comment.id,
+      dedupeKey: `comment:${comment.id}`,
     });
 
     await this.auditRepo.record({

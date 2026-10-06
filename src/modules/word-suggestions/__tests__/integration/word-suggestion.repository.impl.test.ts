@@ -112,7 +112,8 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl.createSuggestion', () 
     const [word] = await db.select().from(words).where(eq(words.id, WORD));
     expect(word.notes).toBe('baru dari reviewer');
     expect(word.isVerified).toBe(true);
-    expect(word.verifiedBy).toBe(REVIEWER);
+    // Preserve (#86): stamp verifikasi asli tidak ditimpa self-apply reviewer.
+    expect(word.verifiedBy).toBe(OWNER);
 
     const [row] = await db
       .select()

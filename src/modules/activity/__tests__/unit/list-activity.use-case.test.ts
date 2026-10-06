@@ -1,15 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ValidationError } from '@/shared/errors/app-error';
 import type { ActivityItem } from '../../domain/entities/activity-item.entity';
-import type { ActivityRepository } from '../../domain/repositories/activity.repository';
-import { encodeActivityCursor } from '../../domain/merge-activity';
+import { encodeActivityCursor, type ActivityCursor } from '../../domain/merge-activity';
 import { ListActivityUseCase } from '../../application/use-cases/list-activity.use-case';
 
-function item(
-  kind: ActivityItem['kind'],
-  id: string,
-  at: string,
-): ActivityItem {
+function item(kind: ActivityItem['kind'], id: string, at: string): ActivityItem {
   return {
     id: `${kind}:${id}`,
     kind,
@@ -21,205 +16,73 @@ function item(
   };
 }
 
-function emptyRepo(overrides: Partial<ActivityRepository> = {}): ActivityRepository {
-  return {
-    listRecentWords: vi.fn().mockResolvedValue([]),
-    listRecentComments: vi.fn().mockResolvedValue([]),
-    listRecentVotes: vi.fn().mockResolvedValue([]),
-    listRecentDiscussions: vi.fn().mockResolvedValue([]),
-    listRecentApprovedContributions: vi.fn().mockResolvedValue([]),
-    listRecentVisibleSearchMisses: vi.fn().mockResolvedValue([]),
-    listRecentWelcomes: vi.fn().mockResolvedValue([]),
-    listRecentCardShares: vi.fn().mockResolvedValue([]),
-    listRecentAppliedSuggestions: vi.fn().mockResolvedValue([]),
-    recordCardShare: vi.fn().mockResolvedValue('recorded'),
-    ...overrides,
-  };
+function feedRepo(pages: ActivityItem[][]) {
+  let call = 0;
+  const listFeed = vi.fn(
+    async (
+      _limit: number,
+      _before?: ActivityCursor,
+      _exclude?: string,
+    ): Promise<ActivityItem[]> => {
+      const page = pages[Math.min(call, pages.length - 1)];
+      call += 1;
+      return page;
+    },
+  );
+  return { listFeed };
 }
 
-describe('ListActivityUseCase - sensor blocklist', () => {
-  it('sensor komentar, buang search-miss kena blocklist, sertakan share + usulan', async () => {
-    const repo = emptyRepo({
-      listRecentComments: vi.fn().mockResolvedValue([
-        { ...item('comment', 'c1', '2026-09-28T11:00:00.000Z'), body: 'dasar bodoh kau' },
-      ]),
-      listRecentVisibleSearchMisses: vi.fn().mockResolvedValue([
-        { ...item('search_miss', 's1', '2026-09-28T10:00:00.000Z'), body: 'Mencari "bodoh"' },
-        { ...item('search_miss', 's2', '2026-09-28T09:00:00.000Z'), body: 'Mencari "pinggan"' },
-      ]),
-      listRecentCardShares: vi.fn().mockResolvedValue([
-        item('card_share', 'k1', '2026-09-28T08:00:00.000Z'),
-      ]),
-      listRecentAppliedSuggestions: vi.fn().mockResolvedValue([
-        item('suggestion', 'g1', '2026-09-28T07:00:00.000Z'),
-      ]),
-    });
-    const blocklist = { listAllActiveWords: vi.fn().mockResolvedValue(['bodoh']) };
-    const page = await new ListActivityUseCase(repo, blocklist).execute({ limit: 20 });
-    expect(page.items.map((i) => i.id)).toEqual([
-      'comment:c1',
-      'search_miss:s2',
-      'card_share:k1',
-      'suggestion:g1',
-    ]);
-    expect(page.items[0].body).not.toContain('bodoh');
+describe('ListActivityUseCase - feed dari activity_events', () => {
+  it('kembalikan halaman + cursor dari event feed repo', async () => {
+    const items = Array.from({ length: 3 }, (_, i) =>
+      item('word', `w${i}`, `2026-09-28T11:0${i}:00.000Z`),
+    );
+    const repo = feedRepo([items]);
+    const page = await new ListActivityUseCase(repo).execute({ limit: 2 });
+    expect(page.items.map((i) => i.id)).toEqual(['word:w0', 'word:w1']);
+    expect(page.hasMore).toBe(true);
+    expect(page.nextCursor).toBe(
+      encodeActivityCursor({
+        createdAt: new Date('2026-09-28T11:01:00.000Z'),
+        id: 'word:w1',
+      }),
+    );
+    expect(repo.listFeed).toHaveBeenCalledWith(3, undefined, undefined);
   });
-});
 
-describe('ListActivityUseCase', () => {
-  it('menggabungkan semua sumber lalu cap', async () => {
-    const repo = emptyRepo({
-      listRecentWords: vi.fn().mockResolvedValue([
-        item('word', 'w1', '2026-09-28T10:00:00.000Z'),
-      ]),
-      listRecentComments: vi.fn().mockResolvedValue([
-        item('comment', 'c1', '2026-09-28T11:00:00.000Z'),
-      ]),
-      listRecentVotes: vi.fn().mockResolvedValue([
-        item('vote', 'v1', '2026-09-28T12:00:00.000Z'),
-      ]),
-      listRecentApprovedContributions: vi.fn().mockResolvedValue([
-        item('word_image', 'i1', '2026-09-28T09:00:00.000Z'),
-      ]),
-      listRecentVisibleSearchMisses: vi.fn().mockResolvedValue([
-        {
-          ...item('search_miss', 's1', '2026-09-28T08:00:00.000Z'),
-          actor: null,
-        },
-      ]),
-      listRecentWelcomes: vi.fn().mockResolvedValue([
-        item('welcome', 'u1', '2026-09-28T07:00:00.000Z'),
-      ]),
-    });
-
-    const useCase = new ListActivityUseCase(repo);
-    const page = await useCase.execute({ limit: 20 });
-
-    expect(page.items.map((r) => r.kind)).toEqual([
-      'vote',
-      'comment',
-      'word',
-      'word_image',
-      'search_miss',
-      'welcome',
-    ]);
+  it('halaman terakhir: hasMore false, cursor null', async () => {
+    const items = [item('comment', 'c1', '2026-09-28T11:00:00.000Z')];
+    const page = await new ListActivityUseCase(feedRepo([items])).execute({ limit: 20 });
     expect(page.hasMore).toBe(false);
     expect(page.nextCursor).toBeNull();
-    expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined, undefined);
-    expect(repo.listRecentApprovedContributions).toHaveBeenCalled();
-    expect(repo.listRecentWelcomes).toHaveBeenCalled();
   });
 
-  it('cursor rusak → ValidationError', async () => {
-    const useCase = new ListActivityUseCase(emptyRepo());
-    await expect(useCase.execute({ limit: 20, cursor: 'bukan-cursor' })).rejects.toBeInstanceOf(
-      ValidationError,
-    );
-  });
-
-  it('halaman berikutnya meneruskan before ke repo', async () => {
+  it('cursor lanjut ke halaman berikutnya (keyset diteruskan)', async () => {
+    const items = [
+      item('vote', 'v1', '2026-09-28T10:00:00.000Z'),
+      item('vote', 'v2', '2026-09-28T09:00:00.000Z'),
+    ];
+    const repo = feedRepo([items]);
     const cursor = encodeActivityCursor({
-      createdAt: new Date('2026-09-28T12:00:00.000Z'),
-      id: 'vote:v1',
+      createdAt: new Date('2026-09-28T11:00:00.000Z'),
+      id: 'word:w0',
     });
-    const repo = emptyRepo({
-      listRecentVotes: vi.fn().mockResolvedValue([
-        item('vote', 'v0', '2026-09-28T11:00:00.000Z'),
-      ]),
-    });
-    const useCase = new ListActivityUseCase(repo);
-    const page = await useCase.execute({ limit: 20, cursor });
-
-    expect(page.items).toHaveLength(1);
-    expect(page.items[0].id).toBe('vote:v0');
-    expect(repo.listRecentVotes).toHaveBeenCalledWith(
-      8,
-      expect.objectContaining({
-        id: 'vote:v1',
-        createdAt: expect.any(Date),
-      }),
-      undefined,
-    );
+    await new ListActivityUseCase(repo).execute({ limit: 2, cursor });
+    const [limit, before, exclude] = repo.listFeed.mock.calls[0];
+    expect(limit).toBe(3);
+    expect(before?.createdAt).toEqual(new Date('2026-09-28T11:00:00.000Z'));
+    expect(exclude).toBeUndefined();
   });
 
-  it('has_more + next_cursor saat pool melebihi limit', async () => {
-    const votes = Array.from({ length: 4 }, (_, i) =>
-      item('vote', `v${i}`, `2026-09-28T${String(20 - i).padStart(2, '0')}:00:00.000Z`),
-    );
-    const comments = Array.from({ length: 4 }, (_, i) =>
-      item(
-        'comment',
-        `c${i}`,
-        `2026-09-28T${String(15 - i).padStart(2, '0')}:00:00.000Z`,
-      ),
-    );
-    const repo = emptyRepo({
-      listRecentVotes: vi.fn().mockResolvedValue(votes),
-      listRecentComments: vi.fn().mockResolvedValue(comments),
-    });
-    const useCase = new ListActivityUseCase(repo);
-    const page = await useCase.execute({ limit: 5 });
-
-    expect(page.items).toHaveLength(5);
-    expect(page.hasMore).toBe(true);
-    expect(page.nextCursor).toBeTruthy();
-  });
-});
-
-describe('ListActivityUseCase - excludeUserId diteruskan ke semua sumber', () => {
-  it('meneruskan excludeUserId ke 8 sumber yang punya kolom user', async () => {
-    const repo = emptyRepo();
-    await new ListActivityUseCase(repo).execute({
-      limit: 20,
-      excludeUserId: '01SELF',
-    });
-
-    expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined, '01SELF');
-    expect(repo.listRecentComments).toHaveBeenCalledWith(8, undefined, '01SELF');
-    expect(repo.listRecentVotes).toHaveBeenCalledWith(8, undefined, '01SELF');
-    expect(repo.listRecentDiscussions).toHaveBeenCalledWith(8, undefined, '01SELF');
-    expect(repo.listRecentWelcomes).toHaveBeenCalledWith(8, undefined, '01SELF');
-    expect(repo.listRecentCardShares).toHaveBeenCalledWith(8, undefined, '01SELF');
-    expect(repo.listRecentAppliedSuggestions).toHaveBeenCalledWith(
-      8,
-      undefined,
-      '01SELF',
-    );
-    expect(repo.listRecentApprovedContributions).toHaveBeenCalledWith(
-      expect.any(Array),
-      expect.any(Number),
-      undefined,
-      '01SELF',
-    );
+  it('excludeUserId diteruskan ke repo', async () => {
+    const repo = feedRepo([[]]);
+    await new ListActivityUseCase(repo).execute({ limit: 20, excludeUserId: 'u1' });
+    expect(repo.listFeed).toHaveBeenCalledWith(21, undefined, 'u1');
   });
 
-  it('search-miss ikut menerima excludeUserId (sembunyikan miss yang dicari sendiri)', async () => {
-    const repo = emptyRepo();
-    await new ListActivityUseCase(repo).execute({
-      limit: 20,
-      excludeUserId: '01SELF',
-    });
-
-    expect(repo.listRecentVisibleSearchMisses).toHaveBeenCalledWith(
-      8,
-      undefined,
-      '01SELF',
-    );
-  });
-
-  it('tanpa excludeUserId → undefined di semua sumber (feed publik utuh)', async () => {
-    const repo = emptyRepo();
-    await new ListActivityUseCase(repo).execute({ limit: 20 });
-
-    expect(repo.listRecentWords).toHaveBeenCalledWith(8, undefined, undefined);
-    expect(repo.listRecentComments).toHaveBeenCalledWith(8, undefined, undefined);
-    expect(repo.listRecentWelcomes).toHaveBeenCalledWith(8, undefined, undefined);
-    // Search-miss tanpa flag harus tetap feed publik penuh - searcher yang
-    // tercatat tidak boleh membuat miss hilang untuk semua orang.
-    expect(repo.listRecentVisibleSearchMisses).toHaveBeenCalledWith(
-      8,
-      undefined,
-      undefined,
-    );
+  it('cursor rusak -> ValidationError', async () => {
+    await expect(
+      new ListActivityUseCase(feedRepo([[]])).execute({ cursor: 'bukan-base64-json' }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 });

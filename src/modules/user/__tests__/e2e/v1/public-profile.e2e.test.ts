@@ -131,6 +131,47 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
         value: 1,
       });
     }
+
+    // Timeline profil baca activity_events (#86): seed event untuk fixture
+    // yang di-insert langsung ke tabel sumber (backfill mini ala produksi).
+    const { activityEvents } = await import('@/shared/database/drizzle/schema');
+    await db.insert(activityEvents).values([
+      {
+        kind: 'contribution_example',
+        actorId: contributorId,
+        targetWordId: wordId,
+        targetId: contributionId,
+        occurredAt: new Date(),
+        dedupeKey: `contribution:${contributionId}`,
+      },
+      {
+        kind: 'word_verified',
+        actorId: reviewerId,
+        targetWordId: wordId,
+        targetId: wordId,
+        occurredAt: new Date(),
+        dedupeKey: `word_verified:${wordId}`,
+      },
+      {
+        kind: 'vote_word',
+        actorId: contributorId,
+        targetWordId: wordId,
+        targetId: wordId,
+        occurredAt: new Date(),
+        dedupeKey: `vote:${contributorId}:word:${wordId}`,
+      },
+      ...Array.from({ length: 3 }, (_, i) => {
+        const wId = ulid26(`01E2EWORD${stamp}V${i + 1}`);
+        return {
+          kind: 'vote_word',
+          actorId: contributorId,
+          targetWordId: wId,
+          targetId: wId,
+          occurredAt: new Date(),
+          dedupeKey: `vote:${contributorId}:word:${wId}`,
+        };
+      }),
+    ]);
   });
 
   it('GET /api/v1/users/anonim → 200, is_verifier false, stats 0', async () => {

@@ -1,53 +1,18 @@
 import { ValidationError } from '@/shared/errors/app-error';
-import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
-import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import type { ActivityItem } from '../../domain/entities/activity-item.entity';
-import type { ActivityRepository } from '../../domain/repositories/activity.repository';
 import {
   ACTIVITY_DEFAULT_LIMIT,
-  ACTIVITY_PER_SOURCE,
   decodeActivityCursor,
   encodeActivityCursor,
-  mergeActivityFeed,
   type ActivityCursor,
 } from '../../domain/merge-activity';
-
-const CONTRIB_ENTITY_TYPES = [
-  'word_image',
-  'word_audio',
-  'pronunciation',
-  'example',
-] as const;
-
-/** Kind dengan teks bebas user di body: disensor saat dibaca. */
-const FREE_TEXT_KINDS = new Set(['comment', 'discussion']);
+import type { ActivityEventFeedRepositoryImpl } from '../../infrastructure/activity-event-feed.repository.impl';
 
 export type ListActivityPage = {
   items: ActivityItem[];
   nextCursor: string | null;
   hasMore: boolean;
 };
-
-/**
- * Sensor ulang saat baca: menutup data lama + kata blocklist yang baru ditambah.
- * Search-miss yang kena blocklist dibuang (term = seluruh isi baris).
- */
-export function censorFeedItems(items: ActivityItem[], blocked: string[]): ActivityItem[] {
-  if (blocked.length === 0) return items;
-  const out: ActivityItem[] = [];
-  for (const item of items) {
-    if (item.kind === 'search_miss') {
-      if (applyBlocklistFilter(item.body, blocked) === item.body) out.push(item);
-      continue;
-    }
-    out.push(
-      FREE_TEXT_KINDS.has(item.kind)
-        ? { ...item, body: applyBlocklistFilter(item.body, blocked) }
-        : item,
-    );
-  }
-  return out;
-}
 
 export type ListActivityInput = {
   limit?: number;
@@ -58,8 +23,7 @@ export type ListActivityInput = {
 
 export class ListActivityUseCase {
   constructor(
-    private readonly activityRepo: ActivityRepository,
-    private readonly blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>,
+    private readonly eventFeedRepo: Pick<ActivityEventFeedRepositoryImpl, 'listFeed'>,
   ) {}
 
   async execute(input: ListActivityInput): Promise<ListActivityPage> {
@@ -76,44 +40,19 @@ export class ListActivityUseCase {
       }
     }
 
-    const perSource = ACTIVITY_PER_SOURCE;
+    // Sumber: activity_events (write-through log) - satu query menggantikan
+    // agregasi 11 sumber (#86). Logika merge/censor/blocklist feed lama tidak
+    // diperlukan lagi: visibility dicek read-time di repo event.
+    const items = await this.eventFeedRepo.listFeed(limit + 1, before, excludeUserId);
 
-    const [sources, blocked] = await Promise.all([
-      Promise.all([
-        this.activityRepo.listRecentWords(perSource, before, excludeUserId),
-        this.activityRepo.listRecentComments(perSource, before, excludeUserId),
-        this.activityRepo.listRecentVotes(perSource, before, excludeUserId),
-        this.activityRepo.listRecentDiscussions(perSource, before, excludeUserId),
-        this.activityRepo.listRecentApprovedContributions(
-          [...CONTRIB_ENTITY_TYPES],
-          perSource * CONTRIB_ENTITY_TYPES.length,
-          before,
-          excludeUserId,
-        ),
-        // Tanpa penyaringan blocklist, tapi tetap sertakan excludeUserId: miss
-        // yang pernah dicari viewer sendiri disembunyikan juga.
-        this.activityRepo.listRecentVisibleSearchMisses(perSource, before, excludeUserId),
-        this.activityRepo.listRecentWelcomes(perSource, before, excludeUserId),
-        this.activityRepo.listRecentCardShares(perSource, before, excludeUserId),
-        this.activityRepo.listRecentAppliedSuggestions(perSource, before, excludeUserId),
-      ]),
-      this.blocklist?.listAllActiveWords() ?? Promise.resolve([] as string[]),
-    ]);
-
-    // Sensor sebelum merge: search-miss yang dibuang tidak ikut memakan slot.
-    const merged = mergeActivityFeed(censorFeedItems(sources.flat(), blocked), {
-      limit: limit + 1,
-      before,
-    });
-
-    const hasMore = merged.length > limit;
-    const items = hasMore ? merged.slice(0, limit) : merged;
-    const last = items[items.length - 1];
+    const hasMore = items.length > limit;
+    const page = hasMore ? items.slice(0, limit) : items;
+    const last = page[page.length - 1];
     const nextCursor =
       hasMore && last
         ? encodeActivityCursor({ createdAt: last.createdAt, id: last.id })
         : null;
 
-    return { items, nextCursor, hasMore };
+    return { items: page, nextCursor, hasMore };
   }
 }

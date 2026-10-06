@@ -1,6 +1,7 @@
-import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
-import { activityEvents, users, words } from '@/shared/database/drizzle/schema';
+import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { activityEvents, searchMisses, users, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
+import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
 import {
   publicAccountDisplayName,
@@ -66,6 +67,22 @@ function quoted(s: string): string {
   return `"${s}"`;
 }
 
+/**
+ * Cursor profil = id event (ULID). ULID monoton naik dengan waktu, jadi
+ * id-desc == occurred_at-desc; keyset tuple (waktu, id) tetap benar dengan
+ * waktu yang didekode dari 10 karakter pertama ULID (Crockford base32).
+ */
+const ULID_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function cursorFromEventId(id: string): { id: string; createdAt: Date } {
+  let ms = 0;
+  for (const c of id.slice(0, 10)) {
+    const v = ULID_ALPHABET.indexOf(c);
+    if (v < 0) return { id, createdAt: new Date(0) };
+    ms = ms * 32 + v;
+  }
+  return { id, createdAt: new Date(ms) };
+}
+
 export class ActivityEventFeedRepositoryImpl {
   constructor(private readonly db: AppDatabase) {}
 
@@ -87,6 +104,121 @@ export class ActivityEventFeedRepositoryImpl {
   ): Promise<ActivityItem[]> {
     const rows = await this.selectVisible(limit, before, undefined, actorId);
     return this.buildItems(rows);
+  }
+
+  /**
+   * Timeline profil publik dalam bentuk PublicActivityItem (19-api-profil-publik).
+   * Kategori profil dipetakan dari kind event:
+   * - contribution: contribution_* + word_created + suggestion_applied (pengusul)
+   * - comment: comment_created
+   * - verification: word_verified + suggestion_selfapply
+   * - vote: vote_*
+   * Cursor = id event (ULID monoton turun) - kontrak lama pakai id sumber,
+   * keduanya opaque bagi klien.
+   */
+  async listPublicByActor(
+    actorId: string,
+    category: 'contribution' | 'comment' | 'verification' | 'vote',
+    limit: number,
+    cursor?: string,
+  ): Promise<{ items: PublicActivityItem[]; nextCursor: string | null; hasMore: boolean }> {
+    const kindSets: Record<typeof category, ActivityEventKind[]> = {
+      contribution: [
+        'word_created',
+        'contribution_image',
+        'contribution_audio',
+        'contribution_pron',
+        'contribution_example',
+        'suggestion_applied',
+      ],
+      comment: ['comment_created'],
+      verification: ['word_verified', 'suggestion_selfapply'],
+      vote: ['vote_word', 'vote_comment'],
+    };
+    const rows = await this.selectVisible(
+      limit + 1,
+      cursor ? cursorFromEventId(cursor) : undefined,
+      undefined,
+      actorId,
+      kindSets[category],
+    );
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const items: PublicActivityItem[] = [];
+    for (const row of page) {
+      const kind = row.kind as ActivityEventKind;
+      const word = row.targetWordId ? await this.resolveWord(row.targetWordId) : null;
+      const lemma = word?.lemma ?? null;
+      // Arah vote dibaca read-time dari tabel votes (mobile membaca arah
+      // dari akhiran summary, kontrak feed lama). targetId event = entityId
+      // target (wordId / commentId), bukan id baris votes.
+      let voteValue: number | null = null;
+      if ((kind === 'vote_word' || kind === 'vote_comment') && row.targetId) {
+        const [v] = await this.db
+          .select({ value: votes.value })
+          .from(votes)
+          .where(
+            and(
+              eq(votes.userId, actorId),
+              eq(votes.entityType, kind === 'vote_word' ? 'word' : 'comment'),
+              eq(votes.entityId, row.targetId),
+            ),
+          )
+          .limit(1);
+        voteValue = v?.value ?? null;
+      }
+      items.push({
+        id: row.id,
+        kind: category,
+        occurredAt: row.occurredAt,
+        wordId: word?.id ?? null,
+        lemma,
+        summary: this.publicSummary(kind, lemma, row.targetId, voteValue),
+      });
+    }
+    return {
+      items,
+      nextCursor: hasMore && page[page.length - 1] ? page[page.length - 1]!.id : null,
+      hasMore,
+    };
+  }
+
+  /** Wording timeline profil: aksi berimbuhan tanpa subjek (docs 23/19). */
+  private publicSummary(
+    kind: ActivityEventKind,
+    lemma: string | null,
+    targetId: string | null,
+    voteValue: number | null = null,
+  ): string {
+    const q = lemma ? `"${lemma}"` : '';
+    switch (kind) {
+      case 'word_created':
+        return `Menambahkan kata ${q}`.trim();
+      case 'contribution_image':
+        return `Menambahkan foto ${q}`.trim();
+      case 'contribution_audio':
+        return `Menambahkan rekaman suara ${q}`.trim();
+      case 'contribution_pron':
+        return `Menambahkan cara baca ${q}`.trim();
+      case 'contribution_example':
+        return `Menambahkan contoh kalimat ${q}`.trim();
+      case 'suggestion_applied':
+        return `Usulan perubahan diterima ${q}`.trim();
+      case 'suggestion_selfapply':
+        return `Melengkapi kata ${q}`.trim();
+      case 'comment_created':
+        return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
+      case 'word_verified':
+        return `Memverifikasi kata ${q}`.trim();
+      case 'vote_word':
+      case 'vote_comment':
+        // Kontrak feed lama: akhiran summary = arah vote (mobile parse ini).
+        return voteValue === null || voteValue >= 0
+          ? `${q} sudah pas`.trim()
+          : `${q} perlu dicek ulang`.trim();
+      default:
+        return lemma ?? '';
+    }
   }
 
   // ---------------------------------------------------------------- select --
@@ -120,24 +252,23 @@ export class ActivityEventFeedRepositoryImpl {
     before?: ActivityCursor,
     excludeUserId?: string,
     actorId?: string,
+    kinds?: ActivityEventKind[],
   ) {
     const occurredAt = activityEvents.occurredAt;
     const conds = this.baseConditions(excludeUserId, actorId);
+    if (kinds && kinds.length > 0) {
+      conds.push(inArray(activityEvents.kind, kinds));
+    }
 
     if (before) {
       const beforeSeconds = Math.floor(before.createdAt.getTime() / 1000);
       const colon = before.id.indexOf(':');
-      const kind = colon >= 0 ? before.id.slice(0, colon) : '';
       const entityId = colon >= 0 ? before.id.slice(colon + 1) : before.id;
-      // Id event sudah `wirekind:ulid` - tapi keyset lama memakai id sumber;
-      // aman: bandingkan hanya waktu (id event ULID monoton, tiebreak id).
-      if (kind && entityId) {
-        conds.push(
-          sql`(${occurredAt}, ${activityEvents.id}) < (${beforeSeconds}, ${entityId})`,
-        );
-      } else {
-        conds.push(sql`${occurredAt} < ${beforeSeconds}`);
-      }
+      // Keyset tuple (occurred_at, id). Id event ULID monoton: detik sama ->
+      // tiebreak id tetap benar (profil cursor = ULID polos, wire = kind:ulid).
+      conds.push(
+        sql`(${occurredAt}, ${activityEvents.id}) < (${beforeSeconds}, ${entityId})`,
+      );
     }
 
     const rows = await this.db
@@ -199,7 +330,17 @@ export class ActivityEventFeedRepositoryImpl {
     const kind = row.kind as ActivityEventKind;
     const actor = await this.resolveActor(row.actorId);
     const word = row.targetWordId ? await this.resolveWord(row.targetWordId) : null;
-    const lemma = word?.lemma ?? null;
+    let lemma = word?.lemma ?? null;
+
+    // search_miss: lemma tidak ada; body pakai term aslinya.
+    if (kind === 'search_miss' && row.targetId) {
+      const [miss] = await this.db
+        .select({ term: searchMisses.term })
+        .from(searchMisses)
+        .where(eq(searchMisses.id, row.targetId))
+        .limit(1);
+      lemma = miss?.term ?? null;
+    }
 
     const body = this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
@@ -263,6 +404,8 @@ export class ActivityEventFeedRepositoryImpl {
         return lemma ? `Melengkapi kata · ${quoted(lemma)}` : 'Melengkapi kata';
       case 'card_shared':
         return lemma ? `Membagikan kartu · ${quoted(lemma)}` : 'Membagikan kartu';
+      case 'search_miss':
+        return lemma ? `Mencari "${lemma}" - belum ada di kamus.` : 'Mencari - belum ada di kamus.';
       case 'user_joined':
         return 'Bergabung di SambasKu';
       case 'contribution_image':
@@ -282,6 +425,8 @@ export class ActivityEventFeedRepositoryImpl {
       case 'word_verified':
       case 'suggestion_selfapply':
         return 'Verifikasi';
+      case 'user_joined':
+        return 'Selamat datang';
       default:
         return lemma;
     }

@@ -3,6 +3,7 @@ import type { AppDatabase } from './client';
 import { ensureTestDbReady } from './test-client';
 import {
   accountDeletionTokens,
+  activityEvents,
   apiClients,
   appSettings,
   auditLogs,
@@ -244,6 +245,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     ugcAnonAbuseEvents,
     ugcAnonMutes,
     databaseBackupLogs,
+    // Event feed publik (FK actor_id) - sebelum users
+    activityEvents,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,

@@ -25,6 +25,8 @@ import type {
   SuggestionReasonCode,
 } from '../domain/entities/word-suggestion.entity';
 import { NotFoundError, ForbiddenError, BadRequestError, ConflictError } from '@/shared/errors/app-error';
+import { ActivityEventRepositoryImpl } from '@/modules/activity/infrastructure/activity-event.repository.impl';
+import type { AppendActivityEventInput } from '@/modules/activity/domain/entities/activity-event.entity';
 import { verifyProposedChanges } from '../application/utils/verify-proposed-changes';
 import { isRevertibleForApplyPending } from '../application/utils/suggestion-category-shape';
 import {
@@ -509,6 +511,21 @@ function asProposed(raw: unknown): ProposedChanges {
 }
 
 export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
+  /** Event log feed (write-through, AGENTS.md #25). Best-effort. */
+  private events = new ActivityEventRepositoryImpl(db);
+
+  private async emitEvent(input: AppendActivityEventInput): Promise<void> {
+    try {
+      await this.events.append(input);
+    } catch (err) {
+      console.error('[activity-event] word-suggestion append gagal (diabaikan):', {
+        kind: input.kind,
+        targetId: input.targetId,
+        err: err instanceof Error ? err.message : err,
+      });
+    }
+  }
+
   constructor(
     private readonly publicImageStorage: PublicImageStoragePort,
     private readonly imageStorage: ImageStoragePort,
@@ -634,15 +651,33 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         });
         await applyChangesToWord(suggestion.id, userId, 'approve', undefined, prepared);
         // applyChangesToWord tidak set is_verified; verifikator = self-review (Section 22 parity).
-        await db
-          .update(words)
-          .set({
-            isVerified: true,
-            verifiedBy: userId,
-            verifiedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(words.id, wordId));
+        // Event feed: aksi "Lengkapi kata" verifikator (#86) + verifikasi bila
+        // kata memang belum verified (stamp asli dipertahankan bila sudah ada).
+        await this.emitEvent({
+          kind: 'suggestion_selfapply',
+          actorId: userId,
+          targetWordId: wordId,
+          targetId: suggestion.id,
+          dedupeKey: `suggestion:${suggestion.id}`,
+        });
+        if (!word.isVerified) {
+          await db
+            .update(words)
+            .set({
+              isVerified: true,
+              verifiedBy: userId,
+              verifiedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(words.id, wordId));
+          await this.emitEvent({
+            kind: 'word_verified',
+            actorId: userId,
+            targetWordId: wordId,
+            targetId: wordId,
+            dedupeKey: `word_verified:${wordId}`,
+          });
+        }
         finalStatus = 'approved';
         reviewedBy = userId;
         reviewedAt = new Date();
@@ -917,6 +952,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         status: wordEditSuggestions.status,
         baselineSnapshot: wordEditSuggestions.baselineSnapshot,
         proposedChanges: wordEditSuggestions.proposedChanges,
+        proposerId: wordEditSuggestions.userId,
       })
       .from(wordEditSuggestions)
       .where(and(eq(wordEditSuggestions.id, id), isNull(wordEditSuggestions.deletedAt)))
@@ -932,19 +968,37 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         imageOpts,
       );
       const [word] = await db
-        .select({ lemma: words.lemma })
+        .select({ lemma: words.lemma, isVerified: words.isVerified })
         .from(words)
         .where(eq(words.id, row.wordId))
         .limit(1);
-      await db
-        .update(words)
-        .set({
-          isVerified: true,
-          verifiedBy: reviewerId,
-          verifiedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(words.id, row.wordId));
+      // Guard preserve (#86): jangan timpa stamp verifikasi yang sudah ada.
+      if (!word?.isVerified) {
+        await db
+          .update(words)
+          .set({
+            isVerified: true,
+            verifiedBy: reviewerId,
+            verifiedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(words.id, row.wordId));
+      }
+      // Event feed: pengusul (usulannya diterima) + verifikator.
+      await this.emitEvent({
+        kind: 'suggestion_applied',
+        actorId: row.proposerId ?? undefined,
+        targetWordId: row.wordId,
+        targetId: id,
+        dedupeKey: `suggestion:${id}`,
+      });
+      await this.emitEvent({
+        kind: 'word_verified',
+        actorId: reviewerId,
+        targetWordId: row.wordId,
+        targetId: row.wordId,
+        dedupeKey: `word_verified:${row.wordId}`,
+      });
       await db
         .update(wordEditSuggestions)
         .set({
@@ -969,7 +1023,23 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       decisions: imageOpts?.decisions,
       censoredFiles: imageOpts?.censoredFiles,
     });
-    return applyChangesToWord(id, reviewerId, 'approve', comment, prepared);
+    const result = await applyChangesToWord(id, reviewerId, 'approve', comment, prepared);
+    // Event feed: usulan diterima (pengusul) + verifikasi kata (reviewer).
+    await this.emitEvent({
+      kind: 'suggestion_applied',
+      actorId: row.proposerId ?? undefined,
+      targetWordId: row.wordId,
+      targetId: id,
+      dedupeKey: `suggestion:${id}`,
+    });
+    await this.emitEvent({
+      kind: 'word_verified',
+      actorId: reviewerId,
+      targetWordId: row.wordId,
+      targetId: row.wordId,
+      dedupeKey: `word_verified:${row.wordId}`,
+    });
+    return result;
   }
 
   async rejectSuggestion(id: string, reviewerId: string, comment: string): Promise<boolean> {
