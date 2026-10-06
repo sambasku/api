@@ -1,6 +1,7 @@
 import type { MailerPort } from '../application/ports/mailer.port';
 import { QuotaAwareMailer } from '@/modules/email/infrastructure/quota-aware-mailer';
 import { ResendEmailSender } from '@/modules/email/infrastructure/resend-email.sender';
+import { SmtpMailerService } from './smtp-mailer.service';
 
 // Interface deps dibuat opsional biar pemanggil lama (app.ts) tak berubah;
 // repositori email wajib ada supaya quota+log jalan di SEMUA tier.
@@ -20,10 +21,13 @@ export interface CreateMailerEmailDeps {
  */
 export function createMailer(emailDeps?: CreateMailerEmailDeps): MailerPort {
   if (emailDeps) {
-    return new QuotaAwareMailer([{ sender: new ResendEmailSender() }], emailDeps.quotaRepo, emailDeps.usageRepo, emailDeps.logRepo);
+    return new QuotaAwareMailer(
+      [{ sender: new ResendEmailSender() }],
+      emailDeps.quotaRepo,
+      emailDeps.usageRepo,
+      emailDeps.logRepo,
+    );
   }
   // ponytail: jalur fallback hanya dipakai test/unit lama; production app.ts selalu kasih deps.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { SmtpMailerService } = require('./smtp-mailer.service') as typeof import('./smtp-mailer.service');
   return new SmtpMailerService();
 }
