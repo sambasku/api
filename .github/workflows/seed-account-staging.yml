@@ -40,3 +40,18 @@ jobs:
           JWT_PRIVATE_KEY: dummy
           JWT_PUBLIC_KEY: dummy
           CORS_ALLOWED_ORIGINS: https://console-sambasku-staging.iamutaki.com
+
+  notify:
+    needs: [seed]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kirim hasil CI ke Telegram
+        uses: appleboy/telegram-action@v1.1.0
+        with:
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          to: ${{ secrets.TELEGRAM_TO }}
+          message: |
+            ${{ contains(needs.*.result, 'failure') && '❌ Gagal' || (contains(needs.*.result, 'cancelled') && '⚠️ Dibatalkan' || '✅ Sukses') }} CI sambasku/api — Seed Account Staging (manual)
+            Branch: ${{ github.ref_name }} · Commit: ${{ github.sha }}
+            https://github.com/sambasku/api/actions/runs/${{ github.run_id }}

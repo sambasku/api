@@ -98,3 +98,18 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  notify:
+    needs: [test, migrate-staging, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kirim hasil CI ke Telegram
+        uses: appleboy/telegram-action@v1.1.0
+        with:
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          to: ${{ secrets.TELEGRAM_TO }}
+          message: |
+            ${{ contains(needs.*.result, 'failure') && '❌ Gagal' || (contains(needs.*.result, 'cancelled') && '⚠️ Dibatalkan' || '✅ Sukses') }} CI sambasku/api — Deploy Staging (Cloudflare Workers)
+            Branch: ${{ github.ref_name }} · Commit: ${{ github.sha }}
+            https://github.com/sambasku/api/actions/runs/${{ github.run_id }}

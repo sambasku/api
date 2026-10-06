@@ -105,3 +105,18 @@ jobs:
         run: |
           echo "::error::Ping Supabase production gagal (HTTP ${{ steps.ping.outputs.http_status }}). Kalau project di-pause, unpause dari dashboard."
           exit 1
+
+  notify:
+    needs: [ping]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kirim hasil CI ke Telegram
+        uses: appleboy/telegram-action@v1.1.0
+        with:
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          to: ${{ secrets.TELEGRAM_TO }}
+          message: |
+            ${{ contains(needs.*.result, 'failure') && '❌ Gagal' || (contains(needs.*.result, 'cancelled') && '⚠️ Dibatalkan' || '✅ Sukses') }} CI sambasku/api — Supabase Keep-Alive (production)
+            Branch: ${{ github.ref_name }} · Commit: ${{ github.sha }}
+            https://github.com/sambasku/api/actions/runs/${{ github.run_id }}
