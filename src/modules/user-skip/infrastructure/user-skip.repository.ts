@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { userSkips } from '@/shared/database/drizzle/schema';
 
-export type UserSkipTargetType = 'word' | 'contribution';
+export type UserSkipTargetType = 'word' | 'contribution' | 'search_miss';
 
 /** Catatan skip per user. POST ulang tidak menambah baris (unik). */
 export class UserSkipRepository {

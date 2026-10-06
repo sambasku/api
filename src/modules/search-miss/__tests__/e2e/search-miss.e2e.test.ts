@@ -261,6 +261,48 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
     expect((await get('/api/v1/admin/search-misses')).status).toBe(401);
   });
 
+  it('skip (pass) per user: hilang dari panel user itu, tetap terlihat user lain', async () => {
+    await get('/api/v1/words/search?q=skipq');
+    const panel = await get('/api/v1/admin/search-misses', adminToken);
+    const item = ((await panel.json()).data as { id: string; term: string }[]).find(
+      (m) => m.term === 'skipq',
+    );
+    expect(item).toBeTruthy();
+
+    // Admin A skip → idempotent, tanpa token → 401
+    expect((await post(`/api/v1/admin/search-misses/${item!.id}/skip`, {}, adminToken)).status).toBe(200);
+    expect((await post(`/api/v1/admin/search-misses/${item!.id}/skip`, {}, adminToken)).status).toBe(200);
+    expect((await post(`/api/v1/admin/search-misses/${item!.id}/skip`, {})).status).toBe(401);
+    const bogus = await post(`/api/v1/admin/search-misses/${ulid26('01E2ESKIPGACAK')}/skip`, {}, adminToken);
+    expect(bogus.status).toBe(404);
+
+    // Panel admin A: miss tidak muncul lagi (kecuali di-skip user lain)
+    const panelA = await get('/api/v1/admin/search-misses', adminToken);
+    const termsA = ((await panelA.json()).data as { term: string }[]).map((m) => m.term);
+    expect(termsA).not.toContain('skipq');
+
+    // Reviewer B (role lain) masih melihat miss yang sama
+    const stamp = Date.now();
+    await post('/api/v1/auth/register', e2eRegisterBody({
+      name: `rvw${stamp}`,
+      email: `rvw${stamp}@test.com`,
+    }));
+    await post('/api/v1/auth/verify-email', {
+      email: `rvw${stamp}@test.com`,
+      code: capturedOtpDisplayCode(),
+    });
+    const db = (await import('@/shared/database/drizzle/test-client')).getTestDb();
+    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
+    const [rvwUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, `rvw${stamp}@test.com`)).limit(1);
+    if (rvwUser) await db.insert(userRoles).values({ userId: rvwUser.id, role: 'reviewer' }).onConflictDoNothing();
+    const reviewerToken = (
+      (await (await post('/api/v1/auth/login', { email: `rvw${stamp}@test.com`, password: 'Password123' })).json()).data
+    ).access_token;
+    const panelB = await get('/api/v1/admin/search-misses', reviewerToken);
+    const termsB = ((await panelB.json()).data as { term: string }[]).map((m) => m.term);
+    expect(termsB).toContain('skipq');
+  });
+
   it('resolve as variant → miss fulfilled tanpa buat lemma baru', async () => {
     const create = await post(
       '/api/v1/admin/words',

@@ -13,7 +13,7 @@ export const userSkips = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
-    // 'word' | 'contribution'
+    // 'word' | 'contribution' | 'search_miss'
     targetType: text('target_type').notNull(),
     targetId: text('target_id').notNull(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),

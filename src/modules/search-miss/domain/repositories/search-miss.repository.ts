@@ -9,6 +9,11 @@ export interface SearchMissListFilter {
   fulfilled?: boolean;
   /** admin only - filter gate tayang (14-api) */
   visible?: boolean;
+  /**
+   * admin only - exclude miss yang pernah di-skip user ini (panel kartu #88).
+   * Skip bersifat per-user: tidak menyembunyikan miss dari verifikator lain.
+   */
+  skipByUserId?: string;
   limit: number;
   cursor?: string;
 }
