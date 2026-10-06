@@ -155,11 +155,18 @@ export class ActivityEventFeedRepositoryImpl {
       const kind = row.kind as ActivityEventKind;
       const word = row.targetWordId ? await this.resolveWord(row.targetWordId) : null;
       const lemma = word?.lemma ?? null;
-      // Arah vote dibaca read-time dari tabel votes (mobile membaca arah
-      // dari akhiran summary, kontrak feed lama). targetId event = entityId
-      // target (wordId / commentId), bukan id baris votes.
+      // #94: payload beku menang (satu sumber kebenaran feed+profil). Live
+      // votes hanya fallback untuk event lama tanpa payload.
+      const frozen = row.payload?.trim() || null;
       let voteValue: number | null = null;
-      if ((kind === 'vote_word' || kind === 'vote_comment') && row.targetId) {
+      if (
+        !frozen &&
+        (kind === 'vote_word' || kind === 'vote_comment') &&
+        row.targetId
+      ) {
+        // Arah vote dibaca read-time dari tabel votes (mobile membaca arah
+        // dari akhiran summary, kontrak feed lama). targetId event = entityId
+        // target (wordId / commentId), bukan id baris votes.
         const [v] = await this.db
           .select({ value: votes.value })
           .from(votes)
@@ -179,7 +186,8 @@ export class ActivityEventFeedRepositoryImpl {
         occurredAt: row.occurredAt,
         wordId: word?.id ?? null,
         lemma,
-        summary: this.publicSummary(kind, lemma, row.targetId, voteValue),
+        summary:
+          frozen ?? this.publicSummary(kind, lemma, row.targetId, voteValue),
       });
     }
     return {
