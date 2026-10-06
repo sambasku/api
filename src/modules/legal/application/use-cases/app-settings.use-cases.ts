@@ -3,6 +3,7 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import {
   APP_SETTING_KEYS,
   type AppSettingKey,
+  type AppSettingType,
   WA_GROUP_CTA_URL_KEY,
   WA_VERIFIER_ENABLED_KEY,
 } from '../../domain/entities/app-setting.entity';
@@ -15,13 +16,17 @@ export class GetAppSettingsUseCase {
 
   async execute() {
     const rows = await this.settingsRepo.getByKeys(APP_SETTING_KEYS);
-    const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-    return APP_SETTING_KEYS.map((key) => ({
-      key,
-      value: map[key] ?? null,
-      updated_at: rows.find((r) => r.key === key)?.updatedAt?.toISOString() ?? null,
-      updated_by: rows.find((r) => r.key === key)?.updatedBy ?? null,
-    }));
+    return APP_SETTING_KEYS.map((key) => {
+      const row = rows.find((r) => r.key === key);
+      return {
+        key,
+        value: row?.value ?? null,
+        type: row?.type ?? 'string',
+        description: row?.description ?? null,
+        updated_at: row?.updatedAt?.toISOString() ?? null,
+        updated_by: row?.updatedBy ?? null,
+      };
+    });
   }
 }
 
@@ -32,7 +37,7 @@ export class UpdateAppSettingsUseCase {
   ) {}
 
   async execute(input: {
-    settings: { key: string; value: string }[];
+    settings: { key: string; value: string; type?: AppSettingType; description?: string }[];
     actorId: string;
     requestId?: string | null;
   }) {
@@ -104,7 +109,12 @@ export class UpdateAppSettingsUseCase {
     }
 
     const updated = await this.settingsRepo.upsertMany(
-      input.settings.map((s) => ({ key: s.key as AppSettingKey, value: s.value })),
+      input.settings.map((s) => ({
+        key: s.key as AppSettingKey,
+        value: s.value,
+        type: s.type,
+        description: s.description,
+      })),
       input.actorId,
     );
 

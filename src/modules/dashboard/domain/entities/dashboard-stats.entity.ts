@@ -2,7 +2,7 @@ export type WordStatusKey = 'draft' | 'pending_review' | 'published' | 'rejected
 export type ContributionStatusKey = 'pending' | 'approved' | 'rejected' | 'corrected';
 export type AppRoleKey = 'root' | 'admin' | 'editor' | 'reviewer' | 'contributor';
 
-/** Satu titik aktivitas harian (tanggal kalender WIB) - 4 series. */
+/** Satu titik aktivitas harian (tanggal kalender WIB) - 5 series. */
 export interface ActivityDailyPoint {
   /** 'YYYY-MM-DD' di zona WIB */
   date: string;
@@ -14,6 +14,8 @@ export interface ActivityDailyPoint {
   comments: number;
   /** registrasi user baru (exclude soft-deleted) */
   newUsers: number;
+  /** pencarian (hit + miss) hari itu */
+  searches: number;
 }
 
 export interface ProblemSourceCounts {

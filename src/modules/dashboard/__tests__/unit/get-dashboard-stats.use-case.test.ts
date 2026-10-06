@@ -14,7 +14,7 @@ import {
 
 function emptyDaily(): DashboardStats['activity']['dailyLast30Days'] {
   return fillDailyActivityLast30Days(
-    { contributions: [], votes: [], comments: [], newUsers: [] },
+    { contributions: [], votes: [], comments: [], newUsers: [], searches: [] },
     '2026-09-27',
   );
 }
@@ -73,6 +73,7 @@ describe('GetDashboardStatsUseCase', () => {
             votes: [{ day: '2026-09-27', count: 4 }],
             comments: [],
             newUsers: [{ day: '2026-09-26', count: 1 }],
+            searches: [{ day: '2026-09-27', count: 7 }],
           },
           '2026-09-27',
         ),
@@ -107,7 +108,12 @@ describe('GetDashboardStatsUseCase', () => {
     expect(stats.activity.dailyLast30Days).toHaveLength(30);
     expect(
       stats.activity.dailyLast30Days.every(
-        (p) => p.contributions === 0 && p.votes === 0 && p.comments === 0 && p.newUsers === 0,
+        (p) =>
+          p.contributions === 0 &&
+          p.votes === 0 &&
+          p.comments === 0 &&
+          p.newUsers === 0 &&
+          p.searches === 0,
       ),
     ).toBe(true);
   });
@@ -128,7 +134,7 @@ describe('dashboard daily activity helpers', () => {
     expect(startOfWibDayUtc('2026-09-27').toISOString()).toBe('2026-09-26T17:00:00.000Z');
   });
 
-  it('fillDailyActivityLast30Days: length 30, merge 4 series, gap = 0', () => {
+  it('fillDailyActivityLast30Days: length 30, merge 5 series, gap = 0', () => {
     const points = fillDailyActivityLast30Days(
       {
         contributions: [
@@ -138,13 +144,20 @@ describe('dashboard daily activity helpers', () => {
         votes: [{ day: '2026-09-27', count: 5 }],
         comments: [{ day: '2026-09-21', count: 2 }],
         newUsers: [{ day: '2026-09-20', count: 1 }],
+        searches: [{ day: '2026-09-27', count: 9 }],
       },
       '2026-09-27',
     );
     expect(points).toHaveLength(30);
     expect(points[0]?.date).toBe('2026-08-29');
     expect(points[29]?.date).toBe('2026-09-27');
-    expect(points[29]).toMatchObject({ contributions: 3, votes: 5, comments: 0, newUsers: 0 });
+    expect(points[29]).toMatchObject({
+      contributions: 3,
+      votes: 5,
+      comments: 0,
+      newUsers: 0,
+      searches: 9,
+    });
   });
 });
 

@@ -1,419 +1,433 @@
 {
- "version": "7",
- "dialect": "sqlite",
- "entries": [
-  {
-   "idx": 0,
-   "version": "6",
-   "when": 1790017265849,
-   "tag": "0000_init-turso",
-   "breakpoints": true
-  },
-  {
-   "idx": 1,
-   "version": "6",
-   "when": 1790100000000,
-   "tag": "0001_word-audios",
-   "breakpoints": true
-  },
-  {
-   "idx": 2,
-   "version": "6",
-   "when": 1790200000000,
-   "tag": "0002_comment-post-moderation",
-   "breakpoints": true
-  },
-  {
-   "idx": 3,
-   "version": "6",
-   "when": 1790300000000,
-   "tag": "0003_user-activity-indexes",
-   "breakpoints": true
-  },
-  {
-   "idx": 4,
-   "version": "6",
-   "when": 1790400000000,
-   "tag": "0004_comment-body-original",
-   "breakpoints": true
-  },
-  {
-   "idx": 5,
-   "version": "6",
-   "when": 1790500000000,
-   "tag": "0005_words-published-recent-idx",
-   "breakpoints": true
-  },
-  {
-   "idx": 6,
-   "version": "6",
-   "when": 1790600000000,
-   "tag": "0006_word-reports",
-   "breakpoints": true
-  },
-  {
-   "idx": 7,
-   "version": "6",
-   "when": 1790700000000,
-   "tag": "0007_public-images-avatar",
-   "breakpoints": true
-  },
-  {
-   "idx": 8,
-   "version": "6",
-   "when": 1790800000000,
-   "tag": "0008_live-unverified",
-   "breakpoints": true
-  },
-  {
-   "idx": 9,
-   "version": "6",
-   "when": 1790900000000,
-   "tag": "0009_account-deletion",
-   "breakpoints": true
-  },
-  {
-   "idx": 10,
-   "version": "6",
-   "when": 1791000000000,
-   "tag": "0010_user-display-name-bio",
-   "breakpoints": true
-  },
-  {
-   "idx": 11,
-   "version": "6",
-   "when": 1791100000000,
-   "tag": "0011_word-usage-labels",
-   "breakpoints": true
-  },
-  {
-   "idx": 12,
-   "version": "6",
-   "when": 1791200000000,
-   "tag": "0012_translation-helps",
-   "breakpoints": true
-  },
-  {
-   "idx": 13,
-   "version": "6",
-   "when": 1791300000000,
-   "tag": "0013_notification-campaigns",
-   "breakpoints": true
-  },
-  {
-   "idx": 14,
-   "version": "6",
-   "when": 1791400000000,
-   "tag": "0014_word-images-unique-per-word",
-   "breakpoints": true
-  },
-  {
-   "idx": 15,
-   "version": "6",
-   "when": 1791500000000,
-   "tag": "0015_comma-literal-flags",
-   "breakpoints": true
-  },
-  {
-   "idx": 16,
-   "version": "6",
-   "when": 1791600000000,
-   "tag": "0016_word-image-content-warnings",
-   "breakpoints": true
-  },
-  {
-   "idx": 17,
-   "version": "6",
-   "when": 1791700000000,
-   "tag": "0017_word-report-image-id",
-   "breakpoints": true
-  },
-  {
-   "idx": 18,
-   "version": "6",
-   "when": 1791800000000,
-   "tag": "0018_refresh-token-rotated-at",
-   "breakpoints": true
-  },
-  {
-   "idx": 19,
-   "version": "6",
-   "when": 1791900000000,
-   "tag": "0019_word-import-sessions",
-   "breakpoints": true
-  },
-  {
-   "idx": 20,
-   "version": "6",
-   "when": 1792000000000,
-   "tag": "0020_legal-consent-and-app-settings",
-   "breakpoints": true
-  },
-  {
-   "idx": 21,
-   "version": "6",
-   "when": 1792100000000,
-   "tag": "0021_api-clients-and-refresh-client-id",
-   "breakpoints": true
-  },
-  {
-   "idx": 22,
-   "version": "6",
-   "when": 1792200000000,
-   "tag": "0022_votes-client-id",
-   "breakpoints": true
-  },
-  {
-   "idx": 23,
-   "version": "6",
-   "when": 1792300000000,
-   "tag": "0023_drop-oauth-write-enforcement-setting",
-   "breakpoints": true
-  },
-  {
-   "idx": 24,
-   "version": "6",
-   "when": 1792400000000,
-   "tag": "0024_rename-seed-email-domain",
-   "breakpoints": true
-  },
-  {
-   "idx": 25,
-   "version": "6",
-   "when": 1792500000000,
-   "tag": "0025_review-push-cooldown",
-   "breakpoints": true
-  },
-  {
-   "idx": 26,
-   "version": "6",
-   "when": 1792600000000,
-   "tag": "0026_user-last-seen",
-   "breakpoints": true
-  },
-  {
-   "idx": 27,
-   "version": "6",
-   "when": 1792700000000,
-   "tag": "0027_username-handle-slug",
-   "breakpoints": true
-  },
-  {
-   "idx": 28,
-   "version": "6",
-   "when": 1792800000000,
-   "tag": "0028_username-no-hyphen",
-   "breakpoints": true
-  },
-  {
-   "idx": 29,
-   "version": "6",
-   "when": 1792900000000,
-   "tag": "0029_word-comment-push-cooldown",
-   "breakpoints": true
-  },
-  {
-   "idx": 30,
-   "version": "6",
-   "when": 1793000000000,
-   "tag": "0030_contribution-reopened-by",
-   "breakpoints": true
-  },
-  {
-   "idx": 31,
-   "version": "6",
-   "when": 1793100000000,
-   "tag": "0031_notification-vote-action",
-   "breakpoints": true
-  },
-  {
-   "idx": 32,
-   "version": "6",
-   "when": 1793200000000,
-   "tag": "0032_rename-translation-helps-to-discussions",
-   "breakpoints": true
-  },
-  {
-   "idx": 33,
-   "version": "6",
-   "when": 1793300000000,
-   "tag": "0033_discussions-link-url",
-   "breakpoints": true
-  },
-  {
-   "idx": 34,
-   "version": "6",
-   "when": 1793400000000,
-   "tag": "0034_meanings-meaning-source",
-   "breakpoints": true
-  },
-  {
-   "idx": 35,
-   "version": "6",
-   "when": 1793500000000,
-   "tag": "0035_word-import-support-attribution",
-   "breakpoints": true
-  },
-  {
-   "idx": 36,
-   "version": "6",
-   "when": 1793600000000,
-   "tag": "0036_word-import-session-claim",
-   "breakpoints": true
-  },
-  {
-   "idx": 37,
-   "version": "6",
-   "when": 1793700000000,
-   "tag": "0037_discussion-reply-audio",
-   "breakpoints": true
-  },
-  {
-   "idx": 38,
-   "version": "6",
-   "when": 1793800000000,
-   "tag": "0038_notification-campaign-image-url",
-   "breakpoints": true
-  },
-  {
-   "idx": 39,
-   "version": "6",
-   "when": 1793900000000,
-   "tag": "0039_discussion-topic-audio",
-   "breakpoints": true
-  },
-  {
-   "idx": 40,
-   "version": "6",
-   "when": 1794000000000,
-   "tag": "0040_comment-audio",
-   "breakpoints": true
-  },
-  {
-   "idx": 41,
-   "version": "6",
-   "when": 1794100000000,
-   "tag": "0041_database-backup-logs",
-   "breakpoints": true
-  },
-  {
-   "idx": 42,
-   "version": "6",
-   "when": 1794200000000,
-   "tag": "0042_word-import-session-rollback",
-   "breakpoints": true
-  },
-  {
-   "idx": 43,
-   "version": "6",
-   "when": 1794300000000,
-   "tag": "0043_ugc-abuse",
-   "breakpoints": true
-  },
-  {
-   "idx": 44,
-   "version": "6",
-   "when": 1794400000000,
-   "tag": "0044_ugc-anon-abuse",
-   "breakpoints": true
-  },
-  {
-   "idx": 45,
-   "version": "6",
-   "when": 1794500000000,
-   "tag": "0045_contribution-guest-display-name",
-   "breakpoints": true
-  },
-  {
-   "idx": 46,
-   "version": "6",
-   "when": 1794600000000,
-   "tag": "0046_word-card-shares",
-   "breakpoints": true
-  },
-  {
-   "idx": 47,
-   "version": "6",
-   "when": 1794700000000,
-   "tag": "0047_user-skips",
-   "breakpoints": true
-  },
-  {
-   "idx": 48,
-   "version": "6",
-   "when": 1794800000000,
-   "tag": "0048_user-email-verified-at",
-   "breakpoints": true
-  },
-  {
-   "idx": 49,
-   "version": "6",
-   "when": 1794900000000,
-   "tag": "0049_timestamp-unit-repair",
-   "breakpoints": true
-  },
-  {
-   "idx": 50,
-   "version": "6",
-   "when": 1795000000000,
-   "tag": "0050_word-image-attribution",
-   "breakpoints": true
-  },
-  {
-   "idx": 51,
-   "version": "6",
-   "when": 1795010000000,
-   "tag": "0051_search-miss-searchers",
-   "breakpoints": true
-  },
-  {
-   "idx": 52,
-   "version": "6",
-   "when": 1795020000000,
-   "tag": "0052_user_roles",
-   "breakpoints": true
-  },
-  {
-   "idx": 53,
-   "version": "6",
-   "when": 1795030000000,
-   "tag": "0053_user-read-contribution-guide",
-   "breakpoints": true
-  },
-  {
-   "idx": 54,
-   "version": "6",
-   "when": 1795140000000,
-   "tag": "0054_word-audios-speaker-consent",
-   "breakpoints": true
-  },
-  {
-   "idx": 55,
-   "version": "6",
-   "when": 1799160000000,
-   "tag": "0055_legal-reconcile-2026-10-04",
-   "breakpoints": true
-  },
-  {
-   "idx": 56,
-   "version": "6",
-   "when": 1799592000000,
-   "tag": "0056_supabase-health-checks",
-   "breakpoints": true
-  },
-  {
-   "idx": 57,
-   "version": "6",
-   "when": 1799680000000,
-   "tag": "0057_wa-messages",
-   "breakpoints": true
-  },
-  {
-   "idx": 58,
-   "version": "6",
-   "when": 1799766400000,
-   "tag": "0058_email-quota-logs",
-   "breakpoints": true
-  }
- ]
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1790017265849,
+      "tag": "0000_init-turso",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790100000000,
+      "tag": "0001_word-audios",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790200000000,
+      "tag": "0002_comment-post-moderation",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790300000000,
+      "tag": "0003_user-activity-indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790400000000,
+      "tag": "0004_comment-body-original",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790500000000,
+      "tag": "0005_words-published-recent-idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790600000000,
+      "tag": "0006_word-reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790700000000,
+      "tag": "0007_public-images-avatar",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790800000000,
+      "tag": "0008_live-unverified",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790900000000,
+      "tag": "0009_account-deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791000000000,
+      "tag": "0010_user-display-name-bio",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791100000000,
+      "tag": "0011_word-usage-labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791200000000,
+      "tag": "0012_translation-helps",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1791300000000,
+      "tag": "0013_notification-campaigns",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1791400000000,
+      "tag": "0014_word-images-unique-per-word",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1791500000000,
+      "tag": "0015_comma-literal-flags",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1791600000000,
+      "tag": "0016_word-image-content-warnings",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1791700000000,
+      "tag": "0017_word-report-image-id",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1791800000000,
+      "tag": "0018_refresh-token-rotated-at",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791900000000,
+      "tag": "0019_word-import-sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1792000000000,
+      "tag": "0020_legal-consent-and-app-settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1792100000000,
+      "tag": "0021_api-clients-and-refresh-client-id",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1792200000000,
+      "tag": "0022_votes-client-id",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1792300000000,
+      "tag": "0023_drop-oauth-write-enforcement-setting",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1792400000000,
+      "tag": "0024_rename-seed-email-domain",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1792500000000,
+      "tag": "0025_review-push-cooldown",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1792600000000,
+      "tag": "0026_user-last-seen",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1792700000000,
+      "tag": "0027_username-handle-slug",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1792800000000,
+      "tag": "0028_username-no-hyphen",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1792900000000,
+      "tag": "0029_word-comment-push-cooldown",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1793000000000,
+      "tag": "0030_contribution-reopened-by",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1793100000000,
+      "tag": "0031_notification-vote-action",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1793200000000,
+      "tag": "0032_rename-translation-helps-to-discussions",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1793300000000,
+      "tag": "0033_discussions-link-url",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1793400000000,
+      "tag": "0034_meanings-meaning-source",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1793500000000,
+      "tag": "0035_word-import-support-attribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1793600000000,
+      "tag": "0036_word-import-session-claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1793700000000,
+      "tag": "0037_discussion-reply-audio",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1793800000000,
+      "tag": "0038_notification-campaign-image-url",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1793900000000,
+      "tag": "0039_discussion-topic-audio",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1794000000000,
+      "tag": "0040_comment-audio",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1794100000000,
+      "tag": "0041_database-backup-logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1794200000000,
+      "tag": "0042_word-import-session-rollback",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1794300000000,
+      "tag": "0043_ugc-abuse",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1794400000000,
+      "tag": "0044_ugc-anon-abuse",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1794500000000,
+      "tag": "0045_contribution-guest-display-name",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "6",
+      "when": 1794600000000,
+      "tag": "0046_word-card-shares",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1794700000000,
+      "tag": "0047_user-skips",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1794800000000,
+      "tag": "0048_user-email-verified-at",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1794900000000,
+      "tag": "0049_timestamp-unit-repair",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1795000000000,
+      "tag": "0050_word-image-attribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "6",
+      "when": 1795010000000,
+      "tag": "0051_search-miss-searchers",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "6",
+      "when": 1795020000000,
+      "tag": "0052_user_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1795030000000,
+      "tag": "0053_user-read-contribution-guide",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1795140000000,
+      "tag": "0054_word-audios-speaker-consent",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "6",
+      "when": 1799160000000,
+      "tag": "0055_legal-reconcile-2026-10-04",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1799592000000,
+      "tag": "0056_supabase-health-checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1799680000000,
+      "tag": "0057_wa-messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1799766400000,
+      "tag": "0058_email-quota-logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1799852800000,
+      "tag": "0059_search-daily",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "6",
+      "when": 1799852900000,
+      "tag": "0060_app-settings-type-description",
+      "breakpoints": true
+    }
+  ]
 }

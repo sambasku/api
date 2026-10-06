@@ -66,7 +66,7 @@ SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 # Statistik Play Console (export CSV GCS). Isi PLAY_STATS_GCS_BUCKET via
 # `npx wrangler secret put PLAY_STATS_GCS_BUCKET` ATAU langsung di sini.
 PLAY_STATS_GCS_PREFIX = ""
-SUPABASE_URL="https://wkhlcrxlncflcztptrmg.supabase.co"
+SUPABASE_URL="https://qqlksojwaqrydxhqpyqd.supabase.co"
 MOBILE_GA4_PROPERTY_ID="555160494"
 KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp"
 KAPSO_PHONE_NUMBER_ID="647015955153740"

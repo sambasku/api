@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import {
   meaningTranslations,
   meanings,
+  searchDaily,
   searchMisses,
   searchMissSearchers,
   wordVariants,
@@ -13,6 +14,7 @@ import { ConflictError } from '@/shared/errors/app-error';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type { SearchMiss, SearchMissDirection } from '../domain/entities/search-miss.entity';
 import { normalizeSearchMissTerm } from '../domain/normalize-term';
+import { searchDayWib } from '@/shared/database/drizzle/schema/search-daily.schema';
 import type {
   SearchMissListFilter,
   SearchMissRepository,
@@ -103,6 +105,17 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
       .onConflictDoUpdate({
         target: [searchMissSearchers.searchMissId, searchMissSearchers.userId],
         set: { createdAt: new Date() },
+      });
+  }
+
+  async recordSearchDay(now: Date = new Date()): Promise<void> {
+    const day = searchDayWib(now);
+    await this.db
+      .insert(searchDaily)
+      .values({ day, count: 1 })
+      .onConflictDoUpdate({
+        target: searchDaily.day,
+        set: { count: sql`${searchDaily.count} + 1` },
       });
   }
 

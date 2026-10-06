@@ -41,9 +41,13 @@ export const DEFAULT_WORD_COMMENT_PUSH_COOLDOWN_MINUTES = 3;
 /** Default jeda push vote pada kosakata (mode Skip). */
 export const DEFAULT_WORD_VOTE_PUSH_COOLDOWN_MINUTES = 3;
 
+export type AppSettingType = 'string' | 'boolean' | 'number' | 'url';
+
 export interface AppSetting {
   key: string;
   value: string;
+  type: AppSettingType;
+  description: string | null;
   updatedAt: Date;
   updatedBy: string | null;
 }

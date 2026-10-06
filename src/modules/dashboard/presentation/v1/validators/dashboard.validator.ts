@@ -10,6 +10,7 @@ const activityDailyPointSchema = z.object({
   votes: z.number().int().nonnegative(),
   comments: z.number().int().nonnegative(),
   new_users: z.number().int().nonnegative(),
+  searches: z.number().int().nonnegative(),
 });
 
 const problemSourceSchema = z.object({
