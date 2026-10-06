@@ -85,6 +85,13 @@ export class ToggleVoteUseCase {
           .resolveWordOwnerForVoteTarget({ entityType: cmd.targetType, entityId: cmd.targetId })
           .catch(() => null);
         if (resolved?.wordId) {
+          // Copy feed dibekukan di momen kejadian (#94): arah dari nilai vote
+          // final (bukan live read saat render) - flip arah menimpa lewat
+          // dedupe key sama. Format selaras publicSummary profil.
+          const payload =
+            result.myVote === -1
+              ? `"${resolved.lemma}" perlu dicek ulang`
+              : `"${resolved.lemma}" sudah pas`;
           await this.activityEvents.safe({
             kind: cmd.targetType === 'word' ? 'vote_word' : 'vote_comment',
             actorId: cmd.userId,
@@ -92,6 +99,7 @@ export class ToggleVoteUseCase {
             targetId: cmd.targetId,
             // Satu event per user+target terakhir: flip arah menimpa copy.
             dedupeKey: `vote:${cmd.userId}:${cmd.targetType}:${cmd.targetId}`,
+            payload,
           });
         }
       }

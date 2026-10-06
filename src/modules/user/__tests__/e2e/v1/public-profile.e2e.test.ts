@@ -159,6 +159,8 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
         targetId: wordId,
         occurredAt: new Date(),
         dedupeKey: `vote:${contributorId}:word:${wordId}`,
+        // #94: payload beku menang atas live votes (nilai DB = -1, copy = pas)
+        payload: `"lemmaprof${stamp}" sudah pas`,
       },
       ...Array.from({ length: 3 }, (_, i) => {
         const wId = ulid26(`01E2EWORD${stamp}V${i + 1}`);
@@ -243,7 +245,8 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     );
     expect(vote).toBeTruthy();
     expect(vote.summary).toContain('"');
-    expect(vote.summary).toMatch(/perlu dicek ulang$/);
+    // #94: payload beku menang — copy "sudah pas" meski votes DB = -1.
+    expect(vote.summary).toMatch(/sudah pas$/);
     expect(vote.lemma).toBe(`lemmaprof${stamp}`);
     expect(vote.word_id).toBeTruthy();
   });

@@ -155,11 +155,18 @@ export class ActivityEventFeedRepositoryImpl {
       const kind = row.kind as ActivityEventKind;
       const word = row.targetWordId ? await this.resolveWord(row.targetWordId) : null;
       const lemma = word?.lemma ?? null;
-      // Arah vote dibaca read-time dari tabel votes (mobile membaca arah
-      // dari akhiran summary, kontrak feed lama). targetId event = entityId
-      // target (wordId / commentId), bukan id baris votes.
+      // #94: payload beku menang (satu sumber kebenaran feed+profil). Live
+      // votes hanya fallback untuk event lama tanpa payload.
+      const frozen = row.payload?.trim() || null;
       let voteValue: number | null = null;
-      if ((kind === 'vote_word' || kind === 'vote_comment') && row.targetId) {
+      if (
+        !frozen &&
+        (kind === 'vote_word' || kind === 'vote_comment') &&
+        row.targetId
+      ) {
+        // Arah vote dibaca read-time dari tabel votes (mobile membaca arah
+        // dari akhiran summary, kontrak feed lama). targetId event = entityId
+        // target (wordId / commentId), bukan id baris votes.
         const [v] = await this.db
           .select({ value: votes.value })
           .from(votes)
@@ -179,7 +186,8 @@ export class ActivityEventFeedRepositoryImpl {
         occurredAt: row.occurredAt,
         wordId: word?.id ?? null,
         lemma,
-        summary: this.publicSummary(kind, lemma, row.targetId, voteValue),
+        summary:
+          frozen ?? this.publicSummary(kind, lemma, row.targetId, voteValue),
       });
     }
     return {
@@ -289,6 +297,8 @@ export class ActivityEventFeedRepositoryImpl {
         targetWordId: activityEvents.targetWordId,
         targetId: activityEvents.targetId,
         occurredAt: activityEvents.occurredAt,
+        // copy beku saat kejadian (#94): null = fallback bodyFor read-time
+        payload: activityEvents.payload,
         // status kata untuk keputusan CTA (pending = tanpa target)
         wordStatus: words.status,
       })
@@ -324,6 +334,7 @@ export class ActivityEventFeedRepositoryImpl {
     targetWordId: string | null;
     targetId: string | null;
     occurredAt: Date;
+    payload: string | null;
     wordStatus: string | null;
   }>): Promise<ActivityItem[]> {
     const out: ActivityItem[] = [];
@@ -341,6 +352,7 @@ export class ActivityEventFeedRepositoryImpl {
     targetWordId: string | null;
     targetId: string | null;
     occurredAt: Date;
+    payload: string | null;
     wordStatus: string | null;
   }): Promise<ActivityItem | null> {
     const kind = row.kind as ActivityEventKind;
@@ -358,7 +370,9 @@ export class ActivityEventFeedRepositoryImpl {
       lemma = miss?.term ?? null;
     }
 
-    const body = this.bodyFor(kind, lemma);
+    // Copy beku saat kejadian (#94) menang; fallback bodyFor untuk event
+    // lama/backfill tanpa payload.
+    const body = row.payload?.trim() ? row.payload.trim() : this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
     // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
     // Setelah approve, read-time join published menghidupkan CTA lagi.

@@ -89,6 +89,8 @@ export interface AppendActivityEventInput {
   occurredAt?: Date;
   /** Idempotensi caller; insert bentrok = event lama dipakai (upsert hidden). */
   dedupeKey?: string | null;
+  /** Copy feed beku pada momen kejadian (mis. `"apam" sudah pas`); optional. */
+  payload?: string | null;
   /** true = event dengan dedupeKey sama disembunyikan (mis. miss ditarik). */
   hidden?: boolean;
 }

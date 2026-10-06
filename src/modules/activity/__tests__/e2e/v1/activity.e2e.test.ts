@@ -144,6 +144,8 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         targetId: wordId,
         occurredAt: new Date(),
         dedupeKey: `vote:${userId}:word:${wordId}`,
+        // #94: copy feed beku saat kejadian
+        payload: `"lemmaact${stamp}" sudah pas`,
       },
       {
         kind: 'search_miss',
@@ -236,6 +238,8 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
 
     const vote = body.data.find((i) => i.kind === 'vote');
     expect(vote?.actor?.username).toBeTruthy();
+    // #94: payload beku menang atas fallback bodyFor (vote tanpa payload = '')
+    expect(vote!.body).toMatch(/^"lemmaact\d+" sudah pas$/);
 
     const welcome = body.data.find((i) => i.kind === 'welcome');
     expect(welcome).toBeTruthy();

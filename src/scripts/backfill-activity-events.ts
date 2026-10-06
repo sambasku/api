@@ -362,8 +362,91 @@ async function main() {
   );
   console.log(`[backfill-activity] search-miss: ${n8}`);
 
+  // 9. #94: isi payload event vote lama (copy beku) dari state votes saat
+  // ini — arah sesuai nilai vote terakhir (mobile parse akhiran copy).
+  // Idempoten: hanya baris dengan payload NULL yang di-update.
+  const voteEventsForPayload = await db
+    .select({
+      id: activityEvents.id,
+      actorId: activityEvents.actorId,
+      kind: activityEvents.kind,
+      targetId: activityEvents.targetId,
+    })
+    .from(activityEvents)
+    .where(
+      and(
+        inArray(activityEvents.kind, ['vote_word', 'vote_comment']),
+        isNull(activityEvents.payload),
+      ),
+    );
+  const lemmaById = new Map<string, string>();
+  const voteValueByKey = new Map<string, number>();
+  {
+    const wordIds = [
+      ...new Set(
+        voteEventsForPayload
+          .filter((r) => r.kind === 'vote_word' && r.targetId)
+          .map((r) => r.targetId as string),
+      ),
+    ];
+    for (let i = 0; i < wordIds.length; i += 500) {
+      const rowsW = await db
+        .select({ id: words.id, lemma: words.lemma })
+        .from(words)
+        .where(inArray(words.id, wordIds.slice(i, i + 500)));
+      for (const r of rowsW) lemmaById.set(r.id, r.lemma);
+    }
+    const commentIds = [
+      ...new Set(
+        voteEventsForPayload
+          .filter((r) => r.kind === 'vote_comment' && r.targetId)
+          .map((r) => r.targetId as string),
+      ),
+    ];
+    for (let i = 0; i < commentIds.length; i += 500) {
+      const rowsC = await db
+        .select({ id: comments.id, wordId: comments.wordId })
+        .from(comments)
+        .where(inArray(comments.id, commentIds.slice(i, i + 500)));
+      for (const r of rowsC) {
+        const lemma = lemmaById.get(r.wordId) ?? null;
+        if (lemma) lemmaById.set(r.id, lemma);
+      }
+    }
+    const voteRows9 = await db
+      .select({
+        userId: votes.userId,
+        entityType: votes.entityType,
+        entityId: votes.entityId,
+        value: votes.value,
+      })
+      .from(votes)
+      .where(inArray(votes.entityType, ['word', 'comment']));
+    for (const v of voteRows9) {
+      voteValueByKey.set(`${v.userId}:${v.entityType}:${v.entityId}`, v.value);
+    }
+  }
+  let n9 = 0;
+  for (const ev of voteEventsForPayload) {
+    const lemma = ev.targetId ? lemmaById.get(ev.targetId) : undefined;
+    if (!lemma || !ev.actorId) continue; // kata hilang: fallback bodyFor
+    const entityType = ev.kind === 'vote_word' ? 'word' : 'comment';
+    const value = voteValueByKey.get(`${ev.actorId}:${entityType}:${ev.targetId}`);
+    if (value === undefined) continue; // vote sudah ditarik: biarkan hidden/fallback
+    const payload =
+      value === -1
+        ? `"${lemma}" perlu dicek ulang`
+        : `"${lemma}" sudah pas`;
+    await db
+      .update(activityEvents)
+      .set({ payload })
+      .where(eq(activityEvents.id, ev.id));
+    n9++;
+  }
+  console.log(`[backfill-activity] payload vote: ${n9}`);
+
   const total = n1 + n2 + n3 + n4 + n5 + n5b + n6 + n7 + n8;
-  console.log(`[backfill-activity] selesai: ${total} event baru`);
+  console.log(`[backfill-activity] selesai: ${total} event baru (+${n9} payload vote)`);
   await closeDb();
 }
 

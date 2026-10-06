@@ -114,4 +114,88 @@ describe('ToggleVoteUseCase', () => {
     expect(voteRepo.resolveWordOwnerForVoteTarget).not.toHaveBeenCalled();
     expect(inbox.execute).not.toHaveBeenCalled();
   });
+
+  // #94: copy feed dibekukan di event (payload), arah dari nilai vote final.
+  it('cast vote word → event vote_word tercatat dengan payload "lemma" sudah pas', async () => {
+    const voteRepo = {
+      targetExists: vi.fn().mockResolvedValue(true),
+      toggle: vi.fn().mockResolvedValue({ myVote: 1, upvotes: 1, downvotes: 0 }),
+      resolveWordOwnerForVoteTarget: vi.fn().mockResolvedValue({
+        wordId: WORD_ID,
+        lemma: 'apam',
+        ownerUserId: USER,
+      }),
+    } as unknown as VoteRepository;
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined), safeVoteVisibility: vi.fn() };
+    const useCase = new ToggleVoteUseCase(
+      voteRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      activityEvents as never,
+    );
+
+    await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 });
+
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'vote_word',
+        actorId: USER,
+        targetWordId: WORD_ID,
+        targetId: WORD_ID,
+        dedupeKey: `vote:${USER}:word:${WORD_ID}`,
+        payload: '"apam" sudah pas',
+      }),
+    );
+  });
+
+  it('cast vote -1 → payload perlu dicek ulang', async () => {
+    const voteRepo = {
+      targetExists: vi.fn().mockResolvedValue(true),
+      toggle: vi.fn().mockResolvedValue({ myVote: -1, upvotes: 0, downvotes: 1 }),
+      resolveWordOwnerForVoteTarget: vi.fn().mockResolvedValue({
+        wordId: WORD_ID,
+        lemma: 'apam',
+        ownerUserId: USER,
+      }),
+    } as unknown as VoteRepository;
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined), safeVoteVisibility: vi.fn() };
+    const useCase = new ToggleVoteUseCase(
+      voteRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      activityEvents as never,
+    );
+
+    await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: -1 });
+
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: '"apam" perlu dicek ulang' }),
+    );
+  });
+
+  it('unvote → tidak ada event append baru (hanya visibility sync)', async () => {
+    const voteRepo = {
+      targetExists: vi.fn().mockResolvedValue(true),
+      toggle: vi.fn().mockResolvedValue({ myVote: null, upvotes: 0, downvotes: 0 }),
+      resolveWordOwnerForVoteTarget: vi.fn(),
+    } as unknown as VoteRepository;
+    const activityEvents = { safe: vi.fn(), safeVoteVisibility: vi.fn() };
+    const useCase = new ToggleVoteUseCase(
+      voteRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      activityEvents as never,
+    );
+
+    await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 });
+
+    expect(activityEvents.safe).not.toHaveBeenCalled();
+    expect(activityEvents.safeVoteVisibility).toHaveBeenCalledWith(USER, 'word', WORD_ID);
+  });
 });

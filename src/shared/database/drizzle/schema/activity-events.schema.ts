@@ -36,6 +36,11 @@ export const activityEvents = sqliteTable(
     hiddenAt: integer('hidden_at', { mode: 'timestamp' }),
     /** Idempotensi caller (mis. `card_share:{userId}:{wordId}:{yyyy-mm-dd}`). */
     dedupeKey: text('dedupe_key'),
+    /**
+     * Copy feed beku pada momen kejadian (mis. `"apam" sudah pas`).
+     * Null = pakai fallback `bodyFor()` read-time (event lama/backfill).
+     */
+    payload: text('payload'),
   },
   (t) => [
     index('activity_events_feed_idx').on(t.occurredAt, t.id),
