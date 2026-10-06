@@ -94,13 +94,18 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
           targetId: input.targetId ?? null,
           occurredAt: input.occurredAt ?? new Date(),
           dedupeKey: input.dedupeKey ?? null,
+          payload: input.payload ?? null,
           hiddenAt: input.hidden ? new Date() : null,
         })
         .onConflictDoUpdate({
           target: activityEvents.dedupeKey,
           // Re-append event tersembunyi (dedupe key sama) = tampilkan lagi;
-          // waktu kejadian TIDAK di-reset (sejarah beku).
-          set: { hiddenAt: input.hidden ? new Date() : null },
+          // waktu kejadian TIDAK di-reset (sejarah beku). Payload ikut
+          // ditimpa: flip arah vote dengan dedupe key sama menimpa copy.
+          set: {
+            hiddenAt: input.hidden ? new Date() : null,
+            ...(input.payload !== undefined ? { payload: input.payload } : {}),
+          },
         })
         .returning({ id: activityEvents.id });
       return rows.length > 0 ? 'appended' : 'duplicate';

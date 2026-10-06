@@ -8,6 +8,8 @@ export interface RecordActivityEventCommand {
   targetId?: string | null;
   occurredAt?: Date;
   dedupeKey?: string | null;
+  /** Copy feed beku (mis. `"apam" sudah pas`) — null = fallback bodyFor. */
+  payload?: string | null;
   /** true = sembunyikan event dengan dedupeKey sama (bukan append baru). */
   hidden?: boolean;
 }
