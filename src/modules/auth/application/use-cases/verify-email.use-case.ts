@@ -8,6 +8,8 @@ import type { LoginMeta } from '../dto/login.dto';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
 import { hashOtp, normalizeOtpCode, OTP_MAX_ATTEMPTS } from '../utils/otp';
 
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+
 export class VerifyEmailUseCase {
   constructor(
     private readonly userRepo: UserRepository,
@@ -16,6 +18,7 @@ export class VerifyEmailUseCase {
     private readonly refreshTokenRepo: RefreshTokenRepository,
     private readonly accessTokenTtlSeconds: number,
     private readonly refreshTokenTtlSeconds: number,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(
@@ -59,6 +62,15 @@ export class VerifyEmailUseCase {
     if (!consumed) throw invalid;
 
     await this.userRepo.markEmailVerified(user.id);
+
+    // Event feed "Bergabung": momen verifikasi email (OAuth verified-saat-daftar
+    // tidak lewat sini; backfill menutup celah itu).
+    await this.activityEvents?.safe({
+      kind: 'user_joined',
+      actorId: user.id,
+      targetId: user.id,
+      dedupeKey: `joined:${user.id}`,
+    });
 
     return issueLoginSession(
       { id: user.id, username: user.username, displayName: user.displayName, roles: user.roles, avatarUrl: user.avatarUrl },

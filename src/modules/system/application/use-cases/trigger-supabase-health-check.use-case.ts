@@ -19,9 +19,10 @@ function projectRefFromUrl(url: string): string {
  * hasilnya INSERT ke supabase_health_checks dengan github_run_id = 'console'
  * (bedakan dari ping CI yang punya run URL).
  *
- * ponytail: satu project Supabase aktif - env SUPABASE_URL/SUPABASE_ANON_KEY
- * tunggal, label selalu 'sambasku-staging' & kolom env 'staging'. Bila nanti
- * ada project kedua: tambah SUPABASE_PROD_* + pilih target dari body.
+ * ponytail: label diturunkan dari NODE_ENV deployment (production -> prod,
+ * selain itu staging, termasuk dev lokal yang memakai project staging).
+ * Target ping tetap satu URL SUPABASE_URL per env - bila nanti perlu pilih
+ * project dari console: tambah env query di body.
  */
 export class TriggerSupabaseHealthCheckUseCase {
   constructor(private readonly repo: SupabaseHealthCheckRepository) {}
@@ -57,10 +58,11 @@ export class TriggerSupabaseHealthCheckUseCase {
 
     const timeEnd = new Date();
     const status = httpStatus === 200 ? 'ok' : 'failed';
+    const envName = env.NODE_ENV === 'production' ? 'production' : 'staging';
     await this.repo.create({
-      projectLabel: 'sambasku-staging',
+      projectLabel: `sambasku-${envName}`,
       projectRef: projectRefFromUrl(env.SUPABASE_URL),
-      env: 'staging',
+      env: envName,
       httpStatus,
       status,
       timeStart,

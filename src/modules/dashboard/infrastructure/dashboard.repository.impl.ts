@@ -4,6 +4,7 @@ import {
   bugReports,
   comments,
   contributions,
+  searchDaily,
   userRoles,
   users,
   verifierApplications,
@@ -74,6 +75,7 @@ export function fillDailyActivityLast30Days(
     votes: DayCountRow[];
     comments: DayCountRow[];
     newUsers: DayCountRow[];
+    searches: DayCountRow[];
   },
   todayWib: string,
 ): ActivityDailyPoint[] {
@@ -81,6 +83,7 @@ export function fillDailyActivityLast30Days(
   const votesMap = toDayMap(series.votes);
   const commentsMap = toDayMap(series.comments);
   const newUsers = toDayMap(series.newUsers);
+  const searches = toDayMap(series.searches);
   const points: ActivityDailyPoint[] = [];
   for (let i = DAILY_WINDOW_DAYS - 1; i >= 0; i -= 1) {
     const date = shiftCalendarDate(todayWib, -i);
@@ -90,6 +93,7 @@ export function fillDailyActivityLast30Days(
       votes: votesMap.get(date) ?? 0,
       comments: commentsMap.get(date) ?? 0,
       newUsers: newUsers.get(date) ?? 0,
+      searches: searches.get(date) ?? 0,
     });
   }
   return points;
@@ -163,6 +167,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
       bugByStatus,
       wordReportByStatus,
       verifierAppByStatus,
+      searchDailyRows,
     ] = await Promise.all([
       this.db
         .select({ status: words.status, count: sql<number>`count(*)`.mapWith(Number) })
@@ -275,6 +280,12 @@ export class DashboardRepositoryImpl implements DashboardRepository {
         })
         .from(verifierApplications)
         .groupBy(verifierApplications.status),
+
+      // Counter pencarian harian - `day` sudah string WIB, filter langsung.
+      this.db
+        .select({ day: searchDaily.day, count: searchDaily.count })
+        .from(searchDaily)
+        .where(gte(searchDaily.day, windowStartYmd)),
     ]);
 
     const wordCounts = toRecord(WORD_STATUSES, wordByStatus);
@@ -308,6 +319,7 @@ export class DashboardRepositoryImpl implements DashboardRepository {
             votes: voteDailyRows,
             comments: commentDailyRows,
             newUsers: newUserDailyRows,
+            searches: searchDailyRows,
           },
           todayWib,
         ),

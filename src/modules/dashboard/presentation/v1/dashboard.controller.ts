@@ -40,6 +40,7 @@ function toWireStats(stats: DashboardStats) {
         votes: point.votes,
         comments: point.comments,
         new_users: point.newUsers,
+        searches: point.searches,
       })),
     },
     problems: {

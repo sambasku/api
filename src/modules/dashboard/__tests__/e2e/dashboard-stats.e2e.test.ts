@@ -120,13 +120,14 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
     expect(d.contributions.total).toBe(1);
     expect(d.contributions.daily_last_30_days).toBeUndefined();
 
-    // Series aktivitas 30 hari WIB: 4 metrik, length tetap
+    // Series aktivitas 30 hari WIB: 5 metrik, length tetap
     const daily = d.activity.daily_last_30_days as Array<{
       date: string;
       contributions: number;
       votes: number;
       comments: number;
       new_users: number;
+      searches: number;
     }>;
     expect(Array.isArray(daily)).toBe(true);
     expect(daily).toHaveLength(30);
@@ -137,7 +138,8 @@ describe.skipIf(!hasTestDb)('Dashboard Stats E2E', () => {
           typeof p.contributions === 'number' &&
           typeof p.votes === 'number' &&
           typeof p.comments === 'number' &&
-          typeof p.new_users === 'number',
+          typeof p.new_users === 'number' &&
+          typeof p.searches === 'number',
       ),
     ).toBe(true);
     const todayWib = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);

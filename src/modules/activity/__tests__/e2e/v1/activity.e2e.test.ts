@@ -33,6 +33,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
       comments,
       votes,
       searchMisses,
+      activityEvents,
     } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
@@ -110,11 +111,57 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     });
 
     // pastikan username ada di DB (register sudah set) + verified supaya welcome masuk
+    const verifiedAt = new Date();
     await db
       .update(users)
-      .set({ avatarUrl: null, emailVerified: true })
+      .set({ avatarUrl: null, emailVerified: true, emailVerifiedAt: verifiedAt })
       .where(eq(users.id, userId));
     void username;
+
+    // Feed baca activity_events (#86): seed event utk fixture yang di-insert
+    // langsung ke tabel sumber (backfill mini ala produksi).
+    await db.insert(activityEvents).values([
+      {
+        kind: 'word_created',
+        actorId: userId,
+        targetWordId: wordId,
+        targetId: wordId,
+        occurredAt: new Date(),
+        dedupeKey: `word:${wordId}`,
+      },
+      {
+        kind: 'comment_created',
+        actorId: userId,
+        targetWordId: wordId,
+        targetId: ulid26(`01E2ECMT${stamp}`),
+        occurredAt: new Date(),
+        dedupeKey: `comment:${ulid26(`01E2ECMT${stamp}`)}`,
+      },
+      {
+        kind: 'vote_word',
+        actorId: userId,
+        targetWordId: wordId,
+        targetId: wordId,
+        occurredAt: new Date(),
+        dedupeKey: `vote:${userId}:word:${wordId}`,
+      },
+      {
+        kind: 'search_miss',
+        actorId: null,
+        targetWordId: null,
+        targetId: ulid26(`01E2EMIS${stamp}`),
+        occurredAt: new Date(),
+        dedupeKey: `search_miss:${ulid26(`01E2EMIS${stamp}`)}`,
+      },
+      {
+        kind: 'user_joined',
+        actorId: userId,
+        targetWordId: null,
+        targetId: userId,
+        occurredAt: verifiedAt,
+        dedupeKey: `joined:${userId}`,
+      },
+    ]);
 
     const login = await post('/api/v1/auth/login', {
       email: `act${stamp}@test.com`,
@@ -210,6 +257,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     );
     const regBody = (await reg.json()) as { data: { user_id: string; username: string } };
     const lateUserId = regBody.data.user_id;
+    const lateVerifiedAt = new Date(stamp + 60_000);
     await db
       .update(usersTable)
       .set({
@@ -217,9 +265,19 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         emailVerified: true,
         // +60s: kolom integer ber-granularitas detik; seluruh fixture e2e
         // berjalan < 1 detik sehingga new Date() bisa tie lalu kalah id-sort.
-        emailVerifiedAt: new Date(stamp + 60_000),
+        emailVerifiedAt: lateVerifiedAt,
       })
       .where(eq(usersTable.id, lateUserId));
+    // Backfill ala produksi: join tercatat saat verifikasi (#86).
+    const { activityEvents } = await import('@/shared/database/drizzle/schema');
+    await db.insert(activityEvents).values({
+      kind: 'user_joined',
+      actorId: lateUserId,
+      targetWordId: null,
+      targetId: lateUserId,
+      occurredAt: lateVerifiedAt,
+      dedupeKey: `joined:${lateUserId}`,
+    });
 
     // Semua aktivitas lain (kata/komentar/vote/share) berumur < 10 hari:
     // lebih baru dari createdAt user ini tapi lebih lama dari verifikasinya.
@@ -246,18 +304,30 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         e2eRegisterBody({ name: `cur${base}${i}`, email: `cur${base}${i}@test.com` }),
       );
       const regBody = (await reg.json()) as { data: { user_id: string } };
+      const curVerifiedAt = new Date(base - offsetSec * 1000);
       await db
         .update(usersTable)
         .set({
           emailVerified: true,
-          emailVerifiedAt: new Date(base - offsetSec * 1000),
+          emailVerifiedAt: curVerifiedAt,
         })
         .where(eq(usersTable.id, regBody.data.user_id));
+      // Backfill ala produksi (#86): join tercatat saat verifikasi.
+      const { activityEvents } = await import('@/shared/database/drizzle/schema');
+      await db.insert(activityEvents).values({
+        kind: 'user_joined',
+        actorId: regBody.data.user_id,
+        targetWordId: null,
+        targetId: regBody.data.user_id,
+        occurredAt: curVerifiedAt,
+        dedupeKey: `joined:${regBody.data.user_id}`,
+      });
       seeded.push(regBody.data.user_id);
     }
 
     const seen: string[] = [];
     const times: number[] = [];
+    const seenActors: string[] = [];
     let cursor: string | null = null;
     let pages = 0;
 
@@ -266,23 +336,22 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
       const url: string = `/api/v1/activity?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
       const body = (await (await get(url)).json()) as {
         success: boolean;
-        data: Array<{ id: string; created_at: string }>;
+        data: Array<{ id: string; created_at: string; kind: string; actor: { username: string | null } | null }>;
         meta: { next_cursor: string | null; has_more: boolean };
       };
       expect(body.success).toBe(true);
       for (const item of body.data) {
         seen.push(item.id);
         times.push(Date.parse(item.created_at));
+        if (item.kind === 'welcome') seenActors.push(item.actor?.username ?? '');
       }
       cursor = body.meta.next_cursor;
       pages += 1;
     } while (cursor && pages < 6);
 
-    // Ketiga user 반드시 muncul, dan butuh >1 halaman pada limit 2.
+    // Ketiga user pasti muncul (welcome milik masing-masing), >1 halaman limit 2.
     expect(pages).toBeGreaterThan(1);
-    for (const id of seeded) {
-      expect(seen).toContain(`welcome:${id}`);
-    }
+    expect(new Set(seenActors).size).toBeGreaterThanOrEqual(seeded.length);
     // Kursor yang terikat milidetik membuat `ts < ms` selalu benar, sehingga
     // setiap halaman mengulang isi halaman sebelumnya.
     expect(new Set(seen).size).toBe(seen.length);
@@ -376,7 +445,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
       if (!first.meta.next_cursor) return; // fixture tipis: tidak ada halaman 2
       const second = (await (
         await request(
-          `/api/v1/activity?limit=2&cursor=${encodeURIComponent(first.meta.next_cursor)}`,
+          `/api/v1/activity?limit=2&exclude_self=true&cursor=${encodeURIComponent(first.meta.next_cursor)}`,
           { headers: { authorization: `Bearer ${token}` } },
         )
       ).json()) as { data: Array<{ actor: { username: string | null } | null }> };

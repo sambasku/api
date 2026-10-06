@@ -157,6 +157,13 @@ const envSchema = z.object({
   FACEBOOK_APP_ID: z.string().optional(),
   FACEBOOK_APP_SECRET: z.string().optional(),
 
+  // WhatsApp via Kapso (proxy Meta Cloud API). Kosong = fitur WA no-op
+  // (kirim dilewati, endpoint admin tetap bisa lihat template/usage).
+  KAPSO_API_KEY: z.string().optional(),
+  // Default https://api.kapso.io/meta/whatsapp (lihat docs/env/kapso.md).
+  KAPSO_BASE_URL: z.url().optional(),
+  KAPSO_PHONE_NUMBER_ID: z.string().optional(),
+
   // Supabase keep-alive + ping manual dari console (System > Supabase).
   // Satu project aktif sekarang; baris log tetap bawa kolom env (default
   // 'staging') buat pembeda bila nanti ada project kedua. URL = subdomain
@@ -164,6 +171,9 @@ const envSchema = z.object({
   // POST /api/v1/admin/system/supabase/ping → 503 SUPABASE_PING_UNAVAILABLE.
   SUPABASE_URL: z.url().optional(),
   SUPABASE_ANON_KEY: z.string().optional(),
+
+  // App URL for the API service (Cloudflare Workers custom domain) - sama
+  // dengan APP_URL di atas (legacy). Tidak ada definisi kedua.
 
   // Gate write: JWT wajib punya claim `azp` (api_clients.client_id).
   // false (default) = grace / backward-compat: token tanpa azp masih lolos

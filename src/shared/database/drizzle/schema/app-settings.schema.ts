@@ -8,6 +8,8 @@ import { users } from './users.schema';
 export const appSettings = sqliteTable('app_settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
+  type: text('type', { enum: ['string', 'boolean', 'number', 'url'] }).notNull().default('string'),
+  description: text('description'),
   updatedAt: integer('updated_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),

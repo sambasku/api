@@ -17,8 +17,8 @@ export class UpdateSearchMissUseCase {
   constructor(
     private readonly searchMissRepo: SearchMissRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly activityEvents?: { safe: (cmd: { kind: 'search_miss'; targetId: string; dedupeKey: string; hidden?: boolean }) => Promise<void> },
   ) {}
-
   async execute(cmd: UpdateSearchMissCommand): Promise<SearchMiss> {
     const hasTerm = cmd.term !== undefined;
     const hasVisible = cmd.isVisible !== undefined;
@@ -61,6 +61,16 @@ export class UpdateSearchMissUseCase {
 
     if (!updated) {
       throw new NotFoundError('SEARCH_MISS_NOT_FOUND', 'Pencarian kosong dengan id tersebut tidak ditemukan');
+    }
+
+    // Event feed: miss mulai/berhenti tayang (dedupe key sama, hide toggles).
+    if (hasVisible && !visibleUnchanged) {
+      await this.activityEvents?.safe({
+        kind: 'search_miss',
+        targetId: cmd.missId,
+        dedupeKey: `search_miss:${cmd.missId}`,
+        hidden: !cmd.isVisible,
+      });
     }
 
     const oldData: Record<string, unknown> = {};

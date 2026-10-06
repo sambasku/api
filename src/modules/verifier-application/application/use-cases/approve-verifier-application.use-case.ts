@@ -4,6 +4,8 @@ import type { RefreshTokenRepository } from '@/modules/auth/domain/repositories/
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { SendVerifierWaNotificationUseCase } from '@/modules/wa/application/use-cases/send-verifier-wa.use-case';
+import { DEFAULT_WA_GROUP_CTA_URL } from '@/modules/legal/domain/entities/app-setting.entity';
 import type { VerifierApplicationRepository } from '../../domain/repositories/verifier-application.repository';
 
 export interface ApproveVerifierApplicationCommand {
@@ -23,6 +25,14 @@ const APPROVE_TITLE = 'Selamat, kamu jadi verifikator';
 const APPROVE_BODY =
   'Pengajuanmu disetujui. Keluar lalu masuk lagi ya, biar peran Verifikator aktif di aplikasi.';
 
+/** Manfaat jadi verifikator - param template WA approved. */
+const APPROVE_BENEFITS = [
+  '- Menentukan status verifikasi kontribusi kosakata',
+  '- Membantu bentengi bahasa dan budaya Sambas',
+  '- Namamu tercatat di halaman kontributor',
+  '- Diskusi langsung dengan tim lewat grup WhatsApp',
+].join('\n');
+
 export class ApproveVerifierApplicationUseCase {
   constructor(
     private readonly appRepo: VerifierApplicationRepository,
@@ -32,6 +42,8 @@ export class ApproveVerifierApplicationUseCase {
     private readonly userRepo: UserRepository,
     private readonly mailer: MailerPort,
     private readonly inbox: RecordInboxNotificationUseCase,
+    private readonly sendVerifierWa?: SendVerifierWaNotificationUseCase,
+    private readonly readWaSettings?: () => Promise<{ enabled: boolean; ctaUrl: string }>,
   ) {}
 
   async execute(cmd: ApproveVerifierApplicationCommand): Promise<ApproveVerifierApplicationResult> {
@@ -77,8 +89,38 @@ export class ApproveVerifierApplicationUseCase {
     });
 
     await this.sendWelcomeEmail(updated.userId);
+    await this.sendWaIfEnabled(updated.userId, updated.id);
 
     return { id: updated.id, status: 'approved', role: 'reviewer' };
+  }
+
+  /** WA opsional: gagal kirim tidak membatalkan persetujuan. */
+  private async sendWaIfEnabled(userId: string, applicationId: string): Promise<void> {
+    if (!this.sendVerifierWa || !this.readWaSettings) return;
+    try {
+      const settings = await this.readWaSettings();
+      if (!settings.enabled) return;
+      const user = await this.userRepo.findById(userId);
+      if (!user) return;
+      await this.sendVerifierWa.execute({
+        userId,
+        phone: user.phone,
+        eventKey: 'verifier_application_approved',
+        displayName: user.displayName.trim() || user.username,
+        detail: APPROVE_BENEFITS,
+        ctaUrl: settings.ctaUrl || DEFAULT_WA_GROUP_CTA_URL,
+      });
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'wa selamat verifikator gagal dikirim',
+          user_id: userId,
+          application_id: applicationId,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 
   /** Peran sudah berubah. Gagal kirim email tidak membatalkan persetujuan. */

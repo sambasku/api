@@ -118,6 +118,8 @@ export const legalIdParamsSchema = z.object({
 export const appSettingItemSchema = z.object({
   key: z.string(),
   value: z.string().nullable(),
+  type: z.enum(['string', 'boolean', 'number', 'url']),
+  description: z.string().nullable(),
   updated_at: z.string().nullable(),
   updated_by: z.string().nullable(),
 });
@@ -135,6 +137,8 @@ export const patchAppSettingsBodySchema = z.object({
       z.object({
         key: z.string().min(1),
         value: z.string().min(1),
+        type: z.enum(['string', 'boolean', 'number', 'url']).optional(),
+        description: z.string().optional(),
       }),
     )
     .min(1, 'Minimal satu pengaturan'),

@@ -361,6 +361,9 @@ import { ListShareBackgroundsUseCase } from '@/modules/share/application/use-cas
 import { ShareController } from '@/modules/share/presentation/v1/share.controller';
 import { createShareRoutes } from '@/modules/share/presentation/v1/share.routes';
 import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
+import { ActivityEventRepositoryImpl } from '@/modules/activity/infrastructure/activity-event.repository.impl';
+import { ActivityEventFeedRepositoryImpl } from '@/modules/activity/infrastructure/activity-event-feed.repository.impl';
+import { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import { ListActivityUseCase } from '@/modules/activity/application/use-cases/list-activity.use-case';
 import { ActivityController } from '@/modules/activity/presentation/v1/activity.controller';
 import {
@@ -379,6 +382,12 @@ import { RejectVerifierApplicationUseCase } from '@/modules/verifier-application
 import { VerifierApplicationController } from '@/modules/verifier-application/presentation/v1/verifier-application.controller';
 import { createVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/verifier-application.routes';
 import { createAdminVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/admin-verifier-application.routes';
+import { WaTemplateRepositoryImpl, WaMessageLogRepositoryImpl, WaUsageRepositoryImpl } from '@/modules/wa/infrastructure/wa-message.repository.impl';
+import { KapsoWaSender } from '@/modules/wa/infrastructure/kapso-wa.sender';
+import { SendWaMessageUseCase } from '@/modules/wa/application/use-cases/send-wa-message.use-case';
+import { SendVerifierWaNotificationUseCase } from '@/modules/wa/application/use-cases/send-verifier-wa.use-case';
+import { createWaAdminRoutes } from '@/modules/wa/presentation/v1/wa-admin.routes';
+import { WA_PROVIDERS } from '@/modules/wa/domain/entities/wa-message.entity';
 import { NotificationCampaignRepositoryImpl } from '@/modules/notification-campaign/infrastructure/notification-campaign.repository.impl';
 import {
   CreateNotificationTemplateUseCase,
@@ -441,6 +450,10 @@ const identityRepo = new AuthIdentityRepositoryImpl(db);
 
 // ---- Modul audit (Section 21) - direkspos ke use case modul lain ----
 const auditRepo = new AuditLogRepositoryImpl(db);
+// Event log feed publik (write-through, #86) - dipakai lintas modul.
+const activityEventRepo = new ActivityEventRepositoryImpl(db);
+const activityEvents = new RecordActivityEventUseCase(activityEventRepo);
+const activityEventFeedRepo = new ActivityEventFeedRepositoryImpl(db);
 const appSettingsRepo = new AppSettingsRepositoryImpl(db);
 const legalDocumentRepo = new LegalDocumentRepositoryImpl(db);
 const userConsentRepo = new UserConsentRepositoryImpl(db);
@@ -473,6 +486,7 @@ const controller = new AuthController({
     refreshTokenRepo,
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
+    activityEvents,
   ),
   resendOtp: new ResendOtpUseCase(userRepo, otpRepo, mailer),
   refresh: new RefreshTokenUseCase(
@@ -698,6 +712,7 @@ const contributionController = new ContributionController({
     recordInbox,
     new ReviewPushCooldownGate(appSettingsRepo, notificationPushCooldownRepo),
     recordAbuseSignal,
+    activityEvents,
   ),
   correct: new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo, recordInbox),
   reopen: new ReopenContributionUseCase(contributionRepo, auditRepo),
@@ -709,7 +724,7 @@ const searchMissController = new SearchMissController({
   list: new ListSearchMissesUseCase(searchMissRepo),
   dismiss: new DismissSearchMissUseCase(searchMissRepo, auditRepo),
   bulkDismiss: new BulkDismissSearchMissUseCase(searchMissRepo, auditRepo),
-  update: new UpdateSearchMissUseCase(searchMissRepo, auditRepo),
+  update: new UpdateSearchMissUseCase(searchMissRepo, auditRepo, activityEvents),
   resolve: new ResolveSearchMissUseCase(
     searchMissRepo,
     wordRepo,
@@ -741,6 +756,7 @@ const toggleVoteUseCase = new ToggleVoteUseCase(
   recordInbox,
   notifyUser,
   wordVotePushCooldown,
+  activityEvents,
 );
 const voteController = new VoteController({
   toggle: toggleVoteUseCase,
@@ -818,6 +834,7 @@ const commentController = new CommentController({
     notifyUser,
     wordCommentPushCooldown,
     recordAbuseSignal,
+    activityEvents,
   ),
   createAudio: new CreateCommentAudioUseCase(
     commentRepo,
@@ -856,7 +873,7 @@ const bookmarkController = new BookmarkController({
 const publicUserRepo = new PublicUserRepositoryImpl(db);
 const userController = new UserController({
   getPublicProfile: new GetPublicProfileUseCase(publicUserRepo),
-  getPublicActivity: new GetPublicActivityUseCase(publicUserRepo),
+  getPublicActivity: new GetPublicActivityUseCase(publicUserRepo, activityEventFeedRepo),
   suggestMention: new SuggestMentionUsersUseCase(publicUserRepo),
   uploadAvatar: new UploadAvatarUseCase(userRepo, publicImageStorage),
   deleteAvatar: new DeleteAvatarUseCase(userRepo, publicImageStorage),
@@ -1309,6 +1326,7 @@ const discussionController = new DiscussionController({
     imageStorage,
     auditRepo,
     recordInbox,
+    activityEvents,
   ),
   reject: new RejectDiscussionUseCase(
     discussionRepo,
@@ -1426,6 +1444,23 @@ const abuseController = new AbuseController({
 app.route('/api/v1/admin/abuse', createAbuseRoutes({ controller: abuseController, authenticate }));
 
 const verifierApplicationRepo = new VerifierApplicationRepositoryImpl(db);
+
+// WA (Kapso) - modul notifikasi WhatsApp + admin console (System > WhatsApp).
+const waTemplateRepo = new WaTemplateRepositoryImpl(db);
+const waLogRepo = new WaMessageLogRepositoryImpl(db);
+const waUsageRepo = new WaUsageRepositoryImpl(db);
+const sendWaMessage = new SendWaMessageUseCase(
+  [{ sender: new KapsoWaSender() }],
+  waUsageRepo,
+  waLogRepo,
+  waTemplateRepo,
+  appSettingsRepo,
+);
+const sendVerifierWa = new SendVerifierWaNotificationUseCase(sendWaMessage);
+async function readWaSettings(): Promise<{ enabled: boolean; ctaUrl: string }> {
+  return sendWaMessage.readWaSettings();
+}
+
 const verifierApplicationController = new VerifierApplicationController({
   create: new CreateVerifierApplicationUseCase(verifierApplicationRepo, userRepo),
   getMine: new GetMyVerifierApplicationUseCase(verifierApplicationRepo),
@@ -1440,17 +1475,32 @@ const verifierApplicationController = new VerifierApplicationController({
     userRepo,
     mailer,
     recordInbox,
+    sendVerifierWa,
+    readWaSettings,
   ),
   reject: new RejectVerifierApplicationUseCase(
     verifierApplicationRepo,
     auditRepo,
     notifyUser,
     recordInbox,
+    userRepo,
+    sendVerifierWa,
+    readWaSettings,
   ),
 });
 app.route(
   '/api/v1/verifier-applications',
   createVerifierApplicationRoutes({ controller: verifierApplicationController, authenticate }),
+);
+app.route(
+  '/api/v1/admin/wa',
+  createWaAdminRoutes({
+    templateRepo: waTemplateRepo,
+    usageRepo: waUsageRepo,
+    logRepo: waLogRepo,
+    sendWa: sendWaMessage,
+    authenticate,
+  }),
 );
 app.route(
   '/api/v1/admin/verifier-applications',
@@ -1505,9 +1555,30 @@ app.route(
   }),
 );
 
-/** Dipanggil cron Workers untuk scheduled + lanjutkan chunk sending. */
+/** Dipanggil cron Workers untuk scheduled + lanjutkan chunk sending + reset kuota WA bulanan. */
 export async function runDueNotificationCampaigns(): Promise<{ processed: number }> {
+  await resetWaUsageIfNewPeriod();
   return processDueCampaigns.execute(5);
+}
+
+/**
+ * Cron WA: reset used_count tiap awal bulan (tanggal 1, 00:00:01 WIB).
+ * Idempoten - lazy reset di WaUsageRepository jadi jaring pengaman.
+ */
+async function resetWaUsageIfNewPeriod(): Promise<void> {
+  try {
+    for (const provider of WA_PROVIDERS) {
+      await waUsageRepo.getActive(provider);
+    }
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'reset kuota wa bulanan gagal',
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
 }
 
 // Lookup definisi lemma (KBBI via port) - prefill field definition di form
@@ -1525,10 +1596,11 @@ app.route(
 );
 
 // Feed lintas aktivitas publik (37-api-activity-feed.md). Beranda mobile.
+// Baca dari activity_events (#86); repo lama masih dipakai card-share.
 const activityRepo = new ActivityRepositoryImpl(db);
 const activityController = new ActivityController({
-  list: new ListActivityUseCase(activityRepo, commentBlocklistRepo),
-  recordCardShare: new RecordCardShareUseCase(activityRepo),
+  list: new ListActivityUseCase(activityEventFeedRepo),
+  recordCardShare: new RecordCardShareUseCase(activityRepo, activityEventRepo),
 });
 app.route(
   '/api/v1/activity',

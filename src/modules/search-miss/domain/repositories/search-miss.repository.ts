@@ -35,6 +35,11 @@ export interface SearchMissRepository {
     direction: SearchMissDirection;
     searcherId?: string;
   }): Promise<void>;
+  /**
+   * Counter pencarian harian (hit + miss) untuk chart dashboard.
+   * Best-effort; upsert count+1 per hari WIB.
+   */
+  recordSearchDay(now?: Date): Promise<void>;
   /** Load miss aktif (deleted_at IS NULL). Null kalau tidak ada / dismissed. */
   findById(id: string): Promise<SearchMiss | null>;
   list(filter: SearchMissListFilter): Promise<CursorPage<SearchMiss>>;

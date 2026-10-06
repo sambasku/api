@@ -46,6 +46,16 @@ export class SearchWordsUseCase {
       published: true,
     });
 
+    // Counter pencarian harian (hit + miss) untuk chart dashboard.
+    // Best-effort: kegagalan tidak boleh membatalkan response.
+    if (query.q.trim().length > 0) {
+      try {
+        await this.searchMissRepo.recordSearchDay();
+      } catch (err) {
+        logger.warn({ err, q: query.q }, 'gagal mencatat counter pencarian harian');
+      }
+    }
+
     if (items.length === 0 && query.q.trim().length >= 2) {
       // Best-effort: kegagalan pencatatan tidak boleh membatalkan response
       try {

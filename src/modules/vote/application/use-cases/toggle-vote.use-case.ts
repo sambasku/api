@@ -5,6 +5,7 @@ import type { UserRepository } from '@/modules/auth/domain/repositories/user.rep
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { WordVotePushCooldownGate } from '@/modules/notification/application/use-cases/word-vote-push-cooldown-gate';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type {
   ToggleVoteResult,
   VoteRepository,
@@ -48,6 +49,7 @@ export class ToggleVoteUseCase {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: WordVotePushCooldownGate,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(cmd: ToggleVoteCommand): Promise<ToggleVoteResult> {
@@ -76,12 +78,37 @@ export class ToggleVoteUseCase {
     );
 
     if (result.myVote !== null) {
+      // Event feed: vote tayang sebagai aktivitas. targetWordId diresolve
+      // best-effort; vote comment punya wordId lewat komentar induk.
+      if (this.activityEvents && (cmd.targetType === 'word' || cmd.targetType === 'comment')) {
+        const resolved = await this.voteRepo
+          .resolveWordOwnerForVoteTarget({ entityType: cmd.targetType, entityId: cmd.targetId })
+          .catch(() => null);
+        if (resolved?.wordId) {
+          await this.activityEvents.safe({
+            kind: cmd.targetType === 'word' ? 'vote_word' : 'vote_comment',
+            actorId: cmd.userId,
+            targetWordId: resolved.wordId,
+            targetId: cmd.targetId,
+            // Satu event per user+target terakhir: flip arah menimpa copy.
+            dedupeKey: `vote:${cmd.userId}:${cmd.targetType}:${cmd.targetId}`,
+          });
+        }
+      }
       await this.notifyWordOwner({
         actorId: cmd.userId,
         targetType: cmd.targetType,
         targetId: cmd.targetId,
         value: result.myVote,
       });
+    } else if (this.activityEvents && (cmd.targetType === 'word' || cmd.targetType === 'comment')) {
+      // Unvote: baris vote dihapus hard - event feed-nya disembunyikan
+      // (bukan dihapus; submit ulang menampilkan kembali, lihat dedupeKey).
+      await this.activityEvents.safeVoteVisibility(
+        cmd.userId,
+        cmd.targetType,
+        cmd.targetId,
+      );
     }
 
     return result;

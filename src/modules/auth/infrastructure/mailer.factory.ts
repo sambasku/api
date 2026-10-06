@@ -1,15 +1,33 @@
-import { env } from '@/shared/config/env';
 import type { MailerPort } from '../application/ports/mailer.port';
-import { ResendMailerService } from './resend-mailer.service';
+import { QuotaAwareMailer } from '@/modules/email/infrastructure/quota-aware-mailer';
+import { ResendEmailSender } from '@/modules/email/infrastructure/resend-email.sender';
 import { SmtpMailerService } from './smtp-mailer.service';
 
-// Pilih impl MailerPort dari konfigurasi (Section 8 - ganti provider =
-// ganti impl, use case tidak tahu bedanya):
-// MAIL_PROVIDER=resend|smtp. Kosong: Resend jika key ada, else SMTP/log.
-export function createMailer(): MailerPort {
-  const named = env.MAIL_PROVIDER?.trim().toLowerCase();
-  if (named === 'resend') return new ResendMailerService();
-  if (named === 'smtp') return new SmtpMailerService();
-  if (env.RESEND_API_KEY) return new ResendMailerService();
+// Interface deps dibuat opsional biar pemanggil lama (app.ts) tak berubah;
+// repositori email wajib ada supaya quota+log jalan di SEMUA tier.
+export interface CreateMailerEmailDeps {
+  quotaRepo: import('@/modules/email/domain/repositories/email.repository').EmailQuotaRepository;
+  usageRepo: import('@/modules/email/domain/repositories/email.repository').EmailUsageRepository;
+  logRepo: import('@/modules/email/domain/repositories/email.repository').EmailLogRepository;
+}
+
+/**
+ * Pilih impl MailerPort (Section 8 - ganti provider = ganti impl, use case
+ * tidak tahu bedanya). Selalu QuotaAwareMailer: quota check + log di satu
+ * titik untuk semua kirim email. Sender terpasang: resend (brevo, mailjet,
+ * ... tinggal ditambah ke daftar + seed email_quotas).
+ *
+ * Tanpa deps email (test lama): fallback SmtpMailerService perilaku lama.
+ */
+export function createMailer(emailDeps?: CreateMailerEmailDeps): MailerPort {
+  if (emailDeps) {
+    return new QuotaAwareMailer(
+      [{ sender: new ResendEmailSender() }],
+      emailDeps.quotaRepo,
+      emailDeps.usageRepo,
+      emailDeps.logRepo,
+    );
+  }
+  // ponytail: jalur fallback hanya dipakai test/unit lama; production app.ts selalu kasih deps.
   return new SmtpMailerService();
 }

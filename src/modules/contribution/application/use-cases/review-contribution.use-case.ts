@@ -6,6 +6,7 @@ import type { RecordInboxNotificationUseCase } from '@/modules/notification/appl
 import type { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
 import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type { ReviewOutcome } from '../../domain/entities/contribution.entity';
 import type { ContributionRepository } from '../../domain/repositories/contribution.repository';
 import {
@@ -60,6 +61,7 @@ export class ReviewContributionUseCase {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly pushCooldown?: ReviewPushCooldownGate,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(cmd: ReviewContributionCommand): Promise<ReviewOutcome> {
@@ -91,6 +93,13 @@ export class ReviewContributionUseCase {
     // Soft-delete foto ditahan (stock + ImageKit) agar hilang dari GET publik.
     if (rejectedImageIds.length > 0) {
       await this.wordRepo.softDeleteWordImages(rejectedImageIds);
+    }
+
+    // Event feed (AGENTS.md #25): approve = kejadian publik. Actor event =
+    // KONTRIBUTOR (aksinya), bukan reviewer; verifikasi reviewer tercatat
+    // lewat event word_verified di jalur lain.
+    if (this.activityEvents && cmd.decision === 'approve' && contrib) {
+      await this.emitContributionEvents(outcome, contrib.entityType);
     }
 
     await this.auditRepo.record({
@@ -260,5 +269,37 @@ export class ReviewContributionUseCase {
     const img = await this.wordRepo.findWordImageById(imageId);
     if (!img || img.provider !== 'imagekit' || img.isVerified) return [];
     return [img];
+  }
+
+  /**
+   * Event feed per jenis kontribusi yang disetujui. `word` = kata baru tayang
+   * (word_created); anak kontribusi (foto/suara/cara baca/contoh) =
+   * contribution_* oleh kontributor, wordId diresolve lewat tabel anak.
+   * Merge kata (entityId pindah ke kata tujuan) tetap satu event ke kata tujuan.
+   */
+  private async emitContributionEvents(
+    outcome: ReviewOutcome,
+    entityType: string,
+  ): Promise<void> {
+    if (!this.activityEvents) return;
+    const kindByEntity: Record<
+      string,
+      'word_created' | 'contribution_image' | 'contribution_audio' | 'contribution_pron' | 'contribution_example'
+    > = {
+      word: 'word_created',
+      word_image: 'contribution_image',
+      word_audio: 'contribution_audio',
+      pronunciation: 'contribution_pron',
+      example: 'contribution_example',
+    };
+    const kind = kindByEntity[entityType];
+    if (!kind) return; // meaning dsb: makna melekat kata, tanpa event sendiri
+    await this.activityEvents.safe({
+      kind,
+      actorId: outcome.contributorUserId,
+      targetWordId: outcome.mergedIntoWordId ?? outcome.entityId,
+      targetId: outcome.entityId,
+      dedupeKey: `contrib:${outcome.contributionId}`,
+    });
   }
 }

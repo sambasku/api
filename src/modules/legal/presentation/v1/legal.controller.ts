@@ -152,6 +152,8 @@ export class LegalController {
         settings: updated.map((s) => ({
           key: s.key,
           value: s.value,
+          type: s.type,
+          description: s.description,
           updated_at: s.updatedAt.toISOString(),
           updated_by: s.updatedBy,
         })),

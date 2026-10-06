@@ -100,6 +100,7 @@ export class ApproveDiscussionUseCase {
     private readonly imageStorage: ImageStoragePort,
     private readonly auditRepo: AuditLogRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly activityEvents?: { safe: (cmd: { kind: 'discussion_created'; actorId: string; targetId: string; dedupeKey: string }) => Promise<void> },
   ) {}
 
   async execute(cmd: ApproveDiscussionCommand): Promise<Discussion> {
@@ -169,6 +170,14 @@ export class ApproveDiscussionUseCase {
     if (!updated) {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');
     }
+
+    // Event feed: diskusi tayang. Actor = pembuat diskusi (existing.userId).
+    await this.activityEvents?.safe({
+      kind: 'discussion_created',
+      actorId: existing.userId,
+      targetId: existing.id,
+      dedupeKey: `discussion:${existing.id}`,
+    });
 
     await this.auditRepo.record({
       userId: cmd.actorId,

@@ -5,6 +5,7 @@ import {
   LEGAL_PRIVACY_VERSION_KEY,
   LEGAL_TERMS_VERSION_KEY,
   type AppSetting,
+  type AppSettingType,
   type LegalActiveVersions,
 } from '../domain/entities/app-setting.entity';
 import type { AppSettingsRepository } from '../domain/repositories/app-settings.repository';
@@ -13,6 +14,8 @@ function toEntity(row: typeof appSettings.$inferSelect): AppSetting {
   return {
     key: row.key,
     value: row.value,
+    type: row.type as AppSettingType,
+    description: row.description,
     updatedAt: row.updatedAt,
     updatedBy: row.updatedBy,
   };
@@ -54,7 +57,7 @@ export class AppSettingsRepositoryImpl implements AppSettingsRepository {
   }
 
   async upsertMany(
-    entries: { key: string; value: string }[],
+    entries: { key: string; value: string; type?: AppSettingType; description?: string }[],
     updatedBy: string | null,
   ): Promise<AppSetting[]> {
     const now = new Date();
@@ -65,6 +68,8 @@ export class AppSettingsRepositoryImpl implements AppSettingsRepository {
         .values({
           key: entry.key,
           value: entry.value,
+          type: entry.type ?? 'string',
+          description: entry.description ?? null,
           updatedAt: now,
           updatedBy,
         })
@@ -72,6 +77,8 @@ export class AppSettingsRepositoryImpl implements AppSettingsRepository {
           target: appSettings.key,
           set: {
             value: entry.value,
+            type: entry.type ?? 'string',
+            description: entry.description ?? null,
             updatedAt: now,
             updatedBy,
           },

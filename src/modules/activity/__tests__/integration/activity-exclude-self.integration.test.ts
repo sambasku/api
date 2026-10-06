@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
 import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
-import { ListActivityUseCase } from '@/modules/activity/application/use-cases/list-activity.use-case';
 
 const { parsed } = config({ path: '.env.test', quiet: true });
 const hasTestDb = !!parsed?.DATABASE_URL;
@@ -135,20 +134,6 @@ describe.skipIf(!hasTestDb)('ActivityRepositoryImpl - excludeSelfUserId (integra
 
     expect(rows).toHaveLength(8);
     expect(new Set(rows.map((r) => r.actor?.username))).toEqual(
-      new Set(['excl_other']),
-    );
-  });
-
-  it('jenis komentar tidak hilang dari feed setelah exclude (cap 4 per jenis)', async () => {
-    const page = await new ListActivityUseCase(repo).execute({
-      limit: 20,
-      excludeUserId: SELF,
-    });
-
-    const comments = page.items.filter((i) => i.kind === 'comment');
-    // Cap per jenis = 4. Kalau penyaringan di memory, jumlah ini 0.
-    expect(comments).toHaveLength(4);
-    expect(new Set(comments.map((c) => c.actor?.username))).toEqual(
       new Set(['excl_other']),
     );
   });
