@@ -20,6 +20,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'discussion_created',
   'suggestion_applied',
   'suggestion_selfapply',
+  'suggestion_created',
   'search_miss',
   'user_joined',
   'card_shared',
@@ -52,6 +53,8 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'discussion_created':
       return 'discussion';
     case 'suggestion_applied':
+      return 'suggestion';
+    case 'suggestion_created':
       return 'suggestion';
     case 'search_miss':
       return 'search_miss';

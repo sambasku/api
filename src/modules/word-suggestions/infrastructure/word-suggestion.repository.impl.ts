@@ -636,6 +636,15 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       })
       .returning();
 
+    // Event feed: user mengusulkan perubahan (suggestion_created)
+    await this.emitEvent({
+      kind: 'suggestion_created',
+      actorId: userId,
+      targetWordId: wordId,
+      targetId: suggestion.id,
+      dedupeKey: `suggestion:${suggestion.id}`,
+    });
+
     let finalStatus: SuggestionStatus = 'pending';
     let reviewedBy: string | null = null;
     let reviewedAt: Date | null = null;
