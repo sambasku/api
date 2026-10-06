@@ -289,14 +289,18 @@ export class ActivityEventFeedRepositoryImpl {
         targetWordId: activityEvents.targetWordId,
         targetId: activityEvents.targetId,
         occurredAt: activityEvents.occurredAt,
+        // status kata untuk keputusan CTA (pending = tanpa target)
+        wordStatus: words.status,
       })
       .from(activityEvents)
       .leftJoin(
         words,
         and(
           eq(words.id, activityEvents.targetWordId),
-          // hanya kata layak-tayang yang lolos; event tanpa kata ikut (left join)
-          sql`${this.feedSafeWordSql()}`,
+          // hanya kata layak-tayang yang lolos; event tanpa kata ikut (left join).
+          // Kata pending (usulan baru) tetap dijoin supaya lemma kebaca;
+          // event-nya dikecualikan dari filter published lewat join ini.
+          sql`(${this.feedSafeWordSql()} or ${activityEvents.kind} = 'contribution_submitted')`,
       ))
       .where(
         and(
@@ -320,6 +324,7 @@ export class ActivityEventFeedRepositoryImpl {
     targetWordId: string | null;
     targetId: string | null;
     occurredAt: Date;
+    wordStatus: string | null;
   }>): Promise<ActivityItem[]> {
     const out: ActivityItem[] = [];
     for (const row of rows) {
@@ -336,6 +341,7 @@ export class ActivityEventFeedRepositoryImpl {
     targetWordId: string | null;
     targetId: string | null;
     occurredAt: Date;
+    wordStatus: string | null;
   }): Promise<ActivityItem | null> {
     const kind = row.kind as ActivityEventKind;
     const actor = await this.resolveActor(row.actorId);
@@ -354,7 +360,9 @@ export class ActivityEventFeedRepositoryImpl {
 
     const body = this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
-    const target = this.targetFor(kind, row, word);
+    // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
+    // Setelah approve, read-time join published menghidupkan CTA lagi.
+    const target = row.wordStatus && row.wordStatus !== 'published' ? null : this.targetFor(kind, row, word);
     const wire = KIND_TO_WIRE[kind];
 
     return {
