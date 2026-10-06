@@ -1,0 +1,46 @@
+name: Backfill Activity Payload
+
+# Sekali jalan (workflow_dispatch): isi payload event vote lama (#94).
+# Idempoten - hanya baris payload IS NULL yang di-update. Jalankan
+# berurutan: staging dulu (environment: staging), lalu production.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Database target backfill'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: backfill-activity-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Backfill staging
+        if: inputs.target == 'staging'
+        run: pnpm db:backfill-activity
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+      - name: Backfill production
+        if: inputs.target == 'production'
+        run: pnpm db:backfill-activity
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
