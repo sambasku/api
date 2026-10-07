@@ -129,6 +129,20 @@ export function createAdminSearchMissRoutes(deps: SearchMissRoutesDeps) {
     },
   });
 
+  const skipRoute = createRoute({
+    method: 'post',
+    path: '/:id/skip',
+    tags: ['Search Misses', 'Admin'],
+    summary: 'Pass - miss tidak muncul lagi di panel user ini (per user, idempotent)',
+    request: { params: z.object({ id: z.string().length(26) }) },
+    responses: {
+      200: { description: 'Miss dilewati untuk user ini', content: { 'application/json': { schema: okNullResponseSchema } } },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Role tidak diizinkan', content: json(errorResponseSchema) },
+      404: { description: 'Miss tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
   const resolveRoute = createRoute({
     method: 'post',
     path: '/:id/resolve',
@@ -157,6 +171,7 @@ export function createAdminSearchMissRoutes(deps: SearchMissRoutesDeps) {
     deps.controller.update(c, c.req.valid('param').id, c.req.valid('json')) as never,
   );
   routes.openapi(dismissRoute, (c) => deps.controller.dismiss(c, c.req.param('id')) as never);
+  routes.openapi(skipRoute, (c) => deps.controller.skip(c, c.req.param('id')) as never);
   routes.openapi(resolveRoute, (c) =>
     deps.controller.resolve(c, c.req.valid('param').id, c.req.valid('json')) as never,
   );

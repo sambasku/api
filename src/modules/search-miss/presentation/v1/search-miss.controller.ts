@@ -6,6 +6,7 @@ import type { DismissSearchMissUseCase } from '../../application/use-cases/dismi
 import type { BulkDismissSearchMissUseCase } from '../../application/use-cases/bulk-dismiss-search-miss.use-case';
 import type { UpdateSearchMissUseCase } from '../../application/use-cases/update-search-miss.use-case';
 import type { ResolveSearchMissUseCase } from '../../application/use-cases/resolve-search-miss.use-case';
+import type { SkipSearchMissUseCase } from '../../application/use-cases/skip-search-miss.use-case';
 import type {
   AdminSearchMissQueryBody,
   BulkDismissSearchMissBody,
@@ -22,6 +23,7 @@ export class SearchMissController {
       bulkDismiss: BulkDismissSearchMissUseCase;
       update: UpdateSearchMissUseCase;
       resolve: ResolveSearchMissUseCase;
+      skip: SkipSearchMissUseCase;
     },
   ) {}
 
@@ -41,11 +43,16 @@ export class SearchMissController {
 
   /** Panel admin - semua miss + filter status terjawab / tayang */
   async listAdmin(c: Context, query: AdminSearchMissQueryBody) {
+    const actor = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
     const { items, nextCursor, hasMore } = await this.deps.list.execute({
       scope: 'admin',
       direction: query.direction,
       fulfilled: query.fulfilled,
       visible: query.visible,
+      // Panel kartu (#88): miss yang sudah di-skip user ini tidak muncul
+      // lagi di panelnya - verifikator lain tetap melihatnya.
+      skipByUserId: actor.user_id,
       limit: query.limit,
       cursor: query.cursor,
     });
@@ -89,6 +96,14 @@ export class SearchMissController {
       requestId,
     });
     return c.json({ success: true as const, data: toApi(item) });
+  }
+
+  /** Pass - miss tidak muncul lagi di panel user ini (#88), idempotent */
+  async skip(c: Context, id: string) {
+    const actor = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    await this.deps.skip.execute({ missId: id, userId: actor.user_id });
+    return c.json({ success: true as const, data: null });
   }
 
   async resolve(c: Context, id: string, body: ResolveSearchMissBody) {

@@ -190,6 +190,7 @@ import { SearchMissRepositoryImpl } from '@/modules/search-miss/infrastructure/s
 import { ListSearchMissesUseCase } from '@/modules/search-miss/application/use-cases/list-search-misses.use-case';
 import { DismissSearchMissUseCase } from '@/modules/search-miss/application/use-cases/dismiss-search-miss.use-case';
 import { BulkDismissSearchMissUseCase } from '@/modules/search-miss/application/use-cases/bulk-dismiss-search-miss.use-case';
+import { SkipSearchMissUseCase } from '@/modules/search-miss/application/use-cases/skip-search-miss.use-case';
 import { UpdateSearchMissUseCase } from '@/modules/search-miss/application/use-cases/update-search-miss.use-case';
 import { ResolveSearchMissUseCase } from '@/modules/search-miss/application/use-cases/resolve-search-miss.use-case';
 import { SearchMissController } from '@/modules/search-miss/presentation/v1/search-miss.controller';
@@ -726,6 +727,7 @@ const searchMissController = new SearchMissController({
   dismiss: new DismissSearchMissUseCase(searchMissRepo, auditRepo),
   bulkDismiss: new BulkDismissSearchMissUseCase(searchMissRepo, auditRepo),
   update: new UpdateSearchMissUseCase(searchMissRepo, auditRepo, activityEvents),
+  skip: new SkipSearchMissUseCase(searchMissRepo, userSkipRepo),
   resolve: new ResolveSearchMissUseCase(
     searchMissRepo,
     wordRepo,

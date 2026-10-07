@@ -5,6 +5,7 @@ import {
   searchDaily,
   searchMisses,
   searchMissSearchers,
+  userSkips,
   wordVariants,
   words,
 } from '@/shared/database/drizzle/schema';
@@ -151,6 +152,16 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
           !isPublic && filter.fulfilled === false ? sql`NOT ${isFulfilledSql}` : undefined,
           !isPublic && filter.visible === true ? eq(searchMisses.isVisible, true) : undefined,
           !isPublic && filter.visible === false ? eq(searchMisses.isVisible, false) : undefined,
+          // Panel kartu (#88): sembunyikan miss yang sudah di-skip user ini
+          // saja - user lain tetap melihatnya.
+          !isPublic && filter.skipByUserId
+            ? sql`NOT EXISTS (
+                SELECT 1 FROM ${userSkips} s
+                WHERE s.target_id = ${searchMisses.id}
+                  AND s.target_type = 'search_miss'
+                  AND s.user_id = ${filter.skipByUserId}
+              )`
+            : undefined,
           !isPublic && filter.cursor ? lt(searchMisses.id, filter.cursor) : undefined,
         ),
       )
