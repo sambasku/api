@@ -12,6 +12,8 @@ export interface RecordActivityEventCommand {
   payload?: string | null;
   /** true = sembunyikan event dengan dedupeKey sama (bukan append baru). */
   hidden?: boolean;
+  /** #56: nama pengusul utk copy verifikasi ("Memverifikasi usulan X: ..."). */
+  proposedByName?: string | null;
 }
 
 /**

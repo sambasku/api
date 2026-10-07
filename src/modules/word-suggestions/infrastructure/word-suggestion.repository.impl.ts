@@ -514,8 +514,28 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
   /** Event log feed (write-through, AGENTS.md #25). Best-effort. */
   private events = new ActivityEventRepositoryImpl(db);
 
+  /** #56: nama tampilan pengusul - 1 select per approve, bukan read-path. */
+  private async displayNameOf(userId: string): Promise<string | null> {
+    try {
+      const { users } = await import('@/shared/database/drizzle/schema');
+      const [row] = await db
+        .select({ displayName: users.displayName, username: users.username })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      return row?.displayName || row?.username || null;
+    } catch {
+      return null;
+    }
+  }
+
   private async emitEvent(input: AppendActivityEventInput): Promise<void> {
     try {
+      // #56: verifikasi dengan pengusul → copy beku + supersede usulan lama.
+      if (input.kind === 'word_verified' && input.proposedByName) {
+        await this.events.append(input);
+        return;
+      }
       await this.events.append(input);
     } catch (err) {
       console.error('[activity-event] word-suggestion append gagal (diabaikan):', {
@@ -679,12 +699,18 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
               updatedAt: new Date(),
             })
             .where(eq(words.id, wordId));
+          // #56: pengusul = pembuat kata (bila bukan diri verifikator).
+          const proposedByName =
+            word.createdBy && word.createdBy !== userId
+              ? await this.displayNameOf(word.createdBy)
+              : null;
           await this.emitEvent({
             kind: 'word_verified',
             actorId: userId,
             targetWordId: wordId,
             targetId: wordId,
             dedupeKey: `word_verified:${wordId}`,
+            ...(proposedByName ? { proposedByName } : {}),
           });
         }
         finalStatus = 'approved';
@@ -1001,12 +1027,19 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         targetId: id,
         dedupeKey: `suggestion:${id}`,
       });
+      // #56: usulan edit diterima → verifikasi menyebut pengusulnya.
+      const proposedByName = row.proposerId
+        ? row.proposerId !== reviewerId
+          ? await this.displayNameOf(row.proposerId)
+          : null
+        : null;
       await this.emitEvent({
         kind: 'word_verified',
         actorId: reviewerId,
         targetWordId: row.wordId,
         targetId: row.wordId,
         dedupeKey: `word_verified:${row.wordId}`,
+        ...(proposedByName ? { proposedByName } : {}),
       });
       await db
         .update(wordEditSuggestions)
@@ -1041,12 +1074,19 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       targetId: id,
       dedupeKey: `suggestion:${id}`,
     });
+    // #56: verifikasi menyebut pengusul (copy "Memverifikasi usulan B: ...").
+    const proposedByName = row.proposerId
+      ? row.proposerId !== reviewerId
+        ? await this.displayNameOf(row.proposerId)
+        : null
+      : null;
     await this.emitEvent({
       kind: 'word_verified',
       actorId: reviewerId,
       targetWordId: row.wordId,
       targetId: row.wordId,
       dedupeKey: `word_verified:${row.wordId}`,
+      ...(proposedByName ? { proposedByName } : {}),
     });
     return result;
   }
