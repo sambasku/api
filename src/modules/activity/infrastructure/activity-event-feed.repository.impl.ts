@@ -374,11 +374,16 @@ export class ActivityEventFeedRepositoryImpl {
     // lama/backfill tanpa payload.
     const body = row.payload?.trim() ? row.payload.trim() : this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
+    // #99: arah vote dari copy beku (#94) - event kind DB tetap vote_word/
+    // vote_comment, split cuma di wire supaya feed home variatif tanpa
+    // migrasi kinds (kinds DB = kontrak AGENTS.md #25).
+    let wire: ActivityKind = KIND_TO_WIRE[kind];
+    if (wire === 'vote') {
+      wire = /perlu dicek ulang/.test(body) ? 'vote_down' : 'vote_up';
+    }
     // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
     // Setelah approve, read-time join published menghidupkan CTA lagi.
     const target = row.wordStatus && row.wordStatus !== 'published' ? null : this.targetFor(kind, row, word);
-    const wire = KIND_TO_WIRE[kind];
-
     return {
       id: `${wire}:${row.id}`,
       kind: wire as ActivityKind,

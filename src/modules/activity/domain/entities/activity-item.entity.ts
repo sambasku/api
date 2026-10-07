@@ -13,7 +13,9 @@ export type ActivityKind =
   | 'card_share'
   | 'suggestion'
   | 'contribution'
-  | 'verification';
+  | 'verification'
+  | 'vote_up'
+  | 'vote_down';
 
 export interface ActivityActor {
   username: string | null;

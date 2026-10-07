@@ -158,6 +158,16 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         payload: 'Memverifikasi kata',
       },
       {
+        // #99: vote turun - wire kind 'vote_down' via copy beku
+        kind: 'vote_word',
+        actorId: userId,
+        targetWordId: wordId,
+        targetId: wordId,
+        occurredAt: new Date(),
+        dedupeKey: `vote:down:${userId}:word:${wordId}`,
+        payload: '"lemmaact' + stamp + '" perlu dicek ulang',
+      },
+      {
         kind: 'search_miss',
         actorId: null,
         targetWordId: null,
@@ -246,7 +256,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     expect(miss!.actor).toBeNull();
     expect(miss!.body).toMatch(/Mencari ".+" - belum ada/);
 
-    const vote = body.data.find((i) => i.kind === 'vote');
+    const vote = body.data.find((i) => i.kind === 'vote_up');
     expect(vote?.actor?.username).toBeTruthy();
     // #94: payload beku menang atas fallback bodyFor (vote tanpa payload = '')
     expect(vote!.body).toMatch(/^"lemmaact\d+" sudah pas$/);
@@ -255,6 +265,14 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     const verification = body.data.find((i) => i.kind === 'verification');
     expect(verification).toBeTruthy();
     expect(verification!.body).toBe('Memverifikasi kata');
+
+    // #99: arah vote terpisah di wire
+    const up = body.data.find((i) => i.kind === 'vote_up');
+    expect(up).toBeTruthy();
+    expect(up!.body).toMatch(/sudah pas$/);
+    const down = body.data.find((i) => i.kind === 'vote_down');
+    expect(down).toBeTruthy();
+    expect(down!.body).toMatch(/perlu dicek ulang$/);
 
     const welcome = body.data.find((i) => i.kind === 'welcome');
     expect(welcome).toBeTruthy();
