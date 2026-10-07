@@ -1227,6 +1227,16 @@ export class WordRepositoryImpl implements WordRepository {
       letter ? sql`${lemmaAz} LIKE ${`${escapeLike(letter)}%`}` : undefined,
       params.wordType ? eq(words.wordType, params.wordType) : undefined,
       params.isVerified === undefined ? undefined : eq(words.isVerified, params.isVerified),
+      // Filter kategori (api#50): satukan id & nama dalam satu EXISTS -
+      // 1 subquery inline (bukan query tambahan).
+      params.category
+        ? sql`exists (
+            select 1 from word_categories wc
+            inner join categories cg on cg.id = wc.category_id
+            where wc.word_id = ${words.id}
+              and (cg.id = ${params.category} or lower(cg.name) = lower(${params.category}))
+          )`
+        : undefined,
       params.cursor
         ? sql`(${lemmaAz}, ${words.id}) > (lower(${params.cursor.lemma}), ${params.cursor.id})`
         : undefined,

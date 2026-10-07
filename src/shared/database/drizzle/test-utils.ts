@@ -11,6 +11,7 @@ import {
   bookmarks,
   bugReports,
   categories,
+  categorySuggestions,
   commentBlocklistWords,
   comments,
   contributionReviews,
@@ -242,6 +243,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     wordVariants,
     meanings,
     words,
+    // Anak users (FK proposed_by/reviewed_by) - sebelum users.
+    categorySuggestions,
     categories,
     wordClasses,
     dialects,
