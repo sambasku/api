@@ -18,13 +18,14 @@ const actor = (
   summary,
 });
 
-/** Mock event feed repo: 4 kategori dengan halaman berbeda. */
-function eventFeed(pages: Partial<Record<'contribution' | 'comment' | 'verification' | 'vote', PublicActivityItem[]>> = {}) {
+/** Mock event feed repo: halaman per kategori (merge = 1 key 'merged'). */
+type FeedKey = 'contribution' | 'comment' | 'verification' | 'vote' | 'merged';
+function eventFeed(pages: Partial<Record<FeedKey, PublicActivityItem[]>> = {}) {
   return {
     listPublicByActor: vi.fn(
       async (
         _actorId: string,
-        category: 'contribution' | 'comment' | 'verification' | 'vote',
+        category: FeedKey,
       ): Promise<{ items: PublicActivityItem[]; nextCursor: string | null; hasMore: boolean }> => ({
         items: pages[category] ?? [],
         nextCursor: null,
@@ -55,13 +56,17 @@ describe('GetPublicActivityUseCase - dari activity_events (#86)', () => {
     await expect(uc.execute('tidakada')).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('merge 4 kategori, urut occurred_at desc', async () => {
+  it('merge: 1 query mode merged, urutan desc diteruskan apa adanya (#103)', async () => {
     const now = Date.now();
+    // Repo sudah ORDER BY (occurred_at, id) DESC global - data masuk terurut,
+    // use-case tidak sort lagi (dulu: 4 panggilan + sort gabungan).
     const feed = eventFeed({
-      contribution: [actor('01C1', 'contribution', new Date(now - 1000), 'Menambahkan foto')],
-      comment: [actor('01M1', 'comment', new Date(now), 'Mengomentari kata')],
-      verification: [actor('01V1', 'verification', new Date(now - 500), 'Memverifikasi kata')],
-      vote: [actor('01X1', 'vote', new Date(now - 2000), 'Mendukung kata')],
+      merged: [
+        actor('01M1', 'comment', new Date(now), 'Mengomentari kata'),
+        actor('01V1', 'verification', new Date(now - 500), 'Memverifikasi kata'),
+        actor('01C1', 'contribution', new Date(now - 1000), 'Menambahkan foto'),
+        actor('01X1', 'vote', new Date(now - 2000), 'Mendukung kata'),
+      ],
     });
 
     const page = await new GetPublicActivityUseCase(userRepo(), feed).execute('budi');
@@ -74,8 +79,9 @@ describe('GetPublicActivityUseCase - dari activity_events (#86)', () => {
     ]);
     // Mode merge tanpa cursor.
     expect(page.nextCursor).toBeUndefined();
-    // Semua 4 kategori ditanya.
-    expect(feed.listPublicByActor).toHaveBeenCalledTimes(4);
+    // SATU panggilan 'merged' (dulu 4 kategori paralel = 4 subrequest).
+    expect(feed.listPublicByActor).toHaveBeenCalledTimes(1);
+    expect(feed.listPublicByActor).toHaveBeenCalledWith('u1', 'merged', 20);
   });
 
   it('mode terfilter: teruskan limit + cursor ke repo event, kembalikan meta cursor', async () => {
