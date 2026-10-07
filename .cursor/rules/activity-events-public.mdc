@@ -1,0 +1,37 @@
+---
+description: Feed publik = activity_events + payload beku; fitur baru yang menghasilkan aksi publik wajib daftar event + payload beku di sesi yang sama.
+alwaysApply: false
+globs: ["src/modules/activity/**", "src/modules/announcement/**"]
+---
+
+# Activity events: daftar tunggal + payload beku (pola #94/#102)
+
+Feed publik dibangun dari tabel `activity_events`. Setiap kind harus terdaftar
+di **empat tempat sekaligus** (satu sesi kerja, jangan menunda):
+
+1. `ACTIVITY_EVENT_KINDS` + `announcementDedupeKey`-style helper —
+   `src/modules/activity/domain/entities/activity-event.entity.ts`
+2. `kindToWire` / `KIND_BODY` / `targetFor` / `buildItem` —
+   `src/modules/activity/infrastructure/activity-event-feed.repository.impl.ts`
+3. `ActivityKind` union + field wire —
+   `src/modules/activity/domain/entities/activity-item.entity.ts`
+   dan `toWire` di `presentation/v1/activity.controller.ts`
+4. Tabel daftar event di `AGENTS.md` root + `docs/api/37-api-activity-feed.md`
+   (+ `docs/mobile/23-...` bila mobile ikut render).
+
+Wajib:
+
+- **Payload beku (#94)**: copy yang bergantung state saat kejadian disimpan
+  JSON di `activity_events.payload` saat write — feed membaca payload, tidak
+  kalkulasi live read-time. Update entitas = re-publish copy dengan dedupe
+  key sama; delete = soft delete + hide event (pola #56), tidak pernah
+  `DELETE` baris feed.
+- **Tabel baru ikut `truncateAll`** (`src/shared/database/drizzle/test-utils.ts`)
+  — sebelum `users` bila ada FK `created_by` (race parallel truncate).
+- ** JOIN, bukan N+1** saat membaca feed (rule `join-bukan-n-panggilan.mdc`).
+- Mapper klien hanya parse field kind-tersebut saat `kind` cocok; tanpa
+  payload item tetap tayang (fallback), tidak di-drop.
+
+Contoh implementasi lengkap: modul `announcement` (#102) — write-through event
++ gate role root/admin + whitelist host `action_url` (https saja) di
+`announcement.validator.ts` + keyset cursor ULID `before` (tanpa offset).
