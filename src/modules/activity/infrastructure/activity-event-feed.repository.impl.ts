@@ -28,7 +28,7 @@ import type { ActivityCursor } from '../domain/merge-activity';
 
 const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   word_created: 'word',
-  word_verified: 'vote' as ActivityKind, // wire lama tak punya 'verification'; dikoreksi di bawah
+  word_verified: 'verification', // #99: verifikasi dibedakan dari vote di wire
   contribution_image: 'word_image',
   contribution_audio: 'word_audio',
   contribution_pron: 'pronunciation',

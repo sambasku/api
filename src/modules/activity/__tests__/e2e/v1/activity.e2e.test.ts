@@ -148,6 +148,16 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         payload: `"lemmaact${stamp}" sudah pas`,
       },
       {
+        // #99: verifikasi reviewer - HARUS wire kind 'verification', bukan 'vote'
+        kind: 'word_verified',
+        actorId: userId,
+        targetWordId: wordId,
+        targetId: wordId,
+        occurredAt: new Date(),
+        dedupeKey: `word_verified:${wordId}`,
+        payload: 'Memverifikasi kata',
+      },
+      {
         kind: 'search_miss',
         actorId: null,
         targetWordId: null,
@@ -240,6 +250,11 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     expect(vote?.actor?.username).toBeTruthy();
     // #94: payload beku menang atas fallback bodyFor (vote tanpa payload = '')
     expect(vote!.body).toMatch(/^"lemmaact\d+" sudah pas$/);
+
+    // #99: word_verified terpisah dari vote di wire
+    const verification = body.data.find((i) => i.kind === 'verification');
+    expect(verification).toBeTruthy();
+    expect(verification!.body).toBe('Memverifikasi kata');
 
     const welcome = body.data.find((i) => i.kind === 'welcome');
     expect(welcome).toBeTruthy();
