@@ -88,10 +88,11 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
       // #56: verifikasi kata = puncak cerita kata itu. Event usulan
       // (contribution_submitted / word_created pengusul) utk kata yang sama
       // ditandai superseded → feed home 1 baris, profil tetap memuat riwayat.
-      // Payload beku membawa nama pengusul (copy "Memverifikasi usulan X: ...").
+      // #110: copy 'Memverifikasi: "B" (usulan X)' - lemma dikutip biar
+      // mobile splitQuotedLemma mem-bold-nya.
       if (input.kind === 'word_verified' && targetWordId) {
         const payload = input.proposedByName
-          ? `Memverifikasi usulan ${input.proposedByName}: {lemma}`
+          ? `Memverifikasi: "{lemma}" (usulan ${input.proposedByName})`
           : (input.payload ?? null);
         const [inserted] = await tx
           .insert(activityEvents)

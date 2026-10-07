@@ -95,7 +95,7 @@ export interface AppendActivityEventInput {
   hidden?: boolean;
   /**
    * #56: nama tampilan pengusul utk kind word_verified (copy beku
-   * "Memverifikasi usulan {name}: ..."). Ambil dari row yang sudah di-load
+   * "Memverifikasi: \"{lemma}\" (usulan {name})"). Ambil dari row yang sudah di-load
    * caller - tanpa query ekstra.
    */
   proposedByName?: string | null;

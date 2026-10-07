@@ -1074,7 +1074,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       targetId: id,
       dedupeKey: `suggestion:${id}`,
     });
-    // #56: verifikasi menyebut pengusul (copy "Memverifikasi usulan B: ...").
+    // #56/#110: verifikasi menyebut pengusul ('Memverifikasi: "kata" (usulan B)').
     const proposedByName = row.proposerId
       ? row.proposerId !== reviewerId
         ? await this.displayNameOf(row.proposerId)

@@ -137,8 +137,9 @@ describe.skipIf(!hasTestDb)('Verification feed consolidation - #56', () => {
     const rows = (feed.data as any[]).filter((it: any) => it.body?.includes(lemma));
     expect(rows.length).toBe(1);
     expect(rows[0].kind).toBe('verification');
-    // Copy #2: "Memverifikasi usulan {B}: lemma".
-    expect(rows[0].body).toBe(`Memverifikasi usulan ${contributorUsername}: ${lemma}`);
+    // #110: 'Memverifikasi: "lemma" (usulan B)' - kutip = penanda bold.
+    expect(rows[0].body)
+      .toBe(`Memverifikasi: "${lemma}" (usulan ${contributorUsername})`);
 
     // Event store: usulan lama superseded (bukan hidden/delete).
     const verifEvents = await db.select().from(activityEvents).where(eq(activityEvents.kind, 'word_verified'));
