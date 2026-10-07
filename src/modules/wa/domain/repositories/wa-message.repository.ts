@@ -24,8 +24,19 @@ export interface WaLogListQuery {
   cursor?: string | null;
 }
 
+export interface WaTemplateCreateInput {
+  eventKey: string;
+  enabled: boolean;
+  metaTemplateName: string;
+  metaTemplateLanguage: string;
+  body: string;
+  params: WaTemplateParam[];
+}
+
 export interface WaTemplateRepository {
   list(): Promise<WaMessageTemplate[]>;
+  /** Buat template event baru (console #31) - event_key unik, 409 saat bentrok. */
+  create(input: WaTemplateCreateInput, actorId: string): Promise<WaMessageTemplate>;
   getByKey(eventKey: string): Promise<WaMessageTemplate | null>;
   update(id: string, input: WaTemplateUpdateInput, actorId: string): Promise<WaMessageTemplate>;
 }

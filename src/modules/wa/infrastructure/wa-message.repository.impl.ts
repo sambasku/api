@@ -1,4 +1,5 @@
-import { NotFoundError } from '@/shared/errors/app-error';
+import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
 import { and, desc, eq, lt, sql } from 'drizzle-orm';
 import {
   waMessageLogs,
@@ -18,7 +19,7 @@ import type {
   WaLogListQuery,
   WaMessageLogRepository,
   WaTemplateRepository,
-  WaTemplateUpdateInput,
+  WaTemplateCreateInput, WaTemplateUpdateInput,
   WaUsageRepository,
   WaUsageUpdateInput,
 } from '../domain/repositories/wa-message.repository';
@@ -43,6 +44,29 @@ export class WaTemplateRepositoryImpl implements WaTemplateRepository {
   async list(): Promise<WaMessageTemplate[]> {
     const rows = await this.db.select().from(waMessageTemplates).orderBy(waMessageTemplates.eventKey);
     return rows.map(toTemplate);
+  }
+
+  async create(input: WaTemplateCreateInput, actorId: string): Promise<WaMessageTemplate> {
+    const [row] = await this.db
+      .insert(waMessageTemplates)
+      .values({
+        eventKey: input.eventKey,
+        enabled: input.enabled,
+        metaTemplateName: input.metaTemplateName,
+        metaTemplateLanguage: input.metaTemplateLanguage,
+        body: input.body,
+        params: input.params,
+        updatedAt: new Date(),
+        updatedBy: actorId,
+      })
+      .returning()
+      .catch((err: unknown) => {
+        if (isUniqueViolation(err)) {
+          throw new ConflictError('WA_TEMPLATE_EVENT_KEY_CONFLICT', 'event_key sudah dipakai template lain');
+        }
+        throw err;
+      });
+    return toTemplate(row!);
   }
 
   async getByKey(eventKey: string): Promise<WaMessageTemplate | null> {
