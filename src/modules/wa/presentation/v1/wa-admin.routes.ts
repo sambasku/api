@@ -33,8 +33,8 @@ const waTemplateSchema = z.object({
   updated_by: z.string().nullable(),
 });
 
-const waTemplateListResponseSchema = z.object({ templates: z.array(waTemplateSchema) });
-const waTemplateResponseSchema = z.object({ template: waTemplateSchema });
+const waTemplateListResponseSchema = z.object({ success: z.literal(true), data: z.object({ templates: z.array(waTemplateSchema) }) });
+const waTemplateResponseSchema = z.object({ success: z.literal(true), data: z.object({ template: waTemplateSchema }) });
 
 const updateWaTemplateBodySchema = z.object({
   enabled: z.boolean().optional(),
@@ -55,7 +55,7 @@ const waUsageSchema = z.object({
   updated_at: z.string().nullable(),
 });
 
-const waUsageResponseSchema = z.object({ usage: waUsageSchema });
+const waUsageResponseSchema = z.object({ success: z.literal(true), data: z.object({ usage: waUsageSchema }) });
 
 const updateWaUsageBodySchema = z.object({
   used_count: z.number().int().min(0).optional(),
@@ -76,8 +76,11 @@ const waLogSchema = z.object({
 });
 
 const waLogListResponseSchema = z.object({
-  logs: z.array(waLogSchema),
-  next_cursor: z.string().nullable(),
+  success: z.literal(true),
+  data: z.object({
+    logs: z.array(waLogSchema),
+    next_cursor: z.string().nullable(),
+  }),
 });
 
 const listWaLogsQuerySchema = z.object({
@@ -91,9 +94,21 @@ const testSendBodySchema = z.object({
 });
 
 const testSendResponseSchema = z.object({
-  sent: z.boolean(),
-  reason: z.string().nullable(),
-  usage: waUsageSchema.nullable(),
+  success: z.literal(true),
+  data: z.object({
+    sent: z.boolean(),
+    reason: z.string().nullable(),
+    usage: waUsageSchema.nullable(),
+  }),
+});
+
+const createWaTemplateBodySchema = z.object({
+  event_key: z.string().trim().min(2).max(80).regex(/^[a-z0-9_]+$/, 'event_key hanya huruf kecil, angka, underscore'),
+  meta_template_name: z.string().trim().min(1).max(512),
+  meta_template_language: z.string().trim().min(1).max(10).default('id'),
+  body: z.string().min(1).max(1024),
+  params: z.array(waTemplateParamSchema).default([]),
+  enabled: z.boolean().default(false),
 });
 
 export interface WaAdminRoutesDeps {
@@ -258,9 +273,41 @@ export function createWaAdminRoutes(deps: WaAdminRoutesDeps) {
     },
   });
 
+  const createTemplateRoute = createRoute({
+    method: 'post',
+    path: '/templates',
+    tags: ['WA', 'Admin'],
+    summary: 'Buat template WA baru (event baru tanpa migrasi seed)',
+    request: { body: { content: json(createWaTemplateBodySchema) } },
+    responses: {
+      201: { description: 'Template dibuat', content: json(waTemplateResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan admin/root', content: json(errorResponseSchema) },
+      409: { description: 'event_key sudah dipakai', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(listTemplatesRoute, async (c) => {
     const templates = await deps.templateRepo.list();
-    return c.json({ templates: templates.map(serializeTemplate) }) as never;
+    return c.json({ success: true as const, data: { templates: templates.map(serializeTemplate) } }) as never;
+  });
+
+  routes.openapi(createTemplateRoute, async (c) => {
+    const body = c.req.valid('json');
+    const actor = requireUser(c);
+    const created = await deps.templateRepo.create(
+      {
+        eventKey: body.event_key,
+        enabled: body.enabled,
+        metaTemplateName: body.meta_template_name,
+        metaTemplateLanguage: body.meta_template_language,
+        body: body.body,
+        params: body.params,
+      },
+      actor.user_id,
+    );
+    return c.json({ success: true as const, data: { template: serializeTemplate(created) } }, 201) as never;
   });
 
   routes.openapi(updateTemplateRoute, async (c) => {
@@ -296,12 +343,12 @@ export function createWaAdminRoutes(deps: WaAdminRoutesDeps) {
       },
       requireUser(c).user_id,
     );
-    return c.json({ template: serializeTemplate(updated) }) as never;
+    return c.json({ success: true as const, data: { template: serializeTemplate(updated) } }) as never;
   });
 
   routes.openapi(getUsageRoute, async (c) => {
     const usage = await deps.usageRepo.getActive('kapso');
-    return c.json({ usage: serializeUsage(usage) }) as never;
+    return c.json({ success: true as const, data: { usage: serializeUsage(usage) } }) as never;
   });
 
   routes.openapi(updateUsageRoute, async (c) => {
@@ -317,25 +364,28 @@ export function createWaAdminRoutes(deps: WaAdminRoutesDeps) {
       },
       requireUser(c).user_id,
     );
-    return c.json({ usage: serializeUsage(usage) }) as never;
+    return c.json({ success: true as const, data: { usage: serializeUsage(usage) } }) as never;
   });
 
   routes.openapi(listLogsRoute, async (c) => {
     const query = c.req.valid('query') as z.infer<typeof listWaLogsQuerySchema>;
     const result = await deps.logRepo.list({ cursor: query.cursor ?? null, limit: query.limit });
     return c.json({
-      logs: result.items.map((l) => ({
-        id: l.id,
-        provider: l.provider,
-        event_key: l.eventKey,
-        to_phone: l.toPhone,
-        template_name: l.templateName,
-        channel: l.channel,
-        status: l.status,
-        error_message: l.errorMessage,
-        created_at: l.createdAt.toISOString(),
-      })),
-      next_cursor: result.nextCursor,
+      success: true as const,
+      data: {
+        logs: result.items.map((l) => ({
+          id: l.id,
+          provider: l.provider,
+          event_key: l.eventKey,
+          to_phone: l.toPhone,
+          template_name: l.templateName,
+          channel: l.channel,
+          status: l.status,
+          error_message: l.errorMessage,
+          created_at: l.createdAt.toISOString(),
+        })),
+        next_cursor: result.nextCursor,
+      },
     }) as never;
   });
 
@@ -353,7 +403,7 @@ export function createWaAdminRoutes(deps: WaAdminRoutesDeps) {
     } catch {
       usage = null;
     }
-    return c.json({ sent: result.sent, reason: result.reason ?? null, usage }) as never;
+    return c.json({ success: true as const, data: { sent: result.sent, reason: result.reason ?? null, usage } }) as never;
   });
 
   return routes;

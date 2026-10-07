@@ -190,6 +190,7 @@ import { SearchMissRepositoryImpl } from '@/modules/search-miss/infrastructure/s
 import { ListSearchMissesUseCase } from '@/modules/search-miss/application/use-cases/list-search-misses.use-case';
 import { DismissSearchMissUseCase } from '@/modules/search-miss/application/use-cases/dismiss-search-miss.use-case';
 import { BulkDismissSearchMissUseCase } from '@/modules/search-miss/application/use-cases/bulk-dismiss-search-miss.use-case';
+import { SkipSearchMissUseCase } from '@/modules/search-miss/application/use-cases/skip-search-miss.use-case';
 import { UpdateSearchMissUseCase } from '@/modules/search-miss/application/use-cases/update-search-miss.use-case';
 import { ResolveSearchMissUseCase } from '@/modules/search-miss/application/use-cases/resolve-search-miss.use-case';
 import { SearchMissController } from '@/modules/search-miss/presentation/v1/search-miss.controller';
@@ -238,6 +239,11 @@ import { ListBugReportsUseCase } from '@/modules/bug-report/application/use-case
 import { ResolveBugReportUseCase } from '@/modules/bug-report/application/use-cases/resolve-bug-report.use-case';
 import { BugReportController } from '@/modules/bug-report/presentation/v1/bug-report.controller';
 import { createBugReportRoutes } from '@/modules/bug-report/presentation/v1/bug-report.routes';
+import { createCategorySuggestionModule } from '@/modules/category-suggestion/factories/category-suggestion.factory';
+import {
+  createAdminCategorySuggestionRoutes,
+  createCategorySuggestionRoutes,
+} from '@/modules/category-suggestion/presentation/v1/category-suggestion.routes';
 import { createAdminBugReportRoutes } from '@/modules/bug-report/presentation/v1/admin-bug-report.routes';
 import { DiscussionRepositoryImpl } from '@/modules/discussion/infrastructure/discussion.repository.impl';
 import { CreateDiscussionUseCase } from '@/modules/discussion/application/use-cases/create-discussion.use-case';
@@ -726,6 +732,7 @@ const searchMissController = new SearchMissController({
   dismiss: new DismissSearchMissUseCase(searchMissRepo, auditRepo),
   bulkDismiss: new BulkDismissSearchMissUseCase(searchMissRepo, auditRepo),
   update: new UpdateSearchMissUseCase(searchMissRepo, auditRepo, activityEvents),
+  skip: new SkipSearchMissUseCase(searchMissRepo, userSkipRepo),
   resolve: new ResolveSearchMissUseCase(
     searchMissRepo,
     wordRepo,
@@ -1301,6 +1308,22 @@ app.route(
   '/api/v1/bug-reports',
   createBugReportRoutes({ controller: bugReportController, optionalAuthenticate, authenticate }),
 );
+const categorySuggestionModule = createCategorySuggestionModule({ db, auditRepo });
+app.route(
+  '/api/v1/category-suggestions',
+  createCategorySuggestionRoutes({
+    controller: categorySuggestionModule.controller,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  '/api/v1/admin/category-suggestions',
+  createAdminCategorySuggestionRoutes({
+    controller: categorySuggestionModule.controller,
+    authenticate,
+  }),
+);
+
 app.route(
   '/api/v1/admin/bug-reports',
   createAdminBugReportRoutes({ controller: bugReportController, authenticate }),

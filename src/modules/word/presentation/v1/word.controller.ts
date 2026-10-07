@@ -649,6 +649,7 @@ export class WordController {
       cursor: query.cursor,
       wordType: query.word_type,
       isVerified: query.is_verified,
+      category: query.category,
     });
     setPublicWordReadCache(c);
     return c.json({

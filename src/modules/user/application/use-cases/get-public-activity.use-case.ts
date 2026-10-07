@@ -44,21 +44,13 @@ export class GetPublicActivityUseCase {
       return { items: page.items, nextCursor: page.nextCursor };
     }
 
-    // Mode merge: 4 kategori lalu gabung terbaru (top 20 campuran, tanpa cursor).
-    const [contributions, comments, verifications, votes] = await Promise.all([
-      this.eventFeedRepo.listPublicByActor(user.id, 'contribution', limit),
-      this.eventFeedRepo.listPublicByActor(user.id, 'comment', limit),
-      this.eventFeedRepo.listPublicByActor(user.id, 'verification', limit),
-      this.eventFeedRepo.listPublicByActor(user.id, 'vote', limit),
-    ]);
-    const items = [
-      ...contributions.items,
-      ...comments.items,
-      ...verifications.items,
-      ...votes.items,
-    ]
-      .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
-      .slice(0, limit);
-    return { items };
+    // Mode merge: 1 query 'merged' (#103) - repo sudah ORDER BY desc global,
+    // sort+slice 4 kategori tidak diperlukan lagi. Tanpa cursor (kontrak lama).
+    const page = await this.eventFeedRepo.listPublicByActor(
+      user.id,
+      'merged',
+      limit,
+    );
+    return { items: page.items };
   }
 }

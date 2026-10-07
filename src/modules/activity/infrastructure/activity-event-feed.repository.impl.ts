@@ -28,7 +28,7 @@ import type { ActivityCursor } from '../domain/merge-activity';
 
 const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   word_created: 'word',
-  word_verified: 'vote' as ActivityKind, // wire lama tak punya 'verification'; dikoreksi di bawah
+  word_verified: 'verification', // #99: verifikasi dibedakan dari vote di wire
   contribution_image: 'word_image',
   contribution_audio: 'word_audio',
   contribution_pron: 'pronunciation',
@@ -87,6 +87,67 @@ function cursorFromEventId(id: string): { id: string; createdAt: Date } {
   return { id, createdAt: new Date(ms) };
 }
 
+/** Kategori timeline profil publik (19-api-profil-publik). */
+type ProfileCategory = 'contribution' | 'comment' | 'verification' | 'vote';
+
+/**
+ * Kind event -> kategori profil. Persis 4 set lama; kind lain (welcome,
+ * search_miss, discussion, card_shared) memang tak pernah tayang di profil.
+ */
+const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
+  contribution: [
+    'word_created',
+    'contribution_image',
+    'contribution_audio',
+    'contribution_pron',
+    'contribution_example',
+    'suggestion_applied',
+    'suggestion_created',
+    'contribution_submitted',
+  ],
+  comment: ['comment_created'],
+  verification: ['word_verified', 'suggestion_selfapply'],
+  vote: ['vote_word', 'vote_comment'],
+};
+
+/** Mode merge profil: 1 query, 13 kind = gabungan 4 kategori (#103). */
+const MERGED_PROFILE_KINDS: ActivityEventKind[] = [
+  ...PROFILE_KIND_SETS.contribution,
+  ...PROFILE_KIND_SETS.comment,
+  ...PROFILE_KIND_SETS.verification,
+  ...PROFILE_KIND_SETS.vote,
+];
+
+function profileCategoryOf(kind: ActivityEventKind): ProfileCategory {
+  const hit = (Object.keys(PROFILE_KIND_SETS) as ProfileCategory[]).find(
+    (cat) => (PROFILE_KIND_SETS[cat] as readonly string[]).includes(kind),
+  );
+  return hit ?? 'contribution';
+}
+
+/**
+ * Baris selectVisible + kolom JOIN (#103): semua kebutuhan buildItem/
+ * listPublicByActor datang dari SATU query tanpa resolve per baris.
+ */
+interface FeedRow {
+  id: string;
+  kind: string;
+  actorId: string | null;
+  targetWordId: string | null;
+  targetId: string | null;
+  occurredAt: Date;
+  payload: string | null;
+  wordStatus: string | null;
+  lemma: string | null;
+  actorUserId: string | null;
+  actorUsername: string | null;
+  actorDisplayName: string | null;
+  actorAvatarUrl: string | null;
+  actorDeletedAt: Date | null;
+  missTerm: string | null;
+  voteValue: number | null;
+}
+
 export class ActivityEventFeedRepositoryImpl {
   constructor(private readonly db: AppDatabase) {}
 
@@ -96,7 +157,9 @@ export class ActivityEventFeedRepositoryImpl {
     before?: ActivityCursor,
     excludeUserId?: string,
   ): Promise<ActivityItem[]> {
-    const rows = await this.selectVisible(limit, before, excludeUserId);
+    // #56: event superseded (usulan yang ceritanya sudah jadi verifikasi)
+    // tidak tayang di feed home - profil (listByActor) tetap memuatnya.
+    const rows = await this.selectVisible(limit, before, excludeUserId, undefined, undefined, true);
     return this.buildItems(rows);
   }
 
@@ -122,69 +185,42 @@ export class ActivityEventFeedRepositoryImpl {
    */
   async listPublicByActor(
     actorId: string,
-    category: 'contribution' | 'comment' | 'verification' | 'vote',
+    category: ProfileCategory | 'merged',
     limit: number,
     cursor?: string,
   ): Promise<{ items: PublicActivityItem[]; nextCursor: string | null; hasMore: boolean }> {
-    const kindSets: Record<typeof category, ActivityEventKind[]> = {
-      contribution: [
-        'word_created',
-        'contribution_image',
-        'contribution_audio',
-        'contribution_pron',
-        'contribution_example',
-        'suggestion_applied',
-        'suggestion_created',
-        'contribution_submitted',
-      ],
-      comment: ['comment_created'],
-      verification: ['word_verified', 'suggestion_selfapply'],
-      vote: ['vote_word', 'vote_comment'],
-    };
+    // 'merged' = 1 query utk semua kategori (use-case profil dulu memanggil
+    // method ini 4x paralel -> 4 subrequest tiap kali; #103).
+    const kinds =
+      category === 'merged'
+        ? MERGED_PROFILE_KINDS
+        : PROFILE_KIND_SETS[category];
     const rows = await this.selectVisible(
       limit + 1,
       cursor ? cursorFromEventId(cursor) : undefined,
       undefined,
       actorId,
-      kindSets[category],
+      kinds,
     );
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const items: PublicActivityItem[] = [];
     for (const row of page) {
       const kind = row.kind as ActivityEventKind;
-      const word = row.targetWordId ? await this.resolveWord(row.targetWordId) : null;
-      const lemma = word?.lemma ?? null;
+      // #103: lemma & arah vote datang dari JOIN selectVisible - tanpa
+      // resolveWord / query tabel votes per baris.
+      const lemma = row.targetWordId ? row.lemma : null;
       // #94: payload beku menang (satu sumber kebenaran feed+profil). Live
       // votes hanya fallback untuk event lama tanpa payload.
       const frozen = row.payload?.trim() || null;
-      let voteValue: number | null = null;
-      if (
-        !frozen &&
-        (kind === 'vote_word' || kind === 'vote_comment') &&
-        row.targetId
-      ) {
-        // Arah vote dibaca read-time dari tabel votes (mobile membaca arah
-        // dari akhiran summary, kontrak feed lama). targetId event = entityId
-        // target (wordId / commentId), bukan id baris votes.
-        const [v] = await this.db
-          .select({ value: votes.value })
-          .from(votes)
-          .where(
-            and(
-              eq(votes.userId, actorId),
-              eq(votes.entityType, kind === 'vote_word' ? 'word' : 'comment'),
-              eq(votes.entityId, row.targetId),
-            ),
-          )
-          .limit(1);
-        voteValue = v?.value ?? null;
-      }
+      const voteValue = row.voteValue;
       items.push({
         id: row.id,
-        kind: category,
+        // mode 'merged': kategori diturunkan dari kind (kontrak 4 kategori
+        // profil tetap utuh).
+        kind: category === 'merged' ? profileCategoryOf(kind) : category,
         occurredAt: row.occurredAt,
-        wordId: word?.id ?? null,
+        wordId: row.targetWordId,
         lemma,
         summary:
           frozen ?? this.publicSummary(kind, lemma, row.targetId, voteValue),
@@ -271,9 +307,14 @@ export class ActivityEventFeedRepositoryImpl {
     excludeUserId?: string,
     actorId?: string,
     kinds?: ActivityEventKind[],
+    excludeSuperseded?: boolean,
   ) {
     const occurredAt = activityEvents.occurredAt;
     const conds = this.baseConditions(excludeUserId, actorId);
+    if (excludeSuperseded) {
+      // #56: superseded = cerita lama yang sudah digantikan verifikasi.
+      conds.push(sql`${activityEvents.supersededAt} is null`);
+    }
     if (kinds && kinds.length > 0) {
       conds.push(inArray(activityEvents.kind, kinds));
     }
@@ -301,6 +342,18 @@ export class ActivityEventFeedRepositoryImpl {
         payload: activityEvents.payload,
         // status kata untuk keputusan CTA (pending = tanpa target)
         wordStatus: words.status,
+        // #103: field dari JOIN - ganti resolveWord/resolveActor per baris.
+        lemma: words.lemma,
+        actorUserId: users.id,
+        actorUsername: users.username,
+        actorDisplayName: users.displayName,
+        actorAvatarUrl: users.avatarUrl,
+        actorDeletedAt: users.deletedAt,
+        // search_miss: term body feed; guard kind supaya kolisi id antar
+        // tabel (ULID) tak pernah match utk kind lain.
+        missTerm: searchMisses.term,
+        // fallback arah vote utk event lama tanpa payload (#94).
+        voteValue: votes.value,
       })
       .from(activityEvents)
       .leftJoin(
@@ -311,7 +364,23 @@ export class ActivityEventFeedRepositoryImpl {
           // Kata pending (usulan baru) tetap dijoin supaya lemma kebaca;
           // event-nya dikecualikan dari filter published lewat join ini.
           sql`(${this.feedSafeWordSql()} or ${activityEvents.kind} = 'contribution_submitted')`,
-      ))
+        ),
+      )
+      .leftJoin(users, eq(users.id, activityEvents.actorId))
+      .leftJoin(
+        searchMisses,
+        and(
+          eq(activityEvents.kind, 'search_miss'),
+          eq(searchMisses.id, activityEvents.targetId),
+        ),
+      )
+      .leftJoin(
+        votes,
+        and(
+          eq(votes.userId, activityEvents.actorId),
+          sql`((${activityEvents.kind} = 'vote_word' and ${votes.entityType} = 'word' and ${votes.entityId} = ${activityEvents.targetId}) or (${activityEvents.kind} = 'vote_comment' and ${votes.entityType} = 'comment' and ${votes.entityId} = ${activityEvents.targetId}))`,
+        ),
+      )
       .where(
         and(
           ...conds,
@@ -327,58 +396,52 @@ export class ActivityEventFeedRepositoryImpl {
 
   // ----------------------------------------------------------------- build --
 
-  private async buildItems(rows: Array<{
-    id: string;
-    kind: string;
-    actorId: string | null;
-    targetWordId: string | null;
-    targetId: string | null;
-    occurredAt: Date;
-    payload: string | null;
-    wordStatus: string | null;
-  }>): Promise<ActivityItem[]> {
+  private buildItems(rows: FeedRow[]): ActivityItem[] {
     const out: ActivityItem[] = [];
     for (const row of rows) {
-      const item = await this.buildItem(row);
+      const item = this.buildItem(row);
       if (item) out.push(item);
     }
     return out;
   }
 
-  private async buildItem(row: {
-    id: string;
-    kind: string;
-    actorId: string | null;
-    targetWordId: string | null;
-    targetId: string | null;
-    occurredAt: Date;
-    payload: string | null;
-    wordStatus: string | null;
-  }): Promise<ActivityItem | null> {
+  private buildItem(row: FeedRow): ActivityItem | null {
     const kind = row.kind as ActivityEventKind;
-    const actor = await this.resolveActor(row.actorId);
-    const word = row.targetWordId ? await this.resolveWord(row.targetWordId) : null;
+    // #103: semua field datang dari JOIN selectVisible - tanpa query per baris.
+    const actor = this.actorFromRow(row);
+    const word =
+      row.targetWordId && row.lemma !== null
+        ? { id: row.targetWordId, lemma: row.lemma }
+        : null;
     let lemma = word?.lemma ?? null;
 
-    // search_miss: lemma tidak ada; body pakai term aslinya.
-    if (kind === 'search_miss' && row.targetId) {
-      const [miss] = await this.db
-        .select({ term: searchMisses.term })
-        .from(searchMisses)
-        .where(eq(searchMisses.id, row.targetId))
-        .limit(1);
-      lemma = miss?.term ?? null;
+    // search_miss: lemma tidak ada; body pakai term aslinya (dari JOIN).
+    if (kind === 'search_miss') {
+      lemma = row.missTerm ?? null;
     }
 
     // Copy beku saat kejadian (#94) menang; fallback bodyFor untuk event
-    // lama/backfill tanpa payload.
-    const body = row.payload?.trim() ? row.payload.trim() : this.bodyFor(kind, lemma);
+    // lama/backfill tanpa payload. #56: payload verifikasi menyimpan
+    // placeholder {lemma} (kata belum tentu published saat verify) -
+    // disubstitusi read-time dengan lemma JOIN.
+    const frozen = row.payload?.trim() ? row.payload.trim() : null;
+    const body =
+      frozen !== null
+        ? lemma
+          ? frozen.replaceAll('{lemma}', lemma)
+          : frozen.replaceAll(' {lemma}', '').replace('{lemma}', '')
+        : this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
+    // #99: arah vote dari copy beku (#94) - event kind DB tetap vote_word/
+    // vote_comment, split cuma di wire supaya feed home variatif tanpa
+    // migrasi kinds (kinds DB = kontrak AGENTS.md #25).
+    let wire: ActivityKind = KIND_TO_WIRE[kind];
+    if (wire === 'vote') {
+      wire = /perlu dicek ulang/.test(body) ? 'vote_down' : 'vote_up';
+    }
     // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
     // Setelah approve, read-time join published menghidupkan CTA lagi.
     const target = row.wordStatus && row.wordStatus !== 'published' ? null : this.targetFor(kind, row, word);
-    const wire = KIND_TO_WIRE[kind];
-
     return {
       id: `${wire}:${row.id}`,
       kind: wire as ActivityKind,
@@ -390,38 +453,25 @@ export class ActivityEventFeedRepositoryImpl {
     };
   }
 
-  private async resolveActor(actorId: string | null) {
-    if (!actorId) return null;
-    const [u] = await this.db
-      .select({
-        username: users.username,
-        displayName: users.displayName,
-        avatarUrl: users.avatarUrl,
-        deletedAt: users.deletedAt,
-        id: users.id,
-      })
-      .from(users)
-      .where(eq(users.id, actorId))
-      .limit(1);
-    if (!u) return null;
-    const username = publicAccountName(u.username, u.deletedAt);
-    const displayName = publicAccountDisplayName(u.displayName, u.username, u.deletedAt);
+  /**
+   * Transform JOIN users -> bentuk wire. Replikasi 1:1 resolveActor lama
+   * (per-baris query) - #103 N+1 dihilangkan, perilaku identik.
+   */
+  private actorFromRow(row: FeedRow) {
+    if (!row.actorUserId) return null;
+    const username = publicAccountName(row.actorUsername!, row.actorDeletedAt);
+    const displayName = publicAccountDisplayName(
+      row.actorDisplayName,
+      row.actorUsername,
+      row.actorDeletedAt,
+    );
     // Akun terhapus: karya tetap tayang berlabel, tapi tidak bisa dibuka profilnya.
-    const hidden = !!u.deletedAt || u.id === ANONIM_USER_ID;
+    const hidden = !!row.actorDeletedAt || row.actorUserId === ANONIM_USER_ID;
     return {
       username: hidden ? null : username,
       displayName: username || displayName ? displayName ?? DELETED_LABEL : null,
-      avatarUrl: u.deletedAt ? null : (u.avatarUrl ?? null),
+      avatarUrl: row.actorDeletedAt ? null : (row.actorAvatarUrl ?? null),
     };
-  }
-
-  private async resolveWord(wordId: string) {
-    const [w] = await this.db
-      .select({ id: words.id, lemma: words.lemma })
-      .from(words)
-      .where(eq(words.id, wordId))
-      .limit(1);
-    return w ?? null;
   }
 
   private bodyFor(kind: ActivityEventKind, lemma: string | null): string {

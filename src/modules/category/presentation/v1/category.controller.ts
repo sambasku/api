@@ -13,6 +13,7 @@ export class CategoryController {
         parent_id: cat.parentId,
         name: cat.name,
         description: cat.description,
+        word_count: cat.wordCount ?? 0,
       })),
     });
   }
