@@ -71,11 +71,10 @@ MOBILE_GA4_PROPERTY_ID="555160494"
 KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp"
 KAPSO_PHONE_NUMBER_ID="647015955153740"
 
-# #103: jaring pengaman subrequest per invocation (bukan pengganti fix N+1 -
-# refactor JOIN di activity-event-feed menurunkan request ke 1-2 query).
-[limits]
-subrequests = 1000
-
+# #103: blok [limits] pernah dipasang di sini lalu DIHAPUS - akun Free plan
+# menolak config `limits` apa pun (error 100328 "CPU limits are not supported
+# for the Free plan"). Pertahanan tetap: aturan JOIN anti-N+1 (AGENTS.md #26).
+# Upgrade Workers Paid dulu sebelum menambah [limits] lagi.
 [observability]
 enabled = true
 
@@ -135,10 +134,7 @@ MOBILE_GA4_PROPERTY_ID="555160494"
 KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp"
 KAPSO_PHONE_NUMBER_ID="647015955153740"
 
-# #103: jaring pengaman subrequest (lihat [limits] di atas).
-[env.staging.limits]
-subrequests = 1000
-
+# [env.staging.limits] DIHAPUS - lihat catatan [limits] di atas (Free plan).
 [env.staging.observability]
 enabled = true
 
