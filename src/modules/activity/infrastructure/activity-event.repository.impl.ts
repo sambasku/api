@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   activityEvents,
   examples,
@@ -84,6 +84,54 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
         if (mapped && input.targetId) {
           targetWordId = await resolveContributionWordId(tx as unknown as AppDatabase, mapped, input.targetId);
         }
+      }
+      // #56: verifikasi kata = puncak cerita kata itu. Event usulan
+      // (contribution_submitted / word_created pengusul) utk kata yang sama
+      // ditandai superseded → feed home 1 baris, profil tetap memuat riwayat.
+      // Payload beku membawa nama pengusul (copy "Memverifikasi usulan X: ...").
+      if (input.kind === 'word_verified' && targetWordId) {
+        const payload = input.proposedByName
+          ? `Memverifikasi usulan ${input.proposedByName}: {lemma}`
+          : (input.payload ?? null);
+        const [inserted] = await tx
+          .insert(activityEvents)
+          .values({
+            kind: input.kind,
+            actorId: input.actorId ?? null,
+            targetWordId,
+            targetId: input.targetId ?? null,
+            occurredAt: input.occurredAt ?? new Date(),
+            dedupeKey: input.dedupeKey ?? null,
+            payload,
+            hiddenAt: input.hidden ? new Date() : null,
+          })
+          .onConflictDoUpdate({
+            target: activityEvents.dedupeKey,
+            set: {
+              hiddenAt: input.hidden ? new Date() : null,
+              ...(payload !== null ? { payload } : {}),
+            },
+          })
+          .returning({ id: activityEvents.id });
+        if (inserted) {
+          await tx
+            .update(activityEvents)
+            .set({ supersededAt: new Date() })
+            .where(
+              and(
+                eq(activityEvents.targetWordId, targetWordId),
+                inArray(activityEvents.kind, [
+                  'contribution_submitted',
+                  'word_created',
+                ]),
+                isNull(activityEvents.supersededAt),
+                // jangan supersede event verifikasi itu sendiri
+                ne(activityEvents.id, inserted.id),
+              ),
+            );
+          return 'appended';
+        }
+        return 'duplicate';
       }
       const rows = await tx
         .insert(activityEvents)

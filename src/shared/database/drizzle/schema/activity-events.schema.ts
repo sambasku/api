@@ -41,6 +41,12 @@ export const activityEvents = sqliteTable(
      * Null = pakai fallback `bodyFor()` read-time (event lama/backfill).
      */
     payload: text('payload'),
+    /**
+     * #56: terisi = cerita event ini sudah digantikan event lanjutan utk kata
+     * yang sama (usulan → verifikasi). Feed home menyaringnya; profil tetap
+     * memuat (riwayat kontributor). Bukan hidden/delete - audit tetap.
+     */
+    supersededAt: integer('superseded_at', { mode: 'timestamp' }),
   },
   (t) => [
     index('activity_events_feed_idx').on(t.occurredAt, t.id),

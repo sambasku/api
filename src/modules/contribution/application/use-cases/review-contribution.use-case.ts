@@ -102,14 +102,18 @@ export class ReviewContributionUseCase {
     if (this.activityEvents && contrib) {
       if (cmd.decision === 'approve') {
         await this.emitContributionEvents(outcome, contrib.entityType);
-        // word baru yang disetujui reviewer = verifikasi (#85)
+        // word baru yang disetujui reviewer = verifikasi (#85). #56: copy beku
+        // membawa nama pengusul ("Memverifikasi usulan B: ...") + event usulan
+        // lama ditandai superseded → feed home 1 baris per lifecycle kata.
         if (contrib.entityType === 'word') {
+          const proposedByName = await this.resolveDisplayName(outcome.contributorUserId);
           await this.activityEvents.safe({
             kind: 'word_verified',
             actorId: cmd.actorId,
             targetWordId: outcome.mergedIntoWordId ?? outcome.entityId,
             targetId: outcome.entityId,
             dedupeKey: `word_verified:${outcome.mergedIntoWordId ?? outcome.entityId}`,
+            ...(proposedByName ? { proposedByName } : {}),
           });
         }
       } else if (cmd.decision === 'reject') {
@@ -295,6 +299,27 @@ export class ReviewContributionUseCase {
     const img = await this.wordRepo.findWordImageById(imageId);
     if (!img || img.provider !== 'imagekit' || img.isVerified) return [];
     return [img];
+  }
+
+  /**
+   * #56: nama tampilan pengusul utk copy beku event verifikasi. Sekali
+   * select per approve (bukan per baris feed) - bukan N+1 read-path.
+   */
+  private async resolveDisplayName(userId: string | null | undefined): Promise<string | null> {
+    if (!userId) return null;
+    try {
+      const { db } = await import('@/shared/database/drizzle/client');
+      const { users } = await import('@/shared/database/drizzle/schema');
+      const { eq } = await import('drizzle-orm');
+      const [row] = await db
+        .select({ displayName: users.displayName, username: users.username })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      return row?.displayName || row?.username || null;
+    } catch {
+      return null;
+    }
   }
 
   /**

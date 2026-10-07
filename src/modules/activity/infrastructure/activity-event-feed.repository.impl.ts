@@ -157,7 +157,9 @@ export class ActivityEventFeedRepositoryImpl {
     before?: ActivityCursor,
     excludeUserId?: string,
   ): Promise<ActivityItem[]> {
-    const rows = await this.selectVisible(limit, before, excludeUserId);
+    // #56: event superseded (usulan yang ceritanya sudah jadi verifikasi)
+    // tidak tayang di feed home - profil (listByActor) tetap memuatnya.
+    const rows = await this.selectVisible(limit, before, excludeUserId, undefined, undefined, true);
     return this.buildItems(rows);
   }
 
@@ -305,9 +307,14 @@ export class ActivityEventFeedRepositoryImpl {
     excludeUserId?: string,
     actorId?: string,
     kinds?: ActivityEventKind[],
+    excludeSuperseded?: boolean,
   ) {
     const occurredAt = activityEvents.occurredAt;
     const conds = this.baseConditions(excludeUserId, actorId);
+    if (excludeSuperseded) {
+      // #56: superseded = cerita lama yang sudah digantikan verifikasi.
+      conds.push(sql`${activityEvents.supersededAt} is null`);
+    }
     if (kinds && kinds.length > 0) {
       conds.push(inArray(activityEvents.kind, kinds));
     }
@@ -414,8 +421,16 @@ export class ActivityEventFeedRepositoryImpl {
     }
 
     // Copy beku saat kejadian (#94) menang; fallback bodyFor untuk event
-    // lama/backfill tanpa payload.
-    const body = row.payload?.trim() ? row.payload.trim() : this.bodyFor(kind, lemma);
+    // lama/backfill tanpa payload. #56: payload verifikasi menyimpan
+    // placeholder {lemma} (kata belum tentu published saat verify) -
+    // disubstitusi read-time dengan lemma JOIN.
+    const frozen = row.payload?.trim() ? row.payload.trim() : null;
+    const body =
+      frozen !== null
+        ? lemma
+          ? frozen.replaceAll('{lemma}', lemma)
+          : frozen.replaceAll(' {lemma}', '').replace('{lemma}', '')
+        : this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
     // #99: arah vote dari copy beku (#94) - event kind DB tetap vote_word/
     // vote_comment, split cuma di wire supaya feed home variatif tanpa

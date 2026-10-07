@@ -112,7 +112,7 @@ describe.skipIf(!hasTestDb)('Verification feed consolidation - #56', () => {
       contributorToken,
     );
     if (propose.status !== 201) throw new Error('propose gagal: ' + JSON.stringify(await propose.json()));
-  });
+  }, 60_000);
 
   it('approve kontribusi kata baru → feed home TEPAT 1 row verifikasi, usulan superseded', async () => {
     const { activityEvents } = await import('@/shared/database/drizzle/schema');
@@ -143,21 +143,24 @@ describe.skipIf(!hasTestDb)('Verification feed consolidation - #56', () => {
     // Event store: usulan lama superseded (bukan hidden/delete).
     const verifEvents = await db.select().from(activityEvents).where(eq(activityEvents.kind, 'word_verified'));
     expect(verifEvents.length).toBe(1);
-    expect(verifEvents[0].supersededAt ?? verifEvents[0].superseded_at).toBeNull();
+    expect(verifEvents[0].supersededAt).toBeNull();
     const superseded = await db
       .select()
       .from(activityEvents)
       .where(eq(activityEvents.kind, 'contribution_submitted'));
     expect(superseded.length).toBe(1);
-    expect(superseded[0].supersededAt ?? superseded[0].superseded_at).not.toBeNull();
+    expect(superseded[0].supersededAt).not.toBeNull();
   });
 
   it('profil kontributor: riwayat usulan TETAP tayang (kredit utuh)', async () => {
     const profileRes = await get(`/api/v1/users/${contributorUsername}/activity?limit=50`);
     const profile = await profileRes.json();
-    if (!Array.isArray(profile.data)) throw new Error('profile error: ' + profileRes.status + ' ' + JSON.stringify(profile).slice(0, 300));
+    const profileItems = (profile.data as { items?: unknown[] })?.items ?? profile.data;
+    if (!Array.isArray(profileItems)) throw new Error('profile error: ' + profileRes.status + ' ' + JSON.stringify(profile).slice(0, 300));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = (profile.data as any[]).filter((it: any) => it.body?.includes(lemma));
+    const rows = (profileItems as any[]).filter((it: any) =>
+      it.summary?.includes(lemma) || it.body?.includes(lemma),
+    );
     expect(rows.length).toBeGreaterThan(0);
   });
 });

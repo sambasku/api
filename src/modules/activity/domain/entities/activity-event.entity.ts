@@ -93,4 +93,10 @@ export interface AppendActivityEventInput {
   payload?: string | null;
   /** true = event dengan dedupeKey sama disembunyikan (mis. miss ditarik). */
   hidden?: boolean;
+  /**
+   * #56: nama tampilan pengusul utk kind word_verified (copy beku
+   * "Memverifikasi usulan {name}: ..."). Ambil dari row yang sudah di-load
+   * caller - tanpa query ekstra.
+   */
+  proposedByName?: string | null;
 }
