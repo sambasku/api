@@ -680,6 +680,8 @@ export const listWordsQuerySchema = z.object({
   word_type: z.enum(['word', 'idiom', 'peribahasa', 'ungkapan']).optional(),
   /** Omit = semua yang tayang. true = hanya terverifikasi (sitemap). */
   is_verified: queryBooleanSchema,
+  /** Filter kategori (api#50): id ULID 26 atau nama kategori (case-insensitive). */
+  category: z.string().trim().min(1).max(60).optional(),
 });
 
 export type SearchWordsQueryBody = z.infer<typeof searchWordsQuerySchema>;

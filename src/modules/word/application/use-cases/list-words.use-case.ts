@@ -14,6 +14,8 @@ export interface ListWordsQuery {
   cursor?: string;
   wordType?: string;
   isVerified?: boolean;
+  /** Filter kategori (api#50): id ULID atau nama case-insensitive. */
+  category?: string;
 }
 
 export interface ListWordsResult extends CursorPage<WordSummary> {
@@ -44,6 +46,7 @@ export class ListWordsUseCase {
       limit: query.limit,
       wordType: query.wordType,
       isVerified: query.isVerified,
+      category: query.category?.trim() || undefined,
       cursor,
     });
 

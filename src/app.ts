@@ -239,6 +239,11 @@ import { ListBugReportsUseCase } from '@/modules/bug-report/application/use-case
 import { ResolveBugReportUseCase } from '@/modules/bug-report/application/use-cases/resolve-bug-report.use-case';
 import { BugReportController } from '@/modules/bug-report/presentation/v1/bug-report.controller';
 import { createBugReportRoutes } from '@/modules/bug-report/presentation/v1/bug-report.routes';
+import { createCategorySuggestionModule } from '@/modules/category-suggestion/factories/category-suggestion.factory';
+import {
+  createAdminCategorySuggestionRoutes,
+  createCategorySuggestionRoutes,
+} from '@/modules/category-suggestion/presentation/v1/category-suggestion.routes';
 import { createAdminBugReportRoutes } from '@/modules/bug-report/presentation/v1/admin-bug-report.routes';
 import { DiscussionRepositoryImpl } from '@/modules/discussion/infrastructure/discussion.repository.impl';
 import { CreateDiscussionUseCase } from '@/modules/discussion/application/use-cases/create-discussion.use-case';
@@ -1303,6 +1308,22 @@ app.route(
   '/api/v1/bug-reports',
   createBugReportRoutes({ controller: bugReportController, optionalAuthenticate, authenticate }),
 );
+const categorySuggestionModule = createCategorySuggestionModule({ db, auditRepo });
+app.route(
+  '/api/v1/category-suggestions',
+  createCategorySuggestionRoutes({
+    controller: categorySuggestionModule.controller,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  '/api/v1/admin/category-suggestions',
+  createAdminCategorySuggestionRoutes({
+    controller: categorySuggestionModule.controller,
+    authenticate,
+  }),
+);
+
 app.route(
   '/api/v1/admin/bug-reports',
   createAdminBugReportRoutes({ controller: bugReportController, authenticate }),

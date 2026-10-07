@@ -16,6 +16,7 @@ const categoryListResponseSchema = z.object({
       parent_id: z.string().nullable(),
       name: z.string(),
       description: z.string().nullable(),
+      word_count: z.number(),
     }),
   ),
 });

@@ -232,6 +232,8 @@ export interface ListAtoZParams {
   wordType?: string;
   /** Omit = semua yang tayang. Sitemap web mengirim true. */
   isVerified?: boolean;
+  /** Filter kategori (api#50): id ULID atau nama case-insensitive. */
+  category?: string;
   cursor?: { lemma: string; id: string };
 }
 
