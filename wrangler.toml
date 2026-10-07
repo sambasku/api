@@ -71,6 +71,11 @@ MOBILE_GA4_PROPERTY_ID="555160494"
 KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp"
 KAPSO_PHONE_NUMBER_ID="647015955153740"
 
+# #103: jaring pengaman subrequest per invocation (bukan pengganti fix N+1 -
+# refactor JOIN di activity-event-feed menurunkan request ke 1-2 query).
+[limits]
+subrequests = 1000
+
 [observability]
 enabled = true
 
@@ -129,6 +134,10 @@ SUPABASE_URL="https://wkhlcrxlncflcztptrmg.supabase.co"
 MOBILE_GA4_PROPERTY_ID="555160494"
 KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp"
 KAPSO_PHONE_NUMBER_ID="647015955153740"
+
+# #103: jaring pengaman subrequest (lihat [limits] di atas).
+[env.staging.limits]
+subrequests = 1000
 
 [env.staging.observability]
 enabled = true
