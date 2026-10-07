@@ -456,6 +456,13 @@
       "when": 1799946500000,
       "tag": "0064_activity_events_superseded",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "6",
+      "when": 1799946600000,
+      "tag": "0065_announcements",
+      "breakpoints": true
     }
   ]
 }

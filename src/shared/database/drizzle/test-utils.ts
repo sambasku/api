@@ -4,6 +4,7 @@ import { ensureTestDbReady } from './test-client';
 import {
   accountDeletionTokens,
   activityEvents,
+  announcements,
   apiClients,
   appSettings,
   auditLogs,
@@ -255,6 +256,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     ugcAnonAbuseEvents,
     ugcAnonMutes,
     databaseBackupLogs,
+    // Pengumuman admin (#102) (FK created_by) - sebelum users
+    announcements,
     // Event feed publik (FK actor_id) - sebelum users
     activityEvents,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)

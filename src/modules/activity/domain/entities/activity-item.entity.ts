@@ -15,7 +15,8 @@ export type ActivityKind =
   | 'contribution'
   | 'verification'
   | 'vote_up'
-  | 'vote_down';
+  | 'vote_down'
+  | 'announcement';
 
 export interface ActivityActor {
   username: string | null;
@@ -37,4 +38,13 @@ export interface ActivityItem {
   body: string;
   subtitle: string | null;
   target: ActivityTarget | null;
+  /** #102: data pengumuman (payload beku) untuk tile + detail mobile. Null = kind lain. */
+  announcement?: {
+    id: string;
+    title: string;
+    body: string;
+    actionUrl: string | null;
+    actionLabel: string | null;
+    expired: boolean;
+  } | null;
 }

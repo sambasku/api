@@ -44,6 +44,7 @@ const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   search_miss: 'search_miss',
   user_joined: 'welcome',
   card_shared: 'card_share',
+  announcement: 'announcement',
 };
 
 /** Label aksi per kind (badan feed; lemma diresolve terpisah). */
@@ -65,6 +66,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   search_miss: '',
   user_joined: 'Bergabung di SambasKu',
   card_shared: 'Membagikan kartu',
+  announcement: 'Pengumuman',
 };
 
 function quoted(s: string): string {
@@ -442,6 +444,35 @@ export class ActivityEventFeedRepositoryImpl {
     // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
     // Setelah approve, read-time join published menghidupkan CTA lagi.
     const target = row.wordStatus && row.wordStatus !== 'published' ? null : this.targetFor(kind, row, word);
+
+    // #102 announcement: payload beku = JSON {title, body, actionUrl,
+    // actionLabel, expiresAt}. Kadaluarsa = tetap tayang tapi expired=true
+    // (mobile menandai & menonaktifkan action) supaya feed tak bergeser.
+    let announcement: ActivityItem['announcement'] = null;
+    if (kind === 'announcement') {
+      let parsed: {
+        title?: unknown;
+        body?: unknown;
+        actionUrl?: unknown;
+        actionLabel?: unknown;
+        expiresAt?: unknown;
+      } | null = null;
+      try {
+        parsed = frozen ? JSON.parse(frozen) : null;
+      } catch {
+        parsed = null;
+      }
+      announcement = {
+        id: row.targetId ?? row.id,
+        title: typeof parsed?.title === 'string' ? parsed.title : 'Pengumuman',
+        body: typeof parsed?.body === 'string' ? parsed.body : body,
+        actionUrl: typeof parsed?.actionUrl === 'string' ? parsed.actionUrl : null,
+        actionLabel: typeof parsed?.actionLabel === 'string' ? parsed.actionLabel : null,
+        expired:
+          typeof parsed?.expiresAt === 'number' && parsed.expiresAt <= Date.now(),
+      };
+    }
+
     return {
       id: `${wire}:${row.id}`,
       kind: wire as ActivityKind,
@@ -450,6 +481,7 @@ export class ActivityEventFeedRepositoryImpl {
       body,
       subtitle,
       target,
+      announcement,
     };
   }
 
@@ -547,6 +579,8 @@ export class ActivityEventFeedRepositoryImpl {
         return row.targetId ? { type: 'search_miss', id: row.targetId! } : null;
       case 'user_joined':
         return row.targetId ? { type: 'user', id: row.targetId! } : null;
+      case 'announcement':
+        return row.targetId ? { type: 'announcement', id: row.targetId! } : null;
       default:
         return null;
     }
