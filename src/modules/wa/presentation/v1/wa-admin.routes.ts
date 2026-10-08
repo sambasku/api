@@ -396,7 +396,7 @@ export function createWaAdminRoutes(deps: WaAdminRoutesDeps) {
     if (!tpl) {
       throw new NotFoundError('WA_TEMPLATE_NOT_FOUND', 'Template tidak ditemukan');
     }
-    const result = await deps.sendWa.sendTest(body.phone, tpl.body, tpl.metaTemplateName);
+    const result = await deps.sendWa.sendTest(body.phone, tpl);
     let usage = null;
     try {
       usage = serializeUsage(await deps.usageRepo.getActive('kapso'));

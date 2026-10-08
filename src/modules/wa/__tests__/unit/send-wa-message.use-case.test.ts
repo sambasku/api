@@ -20,6 +20,18 @@ const TPL_PARAMS: WaTemplateParam[] = [
   { name: 'ctaUrl', description: 'Link grup' },
 ];
 
+const TPL_ROW = {
+  id: 'tpl1',
+  eventKey: 'verifier_application_rejected',
+  enabled: true,
+  metaTemplateName: 'verifier_rejected',
+  metaTemplateLanguage: 'id',
+  body: 'Hai {{displayName}}, {{reasonRejected}}. Gabung: {{ctaUrl}}',
+  params: TPL_PARAMS,
+  updatedAt: null,
+  updatedBy: null,
+};
+
 function makeDeps(overrides: {
   sender?: Partial<WaSenderPort>;
   usage?: { usedCount: number; limitCount: number };
@@ -192,7 +204,22 @@ describe('SendWaMessageUseCase', () => {
 
   it('test send: nomor invalid ditolak', async () => {
     const { useCase } = makeDeps();
-    await expect(useCase.sendTest('08123', 'teks', 'tpl')).rejects.toThrow();
+    await expect(useCase.sendTest('08123', TPL_ROW)).rejects.toThrow();
+  });
+
+  // Di luar window 24 jam Meta menolak teks polos (422) - test wajib template.
+  it('test send: kirim sbg template (lolos window 24 jam), param diisi placeholder', async () => {
+    const { useCase, sender } = makeDeps();
+    const result = await useCase.sendTest('628111111111', TPL_ROW);
+    expect(result.sent).toBe(true);
+    expect(sender.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: 'template',
+        to: '628111111111',
+        templateName: 'verifier_rejected',
+        positionalParams: ['Test', 'Test', 'Test'],
+      }),
+    );
   });
 
   it('readWaSettings: baca flag + fallback cta default', async () => {
