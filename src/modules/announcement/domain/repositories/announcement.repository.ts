@@ -1,4 +1,4 @@
-import type { Announcement } from '../entities/announcement.entity';
+import type { Announcement, AnnouncementBodyType } from '../entities/announcement.entity';
 
 export interface ListAnnouncementsInput {
   limit: number;
@@ -11,6 +11,7 @@ export interface ListAnnouncementsResult {
 }
 
 export interface CreateAnnouncementInput {
+  bodyType?: AnnouncementBodyType;
   title: string;
   body: string;
   actionUrl?: string | null;
@@ -20,6 +21,7 @@ export interface CreateAnnouncementInput {
 }
 
 export interface UpdateAnnouncementInput {
+  bodyType?: AnnouncementBodyType;
   id: string;
   title?: string;
   body?: string;

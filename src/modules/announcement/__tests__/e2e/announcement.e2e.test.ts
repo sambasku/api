@@ -108,6 +108,34 @@ describe.skipIf(!hasTestDb)('Announcement E2E - pengumuman admin tayang di feed 
     expect(externalHost.status).toBe(200);
     const externalAnn = (await externalHost.json()).data;
     await del(`/api/v1/admin/announcements/${externalAnn.id}`, adminToken);
+
+    // #124 lanjutan: body_type enum valid; default plain; invalid 400.
+    const md = await post(
+      '/api/v1/admin/announcements',
+      { title: 'Judul', body: '# Isi', body_type: 'md' },
+      adminToken,
+    );
+    expect(md.status).toBe(200);
+    const mdData = (await md.json()).data;
+    expect(mdData.body_type).toBe('md');
+    await del(`/api/v1/admin/announcements/${mdData.id}`, adminToken);
+
+    const badType = await post(
+      '/api/v1/admin/announcements',
+      { title: 'Judul', body: 'Isi', body_type: 'pdf' },
+      adminToken,
+    );
+    expect(badType.status).toBe(400);
+
+    const def = await post(
+      '/api/v1/admin/announcements',
+      { title: 'Judul', body: 'Isi' },
+      adminToken,
+    );
+    expect(def.status).toBe(200);
+    const defData = (await def.json()).data;
+    expect(defData.body_type).toBe('plain');
+    await del(`/api/v1/admin/announcements/${defData.id}`, adminToken);
   });
 
   it('create → tayang di feed publik dengan payload announcement; edit refresh copy; delete hilang', async () => {

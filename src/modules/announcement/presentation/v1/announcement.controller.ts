@@ -16,6 +16,7 @@ function serialize(a: Announcement) {
     id: a.id,
     title: a.title,
     body: a.body,
+    body_type: a.bodyType,
     action_url: a.actionUrl,
     action_label: a.actionLabel,
     expires_at: a.expiresAt ? Math.floor(a.expiresAt.getTime() / 1000) : null,
@@ -48,13 +49,14 @@ export class AnnouncementController {
 
   createAnnouncement(
     c: Context<{ Variables: AppVariables }>,
-    body: { title: string; body: string; action_url?: string | null; action_label?: string | null; expires_at?: number | null },
+    body: { title: string; body: string; body_type?: 'plain' | 'html' | 'md' | 'webview'; action_url?: string | null; action_label?: string | null; expires_at?: number | null },
   ) {
     const user = c.get('user')!;
     return this.create
       .execute({
         title: body.title,
         body: body.body,
+        bodyType: body.body_type ?? 'plain',
         actionUrl: body.action_url ?? null,
         actionLabel: body.action_label ?? null,
         expiresAt: body.expires_at ? new Date(body.expires_at * 1000) : null,
@@ -81,13 +83,14 @@ export class AnnouncementController {
   updateAnnouncement(
     c: Context<{ Variables: AppVariables }>,
     id: string,
-    body: { title?: string; body?: string; action_url?: string | null; action_label?: string | null; expires_at?: number | null },
+    body: { title?: string; body?: string; body_type?: 'plain' | 'html' | 'md' | 'webview'; action_url?: string | null; action_label?: string | null; expires_at?: number | null },
   ) {
     const user = c.get('user')!;
     return this.update({
       id,
       title: body.title,
       body: body.body,
+      bodyType: body.body_type,
       actionUrl: body.action_url !== undefined ? body.action_url : undefined,
       actionLabel: body.action_label !== undefined ? body.action_label : undefined,
       expiresAt:
