@@ -4,7 +4,7 @@ import {
   WA_GROUP_CTA_URL_KEY,
   WA_VERIFIER_ENABLED_KEY,
 } from '@/modules/legal/domain/entities/app-setting.entity';
-import type { WaTemplateParam } from '../../domain/entities/wa-message.entity';
+import type { WaMessageTemplate, WaTemplateParam } from '../../domain/entities/wa-message.entity';
 import type {
   WaMessageLogRepository,
   WaTemplateRepository,
@@ -109,6 +109,16 @@ export class SendWaMessageUseCase {
           }
         : { channel: 'text', to: cmd.toPhone, bodyText: cmd.bodyText! };
 
+    return this.dispatch(message, cmd, templateName);
+  }
+
+  /** Loop quota + send + log. Dipakai execute (template/text) dan sendTest. */
+  private async dispatch(
+    message: WaSendCommand,
+    cmd: Pick<SendWaMessageCommand, 'eventKey' | 'toPhone' | 'channel'>,
+    templateName: string | null,
+  ): Promise<SendWaMessageResult> {
+    const configured = this.senders.filter((s) => s.sender.isConfigured?.() ?? true);
     let lastError = '';
     for (const entry of configured) {
       // Quota check per provider: habis → pindah provider (routing).
@@ -175,20 +185,28 @@ export class SendWaMessageUseCase {
     };
   }
 
-  /** Admin test send: kirim raw body template tanpa render, lewat quota + log. */
-  async sendTest(phone: string, rawBody: string, templateName: string): Promise<SendWaMessageResult> {
+  /**
+   * Admin test send. WAJIB channel template: di luar window 24 jam Meta
+   * menolak teks polos (422 "non-template messages outside the 24-hour
+   * window"), template selalu boleh. Param diisi placeholder 'Test'.
+   */
+  async sendTest(phone: string, tpl: WaMessageTemplate): Promise<SendWaMessageResult> {
     if (!isValidWaPhone(phone)) {
       throw new BadRequestError('VALIDATION_ERROR', 'Nomor HP harus format internasional tanpa +', [
         { field: 'phone', message: 'Contoh: 6281234567890' },
       ]);
     }
-    return this.execute({
-      eventKey: 'test',
-      toPhone: phone,
-      channel: 'text',
-      bodyText: rawBody,
-      templateName,
-    });
+    return this.dispatch(
+      {
+        channel: 'template',
+        to: phone,
+        templateName: tpl.metaTemplateName,
+        language: tpl.metaTemplateLanguage,
+        positionalParams: tpl.params.map(() => 'Test'),
+      },
+      { eventKey: tpl.eventKey, toPhone: phone, channel: 'template' },
+      tpl.metaTemplateName,
+    );
   }
 }
 
