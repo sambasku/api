@@ -206,7 +206,7 @@ import {
   createAdminSearchMissRoutes,
   createSearchMissRoutes,
 } from '@/modules/search-miss/presentation/v1/search-miss.routes';
-import { createAdminAnnouncementRoutes } from '@/modules/announcement/presentation/v1/announcement.routes';
+import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from '@/modules/announcement/presentation/v1/announcement.routes';
 import { LanguageRepositoryImpl } from '@/modules/language/infrastructure/language.repository.impl';
 import { ListLanguagesUseCase } from '@/modules/language/application/use-cases/list-languages.use-case';
 import { ListDialectsUseCase } from '@/modules/language/application/use-cases/list-dialects.use-case';
@@ -764,6 +764,7 @@ const announcementController = new AnnouncementController(
   (cmd) =>
     new UpdateAnnouncementUseCase(announcementRepo, activityEvents, auditRepo).execute(cmd),
   new DeleteAnnouncementUseCase(announcementRepo, activityEvents, auditRepo),
+  announcementRepo,
 );
 
 const categoryController = new CategoryController({
@@ -1291,6 +1292,8 @@ app.route(
 app.route('/api/v1/search-misses', createSearchMissRoutes({ controller: searchMissController, authenticate }));
 app.route('/api/v1/admin/search-misses', createAdminSearchMissRoutes({ controller: searchMissController, authenticate }));
 app.route('/api/v1/admin/announcements', createAdminAnnouncementRoutes({ controller: announcementController, authenticate }));
+// Publik: detail pengumuman by id (deep link mobile #102).
+app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: announcementController }));
 
 // Data referensi form admin
 app.route('/api/v1/languages', createLanguageRoutes({ controller: languageController }));

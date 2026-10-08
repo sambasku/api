@@ -93,3 +93,27 @@ export function createAdminAnnouncementRoutes(deps: AnnouncementRoutesDeps) {
 
   return routes;
 }
+
+// Publik (#102 deep link): detail pengumuman tanpa auth - soft-delete 404,
+// kadaluarsa 200 + expired=true (konsisten feed).
+export function createPublicAnnouncementRoutes(deps: { controller: AnnouncementController }) {
+  const routes = createOpenApiApp();
+
+  routes.use('*', rateLimit({ points: 60, duration: 60 }));
+
+  const getRoute = createRoute({
+    method: 'get',
+    path: '/:id',
+    tags: ['Announcements'],
+    summary: 'Detail pengumuman (publik, deep link)',
+    request: { params: z.object({ id: z.string().length(26) }) },
+    responses: {
+      200: { description: 'Detail pengumuman', content: json(announcementItemResponseSchema) },
+      404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(getRoute, (c) => deps.controller.getAnnouncement(c, c.req.param('id')) as never);
+
+  return routes;
+}

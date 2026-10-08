@@ -166,4 +166,37 @@ describe.skipIf(!hasTestDb)('Announcement E2E - pengumuman admin tayang di feed 
     expect(tile).toBeTruthy();
     expect(tile.announcement.expired).toBe(true);
   });
+
+  it('publik GET /api/v1/announcements/:id - tamu bisa baca; soft delete 404; expired=true', async () => {
+    // Tamu (tanpa token) baca detail by id
+    const created = await post(
+      '/api/v1/admin/announcements',
+      { title: 'Deep link', body: 'Bisa dibuka tanpa login.' },
+      adminToken,
+    );
+    const { id } = (await created.json()).data;
+
+    const guest = await get(`/api/v1/announcements/${id}`);
+    expect(guest.status).toBe(200);
+    const detail = (await guest.json()).data;
+    expect(detail.id).toBe(id);
+    expect(detail.title).toBe('Deep link');
+    expect(detail.expired).toBe(false);
+
+    // Kadaluarsa tetap 200 + expired=true (konsisten feed)
+    await patch(`/api/v1/admin/announcements/${id}`, { expires_at: Math.floor(Date.now() / 1000) - 60 }, adminToken);
+    const expired = await get(`/api/v1/announcements/${id}`);
+    expect(expired.status).toBe(200);
+    expect((await expired.json()).data.expired).toBe(true);
+
+    // Soft delete → 404 utk tamu
+    await del(`/api/v1/admin/announcements/${id}`, adminToken);
+    const gone = await get(`/api/v1/announcements/${id}`);
+    expect(gone.status).toBe(404);
+    expect((await gone.json()).error_code).toBe('ANNOUNCEMENT_NOT_FOUND');
+
+    // Id sampah → 404
+    const junk = await get(`/api/v1/announcements/${ulid26('01JUNK')}`);
+    expect(junk.status).toBe(404);
+  });
 });

@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
+import { NotFoundError } from '@/shared/errors/app-error';
 import type { Announcement } from '../../domain/entities/announcement.entity';
 import type { ListAnnouncementsResult } from '../../domain/repositories/announcement.repository';
 import type {
@@ -8,6 +9,7 @@ import type {
   UpdateAnnouncementCommand,
 } from '../../application/use-cases/announcement.use-cases';
 import type { ListAnnouncementsUseCase } from '../../application/use-cases/list-announcements.use-case';
+import type { AnnouncementRepository } from '../../domain/repositories/announcement.repository';
 
 function serialize(a: Announcement) {
   return {
@@ -16,8 +18,9 @@ function serialize(a: Announcement) {
     body: a.body,
     action_url: a.actionUrl,
     action_label: a.actionLabel,
-    created_by: a.createdBy,
     expires_at: a.expiresAt ? Math.floor(a.expiresAt.getTime() / 1000) : null,
+    expired: a.expiresAt ? a.expiresAt.getTime() <= Date.now() : false,
+    created_by: a.createdBy,
     created_at: Math.floor(a.createdAt.getTime() / 1000),
     updated_at: a.updatedAt ? Math.floor(a.updatedAt.getTime() / 1000) : null,
   };
@@ -29,7 +32,19 @@ export class AnnouncementController {
     private readonly list: ListAnnouncementsUseCase,
     private readonly update: (cmd: UpdateAnnouncementCommand) => Promise<Announcement>,
     private readonly remove: DeleteAnnouncementUseCase,
+    private readonly repo: AnnouncementRepository,
   ) {}
+
+  // Publik (#102 deep link): detail pengumuman by id, tanpa auth.
+  // Soft-delete = 404; kadaluarsa tetap 200 dengan expired=true.
+  getAnnouncement(c: Context<{ Variables: AppVariables }>, id: string) {
+    return this.repo.findById(id).then((a) => {
+      if (!a) {
+        throw new NotFoundError('ANNOUNCEMENT_NOT_FOUND', 'Pengumuman dengan id tersebut tidak ditemukan');
+      }
+      return c.json({ success: true as const, data: serialize(a) }, 200);
+    });
+  }
 
   createAnnouncement(
     c: Context<{ Variables: AppVariables }>,

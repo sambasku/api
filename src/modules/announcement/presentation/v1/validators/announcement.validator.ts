@@ -82,6 +82,7 @@ const announcementItemSchema = z.object({
   action_label: z.string().nullable(),
   created_by: z.string(),
   expires_at: z.number().int().nullable(),
+  expired: z.boolean(),
   created_at: z.number().int(),
   updated_at: z.number().int().nullable(),
 });
