@@ -160,7 +160,7 @@ const envSchema = z.object({
   // WhatsApp via Kapso (proxy Meta Cloud API). Kosong = fitur WA no-op
   // (kirim dilewati, endpoint admin tetap bisa lihat template/usage).
   KAPSO_API_KEY: z.string().optional(),
-  // Default https://api.kapso.io/meta/whatsapp (lihat docs/env/kapso.md).
+  // Default https://api.kapso.ai/meta/whatsapp/v24.0 (lihat docs/env/kapso.md).
   KAPSO_BASE_URL: z.url().optional(),
   KAPSO_PHONE_NUMBER_ID: z.string().optional(),
 
