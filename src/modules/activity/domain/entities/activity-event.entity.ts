@@ -25,6 +25,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'search_miss',
   'user_joined',
   'card_shared',
+  'announcement',
 ] as const;
 
 export type ActivityEventKind = (typeof ACTIVITY_EVENT_KINDS)[number];
@@ -65,6 +66,8 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'welcome';
     case 'card_shared':
       return 'card_share';
+    case 'announcement':
+      return 'announcement';
   }
 }
 

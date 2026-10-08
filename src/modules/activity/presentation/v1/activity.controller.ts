@@ -20,6 +20,19 @@ function toWire(item: ActivityItem) {
     body: item.body,
     subtitle: item.subtitle,
     target: item.target,
+    announcement: item.announcement
+      ? (() => {
+          const a = item.announcement!;
+          return {
+            id: a.id,
+            title: a.title,
+            body: a.body,
+            action_url: a.actionUrl,
+            action_label: a.actionLabel,
+            expired: a.expired,
+          };
+        })()
+      : null,
   };
 }
 
