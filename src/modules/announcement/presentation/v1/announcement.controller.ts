@@ -6,6 +6,7 @@ import type { ListAnnouncementsResult } from '../../domain/repositories/announce
 import type {
   CreateAnnouncementUseCase,
   DeleteAnnouncementUseCase,
+  ListPinnedAnnouncementsUseCase,
   UpdateAnnouncementCommand,
 } from '../../application/use-cases/announcement.use-cases';
 import type { ListAnnouncementsUseCase } from '../../application/use-cases/list-announcements.use-case';
@@ -20,6 +21,7 @@ function serialize(a: Announcement) {
     action_url: a.actionUrl,
     action_label: a.actionLabel,
     expires_at: a.expiresAt ? Math.floor(a.expiresAt.getTime() / 1000) : null,
+    pinned_at: a.pinnedAt ? Math.floor(a.pinnedAt.getTime() / 1000) : null,
     expired: a.expiresAt ? a.expiresAt.getTime() <= Date.now() : false,
     created_by: a.createdBy,
     created_at: Math.floor(a.createdAt.getTime() / 1000),
@@ -31,6 +33,7 @@ export class AnnouncementController {
   constructor(
     private readonly create: CreateAnnouncementUseCase,
     private readonly list: ListAnnouncementsUseCase,
+    private readonly listPinned: ListPinnedAnnouncementsUseCase,
     private readonly update: (cmd: UpdateAnnouncementCommand) => Promise<Announcement>,
     private readonly remove: DeleteAnnouncementUseCase,
     private readonly repo: AnnouncementRepository,
@@ -45,6 +48,13 @@ export class AnnouncementController {
       }
       return c.json({ success: true as const, data: serialize(a) }, 200);
     });
+  }
+
+  // Publik: list pinned announcements (mobile carousel / pinned page).
+  listPinnedAnnouncements(c: Context<{ Variables: AppVariables }>) {
+    return this.listPinned.execute().then((items) =>
+      c.json({ success: true as const, data: items.map(serialize) }, 200),
+    );
   }
 
   createAnnouncement(
@@ -83,7 +93,7 @@ export class AnnouncementController {
   updateAnnouncement(
     c: Context<{ Variables: AppVariables }>,
     id: string,
-    body: { title?: string; body?: string; body_type?: 'plain' | 'html' | 'md' | 'webview'; action_url?: string | null; action_label?: string | null; expires_at?: number | null },
+    body: { title?: string; body?: string; body_type?: 'plain' | 'html' | 'md' | 'webview'; action_url?: string | null; action_label?: string | null; expires_at?: number | null; pinned_at?: number | null },
   ) {
     const user = c.get('user')!;
     return this.update({
@@ -98,6 +108,12 @@ export class AnnouncementController {
           ? undefined
           : body.expires_at
             ? new Date(body.expires_at * 1000)
+            : null,
+      pinnedAt:
+        body.pinned_at === undefined
+          ? undefined
+          : body.pinned_at
+            ? new Date(body.pinned_at * 1000)
             : null,
       actorId: user.user_id,
       requestId: c.get('requestId'),

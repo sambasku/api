@@ -30,6 +30,10 @@ async function pushOne(
       ...(message.data && Object.keys(message.data).length > 0
         ? { data: message.data }
         : {}),
+      data: {
+        ...(message.data || {}),
+        ...(message.bodyType ? { body_type: message.bodyType } : {}),
+      },
     },
   };
 
@@ -77,6 +81,10 @@ async function pushTopic(
       ...(message.data && Object.keys(message.data).length > 0
         ? { data: message.data }
         : {}),
+      data: {
+        ...(message.data || {}),
+        ...(message.bodyType ? { body_type: message.bodyType } : {}),
+      },
     },
   };
 

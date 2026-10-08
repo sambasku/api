@@ -199,6 +199,7 @@ import {
   CreateAnnouncementUseCase,
   UpdateAnnouncementUseCase,
   DeleteAnnouncementUseCase,
+  ListPinnedAnnouncementsUseCase,
 } from '@/modules/announcement/application/use-cases/announcement.use-cases';
 import { ListAnnouncementsUseCase } from '@/modules/announcement/application/use-cases/list-announcements.use-case';
 import { AnnouncementController } from '@/modules/announcement/presentation/v1/announcement.controller';
@@ -761,6 +762,7 @@ const announcementRepo = new AnnouncementRepositoryImpl(db);
 const announcementController = new AnnouncementController(
   new CreateAnnouncementUseCase(announcementRepo, activityEvents, auditRepo),
   new ListAnnouncementsUseCase(announcementRepo),
+  new ListPinnedAnnouncementsUseCase(announcementRepo),
   (cmd) =>
     new UpdateAnnouncementUseCase(announcementRepo, activityEvents, auditRepo).execute(cmd),
   new DeleteAnnouncementUseCase(announcementRepo, activityEvents, auditRepo),

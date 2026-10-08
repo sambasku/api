@@ -28,6 +28,7 @@ function toEntity(row: typeof notifications.$inferSelect): InboxNotification {
     type: row.type as InboxNotificationType,
     title: row.title,
     body: row.body,
+    bodyType: row.bodyType,
     imageUrl: row.imageUrl ?? null,
     targetKind: row.targetKind as NotificationTargetKind,
     targetId: row.targetId,
@@ -44,6 +45,7 @@ function rowValues(input: CreateInboxNotificationInput) {
     type: input.type,
     title: input.title,
     body: input.body,
+    bodyType: input.bodyType ?? 'plain',
     imageUrl: input.imageUrl ?? null,
     targetKind: input.targetKind,
     targetId: input.targetId,
@@ -85,6 +87,7 @@ export class NotificationRepositoryImpl implements NotificationRepository {
         set: {
           title: input.title,
           body: input.body,
+          bodyType: input.bodyType ?? 'plain',
           imageUrl: input.imageUrl ?? null,
           actionKind: input.actionKind ?? null,
           actionValue: input.actionValue ?? null,

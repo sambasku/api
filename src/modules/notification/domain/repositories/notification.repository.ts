@@ -10,6 +10,7 @@ export interface CreateInboxNotificationInput {
   type: InboxNotificationType;
   title: string;
   body: string;
+  bodyType?: 'plain' | 'html' | 'md' | 'webview';
   imageUrl?: string | null;
   targetKind: NotificationTargetKind;
   targetId: string;

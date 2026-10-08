@@ -43,6 +43,7 @@ export interface InboxNotification {
   type: InboxNotificationType;
   title: string;
   body: string;
+  bodyType: 'plain' | 'html' | 'md' | 'webview';
   imageUrl: string | null;
   targetKind: NotificationTargetKind;
   targetId: string;
@@ -52,110 +53,130 @@ export interface InboxNotification {
   createdAt: Date;
 }
 
-export function inboxCopyFor(type: InboxNotificationType): { title: string; body: string } {
+export function inboxCopyFor(type: InboxNotificationType): { title: string; body: string; bodyType: 'plain' | 'html' | 'md' | 'webview' } {
   switch (type) {
     case 'contribution_approved':
       return {
         title: 'Kata sudah dicek',
         body: 'Tim sudah memeriksa usulanmu. Labelnya sekarang Terverifikasi.',
+        bodyType: 'plain',
       };
     case 'contribution_rejected':
       return {
         title: 'Kata ditarik',
         body: 'Usulanmu ditarik dari kamus. Buka Kontribusi Saya untuk melihat alasan.',
+        bodyType: 'plain',
       };
     case 'contribution_corrected':
       return {
         title: 'Usulan dikoreksi',
         body: 'Tim mengoreksi usulanmu. Entri tetap tayang dan sudah dicek.',
+        bodyType: 'plain',
       };
     case 'suggestion_approved':
       return {
         title: 'Usulan perubahan selesai',
         body: 'Usulan perubahanmu selesai diperiksa.',
+        bodyType: 'plain',
       };
     case 'suggestion_rejected':
       return {
         title: 'Usulan perubahan ditolak',
         body: 'Usulan perubahan ditolak. Buka Kontribusi Saya untuk melihat hasilnya.',
+        bodyType: 'plain',
       };
     case 'suggestion_corrected':
       return {
         title: 'Usulan perubahan dikoreksi',
         body: 'Tim mengoreksi usulan perubahanmu dan menerapkannya.',
+        bodyType: 'plain',
       };
     case 'word_taken_down':
       return {
         title: 'Entri ditarik',
         body: 'Entri yang kamu buat ditarik dari kamus.',
+        bodyType: 'plain',
       };
     case 'contribution_paused':
       return {
         title: 'Kontribusi dihentikan',
         body: 'Kamu belum bisa mengirim usulan baru. Usulan yang sudah tayang tetap ada.',
+        bodyType: 'plain',
       };
     case 'contribution_resumed':
       return {
         title: 'Kontribusi dibuka lagi',
         body: 'Kamu bisa mengirim usulan lagi.',
+        bodyType: 'plain',
       };
     case 'discussion_pending_review':
       return {
         title: 'Diskusi menunggu tinjauan',
         body: 'Ada diskusi baru yang menunggu pemeriksaan.',
+        bodyType: 'plain',
       };
     case 'discussion_approved':
       return {
         title: 'Diskusi tayang',
         body: 'Diskusimu sudah diperiksa dan tayang di feed.',
+        bodyType: 'plain',
       };
     case 'discussion_rejected':
       return {
         title: 'Diskusi ditolak',
         body: 'Diskusimu ditolak. Buka riwayat untuk melihat alasan.',
+        bodyType: 'plain',
       };
     case 'discussion_taken_down':
       return {
         title: 'Diskusi ditarik',
         body: 'Diskusimu ditarik dari feed.',
+        bodyType: 'plain',
       };
     case 'discussion_reply':
       return {
         title: 'Balasan baru',
         body: 'Ada balasan baru di Ruang Diskusi.',
+        bodyType: 'plain',
       };
     case 'discussion_mention':
       return {
         title: 'Kamu disebut di diskusi',
         body: 'Seseorang menyebutmu di Ruang Diskusi.',
+        bodyType: 'plain',
       };
     case 'word_comment':
       return {
         title: 'Komentar baru',
         body: 'Ada komentar baru di diskusi kosakata.',
+        bodyType: 'plain',
       };
     case 'word_comment_mention':
       return {
         title: 'Kamu disebut di komentar',
         body: 'Seseorang menyebutmu di komentar kosakata.',
+        bodyType: 'plain',
       };
     case 'word_vote':
       return {
         title: 'Vote baru',
         body: 'Ada penilaian baru pada kosakatamu.',
+        bodyType: 'plain',
       };
     case 'campaign':
       // Title/body campaign selalu dari snapshot admin (bukan copy bawaan).
-      return { title: 'Pengumuman', body: '' };
+      return { title: 'Pengumuman', body: '', bodyType: 'plain' };
     case 'verifier_application_approved':
       return {
         title: 'Selamat, kamu jadi verifikator',
         body: 'Pengajuanmu disetujui. Keluar lalu masuk lagi ya, biar peran Verifikator aktif di aplikasi.',
+        bodyType: 'plain',
       };
     case 'verifier_application_rejected':
       return {
         title: 'Pengajuan verifikator ditolak',
         body: 'Pengajuan ditolak. Buka profil untuk memperbaiki.',
+        bodyType: 'plain',
       };
   }
 }

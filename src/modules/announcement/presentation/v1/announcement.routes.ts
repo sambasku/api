@@ -113,7 +113,18 @@ export function createPublicAnnouncementRoutes(deps: { controller: AnnouncementC
     },
   });
 
+  const listPinnedRoute = createRoute({
+    method: 'get',
+    path: '/pinned',
+    tags: ['Announcements'],
+    summary: 'Daftar pengumuman yang dipin (mobile carousel / halaman pinned)',
+    responses: {
+      200: { description: 'Daftar pengumuman pinned', content: json(announcementListResponseSchema) },
+    },
+  });
+
   routes.openapi(getRoute, (c) => deps.controller.getAnnouncement(c, c.req.param('id')) as never);
+  routes.openapi(listPinnedRoute, (c) => deps.controller.listPinnedAnnouncements(c) as never);
 
   return routes;
 }

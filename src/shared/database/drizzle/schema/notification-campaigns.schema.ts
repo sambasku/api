@@ -15,6 +15,9 @@ export const notificationCampaigns = sqliteTable(
     /** Snapshot copy saat draft/send. */
     title: text('title').notNull(),
     body: text('body').notNull(),
+    bodyType: text('body_type', { enum: ['plain', 'html', 'md', 'webview'] })
+      .notNull()
+      .default('plain'),
     /** URL gambar opsional (snapshot) untuk rich push / inbox. */
     imageUrl: text('image_url'),
     deepLinkKind: text('deep_link_kind').notNull().default('none'),

@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, desc } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { announcements } from '@/shared/database/drizzle/schema/announcements.schema';
 import type {
@@ -23,6 +23,7 @@ function toDomain(row: AnnouncementRow): Announcement {
     actionLabel: row.actionLabel,
     createdBy: row.createdBy,
     expiresAt: row.expiresAt,
+    pinnedAt: row.pinnedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -78,6 +79,22 @@ export class AnnouncementRepositoryImpl implements AnnouncementRepository {
     };
   }
 
+  async listPinned(): Promise<Announcement[]> {
+    const now = new Date();
+    const rows = await this.db
+      .select()
+      .from(announcements)
+      .where(
+        and(
+          isNull(announcements.deletedAt),
+          isNotNull(announcements.pinnedAt),
+          or(isNull(announcements.expiresAt), gt(announcements.expiresAt, now)),
+        ),
+      )
+      .orderBy(desc(announcements.pinnedAt));
+    return rows.map(toDomain);
+  }
+
   async update(input: UpdateAnnouncementInput): Promise<Announcement | null> {
     const values: Partial<typeof announcements.$inferInsert> = {
       updatedAt: new Date(),
@@ -88,6 +105,7 @@ export class AnnouncementRepositoryImpl implements AnnouncementRepository {
     if (input.actionUrl !== undefined) values.actionUrl = input.actionUrl;
     if (input.actionLabel !== undefined) values.actionLabel = input.actionLabel;
     if (input.expiresAt !== undefined) values.expiresAt = input.expiresAt;
+    if (input.pinnedAt !== undefined) values.pinnedAt = input.pinnedAt;
     const [row] = await this.db
       .update(announcements)
       .set(values)

@@ -32,6 +32,7 @@ export class NotificationController {
         type: n.type,
         title: n.title,
         body: n.body,
+        body_type: n.bodyType,
         image_url: n.imageUrl,
         target_kind: n.targetKind,
         target_id: n.targetId,

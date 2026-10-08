@@ -119,6 +119,7 @@ describe.skipIf(!hasTestDb)('Notification inbox E2E v1 (23-api-notifications.md)
     expect(listBody.data).toHaveLength(1);
     expect(listBody.data[0]).toMatchObject({
       type: 'contribution_approved',
+      body_type: 'plain',
       target_kind: 'contribution',
       target_id: item.id,
       action_kind: null,

@@ -76,6 +76,7 @@ export interface UpdateAnnouncementCommand {
   actionUrl?: string | null;
   actionLabel?: string | null;
   expiresAt?: Date | null;
+  pinnedAt?: Date | null; // set to now to pin, null to unpin
   actorId: string;
   requestId?: string | null;
 }
@@ -98,6 +99,7 @@ export class UpdateAnnouncementUseCase {
       actionUrl: cmd.actionUrl,
       actionLabel: cmd.actionLabel,
       expiresAt: cmd.expiresAt,
+      pinnedAt: cmd.pinnedAt,
       actorId: cmd.actorId,
     });
     if (!announcement) {
@@ -165,5 +167,14 @@ export class DeleteAnnouncementUseCase {
       newData: { deleted: true },
       requestId: cmd.requestId ?? null,
     });
+  }
+}
+
+// List pinned announcements (mobile pinned page / carousel).
+export class ListPinnedAnnouncementsUseCase {
+  constructor(private readonly announcementRepo: AnnouncementRepository) {}
+
+  async execute(): Promise<Announcement[]> {
+    return this.announcementRepo.listPinned();
   }
 }

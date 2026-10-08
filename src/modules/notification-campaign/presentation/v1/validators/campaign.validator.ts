@@ -9,6 +9,8 @@ export const deepLinkKindSchema = z.enum([
   'none',
 ]);
 
+export const campaignBodyTypeSchema = z.enum(['plain', 'html', 'md', 'webview']).default('plain');
+
 /** Host yang boleh dipakai deep_link_kind=url. Sinkron dengan mobile:
  *  lib/core/services/notification_navigation.dart - kAllowedNotificationHosts. */
 const ALLOWED_DEEP_LINK_HOSTS = new Set([
@@ -101,6 +103,7 @@ export const createTemplateBodySchema = refineDeepLinkUrl(
       .max(100, 'Nama template maksimal 100 karakter'),
     title: titleSchema,
     body: bodySchema,
+    bodyType: campaignBodyTypeSchema,
     image_url: imageUrlSchema,
     deep_link_kind: deepLinkKindSchema.default('none'),
     deep_link_value: z.string().trim().max(500).nullable().optional(),
@@ -112,6 +115,7 @@ export const updateTemplateBodySchema = refineDeepLinkUrl(
     name: z.string().trim().min(1).max(100).optional(),
     title: titleSchema.optional(),
     body: bodySchema.optional(),
+    bodyType: campaignBodyTypeSchema.optional(),
     image_url: imageUrlSchema,
     deep_link_kind: deepLinkKindSchema.optional(),
     deep_link_value: z.string().trim().max(500).nullable().optional(),
@@ -159,6 +163,7 @@ export const createCampaignBodySchema = refineDeepLinkUrl(
       template_id: opaqueId.nullable().optional(),
       title: titleSchema.optional(),
       body: bodySchema.optional(),
+      bodyType: campaignBodyTypeSchema.optional(),
       image_url: imageUrlSchema,
       deep_link_kind: deepLinkKindSchema.optional(),
       deep_link_value: z.string().trim().max(500).nullable().optional(),

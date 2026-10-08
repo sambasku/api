@@ -13,6 +13,7 @@ export interface AnnouncementRow {
   actionLabel: string | null;
   createdBy: string;
   expiresAt: Date | null;
+  pinnedAt: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null;
@@ -28,6 +29,7 @@ export interface Announcement {
   actionLabel: string | null;
   createdBy: string;
   expiresAt: Date | null;
+  pinnedAt: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
 }
