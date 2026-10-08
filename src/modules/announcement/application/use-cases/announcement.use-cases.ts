@@ -12,6 +12,7 @@ export interface CreateAnnouncementCommand {
   actionUrl?: string | null;
   actionLabel?: string | null;
   expiresAt?: Date | null;
+  pinnedAt?: Date | null;
   actorId: string;
   requestId?: string | null;
 }
@@ -34,6 +35,7 @@ export class CreateAnnouncementUseCase {
       actionUrl: cmd.actionUrl ?? null,
       actionLabel: cmd.actionLabel ?? null,
       expiresAt: cmd.expiresAt ?? null,
+      pinnedAt: cmd.pinnedAt ?? null,
       actorId: cmd.actorId,
     });
 

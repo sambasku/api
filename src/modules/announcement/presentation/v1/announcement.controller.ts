@@ -59,7 +59,7 @@ export class AnnouncementController {
 
   createAnnouncement(
     c: Context<{ Variables: AppVariables }>,
-    body: { title: string; body: string; body_type?: 'plain' | 'html' | 'md' | 'webview'; action_url?: string | null; action_label?: string | null; expires_at?: number | null },
+    body: { title: string; body: string; body_type?: 'plain' | 'html' | 'md' | 'webview'; action_url?: string | null; action_label?: string | null; expires_at?: number | null; pinned_at?: number | null },
   ) {
     const user = c.get('user')!;
     return this.create
@@ -70,6 +70,7 @@ export class AnnouncementController {
         actionUrl: body.action_url ?? null,
         actionLabel: body.action_label ?? null,
         expiresAt: body.expires_at ? new Date(body.expires_at * 1000) : null,
+        pinnedAt: body.pinned_at ? new Date(body.pinned_at * 1000) : null,
         actorId: user.user_id,
         requestId: c.get('requestId'),
       })

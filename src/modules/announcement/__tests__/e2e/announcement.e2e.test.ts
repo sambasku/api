@@ -172,8 +172,7 @@ describe.skipIf(!hasTestDb)('Announcement E2E - pengumuman admin tayang di feed 
       { title: 'Kamus baru rilis (revisi)' },
       adminToken,
     );
-    expect(edited.status).toBe(200);
-    const feed2 = await get('/api/v1/activity?limit=20');
+    expect(edited.status).toBe(200);    const feed2 = await get('/api/v1/activity?limit=20');
     const items2 = (await feed2.json()).data;
     const tile2 = items2.find((i: { kind: string }) => i.kind === 'announcement');
     expect(tile2.announcement.title).toBe('Kamus baru rilis (revisi)');
@@ -205,6 +204,49 @@ describe.skipIf(!hasTestDb)('Announcement E2E - pengumuman admin tayang di feed 
     const tile = items.find((i: { kind: string }) => i.kind === 'announcement');
     expect(tile).toBeTruthy();
     expect(tile.announcement.expired).toBe(true);
+  });
+
+  it('pin/unpin: PATCH pinned_at tersimpan (tidak dibuang validator) + GET /pinned', async () => {
+    const created = await post(
+      '/api/v1/admin/announcements',
+      { title: 'Pinned e2e', body: 'Coba pin dari console.' },
+      adminToken,
+    );
+    const { id, pinned_at: initialPin } = (await created.json()).data;
+
+    // Awal: belum dipin (response create + list kosong)
+    expect(initialPin ?? null).toBeNull();
+    const empty = await get('/api/v1/announcements/pinned');
+    expect((await empty.json()).data).toHaveLength(0);
+
+    // Pin lewat PATCH (jalur console)
+    const pinned = await patch(
+      `/api/v1/admin/announcements/${id}`,
+      { pinned_at: Math.floor(Date.now() / 1000) },
+      adminToken,
+    );
+    expect(pinned.status).toBe(200);
+    const pinnedBody = (await pinned.json()).data;
+    expect(pinnedBody.pinned_at).toBeGreaterThan(0);
+
+    // GET /pinned publik menampilkan item
+    const listed = await get('/api/v1/announcements/pinned');
+    const listItems = (await listed.json()).data;
+    expect(listItems.some((i: { id: string }) => i.id === id)).toBe(true);
+
+    // Admin list juga menandai pin
+    const adminList = await get('/api/v1/admin/announcements?limit=50', adminToken);
+    const adminItem = (await adminList.json())
+      .data.items.find((i: { id: string }) => i.id === id);
+    expect(adminItem.pinned_at).toBeGreaterThan(0);
+
+    // Unpin → hilang dari /pinned
+    const unpinned = await patch(`/api/v1/admin/announcements/${id}`, { pinned_at: null }, adminToken);
+    expect((await unpinned.json()).data.pinned_at).toBeNull();
+    const after = await get('/api/v1/announcements/pinned');
+    expect((await after.json()).data.some((i: { id: string }) => i.id === id)).toBe(false);
+
+    await del(`/api/v1/admin/announcements/${id}`, adminToken);
   });
 
   it('publik GET /api/v1/announcements/:id - tamu bisa baca; soft delete 404; expired=true', async () => {

@@ -30,9 +30,15 @@ export const createAnnouncementBodySchema = z
     action_url: actionUrlSchema().nullable().optional(),
     action_label: z.string().trim().min(2).max(40).nullable().optional(),
     expires_at: z.number().int().positive().nullable().optional(),
+    pinned_at: z
+      .number()
+      .int()
+      .positive()
+      .nullable()
+      .optional()
   })
   .superRefine((v, ctx) => {
-    if (v.action_label != null && v.action_url == null) {
+    if (v.action_label != null && (v.action_url == null || v.action_url === undefined)) {
       ctx.addIssue({
         code: 'custom',
         path: ['action_label'],
@@ -49,6 +55,12 @@ export const updateAnnouncementBodySchema = z
     action_url: actionUrlSchema().nullable().optional(),
     action_label: z.string().trim().min(2).max(40).nullable().optional(),
     expires_at: z.number().int().positive().nullable().optional(),
+    pinned_at: z
+      .number()
+      .int()
+      .positive()
+      .nullable()
+      .optional(),
   })
   .superRefine((v, ctx) => {
     if (v.action_label != null && v.action_url === undefined) {
@@ -74,6 +86,7 @@ const announcementItemSchema = z.object({
   action_label: z.string().nullable(),
   created_by: z.string(),
   expires_at: z.number().int().nullable(),
+  pinned_at: z.number().int().nullable(),
   expired: z.boolean(),
   created_at: z.number().int(),
   updated_at: z.number().int().nullable(),

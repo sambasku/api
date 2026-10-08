@@ -17,6 +17,7 @@ export interface CreateAnnouncementInput {
   actionUrl?: string | null;
   actionLabel?: string | null;
   expiresAt?: Date | null;
+  pinnedAt?: Date | null;
   actorId: string;
 }
 

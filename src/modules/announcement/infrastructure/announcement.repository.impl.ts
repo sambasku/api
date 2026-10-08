@@ -45,6 +45,7 @@ export class AnnouncementRepositoryImpl implements AnnouncementRepository {
         actionLabel: input.actionLabel ?? null,
         createdBy: input.actorId,
         expiresAt: input.expiresAt ?? null,
+        pinnedAt: input.pinnedAt ?? null,
       })
       .returning();
     return toDomain(row);

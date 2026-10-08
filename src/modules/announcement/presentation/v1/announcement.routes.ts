@@ -123,8 +123,10 @@ export function createPublicAnnouncementRoutes(deps: { controller: AnnouncementC
     },
   });
 
-  routes.openapi(getRoute, (c) => deps.controller.getAnnouncement(c, c.req.param('id')) as never);
+  // /pinned wajib didaftarkan SEBELUM /:id: Hono match urutan registrasi,
+  // kalau tidak /pinned nyangkut di /:id (id="pinned" → 400).
   routes.openapi(listPinnedRoute, (c) => deps.controller.listPinnedAnnouncements(c) as never);
+  routes.openapi(getRoute, (c) => deps.controller.getAnnouncement(c, c.req.param('id')) as never);
 
   return routes;
 }
