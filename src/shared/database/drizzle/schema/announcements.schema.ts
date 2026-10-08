@@ -12,6 +12,11 @@ export const announcements = sqliteTable(
     id: text('id').primaryKey().$defaultFn(() => generateId()),
     title: text('title').notNull(),
     body: text('body').notNull(),
+    // #124 lanjutan: format isi - plain | html | md | webview.
+    // html = render native client; webview = client load body (URL/HTML).
+    bodyType: text('body_type', {
+      enum: ['plain', 'html', 'md', 'webview'],
+    }).notNull().default('plain'),
     // URL https eksternal (opsional). Konsisten whitelist mobile - kosong
     // = pengumuman tanpa action.
     actionUrl: text('action_url'),

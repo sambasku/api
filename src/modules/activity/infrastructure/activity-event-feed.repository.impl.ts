@@ -461,6 +461,7 @@ export class ActivityEventFeedRepositoryImpl {
       let parsed: {
         title?: unknown;
         body?: unknown;
+        bodyType?: unknown;
         actionUrl?: unknown;
         actionLabel?: unknown;
         expiresAt?: unknown;
@@ -476,10 +477,15 @@ export class ActivityEventFeedRepositoryImpl {
       if (typeof parsed?.body === 'string' && parsed.body.trim()) {
         announcementBody = parsed.body;
       }
+      const bodyTypes = ['plain', 'html', 'md', 'webview'] as const;
+      const bodyType = bodyTypes.includes(parsed?.bodyType as (typeof bodyTypes)[number])
+        ? (parsed!.bodyType as (typeof bodyTypes)[number])
+        : 'plain';
       announcement = {
         id: row.targetId ?? row.id,
         title: announcementTitle,
         body: announcementBody ?? announcementTitle,
+        bodyType,
         actionUrl: typeof parsed?.actionUrl === 'string' ? parsed.actionUrl : null,
         actionLabel: typeof parsed?.actionLabel === 'string' ? parsed.actionLabel : null,
         expired:

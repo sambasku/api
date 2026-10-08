@@ -18,6 +18,7 @@ function toDomain(row: AnnouncementRow): Announcement {
     id: row.id,
     title: row.title,
     body: row.body,
+    bodyType: row.bodyType,
     actionUrl: row.actionUrl,
     actionLabel: row.actionLabel,
     createdBy: row.createdBy,
@@ -38,6 +39,7 @@ export class AnnouncementRepositoryImpl implements AnnouncementRepository {
       .values({
         title: input.title,
         body: input.body,
+        bodyType: input.bodyType ?? 'plain',
         actionUrl: input.actionUrl ?? null,
         actionLabel: input.actionLabel ?? null,
         createdBy: input.actorId,
@@ -82,6 +84,7 @@ export class AnnouncementRepositoryImpl implements AnnouncementRepository {
     };
     if (input.title !== undefined) values.title = input.title;
     if (input.body !== undefined) values.body = input.body;
+    if (input.bodyType !== undefined) values.bodyType = input.bodyType;
     if (input.actionUrl !== undefined) values.actionUrl = input.actionUrl;
     if (input.actionLabel !== undefined) values.actionLabel = input.actionLabel;
     if (input.expiresAt !== undefined) values.expiresAt = input.expiresAt;

@@ -43,6 +43,8 @@ export interface ActivityItem {
     id: string;
     title: string;
     body: string;
+    /** #124 lanjutan: plain | html | md | webview (default plain). */
+    bodyType: 'plain' | 'html' | 'md' | 'webview';
     actionUrl: string | null;
     actionLabel: string | null;
     expired: boolean;

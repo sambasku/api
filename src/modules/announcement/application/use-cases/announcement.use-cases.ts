@@ -8,6 +8,7 @@ import type { AnnouncementRepository } from '../../domain/repositories/announcem
 export interface CreateAnnouncementCommand {
   title: string;
   body: string;
+  bodyType?: 'plain' | 'html' | 'md' | 'webview';
   actionUrl?: string | null;
   actionLabel?: string | null;
   expiresAt?: Date | null;
@@ -29,6 +30,7 @@ export class CreateAnnouncementUseCase {
     const announcement = await this.announcementRepo.create({
       title: cmd.title,
       body: cmd.body,
+      bodyType: cmd.bodyType ?? 'plain',
       actionUrl: cmd.actionUrl ?? null,
       actionLabel: cmd.actionLabel ?? null,
       expiresAt: cmd.expiresAt ?? null,
@@ -44,6 +46,7 @@ export class CreateAnnouncementUseCase {
       payload: JSON.stringify({
         title: announcement.title,
         body: announcement.body,
+        bodyType: announcement.bodyType,
         actionUrl: announcement.actionUrl,
         actionLabel: announcement.actionLabel,
         expiresAt: announcement.expiresAt
@@ -69,6 +72,7 @@ export interface UpdateAnnouncementCommand {
   id: string;
   title?: string;
   body?: string;
+  bodyType?: 'plain' | 'html' | 'md' | 'webview';
   actionUrl?: string | null;
   actionLabel?: string | null;
   expiresAt?: Date | null;
@@ -90,6 +94,7 @@ export class UpdateAnnouncementUseCase {
       id: cmd.id,
       title: cmd.title,
       body: cmd.body,
+      bodyType: cmd.bodyType,
       actionUrl: cmd.actionUrl,
       actionLabel: cmd.actionLabel,
       expiresAt: cmd.expiresAt,
@@ -107,6 +112,7 @@ export class UpdateAnnouncementUseCase {
       payload: JSON.stringify({
         title: announcement.title,
         body: announcement.body,
+        bodyType: announcement.bodyType,
         actionUrl: announcement.actionUrl,
         actionLabel: announcement.actionLabel,
         expiresAt: announcement.expiresAt
