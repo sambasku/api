@@ -16,7 +16,13 @@ export const updateMyProfileSchema = z
       .optional()
       .transform((v) => (v === '' ? null : v)),
     // Guide sekali jalan: hanya boleh true, tidak bisa di-reset ke belum baca.
-    has_read_contribution_guide: z.literal(true).optional(),
+    // #98: mobile (json_serializable) selalu ikut mengirim key ini - null saat
+    // tak diisi → terima null sebagai "tidak diubah", bukan 422.
+    has_read_contribution_guide: z
+      .literal(true)
+      .nullable()
+      .optional()
+      .transform((v) => v ?? undefined),
   })
   .refine(
     (body) =>

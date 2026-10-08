@@ -194,10 +194,19 @@ import { SkipSearchMissUseCase } from '@/modules/search-miss/application/use-cas
 import { UpdateSearchMissUseCase } from '@/modules/search-miss/application/use-cases/update-search-miss.use-case';
 import { ResolveSearchMissUseCase } from '@/modules/search-miss/application/use-cases/resolve-search-miss.use-case';
 import { SearchMissController } from '@/modules/search-miss/presentation/v1/search-miss.controller';
+import { AnnouncementRepositoryImpl } from '@/modules/announcement/infrastructure/announcement.repository.impl';
+import {
+  CreateAnnouncementUseCase,
+  UpdateAnnouncementUseCase,
+  DeleteAnnouncementUseCase,
+} from '@/modules/announcement/application/use-cases/announcement.use-cases';
+import { ListAnnouncementsUseCase } from '@/modules/announcement/application/use-cases/list-announcements.use-case';
+import { AnnouncementController } from '@/modules/announcement/presentation/v1/announcement.controller';
 import {
   createAdminSearchMissRoutes,
   createSearchMissRoutes,
 } from '@/modules/search-miss/presentation/v1/search-miss.routes';
+import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from '@/modules/announcement/presentation/v1/announcement.routes';
 import { LanguageRepositoryImpl } from '@/modules/language/infrastructure/language.repository.impl';
 import { ListLanguagesUseCase } from '@/modules/language/application/use-cases/list-languages.use-case';
 import { ListDialectsUseCase } from '@/modules/language/application/use-cases/list-dialects.use-case';
@@ -746,6 +755,18 @@ const languageController = new LanguageController({
   listDialects: new ListDialectsUseCase(languageRepo),
 });
 
+// ---- Modul announcement (#102) - pengumuman admin tayang di feed publik.
+// Write-through activity_events (payload beku) + soft delete hide event. ----
+const announcementRepo = new AnnouncementRepositoryImpl(db);
+const announcementController = new AnnouncementController(
+  new CreateAnnouncementUseCase(announcementRepo, activityEvents, auditRepo),
+  new ListAnnouncementsUseCase(announcementRepo),
+  (cmd) =>
+    new UpdateAnnouncementUseCase(announcementRepo, activityEvents, auditRepo).execute(cmd),
+  new DeleteAnnouncementUseCase(announcementRepo, activityEvents, auditRepo),
+  announcementRepo,
+);
+
 const categoryController = new CategoryController({
   listCategories: new ListCategoriesUseCase(new CategoryRepositoryImpl(db)),
 });
@@ -1270,6 +1291,9 @@ app.route(
 // Search miss - beranda publik (peluang kontribusi) + panel admin
 app.route('/api/v1/search-misses', createSearchMissRoutes({ controller: searchMissController, authenticate }));
 app.route('/api/v1/admin/search-misses', createAdminSearchMissRoutes({ controller: searchMissController, authenticate }));
+app.route('/api/v1/admin/announcements', createAdminAnnouncementRoutes({ controller: announcementController, authenticate }));
+// Publik: detail pengumuman by id (deep link mobile #102).
+app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: announcementController }));
 
 // Data referensi form admin
 app.route('/api/v1/languages', createLanguageRoutes({ controller: languageController }));
