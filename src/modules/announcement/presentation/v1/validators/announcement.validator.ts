@@ -1,15 +1,8 @@
 import { z } from 'zod';
 
-// Whitelist host action_url: konsisten mobile (skill: open-redirect defense).
-// Tambah host = edit sini + mobile `announcement` launcher komentar silang.
-const ACTION_URL_ALLOWED_HOSTS = new Set<string>([
-  'sambasku.com',
-  'www.sambasku.com',
-  'sambasku-staging.iamutaki.com',
-  'sambasku.iamutaki.com',
-  'play.google.com',
-]);
-
+// #124: action_url = URL https valid apa pun host-nya (kebijakan konten
+// admin, bukan teknis). Deep link in-app vs eksternal dibedakan di client.
+// Refine: https + parseable. Host lock dihapus.
 export function actionUrlSchema() {
   return z
     .string()
@@ -23,14 +16,7 @@ export function actionUrlSchema() {
       } catch {
         return false;
       }
-    }, 'URL action wajib https')
-    .refine((v) => {
-      try {
-        return ACTION_URL_ALLOWED_HOSTS.has(new URL(v).host.toLowerCase());
-      } catch {
-        return false;
-      }
-    }, 'Host URL action tidak diizinkan');
+    }, 'URL action wajib https');
 }
 
 export const createAnnouncementBodySchema = z

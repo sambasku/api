@@ -427,12 +427,17 @@ export class ActivityEventFeedRepositoryImpl {
     // placeholder {lemma} (kata belum tentu published saat verify) -
     // disubstitusi read-time dengan lemma JOIN.
     const frozen = row.payload?.trim() ? row.payload.trim() : null;
+    // #124: payload announcement = JSON {title,...} - bukan copy human.
+    // Body wire announcement diisi setelah parse di bawah.
+    const isAnnouncement = kind === 'announcement';
     const body =
-      frozen !== null
-        ? lemma
-          ? frozen.replaceAll('{lemma}', lemma)
-          : frozen.replaceAll(' {lemma}', '').replace('{lemma}', '')
-        : this.bodyFor(kind, lemma);
+      isAnnouncement
+        ? ''
+        : frozen !== null
+          ? lemma
+            ? frozen.replaceAll('{lemma}', lemma)
+            : frozen.replaceAll(' {lemma}', '').replace('{lemma}', '')
+          : this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
     // #99: arah vote dari copy beku (#94) - event kind DB tetap vote_word/
     // vote_comment, split cuma di wire supaya feed home variatif tanpa
@@ -449,6 +454,9 @@ export class ActivityEventFeedRepositoryImpl {
     // actionLabel, expiresAt}. Kadaluarsa = tetap tayang tapi expired=true
     // (mobile menandai & menonaktifkan action) supaya feed tak bergeser.
     let announcement: ActivityItem['announcement'] = null;
+    // #124: body wire announcement = title human-readable (bukan JSON beku).
+    let announcementTitle = 'Pengumuman';
+    let announcementBody: string | null = null;
     if (kind === 'announcement') {
       let parsed: {
         title?: unknown;
@@ -462,10 +470,16 @@ export class ActivityEventFeedRepositoryImpl {
       } catch {
         parsed = null;
       }
+      if (typeof parsed?.title === 'string' && parsed.title.trim()) {
+        announcementTitle = parsed.title.trim();
+      }
+      if (typeof parsed?.body === 'string' && parsed.body.trim()) {
+        announcementBody = parsed.body;
+      }
       announcement = {
         id: row.targetId ?? row.id,
-        title: typeof parsed?.title === 'string' ? parsed.title : 'Pengumuman',
-        body: typeof parsed?.body === 'string' ? parsed.body : body,
+        title: announcementTitle,
+        body: announcementBody ?? announcementTitle,
         actionUrl: typeof parsed?.actionUrl === 'string' ? parsed.actionUrl : null,
         actionLabel: typeof parsed?.actionLabel === 'string' ? parsed.actionLabel : null,
         expired:
@@ -478,7 +492,8 @@ export class ActivityEventFeedRepositoryImpl {
       kind: wire as ActivityKind,
       createdAt: row.occurredAt,
       actor,
-      body,
+      // #124: announcement pakai title human-readable; kind lain copy beku.
+      body: isAnnouncement ? announcementTitle : body,
       subtitle,
       target,
       announcement,

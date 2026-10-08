@@ -82,7 +82,7 @@ describe.skipIf(!hasTestDb)('Announcement E2E - pengumuman admin tayang di feed 
     expect(res.status).toBe(403);
   });
 
-  it('validasi: action_label tanpa action_url ditolak; host tidak diizinkan ditolak', async () => {
+  it('validasi: action_label tanpa action_url ditolak; non-https ditolak; host eksternal kini diizinkan (#124)', async () => {
     const noUrl = await post(
       '/api/v1/admin/announcements',
       { title: 'Judul', body: 'Isi', action_label: 'Buka' },
@@ -90,12 +90,24 @@ describe.skipIf(!hasTestDb)('Announcement E2E - pengumuman admin tayang di feed 
     );
     expect(noUrl.status).toBe(400);
 
-    const badHost = await post(
+    const notHttps = await post(
       '/api/v1/admin/announcements',
-      { title: 'Judul', body: 'Isi', action_url: 'https://evil.example.com/x' },
+      { title: 'Judul', body: 'Isi', action_url: 'http://example.com/x' },
       adminToken,
     );
-    expect(badHost.status).toBe(400);
+    expect(notHttps.status).toBe(400);
+
+    // #124: host bebas (https) - dibedakan deep link/eksternal di client.
+    // Dibuat lalu dihapus: expired tetap tayang di feed (#102), jadi bersihkan
+    // via delete supaya tak ganggu test dedupe di bawah.
+    const externalHost = await post(
+      '/api/v1/admin/announcements',
+      { title: 'Judul', body: 'Isi', action_url: 'https://example.com/x' },
+      adminToken,
+    );
+    expect(externalHost.status).toBe(200);
+    const externalAnn = (await externalHost.json()).data;
+    await del(`/api/v1/admin/announcements/${externalAnn.id}`, adminToken);
   });
 
   it('create → tayang di feed publik dengan payload announcement; edit refresh copy; delete hilang', async () => {
