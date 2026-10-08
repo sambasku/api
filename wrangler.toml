@@ -69,7 +69,7 @@ PLAY_STATS_GCS_PREFIX = ""
 SUPABASE_URL="https://qqlksojwaqrydxhqpyqd.supabase.co"
 MOBILE_GA4_PROPERTY_ID="555160494"
 KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp/v24.0"
-KAPSO_PHONE_NUMBER_ID="647015955153740"
+KAPSO_PHONE_NUMBER_ID="1314628755072991"
 
 # #103: blok [limits] pernah dipasang di sini lalu DIHAPUS - akun Free plan
 # menolak config `limits` apa pun (error 100328 "CPU limits are not supported
@@ -132,7 +132,7 @@ PLAY_STATS_GCS_PREFIX = ""
 SUPABASE_URL="https://wkhlcrxlncflcztptrmg.supabase.co"
 MOBILE_GA4_PROPERTY_ID="555160494"
 KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp/v24.0"
-KAPSO_PHONE_NUMBER_ID="647015955153740"
+KAPSO_PHONE_NUMBER_ID="1314628755072991"
 
 # [env.staging.limits] DIHAPUS - lihat catatan [limits] di atas (Free plan).
 [env.staging.observability]
