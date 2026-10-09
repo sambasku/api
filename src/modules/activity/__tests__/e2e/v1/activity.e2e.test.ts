@@ -281,6 +281,43 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     expect(welcome!.actor?.username).toBeTruthy();
   });
 
+  it('announcement di wire feed membawa body_type (#64) - serializer ganda toWire', async () => {
+    // Serializer announcement ada 2 (serialize announcement.controller + toWire
+    // activity.controller). Unit test repo assert domain, bukan wire - celah
+    // inilah yang dulu melewatkan body_type hilang. Assert di batas HTTP.
+    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
+    const { activityEvents } = await import('@/shared/database/drizzle/schema');
+    const db = getTestDb();
+    const stamp = Date.now();
+    const annId = ulid26(`01E2EANNW${stamp}`);
+    await db.insert(activityEvents).values({
+      kind: 'announcement',
+      actorId: ANONIM_USER_ID,
+      targetWordId: null,
+      targetId: annId,
+      occurredAt: new Date(),
+      dedupeKey: `announcement:${annId}`,
+      payload: JSON.stringify({
+        title: 'Wire body_type',
+        body: '**Penting** dari console',
+        bodyType: 'md',
+      }),
+    });
+
+    const feed = await (
+      await get('/api/v1/activity?limit=50')
+    ).json();
+    const row = feed.data.find(
+      (i: { kind: string; announcement?: { id: string } | null }) =>
+        i.kind === 'announcement' && i.announcement?.id === annId,
+    );
+    expect(row).toBeTruthy();
+    // Inti #64: body_type sampai ke wire (dulu hilang -> mobile parse plain).
+    expect(row.announcement.body_type).toBe('md');
+    expect(row.announcement.body).toBe('**Penting** dari console');
+    expect(row.announcement.title).toBe('Wire body_type');
+  });
+
   it('welcome diurut dari waktu verifikasi, bukan waktu daftar (#47)', async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
     const { users: usersTable } = await import('@/shared/database/drizzle/schema');

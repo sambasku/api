@@ -27,6 +27,9 @@ function toWire(item: ActivityItem) {
             id: a.id,
             title: a.title,
             body: a.body,
+            // #64: body_type wajib di wire - tanpa ini parser mobile
+            // jatuh plain diam-diam, md/webview tak render di jalur feed.
+            body_type: a.bodyType,
             action_url: a.actionUrl,
             action_label: a.actionLabel,
             expired: a.expired,
