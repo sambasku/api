@@ -557,9 +557,12 @@ export class ActivityEventFeedRepositoryImpl {
     switch (kind) {
       case 'word_created':
         return 'Baru ditambahkan';
+      // #132: subtitle 'Verifikasi' duplikat kindLabel mobile ('Verifikasi')
+      // sehingga meta jadi "Verifikasi · Verifikasi". Selfapply pun salah
+      // kategori (kindLabel 'Usulan' + subtitle 'Verifikasi'). Keduanya null.
       case 'word_verified':
       case 'suggestion_selfapply':
-        return 'Verifikasi';
+        return null;
       case 'suggestion_created':
         return 'Usulan baru';
       case 'contribution_submitted':

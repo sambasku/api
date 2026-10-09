@@ -265,6 +265,9 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     const verification = body.data.find((i) => i.kind === 'verification');
     expect(verification).toBeTruthy();
     expect(verification!.body).toBe('Memverifikasi kata');
+    // #132: subtitle verifikasi wajib null - 'Verifikasi' duplikat kindLabel
+    // mobile sehingga meta dirender "Verifikasi · Verifikasi".
+    expect(verification!.subtitle).toBeNull();
 
     // #99: arah vote terpisah di wire
     const up = body.data.find((i) => i.kind === 'vote_up');
