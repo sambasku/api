@@ -138,6 +138,40 @@ describe.skipIf(!hasTestDb)('Announcement E2E - pengumuman admin tayang di feed 
     await del(`/api/v1/admin/announcements/${defData.id}`, adminToken);
   });
 
+  it('#124 webview: body URL tersimpan utuh + tayang di feed & pinned dengan body_type webview', async () => {
+    const created = await post(
+      '/api/v1/admin/announcements',
+      {
+        title: 'Webview kamu',
+        body: 'https://www.sambasku.com',
+        body_type: 'webview',
+        pinned_at: Math.floor(Date.now() / 1000),
+      },
+      adminToken,
+    );
+    expect(created.status).toBe(200);
+    const ann = (await created.json()).data;
+    expect(ann.body_type).toBe('webview');
+    expect(ann.body).toBe('https://www.sambasku.com');
+
+    // Feed wire: body_type webview sampai ke mobile (#64 - serializer toWire).
+    const feed = await get('/api/v1/activity?limit=20');
+    const items = (await feed.json()).data;
+    const tile = items.find(
+      (i: { announcement?: { id: string } | null }) => i.announcement?.id === ann.id,
+    );
+    expect(tile?.announcement?.body_type).toBe('webview');
+    expect(tile?.announcement?.body).toBe('https://www.sambasku.com');
+
+    // /pinned juga bawa webview (serializer serialize).
+    const pinned = await get('/api/v1/announcements/pinned');
+    const pinnedItems = (await pinned.json()).data;
+    const pinnedTile = pinnedItems.find((p: { id: string }) => p.id === ann.id);
+    expect(pinnedTile?.body_type).toBe('webview');
+
+    await del(`/api/v1/admin/announcements/${ann.id}`, adminToken);
+  });
+
   it('create → tayang di feed publik dengan payload announcement; edit refresh copy; delete hilang', async () => {
     // 1. Buat
     const created = await post(
