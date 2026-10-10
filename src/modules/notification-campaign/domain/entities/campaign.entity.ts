@@ -9,6 +9,8 @@ export const CAMPAIGN_MAX_CHUNKS_PER_RUN = 5;
 
 export type DeepLinkKind = 'word' | 'contribution' | 'suggestion' | 'url' | 'none';
 
+export type CampaignBodyType = 'plain' | 'html' | 'md' | 'webview';
+
 export type CampaignAudienceType = 'all' | 'selected';
 
 export type CampaignStatus =
@@ -30,6 +32,7 @@ export interface NotificationTemplate {
   name: string;
   title: string;
   body: string;
+  bodyType: CampaignBodyType;
   imageUrl: string | null;
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
@@ -44,6 +47,7 @@ export interface NotificationCampaign {
   templateId: string | null;
   title: string;
   body: string;
+  bodyType: CampaignBodyType;
   imageUrl: string | null;
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
@@ -77,6 +81,7 @@ export function buildCampaignPushData(campaign: {
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
   imageUrl?: string | null;
+  bodyType?: CampaignBodyType;
 }): Record<string, string> {
   const data: Record<string, string> = {
     type: 'campaign',
@@ -86,6 +91,9 @@ export function buildCampaignPushData(campaign: {
   };
   if (campaign.imageUrl) {
     data.image_url = campaign.imageUrl;
+  }
+  if (campaign.bodyType) {
+    data.body_type = campaign.bodyType;
   }
   if (campaign.deepLinkKind && campaign.deepLinkKind !== 'none' && campaign.deepLinkValue) {
     data.deep_link_kind = campaign.deepLinkKind;

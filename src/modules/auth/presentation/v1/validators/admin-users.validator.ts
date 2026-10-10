@@ -57,7 +57,9 @@ export const createAdminUserBodySchema = z
     phone: z.string().max(20).optional(),
     password: z.string().min(8).regex(/[a-zA-Z]/, 'harus mengandung huruf').regex(/[0-9]/, 'harus mengandung angka'),
     confirm_password: z.string(),
-    roles: z.array(z.enum(ASSIGNABLE_ADMIN_ROLES)).min(1).max(5),
+    // Accept both: new `roles` (array) and legacy `role` (string)
+    roles: z.array(z.enum(ASSIGNABLE_ADMIN_ROLES)).min(1).max(5).optional(),
+    role: z.enum(ASSIGNABLE_ADMIN_ROLES).optional(),
     is_active: z.boolean().default(true),
   })
   .superRefine((d, ctx) => {
@@ -75,16 +77,26 @@ export const createAdminUserBodySchema = z
         path: ['phone'],
       });
     }
+    // At least one of roles or role must be provided
+    if (!d.roles?.length && !d.role) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Peran wajib diisi (roles atau role)',
+        path: ['roles'],
+      });
+    }
   })
   .transform((d) => {
     const phone = normalizePhone(d.phone);
+    // Normalize: prefer roles array, fallback to single role
+    const normalizedRoles = d.roles?.length ? [...new Set(d.roles)] : (d.role ? [d.role] : []);
     return {
       username: d.username,
       email: d.email,
       phone: phone === '__INVALID__' ? null : phone,
       password: d.password,
       confirm_password: d.confirm_password,
-      roles: [...new Set(d.roles)],
+      roles: normalizedRoles,
       is_active: d.is_active,
     };
   });

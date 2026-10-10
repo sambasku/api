@@ -1,15 +1,8 @@
 import { z } from 'zod';
 
-// Whitelist host action_url: konsisten mobile (skill: open-redirect defense).
-// Tambah host = edit sini + mobile `announcement` launcher komentar silang.
-const ACTION_URL_ALLOWED_HOSTS = new Set<string>([
-  'sambasku.com',
-  'www.sambasku.com',
-  'sambasku-staging.iamutaki.com',
-  'sambasku.iamutaki.com',
-  'play.google.com',
-]);
-
+// #124: action_url = URL https valid apa pun host-nya (kebijakan konten
+// admin, bukan teknis). Deep link in-app vs eksternal dibedakan di client.
+// Refine: https + parseable. Host lock dihapus.
 export function actionUrlSchema() {
   return z
     .string()
@@ -23,26 +16,29 @@ export function actionUrlSchema() {
       } catch {
         return false;
       }
-    }, 'URL action wajib https')
-    .refine((v) => {
-      try {
-        return ACTION_URL_ALLOWED_HOSTS.has(new URL(v).host.toLowerCase());
-      } catch {
-        return false;
-      }
-    }, 'Host URL action tidak diizinkan');
+    }, 'URL action wajib https');
 }
+
+// #124 lanjutan: format isi pengumuman. webview = client load isi body.
+export const bodyTypeSchema = z.enum(['plain', 'html', 'md', 'webview']);
 
 export const createAnnouncementBodySchema = z
   .object({
     title: z.string().trim().min(3).max(120),
     body: z.string().trim().min(3).max(5000),
+    body_type: bodyTypeSchema.default('plain'),
     action_url: actionUrlSchema().nullable().optional(),
     action_label: z.string().trim().min(2).max(40).nullable().optional(),
     expires_at: z.number().int().positive().nullable().optional(),
+    pinned_at: z
+      .number()
+      .int()
+      .positive()
+      .nullable()
+      .optional()
   })
   .superRefine((v, ctx) => {
-    if (v.action_label != null && v.action_url == null) {
+    if (v.action_label != null && (v.action_url == null || v.action_url === undefined)) {
       ctx.addIssue({
         code: 'custom',
         path: ['action_label'],
@@ -55,9 +51,16 @@ export const updateAnnouncementBodySchema = z
   .object({
     title: z.string().trim().min(3).max(120).optional(),
     body: z.string().trim().min(3).max(5000).optional(),
+    body_type: bodyTypeSchema.optional(),
     action_url: actionUrlSchema().nullable().optional(),
     action_label: z.string().trim().min(2).max(40).nullable().optional(),
     expires_at: z.number().int().positive().nullable().optional(),
+    pinned_at: z
+      .number()
+      .int()
+      .positive()
+      .nullable()
+      .optional(),
   })
   .superRefine((v, ctx) => {
     if (v.action_label != null && v.action_url === undefined) {
@@ -78,10 +81,12 @@ const announcementItemSchema = z.object({
   id: z.string().length(26),
   title: z.string(),
   body: z.string(),
+  body_type: bodyTypeSchema,
   action_url: z.string().nullable(),
   action_label: z.string().nullable(),
   created_by: z.string(),
   expires_at: z.number().int().nullable(),
+  pinned_at: z.number().int().nullable(),
   expired: z.boolean(),
   created_at: z.number().int(),
   updated_at: z.number().int().nullable(),

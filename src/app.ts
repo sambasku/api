@@ -199,6 +199,7 @@ import {
   CreateAnnouncementUseCase,
   UpdateAnnouncementUseCase,
   DeleteAnnouncementUseCase,
+  ListPinnedAnnouncementsUseCase,
 } from '@/modules/announcement/application/use-cases/announcement.use-cases';
 import { ListAnnouncementsUseCase } from '@/modules/announcement/application/use-cases/list-announcements.use-case';
 import { AnnouncementController } from '@/modules/announcement/presentation/v1/announcement.controller';
@@ -217,6 +218,11 @@ import {
 } from '@/modules/language/presentation/v1/language.routes';
 import { CategoryRepositoryImpl } from '@/modules/category/infrastructure/category.repository.impl';
 import { ListCategoriesUseCase } from '@/modules/category/application/use-cases/list-categories.use-case';
+import {
+  CreateCategoryUseCase,
+  UpdateCategoryUseCase,
+  DeleteCategoryUseCase,
+} from '@/modules/category/application/use-cases/category.use-cases';
 import { CategoryController } from '@/modules/category/presentation/v1/category.controller';
 import { createCategoryRoutes } from '@/modules/category/presentation/v1/category.routes';
 import { AuditLogRepositoryImpl } from '@/modules/audit/infrastructure/audit-log.repository.impl';
@@ -761,14 +767,19 @@ const announcementRepo = new AnnouncementRepositoryImpl(db);
 const announcementController = new AnnouncementController(
   new CreateAnnouncementUseCase(announcementRepo, activityEvents, auditRepo),
   new ListAnnouncementsUseCase(announcementRepo),
+  new ListPinnedAnnouncementsUseCase(announcementRepo),
   (cmd) =>
     new UpdateAnnouncementUseCase(announcementRepo, activityEvents, auditRepo).execute(cmd),
   new DeleteAnnouncementUseCase(announcementRepo, activityEvents, auditRepo),
   announcementRepo,
 );
 
+const categoryRepo = new CategoryRepositoryImpl(db);
 const categoryController = new CategoryController({
-  listCategories: new ListCategoriesUseCase(new CategoryRepositoryImpl(db)),
+  listCategories: new ListCategoriesUseCase(categoryRepo),
+  createCategory: new CreateCategoryUseCase(categoryRepo, auditRepo),
+  updateCategory: new UpdateCategoryUseCase(categoryRepo, auditRepo),
+  deleteCategory: new DeleteCategoryUseCase(categoryRepo, auditRepo),
 });
 
 // ---- Modul vote (08-api-upvote-downvote.md) - upvote/downvote polymorphic
@@ -1298,7 +1309,7 @@ app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: 
 // Data referensi form admin
 app.route('/api/v1/languages', createLanguageRoutes({ controller: languageController }));
 app.route('/api/v1/dialects', createDialectRoutes({ controller: languageController }));
-app.route('/api/v1/categories', createCategoryRoutes({ controller: categoryController }));
+app.route('/api/v1/categories', createCategoryRoutes({ controller: categoryController, authenticate }));
 
 // Audit log - hanya admin & root (Section 21)
 const auditController = new AuditController({ listAuditLogs: new ListAuditLogsUseCase(auditRepo) });

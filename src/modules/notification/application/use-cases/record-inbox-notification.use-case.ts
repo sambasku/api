@@ -17,6 +17,8 @@ export interface RecordInboxNotificationCommand {
   title?: string;
   /** Menimpa salinan bawaan, misalnya menyertakan lemma. */
   body?: string;
+  /** Tipe body eksplisit: plain | html | md | webview. Default dari inboxCopyFor(type). */
+  bodyType?: 'plain' | 'html' | 'md' | 'webview';
   /** Takedown ulang pada kata yang sama: tulis ulang dan tandai belum dibaca. */
   refreshOnConflict?: boolean;
   /** Pelaku aksi; jika sama dengan userId, notifikasi diri sendiri dilewati. */
@@ -53,6 +55,7 @@ export class RecordInboxNotificationUseCase {
       type: cmd.type,
       title: cmd.title?.trim() ? cmd.title.trim() : copy.title,
       body: cmd.body?.trim() ? cmd.body.trim() : copy.body,
+      bodyType: cmd.bodyType ?? copy.bodyType,
       targetKind: cmd.targetKind,
       targetId: cmd.targetId,
       actionKind: cmd.actionKind ?? null,

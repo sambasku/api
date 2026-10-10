@@ -1,0 +1,1 @@
+ALTER TABLE `announcements` ADD `pinned_at` integer;

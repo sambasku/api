@@ -11,6 +11,9 @@ export const notificationTemplates = sqliteTable(
     name: text('name').notNull(),
     title: text('title').notNull(),
     body: text('body').notNull(),
+    bodyType: text('body_type', { enum: ['plain', 'html', 'md', 'webview'] })
+      .notNull()
+      .default('plain'),
     /** URL gambar opsional untuk rich push / inbox. */
     imageUrl: text('image_url'),
     /** word | contribution | suggestion | url | none */

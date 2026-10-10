@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, desc } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { announcements } from '@/shared/database/drizzle/schema/announcements.schema';
 import type {
@@ -18,10 +18,12 @@ function toDomain(row: AnnouncementRow): Announcement {
     id: row.id,
     title: row.title,
     body: row.body,
+    bodyType: row.bodyType,
     actionUrl: row.actionUrl,
     actionLabel: row.actionLabel,
     createdBy: row.createdBy,
     expiresAt: row.expiresAt,
+    pinnedAt: row.pinnedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -38,10 +40,12 @@ export class AnnouncementRepositoryImpl implements AnnouncementRepository {
       .values({
         title: input.title,
         body: input.body,
+        bodyType: input.bodyType ?? 'plain',
         actionUrl: input.actionUrl ?? null,
         actionLabel: input.actionLabel ?? null,
         createdBy: input.actorId,
         expiresAt: input.expiresAt ?? null,
+        pinnedAt: input.pinnedAt ?? null,
       })
       .returning();
     return toDomain(row);
@@ -76,15 +80,33 @@ export class AnnouncementRepositoryImpl implements AnnouncementRepository {
     };
   }
 
+  async listPinned(): Promise<Announcement[]> {
+    const now = new Date();
+    const rows = await this.db
+      .select()
+      .from(announcements)
+      .where(
+        and(
+          isNull(announcements.deletedAt),
+          isNotNull(announcements.pinnedAt),
+          or(isNull(announcements.expiresAt), gt(announcements.expiresAt, now)),
+        ),
+      )
+      .orderBy(desc(announcements.pinnedAt));
+    return rows.map(toDomain);
+  }
+
   async update(input: UpdateAnnouncementInput): Promise<Announcement | null> {
     const values: Partial<typeof announcements.$inferInsert> = {
       updatedAt: new Date(),
     };
     if (input.title !== undefined) values.title = input.title;
     if (input.body !== undefined) values.body = input.body;
+    if (input.bodyType !== undefined) values.bodyType = input.bodyType;
     if (input.actionUrl !== undefined) values.actionUrl = input.actionUrl;
     if (input.actionLabel !== undefined) values.actionLabel = input.actionLabel;
     if (input.expiresAt !== undefined) values.expiresAt = input.expiresAt;
+    if (input.pinnedAt !== undefined) values.pinnedAt = input.pinnedAt;
     const [row] = await this.db
       .update(announcements)
       .set(values)

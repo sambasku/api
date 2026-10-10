@@ -1,0 +1,1 @@
+ALTER TABLE `notifications` ADD `body_type` text NOT NULL DEFAULT 'plain';

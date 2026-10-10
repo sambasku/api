@@ -286,6 +286,7 @@ export class ProcessCampaignDeliveryUseCase {
       const ok = await this.pushSender.sendToTopic(CAMPAIGN_FCM_TOPIC, {
         title: current.title,
         body: current.body,
+        bodyType: current.bodyType,
         imageUrl: current.imageUrl ?? undefined,
         data: buildCampaignPushData(current),
       });
@@ -330,6 +331,7 @@ export class ProcessCampaignDeliveryUseCase {
             type: 'campaign' as const,
             title: current.title,
             body: current.body,
+            bodyType: current.bodyType,
             imageUrl: current.imageUrl,
             targetKind: 'campaign' as const,
             targetId: current.id,
@@ -380,6 +382,7 @@ export class ProcessCampaignDeliveryUseCase {
             type: 'campaign',
             title: campaign.title,
             body: campaign.body,
+            bodyType: campaign.bodyType,
             imageUrl: campaign.imageUrl,
             targetKind: 'campaign',
             targetId: campaign.id,
@@ -391,6 +394,7 @@ export class ProcessCampaignDeliveryUseCase {
           const result = await this.pushSender.send(tokens, {
             title: campaign.title,
             body: campaign.body,
+            bodyType: campaign.bodyType,
             imageUrl: campaign.imageUrl ?? undefined,
             data: buildCampaignPushData(campaign),
           });

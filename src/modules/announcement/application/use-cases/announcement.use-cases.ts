@@ -8,9 +8,11 @@ import type { AnnouncementRepository } from '../../domain/repositories/announcem
 export interface CreateAnnouncementCommand {
   title: string;
   body: string;
+  bodyType?: 'plain' | 'html' | 'md' | 'webview';
   actionUrl?: string | null;
   actionLabel?: string | null;
   expiresAt?: Date | null;
+  pinnedAt?: Date | null;
   actorId: string;
   requestId?: string | null;
 }
@@ -29,9 +31,11 @@ export class CreateAnnouncementUseCase {
     const announcement = await this.announcementRepo.create({
       title: cmd.title,
       body: cmd.body,
+      bodyType: cmd.bodyType ?? 'plain',
       actionUrl: cmd.actionUrl ?? null,
       actionLabel: cmd.actionLabel ?? null,
       expiresAt: cmd.expiresAt ?? null,
+      pinnedAt: cmd.pinnedAt ?? null,
       actorId: cmd.actorId,
     });
 
@@ -44,6 +48,7 @@ export class CreateAnnouncementUseCase {
       payload: JSON.stringify({
         title: announcement.title,
         body: announcement.body,
+        bodyType: announcement.bodyType,
         actionUrl: announcement.actionUrl,
         actionLabel: announcement.actionLabel,
         expiresAt: announcement.expiresAt
@@ -69,9 +74,11 @@ export interface UpdateAnnouncementCommand {
   id: string;
   title?: string;
   body?: string;
+  bodyType?: 'plain' | 'html' | 'md' | 'webview';
   actionUrl?: string | null;
   actionLabel?: string | null;
   expiresAt?: Date | null;
+  pinnedAt?: Date | null; // set to now to pin, null to unpin
   actorId: string;
   requestId?: string | null;
 }
@@ -90,9 +97,11 @@ export class UpdateAnnouncementUseCase {
       id: cmd.id,
       title: cmd.title,
       body: cmd.body,
+      bodyType: cmd.bodyType,
       actionUrl: cmd.actionUrl,
       actionLabel: cmd.actionLabel,
       expiresAt: cmd.expiresAt,
+      pinnedAt: cmd.pinnedAt,
       actorId: cmd.actorId,
     });
     if (!announcement) {
@@ -107,6 +116,7 @@ export class UpdateAnnouncementUseCase {
       payload: JSON.stringify({
         title: announcement.title,
         body: announcement.body,
+        bodyType: announcement.bodyType,
         actionUrl: announcement.actionUrl,
         actionLabel: announcement.actionLabel,
         expiresAt: announcement.expiresAt
@@ -159,5 +169,14 @@ export class DeleteAnnouncementUseCase {
       newData: { deleted: true },
       requestId: cmd.requestId ?? null,
     });
+  }
+}
+
+// List pinned announcements (mobile pinned page / carousel).
+export class ListPinnedAnnouncementsUseCase {
+  constructor(private readonly announcementRepo: AnnouncementRepository) {}
+
+  async execute(): Promise<Announcement[]> {
+    return this.announcementRepo.listPinned();
   }
 }

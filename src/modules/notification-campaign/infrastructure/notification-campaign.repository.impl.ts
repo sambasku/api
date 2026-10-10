@@ -8,6 +8,7 @@ import {
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
   CampaignAudienceType,
+  CampaignBodyType,
   CampaignRecipient,
   CampaignRecipientStatus,
   CampaignStatus,
@@ -33,6 +34,7 @@ function toTemplate(row: typeof notificationTemplates.$inferSelect): Notificatio
     name: row.name,
     title: row.title,
     body: row.body,
+    bodyType: row.bodyType as CampaignBodyType,
     imageUrl: row.imageUrl ?? null,
     deepLinkKind: row.deepLinkKind as DeepLinkKind,
     deepLinkValue: row.deepLinkValue,
@@ -49,6 +51,7 @@ function toCampaign(row: typeof notificationCampaigns.$inferSelect): Notificatio
     templateId: row.templateId,
     title: row.title,
     body: row.body,
+    bodyType: row.bodyType as CampaignBodyType,
     imageUrl: row.imageUrl ?? null,
     deepLinkKind: row.deepLinkKind as DeepLinkKind,
     deepLinkValue: row.deepLinkValue,

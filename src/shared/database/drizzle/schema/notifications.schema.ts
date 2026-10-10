@@ -16,6 +16,9 @@ export const notifications = sqliteTable(
     type: text('type').notNull(),
     title: text('title').notNull(),
     body: text('body').notNull(),
+    bodyType: text('body_type', { enum: ['plain', 'html', 'md', 'webview'] })
+      .notNull()
+      .default('plain'),
     /** URL gambar opsional (campaign rich push / inbox thumbnail). */
     imageUrl: text('image_url'),
     targetKind: text('target_kind').notNull(),
