@@ -7,4 +7,6 @@ export interface CategoryRepository {
   findActiveByNameCaseInsensitive(name: string): Promise<Category | null>;
   /** INSERT kategori baru dari approve usulan (api#50). */
   create(input: { name: string; description?: string | null }): Promise<Category>;
+  update(id: string, input: { name?: string; description?: string | null; parentId?: string | null }): Promise<Category | null>;
+  softDelete(id: string): Promise<boolean>;
 }
