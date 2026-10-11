@@ -618,6 +618,11 @@ export class ActivityRepositoryImpl implements ActivityRepository {
       target: {
         type: 'search_miss',
         id: row.id,
+        // #144: arah pencarian untuk prefill form usul di mobile.
+        direction:
+          row.direction === 'lemma' || row.direction === 'translation'
+            ? row.direction
+            : null,
       },
     }));
   }
