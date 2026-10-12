@@ -27,6 +27,12 @@ export interface ActivityActor {
 export interface ActivityTarget {
   type: string;
   id: string;
+  /**
+   * #144: arah pencarian search-miss. `lemma` = kata Sambas dicari,
+   * `translation` = kata Indonesia dicari. Null untuk kind lain - mobile
+   * memakai ini agar prefill form usul mengisi field yang benar.
+   */
+  direction?: 'lemma' | 'translation' | null;
 }
 
 export interface ActivityItem {

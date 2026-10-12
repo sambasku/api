@@ -147,6 +147,8 @@ interface FeedRow {
   actorAvatarUrl: string | null;
   actorDeletedAt: Date | null;
   missTerm: string | null;
+  /** #144: arah search-miss untuk di-wirer ke target.direction di feed. */
+  missDirection: string | null;
   voteValue: number | null;
 }
 
@@ -354,6 +356,8 @@ export class ActivityEventFeedRepositoryImpl {
         // search_miss: term body feed; guard kind supaya kolisi id antar
         // tabel (ULID) tak pernah match utk kind lain.
         missTerm: searchMisses.term,
+        // #144: arah search-miss (term Indonesia vs kata Sambas).
+        missDirection: searchMisses.direction,
         // fallback arah vote utk event lama tanpa payload (#94).
         voteValue: votes.value,
       })
@@ -576,7 +580,11 @@ export class ActivityEventFeedRepositoryImpl {
 
   private targetFor(
     kind: ActivityEventKind,
-    row: { targetId: string | null; targetWordId: string | null },
+    row: {
+      targetId: string | null;
+      targetWordId: string | null;
+      missDirection: string | null;
+    },
     word: { id: string; lemma: string } | null,
   ): ActivityItem['target'] {
     switch (kind) {
@@ -600,7 +608,17 @@ export class ActivityEventFeedRepositoryImpl {
       case 'discussion_created':
         return row.targetId ? { type: 'discussion', id: row.targetId! } : null;
       case 'search_miss':
-        return row.targetId ? { type: 'search_miss', id: row.targetId! } : null;
+        return row.targetId
+          ? {
+              type: 'search_miss',
+              id: row.targetId!,
+              // #144: arah pencarian untuk prefill form usul di mobile.
+              direction:
+                row.missDirection === 'lemma' || row.missDirection === 'translation'
+                  ? row.missDirection
+                  : null,
+            }
+          : null;
       case 'user_joined':
         return row.targetId ? { type: 'user', id: row.targetId! } : null;
       case 'announcement':

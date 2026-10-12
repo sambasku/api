@@ -33,6 +33,8 @@ const activityTargetSchema = z
   .object({
     type: z.string(),
     id: z.string(),
+    /** #144: arah search-miss untuk prefill form usul (null = kind lain). */
+    direction: z.enum(['lemma', 'translation']).nullable().optional(),
   })
   .nullable();
 
