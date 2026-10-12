@@ -13,14 +13,16 @@ export const TAKEDOWN_REASON_CODES = [
   'duplicate',
   'inappropriate',
   'spam',
+  'vulgar',
   'other',
 ] as const;
 export type TakedownReasonCode = (typeof TAKEDOWN_REASON_CODES)[number];
 
-/** Alasan laporan: takedown + laporan foto kekerasan. */
+/** Alasan laporan: takedown + laporan foto kekerasan + konten vulgar. */
 export const WORD_REPORT_REASON_CODES = [
   ...TAKEDOWN_REASON_CODES,
   'violent_image',
+  'vulgar',
 ] as const;
 export type WordReportReasonCode = (typeof WORD_REPORT_REASON_CODES)[number];
 export type WordType = 'word' | 'idiom' | 'peribahasa' | 'ungkapan';
