@@ -475,10 +475,15 @@ export interface WordRepository {
   ): Promise<boolean>;
 
   /**
-   * taken_down → published. is_verified tidak diubah. Jejak takedown
-   * dikosongkan. false jika status bukan taken_down.
-   */
-  restore(id: string, actorId: string): Promise<boolean>;
+   /** taken_down → published. is_verified tidak diubah. Jejak takedown
+    * dikosongkan. false jika status bukan taken_down.
+    */
+   restore(id: string, actorId: string): Promise<boolean>;
+
+   /**
+    * Update usageLabels on a word. Returns false if word not found.
+    */
+   updateUsageLabels(id: string, usageLabels: string[]): Promise<boolean>;
 
   // ---- Kontribusi media (03-api-kontribusi-verifikasi.md) ----
 
