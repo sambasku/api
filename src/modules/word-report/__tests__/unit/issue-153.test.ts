@@ -1,35 +1,39 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CreateWordReportUseCase } from '../../application/use-cases/create-word-report.use-case';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
-import { WordReportRepository } from '../../domain/repositories/word-report.repository';
-import { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
-import { WordReportReasonCode } from '@/modules/word/domain/entities/word.entity';
-import { Word } from '@/modules/word/domain/entities/word.entity';
-import { WordReport } from '../../domain/entities/word-report.entity';
+import type { WordReportRepository } from '../../domain/repositories/word-report.repository';
+import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { WordReportReasonCode } from '@/modules/word/domain/entities/word.entity';
+import type { Word } from '@/modules/word/domain/entities/word.entity';
+import type { WordReport } from '../../domain/entities/word-report.entity';
 
 // Mock dependencies
 const mockWordRepo = {
   findById: vi.fn(),
   findWordImageById: vi.fn(),
-  updateUsageLabels: vi.fn().mockResolvedValue(undefined),
-} as unknown as WordRepository;
+  updateUsageLabels: vi.fn().mockResolvedValue(true),
+};
 
 const mockReportRepo = {
   findOpenByUserAndWord: vi.fn(),
   create: vi.fn(),
   resolveOne: vi.fn(),
   findById: vi.fn(),
-} as unknown as WordReportRepository;
+};
 
 const mockAuditRepo = {
   record: vi.fn(),
-} as unknown as AuditLogRepository;
+};
 
 describe('Issue #153: Vulgar Auto-Flag and Open Report Endpoint', () => {
   let useCase: CreateWordReportUseCase;
 
   beforeEach(() => {
-    useCase = new CreateWordReportUseCase(mockReportRepo, mockWordRepo, mockAuditRepo);
+    useCase = new CreateWordReportUseCase(
+      mockReportRepo as unknown as WordReportRepository,
+      mockWordRepo as unknown as WordRepository,
+      mockAuditRepo as unknown as AuditLogRepository,
+    );
     vi.clearAllMocks();
   });
 
@@ -49,7 +53,7 @@ describe('Issue #153: Vulgar Auto-Flag and Open Report Endpoint', () => {
       id: wordId,
       status: 'published',
       usageLabels: [],
-    } as Word;
+    } as unknown as Word;
 
     mockWordRepo.findById.mockResolvedValue(existingWord);
     mockReportRepo.findOpenByUserAndWord.mockResolvedValue(null);
@@ -112,7 +116,7 @@ describe('Issue #153: Vulgar Auto-Flag and Open Report Endpoint', () => {
       id: wordId,
       status: 'published',
       usageLabels: ['kasar'],
-    } as Word;
+    } as unknown as Word;
 
     mockWordRepo.findById.mockResolvedValue(existingWord);
     mockReportRepo.findOpenByUserAndWord.mockResolvedValue(null);
@@ -148,7 +152,7 @@ describe('Issue #153: Vulgar Auto-Flag and Open Report Endpoint', () => {
       id: wordId,
       status: 'published',
       usageLabels: ['halus', 'informal'],
-    } as Word;
+    } as unknown as Word;
 
     mockWordRepo.findById.mockResolvedValue(existingWord);
     mockReportRepo.findOpenByUserAndWord.mockResolvedValue(null);
@@ -184,7 +188,7 @@ describe('Issue #153: Vulgar Auto-Flag and Open Report Endpoint', () => {
       id: wordId,
       status: 'published',
       usageLabels: [],
-    } as Word;
+    } as unknown as Word;
 
     mockWordRepo.findById.mockResolvedValue(existingWord);
     mockReportRepo.findOpenByUserAndWord.mockResolvedValue(null);

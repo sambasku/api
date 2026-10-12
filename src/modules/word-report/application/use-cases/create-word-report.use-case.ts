@@ -5,7 +5,7 @@ import { normalizeTakedownNote } from '@/modules/word/domain/takedown-reason';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import type { WordReport } from '../../domain/entities/word-report.entity';
 import type { WordReportRepository } from '../../domain/repositories/word-report.repository';
-import { hasConflictingUsageLabels, USAGE_LABEL_SET } from '@/shared/constants/usage-labels';
+import { hasConflictingUsageLabels } from '@/shared/constants/usage-labels';
 
 export interface CreateWordReportCommand {
   wordId: string;

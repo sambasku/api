@@ -2727,7 +2727,7 @@ export class WordRepositoryImpl implements WordRepository {
     return updated.length > 0;
   }
 
-  async updateUsageLabels(id: string, usageLabels: string[]): Promise<boolean> {
+  async updateUsageLabels(id: string, usageLabels: UsageLabel[]): Promise<boolean> {
     const [row] = await this.db
       .update(words)
       .set({ usageLabels })
