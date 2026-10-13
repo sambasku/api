@@ -5,6 +5,7 @@ import { normalizeTakedownNote } from '@/modules/word/domain/takedown-reason';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import type { WordReport } from '../../domain/entities/word-report.entity';
 import type { WordReportRepository } from '../../domain/repositories/word-report.repository';
+import { hasConflictingUsageLabels } from '@/shared/constants/usage-labels';
 
 export interface CreateWordReportCommand {
   wordId: string;
@@ -61,6 +62,18 @@ export class CreateWordReportUseCase {
       );
     }
 
+    // Auto-flag "kasar" for vulgar content
+    let updatedWord = word;
+    const originalUsageLabels = [...(word.usageLabels ?? [])];
+    if (cmd.reasonCode === 'vulgar' && !hasConflictingUsageLabels(word.usageLabels ?? [])) {
+      const newLabels = new Set(word.usageLabels ?? []);
+      if (!newLabels.has('kasar')) {
+        newLabels.add('kasar');
+        updatedWord = { ...word, usageLabels: Array.from(newLabels) };
+        await this.words.updateUsageLabels(cmd.wordId, Array.from(newLabels));
+      }
+    }
+
     const row = await this.reports.create({
       wordId: cmd.wordId,
       imageId,
@@ -82,6 +95,19 @@ export class CreateWordReportUseCase {
       },
       requestId: cmd.requestId ?? null,
     });
+
+    // Record auto-flag audit log if vulgar reason and label was added
+    if (cmd.reasonCode === 'vulgar' && originalUsageLabels.length !== (updatedWord.usageLabels ?? []).length) {
+      await this.auditRepo.record({
+        userId: cmd.userId,
+        action: 'auto_flag_usage_label',
+        entityType: 'word',
+        entityId: cmd.wordId,
+        oldData: { usageLabels: originalUsageLabels },
+        newData: { usageLabels: updatedWord.usageLabels },
+        requestId: cmd.requestId ?? null,
+      });
+    }
 
     return row;
   }

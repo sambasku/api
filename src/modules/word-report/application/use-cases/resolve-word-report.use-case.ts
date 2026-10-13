@@ -4,6 +4,7 @@ import type { SetWordImageContentWarningsUseCase } from '@/modules/word/applicat
 import type { TakedownWordUseCase } from '@/modules/word/application/use-cases/takedown-word.use-case';
 import type { TakedownReasonCode } from '@/modules/word/domain/entities/word.entity';
 import { normalizeTakedownNote } from '@/modules/word/domain/takedown-reason';
+import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import type { WordReport, WordReportResolution } from '../../domain/entities/word-report.entity';
 import type { WordReportRepository } from '../../domain/repositories/word-report.repository';
 
@@ -34,6 +35,7 @@ export class ResolveWordReportUseCase {
   constructor(
     private readonly reports: WordReportRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly words?: WordRepository,
   ) {}
 
   async execute(cmd: ResolveWordReportCommand): Promise<WordReport> {
@@ -69,6 +71,47 @@ export class ResolveWordReportUseCase {
       newData: { status: 'resolved', resolution: cmd.resolution },
       requestId: cmd.requestId ?? null,
     });
+
+    // #153: undo auto-flag 'kasar' saat dismiss laporan vulgar.
+    // Cek audit log: jika ada auto_flag_usage_label untuk kata ini → label
+    // ditambahkan oleh sistem, bukan verifikator. Aman untuk cabut.
+    if (
+      cmd.resolution === 'dismissed' &&
+      existing.reasonCode === 'vulgar' &&
+      this.words
+    ) {
+      const word = await this.words.findById(existing.wordId);
+      if (word && (word.usageLabels ?? []).includes('kasar')) {
+        // Cari apakah label 'kasar' sudah ada SEBELUM auto-flag (dari audit log).
+        // Desain minimal: cek audit log auto_flag_usage_label untuk word ini.
+        // Jika oldData.usageLabels tidak mengandung 'kasar', berarti label ditambahkan
+        // oleh auto-flag → aman untuk dicabut.
+        const auditPage = await this.auditRepo.list({
+          entityType: 'word',
+          entityId: existing.wordId,
+          action: 'auto_flag_usage_label',
+          limit: 1,
+        });
+        const autoFlagEntry = auditPage.items[0];
+        if (autoFlagEntry) {
+          const oldLabels = (autoFlagEntry.oldData as { usageLabels?: string[] })?.usageLabels ?? [];
+          // Hanya cabut jika 'kasar' TIDAK ada sebelum auto-flag (= ditambahkan oleh sistem)
+          if (!oldLabels.includes('kasar')) {
+            const newLabels = (word.usageLabels ?? []).filter((l: string) => l !== 'kasar');
+            await this.words.updateUsageLabels(existing.wordId, newLabels);
+            await this.auditRepo.record({
+              userId: cmd.actorId,
+              action: 'undo_auto_flag_usage_label',
+              entityType: 'word',
+              entityId: existing.wordId,
+              oldData: { usageLabels: word.usageLabels },
+              newData: { usageLabels: newLabels, dismissed_report_id: cmd.id },
+              requestId: cmd.requestId ?? null,
+            });
+          }
+        }
+      }
+    }
 
     const updated = await this.reports.findById(cmd.id);
     return updated ?? { ...existing, status: 'resolved', resolution: cmd.resolution, resolutionNote: note };

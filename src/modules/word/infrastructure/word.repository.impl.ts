@@ -2727,6 +2727,15 @@ export class WordRepositoryImpl implements WordRepository {
     return updated.length > 0;
   }
 
+  async updateUsageLabels(id: string, usageLabels: UsageLabel[]): Promise<boolean> {
+    const [row] = await this.db
+      .update(words)
+      .set({ usageLabels })
+      .where(and(eq(words.id, id), isNull(words.deletedAt)))
+      .returning({ id: words.id });
+    return row !== undefined;
+  }
+
   async restore(id: string, actorId: string): Promise<boolean> {
     const now = new Date();
     const updated = await this.db

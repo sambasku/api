@@ -12,6 +12,7 @@ import type { CreateWordDto, RelationType } from '../../application/dto/create-w
 import type { MeaningMedia } from '../entities/meaning.entity';
 import type { ImageContentWarning } from '@/shared/constants/image-content-warnings';
 import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
+import type { UsageLabel } from '@/shared/constants/usage-labels';
 
 // status & isVerified & isCorrected di-override use case
 // (Section 22 - approval gate; resolvePublication)
@@ -475,10 +476,15 @@ export interface WordRepository {
   ): Promise<boolean>;
 
   /**
-   * taken_down → published. is_verified tidak diubah. Jejak takedown
-   * dikosongkan. false jika status bukan taken_down.
-   */
-  restore(id: string, actorId: string): Promise<boolean>;
+   /** taken_down → published. is_verified tidak diubah. Jejak takedown
+    * dikosongkan. false jika status bukan taken_down.
+    */
+   restore(id: string, actorId: string): Promise<boolean>;
+
+   /**
+    * Update usageLabels on a word. Returns false if word not found.
+    */
+   updateUsageLabels(id: string, usageLabels: UsageLabel[]): Promise<boolean>;
 
   // ---- Kontribusi media (03-api-kontribusi-verifikasi.md) ----
 
