@@ -12,6 +12,8 @@ function makeRepo(user: Awaited<ReturnType<PublicUserRepository['findPublicByUse
     countPublishedComments: vi.fn(),
     loadStats: vi.fn().mockResolvedValue({
       contributionsApproved: 12,
+      wordsApproved: 4,
+      correctionsApproved: 8,
       verificationsDone: 34,
       commentsPublished: 5,
     }),
@@ -45,7 +47,7 @@ describe('GetPublicProfileUseCase', () => {
       isVerifier: true,
       joinedAt: JOINED,
       avatarUrl: null,
-      stats: { contributionsApproved: 12, verificationsDone: 34, commentsPublished: 5 },
+      stats: { contributionsApproved: 12, wordsApproved: 4, correctionsApproved: 8, verificationsDone: 34, commentsPublished: 5 },
     });
   });
 

@@ -44,6 +44,8 @@ export class UserController {
         avatar_url: profile.avatarUrl,
         stats: {
           contributions_approved: profile.stats.contributionsApproved,
+          words_approved: profile.stats.wordsApproved,
+          corrections_approved: profile.stats.correctionsApproved,
           verifications_done: profile.stats.verificationsDone,
           comments_published: profile.stats.commentsPublished,
         },

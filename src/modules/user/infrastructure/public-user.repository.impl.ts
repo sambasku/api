@@ -160,12 +160,38 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
   }
 
   async loadStats(userId: string): Promise<PublicProfileStats> {
-    const [contributionsApproved, verificationsDone, commentsPublished] = await Promise.all([
-      this.countApprovedContributions(userId),
+    const [byKind, verificationsDone, commentsPublished] = await Promise.all([
+      this.countApprovedByKind(userId),
       this.countVerificationsDone(userId),
       this.countPublishedComments(userId),
     ]);
-    return { contributionsApproved, verificationsDone, commentsPublished };
+    return {
+      contributionsApproved: byKind.words + byKind.corrections,
+      wordsApproved: byKind.words,
+      correctionsApproved: byKind.corrections,
+      verificationsDone,
+      commentsPublished,
+    };
+  }
+
+  /** Satu query: usul kata ('word') vs perbaikan (entity_type lain). */
+  private async countApprovedByKind(
+    userId: string,
+  ): Promise<{ words: number; corrections: number }> {
+    const [row] = await this.db
+      .select({
+        words: sql<number>`coalesce(sum(case when ${contributions.entityType} = 'word' then 1 else 0 end), 0)`.mapWith(Number),
+        corrections: sql<number>`coalesce(sum(case when ${contributions.entityType} <> 'word' then 1 else 0 end), 0)`.mapWith(Number),
+      })
+      .from(contributions)
+      .where(
+        and(
+          eq(contributions.userId, userId),
+          inArray(contributions.status, ['approved', 'corrected']),
+          isNull(contributions.deletedAt),
+        ),
+      );
+    return { words: row?.words ?? 0, corrections: row?.corrections ?? 0 };
   }
 
   async listRecentApprovedContributions(

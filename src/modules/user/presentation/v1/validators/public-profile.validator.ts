@@ -37,6 +37,8 @@ export const publicProfileResponseSchema = z.object({
     avatar_url: z.string().url().nullable(),
     stats: z.object({
       contributions_approved: z.number().int(),
+      words_approved: z.number().int(),
+      corrections_approved: z.number().int(),
       verifications_done: z.number().int(),
       comments_published: z.number().int(),
     }),
