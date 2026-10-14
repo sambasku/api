@@ -1,4 +1,5 @@
 import { BadGatewayError, ServiceUnavailableError } from '@/shared/errors/app-error';
+import { proxyImageCdnUrl } from './image_proxy';
 import type {
   ShareBackgroundItem,
   ShareBackgroundProviderPort,
@@ -150,10 +151,11 @@ export function mapPixabayPhoto(raw: unknown): ShareBackgroundItem | null {
   if (!id || !url || !photographer) return null;
   const width = typeof hit.imageWidth === 'number' ? hit.imageWidth : 0;
   const height = typeof hit.imageHeight === 'number' ? hit.imageHeight : 0;
+  const proxyUrl = proxyImageCdnUrl(url);
   return {
     id: `pixabay-photo-${id}`,
-    url,
-    preview_url: url,
+    url: proxyUrl,
+    preview_url: proxyUrl,
     photographer,
     username: photographer,
     attribution_url: pageUrl,
@@ -215,10 +217,11 @@ export function mapPixabayVideo(raw: unknown): ShareBackgroundItem | null {
   const preview =
     picked.thumbnail ||
     (pictureId ? `https://i.vimeocdn.com/video/${pictureId}_640x360.jpg` : picked.url);
+  const proxyPreview = proxyImageCdnUrl(preview);
   return {
     id: `pixabay-video-${id}`,
     url: picked.url,
-    preview_url: preview,
+    preview_url: proxyPreview,
     photographer,
     username: photographer,
     attribution_url: pageUrl,
