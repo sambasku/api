@@ -51,13 +51,20 @@ export function assessUgcTextQuality(
     return { ok: false, reason: 'Teks harus mengandung huruf yang bermakna' };
   }
 
-  const uniqueLetters = new Set(letters.map((ch) => ch.toLowerCase()));
-  // Keyboard smash: banyak huruf tapi hampir semua sama / sangat sedikit unik
-  if (letters.length >= 8 && uniqueLetters.size / letters.length < 0.25) {
-    return { ok: false, reason: 'Teks tidak terlihat bermakna' };
-  }
-  if (letters.length >= 12 && uniqueLetters.size <= 3) {
-    return { ok: false, reason: 'Teks tidak terlihat bermakna' };
+  // Keyboard smash, tidak bergantung panjang teks (rasio unik/total salah menolak
+  // kalimat panjang karena alfabet cuma 26 huruf):
+  //  - satu huruf dominan > 60% (aaaaabaaaa)
+  //  - <= 2 huruf unik (ababababab, lalalala)
+  if (letters.length >= 8) {
+    const freq = new Map<string, number>();
+    for (const ch of letters) {
+      const lower = ch.toLowerCase();
+      freq.set(lower, (freq.get(lower) ?? 0) + 1);
+    }
+    const maxFreq = Math.max(...freq.values());
+    if (maxFreq / letters.length > 0.6 || freq.size <= 2) {
+      return { ok: false, reason: 'Teks tidak terlihat bermakna' };
+    }
   }
 
   const nonSpace = normalized.replace(/\s+/g, '');

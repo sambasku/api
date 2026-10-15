@@ -25,6 +25,28 @@ describe('assessUgcTextQuality', () => {
     expect(r.ok).toBe(false);
   });
 
+  it('menolak satu huruf dominan > 60%', () => {
+    expect(assessUgcTextQuality('aaaaabaaaa').ok).toBe(false);
+    expect(assessUgcTextQuality('mmmmmmmmnk').ok).toBe(false);
+  });
+
+  it('menolak pola dua huruf bergantian', () => {
+    expect(assessUgcTextQuality('lalala lalala').ok).toBe(false);
+  });
+
+  it('menerima kalimat panjang alami (regresi #162)', () => {
+    const samples = [
+      'melanggar pantangan adat tertentu',
+      'perbuatan melanggar pantangan atau larangan adat yang berlaku dalam masyarakat kampung',
+      'perbuatan melanggar pantangan atau larangan adat yang berlaku dalam masyarakat kampung sehingga dianggap membawa sial bagi pelakunya',
+      'kupu-kupu',
+      'anak-anak',
+      'bubur',
+      'mama',
+    ];
+    for (const s of samples) expect(assessUgcTextQuality(s).ok, s).toBe(true);
+  });
+
   it('menolak duplikat exact body baru-baru ini', () => {
     const r = assessUgcTextQuality('Halo dunia', {
       recentBodies: ['  Halo dunia  '],
