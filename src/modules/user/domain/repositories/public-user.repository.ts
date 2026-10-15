@@ -18,13 +18,6 @@ export interface PublicUserRepository {
    */
   suggestByUsernamePrefix(prefix: string, limit: number): Promise<MentionUserRow[]>;
 
-  countApprovedContributions(userId: string): Promise<number>;
-
-  /** COUNT contribution_reviews reviewer_id = user AND status != pending. */
-  countVerificationsDone(userId: string): Promise<number>;
-
-  countPublishedComments(userId: string): Promise<number>;
-
   loadStats(userId: string): Promise<PublicProfileStats>;
 
   /**

@@ -4,23 +4,33 @@ import type { PublicUserRepository } from '../../domain/repositories/public-user
 
 const JOINED = new Date('2026-08-01T00:00:00Z');
 
-function makeRepo(user: Awaited<ReturnType<PublicUserRepository['findPublicByUsername']>>) {
+function makeRepo(
+  user: Awaited<ReturnType<PublicUserRepository['findPublicByUsername']>>,
+  statsOverride?: Partial<{
+    contributionsApproved: number;
+    wordsApproved: number;
+    correctionsApproved: number;
+    verificationsDone: number;
+    commentsPublished: number;
+  }>,
+) {
+  const stats = {
+    contributionsApproved: 12,
+    wordsApproved: 4,
+    correctionsApproved: 8,
+    verificationsDone: 34,
+    commentsPublished: 5,
+    ...statsOverride,
+  };
   return {
     findPublicByUsername: vi.fn().mockResolvedValue(user),
-    countApprovedContributions: vi.fn(),
-    countVerificationsDone: vi.fn(),
-    countPublishedComments: vi.fn(),
-    loadStats: vi.fn().mockResolvedValue({
-      contributionsApproved: 12,
-      wordsApproved: 4,
-      correctionsApproved: 8,
-      verificationsDone: 34,
-      commentsPublished: 5,
-    }),
+    suggestByUsernamePrefix: vi.fn(),
+    loadStats: vi.fn().mockResolvedValue(stats),
     listRecentApprovedContributions: vi.fn(),
     listRecentPublishedComments: vi.fn(),
     listRecentVerifications: vi.fn(),
-  } as unknown as PublicUserRepository;
+    listRecentVotes: vi.fn(),
+  } satisfies PublicUserRepository;
 }
 
 describe('GetPublicProfileUseCase', () => {
@@ -47,27 +57,66 @@ describe('GetPublicProfileUseCase', () => {
       isVerifier: true,
       joinedAt: JOINED,
       avatarUrl: null,
-      stats: { contributionsApproved: 12, wordsApproved: 4, correctionsApproved: 8, verificationsDone: 34, commentsPublished: 5 },
+      stats: {
+        contributionsApproved: 12,
+        wordsApproved: 4,
+        correctionsApproved: 8,
+        verificationsDone: 34,
+        commentsPublished: 5,
+      },
     });
   });
 
-  it('contributor → is_verifier false', async () => {
+  it('kontributor biasa → is_verifier false + avatar cdnpublish', async () => {
     const repo = makeRepo({
       id: '01JDUSERKONTRIB00000000000',
       username: 'siti',
       displayName: 'siti',
-      bio: null,
-      roles: ['contributor'],
-      role: 'contributor',
+      bio: 'hobi masak',
+      roles: [],
+      role: 'user',
       joinedAt: JOINED,
       avatarUrl: 'https://cdn.jsdelivr.net/gh/x/y@main/a.jpg',
     });
     const profile = await new GetPublicProfileUseCase(repo).execute('siti');
+
     expect(profile.isVerifier).toBe(false);
     expect(profile.avatarUrl).toContain('jsdelivr');
   });
 
-  it('repo null (tidak ada / deleted / inactive) → 404 USER_NOT_FOUND', async () => {
+  it('user baru (0 stats) → loadStats dipanggil dan angka 0 diteruskan', async () => {
+    const repo = makeRepo(
+      {
+        id: '01JDUSERNEW0000000000000',
+        username: 'baru',
+        displayName: 'baru',
+        bio: null,
+        roles: [],
+        role: 'user',
+        joinedAt: JOINED,
+        avatarUrl: null,
+      },
+      {
+        contributionsApproved: 0,
+        wordsApproved: 0,
+        correctionsApproved: 0,
+        verificationsDone: 0,
+        commentsPublished: 0,
+      },
+    );
+    const profile = await new GetPublicProfileUseCase(repo).execute('baru');
+
+    expect(repo.loadStats).toHaveBeenCalledWith('01JDUSERNEW0000000000000');
+    expect(profile.stats).toMatchObject({
+      contributionsApproved: 0,
+      wordsApproved: 0,
+      correctionsApproved: 0,
+      verificationsDone: 0,
+      commentsPublished: 0,
+    });
+  });
+
+  it('user tidak ditemukan → 404 USER_NOT_FOUND', async () => {
     const repo = makeRepo(null);
     const useCase = new GetPublicProfileUseCase(repo);
 
@@ -75,6 +124,7 @@ describe('GetPublicProfileUseCase', () => {
       errorCode: 'USER_NOT_FOUND',
       statusCode: 404,
     });
+
     expect(repo.loadStats).not.toHaveBeenCalled();
   });
 });
