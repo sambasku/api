@@ -8,6 +8,9 @@ export function createOpenApiApp() {
   return new OpenAPIHono<{ Variables: AppVariables }>({
     defaultHook: (result, c) => {
       if (!result.success) {
+        // Pesan Zod (en-US, teknis) hanya untuk env non-prod. Di production
+        // diganti generik supaya toast user tidak menyalahkan isian user.
+        const isProd = process.env.NODE_ENV === 'production';
         return c.json(
           {
             success: false as const,
@@ -15,7 +18,7 @@ export function createOpenApiApp() {
             message: 'Beberapa isian belum sesuai, coba periksa lagi ya.',
             details: (result.error as z.ZodError).issues.map((issue) => ({
               field: issue.path.join('.'),
-              message: issue.message,
+              message: isProd ? 'Terjadi kendala pada isian ini.' : issue.message,
             })),
           },
           400,

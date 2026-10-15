@@ -51,6 +51,10 @@ export const errorHandler: ErrorHandler = (err, c) => {
   // envelope 100% konsisten dengan Section 13 api-base-stack.
   if (err && typeof (err as { name?: string }).name === 'string' && (err as { name: string }).name === 'ZodError') {
     const zerr = err as z.ZodError;
+    // Pesan Zod (en-US, teknis) hanya untuk env non-prod. Di production
+    // diganti generik supaya toast user tidak menyalahkan isian user
+    // (bug app yang mengirim nilai ilegal tetap terbaca field-nya).
+    const isProd = process.env.NODE_ENV === 'production';
     const details = zerr.issues
       .map((iss) => {
         const field = iss.path.length
@@ -60,7 +64,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
               : iss.path[0]
                 ? String(iss.path[0])
                 : '__root__';
-        return { field, message: iss.message };
+        return { field, message: isProd ? 'Terjadi kendala pada isian ini.' : iss.message };
       })
       .filter((d) => d.field !== '__root__' || d.message !== '');
     return c.json(

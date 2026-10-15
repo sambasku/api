@@ -36,4 +36,22 @@ describe('createSuggestionSchema images', () => {
     });
     expect(parsed.success).toBe(true);
   });
+
+  it('menerima alt_text null (upload kamera/galeri tanpa alt)', () => {
+    const parsed = createSuggestionSchema.safeParse({
+      reason_code: 'image_issue',
+      proposed_changes: {
+        images: [
+          {
+            action: 'add',
+            url: 'https://ik.imagekit.io/demo/words/a.jpg',
+            provider: 'imagekit',
+            provider_file_id: 'file_abc',
+            alt_text: null,
+          },
+        ],
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
 });

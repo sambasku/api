@@ -1,4 +1,5 @@
 import { BadGatewayError } from '@/shared/errors/app-error';
+import { proxyImageCdnUrl } from './image_proxy';
 import type {
   ShareBackgroundItem,
   ShareBackgroundProviderPort,
@@ -142,10 +143,12 @@ export function mapOpenversePhoto(raw: unknown): ShareBackgroundItem | null {
     (typeof hit.thumbnail === 'string' && hit.thumbnail) || url;
   const width = typeof hit.width === 'number' ? hit.width : 0;
   const height = typeof hit.height === 'number' ? hit.height : 0;
+  const proxyPreview = proxyImageCdnUrl(preview);
+  const proxyUrl = proxyImageCdnUrl(url);
   return {
     id: `openverse-photo-${id}`,
-    url,
-    preview_url: preview,
+    url: proxyUrl,
+    preview_url: proxyPreview,
     photographer,
     username: photographer,
     attribution_url: pageUrl,

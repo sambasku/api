@@ -186,7 +186,7 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
       bio: null,
       role: 'contributor',
       is_verifier: false,
-      stats: { contributions_approved: 0, verifications_done: 0, comments_published: 0 },
+      stats: { contributions_approved: 0, words_approved: 0, corrections_approved: 0, verifications_done: 0, comments_published: 0 },
     });
     expect(body.data.joined_at).toBeTruthy();
     expect(body.data).toHaveProperty('avatar_url');
@@ -203,6 +203,7 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     expect(body.data.is_verifier).toBe(true);
     expect(body.data.stats.verifications_done).toBe(1);
     expect(body.data.stats.contributions_approved).toBe(0);
+    expect(body.data.stats.words_approved).toBe(0);
   });
 
   it('GET contributor → is_verifier false + contributions_approved >= 1', async () => {
@@ -211,6 +212,8 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     const body = await res.json();
     expect(body.data.is_verifier).toBe(false);
     expect(body.data.stats.contributions_approved).toBe(1);
+    expect(body.data.stats.words_approved).toBe(1);
+    expect(body.data.stats.corrections_approved).toBe(0);
   });
 
   it('GET /users/:username/activity → 200, max 20, bentuk item publik', async () => {

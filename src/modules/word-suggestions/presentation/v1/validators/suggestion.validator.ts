@@ -58,7 +58,7 @@ const imageChangeSchema = z
     url: z.string().url().optional(),
     provider: z.enum([...STOCK_WORD_IMAGE_PROVIDERS, 'github', 'imagekit']).optional(),
     provider_file_id: z.string().trim().min(1).max(255).optional(),
-    alt_text: z.string().trim().max(500).optional(),
+    alt_text: z.string().trim().max(500).nullish(),
     is_primary: z.boolean().optional(),
   })
   .superRefine((img, ctx) => {
@@ -215,7 +215,7 @@ export function mapProposedChanges(
       url: i.url,
       provider: i.provider,
       providerFileId: i.provider_file_id,
-      altText: i.alt_text,
+      altText: i.alt_text ?? undefined,
       isPrimary: i.is_primary,
     })),
   };

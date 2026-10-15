@@ -60,7 +60,7 @@ describe('mapPixabayPhoto', () => {
       id: 'pixabay-photo-42',
       kind: 'photo',
       provider: 'pixabay',
-      url: 'https://cdn.pixabay.com/photo/42.jpg',
+      url: 'https://wsrv.nl/?url=cdn.pixabay.com%2Fphoto%2F42.jpg&w=640&h=640&fit=cover&output=webp',
       photographer: 'Ada',
     });
   });
@@ -88,7 +88,7 @@ describe('mapPixabayVideo', () => {
       kind: 'video',
       provider: 'pixabay',
       url: 'https://example.com/v.mp4',
-      preview_url: 'https://example.com/t.jpg',
+      preview_url: 'https://wsrv.nl/?url=example.com%2Ft.jpg&w=640&h=640&fit=cover&output=webp',
       duration_seconds: 12,
       mime_type: 'video/mp4',
     });

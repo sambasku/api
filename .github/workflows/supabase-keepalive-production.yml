@@ -12,7 +12,7 @@ name: Supabase Keep-Alive (production)
 
 on:
   schedule:
-    - cron: '0 3 * * 1,4' # Senin & Kamis 03:00 UTC, 1 jam setelah staging
+    - cron: '0 3,15 * * *' # Setiap hari 2x: 03:00 & 15:00 UTC, 1 jam setelah staging
   workflow_dispatch:
 
 concurrency:

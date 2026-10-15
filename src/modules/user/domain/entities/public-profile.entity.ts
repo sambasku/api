@@ -1,5 +1,9 @@
 export interface PublicProfileStats {
   contributionsApproved: number;
+  /** Usul kata disetujui (entity_type = 'word'). */
+  wordsApproved: number;
+  /** Perbaikan disetujui: semua entity_type selain 'word'. */
+  correctionsApproved: number;
   verificationsDone: number;
   commentsPublished: number;
 }

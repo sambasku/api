@@ -1,4 +1,5 @@
 import { BadGatewayError, ServiceUnavailableError } from '@/shared/errors/app-error';
+import { proxyImageCdnUrl } from './image_proxy';
 import type {
   ShareBackgroundItem,
   ShareBackgroundProviderPort,
@@ -148,16 +149,17 @@ function mapPhoto(raw: unknown): ShareBackgroundItem | null {
   const width = typeof photo.width === 'number' ? photo.width : 0;
   const height = typeof photo.height === 'number' ? photo.height : 0;
 
+  const proxyUrl = proxyImageCdnUrl(url);
   return {
     id,
-    url,
+    url: proxyUrl,
     photographer,
     username,
     attribution_url: attributionUrl,
     unsplash_url: attributionUrl,
     provider: 'unsplash',
     kind: 'photo',
-    preview_url: url,
+    preview_url: proxyUrl,
     width,
     height,
     duration_seconds: 0,

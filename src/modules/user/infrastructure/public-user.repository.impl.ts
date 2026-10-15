@@ -131,41 +131,51 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
     return row?.count ?? 0;
   }
 
-  async countVerificationsDone(userId: string): Promise<number> {
-    const [row] = await this.db
-      .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(contributionReviews)
-      .where(
-        and(
-          eq(contributionReviews.reviewerId, userId),
-          ne(contributionReviews.status, 'pending'),
-          isNull(contributionReviews.deletedAt),
-        ),
-      );
-    return row?.count ?? 0;
-  }
-
-  async countPublishedComments(userId: string): Promise<number> {
-    const [row] = await this.db
-      .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(comments)
-      .where(
-        and(
-          eq(comments.userId, userId),
-          eq(comments.status, 'published'),
-          isNull(comments.deletedAt),
-        ),
-      );
-    return row?.count ?? 0;
-  }
-
   async loadStats(userId: string): Promise<PublicProfileStats> {
-    const [contributionsApproved, verificationsDone, commentsPublished] = await Promise.all([
-      this.countApprovedContributions(userId),
-      this.countVerificationsDone(userId),
-      this.countPublishedComments(userId),
-    ]);
-    return { contributionsApproved, verificationsDone, commentsPublished };
+    // Satu query, empat subquery skalar - hemat subrequest Turso (aturan
+    // join-bukan-n-panggilan). Jalur baca profil publik sebelumnya 3 query.
+    const [row] = await this.db
+      .select({
+        words: sql<number>`(
+          select coalesce(sum(case when ${contributions.entityType} = 'word' then 1 else 0 end), 0)
+          from ${contributions}
+          where ${contributions.userId} = ${userId}
+            and ${contributions.status} in ('approved', 'corrected')
+            and ${contributions.deletedAt} is null
+        )`.mapWith(Number),
+        corrections: sql<number>`(
+          select coalesce(sum(case when ${contributions.entityType} <> 'word' then 1 else 0 end), 0)
+          from ${contributions}
+          where ${contributions.userId} = ${userId}
+            and ${contributions.status} in ('approved', 'corrected')
+            and ${contributions.deletedAt} is null
+        )`.mapWith(Number),
+        verificationsDone: sql<number>`(
+          select count(*)
+          from ${contributionReviews}
+          where ${contributionReviews.reviewerId} = ${userId}
+            and ${contributionReviews.status} <> 'pending'
+            and ${contributionReviews.deletedAt} is null
+        )`.mapWith(Number),
+        commentsPublished: sql<number>`(
+          select count(*)
+          from ${comments}
+          where ${comments.userId} = ${userId}
+            and ${comments.status} = 'published'
+            and ${comments.deletedAt} is null
+        )`.mapWith(Number),
+      })
+      .from(sql`(select 1)`);
+
+    const words = row?.words ?? 0;
+    const corrections = row?.corrections ?? 0;
+    return {
+      contributionsApproved: words + corrections,
+      wordsApproved: words,
+      correctionsApproved: corrections,
+      verificationsDone: row?.verificationsDone ?? 0,
+      commentsPublished: row?.commentsPublished ?? 0,
+    };
   }
 
   async listRecentApprovedContributions(
