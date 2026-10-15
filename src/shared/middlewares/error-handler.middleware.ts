@@ -9,7 +9,6 @@ import {
   ValidationError,
 } from '@/shared/errors/app-error';
 import { isCapacityFailure } from '@/shared/errors/infra-failure';
-import { env } from '@/shared/config/env';
 import { logger } from '@/shared/logging/logger';
 
 // Dipasang sekali di main.ts via app.onError(errorHandler) -
@@ -55,7 +54,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
     // Pesan Zod (en-US, teknis) hanya untuk env non-prod. Di production
     // diganti generik supaya toast user tidak menyalahkan isian user
     // (bug app yang mengirim nilai ilegal tetap terbaca field-nya).
-    const isProd = env.NODE_ENV === 'production';
+    const isProd = process.env.NODE_ENV === 'production';
     const details = zerr.issues
       .map((iss) => {
         const field = iss.path.length

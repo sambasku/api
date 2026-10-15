@@ -1,7 +1,11 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, afterEach, vi } from 'vitest';
 import { z } from 'zod';
 import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
+// Logger menarik env.ts yang parse-Zod env saat import; test unit tidak
+// pakai logger - mock agar tidak butuh DATABASE_URL dkk.
+vi.mock('@/shared/logging/logger', () => ({ logger: { error: vi.fn() } }));
+import { errorHandler } from '../error-handler.middleware';
 
 const makeZodError = () =>
   new z.ZodError([
@@ -19,18 +23,16 @@ const makeCtx = () =>
     json: (body: unknown, status: number) => new Response(JSON.stringify(body), { status }),
   }) as unknown as Context<{ Variables: AppVariables }>;
 
-// env dibaca lazy per request; re-mock + re-import per skenario.
-async function run(nodeEnv: string) {
-  vi.resetModules();
-  vi.doMock('@/shared/config/env', () => ({ env: { NODE_ENV: nodeEnv } }));
-  const { errorHandler } = await import('../error-handler.middleware');
+function run(nodeEnv: string) {
+  process.env.NODE_ENV = nodeEnv;
   const res = errorHandler(makeZodError(), makeCtx()) as Response;
-  return (await res.json()) as { details: { field: string; message: string }[] };
+  return res.json() as Promise<{ details: { field: string; message: string }[] }>;
 }
 
 describe('errorHandler - ZodError message per env', () => {
+  const original = process.env.NODE_ENV;
   afterEach(() => {
-    vi.doUnmock('@/shared/config/env');
+    process.env.NODE_ENV = original;
   });
 
   it('production: pesan detail diganti generik (tidak expose pesan Zod)', async () => {
