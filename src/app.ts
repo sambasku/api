@@ -48,6 +48,7 @@ import { JwtTokenService } from '@/modules/auth/infrastructure/jwt-token.service
 import { Pbkdf2PasswordService } from '@/modules/auth/infrastructure/pbkdf2-password.service';
 import { createMailer } from '@/modules/auth/infrastructure/mailer.factory';
 import { EmailQuotaRepositoryImpl, EmailUsageRepositoryImpl, EmailLogRepositoryImpl } from '@/modules/email/infrastructure/email.repository.impl';
+import { createEmailAdminRoutes } from '@/modules/email/presentation/v1/email-admin.routes';
 import { createEmailDomainVerifier } from '@/modules/auth/infrastructure/email-domain-verifier.factory';
 import { EmailVerificationOtpRepositoryImpl } from '@/modules/auth/infrastructure/email-verification-otp.repository.impl';
 import { RegisterUserUseCase } from '@/modules/auth/application/use-cases/register-user.use-case';
@@ -471,6 +472,8 @@ const mailer = createMailer({
   usageRepo: new EmailUsageRepositoryImpl(db),
   logRepo: new EmailLogRepositoryImpl(db),
 });
+const emailQuotaRepo = new EmailQuotaRepositoryImpl(db);
+const emailLogRepo = new EmailLogRepositoryImpl(db);
 const emailDomainVerifier = createEmailDomainVerifier();
 const identityRepo = new AuthIdentityRepositoryImpl(db);
 
@@ -1565,6 +1568,10 @@ app.route(
     sendWa: sendWaMessage,
     authenticate,
   }),
+);
+app.route(
+  '/api/v1/admin/email',
+  createEmailAdminRoutes({ quotaRepo: emailQuotaRepo, logRepo: emailLogRepo, authenticate }),
 );
 app.route(
   '/api/v1/admin/verifier-applications',
