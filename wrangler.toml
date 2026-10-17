@@ -107,6 +107,8 @@ REFRESH_COOKIE_DOMAIN = ""
 JWT_ACCESS_TOKEN_TTL = "900"
 JWT_REFRESH_TOKEN_TTL = "2592000"
 MAIL_FROM = "SambasKu <no-reply@sambasku.com>"
+# Test deliverability OTP: kirim email nyata di staging (hapus/0 untuk skip lagi).
+STAGING_SEND_EMAIL = "1"
 KBBI_PROVIDER = "raf555"
 RAF555_BASE_URL = "https://kbbi.raf555.dev"
 LEMMA_DEFINITION_CACHE_TTL_SECONDS = "3600"

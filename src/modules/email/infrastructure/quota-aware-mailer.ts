@@ -129,8 +129,9 @@ export class QuotaAwareMailer implements MailerPort {
     providerFilter?: string,
   ): Promise<EmailSendOutcome> {
     const candidates = await this.resolveCandidates(providerFilter);
-    // Staging: tidak ada kirim nyata (perilaku lama ResendMailerService).
-    if (process.env.NODE_ENV === 'staging') {
+    // Staging: skip kirim nyata kecuali STAGING_SEND_EMAIL=1 (mode test
+    // deliverability; kode OTP staging tetap fixed 111-111).
+    if (process.env.NODE_ENV === 'staging' && process.env.STAGING_SEND_EMAIL !== '1') {
       await this.safeLog({
         provider: candidates[0]?.sender.provider ?? 'none',
         category,
@@ -142,6 +143,18 @@ export class QuotaAwareMailer implements MailerPort {
     }
 
     if (candidates.length === 0) {
+      // Dev/test tanpa key: skip + log (perilaku SmtpMailerService lama),
+      // jangan gagalkan register. Produksi tetap gagal keras (503).
+      if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'staging') {
+        await this.safeLog({
+          provider: providerFilter ?? 'none',
+          category,
+          toEmail: payload.to,
+          status: 'skipped_env',
+          errorMessage: 'DEV/TEST: email tidak dikirim (tanpa provider terkonfigurasi)',
+        });
+        return { sent: true, provider: null, messageId: null, errorCode: null, errorMessage: 'skipped_env' };
+      }
       await this.safeLog({
         provider: providerFilter ?? 'none',
         category,
