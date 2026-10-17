@@ -1,5 +1,5 @@
 import { config as loadEnv } from 'dotenv';
-import { createClient } from '@libsql/client';
+import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import type { AppDatabase } from './client';
 import * as schema from './schema';
@@ -11,6 +11,7 @@ loadEnv({ path: '.env.test', quiet: true, override: true });
 
 let testDb: AppDatabase | undefined;
 let ready: Promise<void> | undefined;
+let testClient: Client | undefined;
 
 export function getTestDb(): AppDatabase {
   if (!testDb) {
@@ -24,6 +25,7 @@ export function getTestDb(): AppDatabase {
       url,
       authToken: process.env.DATABASE_AUTH_TOKEN || undefined,
     });
+    testClient = client;
     testDb = drizzle(client, { schema });
     // FK on + busy_timeout supaya truncateAll paralel-ish tidak SQLITE_BUSY
     ready = (async () => {
@@ -33,6 +35,12 @@ export function getTestDb(): AppDatabase {
     })();
   }
   return testDb;
+}
+
+/** Raw libsql client untuk adapter FTS (FtsWordSearchIndex) di integration test. */
+export function getTestClient(): Client {
+  getTestDb();
+  return testClient!;
 }
 
 /** Panggil di beforeAll jika perlu menunggu pragma selesai. */

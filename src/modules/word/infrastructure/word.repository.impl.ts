@@ -22,6 +22,7 @@ import {
   wordImportSessions,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
+import type { WordSearchIndex } from '../domain/ports/word-search-index';
 import {
   publicAccountDisplayName,
   publicAccountName,
@@ -221,6 +222,14 @@ function escapeLike(q: string): string {
   return q.replace(/[\\%_]/g, (m) => `\\${m}`);
 }
 
+// Pencarian natural: "paddas aek" = cocok %paddas% ATAU %aek%.
+// Dibatasi 5 kata unik supaya klausa OR tidak meledak dari input panjang.
+// ponytail: OR tanpa skor relevansi, urutan tetap words.id DESC. Upgrade ke
+// FTS5 + bm25() kalau hasil perlu diurutkan (frasa utuh di atas).
+function searchTerms(q: string): string[] {
+  return [...new Set(q.trim().toLowerCase().split(/\s+/).filter(Boolean))].slice(0, 5);
+}
+
 // Anak yang ikut submit kata mengikuti gerbang kata-nya (Section 22 -
 // approval gate): kata pending → anak pending; approve/reject kata ikut
 // memutuskan nasib anak-anaknya (lihat ContributionRepositoryImpl.review).
@@ -250,7 +259,10 @@ function mapMediaViolation(err: unknown, uniqueField: string): void {
 }
 
 export class WordRepositoryImpl implements WordRepository {
-  constructor(private readonly db: AppDatabase) {}
+  constructor(
+    private readonly db: AppDatabase,
+    private readonly searchIndex?: WordSearchIndex,
+  ) {}
 
   async saveWithRelations(word: WordToSave, actorId: string): Promise<Word> {
     try {
@@ -1110,6 +1122,30 @@ export class WordRepositoryImpl implements WordRepository {
       return this.searchByTranslation(params);
     }
 
+    const terms = searchTerms(params.q ?? '');
+
+    // FTS bm25 path: cursor "o:<offset>" (page 1 = tanpa cursor). Cursor id
+    // plain (lama / fallback) -> LIKE words.id DESC. Offset dipilih karena
+    // rank bm25 tidak bisa jadi keyset stabil; index kamus jarang berubah
+    // di tengah sesi pencarian, drift offset kecil dan bisa diterima.
+    // ponytail: index error/empty -> fallback LIKE penuh di bawah, jadi
+    // kerusakan index tidak pernah bikin search mati total.
+    let ftsOffset = -1;
+    if (this.searchIndex && terms.length > 0 && params.published === true) {
+      if (params.cursor === undefined) ftsOffset = 0;
+      else if (/^o:\d+$/.test(params.cursor)) ftsOffset = Number(params.cursor.slice(2));
+    }
+    let orderedIds: string[] | null = null;
+    if (ftsOffset >= 0) {
+      try {
+        const hits = await this.searchIndex!.search(terms, params.limit + 1, ftsOffset);
+        orderedIds = hits.map((h) => h.wordId);
+        if (orderedIds.length === 0) orderedIds = null;
+      } catch {
+        orderedIds = null; // index rusak -> fallback LIKE
+      }
+    }
+
     const where = and(
       isNull(words.deletedAt),
       // Publik: published only. Admin: published? true|false|all (omit)
@@ -1121,10 +1157,12 @@ export class WordRepositoryImpl implements WordRepository {
       // 11-api-variasi-penulisan.md: q cocok lemma ATAU bentuk variasi
       // (mis. cari "ketex" menemukan entri "ketek"). EXISTS - bukan JOIN -
       // supaya hasil tetap satu baris per kata (cursor words.id aman).
-      params.q
+      terms.length > 0
         ? or(
-            ilikeCompat(words.lemma, `%${escapeLike(params.q.trim())}%`),
-            sql`EXISTS (SELECT 1 FROM ${wordVariants} v WHERE v.word_id = ${words.id} AND v.deleted_at IS NULL AND lower(v.form) LIKE ${`%${escapeLike(params.q.trim()).toLowerCase()}%`})`,
+            ...terms.flatMap((t) => [
+              ilikeCompat(words.lemma, `%${escapeLike(t)}%`),
+              sql`EXISTS (SELECT 1 FROM ${wordVariants} v WHERE v.word_id = ${words.id} AND v.deleted_at IS NULL AND lower(v.form) LIKE ${`%${escapeLike(t)}%`})`,
+            ]),
           )
         : undefined,
       params.wordType ? eq(words.wordType, params.wordType) : undefined,
@@ -1135,9 +1173,23 @@ export class WordRepositoryImpl implements WordRepository {
         : params.hasImage
           ? sql`EXISTS (SELECT 1 FROM ${wordImages} wi WHERE wi.word_id = ${words.id} AND wi.deleted_at IS NULL)`
           : sql`NOT EXISTS (SELECT 1 FROM ${wordImages} wi WHERE wi.word_id = ${words.id} AND wi.deleted_at IS NULL)`,
-      params.cursor ? lt(words.id, params.cursor) : undefined,
+      // Cursor LIKE path = plain word id; cursor FTS "o:N" tidak lewat sini.
+      params.cursor && ftsOffset < 0 && !/^o:\d+$/.test(params.cursor)
+        ? lt(words.id, params.cursor)
+        : undefined,
     );
 
+    // Narrow eksplisit: TS tidak mengalirkan `usingFts` boolean ke array.
+    const usingFts = orderedIds !== null;
+    const ftsIds = usingFts ? orderedIds : null;
+    // Urutan: FTS aktif -> ikut skor bm25 dari orderedIds (CASE per id);
+    // else -> words.id DESC (keyset cursor tetap kompatibel).
+    const orderExpr = ftsIds
+      ? sql`CASE words.id ${sql.join(
+          ftsIds.map((id, i) => sql`WHEN ${id} THEN ${i}`),
+          sql` `,
+        )} ELSE ${ftsIds.length} END`
+      : desc(words.id);
     const rows = await this.db
       .select({
         id: words.id,
@@ -1151,8 +1203,12 @@ export class WordRepositoryImpl implements WordRepository {
       })
       .from(words)
       .innerJoin(languages, eq(words.languageId, languages.id))
-      .where(where)
-      .orderBy(desc(words.id))
+      .where(
+        ftsIds
+          ? and(where, inArray(words.id, ftsIds))
+          : where,
+      )
+      .orderBy(orderExpr)
       .limit(params.limit + 1);
 
     const hasMore = rows.length > params.limit;
@@ -1170,9 +1226,7 @@ export class WordRepositoryImpl implements WordRepository {
 
     // 11: isi matched_variant HANYA untuk item yang match lewat variasi
     // (bukan lemma) - satu query tambahan untuk ≤ limit baris, bukan N+1.
-    if (params.q && page.length > 0) {
-      const pattern = `%${escapeLike(params.q.trim())}%`;
-      const qLower = params.q.trim().toLowerCase();
+    if (terms.length > 0 && page.length > 0) {
       const variantRows = await this.db
         .select({ wordId: wordVariants.wordId, form: wordVariants.form })
         .from(wordVariants)
@@ -1183,7 +1237,7 @@ export class WordRepositoryImpl implements WordRepository {
               page.map((p) => p.id),
             ),
             isNull(wordVariants.deletedAt),
-            ilikeCompat(wordVariants.form, pattern),
+            or(...terms.map((t) => ilikeCompat(wordVariants.form, `%${escapeLike(t)}%`))),
           ),
         );
       const variantByWord = new Map<string, string>();
@@ -1193,7 +1247,8 @@ export class WordRepositoryImpl implements WordRepository {
       for (const p of page) {
         // match lemma (penentu JS setara ilike untuk alfabet Latin) → tanpa
         // matched_variant (kontrak: field hanya saat cocok via variasi)
-        if (p.lemma.toLowerCase().includes(qLower)) continue;
+        const lemmaLower = p.lemma.toLowerCase();
+        if (terms.some((t) => lemmaLower.includes(t))) continue;
         const matched = variantByWord.get(p.id);
         if (matched) p.matchedVariant = matched;
       }
@@ -1201,9 +1256,16 @@ export class WordRepositoryImpl implements WordRepository {
 
     await this.attachListGlosses(page);
 
+    // FTS path: cursor offset berikutnya; LIKE path: id item terakhir (kontrak lama).
+    const nextCursor =
+      hasMore && page.length > 0
+        ? usingFts
+          ? `o:${ftsOffset + params.limit}`
+          : page[page.length - 1].id
+        : null;
     return {
       items: page,
-      nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
+      nextCursor,
       hasMore,
     };
   }
@@ -1511,6 +1573,7 @@ export class WordRepositoryImpl implements WordRepository {
   }
 
   private async searchByTranslation(params: SearchParams): Promise<CursorPage<WordSummary>> {
+    const terms = searchTerms(params.q ?? '');
     const where = and(
       isNull(words.deletedAt),
       params.published === true
@@ -1525,8 +1588,8 @@ export class WordRepositoryImpl implements WordRepository {
       eq(meanings.status, 'published'),
       ne(meaningTranslations.translationText, '-'),
       isNull(meaningTranslations.deletedAt),
-      params.q
-        ? ilikeCompat(meaningTranslations.translationText, `%${escapeLike(params.q.trim())}%`)
+      terms.length > 0
+        ? or(...terms.map((t) => ilikeCompat(meaningTranslations.translationText, `%${escapeLike(t)}%`)))
         : undefined,
       params.translationLanguageId
         ? eq(meaningTranslations.languageId, params.translationLanguageId)

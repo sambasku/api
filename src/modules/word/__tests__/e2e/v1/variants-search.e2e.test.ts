@@ -173,4 +173,22 @@ describe.skipIf(!hasTestDb)('Variasi Penulisan E2E v1 (11 doc) - search + valida
     const search = await get('/api/v1/words/search?q=lamasx&search_in=lemma&limit=10');
     expect(search.status).toBe(200);
   });
+
+  it('cursor FTS "o:<offset>" dari next_cursor diterima validator (backward compat load-more)', async () => {
+    // Dua kata published supaya FTS path menghasilkan next_cursor "o:N"
+    await post('/api/v1/admin/words', wordBody('padak manis', []), adminToken);
+    await post('/api/v1/admin/words', wordBody('padak asin', []), adminToken);
+
+    const p1 = await get('/api/v1/words/search?q=padak&limit=1');
+    expect(p1.status).toBe(200);
+    const b1 = (await p1.json()) as { data: unknown[]; meta: { next_cursor: string | null; has_more: boolean } };
+    if (b1.meta.next_cursor?.startsWith('o:')) {
+      const p2 = await get(`/api/v1/words/search?q=padak&limit=1&cursor=${encodeURIComponent(b1.meta.next_cursor)}`);
+      expect(p2.status).toBe(200);
+      expect((await p2.json()).data).toBeDefined();
+    } else {
+      // Fallback LIKE (index kosong/di-skip) - cursor id plain juga valid
+      expect(b1.meta.next_cursor).toMatch(/^[0-9A-Z]{26}$/);
+    }
+  });
 });

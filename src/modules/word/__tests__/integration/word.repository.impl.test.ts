@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { config } from 'dotenv';
-import { getTestDb } from '@/shared/database/drizzle/test-client';
+import { getTestDb, getTestClient } from '@/shared/database/drizzle/test-client';
 import {
   categories,
   contributionReviews,
@@ -10,9 +10,10 @@ import {
   lexicalRelations,
   meanings,
   meaningTranslations,
-  wordAudios,
-  wordCategories,
-  wordImages,
+wordAudios,
+wordCategories,
+wordImages,
+wordVariants,
   users,
   wordClasses,
   words,
@@ -21,6 +22,7 @@ import {
 import { eq, sql } from 'drizzle-orm';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
 import { WordRepositoryImpl } from '../../infrastructure/word.repository.impl';
+import { FtsWordSearchIndex } from '../../infrastructure/fts-word-search-index';
 import { decodeLatestCursor, decodeListCursor } from '../../domain/repositories/word.repository';
 import type { ResolvedInlineRelation } from '../../domain/repositories/word.repository';
 import type { WordToSave } from '../../domain/repositories/word.repository';
@@ -98,8 +100,8 @@ function inlineSynonym(
 }
 
 describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
-  const db = hasTestDb ? getTestDb() : null!;
-  const repo = new WordRepositoryImpl(db);
+const db = hasTestDb ? getTestDb() : null!;
+const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTestClient()) : undefined);
 
   beforeEach(async () => {
     // urutan hapus: anak dulu (FK) - satu util untuk semua test
@@ -701,6 +703,49 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
     expect(terfilter.items).toHaveLength(1);
   });
 
+  it('search natural: multi-kata OR per term (lemma, variasi, terjemahan)', async () => {
+    await repo.saveWithRelations(baseWord({ lemma: 'paddas' }), ACTOR);
+    const pinaek = await repo.saveWithRelations(baseWord({ lemma: 'pinaek' }), ACTOR);
+    // "pinaek" cocok lewat variasi "aek" - kata dalam DB tanpa match lemma langsung
+    await db.insert(wordVariants).values({ wordId: pinaek.id, form: 'aek' });
+    // terjemahan "nasi" di kata lain
+    await repo.saveWithRelations(
+      baseWord({
+        lemma: 'nasi',
+        meanings: [{ wordClassId: NOMINA, definition: 'nasi', orderIndex: 1, translations: [{ languageId: IDN, translationText: 'nasi', translationType: 'direct' }] }],
+      }),
+      ACTOR,
+    );
+
+    // "paddas aek" → dua kata Sambas (satu lewat lemma, satu lewat variasi)
+    const hasil = await repo.search({ q: 'paddas aek', limit: 10, published: true });
+    expect(hasil.items.map((w) => w.lemma).sort()).toEqual(['paddas', 'pinaek']);
+
+    // reverse: "nasi minum" → terjemahan cocok salah satu term
+    const reverse = await repo.search({ q: 'nasi minum', searchIn: 'translation', limit: 10, published: true });
+    expect(reverse.items.map((w) => w.lemma)).toEqual(['nasi']);
+  });
+
+  it('search FTS: ranking bm25 - frasa penuh di atas kecocokan sebagian', async () => {
+    await repo.saveWithRelations(baseWord({ lemma: 'paddas aek' }), ACTOR); // match 2 term
+    await repo.saveWithRelations(baseWord({ lemma: 'paddas' }), ACTOR); // match 1 term
+    await repo.saveWithRelations(baseWord({ lemma: 'aek' }), ACTOR); // match 1 term
+
+    const hasil = await repo.search({ q: 'paddas aek', limit: 10, published: true });
+    expect(hasil.items.map((w) => w.lemma)).toContain('paddas aek');
+    // Kata yang cocok kedua term harus di atas yang cocok satu term.
+    expect(hasil.items[0].lemma).toBe('paddas aek');
+    expect(hasil.items).toHaveLength(3);
+    // Pagination offset FTS konsisten: page 2 = 2 item sisanya.
+    const hal1 = await repo.search({ q: 'paddas aek', limit: 1, published: true });
+    expect(hal1.hasMore).toBe(true);
+    expect(hal1.nextCursor).toMatch(/^o:\d+$/);
+    const hal2 = await repo.search({ q: 'paddas aek', limit: 5, cursor: hal1.nextCursor!, published: true });
+    expect(hal2.items.map((w) => w.lemma)).not.toContain('paddas aek');
+    expect(hal2.items).toHaveLength(2);
+    expect(hal2.hasMore).toBe(false);
+  });
+
   it('EDGE CASE: kata DRAFT tidak muncul di search publik (lemma maupun reverse)', async () => {
     await repo.saveWithRelations(baseWord({ lemma: 'publik1' }), ACTOR);
     await repo.saveWithRelations(baseWord({ lemma: 'draft1', status: 'draft' }), ACTOR);
@@ -731,7 +776,8 @@ describe.skipIf(!hasTestDb)('WordRepositoryImpl', () => {
     expect(hal1.items).toHaveLength(1);
     expect(hal1.items[0].languageCode).toBe('smb');
     expect(hal1.hasMore).toBe(true);
-    expect(hal1.nextCursor).toBe(hal1.items[0].id);
+    // Cursor opaque: FTS path = "o:<offset>", fallback LIKE = word id.
+    expect(hal1.nextCursor).toMatch(/^(o:\d+|[0-9A-Z]{26})$/);
 
     const hal2 = await repo.search({ q: 'maka', limit: 1, cursor: hal1.nextCursor!, published: true });
     expect(hal2.items).toHaveLength(1);

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { cors } from 'hono/cors';
 import { env } from '@/shared/config/env';
 import { sql } from 'drizzle-orm';
-import { db } from '@/shared/database/drizzle/client';
+import { client, db } from '@/shared/database/drizzle/client';
 import { bindCanContributeLookup } from '@/modules/word/application/utils/assert-can-contribute';
 import { lookupCanContribute } from '@/modules/word/application/utils/can-contribute-lookup';
 import { errorHandler } from '@/shared/middlewares/error-handler.middleware';
@@ -117,6 +117,7 @@ import { SetUserActiveUseCase } from '@/modules/auth/application/use-cases/set-u
 import { ListUserAbuseEventsUseCase } from '@/modules/auth/application/use-cases/list-user-abuse-events.use-case';
 import { createAdminUserRoutes, createContributionAccessRoutes } from '@/modules/auth/presentation/v1/admin-user.routes';
 import { WordRepositoryImpl } from '@/modules/word/infrastructure/word.repository.impl';
+import { FtsWordSearchIndex } from '@/modules/word/infrastructure/fts-word-search-index';
 import { CreateWordUseCase } from '@/modules/word/application/use-cases/create-word.use-case';
 import { UpdateWordUseCase } from '@/modules/word/application/use-cases/update-word.use-case';
 import { GetWordByIdUseCase } from '@/modules/word/application/use-cases/get-word-by-id.use-case';
@@ -296,6 +297,10 @@ import { FcmAnalyticsController } from '@/modules/fcm-analytics/presentation/v1/
 import { createFcmAnalyticsRoutes } from '@/modules/fcm-analytics/presentation/v1/fcm-analytics.routes';
 import { GetFcmAnalyticsUseCase } from '@/modules/fcm-analytics/application/use-cases/get-fcm-analytics.use-case';
 import { createFcmAnalyticsProviders } from '@/modules/fcm-analytics/infrastructure/fcm-analytics-providers.factory';
+import { MobileAnalyticsController } from '@/modules/mobile-analytics/presentation/v1/mobile-analytics.controller';
+import { createMobileAnalyticsRoutes } from '@/modules/mobile-analytics/presentation/v1/mobile-analytics.routes';
+import { GetMobileAnalyticsUseCase } from '@/modules/mobile-analytics/application/use-cases/get-mobile-analytics.use-case';
+import { createMobileAnalyticsProvider } from '@/modules/mobile-analytics/infrastructure/mobile-analytics-providers.factory';
 import { VoteRepositoryImpl } from '@/modules/vote/infrastructure/vote.repository.impl';
 import { ToggleVoteUseCase } from '@/modules/vote/application/use-cases/toggle-vote.use-case';
 import { GetVoteCountsUseCase } from '@/modules/vote/application/use-cases/get-vote-counts.use-case';
@@ -620,7 +625,9 @@ const requireProfileWriteClient = createRequireApprovedClientMiddleware(apiClien
 });
 
 // ---- Modul word (+ language & category sebagai data referensi form admin) ----
-const wordRepo = new WordRepositoryImpl(db);
+// Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
+// Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
+const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
 const wordImportSessionRepo = new WordImportSessionRepositoryImpl(db);
 const wordReportRepo = new WordReportRepositoryImpl(db);
 const takedownWord = new TakedownWordUseCase(wordRepo, auditRepo, wordReportRepo, recordInbox);
@@ -857,6 +864,16 @@ const playAnalyticsController = new PlayAnalyticsController({
 const fcmAnalyticsController = new FcmAnalyticsController({
   getReport: new GetFcmAnalyticsUseCase({
     ...createFcmAnalyticsProviders(env),
+    cacheTtlSeconds: env.FCM_CACHE_TTL_SECONDS,
+  }),
+});
+
+// ---- Modul mobile-analytics - GA4 property mobile (event, layar, audiens)
+// via service account GA4 yang sama dengan web-analytics. ----
+const mobileAnalyticsController = new MobileAnalyticsController({
+  getReport: new GetMobileAnalyticsUseCase({
+    mobile: createMobileAnalyticsProvider(env),
+    // ponytail: reuse TTL FCM (1 jam); pisah env kalau butuh beda.
     cacheTtlSeconds: env.FCM_CACHE_TTL_SECONDS,
   }),
 });
@@ -1485,6 +1502,11 @@ app.route(
 app.route(
   '/api/v1/admin/fcm-analytics',
   createFcmAnalyticsRoutes({ controller: fcmAnalyticsController, authenticate }),
+);
+// Analitik mobile GA4 (event, layar, audiens) - hanya admin & root
+app.route(
+  '/api/v1/admin/mobile-analytics',
+  createMobileAnalyticsRoutes({ controller: mobileAnalyticsController, authenticate }),
 );
 
 // ---- Admin users (Package A): list user + ubah role, hanya admin & root ----

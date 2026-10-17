@@ -643,7 +643,12 @@ export const wordClassListResponseSchema = z.object({
 export const searchWordsQuerySchema = z.object({
   q: z.string().trim().max(255).default(''),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  cursor: z.string().length(26).optional(),
+  // Cursor dua format: word id (26 char, LIKE path) atau "o:<offset>" (FTS
+  // path bm25). Keduanya opaque dari next_cursor - jangan diasumsikan ULID.
+  cursor: z
+    .string()
+    .refine((v) => /^[0-9A-Z]{26}$/.test(v) || /^o:\d+$/.test(v), 'Data tidak valid. Muat ulang halaman, lalu coba lagi.')
+    .optional(),
   // lemma = Sambas→Indonesia (default); translation = Indonesia→Sambas
   search_in: z.enum(['lemma', 'translation']).default('lemma'),
   translation_language_id: z.string().length(26).optional(),

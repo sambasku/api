@@ -484,6 +484,13 @@
       "when": 1799946900000,
       "tag": "0068_announcements_pinned_at",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1800046900000,
+      "tag": "0069_words_search_fts",
+      "breakpoints": true
     }
   ]
 }
