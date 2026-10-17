@@ -1,8 +1,12 @@
 import { z } from 'zod';
 
-export const loginSchema = z.object({
-  email: z.email(),
-  password: z.string().min(1),
+export const loginSchema = z
+  .object({
+    // 'identifier' (email/username) dikirim mobile; 'email' legacy console/web.
+    // identifier menang bila keduanya dikirim.
+    identifier: z.string().min(1).max(320).optional(),
+    email: z.email().optional(),
+    password: z.string().min(1),
   // web (default): refresh_token via httpOnly cookie.
   // mobile: refresh_token dikirim di response body - client menyimpannya
   // di secure storage (Keychain/Keystore), lalu mengirimnya di body
@@ -10,9 +14,18 @@ export const loginSchema = z.object({
   client_type: z.enum(['web', 'mobile']).default('web'),
   /** Klaim first-party; default dari client_type bila kosong. */
   client_id: z.string().min(1).max(100).optional(),
-});
+  })
+  .refine((v) => Boolean(v.identifier || v.email), {
+    message: 'Email atau username wajib diisi ya.',
+    path: ['identifier'],
+  });
 
 export type LoginBody = z.infer<typeof loginSchema>;
+
+/** Email atau username untuk lookup user. identifier menang atas email. */
+export function resolveLoginIdentifier(body: LoginBody): string {
+  return (body.identifier ?? body.email ?? '').trim();
+}
 
 export const loginResponseSchema = z.object({
   success: z.literal(true),

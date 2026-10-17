@@ -22,7 +22,11 @@ export class LoginUserUseCase {
     // Pesan error generik untuk semua kasus gagal - cegah user enumeration
     const invalid = new UnauthorizedError('INVALID_CREDENTIALS', 'Email atau password salah');
 
-    const user = await this.userRepo.findByEmail(dto.email);
+    // identifier bisa email atau username; '@' tidak valid di username
+    const isEmail = dto.identifier.includes('@');
+    const user = isEmail
+      ? await this.userRepo.findByEmail(dto.identifier)
+      : await this.userRepo.findByUsername(dto.identifier);
     // passwordHash NULL = user OAuth-only (Section 23) - tidak punya jalur
     // login password; pesan tetap generik anti-enumeration
     if (!user || !user.passwordHash || !(await this.hasher.compare(dto.password, user.passwordHash))) {

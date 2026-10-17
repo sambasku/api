@@ -27,6 +27,7 @@ import type {
 import type { GithubOauthCodeExchangerPort } from '../../application/ports/github-oauth-code-exchanger.port';
 import type { RegisterBody } from './validators/register.validator';
 import type { LoginBody } from './validators/login.validator';
+import { resolveLoginIdentifier } from './validators/login.validator';
 import type { GoogleLoginBody } from './validators/google-login.validator';
 import type { GoogleLinkBody } from './validators/google-link.validator';
 import type { FacebookLoginBody } from './validators/facebook-login.validator';
@@ -121,7 +122,10 @@ export class AuthController {
       this.assertNotBrowserBodyChannel(c);
     }
     const meta = await this.loginMetaWithClient(c, body.client_type, body.client_id);
-    const result = await this.deps.login.execute(body, meta);
+    const result = await this.deps.login.execute(
+      { identifier: resolveLoginIdentifier(body), password: body.password },
+      meta,
+    );
     return this.loginJson(c, body.client_type, result);
   }
 

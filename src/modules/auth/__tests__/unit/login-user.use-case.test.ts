@@ -58,8 +58,8 @@ function makeDeps(user: User | null, passwordOk = true) {
     revokeAllForUser: vi.fn(),
   } as unknown as RefreshTokenRepository;
 
-  const useCase = new LoginUserUseCase(userRepo, hasher, tokenService, refreshTokenRepo, 900, 2592000);
-  return { useCase, refreshTokenRepo };
+const useCase = new LoginUserUseCase(userRepo, hasher, tokenService, refreshTokenRepo, 900, 2592000);
+    return { useCase, userRepo, refreshTokenRepo };
 }
 
 describe('LoginUserUseCase', () => {
@@ -67,7 +67,7 @@ describe('LoginUserUseCase', () => {
     const { useCase } = makeDeps(makeUser(), false);
 
     await expect(
-      useCase.execute({ email: 'budi@test.com', password: 'salah' }),
+      useCase.execute({ identifier: 'budi@test.com', password: 'salah' }),
     ).rejects.toMatchObject({ errorCode: 'INVALID_CREDENTIALS', statusCode: 401, message: 'Email atau password salah' });
   });
 
@@ -75,7 +75,7 @@ describe('LoginUserUseCase', () => {
     const { useCase } = makeDeps(null);
 
     await expect(
-      useCase.execute({ email: 'hantu@test.com', password: 'apapun1' }),
+      useCase.execute({ identifier: 'hantu@test.com', password: 'apapun1' }),
     ).rejects.toMatchObject({ errorCode: 'INVALID_CREDENTIALS', message: 'Email atau password salah' });
   });
 
@@ -83,7 +83,7 @@ describe('LoginUserUseCase', () => {
     const { useCase } = makeDeps(makeUser({ deletedAt: new Date() }));
 
     await expect(
-      useCase.execute({ email: 'budi@test.com', password: 'Password123' }),
+      useCase.execute({ identifier: 'budi@test.com', password: 'Password123' }),
     ).rejects.toMatchObject(GENERIC_ERROR);
   });
 
@@ -91,7 +91,7 @@ describe('LoginUserUseCase', () => {
     const { useCase } = makeDeps(makeUser({ isActive: false }));
 
     await expect(
-      useCase.execute({ email: 'budi@test.com', password: 'Password123' }),
+      useCase.execute({ identifier: 'budi@test.com', password: 'Password123' }),
     ).rejects.toMatchObject(GENERIC_ERROR);
   });
 
@@ -99,7 +99,7 @@ describe('LoginUserUseCase', () => {
     const { useCase, refreshTokenRepo } = makeDeps(makeUser({ emailVerified: false }));
 
     await expect(
-      useCase.execute({ email: 'budi@test.com', password: 'Password123' }),
+      useCase.execute({ identifier: 'budi@test.com', password: 'Password123' }),
     ).rejects.toMatchObject({
       errorCode: 'EMAIL_NOT_VERIFIED',
       statusCode: 403,
@@ -107,10 +107,24 @@ describe('LoginUserUseCase', () => {
     expect(refreshTokenRepo.create).not.toHaveBeenCalled();
   });
 
+  it('sukses: identifier username (tanpa @) lookup via findByUsername', async () => {
+    const user = makeUser();
+    const { useCase, userRepo, refreshTokenRepo } = makeDeps(user);
+    userRepo.findByEmail.mockResolvedValue(null);
+    userRepo.findByUsername.mockResolvedValue(user);
+
+    const result = await useCase.execute({ identifier: 'budi', password: 'Password123' });
+
+    expect(userRepo.findByUsername).toHaveBeenCalledWith('budi');
+    expect(userRepo.findByEmail).not.toHaveBeenCalled();
+    expect(result.accessToken).toBe('jwt-token');
+    expect(refreshTokenRepo.create).toHaveBeenCalledTimes(1);
+  });
+
   it('sukses: simpan refresh token dalam bentuk HASH, bukan plain', async () => {
     const { useCase, refreshTokenRepo } = makeDeps(makeUser());
 
-    const result = await useCase.execute({ email: 'budi@test.com', password: 'Password123' });
+    const result = await useCase.execute({ identifier: 'budi@test.com', password: 'Password123' });
 
     expect(result.accessToken).toBe('jwt-token');
     expect(result.expiresIn).toBe(900);
