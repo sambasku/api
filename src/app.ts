@@ -47,6 +47,7 @@ import { PasswordResetTokenRepositoryImpl } from '@/modules/auth/infrastructure/
 import { JwtTokenService } from '@/modules/auth/infrastructure/jwt-token.service';
 import { Pbkdf2PasswordService } from '@/modules/auth/infrastructure/pbkdf2-password.service';
 import { createMailer } from '@/modules/auth/infrastructure/mailer.factory';
+import { EmailQuotaRepositoryImpl, EmailUsageRepositoryImpl, EmailLogRepositoryImpl } from '@/modules/email/infrastructure/email.repository.impl';
 import { createEmailDomainVerifier } from '@/modules/auth/infrastructure/email-domain-verifier.factory';
 import { EmailVerificationOtpRepositoryImpl } from '@/modules/auth/infrastructure/email-verification-otp.repository.impl';
 import { RegisterUserUseCase } from '@/modules/auth/application/use-cases/register-user.use-case';
@@ -465,7 +466,11 @@ const tokenService = new JwtTokenService({
 const hasher = new Pbkdf2PasswordService();
 // Email: Resend (HTTP) kalau RESEND_API_KEY ter-set - jalur Cloudflare
 // Workers; selain itu SMTP (Node). Keduanya implements MailerPort.
-const mailer = createMailer();
+const mailer = createMailer({
+  quotaRepo: new EmailQuotaRepositoryImpl(db),
+  usageRepo: new EmailUsageRepositoryImpl(db),
+  logRepo: new EmailLogRepositoryImpl(db),
+});
 const emailDomainVerifier = createEmailDomainVerifier();
 const identityRepo = new AuthIdentityRepositoryImpl(db);
 
