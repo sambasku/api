@@ -110,8 +110,8 @@ describe('LoginUserUseCase', () => {
   it('sukses: identifier username (tanpa @) lookup via findByUsername', async () => {
     const user = makeUser();
     const { useCase, userRepo, refreshTokenRepo } = makeDeps(user);
-    userRepo.findByEmail.mockResolvedValue(null);
-    userRepo.findByUsername.mockResolvedValue(user);
+    vi.mocked(userRepo.findByEmail).mockResolvedValue(null);
+    vi.mocked(userRepo.findByUsername).mockResolvedValue(user);
 
     const result = await useCase.execute({ identifier: 'budi', password: 'Password123' });
 
