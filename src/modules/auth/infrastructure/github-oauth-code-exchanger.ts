@@ -51,9 +51,36 @@ export class GithubOauthCodeExchanger implements GithubOauthCodeExchangerPort {
     };
 
     if (!data.access_token?.trim()) {
-      throw new UnauthorizedError('INVALID_GITHUB_TOKEN', 'Tidak bisa masuk dengan GitHub.');
+      // GitHub sering 200 + { error } (bukan HTTP 4xx).
+      console.error('[github.oauth] exchange gagal', {
+        error: data.error,
+        error_description: data.error_description,
+        redirectUri: input.redirectUri,
+        hasVerifier: Boolean(input.codeVerifier?.trim()),
+        clientIdPrefix: clientId.slice(0, 8),
+      });
+      const message = messageForGithubOauthError(data.error);
+      throw new UnauthorizedError('INVALID_GITHUB_TOKEN', message, [
+        {
+          field: 'github',
+          message: data.error_description || data.error || 'unknown',
+        },
+      ]);
     }
 
     return data.access_token.trim();
+  }
+}
+
+function messageForGithubOauthError(error: string | undefined): string {
+  switch (error) {
+    case 'bad_verification_code':
+      return 'Kode GitHub sudah dipakai atau kadaluarsa. Coba masuk lagi.';
+    case 'incorrect_client_credentials':
+      return 'Konfigurasi GitHub di server salah. Hubungi pengelola.';
+    case 'mismatching_redirect_uri':
+      return 'Redirect GitHub tidak cocok. Coba update app lalu masuk lagi.';
+    default:
+      return 'Tidak bisa masuk dengan GitHub.';
   }
 }
