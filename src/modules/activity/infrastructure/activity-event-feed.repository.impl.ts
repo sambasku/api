@@ -297,7 +297,11 @@ export class ActivityEventFeedRepositoryImpl {
   private baseConditions(excludeUserId?: string, actorId?: string): SQL[] {
     const conds: SQL[] = [sql`${activityEvents.hiddenAt} is null`];
     if (excludeUserId) {
-      conds.push(sql`(${activityEvents.actorId} is null or ${activityEvents.actorId} <> ${excludeUserId})`);
+      // #167: exclude self, kecuali announcement (admin pencipta tetap lihat
+      // pengumumannya - itu broadcast, bukan karya pribadi).
+      conds.push(
+        sql`(${activityEvents.actorId} is null or ${activityEvents.actorId} <> ${excludeUserId} or ${activityEvents.kind} = 'announcement')`,
+      );
     }
     if (actorId) {
       conds.push(sql`${activityEvents.actorId} = ${actorId}`);

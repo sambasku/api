@@ -4,10 +4,9 @@ export const listActivityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().min(1).optional(),
   /**
-   * true = buang baris milik user yang sedang login (feed beranda mobile).
-   *
-   * Hanya berlaku bila pemanggil terautentikasi. Tanpa Bearer, feed tetap
-   * publik penuh - flag ini bukan gate.
+   * #167: deprecated, no-op. Bearer sah → server selalu membuang baris milik
+   * sendiri; tamu tetap feed publik penuh. Diterima (dan dinormalisasi ke
+   * boolean) agar klien lama yang masih mengirim flag tidak 400.
    *
    * Bentuk union (bukan `z.coerce.boolean()`) mengikuti
    * `contribution.validator.ts`: `Boolean("false") === true` akan membaca

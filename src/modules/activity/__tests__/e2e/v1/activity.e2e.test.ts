@@ -508,9 +508,9 @@ let pendingLemma = '';
       };
     };
 
-    it('tanpa flag: karya sendiri tetap muncul (back-compat)', async () => {
+    it('#167 login tanpa flag: karya sendiri tetap disembunyikan', async () => {
       const { usernames } = await feedUsernames('/api/v1/activity?limit=50', token);
-      expect(usernames).toContain(ownUsername);
+      expect(usernames).not.toContain(ownUsername);
     });
 
     it('login + flag: tidak ada baris milik sendiri', async () => {
