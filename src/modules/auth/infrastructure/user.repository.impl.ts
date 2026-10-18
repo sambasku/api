@@ -128,9 +128,16 @@ export class UserRepositoryImpl implements UserRepository {
         isActive: users.isActive,
         canContribute: users.canContribute,
         contributeMutedUntil: users.contributeMutedUntil,
-        emailVerified: users.emailVerified,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
+      emailVerified: users.emailVerified,
+      emailVerifiedAt: users.emailVerifiedAt,
+      readContributionGuideAt: users.readContributionGuideAt,
+      lastSeenAt: users.lastSeenAt,
+      avatarUrl: users.avatarUrl,
+      avatarProvider: users.avatarProvider,
+      avatarProviderFileId: users.avatarProviderFileId,
+      avatarSha: users.avatarSha,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
         // Di-select juga untuk cursor comparison walau tidak di-return ke user (deletedAt
         // tidak pernah tampil, tapi where exclude deleted).
         deletedAt: users.deletedAt,
@@ -170,11 +177,14 @@ export class UserRepositoryImpl implements UserRepository {
     const page = hasMore ? rows.slice(0, filter.limit) : rows;
     const rolesMap = await loadRolesByUserIds(this.db, page.map((r) => r.id));
 
-    return {
-      items: page.map((r) => ({
-        ...toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? []),
-        authProviders: r.authProviders ? r.authProviders.split(',') : [],
-      })),
+return {
+items: page.map((r) => {
+  const entity = toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? []);
+  return {
+    ...entity,
+    authProviders: r.authProviders ? r.authProviders.split(',') : [],
+  };
+}),
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
       hasMore,
     };

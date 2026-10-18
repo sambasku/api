@@ -258,6 +258,7 @@ let pendingLemma = '';
         actor: { username: string | null; email?: string } | null;
         body: string;
         subtitle: string | null;
+        target?: { type: string; id: string; status?: string } | null;
       }>;
       meta: { limit: number; next_cursor: string | null; has_more: boolean };
     };
