@@ -185,6 +185,29 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
       },
     ]);
 
+    // #166: usulan kata baru (tamu) = pending_review + event
+    // contribution_submitted. Feed harus bawa target word + status
+    // 'pending_review' supaya verifikator bisa shortcut ke antrean review.
+    pendingLemma = `usul166${stamp}`;
+    pendingWordId = ulid26(`01E2EUSUL${stamp}`);
+    await db.insert(words).values({
+      id: pendingWordId,
+      lemma: pendingLemma,
+      languageId,
+      status: 'pending_review',
+      isVerified: false,
+      createdBy: ANONIM_USER_ID,
+      wordType: 'word',
+    });
+    await db.insert(activityEvents).values({
+      kind: 'contribution_submitted',
+      actorId: null,
+      targetWordId: pendingWordId,
+      targetId: pendingWordId,
+      occurredAt: new Date(),
+      dedupeKey: `contribution:${pendingWordId}`,
+    });
+
     const login = await post('/api/v1/auth/login', {
       email: `act${stamp}@test.com`,
       password: 'Password123',
@@ -193,10 +216,13 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     sharedWordId = wordId;
   });
 
-  let token = '';
-  let sharedWordId = '';
-  /** Username user fixture utama; dipakai assertion `exclude_self`. */
-  let ownUsername = '';
+let token = '';
+let sharedWordId = '';
+/** Username user fixture utama; dipakai assertion `exclude_self`. */
+let ownUsername = '';
+/** #166: kata usulan pending + lemma-nya (assertion target feed). */
+let pendingWordId = '';
+let pendingLemma = '';
 
   it('POST /words/:id/card-shares: 201 lalu 200 (dedupe 24 jam), muncul di feed', async () => {
     const share = () =>
@@ -232,6 +258,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         actor: { username: string | null; email?: string } | null;
         body: string;
         subtitle: string | null;
+        target?: { type: string; id: string; status?: string } | null;
       }>;
       meta: { limit: number; next_cursor: string | null; has_more: boolean };
     };
@@ -277,11 +304,25 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
     expect(down).toBeTruthy();
     expect(down!.body).toMatch(/perlu dicek ulang$/);
 
-    const welcome = body.data.find((i) => i.kind === 'welcome');
-    expect(welcome).toBeTruthy();
-    expect(welcome!.body).toBe('Bergabung di SambasKu');
-    expect(welcome!.subtitle).toBe('Selamat datang');
-    expect(welcome!.actor?.username).toBeTruthy();
+      const welcome = body.data.find((i) => i.kind === 'welcome');
+      expect(welcome).toBeTruthy();
+      expect(welcome!.body).toBe('Bergabung di SambasKu');
+      expect(welcome!.subtitle).toBe('Selamat datang');
+      expect(welcome!.actor?.username).toBeTruthy();
+
+      // #166: usulan kata baru pending → target tetap dikirim + status
+      // pending_review (shortcut verifikator ke antrean review).
+      const usulan = body.data.find((i) => i.kind === 'contribution');
+      expect(usulan).toBeTruthy();
+      expect(usulan!.body).toBe(`Mengusulkan kata baru · "${pendingLemma}"`);
+      expect(usulan!.target?.type).toBe('word');
+      expect(usulan!.target?.id).toBe(pendingWordId);
+      expect(usulan!.target?.status).toBe('pending_review');
+      // #166: subtitle null - 'Usulan kata baru' duplikat kindLabel mobile.
+      expect(usulan!.subtitle).toBeNull();
+      // kata published (fixture utama) tetap tanpa field status
+      const wordRow = body.data.find((i) => i.kind === 'word');
+      expect(wordRow === undefined || wordRow.target?.status == null).toBe(true);
   });
 
   it('announcement di wire feed membawa body_type (#64) - serializer ganda toWire', async () => {

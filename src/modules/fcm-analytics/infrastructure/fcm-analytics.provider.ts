@@ -30,17 +30,20 @@ function toError(err: unknown): AnalyticsProviderError {
 }
 
 async function postJson<T>(account: GoogleServiceAccount, scope: string, url: string, body?: unknown): Promise<T> {
-  let token: string;
-  try {
-    token = await getGoogleAccessToken(account, scope);
-  } catch (err) {
-    throw toError(err);
-  }
+  const token = await (async () => {
+    try {
+      return await getGoogleAccessToken(account, scope);
+    } catch (err) {
+      throw toError(err);
+    }
+  })();
   let res: Response;
   try {
     res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      method: body === undefined ? 'GET' : 'POST',
+      headers: body === undefined
+        ? { Authorization: `Bearer ${token}` }
+        : { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -58,15 +61,23 @@ async function postJson<T>(account: GoogleServiceAccount, scope: string, url: st
   }
 }
 
-interface FcmDailyDatum {
-  date: { year: number; month: number; day: number };
-  count: string;
+interface FcmDeliveryDatumData {
+  countMessagesAccepted?: string;
+  countNotificationsAccepted?: string;
   // ponytail: deliveryErrors tidak dipakai UI dulu - tambah kalau admin minta rincian gagal per alasan
   deliveryErrors?: Array<{ errorCode: string; count: string }>;
 }
 
+interface FcmDailyDatum {
+  appId: string;
+  date: { year: number; month: number; day: number };
+  analyticsLabel?: string;
+  data?: FcmDeliveryDatumData;
+}
+
+/** Respons FCM Data API v1beta1 androidApps.deliveryData.list (GET). */
 interface FcmDeliveryDataResponse {
-  data?: FcmDailyDatum[];
+  androidDeliveryData?: FcmDailyDatum[];
   nextPageToken?: string;
 }
 
@@ -105,6 +116,21 @@ export class FcmAnalyticsProviderImpl {
     return Boolean(this.config.fcmAccount && this.config.firebaseProjectId);
   }
 
+  /**
+   * Base URL FCM Data API v1beta1 (GET). AppId Android dari
+   * google-services.json mobile - Firebase Console > Project settings > App.
+   * ponytail: appId di-hardcode per project (2 project saja); pindah ke env
+   * FIREBASE_ANDROID_APP_ID kalau app mobile bertambah.
+   */
+  private fcmDataBaseUrl(): string {
+    const { firebaseProjectId } = this.config;
+    const appId =
+      firebaseProjectId === 'sambasku-production'
+        ? '1:951617114124:android:986beaa41a6668c6c51e29'
+        : '1:521883940125:android:73b1c29ab1403dbe8b1df4';
+    return `https://fcmdata.googleapis.com/v1beta1/projects/${encodeURIComponent(firebaseProjectId!)}/androidApps/${encodeURIComponent(appId)}`;
+  }
+
   async getDelivery(range: ResolvedRange): Promise<FcmDelivery> {
     const [current, previous, latestDataDate, opened] = await Promise.all([
       this.deliveryDays(range.current),
@@ -137,24 +163,23 @@ export class FcmAnalyticsProviderImpl {
   private async deliveryDays(range: DateRange): Promise<{ days: FcmTrendPoint[] }> {
     const { fcmAccount, firebaseProjectId } = this.config;
     if (!fcmAccount || !firebaseProjectId) throw new Error('FcmAnalyticsProviderImpl dipanggil tanpa konfigurasi');
-    const url = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(firebaseProjectId)}/deliveryData`;
+    const url = `${this.fcmDataBaseUrl()}/deliveryData`;
     // ponytail: endpoint ini cuma punya variant ALL_DATA; rentang difilter lokal
     const byDate = new Map<string, FcmTrendPoint>();
     let pageToken: string | undefined;
     do {
-      const res = await postJson<FcmDeliveryDataResponse>(fcmAccount, FCM_DATA_SCOPE, url, {
-        pageToken,
-      }).catch((err) => {
+      const pageUrl = `${url}?pageSize=10000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`;
+      const res = await postJson<FcmDeliveryDataResponse>(fcmAccount, FCM_DATA_SCOPE, pageUrl).catch((err) => {
         throw toError(err);
       });
-      for (const d of res.data ?? []) {
+      for (const d of res.androidDeliveryData ?? []) {
         const date = datumToYmd(d);
         if (date < range.start || date > range.end) continue;
-        const count = Number(d.count) || 0;
+        const count = Number(d.data?.countMessagesAccepted) || 0;
         const prev = byDate.get(date) ?? { date, sent: 0, delivered: 0, opened: 0 };
         prev.sent += count;
         // FCM Data API: baris tanpa deliveryErrors = semua terkirim.
-        if (!d.deliveryErrors || d.deliveryErrors.length === 0) prev.delivered += count;
+        if (!d.data?.deliveryErrors || d.data.deliveryErrors.length === 0) prev.delivered += count;
         byDate.set(date, prev);
       }
       pageToken = res.nextPageToken;
@@ -166,10 +191,10 @@ export class FcmAnalyticsProviderImpl {
   private async latestDataDate(): Promise<string | null> {
     const { fcmAccount, firebaseProjectId } = this.config;
     if (!fcmAccount || !firebaseProjectId) return null;
-    const url = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(firebaseProjectId)}/deliveryData`;
+    const url = `${this.fcmDataBaseUrl()}/deliveryData`;
     try {
-      const res = await postJson<FcmDeliveryDataResponse>(fcmAccount, FCM_DATA_SCOPE, url, {});
-      const dates = (res.data ?? []).map(datumToYmd).sort();
+      const res = await postJson<FcmDeliveryDataResponse>(fcmAccount, FCM_DATA_SCOPE, `${url}?pageSize=10000`);
+      const dates = (res.androidDeliveryData ?? []).map(datumToYmd).sort();
       return dates[dates.length - 1] ?? null;
     } catch {
       return null;

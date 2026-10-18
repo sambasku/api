@@ -452,7 +452,18 @@ export class ActivityEventFeedRepositoryImpl {
     }
     // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
     // Setelah approve, read-time join published menghidupkan CTA lagi.
-    const target = row.wordStatus && row.wordStatus !== 'published' ? null : this.targetFor(kind, row, word);
+    // Kecuali #166: contribution_submitted (usul kata baru) tetap bawa
+    // target + status 'pending_review' supaya verifikator bisa shortcut
+    // ke antrean review dari feed; non-verifikator cukup tahu masih menunggu.
+    let target: ActivityItem['target'];
+    if (row.wordStatus && row.wordStatus !== 'published') {
+      target =
+        kind === 'contribution_submitted' && word
+          ? { type: 'word', id: word.id, status: 'pending_review' }
+          : null;
+    } else {
+      target = this.targetFor(kind, row, word);
+    }
 
     // #102 announcement: payload beku = JSON {title, body, actionUrl,
     // actionLabel, expiresAt}. Kadaluarsa = tetap tayang tapi expired=true
@@ -545,6 +556,11 @@ export class ActivityEventFeedRepositoryImpl {
         return lemma ? `Membagikan kartu · ${quoted(lemma)}` : 'Membagikan kartu';
       case 'search_miss':
         return lemma ? `Mencari "${lemma}" - belum ada di kamus.` : 'Mencari - belum ada di kamus.';
+      case 'contribution_submitted':
+        // #166: lemma di body supaya baris usulan dikenali (kontrak 37-doc).
+        return lemma
+          ? `${KIND_BODY[kind]} · ${quoted(lemma)}`
+          : KIND_BODY[kind];
       case 'user_joined':
         return 'Bergabung di SambasKu';
       case 'contribution_image':
@@ -569,8 +585,10 @@ export class ActivityEventFeedRepositoryImpl {
         return null;
       case 'suggestion_created':
         return 'Usulan baru';
+      // #166: 'Usulan kata baru' duplikat dengan kindLabel mobile
+      // (#132 pola sama untuk word_verified / suggestion_selfapply).
       case 'contribution_submitted':
-        return 'Usulan kata baru';
+        return null;
       case 'user_joined':
         return 'Selamat datang';
       default:

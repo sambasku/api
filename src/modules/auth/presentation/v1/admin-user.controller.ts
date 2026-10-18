@@ -34,6 +34,7 @@ export class AdminUsersController {
       email: u.email,
       roles: u.roles,
       role: u.role,
+      auth_providers: u.authProviders ?? [],
       is_active: u.isActive,
       can_contribute: u.canContribute,
       contribute_muted_until: u.contributeMutedUntil

@@ -33,18 +33,30 @@ export default {
   async scheduled(
     _controller: { cron: string; scheduledTime: number },
     env: Env,
-    _ctx: { waitUntil: (p: Promise<unknown>) => void },
-  ): Promise<void> {
-    const m = await loadApp(env);
-    const result = await m.runDueNotificationCampaigns();
-    console.log(
-      JSON.stringify({
-        level: 'info',
-        msg: 'notification campaign cron done',
-        processed: result.processed,
-      }),
-    );
-  },
+	_ctx: { waitUntil: (p: Promise<unknown>) => void },
+): Promise<void> {
+	const m = await loadApp(env);
+	try {
+		const result = await m.runDueNotificationCampaigns();
+		console.log(
+			JSON.stringify({
+				level: 'info',
+				msg: 'notification campaign cron done',
+				processed: result.processed,
+			}),
+		);
+	} catch (error) {
+		// Transient DB/network error (Turso HTTP) tidak boleh jadi unhandled
+		// exception tiap tick cron; tick berikutnya otomatis retry (idempoten).
+		console.error(
+			JSON.stringify({
+				level: 'error',
+				msg: 'notification campaign cron failed',
+				error: error instanceof Error ? error.message : String(error),
+			}),
+		);
+	}
+},
 };
 
 /** bindings string → process.env, SEBELUM app di-import */

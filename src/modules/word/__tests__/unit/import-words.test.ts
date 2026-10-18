@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { decideImportPublication, meaningFingerprint } from '../../application/import-words';
+import { ImportWordsUseCase } from '../../application/use-cases/import-words.use-case';
+import { importWordsBodySchema } from '../../presentation/v1/validators/import-words.validator';
+import type { WordRepository } from '../../domain/repositories/word.repository';
+import type { LanguageRepository } from '@/modules/language/domain/repositories/language.repository';
+import type { UserLookupPort } from '../../application/ports/user-lookup.port';
+import type { WordClassSummary } from '../../domain/entities/word.entity';
 
 describe('decideImportPublication', () => {
   it('centang tayang saja menayangkan tanpa verifikasi', () => {
@@ -50,5 +56,272 @@ describe('meaningFingerprint', () => {
       .toBe(meaningFingerprint({ definition: 'makan', translation: 'Makan' }));
     expect(meaningFingerprint({ definition: '-', translation: 'makan', isHaveDefinition: false, isHaveTranslation: true }))
       .toBe('\nmakan');
+  });
+});
+
+describe('ImportWordsUseCase - word_class_code & example_translation', () => {
+  const UMUM_ID = '01WORDCLASSUMUM00000000000';
+  const NOMINA_ID = '01WORDCLASSNOMINA000000000';
+  const VERBA_ID = '01WORDCLASSVERBA0000000000';
+  const SBS_LANG_ID = '01LANGSBS00000000000000000';
+  const IDN_LANG_ID = '01LANGIDN00000000000000000';
+
+  const mockWordClasses: WordClassSummary[] = [
+    { id: UMUM_ID, code: 'umum', name: 'Umum', alias: null, description: null, parentId: null },
+    { id: NOMINA_ID, code: 'n', name: 'Nomina', alias: 'Kata Benda', description: null, parentId: null },
+    { id: VERBA_ID, code: 'v', name: 'Verba', alias: 'Kata Kerja', description: null, parentId: null },
+  ];
+
+  function createUseCase(overrides: {
+    wordRepo?: Partial<WordRepository>;
+    languageRepo?: Partial<LanguageRepository>;
+    users?: Partial<UserLookupPort>;
+  } = {}) {
+    const defaultWordRepo: Partial<WordRepository> = {
+      listWordClasses: vi.fn().mockResolvedValue(mockWordClasses),
+      findActiveByLemma: vi.fn().mockResolvedValue(null),
+      saveWithRelations: vi.fn().mockResolvedValue({ id: '01WORDNEW00000000000000000', lemma: 'uji', isVerified: false }),
+      listMeaningKeys: vi.fn().mockResolvedValue([]),
+      addMeaning: vi.fn().mockResolvedValue({ id: '01MEANINGNEW00000000000000' }),
+      addExample: vi.fn().mockResolvedValue({ id: '01EXAMPLENEW00000000000000' }),
+      ...overrides.wordRepo,
+    };
+    const defaultLanguageRepo: Partial<LanguageRepository> = {
+      listLanguages: vi.fn().mockResolvedValue([
+        { id: SBS_LANG_ID, code: 'SBS', name: 'Sambas' },
+        { id: IDN_LANG_ID, code: 'IDN', name: 'Indonesia' },
+      ]),
+      listDialects: vi.fn().mockResolvedValue([
+        { id: '01DIALECTDEFAULT0000000000', languageId: SBS_LANG_ID, code: 'umum', name: 'Umum', isDefault: true },
+      ]),
+      ...overrides.languageRepo,
+    };
+    const defaultUsers: Partial<UserLookupPort> = {
+      findById: vi.fn().mockResolvedValue({ id: '01USER00000000000000000000', isActive: true }),
+      ...overrides.users,
+    };
+    return {
+      useCase: new ImportWordsUseCase(
+        defaultWordRepo as WordRepository,
+        defaultLanguageRepo as LanguageRepository,
+        defaultUsers as UserLookupPort,
+      ),
+      wordRepo: defaultWordRepo,
+    };
+  }
+
+  const defaultActor = { userId: 'admin1', role: 'admin', roles: ['admin'] };
+
+  it('(a) word_class_code "kb" memetakan kelas kata ke id nomina', async () => {
+    const { useCase, wordRepo } = createUseCase();
+    await useCase.execute(
+      {
+        mode: 'commit',
+        items: [
+          {
+            lemma: 'buku',
+            verify: false,
+            verified: false,
+            meanings: [
+              {
+                definition: 'lembar kertas berjilid',
+                translation: 'buku',
+                wordClassCode: 'kb',
+              },
+            ],
+          },
+        ],
+      },
+      defaultActor,
+    );
+
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meanings: [
+          expect.objectContaining({
+            wordClassId: NOMINA_ID,
+          }),
+        ],
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('(b) word_class_code tidak dikenal atau belum di-seed jatuh ke id kelas kata umum', async () => {
+    const { useCase, wordRepo } = createUseCase();
+    await useCase.execute(
+      {
+        mode: 'commit',
+        items: [
+          {
+            lemma: 'lao',
+            verify: false,
+            verified: false,
+            meanings: [
+              {
+                definition: 'sangat jauh',
+                translation: 'jauh',
+                // ks (adjektiva) belum di-seed di fixture mockWordClasses
+                wordClassCode: 'ks',
+              },
+            ],
+          },
+        ],
+      },
+      defaultActor,
+    );
+
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meanings: [
+          expect.objectContaining({
+            wordClassId: UMUM_ID,
+          }),
+        ],
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('(c) example_translation diteruskan ke targetSentence dan targetLanguageId pada addExample (meanings_added branch)', async () => {
+    const existingParent = { id: '01PARENT000000000000000000', status: 'published' as const };
+    const { useCase, wordRepo } = createUseCase({
+      wordRepo: {
+        findActiveByLemma: vi.fn().mockResolvedValue(existingParent),
+        listMeaningKeys: vi.fn().mockResolvedValue([]),
+        addMeaning: vi.fn().mockResolvedValue({ id: '01MEANING00000000000000000' }),
+        addExample: vi.fn().mockResolvedValue({ id: '01EXAMPLE00000000000000000' }),
+      },
+    });
+
+    await useCase.execute(
+      {
+        mode: 'commit',
+        items: [
+          {
+            lemma: 'makan',
+            verify: true,
+            verified: false,
+            meanings: [
+              {
+                definition: 'memasukkan makanan',
+                translation: 'makan',
+                wordClassCode: 'kk',
+                example: 'Aku makan nasik.',
+                exampleTranslation: 'Saya makan nasi.',
+              },
+            ],
+          },
+        ],
+      },
+      defaultActor,
+    );
+
+    // Assert addMeaning receives verba class ID (kk -> 'v')
+    expect(wordRepo.addMeaning).toHaveBeenCalledWith(
+      existingParent.id,
+      expect.objectContaining({
+        wordClassId: VERBA_ID,
+      }),
+      expect.any(String),
+    );
+
+    // Assert addExample receives targetSentence & targetLanguageId
+    expect(wordRepo.addExample).toHaveBeenCalledWith(
+      '01MEANING00000000000000000',
+      expect.objectContaining({
+        sourceLanguageId: SBS_LANG_ID,
+        sourceSentence: 'Aku makan nasik.',
+        targetLanguageId: IDN_LANG_ID,
+        targetSentence: 'Saya makan nasi.',
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('example_translation juga masuk ke examples pada saveWithRelations (kata baru)', async () => {
+    const { useCase, wordRepo } = createUseCase();
+    await useCase.execute(
+      {
+        mode: 'commit',
+        items: [
+          {
+            lemma: 'jalan',
+            verify: false,
+            verified: false,
+            meanings: [
+              {
+                definition: 'melangkah',
+                translation: 'jalan',
+                example: 'Kamek jalan ke pasar.',
+                exampleTranslation: 'Kami berjalan ke pasar.',
+              },
+            ],
+          },
+        ],
+      },
+      defaultActor,
+    );
+
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meanings: [
+          expect.objectContaining({
+            examples: [
+              expect.objectContaining({
+                sourceLanguageId: SBS_LANG_ID,
+                sourceSentence: 'Kamek jalan ke pasar.',
+                targetLanguageId: IDN_LANG_ID,
+                targetSentence: 'Kami berjalan ke pasar.',
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.any(String),
+    );
+  });
+});
+
+describe('importWordsBodySchema - word_class_code & example_translation', () => {
+  const baseItem = {
+    lemma: 'uji',
+    meanings: [{ definition: 'definisi' }],
+  };
+
+  it('menerima word_class_code valid (kb/kk/ks/kt/kd) dan example_translation', () => {
+    for (const code of ['kb', 'kk', 'ks', 'kt', 'kd']) {
+      const parsed = importWordsBodySchema.safeParse({
+        mode: 'validate',
+        items: [{ ...baseItem, meanings: [{ ...baseItem.meanings[0], word_class_code: code }] }],
+      });
+      expect(parsed.success).toBe(true);
+    }
+    const withTranslation = importWordsBodySchema.safeParse({
+      mode: 'validate',
+      items: [{ ...baseItem, meanings: [{ ...baseItem.meanings[0], example_translation: 'Saya makan nasi.' }] }],
+    });
+    expect(withTranslation.success).toBe(true);
+  });
+
+  it('menolak word_class_code di luar daftar', () => {
+    const parsed = importWordsBodySchema.safeParse({
+      mode: 'validate',
+      items: [{ ...baseItem, meanings: [{ ...baseItem.meanings[0], word_class_code: 'noun' }] }],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('menolak example_translation lebih dari 500 karakter', () => {
+    const parsed = importWordsBodySchema.safeParse({
+      mode: 'validate',
+      items: [
+        {
+          ...baseItem,
+          meanings: [{ ...baseItem.meanings[0], example_translation: 'a'.repeat(501) }],
+        },
+      ],
+    });
+    expect(parsed.success).toBe(false);
   });
 });

@@ -1483,7 +1483,7 @@ app.route(
   createAdminWordReportRoutes({ controller: wordReportController, authenticate }),
 );
 
-// Statistik dashboard - hanya admin, root & reviewer (issue #33)
+// Statistik dashboard - hanya admin, root (analitik = admin/root saja)
 app.route('/api/v1/admin/dashboard', createDashboardRoutes({ controller: dashboardController, authenticate }));
 
 // Trafik Web (GA4 + Search Console) - hanya admin & root

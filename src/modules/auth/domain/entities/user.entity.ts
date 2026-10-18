@@ -53,6 +53,8 @@ export interface User {
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null; // soft delete - tidak boleh bisa login lagi
+  /** Provider OAuth yang menaut (auth_identities), mis. ['google']. Kosong = onboard email/password. Hanya diisi list admin (bukan kolom users). */
+  authProviders?: string[];
 }
 
 export type NewUser = Pick<User, 'username' | 'email' | 'passwordHash' | 'phone'> & {

@@ -36,11 +36,15 @@ export async function issueLoginSession(
   },
   meta: LoginMeta = {},
 ): Promise<LoginResult> {
+  // Akun OAuth lama sempat tanpa baris user_roles → roles []. JWT dengan
+  // roles:[] ditolak verify (array kosong menang dari fallback klaim `role`).
+  // Token harus selalu non-empty supaya GET /users/me tidak 401 setelah login.
+  const roles = user.roles.length > 0 ? user.roles : (['contributor'] as const);
   // @deprecated claim `role` = tertinggi dari roles, untuk client lama
-  const primaryRole = derivePrimaryRole(user.roles);
+  const primaryRole = derivePrimaryRole(roles);
   const accessToken = await deps.tokenService.generateAccessToken({
     user_id: user.id,
-    roles: user.roles,
+    roles: [...roles],
     role: primaryRole,
     username: user.username,
     ...(meta.clientId ? { azp: meta.clientId } : {}),
@@ -65,7 +69,7 @@ export async function issueLoginSession(
       id: user.id,
       username: user.username,
       displayName: user.displayName?.trim() || user.username,
-      roles: user.roles,
+      roles: [...roles],
       role: primaryRole,
       avatarUrl: user.avatarUrl ?? null,
     },

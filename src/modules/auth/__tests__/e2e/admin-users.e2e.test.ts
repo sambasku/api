@@ -245,4 +245,37 @@ describe.skipIf(!hasTestDb)('Admin create user E2E', () => {
     const body = await res.json();
     expect(body.error_code).toBe('CANNOT_DEACTIVATE_SELF');
   });
+
+  it('GET /admin/users menampilkan auth_providers per metode onboard', async () => {
+    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
+    const { authIdentities, users } = await import('@/shared/database/drizzle/schema');
+    const { eq } = await import('drizzle-orm');
+    const db = getTestDb();
+
+    // User onboard via Google: buat manual + identity (tanpa ping Google).
+    const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const googleEmail = `gvia${stamp}@test.com`;
+    const reg = await request('/api/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(e2eRegisterBody({ name: `gvia${stamp}`, email: googleEmail })),
+    });
+    expect(reg.status).toBe(201);
+    const [gUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, googleEmail)).limit(1);
+    await db.insert(authIdentities).values({
+      userId: gUser.id,
+      provider: 'google',
+      providerUserId: `sub-onboard-${stamp}`,
+      emailAtProvider: googleEmail,
+    });
+
+    const res = await request('/api/v1/admin/users?q=gvia', { headers: { authorization: `Bearer ${adminToken}` } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data[0].auth_providers).toEqual(['google']);
+
+    // User password biasa (seed describe ini) tidak punya identity → [].
+    const plain = await request('/api/v1/admin/users?q=adm', { headers: { authorization: `Bearer ${adminToken}` } });
+    const plainBody = await plain.json();
+    expect(plainBody.data[0].auth_providers).toEqual([]);
+  });
 });
