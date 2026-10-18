@@ -103,9 +103,20 @@ export class LoginWithFacebookUseCase {
     return this.issue(user, meta);
   }
 
-  private issue(user: User, meta: LoginMeta): Promise<LoginResult> {
+  private async issue(user: User, meta: LoginMeta): Promise<LoginResult> {
+    let roles = user.roles;
+    if (roles.length === 0) {
+      await this.userRepo.setRoles(user.id, ['contributor']);
+      roles = ['contributor'];
+    }
     return issueLoginSession(
-      { id: user.id, username: user.username, displayName: user.displayName, roles: user.roles, avatarUrl: user.avatarUrl },
+      {
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        roles,
+        avatarUrl: user.avatarUrl,
+      },
       {
         tokenService: this.tokenService,
         refreshTokenRepo: this.refreshTokenRepo,

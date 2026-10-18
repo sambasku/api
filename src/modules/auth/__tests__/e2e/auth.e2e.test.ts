@@ -488,7 +488,15 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
     expect(body.data.access_token).toEqual(expect.any(String));
     expect(body.data.refresh_token).toEqual(expect.any(String));
     expect(body.data.user.role).toBe('contributor');
+    expect(body.data.user.roles).toEqual(['contributor']);
     expect(res.headers.get('set-cookie')).toBeNull();
+
+    // Regresi: user OAuth tanpa user_roles → JWT roles=[] → verify gagal
+    // → Profil 401 "Token tidak valid atau kadaluarsa" meski token tersimpan.
+    const me = await app.request('/api/v1/users/me', {
+      headers: { Authorization: `Bearer ${body.data.access_token}` },
+    });
+    expect(me.status).toBe(200);
   });
 
   it('POST /google token invalid → 401 INVALID_GOOGLE_TOKEN', async () => {

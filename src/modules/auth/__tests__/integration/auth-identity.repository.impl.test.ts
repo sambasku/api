@@ -56,6 +56,7 @@ describe.skipIf(!hasTestDb)('AuthIdentityRepositoryImpl', () => {
       { provider: 'google', providerUserId: 'sub-race', emailAtProvider: 'race@test.com' },
     );
     expect(first.created).toBe(true);
+    expect(first.user.roles).toEqual(['contributor']);
 
     const second = await repo.createUserWithGoogleIdentity(
       {

@@ -199,6 +199,13 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
             bio: newUser.bio ?? null,
           })
           .returning();
+        // Wajib: tanpa baris user_roles, JWT roles=[] → verifyAccessToken
+        // menolak (normalizeRoleClaims) → GET /users/me 401 meski login 200.
+        // Samakan dengan UserRepository.save default ['contributor'].
+        await tx.insert(userRoles).values({
+          userId: userRow.id,
+          role: 'contributor',
+        });
         const [idRow] = await tx
           .insert(authIdentities)
           .values({
@@ -209,7 +216,7 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
           })
           .returning();
         return {
-          user: toUserEntity(userRow, await loadRoles(this.db, userRow.id)),
+          user: toUserEntity(userRow, ['contributor']),
           identity: toIdentityEntity(idRow),
           created: true,
         };
