@@ -17,6 +17,17 @@ export interface ImportWordsResult {
   items: ImportWordResult[];
 }
 
+// Mapping kode kelas kata CSV → kode word_classes di DB.
+// DB seed: umum='umum', nomina='n', verba='v' (adj/adv/prep belum di-seed).
+// verify against actual DB codes via listWordClasses(), absent → fallback umum.
+const IMPORT_CODE_TO_DB_CODE: Record<string, string> = {
+  kb: 'n',
+  kk: 'v',
+  ks: 'adj',
+  kt: 'adv',
+  kd: 'prep',
+};
+
 export class ImportWordsUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
@@ -66,11 +77,20 @@ export class ImportWordsUseCase {
     if (!umum) {
       throw new BadRequestError('IMPORT_REFS', 'Kelas kata umum belum tersedia');
     }
+    // Import code (kb/kk/ks/kt/kd) → id word_class. Kelas yang belum ada
+    // di DB (mis. adj/adv/prep belum di-seed) tidak masuk map - pemanggil
+    // fallback ke umum, import tidak boleh gagal karena ini.
+    const codeMap = new Map<string, string>();
+    for (const [importCode, dbCode] of Object.entries(IMPORT_CODE_TO_DB_CODE)) {
+      const found = classes.find((c) => c.code.trim().toLowerCase() === dbCode);
+      if (found) codeMap.set(importCode, found.id);
+    }
     return {
       languageId: sambas.id,
       translationLanguageId: indonesia.id,
       dialectId: dialect?.id,
       wordClassId: umum.id,
+      codeMap,
     };
   }
 
@@ -78,7 +98,7 @@ export class ImportWordsUseCase {
     item: ImportWordInput,
     actor: Actor,
     writeActorId: string,
-    refs: { languageId: string; translationLanguageId: string; dialectId?: string; wordClassId: string },
+    refs: { languageId: string; translationLanguageId: string; dialectId?: string; wordClassId: string; codeMap: Map<string, string> },
     mode: 'validate' | 'commit',
     importSessionId?: string,
   ): Promise<ImportWordResult> {
@@ -134,7 +154,7 @@ export class ImportWordsUseCase {
           notes: item.notes?.trim() || undefined,
           wordType: 'word',
           meanings: unique.map((m, index) => ({
-            wordClassId: refs.wordClassId,
+            wordClassId: m.wordClassCode ? (refs.codeMap.get(m.wordClassCode) ?? refs.wordClassId) : refs.wordClassId,
             definition: m.definition,
             isHaveDefinition: m.isHaveDefinition,
             isHaveTranslation: m.isHaveTranslation,
@@ -143,7 +163,12 @@ export class ImportWordsUseCase {
               ? [{ languageId: refs.translationLanguageId, translationText: m.translation, translationType: 'direct' }]
               : [],
             examples: m.example
-              ? [{ sourceLanguageId: refs.languageId, sourceSentence: m.example, sourceType: 'other' }]
+              ? [{
+                  sourceLanguageId: refs.languageId,
+                  sourceSentence: m.example,
+                  sourceType: 'other',
+                  ...(m.exampleTranslation ? { targetLanguageId: refs.translationLanguageId, targetSentence: m.exampleTranslation } : {}),
+                }]
               : [],
           })),
           categoryIds: [],
@@ -199,10 +224,13 @@ export class ImportWordsUseCase {
       };
     }
     for (const meaning of fresh) {
+      const wordClassId = meaning.wordClassCode
+        ? (refs.codeMap.get(meaning.wordClassCode) ?? refs.wordClassId)
+        : refs.wordClassId;
       const saved = await this.wordRepo.addMeaning(
         parent.id,
         {
-          wordClassId: refs.wordClassId,
+          wordClassId,
           definition: meaning.definition,
           isHaveDefinition: meaning.isHaveDefinition,
           isHaveTranslation: meaning.isHaveTranslation,
@@ -221,6 +249,9 @@ export class ImportWordsUseCase {
             sourceLanguageId: refs.languageId,
             sourceSentence: meaning.example,
             sourceType: 'other',
+            ...(meaning.exampleTranslation
+              ? { targetLanguageId: refs.translationLanguageId, targetSentence: meaning.exampleTranslation }
+              : {}),
             status: publication.status === 'draft' ? 'pending_review' : 'published',
             isVerified: publication.isVerified,
           },

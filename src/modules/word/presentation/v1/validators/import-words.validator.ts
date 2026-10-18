@@ -6,6 +6,12 @@ const importMeaningSchema = z
     translation: z.string().trim().max(500).optional(),
     definition: z.string().trim().max(2000).optional(),
     example: z.string().trim().max(500).optional(),
+    word_class_code: z
+      .string()
+      .trim()
+      .regex(/^(kb|kk|ks|kt|kd)$/, 'Kode kelas kata hanya boleh kb, kk, ks, kt, atau kd')
+      .optional(),
+    example_translation: z.string().trim().max(500).optional(),
   })
   .refine((m) => !!m.translation || !!m.definition, {
     message: 'Terjemahan atau definisi wajib terisi',

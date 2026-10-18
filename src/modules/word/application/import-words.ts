@@ -4,6 +4,10 @@ export interface ImportMeaningInput {
   translation?: string;
   definition?: string;
   example?: string;
+  /** Kode kelas kata CSV: kb(kb), kk(verba), ks(adjektiva), kt(adverbia), kd(preposisi). Kosong=default umum. */
+  wordClassCode?: string;
+  /** Terjemahan kalimat contoh (Indonesian). */
+  exampleTranslation?: string;
 }
 
 export interface ImportWordInput {
@@ -82,16 +86,23 @@ export function preparedMeaning(input: ImportMeaningInput): {
   example: string;
   isHaveDefinition: boolean;
   isHaveTranslation: boolean;
+  /** Normalized lowercase kode kelas kata CSV (kb/kk/ks/kt/kd) atau undefined. */
+  wordClassCode?: string;
+  /** Trimmed Indonesian translation of example sentence. */
+  exampleTranslation?: string;
 } | null {
   const translation = input.translation?.trim() ?? '';
   const definition = input.definition?.trim() ?? '';
   const example = input.example?.trim() ?? '';
   if (!translation && !definition) return null;
+  const rawCode = input.wordClassCode?.trim().toLowerCase();
   return {
     definition: definition || '-',
     translation,
     example,
     isHaveDefinition: definition.length > 0,
     isHaveTranslation: translation.length > 0,
+    wordClassCode: rawCode || undefined,
+    exampleTranslation: input.exampleTranslation?.trim() || undefined,
   };
 }

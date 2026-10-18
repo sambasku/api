@@ -134,6 +134,14 @@ export class UserRepositoryImpl implements UserRepository {
         // Di-select juga untuk cursor comparison walau tidak di-return ke user (deletedAt
         // tidak pernah tampil, tapi where exclude deleted).
         deletedAt: users.deletedAt,
+        // Provider OAuth tertaut (auth_identities) - scalar subquery, tetap 1 query.
+        // CATATAN: tulis `users.id` sebagai teks mentah, BUKAN ${users.id} - Drizzle
+        // me-render interpolation jadi "id" unqualified yang ke-shadow ai.id di scope
+        // subquery (auth_identities juga punya kolom id) sehingga subquery selalu null.
+        authProviders: sql<string | null>`(
+          SELECT group_concat(DISTINCT ai.provider) FROM auth_identities ai
+          WHERE ai.user_id = users.id AND ai.deleted_at IS NULL
+        )`,
       })
       .from(users)
       .where(
@@ -163,7 +171,10 @@ export class UserRepositoryImpl implements UserRepository {
     const rolesMap = await loadRolesByUserIds(this.db, page.map((r) => r.id));
 
     return {
-      items: page.map((r) => toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? [])),
+      items: page.map((r) => ({
+        ...toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? []),
+        authProviders: r.authProviders ? r.authProviders.split(',') : [],
+      })),
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
       hasMore,
     };

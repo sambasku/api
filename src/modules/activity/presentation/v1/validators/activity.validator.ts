@@ -35,6 +35,8 @@ const activityTargetSchema = z
     id: z.string(),
     /** #144: arah search-miss untuk prefill form usul (null = kind lain). */
     direction: z.enum(['lemma', 'translation']).nullable().optional(),
+    /** #166: status kata target (usulan belum tayang = pending_review). */
+    status: z.enum(['published', 'pending_review']).nullable().optional(),
   })
   .nullable();
 

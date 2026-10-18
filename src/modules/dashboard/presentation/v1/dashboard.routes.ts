@@ -18,10 +18,11 @@ export function createDashboardRoutes(deps: {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
+  // Analitik ringkasan - admin & root saja (bukan reviewer).
   routes.use(
     '*',
     deps.authenticate,
-    authorizeRole('admin', 'root', 'reviewer'),
+    authorizeRole('admin', 'root'),
     rateLimit({ points: 300, duration: 60 }),
   );
 
@@ -33,7 +34,7 @@ export function createDashboardRoutes(deps: {
     responses: {
       200: { description: 'Statistik dashboard', content: json(dashboardStatsResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
-      403: { description: 'Role tidak diizinkan (admin/root/reviewer)', content: json(errorResponseSchema) },
+      403: { description: 'Role tidak diizinkan (admin/root)', content: json(errorResponseSchema) },
     },
   });
 

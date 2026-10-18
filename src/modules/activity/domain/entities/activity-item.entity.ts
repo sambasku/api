@@ -28,11 +28,17 @@ export interface ActivityTarget {
   type: string;
   id: string;
   /**
-   * #144: arah pencarian search-miss. `lemma` = kata Sambas dicari,
-   * `translation` = kata Indonesia dicari. Null untuk kind lain - mobile
-   * memakai ini agar prefill form usul mengisi field yang benar.
+ * #144: arah pencarian search-miss. `lemma` = kata Sambas dicari,
+ * `translation` = kata Indonesia dicari. Null untuk kind lain - mobile
+ * memakai ini agar prefill form usul mengisi field yang benar.
+ */
+direction?: 'lemma' | 'translation' | null;
+  /**
+   * #166: status kata target saat event dibaca. `pending_review` = usulan
+   * kata baru yang belum tayang - mobile mengarahkan verifikator ke antrean
+   * review, bukan detail publik (404). Null/`published` = kata tayang normal.
    */
-  direction?: 'lemma' | 'translation' | null;
+  status?: 'published' | 'pending_review' | null;
 }
 
 export interface ActivityItem {
