@@ -27,10 +27,16 @@ export class NotFoundError extends AppError {
 export class UnauthorizedError extends AppError {
   statusCode = 401;
   errorCode: string;
+  details: { field: string; message: string }[] | null;
   // errorCode bisa dioverride untuk kode spesifik: INVALID_CREDENTIALS, TOKEN_EXPIRED
-  constructor(errorCode = 'UNAUTHORIZED', message = 'Kamu belum login') {
+  constructor(
+    errorCode = 'UNAUTHORIZED',
+    message = 'Kamu belum login',
+    details: { field: string; message: string }[] | null = null,
+  ) {
     super(message);
     this.errorCode = errorCode;
+    this.details = details;
   }
 }
 

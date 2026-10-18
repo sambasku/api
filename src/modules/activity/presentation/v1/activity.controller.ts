@@ -45,11 +45,12 @@ export class ActivityController {
   ) {}
 
   async list(c: Context, query: ListActivityQuery) {
-    // Flag hanya berguna kalau ada identitas nyata. Tanpa token sah (tamu, atau
-    // token basi yang ditelan soft-auth) hasilnya `undefined` → feed publik
-    // penuh. Tidak ada 400: `exclude_self` bukan gate, cuma preferensi tampilan.
+    // #167: Bearer sah → karya sendiri selalu dibuang (server-side, klien
+    // render as-is). Tanpa token (tamu, token basi yang ditelan soft-auth)
+    // feed tetap publik penuh. Query `exclude_self` jadi no-op (deprecated):
+    // tetap diterima validator agar klien lama tidak 400.
     const viewerId = c.get('user')?.user_id;
-    const excludeUserId = query.exclude_self === true ? viewerId : undefined;
+    const excludeUserId = viewerId;
 
     const page = await this.deps.list.execute({
       limit: query.limit,
@@ -57,8 +58,8 @@ export class ActivityController {
       excludeUserId,
     });
 
-    // Response jadi berbeda per identitas begitu `exclude_self` dipakai, jadi
-    // cache per URL saja tidak boleh dipakai. Belum ada cache di API untuk route
+    // Response berbeda per identitas (Bearer sah = exclude self), jadi cache
+    // per URL saja tidak boleh dipakai. Belum ada cache di API untuk route
     // ini; ini pagar buat nanti kalau ada CDN di depan.
     c.header('Vary', 'Authorization');
     return c.json({

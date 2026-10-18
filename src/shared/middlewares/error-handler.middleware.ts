@@ -6,6 +6,7 @@ import {
   ConflictError,
   ForbiddenError,
   RateLimitedError,
+  UnauthorizedError,
   ValidationError,
 } from '@/shared/errors/app-error';
 import { isCapacityFailure } from '@/shared/errors/infra-failure';
@@ -37,7 +38,9 @@ export const errorHandler: ErrorHandler = (err, c) => {
             ? err.details
             : err instanceof ForbiddenError
               ? err.details
-              : null,
+              : err instanceof UnauthorizedError
+                ? err.details
+                : null,
     };
     if (err instanceof ConflictError && err.data) {
       body.data = err.data;

@@ -32,14 +32,15 @@ export function createActivityRoutes(deps: {
     method: 'get',
     path: '/',
     tags: ['Activity'],
-    summary: 'Feed lintas aktivitas publik (beranda)',
-    description:
-      'Gabungan kata baru, komentar, vote, diskusi, kontribusi media, ' +
-      'search-miss tayang, dan selamat datang akun terverifikasi. ' +
-      'Auth opsional (tidak pernah 401). Cursor opaque (created_at + id); ' +
-      'limit 1-50 (default 20). ' +
-      '`exclude_self=true` membuang baris milik user yang sedang login; ' +
-      'tanpa token sah flag diabaikan dan feed tetap publik penuh.',
+  summary: 'Feed lintas aktivitas publik (beranda)',
+  description:
+    'Gabungan kata baru, komentar, vote, diskusi, kontribusi media, ' +
+    'search-miss tayang, dan selamat datang akun terverifikasi. ' +
+    'Auth opsional (tidak pernah 401). Cursor opaque (created_at + id); ' +
+    'limit 1-50 (default 20). ' +
+    '#167: Bearer sah → baris milik sendiri selalu dibuang server; ' +
+    'tamu/token basi tetap feed publik penuh. Query `exclude_self` ' +
+    'deprecated (no-op), diterima untuk kompatibilitas klien lama.',
     request: { query: listActivityQuerySchema },
     responses: {
       200: {
