@@ -19,6 +19,8 @@ export const places = sqliteTable(
     mapsUrl: text('maps_url'),
     shortDescription: text('short_description').notNull(),
     regionId: text('region_id'),
+    /** Id desa di regions.json (`parentId` = region_id). Null = belum masuk desa. */
+    villageId: text('village_id'),
     hours: text('hours'),
     contact: text('contact'),
     authorId: text('author_id'),
@@ -38,6 +40,7 @@ export const places = sqliteTable(
     uniqueIndex('places_slug_uidx').on(t.slug),
     index('places_category_idx').on(t.category),
     index('places_region_id_idx').on(t.regionId),
+    index('places_village_id_idx').on(t.villageId),
     index('places_status_idx').on(t.status),
     index('places_status_updated_at_idx').on(t.status, t.updatedAt),
   ],

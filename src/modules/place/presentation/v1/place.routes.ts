@@ -61,13 +61,13 @@ export function createAdminPlaceRoutes(deps: {
 }) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 60, duration: 60 }));
-  routes.use('*', deps.authenticate, authorizeRole('root', 'admin'));
+  routes.use('*', deps.authenticate, authorizeRole('root', 'admin', 'reviewer'));
 
   const listRoute = createRoute({
     method: 'get',
     path: '/',
     tags: ['Admin Places'],
-    summary: 'List place (admin, semua status)',
+    summary: 'List place (admin/reviewer, semua status)',
     request: { query: listPlacesQuerySchema },
     responses: {
       200: { description: 'Daftar place', content: json(placeListResponseSchema) },

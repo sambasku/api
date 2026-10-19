@@ -71,6 +71,7 @@ function mapPlace(row: PlaceRow, images: PlaceImage[]): Place {
     mapsUrl: row.mapsUrl ?? null,
     shortDescription: row.shortDescription,
     regionId: row.regionId ?? null,
+    villageId: row.villageId ?? null,
     hours: row.hours ?? null,
     contact: row.contact ?? null,
     authorId: row.authorId ?? null,
@@ -139,6 +140,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
           mapsUrl: input.mapsUrl ?? null,
           shortDescription: input.shortDescription,
           regionId: input.regionId ?? null,
+          villageId: input.villageId ?? null,
           hours: input.hours ?? null,
           contact: input.contact ?? null,
           authorId: input.authorId ?? null,
@@ -183,6 +185,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     if (input.mapsUrl !== undefined) values.mapsUrl = input.mapsUrl;
     if (input.shortDescription !== undefined) values.shortDescription = input.shortDescription;
     if (input.regionId !== undefined) values.regionId = input.regionId;
+    if (input.villageId !== undefined) values.villageId = input.villageId;
     if (input.hours !== undefined) values.hours = input.hours;
     if (input.contact !== undefined) values.contact = input.contact;
     if (input.authorId !== undefined) values.authorId = input.authorId;
@@ -264,6 +267,8 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     else if (input.status) conds.push(eq(places.status, input.status));
     if (input.category) conds.push(eq(places.category, input.category));
     if (input.regionId) conds.push(eq(places.regionId, input.regionId));
+    if (input.villageUnset) conds.push(isNull(places.villageId));
+    else if (input.villageId) conds.push(eq(places.villageId, input.villageId));
     if (input.q?.trim()) {
       const q = `%${input.q.trim()}%`;
       conds.push(or(ilikeCompat(places.name, q), ilikeCompat(places.slug, q))!);

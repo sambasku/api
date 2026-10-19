@@ -30,3 +30,8 @@ export function buildDiscussionImagePath(mimeType: string): string {
 export function buildCampaignImagePath(mimeType: string): string {
   return `assets/campaigns/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path foto place: assets/places/<ulid>.<ext> */
+export function buildPlaceImagePath(mimeType: string): string {
+  return `assets/places/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

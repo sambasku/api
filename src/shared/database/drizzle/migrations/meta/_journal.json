@@ -505,6 +505,20 @@
       "when": 1800146900000,
       "tag": "0071_places",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1800246900000,
+      "tag": "0072_places_seed",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1800346900000,
+      "tag": "0073_places_village_id",
+      "breakpoints": true
     }
   ]
 }

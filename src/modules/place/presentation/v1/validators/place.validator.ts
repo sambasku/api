@@ -50,6 +50,7 @@ export const createPlaceBodySchema = z
     maps_url: z.string().url().startsWith('https://').nullable().optional(),
     short_description: z.string().min(1).max(4000),
     region_id: z.string().max(64).nullable().optional(),
+    village_id: z.string().max(64).nullable().optional(),
     hours: z.string().max(500).nullable().optional(),
     contact: z.string().max(500).nullable().optional(),
     author_id: z.string().max(64).nullable().optional(),
@@ -66,6 +67,9 @@ export const listPlacesQuerySchema = z.object({
   before: z.string().min(1).max(64).optional(),
   category: placeCategorySchema.optional(),
   region_id: z.string().max(64).optional(),
+  village_id: z.string().max(64).optional(),
+  /** "1" = hanya place yang belum punya desa. */
+  village_unset: z.literal('1').optional(),
   q: z.string().max(120).optional(),
   status: placeStatusSchema.optional(),
 });
@@ -101,6 +105,7 @@ export const placeItemResponseSchema = z.object({
     maps_url: z.string().nullable(),
     short_description: z.string(),
     region_id: z.string().nullable(),
+    village_id: z.string().nullable(),
     hours: z.string().nullable(),
     contact: z.string().nullable(),
     author_id: z.string().nullable(),

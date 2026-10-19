@@ -25,6 +25,7 @@ export interface CreatePlaceInput {
   mapsUrl?: string | null;
   shortDescription: string;
   regionId?: string | null;
+  villageId?: string | null;
   hours?: string | null;
   contact?: string | null;
   authorId?: string | null;
@@ -44,6 +45,7 @@ export interface UpdatePlaceInput {
   mapsUrl?: string | null;
   shortDescription?: string;
   regionId?: string | null;
+  villageId?: string | null;
   hours?: string | null;
   contact?: string | null;
   authorId?: string | null;
@@ -57,6 +59,9 @@ export interface ListPlacesInput {
   before?: string;
   category?: PlaceCategory;
   regionId?: string;
+  villageId?: string;
+  /** Hanya place tanpa desa (village_id null), biasanya bersama regionId. */
+  villageUnset?: boolean;
   q?: string;
   status?: PlaceStatus;
   /** true = hanya published + not deleted (publik). */

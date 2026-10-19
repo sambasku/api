@@ -33,6 +33,7 @@ const adminUserWireSchema = z.object({
   roles: z.array(roleEnum).min(1),
   /** @deprecated Derived tertinggi dari roles (wire compat, baca roles). */
   role: roleEnum,
+  avatar_url: z.string().nullable(),
   is_active: z.boolean(),
   can_contribute: z.boolean(),
   contribute_muted_until: z.string().nullable(),

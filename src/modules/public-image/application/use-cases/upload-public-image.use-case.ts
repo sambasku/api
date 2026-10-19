@@ -1,11 +1,12 @@
 import type { PublicImageStoragePort } from '../ports/public-image-storage.port';
 import {
   buildCampaignImagePath,
+  buildPlaceImagePath,
   buildWordImagePath,
 } from '../utils/public-image-path';
 import { validateImageFile } from '../utils/validate-image-file';
 
-export type PublicImagePurpose = 'word' | 'campaign';
+export type PublicImagePurpose = 'word' | 'campaign' | 'place';
 
 export interface UploadPublicImageResult {
   url: string;
@@ -29,7 +30,9 @@ export class UploadPublicImageUseCase {
     const path =
       purpose === 'campaign'
         ? buildCampaignImagePath(file.mimeType)
-        : buildWordImagePath(file.mimeType);
+        : purpose === 'place'
+          ? buildPlaceImagePath(file.mimeType)
+          : buildWordImagePath(file.mimeType);
     const uploaded = await this.storage.upload({
       path,
       content: file.bytes,

@@ -92,6 +92,7 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
         lng: 109.2,
         short_description: 'Deskripsi singkat untuk uji e2e.',
         region_id: 'pemangkat',
+        village_id: 'pemangkat/perapakan',
         images: [
           {
             url: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/test.webp',
@@ -114,6 +115,7 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
     expect(created.slug).toBe('pantai-test-e2e');
     expect(created.images).toHaveLength(1);
     expect(created.images[0].is_main).toBe(true);
+    expect(created.village_id).toBe('pemangkat/perapakan');
 
     const listRes = await get('/api/v1/places?category=wisata');
     expect(listRes.status).toBe(200);
