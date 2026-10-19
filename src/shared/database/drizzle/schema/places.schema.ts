@@ -8,9 +8,7 @@ export const places = sqliteTable(
     id: text('id').primaryKey(),
     slug: text('slug').notNull(),
     name: text('name').notNull(),
-    category: text('category', {
-      enum: ['wisata', 'kuliner', 'budaya'],
-    }).notNull(),
+    category: text('category').notNull(),
     type: text('type', {
       enum: ['sejarah', 'alam', 'budaya', 'pantai', 'belanja'],
     }),

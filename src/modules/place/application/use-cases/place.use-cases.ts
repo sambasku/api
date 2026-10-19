@@ -1,4 +1,5 @@
-import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { BadRequestError, ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import type { PlaceCategoryRepository } from '@/modules/place-category/domain/repositories/place-category.repository';
 import type { Place } from '../../domain/entities/place.entity';
 import type {
   CreatePlaceInput,
@@ -8,10 +9,26 @@ import type {
   UpdatePlaceInput,
 } from '../../domain/repositories/place.repository';
 
+async function assertCategory(
+  categories: PlaceCategoryRepository,
+  id: string,
+): Promise<void> {
+  const row = await categories.findById(id);
+  if (!row || row.status !== 'published') {
+    throw new BadRequestError('CATEGORY_NOT_FOUND', 'Kategori tidak ditemukan', [
+      { field: 'category', message: 'Pilih kategori yang masih published' },
+    ]);
+  }
+}
+
 export class CreatePlaceUseCase {
-  constructor(private readonly repo: PlaceRepository) {}
+  constructor(
+    private readonly repo: PlaceRepository,
+    private readonly categories: PlaceCategoryRepository,
+  ) {}
 
   async execute(input: CreatePlaceInput): Promise<Place> {
+    await assertCategory(this.categories, input.category);
     const existing = await this.repo.findBySlugAny(input.slug);
     if (existing) {
       throw new ConflictError('SLUG_TAKEN', 'Slug place sudah dipakai');
@@ -21,9 +38,15 @@ export class CreatePlaceUseCase {
 }
 
 export class UpdatePlaceUseCase {
-  constructor(private readonly repo: PlaceRepository) {}
+  constructor(
+    private readonly repo: PlaceRepository,
+    private readonly categories: PlaceCategoryRepository,
+  ) {}
 
   async execute(input: UpdatePlaceInput): Promise<Place> {
+    if (input.category) {
+      await assertCategory(this.categories, input.category);
+    }
     if (input.slug) {
       const other = await this.repo.findBySlugAny(input.slug);
       if (other && other.id !== input.id) {

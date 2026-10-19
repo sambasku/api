@@ -34,6 +34,8 @@ import {
   passwordResetTokens,
   placeImages,
   places,
+  placeCategories,
+  regions,
   pronunciations,
   refreshTokens,
   searchMisses,
@@ -197,6 +199,15 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
       },
     ])
     .onConflictDoNothing();
+
+  await db
+    .insert(placeCategories)
+    .values([
+      { id: 'wisata', name: 'Wisata', sortOrder: 0, status: 'published', createdAt: now },
+      { id: 'kuliner', name: 'Kuliner', sortOrder: 1, status: 'published', createdAt: now },
+      { id: 'budaya', name: 'Budaya', sortOrder: 2, status: 'published', createdAt: now },
+    ])
+    .onConflictDoNothing();
 }
 
 // Hapus semua tabel dalam urutan aman FK (anak dulu) - pakai ini di
@@ -261,10 +272,12 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     // Pengumuman admin (#102) (FK created_by) - sebelum users
     announcements,
     // Places CRUD (FK place_images.place_id) - anak dulu
-    placeImages,
-    places,
-    // Event feed publik (FK actor_id) - sebelum users
-    activityEvents,
+  placeImages,
+  places,
+  placeCategories,
+  regions,
+  // Event feed publik (FK actor_id) - sebelum users
+  activityEvents,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,

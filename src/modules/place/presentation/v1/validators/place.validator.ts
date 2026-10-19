@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-const placeCategorySchema = z.enum(['wisata', 'kuliner', 'budaya']);
+const placeCategorySchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Kategori harus slug di tabel place_categories');
 const placeTypeSchema = z.enum(['sejarah', 'alam', 'budaya', 'pantai', 'belanja']);
 const placeStatusSchema = z.enum(['draft', 'published', 'archived']);
 
@@ -19,7 +23,7 @@ const attributionSchema = z
 const imageSchema = z.object({
   url: z.string().url().startsWith('https://'),
   is_main: z.boolean().optional(),
-  sort_order: z.number().int().min(0).max(999).optional(),
+  sort_order: z.number().int().min(0).optional(),
   attribution: attributionSchema.nullable().optional(),
 });
 
@@ -55,7 +59,7 @@ export const createPlaceBodySchema = z
     contact: z.string().max(500).nullable().optional(),
     author_id: z.string().max(64).nullable().optional(),
     sources: z.array(sourceSchema).max(20).optional(),
-    images: z.array(imageSchema).max(30).optional(),
+    images: z.array(imageSchema).optional(),
     status: placeStatusSchema.optional(),
   })
   .strict();

@@ -519,6 +519,27 @@
       "when": 1800346900000,
       "tag": "0073_places_village_id",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "6",
+      "when": 1800446900000,
+      "tag": "0074_regions",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1800546900000,
+      "tag": "0075_places_contact",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1800646900000,
+      "tag": "0076_place_categories",
+      "breakpoints": true
     }
   ]
 }

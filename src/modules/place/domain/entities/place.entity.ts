@@ -1,4 +1,5 @@
-export type PlaceCategory = 'wisata' | 'kuliner' | 'budaya';
+/** Id slug di tabel `place_categories`. */
+export type PlaceCategory = string;
 export type PlaceType = 'sejarah' | 'alam' | 'budaya' | 'pantai' | 'belanja';
 export type PlaceStatus = 'draft' | 'published' | 'archived';
 

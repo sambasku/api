@@ -224,6 +224,32 @@ import {
   createAdminPlaceRoutes,
   createPublicPlaceRoutes,
 } from '@/modules/place/presentation/v1/place.routes';
+import { PlaceCategoryRepositoryImpl } from '@/modules/place-category/infrastructure/place-category.repository.impl';
+import {
+  CreatePlaceCategoryUseCase,
+  DeletePlaceCategoryUseCase,
+  GetPlaceCategoryUseCase,
+  ListPlaceCategoriesUseCase,
+  UpdatePlaceCategoryUseCase,
+} from '@/modules/place-category/application/use-cases/place-category.use-cases';
+import { PlaceCategoryController } from '@/modules/place-category/presentation/v1/place-category.controller';
+import {
+  createAdminPlaceCategoryRoutes,
+  createPublicPlaceCategoryRoutes,
+} from '@/modules/place-category/presentation/v1/place-category.routes';
+import { RegionRepositoryImpl } from '@/modules/region/infrastructure/region.repository.impl';
+import {
+  CreateRegionUseCase,
+  DeleteRegionUseCase,
+  GetRegionByIdUseCase,
+  ListRegionsUseCase,
+  UpdateRegionUseCase,
+} from '@/modules/region/application/use-cases/region.use-cases';
+import { RegionController } from '@/modules/region/presentation/v1/region.controller';
+import {
+  createAdminRegionRoutes,
+  createPublicRegionRoutes,
+} from '@/modules/region/presentation/v1/region.routes';
 import { LanguageRepositoryImpl } from '@/modules/language/infrastructure/language.repository.impl';
 import { ListLanguagesUseCase } from '@/modules/language/application/use-cases/list-languages.use-case';
 import { ListDialectsUseCase } from '@/modules/language/application/use-cases/list-dialects.use-case';
@@ -803,12 +829,29 @@ const announcementController = new AnnouncementController(
 );
 
 const placeRepo = new PlaceRepositoryImpl(db);
+const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
 const placeController = new PlaceController(
-  new CreatePlaceUseCase(placeRepo),
-  new UpdatePlaceUseCase(placeRepo),
+  new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
+  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
   new DeletePlaceUseCase(placeRepo),
   new ListPlacesUseCase(placeRepo),
   new GetPlaceBySlugUseCase(placeRepo),
+);
+const placeCategoryController = new PlaceCategoryController(
+  new CreatePlaceCategoryUseCase(placeCategoryRepo),
+  new UpdatePlaceCategoryUseCase(placeCategoryRepo),
+  new DeletePlaceCategoryUseCase(placeCategoryRepo),
+  new ListPlaceCategoriesUseCase(placeCategoryRepo),
+  new GetPlaceCategoryUseCase(placeCategoryRepo),
+);
+
+const regionRepo = new RegionRepositoryImpl(db);
+const regionController = new RegionController(
+  new CreateRegionUseCase(regionRepo),
+  new UpdateRegionUseCase(regionRepo),
+  new DeleteRegionUseCase(regionRepo),
+  new ListRegionsUseCase(regionRepo),
+  new GetRegionByIdUseCase(regionRepo),
 );
 
 const categoryRepo = new CategoryRepositoryImpl(db);
@@ -1356,6 +1399,10 @@ app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: 
 // Places CRUD - katalog wisata/kuliner/budaya (SoT Turso).
 app.route('/api/v1/admin/places', createAdminPlaceRoutes({ controller: placeController, authenticate }));
 app.route('/api/v1/places', createPublicPlaceRoutes({ controller: placeController }));
+app.route('/api/v1/admin/place-categories', createAdminPlaceCategoryRoutes({ controller: placeCategoryController, authenticate }));
+app.route('/api/v1/place-categories', createPublicPlaceCategoryRoutes({ controller: placeCategoryController }));
+app.route('/api/v1/admin/regions', createAdminRegionRoutes({ controller: regionController, authenticate }));
+app.route('/api/v1/regions', createPublicRegionRoutes({ controller: regionController }));
 
 // Data referensi form admin
 app.route('/api/v1/languages', createLanguageRoutes({ controller: languageController }));

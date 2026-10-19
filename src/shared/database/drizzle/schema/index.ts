@@ -26,6 +26,8 @@ export * from './contribution-reviews.schema';
 export * from './search-misses.schema';
 export * from './announcements.schema';
 export * from './places.schema';
+export * from './place-categories.schema';
+export * from './regions.schema';
 export * from './search-miss-searchers.schema';
 export * from './search-daily.schema';
 export * from './audit-logs.schema';

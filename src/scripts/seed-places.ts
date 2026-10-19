@@ -42,7 +42,7 @@ type SeedPlace = {
   shortDescription: string;
   regionId?: string | null;
   hours?: string | null;
-  contact?: string | null;
+  contact?: string | { phone?: string | null; email?: string | null } | null;
   authorId?: string | null;
   images?: SeedImage[];
   sources?: Array<{
@@ -60,6 +60,19 @@ const list = raw.places ?? [];
 if (list.length === 0) {
   console.error('Tidak ada places di', pathArg);
   process.exit(1);
+}
+
+function formatContact(contact: SeedPlace['contact']): string | null {
+  if (contact == null) return null;
+  if (typeof contact === 'string') {
+    const text = contact.trim();
+    if (!text || text.toLowerCase() === '[object object]') return null;
+    return text;
+  }
+  const phone = contact.phone?.trim() ?? '';
+  const email = contact.email?.trim() ?? '';
+  const parts = [phone, email].filter((part) => part.length > 0);
+  return parts.length > 0 ? parts.join('\n') : null;
 }
 
 const allowedType = new Set(['sejarah', 'alam', 'budaya', 'pantai', 'belanja']);
@@ -102,7 +115,7 @@ for (const p of list) {
           shortDescription: p.shortDescription,
           regionId: p.regionId ?? null,
           hours: p.hours ?? null,
-          contact: p.contact ?? null,
+          contact: formatContact(p.contact),
           authorId: p.authorId ?? null,
           sourcesJson,
           status: 'published',
@@ -124,7 +137,7 @@ for (const p of list) {
         shortDescription: p.shortDescription,
         regionId: p.regionId ?? null,
         hours: p.hours ?? null,
-        contact: p.contact ?? null,
+        contact: formatContact(p.contact),
         authorId: p.authorId ?? null,
         sourcesJson,
         status: 'published',
