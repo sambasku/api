@@ -53,6 +53,8 @@ function toUserEntity(row: UserRow, roles: User['roles']): User {
     username: row.username,
     displayName: row.displayName || row.username,
     bio: row.bio ?? null,
+    regionId: row.regionId ?? null,
+    villageId: row.villageId ?? null,
     email: row.email,
     phone: row.phone,
     passwordHash: row.passwordHash,

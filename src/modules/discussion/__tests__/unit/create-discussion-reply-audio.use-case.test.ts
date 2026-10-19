@@ -33,6 +33,7 @@ function makeDiscussion(overrides: Partial<Discussion> = {}): Discussion {
     username: 'pemilik',
     displayName: 'Pemilik Thread',
     avatarUrl: null,
+    userRole: null,
     body: 'Apa arti tulisan di papan pasar?',
     linkUrl: null,
     images: [],

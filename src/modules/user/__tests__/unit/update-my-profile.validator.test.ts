@@ -48,4 +48,45 @@ describe('updateMyProfileSchema', () => {
       updateMyProfileSchema.safeParse({ display_name: '   ' }).success,
     ).toBe(false);
   });
+
+  it('region_id dan village_id null diterima', () => {
+    const parsed = updateMyProfileSchema.safeParse({
+      region_id: null,
+      village_id: null,
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.region_id).toBeNull();
+    expect(parsed.data.village_id).toBeNull();
+  });
+
+  it('string kosong wilayah menjadi null', () => {
+    const parsed = updateMyProfileSchema.safeParse({
+      region_id: '',
+      village_id: '  ',
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.region_id).toBeNull();
+    expect(parsed.data.village_id).toBeNull();
+  });
+
+  it('slug wilayah rusak ditolak', () => {
+    expect(
+      updateMyProfileSchema.safeParse({ region_id: 'Pemangkat' }).success,
+    ).toBe(false);
+    expect(
+      updateMyProfileSchema.safeParse({ village_id: 'pemangkat/Perapakan' }).success,
+    ).toBe(false);
+  });
+
+  it('slug desa dengan satu slash diterima', () => {
+    const parsed = updateMyProfileSchema.safeParse({
+      region_id: 'pemangkat',
+      village_id: 'pemangkat/perapakan',
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.village_id).toBe('pemangkat/perapakan');
+  });
 });

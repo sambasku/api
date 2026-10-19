@@ -8,6 +8,8 @@ import {
   publicAccountName,
 } from '@/shared/constants/deleted-account';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
+import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
 import type { ActivityCursor } from '../domain/merge-activity';
@@ -145,6 +147,7 @@ interface FeedRow {
   actorUsername: string | null;
   actorDisplayName: string | null;
   actorAvatarUrl: string | null;
+  actorRole: string | null;
   actorDeletedAt: Date | null;
   missTerm: string | null;
   /** #144: arah search-miss untuk di-wirer ke target.direction di feed. */
@@ -356,6 +359,7 @@ export class ActivityEventFeedRepositoryImpl {
         actorUsername: users.username,
         actorDisplayName: users.displayName,
         actorAvatarUrl: users.avatarUrl,
+        actorRole: highestUserRoleSql,
         actorDeletedAt: users.deletedAt,
         // search_miss: term body feed; guard kind supaya kolisi id antar
         // tabel (ULID) tak pernah match utk kind lain.
@@ -543,6 +547,7 @@ export class ActivityEventFeedRepositoryImpl {
       username: hidden ? null : username,
       displayName: username || displayName ? displayName ?? DELETED_LABEL : null,
       avatarUrl: row.actorDeletedAt ? null : (row.actorAvatarUrl ?? null),
+      isVerifier: hidden ? false : isVerifierRole(row.actorRole ?? ''),
     };
   }
 

@@ -14,6 +14,10 @@ export const users = sqliteTable(
     displayName: text('display_name').notNull().default(''),
     // Bio publik opsional (edit profil).
     bio: text('bio'),
+    /** Id kecamatan (`regions.id`). Null = belum diisi. */
+    regionId: text('region_id'),
+    /** Id desa (`regions.id`, parent = region_id). Null = belum diisi. */
+    villageId: text('village_id'),
     email: text('email').notNull().unique(),
     // Digit internasional tanpa '+', mis. 62899…; NULL kalau user skip.
     phone: text('phone'),

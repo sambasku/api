@@ -15,6 +15,7 @@ function toWire(item: ActivityItem) {
           username: item.actor.username,
           display_name: item.actor.displayName,
           avatar_url: item.actor.avatarUrl,
+          is_verifier: item.actor.isVerifier,
         }
       : null,
     body: item.body,

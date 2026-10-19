@@ -30,6 +30,10 @@ export interface User {
   displayName: string;
   /** Bio publik opsional. */
   bio: string | null;
+  /** Id kecamatan. Null = belum diisi. */
+  regionId: string | null;
+  /** Id desa. Null = belum diisi. Induknya harus `regionId`. */
+  villageId: string | null;
   email: string;
   // Digit internasional tanpa '+', mis. 62899… / 6012… - null bila user skip saat register
   phone: string | null;

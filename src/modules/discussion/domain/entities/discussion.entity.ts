@@ -22,6 +22,8 @@ export interface Discussion {
   displayName: string | null;
   /** Avatar publik pembuka thread; null jika penulis hilang / tanpa foto. */
   avatarUrl: string | null;
+  /** Role tertinggi penulis. Null jika akun hilang. Dipakai centang verifikator. */
+  userRole: string | null;
   body: string | null;
   /** Tautan https luar (opsional). */
   linkUrl: string | null;

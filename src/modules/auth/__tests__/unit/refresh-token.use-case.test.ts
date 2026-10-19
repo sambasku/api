@@ -25,6 +25,8 @@ function user(): User {
     username: 'budi',
     displayName: 'budi',
     bio: null,
+    regionId: null,
+    villageId: null,
     email: 'budi@test.com',
     phone: null,
     passwordHash: 'hash',

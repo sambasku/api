@@ -3,4 +3,8 @@ export interface UpdateMyProfileDto {
   bio?: string | null;
   /** true = user tap "Mengerti" di guide swipe halaman kontribusi. */
   hasReadContributionGuide?: true;
+  /** Id kecamatan. `null` mengosongkan. Field absen = tidak diubah. */
+  regionId?: string | null;
+  /** Id desa. `null` mengosongkan. Field absen = tidak diubah. */
+  villageId?: string | null;
 }

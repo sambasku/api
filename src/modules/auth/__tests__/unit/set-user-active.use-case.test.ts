@@ -16,6 +16,8 @@ function user(partial: Partial<User> = {}): User {
     username: 'siti',
     displayName: 'siti',
     bio: null,
+    regionId: null,
+    villageId: null,
     email: 'siti@test.com',
     phone: null,
     passwordHash: 'hash',

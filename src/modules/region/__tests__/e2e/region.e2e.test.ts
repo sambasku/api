@@ -23,12 +23,6 @@ describe.skipIf(!hasTestDb)('Region E2E - CRUD admin + list publik', () => {
       body: JSON.stringify(body),
       headers: token ? { authorization: `Bearer ${token}` } : {},
     });
-  const patch = (path: string, body: unknown, token?: string) =>
-    request(path, {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-      headers: token ? { authorization: `Bearer ${token}` } : {},
-    });
   const get = (path: string, token?: string) =>
     request(path, { headers: token ? { authorization: `Bearer ${token}` } : {} });
   const del = (path: string, token?: string) =>

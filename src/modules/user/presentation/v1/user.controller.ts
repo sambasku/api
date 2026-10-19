@@ -89,6 +89,8 @@ export class UserController {
         username: profile.username,
         display_name: profile.displayName,
         bio: profile.bio,
+        region_id: profile.regionId,
+        village_id: profile.villageId,
         avatar_url: profile.avatarUrl,
         has_read_contribution_guide: profile.hasReadContributionGuide,
       },
@@ -124,6 +126,8 @@ export class UserController {
     const profile = await this.deps.updateMyProfile.execute(user.user_id, {
       displayName: body.display_name,
       bio: body.bio,
+      regionId: body.region_id,
+      villageId: body.village_id,
       hasReadContributionGuide: body.has_read_contribution_guide,
     });
     return c.json({
@@ -132,6 +136,8 @@ export class UserController {
         username: profile.username,
         display_name: profile.displayName,
         bio: profile.bio,
+        region_id: profile.regionId,
+        village_id: profile.villageId,
         avatar_url: profile.avatarUrl,
         has_read_contribution_guide: profile.hasReadContributionGuide,
       },

@@ -33,6 +33,8 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     username: row.username,
     displayName: row.displayName || row.username,
     bio: row.bio ?? null,
+    regionId: row.regionId ?? null,
+    villageId: row.villageId ?? null,
     email: row.email,
     phone: row.phone,
     passwordHash: row.passwordHash,
@@ -123,6 +125,8 @@ export class UserRepositoryImpl implements UserRepository {
         username: users.username,
         displayName: users.displayName,
         bio: users.bio,
+        regionId: users.regionId,
+        villageId: users.villageId,
         email: users.email,
         phone: users.phone,
         isActive: users.isActive,
@@ -341,13 +345,21 @@ items: page.map((r) => {
 
   async updateProfile(
     id: string,
-    data: { displayName?: string; bio?: string | null; readContributionGuideAt?: Date },
+    data: {
+      displayName?: string;
+      bio?: string | null;
+      readContributionGuideAt?: Date;
+      regionId?: string | null;
+      villageId?: string | null;
+    },
   ): Promise<User> {
     const [updated] = await this.db
       .update(users)
       .set({
         ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
         ...(data.bio !== undefined ? { bio: data.bio } : {}),
+        ...(data.regionId !== undefined ? { regionId: data.regionId } : {}),
+        ...(data.villageId !== undefined ? { villageId: data.villageId } : {}),
         ...(data.readContributionGuideAt !== undefined
           ? { readContributionGuideAt: data.readContributionGuideAt }
           : {}),

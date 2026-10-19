@@ -1008,7 +1008,7 @@ const userController = new UserController({
   uploadAvatar: new UploadAvatarUseCase(userRepo, publicImageStorage),
   deleteAvatar: new DeleteAvatarUseCase(userRepo, publicImageStorage),
   getMyProfile: new GetMyProfileUseCase(userRepo),
-  updateMyProfile: new UpdateMyProfileUseCase(userRepo),
+  updateMyProfile: new UpdateMyProfileUseCase(userRepo, regionRepo),
 });
 
 // ---- Modul device (FCM token register/revoke, multi-device) ----
