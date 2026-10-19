@@ -498,6 +498,13 @@
       "when": 1800046900001,
       "tag": "0070_notification_templates_body_type",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1800146900000,
+      "tag": "0071_places",
+      "breakpoints": true
     }
   ]
 }

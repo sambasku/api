@@ -211,6 +211,19 @@ import {
   createSearchMissRoutes,
 } from '@/modules/search-miss/presentation/v1/search-miss.routes';
 import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from '@/modules/announcement/presentation/v1/announcement.routes';
+import { PlaceRepositoryImpl } from '@/modules/place/infrastructure/place.repository.impl';
+import {
+  CreatePlaceUseCase,
+  DeletePlaceUseCase,
+  GetPlaceBySlugUseCase,
+  ListPlacesUseCase,
+  UpdatePlaceUseCase,
+} from '@/modules/place/application/use-cases/place.use-cases';
+import { PlaceController } from '@/modules/place/presentation/v1/place.controller';
+import {
+  createAdminPlaceRoutes,
+  createPublicPlaceRoutes,
+} from '@/modules/place/presentation/v1/place.routes';
 import { LanguageRepositoryImpl } from '@/modules/language/infrastructure/language.repository.impl';
 import { ListLanguagesUseCase } from '@/modules/language/application/use-cases/list-languages.use-case';
 import { ListDialectsUseCase } from '@/modules/language/application/use-cases/list-dialects.use-case';
@@ -789,6 +802,15 @@ const announcementController = new AnnouncementController(
   announcementRepo,
 );
 
+const placeRepo = new PlaceRepositoryImpl(db);
+const placeController = new PlaceController(
+  new CreatePlaceUseCase(placeRepo),
+  new UpdatePlaceUseCase(placeRepo),
+  new DeletePlaceUseCase(placeRepo),
+  new ListPlacesUseCase(placeRepo),
+  new GetPlaceBySlugUseCase(placeRepo),
+);
+
 const categoryRepo = new CategoryRepositoryImpl(db);
 const categoryController = new CategoryController({
   listCategories: new ListCategoriesUseCase(categoryRepo),
@@ -1330,6 +1352,10 @@ app.route('/api/v1/admin/search-misses', createAdminSearchMissRoutes({ controlle
 app.route('/api/v1/admin/announcements', createAdminAnnouncementRoutes({ controller: announcementController, authenticate }));
 // Publik: detail pengumuman by id (deep link mobile #102).
 app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: announcementController }));
+
+// Places CRUD - katalog wisata/kuliner/budaya (SoT Turso).
+app.route('/api/v1/admin/places', createAdminPlaceRoutes({ controller: placeController, authenticate }));
+app.route('/api/v1/places', createPublicPlaceRoutes({ controller: placeController }));
 
 // Data referensi form admin
 app.route('/api/v1/languages', createLanguageRoutes({ controller: languageController }));
