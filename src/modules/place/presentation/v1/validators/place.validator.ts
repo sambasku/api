@@ -40,8 +40,15 @@ export const placeRelationSchema = z.object({
   slug: z.string().min(1).max(120),
 });
 
-const sambasLat = z.number().min(1.0).max(1.8).nullable().optional();
-const sambasLng = z.number().min(108.5).max(110.0).nullable().optional();
+function optionalCoord(schema: z.ZodNumber) {
+  return z.preprocess(
+    (value) => (value === '' || value === null || value === undefined ? undefined : value),
+    schema.optional(),
+  );
+}
+
+const sambasLat = optionalCoord(z.number().min(1.0).max(1.8));
+const sambasLng = optionalCoord(z.number().min(108.5).max(110.0));
 
 export const createPlaceBodySchema = z
   .object({

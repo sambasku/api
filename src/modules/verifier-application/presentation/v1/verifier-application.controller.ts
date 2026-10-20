@@ -9,10 +9,12 @@ import type { ListVerifierApplicationsUseCase } from '../../application/use-case
 import type { GetVerifierApplicationDetailUseCase } from '../../application/use-cases/get-verifier-application-detail.use-case';
 import type { ApproveVerifierApplicationUseCase } from '../../application/use-cases/approve-verifier-application.use-case';
 import type { RejectVerifierApplicationUseCase } from '../../application/use-cases/reject-verifier-application.use-case';
+import type { UpdateVerifierApplicationScreenshotUseCase } from '../../application/use-cases/update-verifier-application-screenshot.use-case';
 import type {
   ListVerifierApplicationsQuery,
   RejectVerifierApplicationBody,
   SubmitVerifierApplicationBody,
+  UpdateVerifierScreenshotBody,
 } from './validators/verifier-application.validator';
 
 function toMine(row: VerifierApplication) {
@@ -39,6 +41,7 @@ export class VerifierApplicationController {
       getDetail: GetVerifierApplicationDetailUseCase;
       approve: ApproveVerifierApplicationUseCase;
       reject: RejectVerifierApplicationUseCase;
+      updateScreenshot: UpdateVerifierApplicationScreenshotUseCase;
     },
   ) {}
 
@@ -132,10 +135,44 @@ export class VerifierApplicationController {
     const result = await this.deps.reject.execute({
       applicationId: id,
       actorId: user.user_id,
+      actorRoles: user.roles,
       comment: body.comment,
       requestId: this.requestId(c),
     });
     return c.json({ success: true as const, data: result });
+  }
+
+  async updateScreenshot(
+    c: Context,
+    id: string,
+    index: number,
+    body: UpdateVerifierScreenshotBody,
+  ) {
+    const user = this.requireUser(c);
+    const row = await this.deps.updateScreenshot.execute({
+      applicationId: id,
+      index,
+      actorRoles: user.roles,
+      screenshot: { url: body.url, provider_file_id: body.provider_file_id },
+    });
+    return c.json({
+      success: true as const,
+      data: {
+        id: row.id,
+        user_id: row.userId,
+        username: row.username,
+        status: row.status,
+        phone: row.phone,
+        address: row.address,
+        social_links: row.socialLinks,
+        admin_comment: row.adminComment,
+        reviewed_by: row.reviewedBy,
+        reviewed_by_username: row.reviewedByUsername,
+        reviewed_at: row.reviewedAt?.toISOString() ?? null,
+        created_at: row.createdAt.toISOString(),
+        updated_at: row.updatedAt?.toISOString() ?? null,
+      },
+    });
   }
 
   private requireUser(c: Context): AuthUser {

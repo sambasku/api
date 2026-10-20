@@ -31,7 +31,8 @@ const appendImagesBody = z.object({
 
 export function createPublicPlaceRoutes(deps: {
   controller: PlaceController;
-  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Tanpa token = kredit ke user sistem anonim. */
+  optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 120, duration: 60 }));
@@ -86,7 +87,7 @@ export function createPublicPlaceRoutes(deps: {
   });
 
   routes.use('/:slug/images', async (c, next) => {
-    if (c.req.method === 'POST') return deps.authenticate(c, next);
+    if (c.req.method === 'POST') return deps.optionalAuthenticate(c, next);
     return next();
   });
   routes.openapi(listRoute, (c) => deps.controller.listPublic(c, c.req.valid('query')) as never);

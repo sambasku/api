@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ForbiddenError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { MailerPort } from '@/modules/auth/application/ports/mailer.port';
 import type { User } from '@/modules/auth/domain/entities/user.entity';
@@ -128,5 +129,12 @@ describe('ApproveVerifierApplicationUseCase', () => {
     expect(result.status).toBe('approved');
     expect(mailer.sendVerifierApprovedEmail).toHaveBeenCalled();
     error.mockRestore();
+  });
+
+  it('menolak actor selain admin/root (403)', async () => {
+    const { useCase } = makeUseCase(makeUser());
+    await expect(
+      useCase.execute({ ...cmd, actorRoles: ['reviewer'] }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

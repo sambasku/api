@@ -85,6 +85,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `DISCUSSION_NOT_PENDING` | 409 | Audio opening hanya untuk diskusi pending_review |
 | `VERIFIER_APPLICATION_NOT_FOUND` | 404 | Pengajuan verifikator tidak ada (GET me belum apply; detail admin id tidak dikenal) |
 | `VERIFIER_APPLICATION_NOT_REJECTED` | 409 | PATCH me hanya boleh jika status rejected |
+| `SOCIAL_LINK_NOT_FOUND` | 404 | Admin ganti screenshot akun sosial dengan indeks di luar daftar |
 | `ALREADY_VERIFIER` | 403 | POST/PATCH pengajuan oleh user yang role-nya bukan contributor; juga approve jika pemohon sudah bukan contributor |
 | `APPLICATION_ALREADY_EXISTS` | 409 | POST pengajuan padahal user sudah punya baris verifier_applications |
 | `APPLICATION_ALREADY_REVIEWED` | 409 | Approve/reject pengajuan yang statusnya bukan pending |

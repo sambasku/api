@@ -81,6 +81,21 @@ export const verifierApplicationIdParamSchema = z.object({
   id: opaqueId,
 });
 
+export const verifierApplicationScreenshotParamSchema = z.object({
+  id: opaqueId,
+  index: z.coerce
+    .number({ error: 'Indeks akun tidak valid. Muat ulang halaman, lalu coba lagi.' })
+    .int('Indeks akun tidak valid. Muat ulang halaman, lalu coba lagi.')
+    .min(0, 'Indeks akun tidak valid. Muat ulang halaman, lalu coba lagi.'),
+});
+
+export const updateVerifierScreenshotSchema = z.object({
+  url: z.url('URL screenshot tidak valid'),
+  provider_file_id: z.string().trim().min(1, 'provider_file_id wajib diisi'),
+});
+
+export type UpdateVerifierScreenshotBody = z.infer<typeof updateVerifierScreenshotSchema>;
+
 const socialLinkWire = z.object({
   platform: socialPlatformSchema,
   username: z.string(),

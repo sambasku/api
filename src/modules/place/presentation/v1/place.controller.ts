@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { AppVariables } from '@/shared/types';
 import type { Place, PlaceImage, PlaceRelatedCard } from '../../domain/entities/place.entity';
 import type {
@@ -279,7 +280,7 @@ export class PlaceController {
 
   appendImages(c: Context<{ Variables: AppVariables }>, slug: string, urls: string[]) {
     return this.appendImagesUc
-      .execute(slug, c.get('user')!.user_id, urls)
+      .execute(slug, c.get('user')?.user_id ?? ANONIM_USER_ID, urls)
       .then(() => c.json({ success: true as const, data: null }));
   }
 

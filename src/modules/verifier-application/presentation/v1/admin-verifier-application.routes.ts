@@ -14,7 +14,9 @@ import {
   listVerifierApplicationsQuerySchema,
   rejectVerifierApplicationResponseSchema,
   rejectVerifierApplicationSchema,
+  updateVerifierScreenshotSchema,
   verifierApplicationIdParamSchema,
+  verifierApplicationScreenshotParamSchema,
 } from './validators/verifier-application.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -39,6 +41,7 @@ export function createAdminVerifierApplicationRoutes(deps: AdminVerifierApplicat
   routes.use('/:id', ...admin);
   routes.use('/:id/approve', ...admin);
   routes.use('/:id/reject', ...admin);
+  routes.use('/:id/social-links/:index/screenshot', ...admin);
 
   const listRoute = createRoute({
     method: 'get',
@@ -106,6 +109,39 @@ export function createAdminVerifierApplicationRoutes(deps: AdminVerifierApplicat
   routes.openapi(approveRoute, (c) => deps.controller.approve(c, c.req.param('id')) as never);
   routes.openapi(rejectRoute, (c) =>
     deps.controller.reject(c, c.req.param('id'), c.req.valid('json')) as never,
+  );
+
+  const updateScreenshotRoute = createRoute({
+    method: 'patch',
+    path: '/:id/social-links/:index/screenshot',
+    tags: ['Verifier Applications', 'Admin'],
+    summary: 'Ganti screenshot akun sosial pengajuan pending (admin/root)',
+    request: {
+      params: verifierApplicationScreenshotParamSchema,
+      body: { content: json(updateVerifierScreenshotSchema) },
+    },
+    responses: {
+      200: {
+        description: 'Screenshot diperbarui',
+        content: json(adminVerifierApplicationDetailResponseSchema),
+      },
+      400: { description: 'Body/param tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan admin/root', content: json(errorResponseSchema) },
+      404: {
+        description: 'Pengajuan/akun sosial tidak ditemukan',
+        content: json(errorResponseSchema),
+      },
+      409: { description: 'Sudah ada keputusan', content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(updateScreenshotRoute, (c) =>
+    deps.controller.updateScreenshot(
+      c,
+      c.req.param('id'),
+      c.req.valid('param').index,
+      c.req.valid('json'),
+    ) as never,
   );
 
   return routes;

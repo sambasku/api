@@ -183,4 +183,41 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
     expect(detail?.reviewedBy).toBe(admin.id);
     expect(detail?.reviewedByUsername).toBe('admin-va');
   });
+
+  it('updateSocialScreenshot: pending → screenshot berganti; decided → 409; index invalid → 404', async () => {
+    const contributor = await users.save({
+      username: 'shot-va',
+      email: 'shot-va@test.com',
+      phone: '6281777000001',
+      passwordHash: 'hash',
+    });
+    const created = await repo.create({
+      userId: contributor.id,
+      phone: '6281777000001',
+      address: 'Jl. Screenshot yang cukup panjang',
+      socialLinks: links,
+    });
+
+    const updated = await repo.updateSocialScreenshot(created.id, 0, {
+      url: 'https://ik.imagekit.io/test/verifier-applications/budi-v2.jpg',
+      provider_file_id: 'file_va_budi_v2',
+    });
+    expect(updated.socialLinks[0].screenshot.provider_file_id).toBe('file_va_budi_v2');
+    expect((await repo.findById(created.id))?.socialLinks[0].screenshot.url).toContain('budi-v2');
+
+    await expect(
+      repo.updateSocialScreenshot(created.id, 5, {
+        url: 'https://ik.imagekit.io/test/x.jpg',
+        provider_file_id: 'file_x',
+      }),
+    ).rejects.toMatchObject({ errorCode: 'SOCIAL_LINK_NOT_FOUND', statusCode: 404 });
+
+    await repo.markRejected(created.id, contributor.id, 'screenshot rusak');
+    await expect(
+      repo.updateSocialScreenshot(created.id, 0, {
+        url: 'https://ik.imagekit.io/test/x.jpg',
+        provider_file_id: 'file_x',
+      }),
+    ).rejects.toMatchObject({ errorCode: 'APPLICATION_ALREADY_REVIEWED', statusCode: 409 });
+  });
 });

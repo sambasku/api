@@ -128,7 +128,7 @@ export class RegionRepositoryImpl implements RegionRepository {
       .select()
       .from(regions)
       .where(and(...conds))
-      .orderBy(regions.sortOrder, regions.name, desc(regions.id))
+      .orderBy(desc(regions.id))
       .limit(input.limit + 1);
 
     const hasMore = rows.length > input.limit;

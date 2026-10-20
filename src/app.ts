@@ -456,6 +456,7 @@ import { ListVerifierApplicationsUseCase } from '@/modules/verifier-application/
 import { GetVerifierApplicationDetailUseCase } from '@/modules/verifier-application/application/use-cases/get-verifier-application-detail.use-case';
 import { ApproveVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/approve-verifier-application.use-case';
 import { RejectVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/reject-verifier-application.use-case';
+import { UpdateVerifierApplicationScreenshotUseCase } from '@/modules/verifier-application/application/use-cases/update-verifier-application-screenshot.use-case';
 import { VerifierApplicationController } from '@/modules/verifier-application/presentation/v1/verifier-application.controller';
 import { createVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/verifier-application.routes';
 import { createAdminVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/admin-verifier-application.routes';
@@ -1431,9 +1432,17 @@ app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: 
 
 // Places CRUD - katalog wisata/kuliner/budaya (SoT Turso).
 app.route('/api/v1/admin/places', createAdminPlaceRoutes({ controller: placeController, authenticate }));
-app.route('/api/v1/places', createPublicPlaceRoutes({ controller: placeController, authenticate }));
+app.route('/api/v1/places', createPublicPlaceRoutes({ controller: placeController, optionalAuthenticate }));
 app.route('/api/v1/admin/place-contributions', createAdminPlaceContributionRoutes({ controller: placeContributionController, authenticate }));
-app.route('/api/v1/place-contributions', createPlaceContributionRoutes({ controller: placeContributionController, authenticate }));
+app.route(
+  '/api/v1/place-contributions',
+  createPlaceContributionRoutes({
+    controller: placeContributionController,
+    authenticate,
+    optionalAuthenticate,
+    uploadPlaceImage: (c) => publicImageController.upload(c, { purpose: 'place' }),
+  }),
+);
 app.route('/api/v1/admin/place-categories', createAdminPlaceCategoryRoutes({ controller: placeCategoryController, authenticate }));
 app.route('/api/v1/place-categories', createPublicPlaceCategoryRoutes({ controller: placeCategoryController }));
 app.route('/api/v1/admin/regions', createAdminRegionRoutes({ controller: regionController, authenticate }));
@@ -1675,15 +1684,16 @@ const verifierApplicationController = new VerifierApplicationController({
     sendVerifierWa,
     readWaSettings,
   ),
-  reject: new RejectVerifierApplicationUseCase(
-    verifierApplicationRepo,
-    auditRepo,
-    notifyUser,
-    recordInbox,
-    userRepo,
-    sendVerifierWa,
-    readWaSettings,
-  ),
+reject: new RejectVerifierApplicationUseCase(
+  verifierApplicationRepo,
+  auditRepo,
+  notifyUser,
+  recordInbox,
+  userRepo,
+  sendVerifierWa,
+  readWaSettings,
+),
+updateScreenshot: new UpdateVerifierApplicationScreenshotUseCase(verifierApplicationRepo),
 });
 app.route(
   '/api/v1/verifier-applications',

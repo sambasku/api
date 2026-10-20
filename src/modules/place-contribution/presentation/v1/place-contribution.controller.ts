@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import type { PlaceContribution } from '../../infrastructure/place-contribution.repository.impl';
@@ -54,7 +55,7 @@ export class PlaceContributionController {
   constructor(private readonly uc: PlaceContributionUseCases) {}
 
   submit(c: Context<{ Variables: AppVariables }>, body: z.infer<typeof submitContributionBodySchema>) {
-    const userId = c.get('user')!.user_id;
+    const userId = c.get('user')?.user_id ?? ANONIM_USER_ID;
     return this.uc
       .submit(userId, body.place_id ?? null, toPayload(body))
       .then((row) => c.json({ success: true as const, data: serialize(row) }));

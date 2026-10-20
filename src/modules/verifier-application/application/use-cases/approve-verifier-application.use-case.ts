@@ -1,3 +1,4 @@
+import { ForbiddenError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { MailerPort } from '@/modules/auth/application/ports/mailer.port';
 import type { RefreshTokenRepository } from '@/modules/auth/domain/repositories/refresh-token.repository';
@@ -47,6 +48,9 @@ export class ApproveVerifierApplicationUseCase {
   ) {}
 
   async execute(cmd: ApproveVerifierApplicationCommand): Promise<ApproveVerifierApplicationResult> {
+    if (!cmd.actorRoles.includes('root') && !cmd.actorRoles.includes('admin')) {
+      throw new ForbiddenError('FORBIDDEN', 'Hanya admin dan root yang bisa meninjau pengajuan');
+    }
     const updated = await this.appRepo.approveAtomically(cmd.applicationId, cmd.actorId);
 
     await this.refreshTokenRepo.revokeAllForUser(updated.userId);

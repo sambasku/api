@@ -7,6 +7,7 @@ import {
 import type { PlaceRepository } from '@/modules/place/domain/repositories/place.repository';
 import type { PlaceCategoryRepository } from '@/modules/place-category/domain/repositories/place-category.repository';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { BadRequestError, ConflictError, NotFoundError } from '@/shared/errors/app-error';
 import type {
   ContributionPayload,
@@ -29,7 +30,8 @@ export class PlaceContributionUseCases {
 
   async submit(userId: string, placeId: string | null, payload: ContributionPayload): Promise<PlaceContribution> {
     await this.assertPayload(payload);
-    if ((await this.contrib.countPending(userId)) >= PENDING_CAP) {
+    const anon = userId === ANONIM_USER_ID;
+    if (!anon && (await this.contrib.countPending(userId)) >= PENDING_CAP) {
       throw new ConflictError('PENDING_CAP', 'Maksimal 10 usulan yang masih menunggu');
     }
     let base: Date | null = null;
@@ -38,7 +40,7 @@ export class PlaceContributionUseCases {
       if (!place || place.status === 'archived') {
         throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
       }
-      if (await this.contrib.findPendingEdit(userId, place.id)) {
+      if (!anon && (await this.contrib.findPendingEdit(userId, place.id))) {
         throw new ConflictError('PENDING_EXISTS', 'Kamu sudah punya usulan suntingan untuk tempat ini');
       }
       base = place.updatedAt;
