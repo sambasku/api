@@ -870,15 +870,17 @@ const placeCategoryController = new PlaceCategoryController(
 
 const regionRepo = new RegionRepositoryImpl(db);
 const placeContributionController = new PlaceContributionController(
-  new PlaceContributionUseCases(
-    new PlaceContributionRepositoryImpl(db),
-    placeRepo,
-    placeCategoryRepo,
-    regionRepo,
-    userRepo,
-    new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
-    new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
-  ),
+new PlaceContributionUseCases(
+new PlaceContributionRepositoryImpl(db),
+placeRepo,
+placeCategoryRepo,
+regionRepo,
+userRepo,
+new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
+new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
+recordInbox,
+notifyUser,
+),
 );
 const regionController = new RegionController(
   new CreateRegionUseCase(regionRepo),

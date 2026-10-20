@@ -28,6 +28,8 @@ export interface PlaceContribution {
   baseUpdatedAt: Date | null;
   payload: ContributionPayload;
   status: ContributionStatus;
+  rejectReasonCode: string | null;
+  rejectReasonText: string | null;
   createdAt: Date;
   reviewedAt: Date | null;
 }
@@ -40,6 +42,8 @@ function mapRow(row: typeof placeContributions.$inferSelect): PlaceContribution 
     baseUpdatedAt: row.baseUpdatedAt,
     payload: JSON.parse(row.payloadJson) as ContributionPayload,
     status: row.status,
+    rejectReasonCode: row.rejectReasonCode,
+    rejectReasonText: row.rejectReasonText,
     createdAt: row.createdAt,
     reviewedAt: row.reviewedAt,
   };
@@ -120,10 +124,20 @@ export class PlaceContributionRepositoryImpl {
     return row ? mapRow(row) : null;
   }
 
-  async setStatus(id: string, status: ContributionStatus): Promise<void> {
+  async setStatus(
+    id: string,
+    status: ContributionStatus,
+    reject?: { code: string; text?: string | null },
+  ): Promise<void> {
     await this.db
       .update(placeContributions)
-      .set({ status, reviewedAt: new Date() })
+      .set({
+        status,
+        reviewedAt: new Date(),
+        ...(status === 'rejected' && reject
+          ? { rejectReasonCode: reject.code, rejectReasonText: reject.text ?? null }
+          : {}),
+      })
       .where(eq(placeContributions.id, id));
   }
 

@@ -8,6 +8,7 @@ import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema, okNullResponseSchema } from '@/shared/openapi/error-response.schema';
 import type { AppVariables } from '@/shared/types';
 import type { PlaceContributionController } from './place-contribution.controller';
+import { PLACE_REJECT_REASON_CODES } from '../../domain/place-reject-reason';
 import { submitContributionBodySchema } from './place-contribution.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -30,9 +31,18 @@ export function createPlaceContributionRoutes(deps: {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 30, duration: 60 }));
   routes.use('*', async (c, next) => {
-    if (c.req.path.endsWith('/images')) return next();
     if (c.req.method === 'POST') return deps.optionalAuthenticate(c, next);
     return deps.authenticate(c, next);
+  });
+  // Tier ketat request TANPA token: rem utama abuse anonim (submit + unggah
+  // foto public). Submit 5/jam per IP; unggah 25/jam (20 foto maks per
+  // usulan + margin) supaya alur kontribusi anonim tetap jalan.
+  const anonSubmitLimit = rateLimit({ points: 5, duration: 60 * 60 });
+  const anonImageLimit = rateLimit({ points: 25, duration: 60 * 60 });
+  routes.use('*', async (c, next) => {
+    if (c.req.method !== 'POST' || c.get('user')) return next();
+    const limiter = c.req.path.endsWith('/images') ? anonImageLimit : anonSubmitLimit;
+    return limiter(c, next);
   });
   routes.use(
     '/images',
@@ -124,16 +134,35 @@ export function createAdminPlaceContributionRoutes(deps: {
       409: { description: 'Usulan basi atau bentrok', content: json(errorResponseSchema) },
     },
   });
+  const rejectBodySchema = z
+    .object({
+      reason_code: z.enum(PLACE_REJECT_REASON_CODES),
+      reason_text: z.string().trim().max(500).optional(),
+    })
+    .superRefine((body, ctx) => {
+      if (body.reason_code === 'other' && !(body.reason_text && body.reason_text.length >= 3)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['reason_text'],
+          message: 'reason_text wajib (min 3) jika reason_code=other',
+        });
+      }
+    });
   const rejectRoute = createRoute({
     method: 'post',
     path: '/:id/reject',
     tags: ['Admin place contributions'],
-    request: { params: idParam },
+    request: {
+      params: idParam,
+      body: { content: { 'application/json': { schema: rejectBodySchema } } },
+    },
     responses: { 200: { description: 'Ditolak', content: json(okNullResponseSchema) } },
   });
 
   routes.openapi(listRoute, (c) => deps.controller.listPending(c) as never);
   routes.openapi(approveRoute, (c) => deps.controller.approve(c, c.req.param('id')) as never);
-  routes.openapi(rejectRoute, (c) => deps.controller.reject(c, c.req.param('id')) as never);
+  routes.openapi(rejectRoute, (c) =>
+    deps.controller.reject(c, c.req.param('id'), c.req.valid('json')) as never,
+  );
   return routes;
 }

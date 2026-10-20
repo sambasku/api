@@ -4,6 +4,7 @@ import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import type { PlaceContribution } from '../../infrastructure/place-contribution.repository.impl';
 import type { PlaceContributionUseCases } from '../../application/place-contribution.use-cases';
+import { composePlaceRejectDisplay } from '../../domain/place-reject-reason';
 import type { submitContributionBodySchema } from './place-contribution.validator';
 
 function serialize(row: PlaceContribution) {
@@ -13,6 +14,11 @@ function serialize(row: PlaceContribution) {
     user_id: row.userId,
     place_id: row.placeId,
     status: row.status,
+    reject_reason_code: row.rejectReasonCode,
+    reject_reason_text: row.rejectReasonText,
+    reject_reason_display: row.rejectReasonCode
+      ? composePlaceRejectDisplay(row.rejectReasonCode, row.rejectReasonText)
+      : null,
     created_at: Math.floor(row.createdAt.getTime() / 1000),
     reviewed_at: row.reviewedAt ? Math.floor(row.reviewedAt.getTime() / 1000) : null,
     payload: {
@@ -80,10 +86,14 @@ export class PlaceContributionController {
   }
 
   approve(c: Context<{ Variables: AppVariables }>, id: string) {
-    return this.uc.approve(id).then(() => c.json({ success: true as const, data: null }));
+    const actorId = c.get('user')?.user_id;
+    return this.uc.approve(id, actorId).then(() => c.json({ success: true as const, data: null }));
   }
 
-  reject(c: Context<{ Variables: AppVariables }>, id: string) {
-    return this.uc.reject(id).then(() => c.json({ success: true as const, data: null }));
+  reject(c: Context<{ Variables: AppVariables }>, id: string, body: { reason_code: string; reason_text?: string }) {
+    const actorId = c.get('user')?.user_id;
+    return this.uc
+      .reject(id, body.reason_code, body.reason_text ?? null, actorId)
+      .then(() => c.json({ success: true as const, data: null }));
   }
 }

@@ -1,4 +1,7 @@
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import type { InboxNotificationType } from '@/modules/notification/domain/entities/notification.entity';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import {
   assertOurPlaceImage,
   CreatePlaceUseCase,
@@ -9,6 +12,7 @@ import type { PlaceCategoryRepository } from '@/modules/place-category/domain/re
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { BadRequestError, ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { composePlaceRejectDisplay } from '../domain/place-reject-reason';
 import type {
   ContributionPayload,
   PlaceContribution,
@@ -16,6 +20,27 @@ import type {
 } from '../infrastructure/place-contribution.repository.impl';
 
 const PENDING_CAP = 10;
+
+/** Copy notifikasi inbox + FCM untuk keputusan usulan wisata. */
+function decisionCopy(
+  kind: 'approved' | 'rejected',
+  name: string,
+  rejectReason?: { code: string; text?: string | null },
+): { title: string; body: string } {
+  if (kind === 'approved') {
+    return {
+      title: 'Usulan wisata disetujui',
+      body: `Usulanmu "${name}" sudah tayang di daftar wisata. Terima kasih!`,
+    };
+  }
+  const reason = rejectReason
+    ? ` Alasan: ${composePlaceRejectDisplay(rejectReason.code, rejectReason.text)}.`
+    : '';
+  return {
+    title: 'Usulan wisata ditolak',
+    body: `Usulanmu "${name}" ditolak.${reason} Buka daftar usulan untuk detailnya.`,
+  };
+}
 
 export class PlaceContributionUseCases {
   constructor(
@@ -26,6 +51,8 @@ export class PlaceContributionUseCases {
     private readonly users: UserRepository,
     private readonly createPlace: CreatePlaceUseCase,
     private readonly updatePlace: UpdatePlaceUseCase,
+    private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly notifyUser?: NotifyUserUseCase,
   ) {}
 
   async submit(userId: string, placeId: string | null, payload: ContributionPayload): Promise<PlaceContribution> {
@@ -68,7 +95,7 @@ export class PlaceContributionUseCases {
     return this.contrib.listByStatus('pending');
   }
 
-  async approve(id: string): Promise<void> {
+  async approve(id: string, actorId?: string): Promise<void> {
     const row = await this.mustPending(id);
     const user = await this.users.findById(row.userId);
     const credit = user?.displayName || user?.username || 'Pengguna';
@@ -95,9 +122,10 @@ export class PlaceContributionUseCases {
         images,
         status: 'published',
       });
-      await this.contrib.setStatus(id, 'approved');
-      return;
-    }
+    await this.contrib.setStatus(id, 'approved');
+    await this.notifyDecision(row, 'approved', undefined, actorId);
+    return;
+  }
     const place = await this.places.findById(row.placeId);
     if (!place || place.status === 'archived') {
       throw new ConflictError('STALE_PROPOSAL', 'Tempat sudah tidak ada');
@@ -120,16 +148,72 @@ export class PlaceContributionUseCases {
       hours: row.payload.hours,
       contact: row.payload.contact,
     });
-    const have = new Set(place.images.map((img) => img.url));
-    const fresh = images.filter((img) => !have.has(img.url)).map((img) => ({ ...img, isMain: false }));
-    await this.places.appendImages(place.id, fresh);
-    await this.contrib.setStatus(id, 'approved');
-  }
+const have = new Set(place.images.map((img) => img.url));
+const fresh = images.filter((img) => !have.has(img.url)).map((img) => ({ ...img, isMain: false }));
+await this.places.appendImages(place.id, fresh);
+await this.contrib.setStatus(id, 'approved');
+await this.notifyDecision(row, 'approved', undefined, actorId);
+}
 
-  async reject(id: string): Promise<void> {
-    await this.mustPending(id);
-    await this.contrib.setStatus(id, 'rejected');
+async reject(id: string, reasonCode: string, reasonText?: string | null, actorId?: string): Promise<void> {
+  const row = await this.mustPending(id);
+  await this.contrib.setStatus(id, 'rejected', { code: reasonCode, text: reasonText });
+  await this.notifyDecision(row, 'rejected', { code: reasonCode, text: reasonText }, actorId);
+}
+
+/**
+ * Inbox + FCM push ke pengusul. Best-effort setelah keputusan tersimpan:
+ * notifikasi gagal tidak membatalkan approve/reject. Anonim & self-review
+ * di-skip di dalam use case masing-masing.
+ */
+  private async notifyDecision(
+    row: PlaceContribution,
+    kind: 'approved' | 'rejected',
+    rejectReason?: { code: string; text?: string | null },
+    actorId?: string,
+  ): Promise<void> {
+    // Self-review (admin menyetujui/menolak usulannya sendiri) = tanpa notif.
+    if (actorId && actorId === row.userId) return;
+    const copy = decisionCopy(kind, row.payload.name, rejectReason);
+  const type: InboxNotificationType =
+    kind === 'approved' ? 'place_contribution_approved' : 'place_contribution_rejected';
+  const data = {
+    type,
+    target_kind: 'place_contribution',
+    target_id: row.id,
+    place_slug: row.payload.slug,
+  };
+  try {
+    await this.inbox?.execute({
+      userId: row.userId,
+      type,
+      targetKind: 'place_contribution',
+      targetId: row.id,
+      title: copy.title,
+      body: copy.body,
+      actionKind: 'place_contribution',
+      actionValue: row.id,
+      actorId,
+    });
+    await this.notifyUser?.execute({
+      userId: row.userId,
+      title: copy.title,
+      body: copy.body,
+      data,
+      actorId,
+    });
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'notifikasi keputusan usulan wisata gagal',
+        contribution_id: row.id,
+        kind,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
   }
+}
 
   private async mustPending(id: string): Promise<PlaceContribution> {
     const row = await this.contrib.findById(id);

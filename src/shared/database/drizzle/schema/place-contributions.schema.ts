@@ -14,6 +14,9 @@ export const placeContributions = sqliteTable(
     status: text('status', { enum: ['pending', 'approved', 'rejected'] })
       .notNull()
       .default('pending'),
+    /** Alasan penolakan (hanya saat status=rejected). */
+    rejectReasonCode: text('reject_reason_code'),
+    rejectReasonText: text('reject_reason_text'),
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),

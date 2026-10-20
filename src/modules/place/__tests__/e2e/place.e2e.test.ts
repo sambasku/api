@@ -229,6 +229,20 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
     const approve = await post(`/api/v1/admin/place-contributions/${proposalId}/approve`, {}, adminToken);
     expect(approve.status).toBe(200);
 
+    // Notifikasi inbox sampai ke pengusul non-anonim setelah approve.
+    const notifRes = await get('/api/v1/notifications?limit=20', userToken);
+    expect(notifRes.status).toBe(200);
+    const notifItems = (await notifRes.json()).data as Array<Record<string, unknown>>;
+    expect(
+      notifItems.find(
+        (n) => n.type === 'place_contribution_approved' && n.target_id === proposalId,
+      ),
+    ).toMatchObject({
+      target_kind: 'place_contribution',
+      title: expect.stringContaining('disetujui'),
+      action_kind: 'place_contribution',
+    });
+
     const detail = await get('/api/v1/places/pantai-usulan-e2e');
     expect(detail.status).toBe(200);
     const place = (await detail.json()).data;
@@ -294,5 +308,110 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
     expect(finalPlace.related[0].name).toBe('Tetangga');
     expect(finalPlace.related[1].name).toBeNull();
     expect(neighborBody.slug).toBe('tetangga-usulan-e2e');
+  });
+
+  it('reject usulan wajib beralasan: disimpan, tampil ke pengusul, masuk notifikasi', async () => {
+    const submit = await post(
+      '/api/v1/place-contributions',
+      {
+        slug: 'usulan-ditolak-e2e',
+        name: 'Usulan Ditolak',
+        category: 'wisata',
+        short_description: 'Usulan yang ditolak.',
+      },
+      userToken,
+    );
+    expect(submit.status).toBe(200);
+    const id = (await submit.json()).data.id as string;
+
+    // Tanpa alasan → 400.
+    expect(
+      (await post(`/api/v1/admin/place-contributions/${id}/reject`, {}, adminToken)).status,
+    ).toBe(400);
+    // other tanpa catatan → 400.
+    expect(
+      (await post(`/api/v1/admin/place-contributions/${id}/reject`, { reason_code: 'other' }, adminToken))
+        .status,
+    ).toBe(400);
+
+    const ok = await post(
+      `/api/v1/admin/place-contributions/${id}/reject`,
+      { reason_code: 'inaccurate', reason_text: 'Koordinat meleset dari desa.' },
+      adminToken,
+    );
+    expect(ok.status).toBe(200);
+
+    const mine = await get('/api/v1/place-contributions/mine', userToken);
+    const row = ((await mine.json()).data.items as Array<Record<string, unknown>>).find(
+      (r) => r.id === id,
+    );
+    expect(row).toMatchObject({
+      status: 'rejected',
+      reject_reason_code: 'inaccurate',
+      reject_reason_display: 'Data atau lokasi tidak akurat: Koordinat meleset dari desa.',
+    });
+
+    const notif = await get('/api/v1/notifications?limit=20', userToken);
+    const items = (await notif.json()).data as Array<Record<string, unknown>>;
+    const rejectNotif = items.find(
+      (n) => n.type === 'place_contribution_rejected' && n.target_id === id,
+    );
+    expect(rejectNotif?.body).toContain(
+      'Alasan: Data atau lokasi tidak akurat: Koordinat meleset dari desa.',
+    );
+  });
+
+  it('self-review tanpa notifikasi: admin approve usulan sendiri', async () => {
+    const submit = await post(
+      '/api/v1/place-contributions',
+      {
+        slug: 'usulan-admin-sendiri-e2e',
+        name: 'Usulan Admin Sendiri',
+        category: 'wisata',
+        short_description: 'Diusulkan admin, direview admin.',
+      },
+      adminToken,
+    );
+    expect(submit.status).toBe(200);
+    const id = (await submit.json()).data.id as string;
+    expect(
+      (await post(`/api/v1/admin/place-contributions/${id}/approve`, {}, adminToken)).status,
+    ).toBe(200);
+    const notif = await get('/api/v1/notifications?limit=20', adminToken);
+    const items = (await notif.json()).data as Array<Record<string, unknown>>;
+    expect(items.find((n) => n.type === 'place_contribution_approved' && n.target_id === id)).toBeUndefined();
+  });
+
+  it('rate limit anonim: submit ke-6 tanpa token = 429, token tetap lolos', async () => {
+    // Submit anonim 5x pertama lolos, ke-6 kena tier 5/jam/IP.
+    for (let i = 0; i < 5; i++) {
+      const res = await post('/api/v1/place-contributions', {
+        slug: `anon-rate-e2e-${i}`,
+        name: `Usulan Anonim ${i}`,
+        category: 'wisata',
+        short_description: 'Rate limit probe.',
+      });
+      expect(res.status).toBe(200);
+    }
+    const sixth = await post('/api/v1/place-contributions', {
+      slug: 'anon-rate-e2e-5',
+      name: 'Usulan Anonim 5',
+      category: 'wisata',
+      short_description: 'Rate limit probe.',
+    });
+    expect(sixth.status).toBe(429);
+    expect((await sixth.json()).error_code).toBe('RATE_LIMITED');
+    // Request terautentikasi tidak ikut kena bucket anonim.
+    const authed = await post(
+      '/api/v1/place-contributions',
+      {
+        slug: 'anon-rate-e2e-authed',
+        name: 'Usulan Ber token',
+        category: 'wisata',
+        short_description: 'Rate limit probe.',
+      },
+      userToken,
+    );
+    expect(authed.status).toBe(200);
   });
 });

@@ -18,24 +18,28 @@ export type InboxNotificationType =
   | 'word_comment_mention'
   | 'word_vote'
   | 'campaign'
-  | 'verifier_application_approved'
-  | 'verifier_application_rejected';
+| 'verifier_application_approved'
+| 'verifier_application_rejected'
+| 'place_contribution_approved'
+| 'place_contribution_rejected';
 
 export type NotificationTargetKind =
   | 'contribution'
   | 'suggestion'
   | 'word'
-  | 'discussion'
-  | 'campaign'
-  | 'verifier_application';
+| 'discussion'
+| 'campaign'
+| 'verifier_application'
+| 'place_contribution';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
 export type NotificationActionKind =
   | 'word'
   | 'contribution'
   | 'suggestion'
-  | 'discussion'
-  | 'url';
+| 'discussion'
+| 'url'
+| 'place_contribution';
 
 export interface InboxNotification {
   id: string;
@@ -172,11 +176,23 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
         body: 'Pengajuanmu disetujui. Keluar lalu masuk lagi ya, biar peran Verifikator aktif di aplikasi.',
         bodyType: 'plain',
       };
-    case 'verifier_application_rejected':
-      return {
-        title: 'Pengajuan verifikator ditolak',
-        body: 'Pengajuan ditolak. Buka profil untuk memperbaiki.',
-        bodyType: 'plain',
-      };
-  }
+case 'verifier_application_rejected':
+return {
+title: 'Pengajuan verifikator ditolak',
+body: 'Pengajuan ditolak. Buka profil untuk memperbaiki.',
+bodyType: 'plain',
+};
+case 'place_contribution_approved':
+return {
+title: 'Usulan wisata disetujui',
+body: 'Usulanmu sudah tayang di daftar wisata. Terima kasih!',
+bodyType: 'plain',
+};
+case 'place_contribution_rejected':
+return {
+title: 'Usulan wisata ditolak',
+body: 'Usulanmu belum lolos tinjauan. Buka daftar usulan untuk detailnya.',
+bodyType: 'plain',
+};
+}
 }

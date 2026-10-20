@@ -110,7 +110,7 @@ export interface ReviewCommand {
 // patch diterapkan, is_corrected=true, tapi status tetap 'pending_review'
 // dan tidak ada keputusan review (kontribusi tetap di antrean).
 export interface ApplyChildCorrectionCommand {
-  entityType: 'pronunciation' | 'word_image' | 'word_audio' | 'example' | 'meaning';
+entityType: 'pronunciation' | 'word_image' | 'word_audio' | 'example' | 'meaning';
   entityId: string;
   actorId: string;
   pronunciation?: PronunciationPatch;
