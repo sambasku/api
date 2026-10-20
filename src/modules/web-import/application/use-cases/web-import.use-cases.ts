@@ -31,6 +31,7 @@ export type SubmitWebImportResult = {
   status: WebImportStatus;
   totalRows: number;
   officerName: string;
+  createdAt: Date;
 };
 
 function normalizeType(raw: string | null | undefined): string | null {
@@ -152,6 +153,7 @@ export class SubmitWebImportUseCase {
       status: created.status,
       totalRows: created.totalRows,
       officerName: created.officerName,
+      createdAt: created.createdAt,
     };
   }
 }

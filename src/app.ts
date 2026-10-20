@@ -485,7 +485,6 @@ import {
   RejectWebImportUseCase,
   SubmitWebImportUseCase,
 } from '@/modules/web-import/application/use-cases/web-import.use-cases';
-import { WEB_IMPORT_USER_ID } from '@/shared/constants/web-importer';
 import { createVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/verifier-application.routes';
 import { createAdminVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/admin-verifier-application.routes';
 import { WaTemplateRepositoryImpl, WaMessageLogRepositoryImpl, WaUsageRepositoryImpl } from '@/modules/wa/infrastructure/wa-message.repository.impl';
@@ -1741,12 +1740,12 @@ updateScreenshot: new UpdateVerifierApplicationScreenshotUseCase(verifierApplica
 });
 const webImportRepo = new WebImportRepositoryImpl(db);
 const webImportController = new WebImportController(
-  new SubmitWebImportUseCase(webImportRepo),
+  new SubmitWebImportUseCase(webImportRepo, auditRepo),
   new ListWebImportsUseCase(webImportRepo),
   new GetWebImportUseCase(webImportRepo),
   new PreviewWebImportUseCase(webImportRepo),
-  new ApproveWebImportUseCase(webImportRepo),
-  new RejectWebImportUseCase(webImportRepo),
+  new ApproveWebImportUseCase(webImportRepo, auditRepo),
+  new RejectWebImportUseCase(webImportRepo, auditRepo),
 );
 app.route(
   '/api/v1/web-imports',

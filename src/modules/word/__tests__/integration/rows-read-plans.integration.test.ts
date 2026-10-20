@@ -13,8 +13,8 @@ const hasTestDb = !!parsed?.DATABASE_URL;
 describe.skipIf(!hasTestDb)('Query plan hemat rows read (0083)', () => {
   const client = getTestClient();
 
-  async function plan(sql: string, args: unknown[] = []): Promise<string> {
-    const rs = await client.execute({ sql: `EXPLAIN QUERY PLAN ${sql}`, args });
+  async function plan(sql: string, args: (string | number)[] = []): Promise<string> {
+    const rs = await client.execute(`EXPLAIN QUERY PLAN ${sql}`, args);
     return rs.rows
       .map((r) => {
         const row = r as Record<string, unknown>;

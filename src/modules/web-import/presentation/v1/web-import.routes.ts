@@ -13,12 +13,11 @@ import {
   previewWebImportQuerySchema,
   rejectWebImportBodySchema,
   submitWebImportBodySchema,
-  webImportDetailResponseSchema,
-  webImportListResponseSchema,
-  webImportPreviewResponseSchema,
-  webImportResponseSchema,
-  webImportSubmitResponseSchema,
-  webImportIdParamSchema,
+  listWebImportsResponseSchema,
+  previewWebImportResponseSchema,
+  getWebImportResponseSchema,
+  submitWebImportResponseSchema,
+  webImportIdParamsSchema,
 } from './validators/web-import.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -37,7 +36,7 @@ export function createPublicWebImportRoutes(deps: { controller: WebImportControl
     summary: 'Submit pengajuan impor lemma (publik, tanpa login)',
     request: { body: { content: json(submitWebImportBodySchema) } },
     responses: {
-      201: { description: 'Pengajuan diterima', content: json(webImportSubmitResponseSchema) },
+      201: { description: 'Pengajuan diterima', content: json(submitWebImportResponseSchema) },
       400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
       429: { description: 'Rate limit terlampaui', content: json(errorResponseSchema) },
     },
@@ -72,7 +71,7 @@ export function createAdminWebImportRoutes(deps: {
     summary: 'Daftar pengajuan impor web (admin/root/reviewer, cursor)',
     request: { query: listWebImportsQuerySchema },
     responses: {
-      200: { description: 'Daftar pengajuan', content: json(webImportListResponseSchema) },
+      200: { description: 'Daftar pengajuan', content: json(listWebImportsResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
       403: { description: 'Bukan admin/root/reviewer', content: json(errorResponseSchema) },
     },
@@ -83,9 +82,9 @@ export function createAdminWebImportRoutes(deps: {
     path: '/:id',
     tags: ['Web imports', 'Admin'],
     summary: 'Detail pengajuan impor web',
-    request: { params: webImportIdParamSchema },
+    request: { params: webImportIdParamsSchema },
     responses: {
-      200: { description: 'Detail pengajuan', content: json(webImportResponseSchema) },
+      200: { description: 'Detail pengajuan', content: json(getWebImportResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
       403: { description: 'Bukan admin/root/reviewer', content: json(errorResponseSchema) },
       404: { description: 'Pengajuan tidak ditemukan', content: json(errorResponseSchema) },
@@ -97,9 +96,9 @@ export function createAdminWebImportRoutes(deps: {
     path: '/:id/preview',
     tags: ['Web imports', 'Admin'],
     summary: 'Preview baris pengajuan impor web',
-    request: { params: webImportIdParamSchema, query: previewWebImportQuerySchema },
+    request: { params: webImportIdParamsSchema, query: previewWebImportQuerySchema },
     responses: {
-      200: { description: 'Preview baris', content: json(webImportPreviewResponseSchema) },
+      200: { description: 'Preview baris', content: json(previewWebImportResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
       403: { description: 'Bukan admin/root/reviewer', content: json(errorResponseSchema) },
       404: { description: 'Pengajuan tidak ditemukan', content: json(errorResponseSchema) },
@@ -112,11 +111,11 @@ export function createAdminWebImportRoutes(deps: {
     tags: ['Web imports', 'Admin'],
     summary: 'Setujui pengajuan impor web',
     request: {
-      params: webImportIdParamSchema,
+      params: webImportIdParamsSchema,
       body: { content: json(approveWebImportBodySchema) },
     },
     responses: {
-      200: { description: 'Disetujui', content: json(webImportResponseSchema) },
+      200: { description: 'Disetujui', content: json(getWebImportResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
       403: { description: 'Bukan admin/root/reviewer', content: json(errorResponseSchema) },
       404: { description: 'Pengajuan tidak ditemukan', content: json(errorResponseSchema) },
@@ -130,11 +129,11 @@ export function createAdminWebImportRoutes(deps: {
     tags: ['Web imports', 'Admin'],
     summary: 'Tolak pengajuan impor web (note wajib)',
     request: {
-      params: webImportIdParamSchema,
+      params: webImportIdParamsSchema,
       body: { content: json(rejectWebImportBodySchema) },
     },
     responses: {
-      200: { description: 'Ditolak', content: json(webImportResponseSchema) },
+      200: { description: 'Ditolak', content: json(getWebImportResponseSchema) },
       400: { description: 'Note wajib', content: json(errorResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
       403: { description: 'Bukan admin/root/reviewer', content: json(errorResponseSchema) },
@@ -144,15 +143,15 @@ export function createAdminWebImportRoutes(deps: {
   });
 
   routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
-  routes.openapi(detailRoute, (c) => deps.controller.getById(c, c.req.param('id')) as never);
+  routes.openapi(detailRoute, (c) => deps.controller.getById(c, c.req.valid('param')) as never);
   routes.openapi(previewRoute, (c) =>
-    deps.controller.preview(c, c.req.param('id'), c.req.valid('query')) as never,
+    deps.controller.preview(c, c.req.valid('param'), c.req.valid('query')) as never,
   );
   routes.openapi(approveRoute, (c) =>
-    deps.controller.approve(c, c.req.param('id'), c.req.valid('json')) as never,
+    deps.controller.approve(c, c.req.valid('param'), c.req.valid('json')) as never,
   );
   routes.openapi(rejectRoute, (c) =>
-    deps.controller.reject(c, c.req.param('id'), c.req.valid('json')) as never,
+    deps.controller.reject(c, c.req.valid('param'), c.req.valid('json')) as never,
   );
 
   return routes;

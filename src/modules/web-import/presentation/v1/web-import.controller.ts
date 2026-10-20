@@ -81,7 +81,16 @@ export class WebImportController {
     body: z.infer<typeof submitWebImportBodySchema>,
   ) {
     return this.submitUc
-      .execute(body)
+      .execute({
+        officerName: body.officer_name,
+        sourceLabel: body.source_label,
+        supportName: body.support_name,
+        supportType: body.support_type,
+        supportAddress: body.support_address,
+        supportTitle: body.support_title,
+        supportDesc: body.support_desc,
+        rows: body.rows,
+      })
       .then((r) =>
         c.json(
           {
@@ -171,7 +180,7 @@ export class WebImportController {
     body: z.infer<typeof approveWebImportBodySchema>,
   ) {
     return this.approveUc
-      .execute(params.id, c.get('user')!.user_id, body.note)
+      .execute({ id: params.id, actorId: c.get('user')!.user_id, note: body.note })
       .then((r) =>
         c.json(
           {
@@ -189,7 +198,7 @@ export class WebImportController {
     body: z.infer<typeof rejectWebImportBodySchema>,
   ) {
     return this.rejectUc
-      .execute(params.id, c.get('user')!.user_id, body.note)
+      .execute({ id: params.id, actorId: c.get('user')!.user_id, note: body.note })
       .then((r) =>
         c.json(
           {
