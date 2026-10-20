@@ -14,6 +14,7 @@ wordAudios,
 wordCategories,
 wordImages,
 wordVariants,
+  userRoles,
   users,
   wordClasses,
   words,
@@ -600,11 +601,17 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
   });
 
   it('findDetailById: lengkap untuk published, null untuk draft', async () => {
+    await db.insert(userRoles).values({ userId: ACTOR, role: 'contributor' });
     const published = await repo.saveWithRelations(baseWord({ lemma: 'terbit' }), ACTOR);
     await repo.saveWithRelations(baseWord({ lemma: 'konsep', status: 'draft' }), ACTOR);
 
     const detail = await repo.findDetailById(published.id);
     expect(detail?.lemma).toBe('terbit');
+    expect(detail?.meanings[0].creator).toEqual({
+      username: 'actor',
+      displayName: 'actor',
+      role: 'contributor',
+    });
     expect(detail?.meanings[0].wordClass).toMatchObject({ id: NOMINA, code: 'n', name: 'Nomina' });
     expect(detail?.meanings[0].translations.map((t) => t.translationText)).toEqual(['makan', 'sudah makan']);
     expect(detail?.meanings[0].examples[0].targetSentence).toBe('Kami sudah makan tadi.');

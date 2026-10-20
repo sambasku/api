@@ -97,7 +97,11 @@ export interface WordEditSuggestion {
   wordLemma?: string;
 }
 
+export type SuggestionWordType = 'word' | 'idiom' | 'peribahasa' | 'ungkapan';
+
 export interface ProposedChanges {
+  /** Jenis entri. Bukan kelas kata (itu di makna). */
+  wordType?: SuggestionWordType;
   lemma?: string;
   notes?: string;
   meanings?: MeaningChange[];
@@ -160,6 +164,7 @@ export interface SuggestionSummary {
   summaryChanges: {
     lemma: string | null;
     notes: string | null;
+    wordType: string | null;
     meaningsCount: number;
     categoriesAdded: number;
     categoriesRemoved: number;
@@ -178,6 +183,7 @@ export interface SuggestionDetail {
 export interface CurrentWordSnapshot {
   lemma: string;
   notes: string | null;
+  wordType: string;
   meanings: CurrentMeaningSnapshot[];
   categoryIds: string[];
   relations: { relationType: string; wordId: string; lemma: string }[];
@@ -188,6 +194,8 @@ export interface CurrentWordSnapshot {
 export interface CurrentMeaningSnapshot {
   id: string;
   wordClass: { code: string; name: string };
+  /** Id kelas saat ini. Tidak dikirim ke klien. */
+  wordClassId: string | null;
   definition: string;
   translations: { translationText: string }[];
 }
@@ -195,6 +203,7 @@ export interface CurrentMeaningSnapshot {
 export interface DiffResult {
   lemma: DiffField;
   notes: DiffField;
+  wordType: DiffField;
   meanings: DiffMeaning[];
   categories: { added: string[]; removed: string[] };
   relations: {
@@ -218,6 +227,8 @@ export interface DiffResult {
 }
 
 export interface DiffField {
+  /** Nama field bila satu objek diff memuat lebih dari satu kolom (mis. kelas kata). */
+  label?: string;
   current: string | null;
   proposed: string | null;
   changed: boolean;

@@ -41,6 +41,14 @@ describe('checkSuggestionCategoryShape', () => {
     expect(issues).toHaveLength(1);
   });
 
+  it('kategori menolak jenis entri yang dicampur', () => {
+    const issues = checkSuggestionCategoryShape('change_meaning', {
+      wordType: 'ungkapan',
+      meanings: [{ action: 'update', meaningId: MEANING, definition: 'x' }],
+    });
+    expect(issues.map((i) => i.field)).toContain('word_type');
+  });
+
   it('kode lama tidak dicek', () => {
     expect(
       checkSuggestionCategoryShape('typo', {
@@ -63,6 +71,10 @@ describe('checkSuggestionCategoryShape', () => {
 });
 
 describe('isRevertibleForApplyPending', () => {
+  it('jenis entri boleh dikembalikan saat ditolak', () => {
+    expect(isRevertibleForApplyPending({ wordType: 'ungkapan' })).toBe(true);
+  });
+
   it('teks dan foto baru boleh langsung tayang', () => {
     expect(
       isRevertibleForApplyPending({

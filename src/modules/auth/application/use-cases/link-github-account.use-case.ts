@@ -55,7 +55,7 @@ export class UnlinkGithubAccountUseCase {
     if (!hasPassword && otherIdentities.length === 0) {
       throw new ConflictError(
         'LAST_AUTH_METHOD',
-        'Setel password dulu sebelum melepas GitHub. Gunakan lupa password jika belum punya.',
+        'Setel password dulu sebelum melepas GitHub. Buat password dari menu profil.',
       );
     }
 

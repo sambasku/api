@@ -27,6 +27,7 @@ import {
   publicAccountDisplayName,
   publicAccountName,
 } from '@/shared/constants/deleted-account';
+import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { ConflictError, ValidationError } from '@/shared/errors/app-error';
 import { wordImageIsAutoVerified } from '../domain/word-image-provider';
 import {
@@ -730,6 +731,9 @@ export class WordRepositoryImpl implements WordRepository {
 
     const wordClassIds = [...new Set(meaningRows.map((m) => m.wordClassId).filter((x): x is string => !!x))];
     const meaningIds = meaningRows.map((m) => m.id);
+    const meaningCreatorIds = [
+      ...new Set(meaningRows.map((m) => m.createdBy).filter((x): x is string => !!x)),
+    ];
 
     // Child SELECTs independen setelah meanings → 1 batch (hemat subrequest Workers).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -739,6 +743,21 @@ export class WordRepositoryImpl implements WordRepository {
     if (wordClassIds.length > 0) {
       batchKeys.push('wc');
       batchQueries.push(this.db.select().from(wordClasses).where(inArray(wordClasses.id, wordClassIds)));
+    }
+    if (meaningCreatorIds.length > 0) {
+      batchKeys.push('meaningCreators');
+      batchQueries.push(
+        this.db
+          .select({
+            id: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            deletedAt: users.deletedAt,
+            role: highestUserRoleSql,
+          })
+          .from(users)
+          .where(inArray(users.id, meaningCreatorIds)),
+      );
     }
     if (meaningIds.length > 0) {
       batchKeys.push('translations');
@@ -881,6 +900,15 @@ export class WordRepositoryImpl implements WordRepository {
     }>('wc');
     const wcById = new Map(wcRows.map((wc) => [wc.id, wc]));
 
+    const meaningCreatorRows = pick<{
+      id: string;
+      username: string;
+      displayName: string;
+      deletedAt: Date | null;
+      role: string | null;
+    }>('meaningCreators');
+    const meaningCreatorById = new Map(meaningCreatorRows.map((u) => [u.id, u]));
+
     const translationRows = pick<(typeof meaningTranslations.$inferSelect)>('translations');
     const exampleRows = pick<(typeof examples.$inferSelect)>('examples');
     const categoryRows = pick<{ id: string; name: string }>('categories');
@@ -957,6 +985,19 @@ export class WordRepositoryImpl implements WordRepository {
         meaningSource: (m.meaningSource as 'manual' | 'kbbi' | 'kbbi_edited') ?? 'manual',
         orderIndex: m.orderIndex,
         notes: m.notes,
+        creator: (() => {
+          if (!m.createdBy) return null;
+          const person = meaningCreatorById.get(m.createdBy);
+          if (!person || person.role == null) return null;
+          const username = publicAccountName(person.username, person.deletedAt);
+          const displayName = publicAccountDisplayName(
+            person.displayName,
+            person.username,
+            person.deletedAt,
+          );
+          if (!username || !displayName) return null;
+          return { username, displayName, role: person.role };
+        })(),
         translations: translationRows
           .filter((t) => t.meaningId === m.id)
           .map((t) => ({

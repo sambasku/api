@@ -17,7 +17,7 @@ export const places = sqliteTable(
     mapsUrl: text('maps_url'),
     shortDescription: text('short_description').notNull(),
     regionId: text('region_id'),
-    /** Id desa di regions.json (`parentId` = region_id). Null = belum masuk desa. */
+    /** ULID desa di `regions`. Null = belum masuk desa. */
     villageId: text('village_id'),
     hours: text('hours'),
     contact: text('contact'),

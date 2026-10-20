@@ -10,6 +10,7 @@ import type { RegionController } from './region.controller';
 import {
   createRegionBodySchema,
   listRegionsQuerySchema,
+  regionCatalogResponseSchema,
   regionIdQuerySchema,
   regionItemResponseSchema,
   regionListResponseSchema,
@@ -36,11 +37,21 @@ export function createPublicRegionRoutes(deps: { controller: RegionController })
     },
   });
 
+  const catalogRoute = createRoute({
+    method: 'get',
+    path: '/catalog',
+    tags: ['Regions'],
+    summary: 'Katalog wilayah published untuk peta Eksplorasi (slug, satu response)',
+    responses: {
+      200: { description: 'Seluruh kecamatan dan desa', content: json(regionCatalogResponseSchema) },
+    },
+  });
+
   const getRoute = createRoute({
     method: 'get',
     path: '/by-id',
     tags: ['Regions'],
-    summary: 'Detail wilayah by id (publik; id desa boleh mengandung /)',
+    summary: 'Detail wilayah by id (ULID)',
     request: { query: regionIdQuerySchema },
     responses: {
       200: { description: 'Detail wilayah', content: json(regionItemResponseSchema) },
@@ -49,6 +60,7 @@ export function createPublicRegionRoutes(deps: { controller: RegionController })
   });
 
   routes.openapi(listRoute, (c) => deps.controller.listPublic(c, c.req.valid('query')) as never);
+  routes.openapi(catalogRoute, (c) => deps.controller.catalog(c) as never);
   routes.openapi(getRoute, (c) => deps.controller.getById(c, c.req.valid('query').id) as never);
   return routes;
 }

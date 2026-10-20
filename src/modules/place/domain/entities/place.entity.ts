@@ -40,7 +40,7 @@ export interface Place {
   mapsUrl: string | null;
   shortDescription: string;
   regionId: string | null;
-  /** Id desa (`regions.json`). Null kalau place masih di level kecamatan. */
+  /** ULID desa di `regions`. Null kalau place masih di level kecamatan. */
   villageId: string | null;
   hours: string | null;
   contact: string | null;

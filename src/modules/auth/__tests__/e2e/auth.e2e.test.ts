@@ -499,6 +499,107 @@ describe.skipIf(!hasTestDb)('Auth E2E', () => {
     expect(me.status).toBe(200);
   });
 
+  it('POST /set-password google → login password sukses, Google tetap bisa', async () => {
+    const email = unique();
+    await withGoogleVerifier(
+      {
+        verify: async () => ({
+          sub: `sub-${email}`,
+          email,
+          emailVerified: true,
+          name: 'Google User',
+        }),
+      },
+      async () => {
+        const login = await postGoogle({ id_token: 'fake-id-token', client_type: 'mobile' });
+        expect(login.status).toBe(200);
+        const loginBody = await jsonBody(login);
+        const token = loginBody.data.access_token as string;
+
+        const res = await app.request('/api/v1/auth/set-password', {
+          method: 'POST',
+          body: JSON.stringify({
+            provider: 'google',
+            id_token: 'fake-id-token',
+            new_password: 'PasswordBaru123',
+            confirm_password: 'PasswordBaru123',
+          }),
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${token}`,
+            ...xff(),
+          },
+        });
+        expect(res.status).toBe(200);
+        const body = await jsonBody(res);
+        expect(body.data.login_with).toBe(email);
+        expect(body.data.message).toEqual(expect.any(String));
+
+        const refreshRes = await client.api.v1.auth.refresh.$post({
+          json: { refresh_token: loginBody.data.refresh_token },
+        });
+        expect(refreshRes.status).toBe(401);
+        expect((await loginMobile(email, 'PasswordBaru123')).status).toBe(200);
+
+        const again = await postGoogle({ id_token: 'fake-id-token', client_type: 'mobile' });
+        expect(again.status).toBe(200);
+      },
+    );
+  });
+
+  it('POST /set-password confirm beda → 400, tanpa token → 401, akun ber-password → 409', async () => {
+    const email = unique();
+    await registerAndVerify(email);
+    const login = await loginMobile(email, 'Password123');
+    const token = login.body.data.access_token as string;
+
+    const mismatch = await app.request('/api/v1/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'google',
+        id_token: 'fake',
+        new_password: 'PasswordBaru123',
+        confirm_password: 'BedaSekali123',
+      }),
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+        ...xff(),
+      },
+    });
+    expect(mismatch.status).toBe(400);
+    expect((await mismatch.json()).error_code).toBe('VALIDATION_ERROR');
+
+    const noToken = await app.request('/api/v1/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'google',
+        id_token: 'fake',
+        new_password: 'PasswordBaru123',
+        confirm_password: 'PasswordBaru123',
+      }),
+      headers: { 'content-type': 'application/json', ...xff() },
+    });
+    expect(noToken.status).toBe(401);
+
+    const already = await app.request('/api/v1/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'google',
+        id_token: 'fake',
+        new_password: 'PasswordBaru123',
+        confirm_password: 'PasswordBaru123',
+      }),
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+        ...xff(),
+      },
+    });
+    expect(already.status).toBe(409);
+    expect((await already.json()).error_code).toBe('PASSWORD_ALREADY_SET');
+  });
+
   it('POST /google token invalid → 401 INVALID_GOOGLE_TOKEN', async () => {
     const { UnauthorizedError } = await import('@/shared/errors/app-error');
     const res = await withGoogleVerifier(

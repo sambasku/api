@@ -145,6 +145,24 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl.createSuggestion', () 
     expect(word.isVerified).toBe(true);
     expect(word.verifiedBy).toBe(REVIEWER);
   });
+
+  it('jenis entri dari kontributor pada kata terverifikasi menunggu persetujuan', async () => {
+    const suggestion = await repo.createSuggestion(
+      KONTRIBUTOR,
+      WORD,
+      { wordType: 'ungkapan' },
+      'Ubah jenis / kelas kata',
+      'other',
+      'contributor',
+    );
+    expect(suggestion.status).toBe('pending');
+    const [before] = await db.select().from(words).where(eq(words.id, WORD));
+    expect(before.wordType).toBe('word');
+
+    await repo.approveSuggestion(suggestion.id, REVIEWER, 'jenisnya ungkapan');
+    const [after] = await db.select().from(words).where(eq(words.id, WORD));
+    expect(after.wordType).toBe('ungkapan');
+  });
 });
 
 describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
@@ -256,6 +274,45 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
         'contributor',
       ),
     ).rejects.toMatchObject({ errorCode: 'SUGGESTION_STALE_DATA', statusCode: 409 });
+  });
+
+  it('ubah jenis lalu ditolak mengembalikan jenis semula', async () => {
+    const suggestion = await repo.createSuggestion(
+      KONTRIBUTOR,
+      WORD,
+      { wordType: 'peribahasa' },
+      'Ubah jenis / kelas kata',
+      'other',
+      'contributor',
+    );
+    const [applied] = await db.select().from(words).where(eq(words.id, WORD));
+    expect(applied.wordType).toBe('peribahasa');
+
+    await repo.rejectSuggestion(suggestion.id, REVIEWER, 'bukan peribahasa');
+    const [restored] = await db.select().from(words).where(eq(words.id, WORD));
+    expect(restored.wordType).toBe('word');
+  });
+
+  it('jenis kata ditolak bila masih ada komponen frasa', async () => {
+    await db.update(words).set({ wordType: 'ungkapan' }).where(eq(words.id, WORD));
+    await db.insert(lexicalRelations).values({
+      sourceWordId: WORD,
+      targetWordId: OTHER_WORD,
+      relationType: 'has_component',
+      createdBy: OWNER,
+    });
+    await expect(
+      repo.createSuggestion(
+        KONTRIBUTOR,
+        WORD,
+        { wordType: 'word' },
+        'Ubah jenis / kelas kata',
+        'other',
+        'contributor',
+      ),
+    ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
+    const [word] = await db.select().from(words).where(eq(words.id, WORD));
+    expect(word.wordType).toBe('ungkapan');
   });
 
   it('ubah makna yang isinya sama ditolak', async () => {

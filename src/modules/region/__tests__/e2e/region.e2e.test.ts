@@ -78,7 +78,7 @@ describe.skipIf(!hasTestDb)('Region E2E - CRUD admin + list publik', () => {
     const kecRes = await post(
       '/api/v1/admin/regions',
       {
-        id: 'pemangkat-e2e',
+        slug: 'pemangkat-e2e',
         name: 'Pemangkat E2E',
         type: 'kecamatan',
         lat: 1.17,
@@ -87,45 +87,57 @@ describe.skipIf(!hasTestDb)('Region E2E - CRUD admin + list publik', () => {
       adminToken,
     );
     expect(kecRes.status).toBe(200);
-    expect((await kecRes.json()).data.type).toBe('kecamatan');
+    const kec = (await kecRes.json()).data;
+    expect(kec.type).toBe('kecamatan');
+    expect(kec.slug).toBe('pemangkat-e2e');
+    expect(kec.id).toHaveLength(26);
 
     const desaRes = await post(
       '/api/v1/admin/regions',
       {
-        id: 'pemangkat-e2e/perapakan',
+        slug: 'pemangkat-e2e/perapakan',
         name: 'Perapakan',
         type: 'desa',
-        parent_id: 'pemangkat-e2e',
+        parent_id: kec.id,
         code: '6101020011',
       },
       adminToken,
     );
     expect(desaRes.status).toBe(200);
-    expect((await desaRes.json()).data.parent_id).toBe('pemangkat-e2e');
+    const desa = (await desaRes.json()).data;
+    expect(desa.parent_id).toBe(kec.id);
+    expect(desa.id).toHaveLength(26);
 
-    const listRes = await get('/api/v1/regions?type=desa&parent_id=pemangkat-e2e');
+    const catalogRes = await get('/api/v1/regions/catalog');
+    expect(catalogRes.status).toBe(200);
+    const catalog = (await catalogRes.json()).data.regions as Array<{
+      id: string;
+      parent_id: string | null;
+      type: string;
+    }>;
+    expect(catalog.find((r) => r.id === 'pemangkat-e2e')?.type).toBe('kecamatan');
+    expect(catalog.find((r) => r.id === 'pemangkat-e2e/perapakan')?.parent_id).toBe('pemangkat-e2e');
+
+    const listRes = await get(`/api/v1/regions?type=desa&parent_id=${kec.id}`);
     expect(listRes.status).toBe(200);
     const items = (await listRes.json()).data.items;
-    expect(items.some((r: { id: string }) => r.id === 'pemangkat-e2e/perapakan')).toBe(true);
+    expect(items.some((r: { id: string }) => r.id === desa.id)).toBe(true);
 
-    const detailRes = await get('/api/v1/regions/by-id?id=pemangkat-e2e%2Fperapakan');
+    const detailRes = await get(`/api/v1/regions/by-id?id=${desa.id}`);
     expect(detailRes.status).toBe(200);
     expect((await detailRes.json()).data.name).toBe('Perapakan');
 
-    const blockParent = await del('/api/v1/admin/regions/by-id?id=pemangkat-e2e', adminToken);
+    const blockParent = await del(`/api/v1/admin/regions/by-id?id=${kec.id}`, adminToken);
     expect(blockParent.status).toBe(409);
     expect((await blockParent.json()).error_code).toBe('REGION_HAS_CHILDREN');
 
-    const delDesa = await del(
-      '/api/v1/admin/regions/by-id?id=pemangkat-e2e%2Fperapakan',
-      adminToken,
-    );
+    const delDesa = await del(`/api/v1/admin/regions/by-id?id=${desa.id}`, adminToken);
     expect(delDesa.status).toBe(200);
 
-    const delKec = await del('/api/v1/admin/regions/by-id?id=pemangkat-e2e', adminToken);
+    const delKec = await del(`/api/v1/admin/regions/by-id?id=${kec.id}`, adminToken);
     expect(delKec.status).toBe(200);
 
-    const gone = await get('/api/v1/regions/by-id?id=pemangkat-e2e');
+    const gone = await get(`/api/v1/regions/by-id?id=${kec.id}`);
     expect(gone.status).toBe(404);
   });
 });

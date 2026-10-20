@@ -1,14 +1,17 @@
-import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
+import { and, asc, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { places } from '@/shared/database/drizzle/schema/places.schema';
 import { regions } from '@/shared/database/drizzle/schema/regions.schema';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { ConflictError } from '@/shared/errors/app-error';
+import { generateId } from '@/shared/utils/ulid';
 import type { Region } from '../domain/entities/region.entity';
 import type {
   CreateRegionInput,
   ListRegionsInput,
   ListRegionsResult,
+  RegionCatalogItem,
   RegionRepository,
   UpdateRegionInput,
 } from '../domain/repositories/region.repository';
@@ -18,6 +21,7 @@ type RegionRow = typeof regions.$inferSelect;
 function mapRegion(row: RegionRow): Region {
   return {
     id: row.id,
+    slug: row.slug,
     name: row.name,
     type: row.type,
     parentId: row.parentId ?? null,
@@ -37,7 +41,8 @@ export class RegionRepositoryImpl implements RegionRepository {
   async create(input: CreateRegionInput): Promise<Region> {
     try {
       await this.db.insert(regions).values({
-        id: input.id,
+        id: generateId(),
+        slug: input.slug,
         name: input.name,
         type: input.type,
         parentId: input.parentId ?? null,
@@ -54,7 +59,7 @@ export class RegionRepositoryImpl implements RegionRepository {
       }
       throw e;
     }
-    const created = await this.findById(input.id);
+    const created = await this.findBySlug(input.slug);
     if (!created) throw new Error('Region create gagal - row tidak ketemu');
     return created;
   }
@@ -98,6 +103,15 @@ export class RegionRepositoryImpl implements RegionRepository {
     return row ? mapRegion(row) : null;
   }
 
+  async findBySlug(slug: string): Promise<Region | null> {
+    const [row] = await this.db
+      .select()
+      .from(regions)
+      .where(and(eq(regions.slug, slug), isNull(regions.deletedAt)))
+      .limit(1);
+    return row ? mapRegion(row) : null;
+  }
+
   async list(input: ListRegionsInput): Promise<ListRegionsResult> {
     const conds = [isNull(regions.deletedAt)];
     if (input.publicOnly) conds.push(eq(regions.status, 'published'));
@@ -106,7 +120,7 @@ export class RegionRepositoryImpl implements RegionRepository {
     if (input.parentId) conds.push(eq(regions.parentId, input.parentId));
     if (input.q?.trim()) {
       const q = `%${input.q.trim()}%`;
-      conds.push(or(ilikeCompat(regions.name, q), ilikeCompat(regions.id, q))!);
+      conds.push(or(ilikeCompat(regions.name, q), ilikeCompat(regions.slug, q))!);
     }
     if (input.before) conds.push(lt(regions.id, input.before));
 
@@ -124,6 +138,33 @@ export class RegionRepositoryImpl implements RegionRepository {
       items,
       nextCursor: hasMore ? items[items.length - 1].id : null,
     };
+  }
+
+  async listPublishedCatalog(): Promise<RegionCatalogItem[]> {
+    const parent = alias(regions, 'region_parent');
+    const rows = await this.db
+      .select({
+        slug: regions.slug,
+        name: regions.name,
+        type: regions.type,
+        parentSlug: parent.slug,
+        code: regions.code,
+        lat: regions.lat,
+        lng: regions.lng,
+      })
+      .from(regions)
+      .leftJoin(parent, eq(regions.parentId, parent.id))
+      .where(and(isNull(regions.deletedAt), eq(regions.status, 'published')))
+      .orderBy(desc(regions.type), asc(regions.name));
+    return rows.map((row) => ({
+      id: row.slug,
+      name: row.name,
+      type: row.type,
+      parentId: row.parentSlug ?? null,
+      code: row.code ?? null,
+      lat: row.lat ?? null,
+      lng: row.lng ?? null,
+    }));
   }
 
   async countActiveChildren(parentId: string): Promise<number> {

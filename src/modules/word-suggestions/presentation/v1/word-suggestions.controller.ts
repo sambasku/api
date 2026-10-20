@@ -174,6 +174,7 @@ export class WordSuggestionController {
           summary_changes: {
             lemma: item.summaryChanges.lemma,
             notes: item.summaryChanges.notes,
+            word_type: item.summaryChanges.wordType,
             meanings_count: item.summaryChanges.meaningsCount,
             categories_added: item.summaryChanges.categoriesAdded,
             categories_removed: item.summaryChanges.categoriesRemoved,
@@ -224,6 +225,7 @@ export class WordSuggestionController {
           current_word: {
             lemma: detail.currentWord.lemma,
             notes: detail.currentWord.notes,
+            word_type: detail.currentWord.wordType,
             meanings: detail.currentWord.meanings.map((m) => ({
               id: m.id,
               word_class: m.wordClass.code ? m.wordClass : null,
@@ -253,6 +255,7 @@ export class WordSuggestionController {
           diff: {
             lemma: detail.diff.lemma,
             notes: detail.diff.notes,
+            word_type: detail.diff.wordType,
             meanings: detail.diff.meanings.map((m) => ({
               meaning_id: m.meaningId,
               changes: m.changes,

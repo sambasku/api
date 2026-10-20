@@ -66,6 +66,7 @@ describe('GetMyProfileUseCase', () => {
 
 function makeRegion(overrides: Partial<Region> & Pick<Region, 'id' | 'type'>): Region {
   return {
+    slug: overrides.id,
     name: overrides.id,
     parentId: null,
     code: null,

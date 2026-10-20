@@ -12,6 +12,7 @@ import { config } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { closeDb, db } from '@/shared/database/drizzle/client';
 import { regions } from '@/shared/database/drizzle/schema/regions.schema';
+import { regionSeedId } from '@/shared/utils/region-seed-id';
 
 config({ quiet: true });
 
@@ -47,11 +48,13 @@ for (const r of list) {
     skip++;
     continue;
   }
+  const id = regionSeedId(r.id);
   const values = {
-    id: r.id,
+    id,
+    slug: r.id,
     name: r.name,
     type: r.type,
-    parentId: r.type === 'desa' ? (r.parentId ?? null) : null,
+    parentId: r.type === 'desa' && r.parentId ? regionSeedId(r.parentId) : null,
     code: r.code ?? null,
     lat: r.lat ?? null,
     lng: r.lng ?? null,
@@ -60,11 +63,12 @@ for (const r of list) {
     updatedAt: new Date(),
   };
 
-  const [existing] = await db.select({ id: regions.id }).from(regions).where(eq(regions.id, r.id)).limit(1);
+  const [existing] = await db.select({ id: regions.id }).from(regions).where(eq(regions.id, id)).limit(1);
   if (existing) {
     await db
       .update(regions)
       .set({
+        slug: values.slug,
         name: values.name,
         type: values.type,
         parentId: values.parentId,
@@ -75,7 +79,7 @@ for (const r of list) {
         updatedAt: values.updatedAt,
         deletedAt: null,
       })
-      .where(eq(regions.id, r.id));
+      .where(eq(regions.id, id));
   } else {
     await db.insert(regions).values({
       ...values,

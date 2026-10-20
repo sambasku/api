@@ -52,6 +52,8 @@ export interface MeaningDetail extends Meaning {
     isVerified?: boolean;
     isCorrected?: boolean;
   }[];
+  /** JOIN users pada meanings.created_by. Null kalau kolom kosong atau user hilang. */
+  creator: { username: string; displayName: string; role: string } | null;
 }
 
 /** 17-api-usul-definisi.md: hasil POST /words/:wordId/meanings (per role). */

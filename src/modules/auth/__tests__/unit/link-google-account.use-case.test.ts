@@ -148,9 +148,13 @@ describe('ListAuthProvidersUseCase', () => {
     const identityRepo = {
       listActiveByUserId: vi.fn().mockResolvedValue([identity]),
     } as unknown as AuthIdentityRepository;
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser({ passwordHash: null })),
+    } as unknown as UserRepository;
 
-    const items = await new ListAuthProvidersUseCase(identityRepo).execute(USER_ID);
-    expect(items).toEqual([{ provider: 'google', linkedAt: identity.createdAt }]);
+    const view = await new ListAuthProvidersUseCase(identityRepo, userRepo).execute(USER_ID);
+    expect(view.providers).toEqual([{ provider: 'google', linkedAt: identity.createdAt }]);
+    expect(view.hasPassword).toBe(false);
   });
 });
 

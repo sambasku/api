@@ -83,6 +83,7 @@ function makeDetail(overrides: Partial<WordDetail> = {}): WordDetail {
         notes: null,
         translations: [],
         examples: [],
+        creator: null,
       },
     ],
     categories: [],

@@ -1,5 +1,5 @@
 import type { ProposedChanges } from '../../domain/entities/word-suggestion.entity';
-import { NotFoundError, ConflictError } from '@/shared/errors/app-error';
+import { NotFoundError, ConflictError, BadRequestError } from '@/shared/errors/app-error';
 import { resolveWordImageProvider } from '@/modules/word/domain/word-image-provider';
 import { db } from '@/shared/database/drizzle/client';
 import {
@@ -30,6 +30,31 @@ async function ensurePrimaryImage(wordId: string): Promise<void> {
   });
   if (!oldest) return;
   await db.update(wordImages).set({ isPrimary: true }).where(eq(wordImages.id, oldest.id));
+}
+
+/** Jenis `word` tidak boleh tetap punya relasi komponen frasa. */
+export async function assertWordTypeAllowsComponents(
+  wordId: string,
+  wordType: string | undefined,
+): Promise<void> {
+  if (wordType !== 'word') return;
+  const [row] = await db
+    .select({ id: lexicalRelations.id })
+    .from(lexicalRelations)
+    .where(
+      and(
+        eq(lexicalRelations.sourceWordId, wordId),
+        eq(lexicalRelations.relationType, 'has_component'),
+        isNull(lexicalRelations.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!row) return;
+  throw new BadRequestError(
+    'VALIDATION_ERROR',
+    'has_component hanya untuk entri idiom/peribahasa/ungkapan',
+    [{ field: 'word_type', message: 'has_component hanya untuk entri idiom/peribahasa/ungkapan' }],
+  );
 }
 
 export interface ApplyResult {
@@ -65,18 +90,22 @@ export async function applyChangesToWord(
 
   const word = await db.query.words.findFirst({
     where: and(eq(words.id, suggestion.wordId), isNull(words.deletedAt)),
-    columns: { id: true, lemma: true, notes: true, isVerified: true },
+    columns: { id: true, lemma: true, notes: true, wordType: true, isVerified: true },
   });
 
   if (!word) throw new NotFoundError('WORD_NOT_FOUND', 'Kata tidak ditemukan');
 
+  await assertWordTypeAllowsComponents(word.id, changes.wordType);
+
   const oldAudit: Record<string, unknown> = {
     lemma: word.lemma,
     notes: word.notes,
+    word_type: word.wordType,
   };
   const newAudit: Record<string, unknown> = {
     lemma: changes.lemma ?? word.lemma,
     notes: changes.notes ?? word.notes,
+    word_type: changes.wordType ?? word.wordType,
   };
 
   if (changes.lemma !== undefined && changes.lemma !== word.lemma) {
@@ -91,6 +120,14 @@ export async function applyChangesToWord(
     await db
       .update(words)
       .set({ notes: changes.notes, updatedAt: new Date() })
+      .where(eq(words.id, word.id));
+    changesApplied++;
+  }
+
+  if (changes.wordType !== undefined && changes.wordType !== word.wordType) {
+    await db
+      .update(words)
+      .set({ wordType: changes.wordType, updatedAt: new Date() })
       .where(eq(words.id, word.id));
     changesApplied++;
   }

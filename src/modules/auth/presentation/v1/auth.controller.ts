@@ -10,6 +10,7 @@ import type { LogoutAllDevicesUseCase } from '../../application/use-cases/logout
 import type { ForgotPasswordUseCase } from '../../application/use-cases/forgot-password.use-case';
 import type { ResetPasswordUseCase } from '../../application/use-cases/reset-password.use-case';
 import type { ChangePasswordUseCase } from '../../application/use-cases/change-password.use-case';
+import type { SetPasswordUseCase } from '../../application/use-cases/set-password.use-case';
 import type { VerifyEmailUseCase } from '../../application/use-cases/verify-email.use-case';
 import type { ResendOtpUseCase } from '../../application/use-cases/resend-otp.use-case';
 import type { LoginWithGoogleUseCase } from '../../application/use-cases/login-with-google.use-case';
@@ -36,6 +37,7 @@ import type { GithubLinkBody } from './validators/github-link.validator';
 import type { ForgotPasswordBody } from './validators/forgot-password.validator';
 import type { ResetPasswordBody } from './validators/reset-password.validator';
 import type { ChangePasswordBody } from './validators/change-password.validator';
+import type { SetPasswordBody } from './validators/set-password.validator';
 import type { VerifyEmailBody, ResendOtpBody } from './validators/verify-email.validator';
 import type { ResolveFirstPartyClientUseCase } from '@/modules/developer-oauth/application/use-cases/resolve-first-party-client.use-case';
 import type { LoginMeta } from '../../application/dto/login.dto';
@@ -57,6 +59,7 @@ export class AuthController {
       forgot: ForgotPasswordUseCase;
       reset: ResetPasswordUseCase;
       changePassword: ChangePasswordUseCase;
+      setPassword: SetPasswordUseCase;
       verifyEmail: VerifyEmailUseCase;
       resendOtp: ResendOtpUseCase;
       google: LoginWithGoogleUseCase;
@@ -282,17 +285,45 @@ export class AuthController {
     });
   }
 
+  async setPassword(c: Context, body: SetPasswordBody) {
+    const typed = c as Context<{ Variables: AppVariables }>;
+    const user = typed.get('user');
+    if (!user) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const requestId = typed.get('requestId');
+
+    const accessToken =
+      body.provider === 'github'
+        ? await this.resolveGithubAccessToken(body)
+        : body.access_token;
+
+    const result = await this.deps.setPassword.execute(
+      {
+        provider: body.provider,
+        idToken: body.id_token,
+        accessToken,
+        newPassword: body.new_password,
+      },
+      user.user_id,
+      requestId,
+    );
+    return c.json({
+      success: true as const,
+      data: { message: result.message, login_with: result.loginWith },
+    });
+  }
+
   async listProviders(c: Context) {
     const user = (c as Context<{ Variables: AppVariables }>).get('user');
     if (!user) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
-    const providers = await this.deps.listProviders.execute(user.user_id);
+    const view = await this.deps.listProviders.execute(user.user_id);
     return c.json({
       success: true as const,
       data: {
-        providers: providers.map((p) => ({
+        providers: view.providers.map((p) => ({
           provider: p.provider,
           linked_at: p.linkedAt.toISOString(),
         })),
+        has_password: view.hasPassword,
       },
     });
   }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { wordTypeSchema } from '@/modules/word/presentation/v1/validators/create-word.validator';
 import { choiceId, opaqueId } from '@/shared/validation/id';
 import {
   STOCK_WORD_IMAGE_PROVIDERS,
@@ -95,6 +96,7 @@ const imageChangeSchema = z
 
 const proposedChangesObjectSchema = z
   .object({
+    word_type: wordTypeSchema.optional(),
     lemma: z.string().trim().min(1).max(255).optional(),
     notes: z.string().max(2000).optional(),
     meanings: z.array(meaningChangeSchema).max(10).optional(),
@@ -106,6 +108,7 @@ const proposedChangesObjectSchema = z
   })
   .refine(
     (p) =>
+      p.word_type !== undefined ||
       p.lemma !== undefined ||
       p.notes !== undefined ||
       (p.meanings?.length ?? 0) > 0 ||
@@ -183,6 +186,7 @@ export function mapProposedChanges(
   raw: CreateSuggestionRequest['proposed_changes'],
 ): ProposedChanges {
   return {
+    wordType: raw.word_type,
     lemma: raw.lemma,
     notes: raw.notes,
     meanings: raw.meanings?.map((m) => ({
@@ -250,6 +254,7 @@ export const suggestionListResponseSchema = z.object({
       summary_changes: z.object({
         lemma: z.string().nullable(),
         notes: z.string().nullable(),
+        word_type: z.string().nullable(),
         meanings_count: z.number(),
         categories_added: z.number(),
         categories_removed: z.number(),
@@ -285,6 +290,7 @@ export const suggestionDetailResponseSchema = z.object({
     current_word: z.object({
       lemma: z.string(),
       notes: z.string().nullable(),
+      word_type: z.string(),
       meanings: z.array(
         z.object({
           id: z.string().length(26),
@@ -328,11 +334,17 @@ export const suggestionDetailResponseSchema = z.object({
         proposed: z.string().nullable(),
         changed: z.boolean(),
       }),
+      word_type: z.object({
+        current: z.string().nullable(),
+        proposed: z.string().nullable(),
+        changed: z.boolean(),
+      }),
       meanings: z.array(
         z.object({
           meaning_id: z.string().length(26).nullable(),
           changes: z.array(
             z.object({
+              label: z.string().optional(),
               current: z.string().nullable(),
               proposed: z.string().nullable(),
               changed: z.boolean(),

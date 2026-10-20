@@ -86,6 +86,7 @@ import { LogoutAllDevicesUseCase } from '@/modules/auth/application/use-cases/lo
 import { ForgotPasswordUseCase } from '@/modules/auth/application/use-cases/forgot-password.use-case';
 import { ResetPasswordUseCase } from '@/modules/auth/application/use-cases/reset-password.use-case';
 import { ChangePasswordUseCase } from '@/modules/auth/application/use-cases/change-password.use-case';
+import { SetPasswordUseCase } from '@/modules/auth/application/use-cases/set-password.use-case';
 import { AccountDeletionUseCase } from '@/modules/auth/application/use-cases/account-deletion.use-case';
 import { AccountErasureRepositoryImpl } from '@/modules/auth/infrastructure/account-erasure.repository.impl';
 import { AccountDeletionTokenRepositoryImpl } from '@/modules/auth/infrastructure/account-deletion-token.repository.impl';
@@ -575,6 +576,16 @@ const controller = new AuthController({
   forgot: new ForgotPasswordUseCase(userRepo, resetTokenRepo, mailer, `${env.webAppUrl}/reset-password`),
   reset: new ResetPasswordUseCase(resetTokenRepo, userRepo, hasher, auditRepo, refreshTokenRepo),
   changePassword: new ChangePasswordUseCase(userRepo, hasher, auditRepo, refreshTokenRepo),
+  setPassword: new SetPasswordUseCase(
+    userRepo,
+    identityRepo,
+    hasher,
+    auditRepo,
+    refreshTokenRepo,
+    googleTokenVerifier,
+    facebookTokenVerifier,
+    githubTokenVerifier,
+  ),
   google: new LoginWithGoogleUseCase(
     userRepo,
     identityRepo,
@@ -605,7 +616,7 @@ const controller = new AuthController({
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
   ),
-  listProviders: new ListAuthProvidersUseCase(identityRepo),
+  listProviders: new ListAuthProvidersUseCase(identityRepo, userRepo),
   linkGoogle: new LinkGoogleAccountUseCase(userRepo, identityRepo, googleTokenVerifier),
   unlinkGoogle: new UnlinkGoogleAccountUseCase(userRepo, identityRepo),
   linkGithub: new LinkGithubAccountUseCase(userRepo, identityRepo, githubTokenVerifier),

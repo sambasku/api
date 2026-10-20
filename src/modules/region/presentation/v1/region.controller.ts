@@ -18,6 +18,7 @@ import type {
 function serialize(r: Region) {
   return {
     id: r.id,
+    slug: r.slug,
     name: r.name,
     type: r.type,
     parent_id: r.parentId,
@@ -61,6 +62,25 @@ export class RegionController {
       );
   }
 
+  catalog(c: Context<{ Variables: AppVariables }>) {
+    return this.listUc.catalog().then((regions) =>
+      c.json({
+        success: true as const,
+        data: {
+          regions: regions.map((r) => ({
+            id: r.id,
+            name: r.name,
+            type: r.type,
+            parent_id: r.parentId,
+            code: r.code,
+            lat: r.lat,
+            lng: r.lng,
+          })),
+        },
+      }),
+    );
+  }
+
   getById(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.getByIdUc
       .execute(id, true)
@@ -95,7 +115,7 @@ export class RegionController {
   ) {
     return this.createUc
       .execute({
-        id: body.id,
+        slug: body.slug,
         name: body.name,
         type: body.type,
         parentId: body.parent_id ?? null,

@@ -547,6 +547,13 @@
       "when": 1800746900000,
       "tag": "0077_users_region",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1800846900000,
+      "tag": "0078_regions_seed",
+      "breakpoints": true
     }
   ]
 }

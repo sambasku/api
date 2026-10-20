@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
-/** Sama dengan id wilayah: slug, opsional satu slash untuk desa. */
-const REGION_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/;
+/** ULID 26 (PK regions) atau slug lama dari CDN regions.json. */
+const REGION_REF =
+  /^(?:[0-9A-HJKMNP-TV-Z]{26}|[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?)$/;
 
 function nullableRegionId(message: string) {
   return z
@@ -11,7 +12,7 @@ function nullableRegionId(message: string) {
     .nullable()
     .optional()
     .transform((v) => (v === '' ? null : v))
-    .refine((v) => v == null || REGION_SLUG.test(v), { message });
+    .refine((v) => v == null || REGION_REF.test(v), { message });
 }
 
 export const updateMyProfileSchema = z

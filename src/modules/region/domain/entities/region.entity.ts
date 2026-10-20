@@ -3,6 +3,7 @@ export type RegionStatus = 'draft' | 'published' | 'archived';
 
 export interface Region {
   id: string;
+  slug: string;
   name: string;
   type: RegionType;
   parentId: string | null;

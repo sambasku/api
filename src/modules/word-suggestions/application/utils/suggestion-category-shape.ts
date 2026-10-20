@@ -9,10 +9,19 @@ export interface ShapeIssue {
   message: string;
 }
 
-type Part = 'lemma' | 'notes' | 'meanings' | 'categories' | 'relations' | 'variants' | 'images';
+type Part =
+  | 'word_type'
+  | 'lemma'
+  | 'notes'
+  | 'meanings'
+  | 'categories'
+  | 'relations'
+  | 'variants'
+  | 'images';
 
 function presentParts(c: ProposedChanges): Set<Part> {
   const parts = new Set<Part>();
+  if (c.wordType !== undefined) parts.add('word_type');
   if (c.lemma !== undefined) parts.add('lemma');
   if (c.notes !== undefined) parts.add('notes');
   if (c.meanings?.length) parts.add('meanings');

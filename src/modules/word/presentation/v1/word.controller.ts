@@ -491,6 +491,13 @@ export class WordController {
         is_have_translation: m.isHaveTranslation,
         meaning_source: m.meaningSource,
         order_index: m.orderIndex,
+        created_by: m.creator
+          ? {
+              username: m.creator.username,
+              display_name: m.creator.displayName,
+              role: m.creator.role,
+            }
+          : null,
         translations: m.translations.map((t) => ({
           language_id: t.languageId,
           translation_text: t.translationText,

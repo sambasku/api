@@ -12,6 +12,7 @@ export function verifyProposedChanges(changes: ProposedChanges): {
   const errors: ValidationError[] = [];
 
   const hasContent =
+    changes.wordType !== undefined ||
     changes.lemma !== undefined ||
     changes.notes !== undefined ||
     (changes.meanings?.length ?? 0) > 0 ||

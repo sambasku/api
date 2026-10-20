@@ -71,7 +71,7 @@ describe('updateMyProfileSchema', () => {
     expect(parsed.data.village_id).toBeNull();
   });
 
-  it('slug wilayah rusak ditolak', () => {
+  it('id wilayah rusak ditolak', () => {
     expect(
       updateMyProfileSchema.safeParse({ region_id: 'Pemangkat' }).success,
     ).toBe(false);
@@ -88,5 +88,16 @@ describe('updateMyProfileSchema', () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.village_id).toBe('pemangkat/perapakan');
+  });
+
+  it('id wilayah 26 karakter diterima', () => {
+    const id = '01MD5DDYS0YATK69KTSWAFVKFD';
+    const parsed = updateMyProfileSchema.safeParse({
+      region_id: id,
+      village_id: id,
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.village_id).toBe(id);
   });
 });
