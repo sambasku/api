@@ -1,6 +1,7 @@
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
   NewVerifierApplication,
+  SocialScreenshot,
   VerifierApplication,
   VerifierApplicationListItem,
   VerifierApplicationStatus,
