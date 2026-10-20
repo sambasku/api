@@ -67,6 +67,7 @@ import {
   wordImportSessions,
   wordReports,
   wordCardShares,
+  wordVoteCounts,
   wordVariants,
   words,
 } from './schema';
@@ -260,6 +261,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     searchMisses,
     wordCategories,
     wordImages,
+    wordVoteCounts,
     wordVariants,
     meanings,
     words,

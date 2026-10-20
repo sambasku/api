@@ -372,9 +372,11 @@ export class WordController {
   }
 
   /** 28-api-word-of-the-day.md - payload detail + date + is_new_this_week,
-   *  atau data:null saat korpus published kosong (state normal). */
+   *  atau data:null saat korpus published kosong (state normal).
+   *  Cache 5 menit / CDN 1 jam: hasil deterministik per tanggal WIB. */
   async wordOfDay(c: Context) {
     const { date, isNewThisWeek, word } = await this.deps.wordOfDay.execute();
+    c.header('Cache-Control', 'public, max-age=300, s-maxage=3600');
     return c.json({
       success: true as const,
       data: word

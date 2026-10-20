@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { sqliteTable, text, integer, index, unique } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 import { words } from './words.schema';
@@ -32,5 +33,10 @@ export const wordVariants = sqliteTable(
   (t) => [
     unique('word_variants_unique').on(t.wordId, t.form, t.dialectId),
     index('word_variants_word_idx').on(t.wordId),
+    // 0083 rows-read: cek fulfilled search-miss / pencarian variasi -
+    // lookup lower(trim(form)) tanpa scan penuh. Partial: baris aktif saja.
+    index('word_variants_form_trim_idx')
+      .on(sql`lower(trim(${t.form}))`, t.wordId)
+      .where(sql`${t.deletedAt} is null`),
   ],
 );

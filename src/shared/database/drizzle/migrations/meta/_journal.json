@@ -582,6 +582,27 @@
       "when": 1801060000000,
       "tag": "0082_word_relations_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "6",
+      "when": 1801070000000,
+      "tag": "0083_rows_read_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "6",
+      "when": 1801080000000,
+      "tag": "0084_web_imports",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "6",
+      "when": 1801090000000,
+      "tag": "0085_word_vote_counts",
+      "breakpoints": true
     }
   ]
 }

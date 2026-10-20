@@ -26,11 +26,16 @@ import type {
 export const normalizeTerm = normalizeSearchMissTerm;
 
 // Miss 'lemma' terjawab kalau ada kata published dengan lemma sama
-// ATAU variasi penulisan (resolve-as-variant) yang form-nya = term
+// ATAU variasi penulisan (resolve-as-variant) yang form-nya = term.
+// lower() TANPA trim() supaya pakai words_lemma_az_idx (index ekspresi
+// existing) - trim() membuat ekspresi tak cocok index = scan penuh.
+// Aman: semua insert words memakai lemma.trim(); term miss juga sudah
+// trim+lower (normalizeSearchMissTerm). Varians/terjemahan tetap
+// lower(trim(...)) - persis ekspresi index partial 0083.
 const lemmaFulfilledSql = sql`(
   EXISTS (
     SELECT 1 FROM ${words} w
-    WHERE lower(trim(w.lemma)) = ${searchMisses.term}
+    WHERE lower(w.lemma) = ${searchMisses.term}
       AND w.status = 'published'
       AND w.deleted_at IS NULL
   )
@@ -273,7 +278,9 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
         .from(words)
         .where(
           and(
-            inArray(sql`lower(trim(${words.lemma}))`, terms),
+            // lower() tanpa trim: cocok words_lemma_az_idx (lemma tersimpan
+            // selalu trim di insert; terms sudah trim+lower).
+            inArray(sql`lower(${words.lemma})`, terms),
             eq(words.status, 'published'),
             isNull(words.deletedAt),
           ),

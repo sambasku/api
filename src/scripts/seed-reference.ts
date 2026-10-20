@@ -22,6 +22,11 @@ import {
   GITHUB_ACTIONS_USER_ID,
   GITHUB_ACTIONS_USERNAME,
 } from '@/shared/constants/github-actions';
+import {
+  WEB_IMPORT_EMAIL,
+  WEB_IMPORT_USER_ID,
+  WEB_IMPORT_USERNAME,
+} from '@/shared/constants/web-importer';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
@@ -152,8 +157,30 @@ export async function seedReference(): Promise<void> {
     .where(eq(users.id, GITHUB_ACTIONS_USER_ID));
   logger.info(`Seed referensi: user sistem ${GITHUB_ACTIONS_EMAIL}`);
 
+  // User sistem Web Importer
+  await db
+    .insert(users)
+    .values({
+      id: WEB_IMPORT_USER_ID,
+      username: WEB_IMPORT_USERNAME,
+      displayName: WEB_IMPORT_USERNAME,
+      email: WEB_IMPORT_EMAIL,
+      passwordHash: await hasher.hash(crypto.randomUUID()),
+      emailVerified: true,
+    })
+    .onConflictDoNothing({ target: users.id });
+  await db
+    .update(users)
+    .set({
+      username: WEB_IMPORT_USERNAME,
+      displayName: WEB_IMPORT_USERNAME,
+      email: WEB_IMPORT_EMAIL,
+    })
+    .where(eq(users.id, WEB_IMPORT_USER_ID));
+  logger.info(`Seed referensi: user sistem ${WEB_IMPORT_EMAIL}`);
+
   // Multi role: user sistem pegang role contributor di junction.
-  const systemUserIds = [ANONIM_USER_ID, CSV_IMPORTER_USER_ID, GITHUB_ACTIONS_USER_ID];
+  const systemUserIds = [ANONIM_USER_ID, CSV_IMPORTER_USER_ID, GITHUB_ACTIONS_USER_ID, WEB_IMPORT_USER_ID];
   await db
     .insert(userRoles)
     .values(systemUserIds.map((userId) => ({ userId, role: 'contributor' })))

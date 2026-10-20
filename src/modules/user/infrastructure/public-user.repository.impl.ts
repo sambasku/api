@@ -91,6 +91,10 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
 
   /** Prefix-search username untuk autocomplete mention. Kolom publik saja. */
   async suggestByUsernamePrefix(prefix: string, limit: number): Promise<MentionUserRow[]> {
+    // Range seek, bukan LIKE prefix||'%': LIKE tidak memakai index penuh
+    // (scan setengah index + wildcard user harus di-escape). Charset
+    // username `[a-z0-9._]` - '~' (0x7E) di atas 'z' (0x7A) = batas atas
+    // aman, jadi `>= prefix AND < prefix~` persis prefix-match.
     const rows = await this.db
       .select({
         id: users.id,
@@ -101,7 +105,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       .from(users)
       .where(
         and(
-          sql`${users.username} LIKE ${prefix} || '%'`,
+          sql`${users.username} >= ${prefix}`,
+          sql`${users.username} < ${`${prefix}~`}`,
           isNull(users.deletedAt),
           eq(users.isActive, true),
         ),

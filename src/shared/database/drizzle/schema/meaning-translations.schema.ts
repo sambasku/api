@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, unique } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, unique, index } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 import { meanings } from './meanings.schema';
 import { languages } from './languages.schema';
@@ -30,5 +31,10 @@ export const meaningTranslations = sqliteTable(
   },
   (t) => [
     unique('meaning_translations_unique').on(t.meaningId, t.languageId, t.translationText),
+    // 0083 rows-read: cek fulfilled search-miss terjemahan - lookup
+    // lower(trim(translation_text)) tanpa scan penuh. Partial: aktif saja.
+    index('meaning_translations_text_trim_idx')
+      .on(sql`lower(trim(${t.translationText}))`, t.meaningId)
+      .where(sql`${t.deletedAt} is null`),
   ],
 );

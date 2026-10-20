@@ -12,9 +12,10 @@ import {
   userSkips,
   votes,
   wordImages,
+  wordVoteCounts,
   words,
 } from '@/shared/database/drizzle/schema';
-import type { AppDatabase } from '@/shared/database/drizzle/client';
+import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
 import { NotFoundError } from '@/shared/errors/app-error';
@@ -156,6 +157,19 @@ export class VoteRepositoryImpl implements VoteRepository {
 
       let myVote: 1 | -1 | null = null;
       if (removed.length === 0) {
+        // 0085: tahu apakah upsert ini = baris BARU (+1 ringkasan) atau
+        // ganti arah baris lama (+0) - cek existence sebelum insert.
+        const [existing] = await tx
+          .select({ id: votes.id })
+          .from(votes)
+          .where(
+            and(
+              eq(votes.userId, userId),
+              eq(votes.entityType, target.entityType),
+              eq(votes.entityId, target.entityId),
+            ),
+          )
+          .limit(1);
         await tx
           .insert(votes)
           .values({
@@ -174,6 +188,15 @@ export class VoteRepositoryImpl implements VoteRepository {
             },
           });
         myVote = value;
+
+        // 0085: ringkasan deck - hanya vote kata yang punya baris di
+        // word_vote_counts; insert baru = +1, ganti arah = net 0.
+        if (target.entityType === 'word' && !existing) {
+          await this.bumpWordVoteCount(tx, target.entityId, 1);
+        }
+      } else if (target.entityType === 'word') {
+        // batal vote = baris hilang.
+        await this.bumpWordVoteCount(tx, target.entityId, -1);
       }
 
       const [row] = await tx
@@ -186,6 +209,27 @@ export class VoteRepositoryImpl implements VoteRepository {
 
       return { myVote, upvotes: row?.upvotes ?? 0, downvotes: row?.downvotes ?? 0 };
     });
+  }
+
+  /**
+   * Naik/turunkan `word_vote_counts.total` di transaksi yang sama dengan
+   * tulis vote. `delta` = perubahan JUMLAH baris vote kata itu.
+   */
+  private async bumpWordVoteCount(
+    tx: AppTransaction,
+    wordId: string,
+    delta: number,
+  ): Promise<void> {
+    await tx
+      .insert(wordVoteCounts)
+      .values({ wordId, total: delta, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: wordVoteCounts.wordId,
+        set: {
+          total: sql`${wordVoteCounts.total} + ${delta}`,
+          updatedAt: new Date(),
+        },
+      });
   }
 
   async countMany(targets: VoteTarget[]): Promise<Map<string, VoteCounts>> {
@@ -319,23 +363,50 @@ export class VoteRepositoryImpl implements VoteRepository {
   }
 
   async deleteById(id: string): Promise<void> {
-    const result = await this.db.delete(votes).where(eq(votes.id, id));
-    const affected = Number(result.rowsAffected ?? 0);
-    if (affected === 0) {
-      throw new NotFoundError('VOTE_NOT_FOUND', 'Vote tidak ditemukan');
-    }
+    await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ entityType: votes.entityType, entityId: votes.entityId })
+        .from(votes)
+        .where(eq(votes.id, id))
+        .limit(1);
+      if (!row) throw new NotFoundError('VOTE_NOT_FOUND', 'Vote tidak ditemukan');
+      await tx.delete(votes).where(eq(votes.id, id));
+      if (row.entityType === 'word') {
+        await this.bumpWordVoteCount(tx, row.entityId, -1);
+      }
+    });
   }
 
   async resetTarget(target: VoteTarget): Promise<number> {
-    const result = await this.db
-      .delete(votes)
-      .where(and(eq(votes.entityType, target.entityType), eq(votes.entityId, target.entityId)));
-    return Number(result.rowsAffected ?? 0);
+    return this.db.transaction(async (tx) => {
+      const removed = await tx
+        .delete(votes)
+        .where(and(eq(votes.entityType, target.entityType), eq(votes.entityId, target.entityId)))
+        .returning({ id: votes.id });
+      if (target.entityType === 'word' && removed.length > 0) {
+        await this.bumpWordVoteCount(tx, target.entityId, -removed.length);
+      }
+      return removed.length;
+    });
   }
 
   async resetByClientId(clientId: string): Promise<number> {
-    const result = await this.db.delete(votes).where(eq(votes.clientId, clientId));
-    return Number(result.rowsAffected ?? 0);
+    return this.db.transaction(async (tx) => {
+      const removed = await tx
+        .delete(votes)
+        .where(eq(votes.clientId, clientId))
+        .returning({ entityType: votes.entityType, entityId: votes.entityId });
+      // Kelompokkan kata terdampak lalu kurangi totalnya masing-masing.
+      const byWord = new Map<string, number>();
+      for (const r of removed) {
+        if (r.entityType !== 'word') continue;
+        byWord.set(r.entityId, (byWord.get(r.entityId) ?? 0) + 1);
+      }
+      for (const [wordId, n] of byWord) {
+        await this.bumpWordVoteCount(tx, wordId, -n);
+      }
+      return removed.length;
+    });
   }
 
   async getTopTargets(entityType: VoteTargetType, limit: number): Promise<AdminTopVoteTarget[]> {
@@ -726,10 +797,9 @@ export class VoteRepositoryImpl implements VoteRepository {
    */
   async listDeckWords(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult> {
     const approvedAtExpr = sql`COALESCE(${words.verifiedAt}, ${words.createdAt})`;
-    const totalVotesExpr = sql<number>`coalesce((
-      select count(*) from ${votes}
-      where ${votes.entityType} = 'word' and ${votes.entityId} = ${words.id}
-    ), 0)`.mapWith(Number);
+    // 0085: total dari tabel ringkasan (1 baris per kata) - bukan
+    // COUNT(*) correlated yang scan seluruh votes per baris kata.
+    const totalVotesExpr = sql<number>`coalesce(${wordVoteCounts.total}, 0)`.mapWith(Number);
 
     const feedSafe = and(
       ...FEED_EXCLUDED_USAGE_LABELS.map(
@@ -793,6 +863,7 @@ export class VoteRepositoryImpl implements VoteRepository {
       })
       .from(words)
       .innerJoin(languages, eq(words.languageId, languages.id))
+      .leftJoin(wordVoteCounts, eq(wordVoteCounts.wordId, words.id))
       .where(
         and(
           isNull(words.deletedAt),

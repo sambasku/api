@@ -471,6 +471,21 @@ import { ApproveVerifierApplicationUseCase } from '@/modules/verifier-applicatio
 import { RejectVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/reject-verifier-application.use-case';
 import { UpdateVerifierApplicationScreenshotUseCase } from '@/modules/verifier-application/application/use-cases/update-verifier-application-screenshot.use-case';
 import { VerifierApplicationController } from '@/modules/verifier-application/presentation/v1/verifier-application.controller';
+import { WebImportController } from '@/modules/web-import/presentation/v1/web-import.controller';
+import {
+  createAdminWebImportRoutes,
+  createPublicWebImportRoutes,
+} from '@/modules/web-import/presentation/v1/web-import.routes';
+import { WebImportRepositoryImpl } from '@/modules/web-import/infrastructure/web-import.repository.impl';
+import {
+  ApproveWebImportUseCase,
+  GetWebImportUseCase,
+  ListWebImportsUseCase,
+  PreviewWebImportUseCase,
+  RejectWebImportUseCase,
+  SubmitWebImportUseCase,
+} from '@/modules/web-import/application/use-cases/web-import.use-cases';
+import { WEB_IMPORT_USER_ID } from '@/shared/constants/web-importer';
 import { createVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/verifier-application.routes';
 import { createAdminVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/admin-verifier-application.routes';
 import { WaTemplateRepositoryImpl, WaMessageLogRepositoryImpl, WaUsageRepositoryImpl } from '@/modules/wa/infrastructure/wa-message.repository.impl';
@@ -752,7 +767,7 @@ const wordController = new WordController({
   update: new UpdateWordUseCase(wordRepo, auditRepo),
   getById: new GetWordByIdUseCase(wordRepo),
   getByLemma: new GetWordByLemmaUseCase(wordRepo),
-  wordOfDay: new GetWordOfDayUseCase(wordRepo),
+  wordOfDay: new GetWordOfDayUseCase(wordRepo, appSettingsRepo),
   search: new SearchWordsUseCase(wordRepo, searchMissRepo),
   listAdmin: new ListAdminWordsUseCase(wordRepo),
   list: new ListWordsUseCase(wordRepo),
@@ -1724,6 +1739,23 @@ reject: new RejectVerifierApplicationUseCase(
 ),
 updateScreenshot: new UpdateVerifierApplicationScreenshotUseCase(verifierApplicationRepo),
 });
+const webImportRepo = new WebImportRepositoryImpl(db);
+const webImportController = new WebImportController(
+  new SubmitWebImportUseCase(webImportRepo),
+  new ListWebImportsUseCase(webImportRepo),
+  new GetWebImportUseCase(webImportRepo),
+  new PreviewWebImportUseCase(webImportRepo),
+  new ApproveWebImportUseCase(webImportRepo),
+  new RejectWebImportUseCase(webImportRepo),
+);
+app.route(
+  '/api/v1/web-imports',
+  createPublicWebImportRoutes({ controller: webImportController }),
+);
+app.route(
+  '/api/v1/admin/web-imports',
+  createAdminWebImportRoutes({ controller: webImportController, authenticate }),
+);
 app.route(
   '/api/v1/verifier-applications',
   createVerifierApplicationRoutes({ controller: verifierApplicationController, authenticate }),
