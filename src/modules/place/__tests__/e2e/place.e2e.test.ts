@@ -11,6 +11,7 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let app: any;
   let adminToken: string;
+  let userToken: string;
 
   const request = (path: string, init: RequestInit = {}) =>
     app.request(path, {
@@ -39,7 +40,7 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { languages, userRoles, users, wordClasses } = await import(
+    const { languages, regions, userRoles, users, wordClasses } = await import(
       '@/shared/database/drizzle/schema'
     );
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
@@ -76,6 +77,37 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
     if (uid) await db.insert(userRoles).values({ userId: uid.id, role: 'admin' }).onConflictDoNothing();
     adminToken = (
       (await (await post('/api/v1/auth/login', { email: `adm${stamp}@test.com`, password: 'Password123' })).json())
+        .data
+    ).access_token;
+
+    await db.insert(regions).values([
+      {
+        id: '01E2EREGIONKEC0000000001',
+        slug: 'pemangkat',
+        name: 'Pemangkat',
+        type: 'kecamatan',
+        status: 'published',
+      },
+      {
+        id: '01E2EREGIONDESA000000001',
+        slug: 'pemangkat/perapakan',
+        name: 'Perapakan',
+        type: 'desa',
+        parentId: '01E2EREGIONKEC0000000001',
+        status: 'published',
+      },
+    ]);
+
+    await post(
+      '/api/v1/auth/register',
+      e2eRegisterBody({ name: `usr${stamp}`, email: `usr${stamp}@test.com` }),
+    );
+    await post('/api/v1/auth/verify-email', {
+      email: `usr${stamp}@test.com`,
+      code: capturedOtpDisplayCode(),
+    });
+    userToken = (
+      (await (await post('/api/v1/auth/login', { email: `usr${stamp}@test.com`, password: 'Password123' })).json())
         .data
     ).access_token;
   });
@@ -119,8 +151,23 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
 
     const listRes = await get('/api/v1/places?category=wisata');
     expect(listRes.status).toBe(200);
-    const list = (await listRes.json()).data.items;
-    expect(list.some((p: { slug: string }) => p.slug === 'pantai-test-e2e')).toBe(true);
+    const listBody = (await listRes.json()).data;
+    expect(listBody.items.some((p: { slug: string }) => p.slug === 'pantai-test-e2e')).toBe(
+      true,
+    );
+    expect(listBody.next_cursor === null || typeof listBody.next_cursor === 'string').toBe(
+      true,
+    );
+
+    const typedRes = await get('/api/v1/places?category=wisata&type=pantai&limit=50');
+    expect(typedRes.status).toBe(200);
+    const typed = (await typedRes.json()).data.items;
+    expect(typed.some((p: { slug: string }) => p.slug === 'pantai-test-e2e')).toBe(true);
+
+    const otherType = await get('/api/v1/places?category=wisata&type=sejarah&limit=50');
+    expect(otherType.status).toBe(200);
+    const sejarah = (await otherType.json()).data.items;
+    expect(sejarah.some((p: { slug: string }) => p.slug === 'pantai-test-e2e')).toBe(false);
 
     const detailRes = await get('/api/v1/places/pantai-test-e2e');
     expect(detailRes.status).toBe(200);
@@ -152,5 +199,100 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
     const dup = await post('/api/v1/admin/places', body, adminToken);
     expect(dup.status).toBe(409);
     expect((await dup.json()).error_code).toBe('SLUG_TAKEN');
+  });
+
+  it('usulan menunggu tinjauan, foto langsung nempel, related tidak terhapus', async () => {
+    const photo = 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/usulan.webp';
+    const extra = 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/tambahan.webp';
+    const submit = await post(
+      '/api/v1/place-contributions',
+      {
+        slug: 'pantai-usulan-e2e',
+        name: 'Pantai Usulan',
+        category: 'wisata',
+        type: 'pantai',
+        lat: 1.36,
+        lng: 109.3,
+        short_description: 'Usulan dari user.',
+        region_id: '01E2EREGIONKEC0000000001',
+        village_id: '01E2EREGIONDESA000000001',
+        images: [{ url: photo, is_main: true }],
+      },
+      userToken,
+    );
+    expect(submit.status).toBe(200);
+    const proposalId = (await submit.json()).data.id as string;
+
+    const hidden = await get('/api/v1/places/pantai-usulan-e2e');
+    expect(hidden.status).toBe(404);
+
+    const approve = await post(`/api/v1/admin/place-contributions/${proposalId}/approve`, {}, adminToken);
+    expect(approve.status).toBe(200);
+
+    const detail = await get('/api/v1/places/pantai-usulan-e2e');
+    expect(detail.status).toBe(200);
+    const place = (await detail.json()).data;
+    expect(place.images[0].is_main).toBe(true);
+    expect(place.images[0].attribution.provider).toBe('sambasku');
+    expect(place.image_count).toBe(1);
+
+    const live = await post(`/api/v1/places/pantai-usulan-e2e/images`, { urls: [extra] }, userToken);
+    expect(live.status).toBe(200);
+    const afterPhoto = (await (await get('/api/v1/places/pantai-usulan-e2e')).json()).data;
+    expect(afterPhoto.image_count).toBe(2);
+    expect(afterPhoto.images.find((img: { url: string }) => img.url === extra).is_main).toBe(false);
+
+    const neighbor = await post(
+      '/api/v1/admin/places',
+      {
+        slug: 'tetangga-usulan-e2e',
+        name: 'Tetangga',
+        category: 'wisata',
+        short_description: 'Dekat.',
+        related: [{ kind: 'place', slug: 'pantai-usulan-e2e' }],
+      },
+      adminToken,
+    );
+    expect(neighbor.status).toBe(200);
+    const neighborBody = (await neighbor.json()).data;
+    await patch(
+      `/api/v1/admin/places/${place.id}`,
+      { related: [{ kind: 'place', slug: 'tetangga-usulan-e2e' }, { kind: 'usaha', slug: 'warung-kopi' }] },
+      adminToken,
+    );
+
+    const edit = await post(
+      '/api/v1/place-contributions',
+      {
+        place_id: place.id,
+        slug: 'pantai-usulan-e2e',
+        name: 'Pantai Usulan Baru',
+        category: 'wisata',
+        type: 'pantai',
+        lat: 1.36,
+        lng: 109.3,
+        short_description: 'Suntingan.',
+        region_id: '01E2EREGIONKEC0000000001',
+        village_id: '01E2EREGIONDESA000000001',
+        images: [{ url: extra }],
+      },
+      userToken,
+    );
+    expect(edit.status).toBe(200);
+    const editId = (await edit.json()).data.id as string;
+    expect((await post(`/api/v1/admin/place-contributions/${editId}/approve`, {}, adminToken)).status).toBe(200);
+
+    const finalRes = await get('/api/v1/places/pantai-usulan-e2e');
+    const finalPlace = (await finalRes.json()).data;
+    expect(finalPlace.name).toBe('Pantai Usulan Baru');
+    expect(finalPlace.image_count).toBe(2);
+    expect(finalPlace.images[0].is_main).toBe(true);
+    expect(finalPlace.related.map((r: { slug: string }) => r.slug)).toEqual([
+      'tetangga-usulan-e2e',
+      'warung-kopi',
+    ]);
+    expect(finalPlace.related[0].name).toBe('Tetangga');
+    expect(finalPlace.related[1].name).toBeNull();
+    expect(neighborBody.slug).toBe('tetangga-usulan-e2e');
   });
 });

@@ -23,6 +23,8 @@ export const places = sqliteTable(
     contact: text('contact'),
     authorId: text('author_id'),
     sourcesJson: text('sources_json').notNull().default('[]'),
+    /** `{ kind: "place" | "usaha", slug }[]`. Usaha diisi modul berikutnya. */
+    relatedJson: text('related_json').notNull().default('[]'),
     status: text('status', {
       enum: ['draft', 'published', 'archived'],
     })
@@ -57,6 +59,7 @@ export const placeImages = sqliteTable(
     isMain: integer('is_main', { mode: 'boolean' }).notNull().default(false),
     sortOrder: integer('sort_order').notNull().default(0),
     attributionJson: text('attribution_json'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   },
   (t) => [index('place_images_place_id_idx').on(t.placeId)],
 );

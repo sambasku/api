@@ -32,6 +32,7 @@ import {
   notificationPushCooldowns,
   notifications,
   passwordResetTokens,
+  placeContributions,
   placeImages,
   places,
   placeCategories,
@@ -272,8 +273,9 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     // Pengumuman admin (#102) (FK created_by) - sebelum users
     announcements,
     // Places CRUD (FK place_images.place_id) - anak dulu
-  placeImages,
-  places,
+    placeContributions,
+    placeImages,
+    places,
   placeCategories,
   regions,
   // Event feed publik (FK actor_id) - sebelum users

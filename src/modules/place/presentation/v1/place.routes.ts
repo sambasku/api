@@ -22,7 +22,17 @@ const json = <T extends z.ZodType>(schema: T) => ({
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const slugParam = z.object({ slug: z.string().min(1).max(120) });
 
-export function createPublicPlaceRoutes(deps: { controller: PlaceController }) {
+const imagePageQuery = z.object({
+  offset: z.coerce.number().int().min(0).default(0),
+});
+const appendImagesBody = z.object({
+  urls: z.array(z.string().url().startsWith('https://')).min(1).max(5),
+});
+
+export function createPublicPlaceRoutes(deps: {
+  controller: PlaceController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 120, duration: 60 }));
 
@@ -50,7 +60,42 @@ export function createPublicPlaceRoutes(deps: { controller: PlaceController }) {
     },
   });
 
+  const imagesRoute = createRoute({
+    method: 'get',
+    path: '/:slug/images',
+    tags: ['Places'],
+    summary: 'Galeri foto tempat, 12 per halaman',
+    request: { params: slugParam, query: imagePageQuery },
+    responses: {
+      200: { description: 'Halaman foto', content: json(z.object({ success: z.literal(true) }).passthrough()) },
+    },
+  });
+  const appendRoute = createRoute({
+    method: 'post',
+    path: '/:slug/images',
+    tags: ['Places'],
+    summary: 'Tambah foto ke tempat yang sudah terbit',
+    request: {
+      params: slugParam,
+      body: { content: { 'application/json': { schema: appendImagesBody } } },
+    },
+    responses: {
+      200: { description: 'Foto ditambahkan', content: json(okNullResponseSchema) },
+      400: { description: 'Batas foto', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.use('/:slug/images', async (c, next) => {
+    if (c.req.method === 'POST') return deps.authenticate(c, next);
+    return next();
+  });
   routes.openapi(listRoute, (c) => deps.controller.listPublic(c, c.req.valid('query')) as never);
+  routes.openapi(imagesRoute, (c) =>
+    deps.controller.listImages(c, c.req.param('slug'), c.req.valid('query').offset) as never,
+  );
+  routes.openapi(appendRoute, (c) =>
+    deps.controller.appendImages(c, c.req.param('slug'), c.req.valid('json').urls) as never,
+  );
   routes.openapi(getRoute, (c) => deps.controller.getBySlug(c, c.req.param('slug')) as never);
   return routes;
 }

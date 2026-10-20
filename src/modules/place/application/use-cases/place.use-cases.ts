@@ -1,6 +1,7 @@
-import { BadRequestError, ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { BadRequestError, ConflictError, NotFoundError, RateLimitedError } from '@/shared/errors/app-error';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { PlaceCategoryRepository } from '@/modules/place-category/domain/repositories/place-category.repository';
-import type { Place } from '../../domain/entities/place.entity';
+import type { Place, PlaceRelatedCard } from '../../domain/entities/place.entity';
 import type {
   CreatePlaceInput,
   ListPlacesInput,
@@ -83,11 +84,72 @@ export class ListPlacesUseCase {
 export class GetPlaceBySlugUseCase {
   constructor(private readonly repo: PlaceRepository) {}
 
-  async execute(slug: string, publicOnly = true): Promise<Place> {
+  async execute(slug: string, publicOnly = true): Promise<Place & { imageCount: number; relatedCards: PlaceRelatedCard[] }> {
     const place = await this.repo.findBySlug(slug, { publicOnly });
     if (!place) {
       throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
     }
-    return place;
+    const page = await this.repo.listImages(place.id, 0, 12);
+    const relatedCards = await this.repo.resolveRelated(place.related);
+    return { ...place, images: page.items, imageCount: page.total, relatedCards };
+  }
+}
+
+const GALLERY_PAGE = 12;
+const PHOTO_CAP = 100;
+const PHOTO_DAILY = 5;
+
+export function assertOurPlaceImage(url: string): void {
+  if (!url.startsWith('https://cdn.jsdelivr.net/') || !url.includes('/assets/places/')) {
+    throw new BadRequestError('IMAGE_URL', 'Foto harus hasil unggah SambasKu');
+  }
+}
+
+export class ListPlaceImagesUseCase {
+  constructor(private readonly repo: PlaceRepository) {}
+
+  async execute(slug: string, offset: number) {
+    const place = await this.repo.findBySlug(slug, { publicOnly: true });
+    if (!place) throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
+    const page = await this.repo.listImages(place.id, offset, GALLERY_PAGE);
+    const next = offset + page.items.length < page.total ? offset + page.items.length : null;
+    return { items: page.items, total: page.total, nextOffset: next };
+  }
+}
+
+export class AppendPlaceImagesUseCase {
+  constructor(
+    private readonly repo: PlaceRepository,
+    private readonly users: UserRepository,
+  ) {}
+
+  async execute(slug: string, userId: string, urls: string[]): Promise<void> {
+    const place = await this.repo.findBySlug(slug, { publicOnly: true });
+    if (!place || place.status !== 'published') {
+      throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
+    }
+    for (const url of urls) assertOurPlaceImage(url);
+    const user = await this.users.findById(userId);
+    if (!user) throw new NotFoundError('USER_NOT_FOUND', 'User tidak ditemukan');
+    const total = (await this.repo.listImages(place.id, 0, 1)).total;
+    if (total + urls.length > PHOTO_CAP) {
+      throw new BadRequestError('PHOTO_CAP', 'Foto tempat ini sudah penuh (100)');
+    }
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const today = await this.repo.countUploadsSince(place.id, userId, since);
+    if (today + urls.length > PHOTO_DAILY) {
+      throw new RateLimitedError('Maksimal 5 foto per tempat dalam 24 jam');
+    }
+    const have = new Set(place.images.map((img) => img.url));
+    const fresh = urls.filter((url) => !have.has(url));
+    const name = user.displayName || user.username;
+    await this.repo.appendImages(
+      place.id,
+      fresh.map((url) => ({
+        url,
+        isMain: false,
+        attribution: { name, provider: 'sambasku', authorId: userId },
+      })),
+    );
   }
 }

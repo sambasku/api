@@ -1,7 +1,10 @@
 import type {
   Place,
   PlaceCategory,
+  PlaceImage,
   PlaceImageAttribution,
+  PlaceRelatedCard,
+  PlaceRelation,
   PlaceSource,
   PlaceStatus,
   PlaceType,
@@ -30,6 +33,7 @@ export interface CreatePlaceInput {
   contact?: string | null;
   authorId?: string | null;
   sources?: PlaceSource[];
+  related?: PlaceRelation[];
   images?: PlaceImageInput[];
   status?: PlaceStatus;
 }
@@ -50,6 +54,7 @@ export interface UpdatePlaceInput {
   contact?: string | null;
   authorId?: string | null;
   sources?: PlaceSource[];
+  related?: PlaceRelation[];
   images?: PlaceImageInput[];
   status?: PlaceStatus;
 }
@@ -58,6 +63,7 @@ export interface ListPlacesInput {
   limit: number;
   before?: string;
   category?: PlaceCategory;
+  type?: PlaceType;
   regionId?: string;
   villageId?: string;
   /** Hanya place tanpa desa (village_id null), biasanya bersama regionId. */
@@ -81,4 +87,8 @@ export interface PlaceRepository {
   findBySlug(slug: string, opts?: { publicOnly?: boolean }): Promise<Place | null>;
   list(input: ListPlacesInput): Promise<ListPlacesResult>;
   findBySlugAny(slug: string): Promise<Place | null>;
+  listImages(placeId: string, offset: number, limit: number): Promise<{ items: PlaceImage[]; total: number }>;
+  appendImages(placeId: string, images: PlaceImageInput[]): Promise<void>;
+  countUploadsSince(placeId: string, authorId: string, since: Date): Promise<number>;
+  resolveRelated(related: PlaceRelation[]): Promise<PlaceRelatedCard[]>;
 }

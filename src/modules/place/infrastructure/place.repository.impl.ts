@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, lt, max, or } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { placeImages, places } from '@/shared/database/drizzle/schema/places.schema';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
@@ -8,6 +8,8 @@ import type {
   Place,
   PlaceImage,
   PlaceImageAttribution,
+  PlaceRelatedCard,
+  PlaceRelation,
   PlaceSource,
 } from '../domain/entities/place.entity';
 import type {
@@ -33,6 +35,26 @@ function parseSources(raw: string): PlaceSource[] {
         typeof (s as PlaceSource).name === 'string' &&
         typeof (s as PlaceSource).address === 'string',
     );
+  } catch {
+    return [];
+  }
+}
+
+function parseRelated(raw: string | null | undefined): PlaceRelation[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (!Array.isArray(v)) return [];
+    const out: PlaceRelation[] = [];
+    for (const item of v) {
+      if (!item || typeof item !== 'object') continue;
+      const kind = (item as PlaceRelation).kind;
+      const slug = (item as PlaceRelation).slug;
+      if ((kind === 'place' || kind === 'usaha') && typeof slug === 'string' && slug) {
+        out.push({ kind, slug });
+      }
+    }
+    return out;
   } catch {
     return [];
   }
@@ -76,6 +98,7 @@ function mapPlace(row: PlaceRow, images: PlaceImage[]): Place {
     contact: row.contact ?? null,
     authorId: row.authorId ?? null,
     sources: parseSources(row.sourcesJson),
+    related: parseRelated(row.relatedJson),
     images,
     status: row.status,
     createdAt: row.createdAt,
@@ -105,13 +128,18 @@ function normalizeImages(images: PlaceImageInput[]): PlaceImageInput[] {
 async function loadImagesForPlaces(
   db: AppDatabase,
   placeIds: string[],
+  coverOnly = false,
 ): Promise<Map<string, PlaceImage[]>> {
   const map = new Map<string, PlaceImage[]>();
   if (placeIds.length === 0) return map;
   const rows = await db
     .select()
     .from(placeImages)
-    .where(inArray(placeImages.placeId, placeIds))
+    .where(
+      coverOnly
+        ? and(inArray(placeImages.placeId, placeIds), eq(placeImages.isMain, true))
+        : inArray(placeImages.placeId, placeIds),
+    )
     .orderBy(placeImages.sortOrder);
   for (const row of rows) {
     const list = map.get(row.placeId) ?? [];
@@ -145,6 +173,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
           contact: input.contact ?? null,
           authorId: input.authorId ?? null,
           sourcesJson: JSON.stringify(input.sources ?? []),
+          relatedJson: JSON.stringify(input.related ?? []),
           status: input.status ?? 'published',
         });
         if (images.length > 0) {
@@ -190,6 +219,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     if (input.contact !== undefined) values.contact = input.contact;
     if (input.authorId !== undefined) values.authorId = input.authorId;
     if (input.sources !== undefined) values.sourcesJson = JSON.stringify(input.sources);
+    if (input.related !== undefined) values.relatedJson = JSON.stringify(input.related);
     if (input.status !== undefined) values.status = input.status;
 
     try {
@@ -266,6 +296,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     if (input.publicOnly) conds.push(eq(places.status, 'published'));
     else if (input.status) conds.push(eq(places.status, input.status));
     if (input.category) conds.push(eq(places.category, input.category));
+    if (input.type) conds.push(eq(places.type, input.type));
     if (input.regionId) conds.push(eq(places.regionId, input.regionId));
     if (input.villageUnset) conds.push(isNull(places.villageId));
     else if (input.villageId) conds.push(eq(places.villageId, input.villageId));
@@ -287,11 +318,106 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     const imgs = await loadImagesForPlaces(
       this.db,
       page.map((r) => r.id),
+      input.publicOnly === true,
     );
     const items = page.map((r) => mapPlace(r, imgs.get(r.id) ?? []));
     return {
       items,
       nextCursor: hasMore ? items[items.length - 1].id : null,
     };
+  }
+
+  async listImages(
+    placeId: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ items: PlaceImage[]; total: number }> {
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(placeImages)
+      .where(eq(placeImages.placeId, placeId));
+    const rows = await this.db
+      .select()
+      .from(placeImages)
+      .where(eq(placeImages.placeId, placeId))
+      .orderBy(placeImages.sortOrder)
+      .limit(limit)
+      .offset(offset);
+    return { items: rows.map(mapImage), total: totalRow?.total ?? 0 };
+  }
+
+  async appendImages(placeId: string, images: PlaceImageInput[]): Promise<void> {
+    if (images.length === 0) return;
+    await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ top: max(placeImages.sortOrder) })
+        .from(placeImages)
+        .where(eq(placeImages.placeId, placeId));
+      const start = (row?.top ?? -1) + 1;
+      await tx.insert(placeImages).values(
+        images.map((img, i) => ({
+          id: generateId(),
+          placeId,
+          url: img.url,
+          isMain: false,
+          sortOrder: start + i,
+          attributionJson: img.attribution ? JSON.stringify(img.attribution) : null,
+          createdAt: new Date(),
+        })),
+      );
+    });
+  }
+
+  async countUploadsSince(placeId: string, authorId: string, since: Date): Promise<number> {
+    const rows = await this.db
+      .select({ attributionJson: placeImages.attributionJson, createdAt: placeImages.createdAt })
+      .from(placeImages)
+      .where(and(eq(placeImages.placeId, placeId), gte(placeImages.createdAt, since)));
+    return rows.filter((row) => parseAttribution(row.attributionJson)?.authorId === authorId).length;
+  }
+
+  async resolveRelated(related: PlaceRelation[]): Promise<PlaceRelatedCard[]> {
+    const placeSlugs = related.filter((r) => r.kind === 'place').map((r) => r.slug);
+    const found = new Map<string, PlaceRelatedCard>();
+    if (placeSlugs.length > 0) {
+      const rows = await this.db
+        .select({
+          id: places.id,
+          slug: places.slug,
+          name: places.name,
+          category: places.category,
+          type: places.type,
+        })
+        .from(places)
+        .where(
+          and(inArray(places.slug, placeSlugs), eq(places.status, 'published'), isNull(places.deletedAt)),
+        );
+      const covers = await loadImagesForPlaces(
+        this.db,
+        rows.map((r) => r.id),
+        true,
+      );
+      for (const row of rows) {
+        const cover = covers.get(row.id)?.[0];
+        found.set(row.slug, {
+          kind: 'place',
+          slug: row.slug,
+          name: row.name,
+          category: row.category,
+          type: row.type ?? null,
+          coverUrl: cover?.url ?? null,
+        });
+      }
+    }
+    const cards: PlaceRelatedCard[] = [];
+    for (const item of related) {
+      if (item.kind === 'usaha') {
+        cards.push({ kind: 'usaha', slug: item.slug, name: null, category: null, type: null, coverUrl: null });
+        continue;
+      }
+      const card = found.get(item.slug);
+      if (card) cards.push(card);
+    }
+    return cards;
   }
 }

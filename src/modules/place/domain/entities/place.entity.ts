@@ -11,6 +11,23 @@ export interface PlaceSource {
   licenseUrl?: string | null;
 }
 
+export type PlaceRelationKind = 'place' | 'usaha';
+
+export interface PlaceRelation {
+  kind: PlaceRelationKind;
+  slug: string;
+}
+
+/** Kartu "Didekat sini". Usaha belum punya nama sampai modulnya ada. */
+export interface PlaceRelatedCard {
+  kind: PlaceRelationKind;
+  slug: string;
+  name: string | null;
+  category: string | null;
+  type: string | null;
+  coverUrl: string | null;
+}
+
 export interface PlaceImageAttribution {
   name: string;
   provider?: string;
@@ -46,6 +63,7 @@ export interface Place {
   contact: string | null;
   authorId: string | null;
   sources: PlaceSource[];
+  related: PlaceRelation[];
   images: PlaceImage[];
   status: PlaceStatus;
   createdAt: Date;

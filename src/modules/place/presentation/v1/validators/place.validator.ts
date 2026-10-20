@@ -35,6 +35,11 @@ const sourceSchema = z.object({
   license_url: z.string().url().startsWith('https://').nullable().optional(),
 });
 
+export const placeRelationSchema = z.object({
+  kind: z.enum(['place', 'usaha']),
+  slug: z.string().min(1).max(120),
+});
+
 const sambasLat = z.number().min(1.0).max(1.8).nullable().optional();
 const sambasLng = z.number().min(108.5).max(110.0).nullable().optional();
 
@@ -59,6 +64,7 @@ export const createPlaceBodySchema = z
     contact: z.string().max(500).nullable().optional(),
     author_id: z.string().max(64).nullable().optional(),
     sources: z.array(sourceSchema).max(20).optional(),
+    related: z.array(placeRelationSchema).max(20).optional(),
     images: z.array(imageSchema).optional(),
     status: placeStatusSchema.optional(),
   })
@@ -70,6 +76,7 @@ export const listPlacesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(50),
   before: z.string().min(1).max(64).optional(),
   category: placeCategorySchema.optional(),
+  type: placeTypeSchema.optional(),
   region_id: z.string().max(64).optional(),
   village_id: z.string().max(64).optional(),
   /** "1" = hanya place yang belum punya desa. */
@@ -122,6 +129,17 @@ export const placeItemResponseSchema = z.object({
         license_url: z.string().nullable().optional(),
       }),
     ),
+    related: z.array(
+      z.object({
+        kind: z.enum(['place', 'usaha']),
+        slug: z.string(),
+        name: z.string().nullable(),
+        category: z.string().nullable(),
+        type: placeTypeSchema.nullable(),
+        cover_url: z.string().nullable(),
+      }),
+    ),
+    image_count: z.number(),
     images: z.array(placeImageResponseSchema),
     status: placeStatusSchema,
     created_at: z.number(),
