@@ -20,6 +20,7 @@ export * from './word-images.schema';
 export * from './word-audios.schema';
 export * from './word-variants.schema';
 export * from './lexical-relations.schema';
+export * from './word-groups.schema';
 export * from './pronunciations.schema';
 export * from './contributions.schema';
 export * from './contribution-reviews.schema';

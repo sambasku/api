@@ -362,6 +362,20 @@ export interface WordRepository {
   updateWithRelations(id: string, word: WordToSave, actorId: string, tx?: unknown): Promise<Word | null>;
   search(params: SearchParams): Promise<CursorPage<WordSummary>>;
   /**
+   * PRD relasi-lemma: perluasan pencarian via kelompok makna.
+   * Input = id hasil pencarian langsung (halaman pertama saja); output =
+   * anggota grup published lain yang layak ditempel ke hasil (dedupe di
+   * pemanggil). Query tunggal IN (...), hemat subrequest.
+   */
+  findRelatedGroupMembers(wordIds: string[]): Promise<WordSummary[]>;
+  /** PRD relasi-lemma: id anggota kelompok lain milik kata-kata ini. */
+  listGroupIdsByWordIds(wordIds: string[]): Promise<Map<string, string[]>>;
+  /**
+   * Guard siklus relasi akar (derived_from): true = A→…→target sudah
+   * terhubung (menambahkan edge akan membuat siklus). Satu query recursive.
+   */
+  hasDerivedFromPath(sourceWordId: string, targetWordId: string): Promise<boolean>;
+  /**
    * 18-api-list-words.md: daftar semua kata published urut
    * lower(lemma) COLLATE "C" ASC, id ASC (browsing A-Z case-insensitive).
    * q = filter ILIKE %q% pada lemma saja - tanpa variasi penulisan,

@@ -24,6 +24,8 @@ import {
   languages,
   legalDocuments,
   lexicalRelations,
+  wordGroupMembers,
+  wordGroups,
   meanings,
   meaningTranslations,
   notificationCampaignRecipients,
@@ -241,6 +243,9 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     waMessageTemplates,
     waUsage,
     lexicalRelations,
+    // PRD relasi-lemma: anak word_groups (FK word_id) + grup (FK created_by) - sebelum words/users.
+    wordGroupMembers,
+    wordGroups,
     pronunciations,
     wordAudios,
     examples,

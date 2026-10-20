@@ -55,6 +55,26 @@ export class SearchWordsUseCase {
         logger.warn({ err, q: query.q }, 'gagal mencatat counter pencarian harian');
       }
     }
+    // PRD relasi-lemma: perluasan kelompok makna. Halaman pertama (tanpa
+    // cursor) hasil langsung ditempeli anggota grup published lain (dedupe
+    // by id, ranking hasil langsung tetap di atas, cap limit + has_more).
+    // Halaman lanjutan tidak diperluas supaya pagination offset FTS stabil.
+    if (query.searchIn !== 'translation' && query.cursor === undefined && items.length > 0) {
+      try {
+        const expansions = await this.wordRepo.findRelatedGroupMembers(items.map((i) => i.id));
+        if (expansions.length > 0) {
+          const seen = new Set(items.map((i) => i.id));
+          for (const exp of expansions) {
+            if (seen.has(exp.id)) continue;
+            seen.add(exp.id);
+            items.push({ ...exp, matchType: 'related_group' });
+          }
+        }
+      } catch (err) {
+        // Perluasan best-effort: kegagalan tidak boleh membatalkan pencarian.
+        logger.warn({ err, q: query.q }, 'gagal memperluas pencarian kelompok makna');
+      }
+    }
 
     if (items.length === 0 && query.q.trim().length >= 2) {
       // Best-effort: kegagalan pencatatan tidak boleh membatalkan response

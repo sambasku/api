@@ -248,6 +248,19 @@ import {
   createPublicPlaceCategoryRoutes,
 } from '@/modules/place-category/presentation/v1/place-category.routes';
 import { RegionRepositoryImpl } from '@/modules/region/infrastructure/region.repository.impl';
+// PRD relasi-lemma: kelompok makna (word_groups) - kelola + tampil publik.
+import { WordGroupRepositoryImpl } from '@/modules/word-group/infrastructure/word-group.repository.impl';
+import {
+  AddWordGroupMemberUseCase,
+  CreateWordGroupUseCase,
+  DeleteWordGroupUseCase,
+  GetWordGroupUseCase,
+  ListWordGroupsUseCase,
+  RemoveWordGroupMemberUseCase,
+  UpdateWordGroupUseCase,
+} from '@/modules/word-group/application/use-cases/word-group.use-cases';
+import { WordGroupController } from '@/modules/word-group/presentation/v1/word-group.controller';
+import { createWordGroupRoutes } from '@/modules/word-group/presentation/v1/word-group.routes';
 import {
   CreateRegionUseCase,
   DeleteRegionUseCase,
@@ -898,6 +911,18 @@ const categoryController = new CategoryController({
   deleteCategory: new DeleteCategoryUseCase(categoryRepo, auditRepo),
 });
 
+// ---- Modul word-group (PRD relasi-lemma): kelompok makna. ----
+const wordGroupRepo = new WordGroupRepositoryImpl(db);
+const wordGroupController = new WordGroupController({
+  create: new CreateWordGroupUseCase(wordGroupRepo),
+  update: new UpdateWordGroupUseCase(wordGroupRepo),
+  remove: new DeleteWordGroupUseCase(wordGroupRepo, auditRepo),
+  list: new ListWordGroupsUseCase(wordGroupRepo),
+  getById: new GetWordGroupUseCase(wordGroupRepo),
+  addMember: new AddWordGroupMemberUseCase(wordGroupRepo),
+  removeMember: new RemoveWordGroupMemberUseCase(wordGroupRepo),
+});
+
 // ---- Modul vote (08-api-upvote-downvote.md) - upvote/downvote polymorphic
 // pada word & children-nya. TANPA audit per vote (volume tinggi, bukan
 // aksi admin - lihat KEPUTUSAN PRODUK di doc). ----
@@ -1447,6 +1472,8 @@ app.route(
 );
 app.route('/api/v1/admin/place-categories', createAdminPlaceCategoryRoutes({ controller: placeCategoryController, authenticate }));
 app.route('/api/v1/place-categories', createPublicPlaceCategoryRoutes({ controller: placeCategoryController }));
+// PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
+app.route('/api/v1/word-groups', createWordGroupRoutes({ controller: wordGroupController, authenticate }));
 app.route('/api/v1/admin/regions', createAdminRegionRoutes({ controller: regionController, authenticate }));
 app.route('/api/v1/regions', createPublicRegionRoutes({ controller: regionController }));
 

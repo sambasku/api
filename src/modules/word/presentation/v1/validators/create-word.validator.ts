@@ -19,7 +19,16 @@ export const wordStatusSchema = z.enum([
   'taken_down',
 ]);
 
-export const relationTypeSchema = z.enum(['synonym', 'antonym', 'has_component', 'derived_from']);
+export const relationTypeSchema = z.enum([
+  'synonym',
+  'antonym',
+  'has_component',
+  'derived_from',
+  // PRD relasi-lemma: variasi bentuk + bentuk tidak baku. Arah: source =
+  // lema yang dijelaskan, target = rujukannya (mis. tekpalat → taek palat).
+  'variant_of',
+  'nonstandard_of',
+]);
 export const wordTypeSchema = z.enum(['word', 'idiom', 'peribahasa', 'ungkapan']);
 export const usageLabelSchema = z.enum(USAGE_LABELS);
 
@@ -577,6 +586,23 @@ export const wordDetailResponseSchema = z.object({
         relation_type: z.string(),
       }),
     ),
+    // PRD relasi-lemma: kelompok makna published (kosong bila tak ada)
+    meaning_groups: z
+      .array(
+        z.object({
+          group_id: z.string(),
+          name: z.string(),
+          description: z.string().nullable(),
+          members: z.array(
+            z.object({
+              word_id: z.string(),
+              lemma: z.string(),
+              notes: z.string().nullable(),
+            }),
+          ),
+        }),
+      )
+      .optional(),
     variants: z.array(
       z.object({
         id: z.string(),
@@ -615,6 +641,9 @@ export const wordListResponseSchema = z.object({
       is_verified: z.boolean(),
       matched_translation: z.string().optional(), // hanya search_in=translation
       matched_variant: z.string().optional(), // 11: form variasi yang cocok (search_in=lemma)
+      // PRD relasi-lemma: direct = cocok query; related_group = hasil
+      // perluasan kelompok makna (label UX "Makna terkait").
+      match_type: z.enum(['direct', 'related_group']).optional(),
       // A-Z + search: gloss `[n] makan,[v] santap` (null jika belum ada terjemahan)
       sense: z.string().nullable().optional(),
     }),

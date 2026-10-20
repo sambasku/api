@@ -561,6 +561,27 @@
       "when": 1800946900000,
       "tag": "0079_place_contributions",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1801046900000,
+      "tag": "0080_place_contributions_reject_reason",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "6",
+      "when": 1801050000000,
+      "tag": "0081_word_classes_extra",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "6",
+      "when": 1801060000000,
+      "tag": "0082_word_relations_groups",
+      "breakpoints": true
     }
   ]
 }

@@ -579,11 +579,22 @@ export class WordController {
         lemma: rel.lemma,
         relation_type: rel.relationType,
       })),
-      appears_in: word.appearsIn.map((rel) => ({
-        word_id: rel.wordId,
-        lemma: rel.lemma,
-        relation_type: rel.relationType,
+    appears_in: word.appearsIn.map((rel) => ({
+      word_id: rel.wordId,
+      lemma: rel.lemma,
+      relation_type: rel.relationType,
+    })),
+    // PRD relasi-lemma: kelompok makna published (label UX "Makna terkait")
+    meaning_groups: (word.meaningGroups ?? []).map((g) => ({
+      group_id: g.groupId,
+      name: g.name,
+      description: g.description,
+      members: g.members.map((m) => ({
+        word_id: m.wordId,
+        lemma: m.lemma,
+        notes: m.notes,
       })),
+    })),
       variants: word.variants.map((v) => ({
         id: v.id,
         form: v.form,
@@ -1274,6 +1285,7 @@ function toListItem(w: {
   status: string;
   matchedTranslation?: string;
   matchedVariant?: string;
+  matchType?: 'direct' | 'related_group';
   sense?: string | null;
   updatedAt?: Date | null;
 }) {
@@ -1287,8 +1299,10 @@ function toListItem(w: {
     is_verified: w.isVerified,
     status: w.status,
     ...(w.matchedTranslation !== undefined ? { matched_translation: w.matchedTranslation } : {}),
-    ...(w.matchedVariant !== undefined ? { matched_variant: w.matchedVariant } : {}),
-    // A-Z + search: `[n] makan,[v] santap`. Null = belum ada terjemahan published.
+  ...(w.matchedVariant !== undefined ? { matched_variant: w.matchedVariant } : {}),
+  // PRD relasi-lemma: tandai hasil perluasan kelompok makna di /search.
+  ...(w.matchType !== undefined ? { match_type: w.matchType } : {}),
+  // A-Z + search: `[n] makan,[v] santap`. Null = belum ada terjemahan published.
     ...(w.sense !== undefined ? { sense: w.sense } : {}),
     ...(w.updatedAt !== undefined
       ? { updated_at: w.updatedAt ? w.updatedAt.toISOString() : null }

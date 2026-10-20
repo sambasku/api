@@ -50,7 +50,16 @@ export interface CreateWordImageDto {
 }
 
 export type WordType = 'word' | 'idiom' | 'peribahasa' | 'ungkapan';
-export type RelationType = 'synonym' | 'antonym' | 'has_component' | 'derived_from';
+// PRD relasi-lemma: tambah variant_of (variasi bentuk) + nonstandard_of
+// (bentuk tidak baku terverifikasi). Arah: source = lema yang dijelaskan,
+// target = rujukannya (mis. tekpalat → taek palat).
+export type RelationType =
+  | 'synonym'
+  | 'antonym'
+  | 'has_component'
+  | 'derived_from'
+  | 'variant_of'
+  | 'nonstandard_of';
 export type PublicationRequested = 'draft' | 'published';
 
 // 04-api-sinonim-inline.md - override SATU PER SATU atas hasil salinan
