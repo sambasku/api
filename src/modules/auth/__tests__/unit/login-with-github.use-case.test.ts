@@ -14,6 +14,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     username: 'octocat',
     displayName: 'The Octocat',
     bio: null,
+    regionId: null,
+    villageId: null,
     email: 'octocat@github.com',
     phone: null,
     passwordHash: null,

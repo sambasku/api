@@ -86,6 +86,7 @@ import { LogoutAllDevicesUseCase } from '@/modules/auth/application/use-cases/lo
 import { ForgotPasswordUseCase } from '@/modules/auth/application/use-cases/forgot-password.use-case';
 import { ResetPasswordUseCase } from '@/modules/auth/application/use-cases/reset-password.use-case';
 import { ChangePasswordUseCase } from '@/modules/auth/application/use-cases/change-password.use-case';
+import { SetPasswordUseCase } from '@/modules/auth/application/use-cases/set-password.use-case';
 import { AccountDeletionUseCase } from '@/modules/auth/application/use-cases/account-deletion.use-case';
 import { AccountErasureRepositoryImpl } from '@/modules/auth/infrastructure/account-erasure.repository.impl';
 import { AccountDeletionTokenRepositoryImpl } from '@/modules/auth/infrastructure/account-deletion-token.repository.impl';
@@ -211,6 +212,91 @@ import {
   createSearchMissRoutes,
 } from '@/modules/search-miss/presentation/v1/search-miss.routes';
 import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from '@/modules/announcement/presentation/v1/announcement.routes';
+import { AchievementRepositoryImpl } from '@/modules/achievement/infrastructure/achievement.repository.impl';
+import {
+  CreateAchievementUseCase,
+  DeleteAchievementUseCase,
+  GrantAchievementUseCase,
+  PreviewAchievementUseCase,
+  RevokeUserAchievementUseCase,
+  SetActiveBorderUseCase,
+  UpdateAchievementUseCase,
+} from '@/modules/achievement/application/use-cases/achievement-admin.use-cases';
+import { ScanAchievementUseCase } from '@/modules/achievement/application/use-cases/scan-achievement.use-case';
+import { RunDueAchievementScanUseCase } from '@/modules/achievement/application/use-cases/run-due-achievement-scan.use-case';
+import {
+  ListActiveAchievementsUseCase,
+  ListMyAchievementsUseCase,
+  ListUserAchievementsUseCase,
+} from '@/modules/achievement/application/use-cases/list-achievements.use-case';
+import { AchievementController } from '@/modules/achievement/presentation/v1/achievement.controller';
+import {
+  createAdminAchievementRoutes,
+  createMyAchievementRoutes,
+  createMyProfileBorderRoutes,
+  createPublicAchievementRoutes,
+} from '@/modules/achievement/presentation/v1/achievement.routes';
+import { PlaceRepositoryImpl } from '@/modules/place/infrastructure/place.repository.impl';
+import {
+  AppendPlaceImagesUseCase,
+  CreatePlaceUseCase,
+  DeletePlaceUseCase,
+  GetPlaceBySlugUseCase,
+  ListPlaceImagesUseCase,
+  ListPlacesUseCase,
+  UpdatePlaceUseCase,
+} from '@/modules/place/application/use-cases/place.use-cases';
+import { PlaceController } from '@/modules/place/presentation/v1/place.controller';
+import {
+  createAdminPlaceRoutes,
+  createPublicPlaceRoutes,
+} from '@/modules/place/presentation/v1/place.routes';
+import { PlaceContributionRepositoryImpl } from '@/modules/place-contribution/infrastructure/place-contribution.repository.impl';
+import { PlaceContributionUseCases } from '@/modules/place-contribution/application/place-contribution.use-cases';
+import { PlaceContributionController } from '@/modules/place-contribution/presentation/v1/place-contribution.controller';
+import {
+  createAdminPlaceContributionRoutes,
+  createPlaceContributionRoutes,
+} from '@/modules/place-contribution/presentation/v1/place-contribution.routes';
+import { PlaceCategoryRepositoryImpl } from '@/modules/place-category/infrastructure/place-category.repository.impl';
+import {
+  CreatePlaceCategoryUseCase,
+  DeletePlaceCategoryUseCase,
+  GetPlaceCategoryUseCase,
+  ListPlaceCategoriesUseCase,
+  UpdatePlaceCategoryUseCase,
+} from '@/modules/place-category/application/use-cases/place-category.use-cases';
+import { PlaceCategoryController } from '@/modules/place-category/presentation/v1/place-category.controller';
+import {
+  createAdminPlaceCategoryRoutes,
+  createPublicPlaceCategoryRoutes,
+} from '@/modules/place-category/presentation/v1/place-category.routes';
+import { RegionRepositoryImpl } from '@/modules/region/infrastructure/region.repository.impl';
+// PRD relasi-lemma: kelompok makna (word_groups) - kelola + tampil publik.
+import { WordGroupRepositoryImpl } from '@/modules/word-group/infrastructure/word-group.repository.impl';
+import {
+  AddWordGroupMemberUseCase,
+  CreateWordGroupUseCase,
+  DeleteWordGroupUseCase,
+  GetWordGroupUseCase,
+  ListWordGroupsUseCase,
+  RemoveWordGroupMemberUseCase,
+  UpdateWordGroupUseCase,
+} from '@/modules/word-group/application/use-cases/word-group.use-cases';
+import { WordGroupController } from '@/modules/word-group/presentation/v1/word-group.controller';
+import { createWordGroupRoutes } from '@/modules/word-group/presentation/v1/word-group.routes';
+import {
+  CreateRegionUseCase,
+  DeleteRegionUseCase,
+  GetRegionByIdUseCase,
+  ListRegionsUseCase,
+  UpdateRegionUseCase,
+} from '@/modules/region/application/use-cases/region.use-cases';
+import { RegionController } from '@/modules/region/presentation/v1/region.controller';
+import {
+  createAdminRegionRoutes,
+  createPublicRegionRoutes,
+} from '@/modules/region/presentation/v1/region.routes';
 import { LanguageRepositoryImpl } from '@/modules/language/infrastructure/language.repository.impl';
 import { ListLanguagesUseCase } from '@/modules/language/application/use-cases/list-languages.use-case';
 import { ListDialectsUseCase } from '@/modules/language/application/use-cases/list-dialects.use-case';
@@ -407,7 +493,22 @@ import { ListVerifierApplicationsUseCase } from '@/modules/verifier-application/
 import { GetVerifierApplicationDetailUseCase } from '@/modules/verifier-application/application/use-cases/get-verifier-application-detail.use-case';
 import { ApproveVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/approve-verifier-application.use-case';
 import { RejectVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/reject-verifier-application.use-case';
+import { UpdateVerifierApplicationScreenshotUseCase } from '@/modules/verifier-application/application/use-cases/update-verifier-application-screenshot.use-case';
 import { VerifierApplicationController } from '@/modules/verifier-application/presentation/v1/verifier-application.controller';
+import { WebImportController } from '@/modules/web-import/presentation/v1/web-import.controller';
+import {
+  createAdminWebImportRoutes,
+  createPublicWebImportRoutes,
+} from '@/modules/web-import/presentation/v1/web-import.routes';
+import { WebImportRepositoryImpl } from '@/modules/web-import/infrastructure/web-import.repository.impl';
+import {
+  ApproveWebImportUseCase,
+  GetWebImportUseCase,
+  ListWebImportsUseCase,
+  PreviewWebImportUseCase,
+  RejectWebImportUseCase,
+  SubmitWebImportUseCase,
+} from '@/modules/web-import/application/use-cases/web-import.use-cases';
 import { createVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/verifier-application.routes';
 import { createAdminVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/admin-verifier-application.routes';
 import { WaTemplateRepositoryImpl, WaMessageLogRepositoryImpl, WaUsageRepositoryImpl } from '@/modules/wa/infrastructure/wa-message.repository.impl';
@@ -536,6 +637,16 @@ const controller = new AuthController({
   forgot: new ForgotPasswordUseCase(userRepo, resetTokenRepo, mailer, `${env.webAppUrl}/reset-password`),
   reset: new ResetPasswordUseCase(resetTokenRepo, userRepo, hasher, auditRepo, refreshTokenRepo),
   changePassword: new ChangePasswordUseCase(userRepo, hasher, auditRepo, refreshTokenRepo),
+  setPassword: new SetPasswordUseCase(
+    userRepo,
+    identityRepo,
+    hasher,
+    auditRepo,
+    refreshTokenRepo,
+    googleTokenVerifier,
+    facebookTokenVerifier,
+    githubTokenVerifier,
+  ),
   google: new LoginWithGoogleUseCase(
     userRepo,
     identityRepo,
@@ -566,7 +677,7 @@ const controller = new AuthController({
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
   ),
-  listProviders: new ListAuthProvidersUseCase(identityRepo),
+  listProviders: new ListAuthProvidersUseCase(identityRepo, userRepo),
   linkGoogle: new LinkGoogleAccountUseCase(userRepo, identityRepo, googleTokenVerifier),
   unlinkGoogle: new UnlinkGoogleAccountUseCase(userRepo, identityRepo),
   linkGithub: new LinkGithubAccountUseCase(userRepo, identityRepo, githubTokenVerifier),
@@ -679,7 +790,7 @@ const wordController = new WordController({
   update: new UpdateWordUseCase(wordRepo, auditRepo),
   getById: new GetWordByIdUseCase(wordRepo),
   getByLemma: new GetWordByLemmaUseCase(wordRepo),
-  wordOfDay: new GetWordOfDayUseCase(wordRepo),
+  wordOfDay: new GetWordOfDayUseCase(wordRepo, appSettingsRepo),
   search: new SearchWordsUseCase(wordRepo, searchMissRepo),
   listAdmin: new ListAdminWordsUseCase(wordRepo),
   list: new ListWordsUseCase(wordRepo),
@@ -789,12 +900,67 @@ const announcementController = new AnnouncementController(
   announcementRepo,
 );
 
+
+
+const placeRepo = new PlaceRepositoryImpl(db);
+const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
+const placeController = new PlaceController(
+  new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
+  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
+  new DeletePlaceUseCase(placeRepo),
+  new ListPlacesUseCase(placeRepo),
+  new GetPlaceBySlugUseCase(placeRepo),
+  new ListPlaceImagesUseCase(placeRepo),
+  new AppendPlaceImagesUseCase(placeRepo, userRepo),
+);
+const placeCategoryController = new PlaceCategoryController(
+  new CreatePlaceCategoryUseCase(placeCategoryRepo),
+  new UpdatePlaceCategoryUseCase(placeCategoryRepo),
+  new DeletePlaceCategoryUseCase(placeCategoryRepo),
+  new ListPlaceCategoriesUseCase(placeCategoryRepo),
+  new GetPlaceCategoryUseCase(placeCategoryRepo),
+);
+
+const regionRepo = new RegionRepositoryImpl(db);
+const placeContributionController = new PlaceContributionController(
+new PlaceContributionUseCases(
+new PlaceContributionRepositoryImpl(db),
+placeRepo,
+placeCategoryRepo,
+regionRepo,
+userRepo,
+new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
+new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
+recordInbox,
+notifyUser,
+),
+);
+const regionController = new RegionController(
+  new CreateRegionUseCase(regionRepo),
+  new UpdateRegionUseCase(regionRepo),
+  new DeleteRegionUseCase(regionRepo),
+  new ListRegionsUseCase(regionRepo),
+  new GetRegionByIdUseCase(regionRepo),
+);
+
 const categoryRepo = new CategoryRepositoryImpl(db);
 const categoryController = new CategoryController({
   listCategories: new ListCategoriesUseCase(categoryRepo),
   createCategory: new CreateCategoryUseCase(categoryRepo, auditRepo),
   updateCategory: new UpdateCategoryUseCase(categoryRepo, auditRepo),
   deleteCategory: new DeleteCategoryUseCase(categoryRepo, auditRepo),
+});
+
+// ---- Modul word-group (PRD relasi-lemma): kelompok makna. ----
+const wordGroupRepo = new WordGroupRepositoryImpl(db);
+const wordGroupController = new WordGroupController({
+  create: new CreateWordGroupUseCase(wordGroupRepo),
+  update: new UpdateWordGroupUseCase(wordGroupRepo),
+  remove: new DeleteWordGroupUseCase(wordGroupRepo, auditRepo),
+  list: new ListWordGroupsUseCase(wordGroupRepo),
+  getById: new GetWordGroupUseCase(wordGroupRepo),
+  addMember: new AddWordGroupMemberUseCase(wordGroupRepo),
+  removeMember: new RemoveWordGroupMemberUseCase(wordGroupRepo),
 });
 
 // ---- Modul vote (08-api-upvote-downvote.md) - upvote/downvote polymorphic
@@ -943,8 +1109,36 @@ const userController = new UserController({
   uploadAvatar: new UploadAvatarUseCase(userRepo, publicImageStorage),
   deleteAvatar: new DeleteAvatarUseCase(userRepo, publicImageStorage),
   getMyProfile: new GetMyProfileUseCase(userRepo),
-  updateMyProfile: new UpdateMyProfileUseCase(userRepo),
+  updateMyProfile: new UpdateMyProfileUseCase(userRepo, regionRepo),
 });
+
+// ---- Modul achievement: katalog reward (border/badge/stiker) + evaluasi
+// cron + border profil. Registry source di domain/achievement-registry. ----
+const achievementRepo = new AchievementRepositoryImpl(db);
+const scanAchievement = new ScanAchievementUseCase(achievementRepo, recordInbox, auditRepo);
+const achievementController = new AchievementController({
+  create: new CreateAchievementUseCase(achievementRepo, auditRepo),
+  update: new UpdateAchievementUseCase(achievementRepo, auditRepo),
+  remove: new DeleteAchievementUseCase(achievementRepo, auditRepo),
+  grant: new GrantAchievementUseCase(achievementRepo, recordInbox, auditRepo),
+  revoke: new RevokeUserAchievementUseCase(achievementRepo, auditRepo),
+  preview: new PreviewAchievementUseCase(achievementRepo),
+  scan: scanAchievement,
+  setBorder: new SetActiveBorderUseCase(achievementRepo, auditRepo),
+  listActive: new ListActiveAchievementsUseCase(achievementRepo),
+  listMine: new ListMyAchievementsUseCase(achievementRepo),
+  listByUsername: new ListUserAchievementsUseCase(achievementRepo, async (username) => {
+    const row = await publicUserRepo.findPublicByUsername(username);
+    return row?.id ?? null;
+  }),
+  repo: achievementRepo,
+});
+const runDueAchievementScanUseCase = new RunDueAchievementScanUseCase(
+  achievementRepo,
+  scanAchievement,
+  appSettingsRepo,
+  auditRepo,
+);
 
 // ---- Modul device (FCM token register/revoke, multi-device) ----
 const deviceController = new DeviceController({
@@ -1331,6 +1525,37 @@ app.route('/api/v1/admin/announcements', createAdminAnnouncementRoutes({ control
 // Publik: detail pengumuman by id (deep link mobile #102).
 app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: announcementController }));
 
+// Achievement (Pencapaian) - katalog reward, milik sendiri, border profil.
+// Publik katalog + badge profil; `/me/achievements` dan `/me/profile/border`
+// butuh auth. Border profil TIDAK lewat /api/v1/users/:username supaya
+// tidak bentrok dengan route profil.
+app.route('/api/v1/achievements', createPublicAchievementRoutes({ controller: achievementController }));
+// Border profil: mount di `/api/v1/me/profile` + path `/border` =
+// PATCH /api/v1/me/profile/border (jangan mount dua-duanya "border").
+app.route('/api/v1/me/achievements', createMyAchievementRoutes({ controller: achievementController, authenticate }));
+app.route('/api/v1/me/profile', createMyProfileBorderRoutes({ controller: achievementController, authenticate }));
+app.route('/api/v1/admin/achievements', createAdminAchievementRoutes({ controller: achievementController, authenticate }));
+
+// Places CRUD - katalog wisata/kuliner/budaya (SoT Turso).
+app.route('/api/v1/admin/places', createAdminPlaceRoutes({ controller: placeController, authenticate }));
+app.route('/api/v1/places', createPublicPlaceRoutes({ controller: placeController, optionalAuthenticate }));
+app.route('/api/v1/admin/place-contributions', createAdminPlaceContributionRoutes({ controller: placeContributionController, authenticate }));
+app.route(
+  '/api/v1/place-contributions',
+  createPlaceContributionRoutes({
+    controller: placeContributionController,
+    authenticate,
+    optionalAuthenticate,
+    uploadPlaceImage: (c) => publicImageController.upload(c, { purpose: 'place' }),
+  }),
+);
+app.route('/api/v1/admin/place-categories', createAdminPlaceCategoryRoutes({ controller: placeCategoryController, authenticate }));
+app.route('/api/v1/place-categories', createPublicPlaceCategoryRoutes({ controller: placeCategoryController }));
+// PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
+app.route('/api/v1/word-groups', createWordGroupRoutes({ controller: wordGroupController, authenticate }));
+app.route('/api/v1/admin/regions', createAdminRegionRoutes({ controller: regionController, authenticate }));
+app.route('/api/v1/regions', createPublicRegionRoutes({ controller: regionController }));
+
 // Data referensi form admin
 app.route('/api/v1/languages', createLanguageRoutes({ controller: languageController }));
 app.route('/api/v1/dialects', createDialectRoutes({ controller: languageController }));
@@ -1567,16 +1792,34 @@ const verifierApplicationController = new VerifierApplicationController({
     sendVerifierWa,
     readWaSettings,
   ),
-  reject: new RejectVerifierApplicationUseCase(
-    verifierApplicationRepo,
-    auditRepo,
-    notifyUser,
-    recordInbox,
-    userRepo,
-    sendVerifierWa,
-    readWaSettings,
-  ),
+reject: new RejectVerifierApplicationUseCase(
+  verifierApplicationRepo,
+  auditRepo,
+  notifyUser,
+  recordInbox,
+  userRepo,
+  sendVerifierWa,
+  readWaSettings,
+),
+updateScreenshot: new UpdateVerifierApplicationScreenshotUseCase(verifierApplicationRepo),
 });
+const webImportRepo = new WebImportRepositoryImpl(db);
+const webImportController = new WebImportController(
+  new SubmitWebImportUseCase(webImportRepo, auditRepo),
+  new ListWebImportsUseCase(webImportRepo),
+  new GetWebImportUseCase(webImportRepo),
+  new PreviewWebImportUseCase(webImportRepo),
+  new ApproveWebImportUseCase(webImportRepo, auditRepo),
+  new RejectWebImportUseCase(webImportRepo, auditRepo),
+);
+app.route(
+  '/api/v1/web-imports',
+  createPublicWebImportRoutes({ controller: webImportController }),
+);
+app.route(
+  '/api/v1/admin/web-imports',
+  createAdminWebImportRoutes({ controller: webImportController, authenticate }),
+);
 app.route(
   '/api/v1/verifier-applications',
   createVerifierApplicationRoutes({ controller: verifierApplicationController, authenticate }),
@@ -1652,6 +1895,18 @@ app.route(
 export async function runDueNotificationCampaigns(): Promise<{ processed: number }> {
   await resetWaUsageIfNewPeriod();
   return processDueCampaigns.execute(5);
+}
+
+/**
+ * Cron achievement: scan semua katalog aktif (due-check 6 jam via
+ * app_settings). Idempotent - tick berulang aman.
+ */
+export async function runDueAchievementScan(): Promise<{
+  scanned: number;
+  awarded: number;
+  ran: boolean;
+}> {
+  return runDueAchievementScanUseCase.execute();
 }
 
 /**

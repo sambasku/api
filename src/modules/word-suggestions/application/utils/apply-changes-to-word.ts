@@ -1,5 +1,5 @@
 import type { ProposedChanges } from '../../domain/entities/word-suggestion.entity';
-import { NotFoundError, ConflictError } from '@/shared/errors/app-error';
+import { NotFoundError, ConflictError, BadRequestError } from '@/shared/errors/app-error';
 import { resolveWordImageProvider } from '@/modules/word/domain/word-image-provider';
 import { db } from '@/shared/database/drizzle/client';
 import {
@@ -12,8 +12,10 @@ import {
   lexicalRelations,
   wordVariants,
   wordImages,
+  wordGroups,
+  wordGroupMembers,
 } from '@/shared/database/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 
 /** Foto utama terhapus tanpa pengganti: foto tersisa paling lama jadi utama. */
 async function ensurePrimaryImage(wordId: string): Promise<void> {
@@ -30,6 +32,31 @@ async function ensurePrimaryImage(wordId: string): Promise<void> {
   });
   if (!oldest) return;
   await db.update(wordImages).set({ isPrimary: true }).where(eq(wordImages.id, oldest.id));
+}
+
+/** Jenis `word` tidak boleh tetap punya relasi komponen frasa. */
+export async function assertWordTypeAllowsComponents(
+  wordId: string,
+  wordType: string | undefined,
+): Promise<void> {
+  if (wordType !== 'word') return;
+  const [row] = await db
+    .select({ id: lexicalRelations.id })
+    .from(lexicalRelations)
+    .where(
+      and(
+        eq(lexicalRelations.sourceWordId, wordId),
+        eq(lexicalRelations.relationType, 'has_component'),
+        isNull(lexicalRelations.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!row) return;
+  throw new BadRequestError(
+    'VALIDATION_ERROR',
+    'has_component hanya untuk entri idiom/peribahasa/ungkapan',
+    [{ field: 'word_type', message: 'has_component hanya untuk entri idiom/peribahasa/ungkapan' }],
+  );
 }
 
 export interface ApplyResult {
@@ -65,18 +92,22 @@ export async function applyChangesToWord(
 
   const word = await db.query.words.findFirst({
     where: and(eq(words.id, suggestion.wordId), isNull(words.deletedAt)),
-    columns: { id: true, lemma: true, notes: true, isVerified: true },
+    columns: { id: true, lemma: true, notes: true, wordType: true, isVerified: true },
   });
 
   if (!word) throw new NotFoundError('WORD_NOT_FOUND', 'Kata tidak ditemukan');
 
+  await assertWordTypeAllowsComponents(word.id, changes.wordType);
+
   const oldAudit: Record<string, unknown> = {
     lemma: word.lemma,
     notes: word.notes,
+    word_type: word.wordType,
   };
   const newAudit: Record<string, unknown> = {
     lemma: changes.lemma ?? word.lemma,
     notes: changes.notes ?? word.notes,
+    word_type: changes.wordType ?? word.wordType,
   };
 
   if (changes.lemma !== undefined && changes.lemma !== word.lemma) {
@@ -91,6 +122,14 @@ export async function applyChangesToWord(
     await db
       .update(words)
       .set({ notes: changes.notes, updatedAt: new Date() })
+      .where(eq(words.id, word.id));
+    changesApplied++;
+  }
+
+  if (changes.wordType !== undefined && changes.wordType !== word.wordType) {
+    await db
+      .update(words)
+      .set({ wordType: changes.wordType, updatedAt: new Date() })
       .where(eq(words.id, word.id));
     changesApplied++;
   }
@@ -244,6 +283,49 @@ export async function applyChangesToWord(
     for (const rel of changes.relations) {
       if (rel.wordId === word.id) continue;
       if (rel.action === 'add') {
+        // PRD relasi-lemma 5.2: derived_from - satu akar utama, tanpa siklus.
+        if (rel.relationType === 'derived_from') {
+          const [existingRoot] = await db
+            .select({ id: lexicalRelations.id, targetWordId: lexicalRelations.targetWordId })
+            .from(lexicalRelations)
+            .where(
+              and(
+                eq(lexicalRelations.sourceWordId, word.id),
+                eq(lexicalRelations.relationType, 'derived_from'),
+                isNull(lexicalRelations.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (existingRoot && existingRoot.targetWordId !== rel.wordId) {
+            throw new BadRequestError(
+              'VALIDATION_ERROR',
+              'Kata ini sudah punya akar lain. Hapus akar lama dulu sebelum mengganti.',
+              [{ field: 'relations', message: 'Satu kata turunan hanya boleh punya satu akar' }],
+            );
+          }
+          const cycle = await db.all<{ hit: number }>(sql`
+            WITH RECURSIVE walk(word_id) AS (
+              SELECT ${rel.wordId}
+              UNION
+              SELECT lr.source_word_id
+              FROM lexical_relations lr
+              JOIN walk w ON lr.target_word_id = w.word_id
+              WHERE lr.relation_type = 'derived_from'
+                AND lr.deleted_at IS NULL
+                AND lr.status = 'published'
+                AND w.word_id != ${word.id}
+              LIMIT 1000
+            )
+            SELECT 1 AS hit FROM walk WHERE word_id = ${word.id} LIMIT 1
+          `);
+          if (cycle.length > 0) {
+            throw new BadRequestError(
+              'VALIDATION_ERROR',
+              'Relasi akar ini akan membuat siklus. Periksa rujukan akarnya.',
+              [{ field: 'relations', message: 'Relasi akar menutup siklus' }],
+            );
+          }
+        }
         await db
           .insert(lexicalRelations)
           .values({
@@ -327,11 +409,106 @@ export async function applyChangesToWord(
           .update(wordVariants)
           .set({ deletedAt: new Date(), deletedBy: reviewerId })
           .where(and(...conditions));
-        variantAudit.removed.push({ form, variant_type: v.variantType ?? 'alternative' });
+      variantAudit.removed.push({ form, variant_type: v.variantType ?? 'alternative' });
+      changesApplied++;
+    }
+  }
+    newAudit.variants = variantAudit;
+  }
+
+  // PRD relasi-lemma: kelompok makna. Approve verifikator = publish
+  // (moderasi sudah lewat antrean usulan ini); relasi status mengikuti
+  // konvensi lexical_relations (default kolom = published).
+  const groupAudit: { joined: string[]; left: string[]; created: string[] } = {
+    joined: [],
+    left: [],
+    created: [],
+  };
+  if (changes.groups?.length) {
+    for (const g of changes.groups) {
+      if (g.action === 'add' && g.groupId) {
+        const [group] = await db
+          .select({ id: wordGroups.id })
+          .from(wordGroups)
+          .where(and(eq(wordGroups.id, g.groupId), isNull(wordGroups.deletedAt)))
+          .limit(1);
+        if (!group) continue; // kelompok sudah dihapus - skip, bukan gagal
+        // Baris yang pernah dikeluarkan (soft-delete) dihidupkan lagi -
+        // unique (group_id, word_id) tidak memperhitungkan deleted_at, jadi
+        // insert baru akan ditolak diam-diam.
+        const [existing] = await db
+          .select({ id: wordGroupMembers.id, deletedAt: wordGroupMembers.deletedAt })
+          .from(wordGroupMembers)
+          .where(
+            and(
+              eq(wordGroupMembers.groupId, g.groupId),
+              eq(wordGroupMembers.wordId, word.id),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          if (!existing.deletedAt) continue; // sudah anggota - tidak ada perubahan
+          await db
+            .update(wordGroupMembers)
+            .set({ deletedAt: null, deletedBy: null, status: 'published', updatedAt: new Date() })
+            .where(eq(wordGroupMembers.id, existing.id));
+        } else {
+          await db
+            .insert(wordGroupMembers)
+            .values({
+              groupId: g.groupId,
+              wordId: word.id,
+              status: 'published',
+              createdBy: reviewerId,
+            })
+            .onConflictDoNothing();
+        }
+        groupAudit.joined.push(g.groupId);
+        changesApplied++;
+      } else if (g.action === 'add' && !g.groupId) {
+        const name = g.name?.trim();
+        if (!name) continue;
+        const [newGroup] = await db
+          .insert(wordGroups)
+          .values({
+            name,
+            description: g.description ?? null,
+            status: 'published',
+            createdBy: reviewerId,
+          })
+          .returning({ id: wordGroups.id });
+        const memberIds = [...new Set([...(g.wordIds ?? []), word.id])];
+        await db
+          .insert(wordGroupMembers)
+          .values(
+            memberIds.map((id) => ({
+              groupId: newGroup.id,
+              wordId: id,
+              status: 'published',
+              createdBy: reviewerId,
+            })),
+          )
+          .onConflictDoNothing();
+        groupAudit.created.push(name);
+        changesApplied++;
+      } else if (g.action === 'remove' && g.groupId) {
+        await db
+          .update(wordGroupMembers)
+          .set({ deletedAt: new Date(), deletedBy: reviewerId })
+          .where(
+            and(
+              eq(wordGroupMembers.groupId, g.groupId),
+              eq(wordGroupMembers.wordId, word.id),
+              isNull(wordGroupMembers.deletedAt),
+            ),
+          );
+        groupAudit.left.push(g.groupId);
         changesApplied++;
       }
     }
-    newAudit.variants = variantAudit;
+    if (groupAudit.joined.length || groupAudit.left.length || groupAudit.created.length) {
+      newAudit.groups = groupAudit;
+    }
   }
 
   // Images

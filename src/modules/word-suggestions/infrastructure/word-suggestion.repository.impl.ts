@@ -12,6 +12,8 @@ import {
   lexicalRelations,
   wordVariants,
   wordImages,
+  wordGroups,
+  wordGroupMembers,
 } from '@/shared/database/drizzle/schema';
 import type { WordSuggestionRepository, ChangeHistoryItem, SuggestionSource } from '../domain/repositories/word-suggestion.repository';
 import type {
@@ -34,7 +36,7 @@ import {
   REASON_CODE_LABELS,
   isSuggestionCategory,
 } from '../domain/entities/word-suggestion.entity';
-import { applyChangesToWord } from '../application/utils/apply-changes-to-word';
+import { applyChangesToWord, assertWordTypeAllowsComponents } from '../application/utils/apply-changes-to-word';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import {
   deleteProposedStagingImages,
@@ -81,6 +83,7 @@ async function captureBaseline(
   lemma: string,
   notes: string | null,
   isVerified: boolean,
+  wordType: string,
 ) {
   const meaningRows = await db
     .select({ id: meanings.id, definition: meanings.definition, wordClassId: meanings.wordClassId })
@@ -100,6 +103,7 @@ async function captureBaseline(
   return {
     lemma,
     notes,
+    wordType,
     isVerified,
     meanings: meaningRows.map((m) => ({
       id: m.id,
@@ -216,8 +220,24 @@ async function assertProposedTargetsCurrent(wordId: string, c: ProposedChanges):
       .limit(1);
     if (!row) throw stale();
   }
-}
 
+  // PRD relasi-lemma: keluar kelompok hanya sah bila masih anggota.
+  for (const g of c.groups ?? []) {
+    if (g.action !== 'remove' || !g.groupId) continue;
+    const [row] = await db
+      .select({ id: wordGroupMembers.id })
+      .from(wordGroupMembers)
+      .where(
+        and(
+          eq(wordGroupMembers.groupId, g.groupId),
+          eq(wordGroupMembers.wordId, wordId),
+          isNull(wordGroupMembers.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) throw stale();
+  }
+}
 /**
  * Kembalikan hanya field yang disentuh usulan ini. Usulan lain (kategori
  * berbeda) bisa tayang bersamaan di kata yang sama. `is_verified` tidak
@@ -232,9 +252,13 @@ export async function restoreBaseline(
   const snap = raw as Awaited<ReturnType<typeof captureBaseline>> | null;
   if (!snap || typeof snap !== 'object' || !snap.lemma) return;
 
-  const wordPatch: { lemma?: string; notes?: string | null } = {};
+  const wordPatch: { lemma?: string; notes?: string | null; wordType?: string } = {};
   if (proposed.lemma !== undefined) wordPatch.lemma = snap.lemma;
   if (proposed.notes !== undefined) wordPatch.notes = snap.notes;
+  // Snapshot lama belum menyimpan jenis entri: lewati.
+  if (proposed.wordType !== undefined && typeof snap.wordType === 'string') {
+    wordPatch.wordType = snap.wordType;
+  }
   if (Object.keys(wordPatch).length > 0) {
     await db
       .update(words)
@@ -285,7 +309,7 @@ export async function restoreBaseline(
 
 async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapshot | null> {
   const [word] = await db
-    .select({ lemma: words.lemma, notes: words.notes })
+    .select({ lemma: words.lemma, notes: words.notes, wordType: words.wordType })
     .from(words)
     .where(and(eq(words.id, wordId), isNull(words.deletedAt)))
     .limit(1);
@@ -295,8 +319,10 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
     .select({
       id: meanings.id,
       definition: meanings.definition,
+      wordClassId: meanings.wordClassId,
       wordClassCode: wordClasses.code,
       wordClassName: wordClasses.name,
+      wordClassAlias: wordClasses.alias,
     })
     .from(meanings)
     .leftJoin(wordClasses, eq(meanings.wordClassId, wordClasses.id))
@@ -363,14 +389,54 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
     .from(wordImages)
     .where(and(eq(wordImages.wordId, wordId), isNull(wordImages.deletedAt)));
 
+  // PRD relasi-lemma: kelompok makna published yang memuat kata ini.
+  const groupRows = await db
+    .select({
+      groupId: wordGroups.id,
+      name: wordGroups.name,
+      memberWordId: wordGroupMembers.wordId,
+    })
+    .from(wordGroupMembers)
+    .innerJoin(
+      wordGroups,
+      and(
+        eq(wordGroups.id, wordGroupMembers.groupId),
+        eq(wordGroups.status, 'published'),
+        isNull(wordGroups.deletedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(wordGroupMembers.wordId, wordId),
+        eq(wordGroupMembers.status, 'published'),
+        isNull(wordGroupMembers.deletedAt),
+      ),
+    );
+
+  const groupMap = new Map<string, { groupId: string; name: string; memberWordIds: string[] }>();
+  for (const g of groupRows) {
+    const cur = groupMap.get(g.groupId) ?? {
+      groupId: g.groupId,
+      name: g.name,
+      memberWordIds: [],
+    };
+    cur.memberWordIds.push(g.memberWordId);
+    groupMap.set(g.groupId, cur);
+  }
+
   return {
     lemma: word.lemma,
     notes: word.notes,
+    wordType: word.wordType,
     meanings: meaningRows.map((m) => ({
       id: m.id,
+      wordClassId: m.wordClassId,
       wordClass:
         m.wordClassCode && m.wordClassName
-          ? { code: m.wordClassCode, name: m.wordClassName }
+          ? {
+              code: m.wordClassCode,
+              name: m.wordClassAlias?.trim() || m.wordClassName,
+            }
           : { code: '', name: '' },
       definition: m.definition,
       translations: byMeaning.get(m.id) ?? [],
@@ -392,6 +458,7 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
       isPrimary: i.isPrimary,
       altText: i.altText,
     })),
+    groups: [...groupMap.values()],
   };
 }
 
@@ -417,6 +484,16 @@ async function relationLemmas(
   return known;
 }
 
+async function classLabels(ids: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.filter((id) => id.length > 0))];
+  if (unique.length === 0) return new Map();
+  const rows = await db
+    .select({ id: wordClasses.id, name: wordClasses.name, alias: wordClasses.alias })
+    .from(wordClasses)
+    .where(inArray(wordClasses.id, unique));
+  return new Map(rows.map((row) => [row.id, row.alias?.trim() || row.name]));
+}
+
 async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot): Promise<DiffResult> {
   const lemma: DiffResult['lemma'] = {
     current: current.lemma,
@@ -428,6 +505,14 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
     proposed: proposed.notes ?? null,
     changed: proposed.notes !== undefined && proposed.notes !== current.notes,
   };
+  const wordType: DiffResult['wordType'] = {
+    current: current.wordType,
+    proposed: proposed.wordType ?? null,
+    changed: proposed.wordType !== undefined && proposed.wordType !== current.wordType,
+  };
+  const labels = await classLabels(
+    (proposed.meanings ?? []).flatMap((mc) => (mc.wordClassId ? [mc.wordClassId] : [])),
+  );
 
   const meaningsDiff: DiffResult['meanings'] = [];
   for (const mc of proposed.meanings ?? []) {
@@ -441,9 +526,27 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
     }
     if (!mc.meaningId) continue;
     const cur = current.meanings.find((m) => m.id === mc.meaningId);
+    if (mc.wordClassId !== undefined) {
+      const currentId = cur?.wordClassId ?? null;
+      const proposedLabel = labels.get(mc.wordClassId) ?? null;
+      const currentLabel = cur?.wordClass.name?.trim() || null;
+      if (proposedLabel) {
+        changes.push({
+          label: 'Kelas kata',
+          current: currentLabel,
+          proposed: proposedLabel,
+          changed: mc.wordClassId !== currentId,
+        });
+      }
+    }
     if (mc.definition !== undefined) {
       const d = cur?.definition ?? null;
-      changes.push({ current: d, proposed: mc.definition, changed: mc.definition !== d });
+      changes.push({
+        label: 'Definisi',
+        current: d,
+        proposed: mc.definition,
+        changed: mc.definition !== d,
+      });
     }
     if (mc.translations) {
       for (const t of mc.translations) {
@@ -470,9 +573,60 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
       lemma: lemmaOf.get(r.wordId),
     }));
 
+  // PRD relasi-lemma: diff keanggotaan kelompok makna.
+  const curGroups = new Map(current.groups.map((g) => [g.groupId, g.name]));
+  const groupIds = [
+    ...new Set((proposed.groups ?? []).map((g) => g.groupId).filter((id): id is string => !!id)),
+  ];
+  const groupNames = new Map<string, string>();
+  if (groupIds.length > 0) {
+    const rows = await db
+      .select({ id: wordGroups.id, name: wordGroups.name })
+      .from(wordGroups)
+      .where(and(inArray(wordGroups.id, groupIds), isNull(wordGroups.deletedAt)));
+    for (const row of rows) groupNames.set(row.id, row.name);
+  }
+  const newGroupWordIds = [
+    ...new Set(
+      (proposed.groups ?? [])
+        .filter((g) => g.action === 'add' && !g.groupId)
+        .flatMap((g) => g.wordIds ?? []),
+    ),
+  ];
+  const newGroupLemmas = new Map<string, string>();
+  if (newGroupWordIds.length > 0) {
+    const rows = await db
+      .select({ id: words.id, lemma: words.lemma })
+      .from(words)
+      .where(inArray(words.id, newGroupWordIds));
+    for (const row of rows) newGroupLemmas.set(row.id, row.lemma);
+  }
+  const groupsDiff: DiffResult['groups'] = { joined: [], left: [], created: [] };
+  for (const g of proposed.groups ?? []) {
+    if (g.action === 'add' && g.groupId) {
+      if (curGroups.has(g.groupId)) continue; // sudah anggota - bukan perubahan
+      groupsDiff.joined.push({
+        groupId: g.groupId,
+        name: groupNames.get(g.groupId) ?? curGroups.get(g.groupId) ?? g.groupId,
+      });
+    } else if (g.action === 'add' && !g.groupId) {
+      groupsDiff.created.push({
+        name: g.name ?? '',
+        memberLemmas: (g.wordIds ?? [])
+          .map((id) => newGroupLemmas.get(id) ?? id)
+          // Kata ini sendiri tidak ditampilkan sebagai anggota "lain".
+          .filter((lemma) => lemma !== current.lemma),
+      });
+    } else if (g.action === 'remove' && g.groupId) {
+      if (!curGroups.has(g.groupId)) continue; // bukan anggota - bukan perubahan
+      groupsDiff.left.push({ groupId: g.groupId, name: groupNames.get(g.groupId) ?? g.groupId });
+    }
+  }
+
   return {
     lemma,
     notes,
+    wordType,
     meanings: meaningsDiff,
     categories: {
       added: (proposed.categoryIdsToAdd ?? []).filter((c) => !curCats.has(c)),
@@ -503,6 +657,7 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
         .filter((i) => i.action === 'set_primary' && i.imageId)
         .map((i) => ({ imageId: i.imageId! })),
     },
+    groups: groupsDiff,
   };
 }
 
@@ -573,6 +728,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         id: words.id,
         lemma: words.lemma,
         notes: words.notes,
+        wordType: words.wordType,
         status: words.status,
         isVerified: words.isVerified,
         createdBy: words.createdBy,
@@ -585,13 +741,28 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       throw new BadRequestError('WORD_NOT_PUBLISHED', 'Hanya kata yang tayang bisa diusulkan');
     }
 
+    if (proposedChanges.wordType !== undefined && proposedChanges.wordType === word.wordType) {
+      proposedChanges = { ...proposedChanges, wordType: undefined };
+    }
     const validation = verifyProposedChanges(proposedChanges);
     if (!validation.valid) {
+      const onlyEmpty = validation.errors.every((e) => e.field === 'proposed_changes');
+      if (onlyEmpty) {
+        throw new BadRequestError(
+          'SUGGESTION_NO_CHANGES',
+          'Tidak ada yang berubah dari data sekarang',
+          [{ field: 'word_type', message: 'Jenis entri masih sama' }],
+        );
+      }
       throw new BadRequestError(
         'INVALID_SUGGESTION_CHANGES',
         'Perubahan tidak valid',
         validation.errors.map((e) => ({ field: e.field, message: e.message })),
       );
+    }
+
+    if (proposedChanges.wordType !== undefined) {
+      await assertWordTypeAllowsComponents(wordId, proposedChanges.wordType);
     }
 
     if (word.createdBy === userId) {
@@ -640,7 +811,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     const applyPendingNow =
       !selfApply && !word.isVerified && isRevertibleForApplyPending(proposedChanges);
     const baseline = applyPendingNow
-      ? await captureBaseline(wordId, word.lemma, word.notes, word.isVerified)
+      ? await captureBaseline(wordId, word.lemma, word.notes, word.isVerified, word.wordType)
       : null;
 
     const [suggestion] = await db
@@ -818,12 +989,14 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         summaryChanges: {
           lemma: pc.lemma ?? null,
           notes: pc.notes ?? null,
+          wordType: pc.wordType ?? null,
           meaningsCount: pc.meanings?.length ?? 0,
           categoriesAdded: pc.categoryIdsToAdd?.length ?? 0,
           categoriesRemoved: pc.categoryIdsToRemove?.length ?? 0,
           relationsCount: pc.relations?.length ?? 0,
           variantsCount: pc.variants?.length ?? 0,
           imagesCount: pc.images?.length ?? 0,
+          groupsCount: pc.groups?.length ?? 0,
         },
       };
     });

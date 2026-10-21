@@ -274,6 +274,7 @@ describe('RejectVerifierApplicationUseCase', () => {
     const result = await useCase.execute({
       applicationId: APP_ID,
       actorId: ADMIN,
+      actorRoles: ['admin'],
       comment: 'HP tidak bisa dihubungi',
     });
     expect(result.status).toBe('rejected');
@@ -299,5 +300,24 @@ describe('RejectVerifierApplicationUseCase', () => {
         }),
       }),
     );
+  });
+
+  it('actor selain admin/root → 403 sebelum menulis apa pun', async () => {
+    const appRepo = makeAppRepo();
+    const useCase = new RejectVerifierApplicationUseCase(
+      appRepo,
+      { record: vi.fn() } as never,
+      { execute: vi.fn() } as never,
+      { execute: vi.fn() } as never,
+    );
+    await expect(
+      useCase.execute({
+        applicationId: APP_ID,
+        actorId: ADMIN,
+        actorRoles: ['reviewer'],
+        comment: 'x',
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(appRepo.markRejected).not.toHaveBeenCalled();
   });
 });

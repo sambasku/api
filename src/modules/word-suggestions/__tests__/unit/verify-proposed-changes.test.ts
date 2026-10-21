@@ -7,6 +7,11 @@ describe('verifyProposedChanges', () => {
     expect(r.valid).toBe(true);
   });
 
+  it('menerima hanya jenis entri', () => {
+    const r = verifyProposedChanges({ wordType: 'ungkapan' });
+    expect(r.valid).toBe(true);
+  });
+
   it('menerima hanya update makna', () => {
     const r = verifyProposedChanges({
       meanings: [

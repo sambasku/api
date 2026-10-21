@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { activityEvents, searchMisses, users, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
@@ -8,6 +8,8 @@ import {
   publicAccountName,
 } from '@/shared/constants/deleted-account';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
+import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
 import type { ActivityCursor } from '../domain/merge-activity';
@@ -145,6 +147,7 @@ interface FeedRow {
   actorUsername: string | null;
   actorDisplayName: string | null;
   actorAvatarUrl: string | null;
+  actorRole: string | null;
   actorDeletedAt: Date | null;
   missTerm: string | null;
   /** #144: arah search-miss untuk di-wirer ke target.direction di feed. */
@@ -356,14 +359,16 @@ export class ActivityEventFeedRepositoryImpl {
         actorUsername: users.username,
         actorDisplayName: users.displayName,
         actorAvatarUrl: users.avatarUrl,
+        actorRole: highestUserRoleSql,
         actorDeletedAt: users.deletedAt,
         // search_miss: term body feed; guard kind supaya kolisi id antar
         // tabel (ULID) tak pernah match utk kind lain.
         missTerm: searchMisses.term,
         // #144: arah search-miss (term Indonesia vs kata Sambas).
         missDirection: searchMisses.direction,
-        // fallback arah vote utk event lama tanpa payload (#94).
-        voteValue: votes.value,
+        // fallback arah vote utk event lama tanpa payload (#94) — diisi
+        // batch terpisah sesudah rows terfetch (bukan JOIN per baris).
+        voteValue: sql<number | null>`null`,
       })
       .from(activityEvents)
       .leftJoin(
@@ -384,13 +389,6 @@ export class ActivityEventFeedRepositoryImpl {
           eq(searchMisses.id, activityEvents.targetId),
         ),
       )
-      .leftJoin(
-        votes,
-        and(
-          eq(votes.userId, activityEvents.actorId),
-          sql`((${activityEvents.kind} = 'vote_word' and ${votes.entityType} = 'word' and ${votes.entityId} = ${activityEvents.targetId}) or (${activityEvents.kind} = 'vote_comment' and ${votes.entityType} = 'comment' and ${votes.entityId} = ${activityEvents.targetId}))`,
-        ),
-      )
       .where(
         and(
           ...conds,
@@ -401,7 +399,53 @@ export class ActivityEventFeedRepositoryImpl {
       )
       .orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id))
       .limit(limit);
+    await this.hydrateLegacyVoteDirection(rows);
     return rows;
+  }
+
+  /**
+   * Fallback arah vote untuk event lama tanpa payload (#94): satu query
+   * batch `IN (...)` - bukan JOIN votes per baris (baca semua vote si
+   * actor per event = ratusan rows untuk user aktif). Event pasca-#94
+   * selalu punya payload beku → nol query tambahan.
+   */
+  private async hydrateLegacyVoteDirection(rows: FeedRow[]): Promise<void> {
+    const pending = rows.filter(
+      (r) =>
+        (r.kind === 'vote_word' || r.kind === 'vote_comment') &&
+        !r.payload?.trim() &&
+        r.actorId &&
+        r.targetId,
+    );
+    if (pending.length === 0) return;
+    const value = votes.value;
+    const found = await this.db
+      .select({
+        userId: votes.userId,
+        entityType: votes.entityType,
+        entityId: votes.entityId,
+        value,
+      })
+      .from(votes)
+      .where(
+        or(
+          ...pending.map((r) =>
+            and(
+              eq(votes.userId, r.actorId!),
+              eq(votes.entityType, r.kind === 'vote_word' ? 'word' : 'comment'),
+              eq(votes.entityId, r.targetId!),
+            ),
+          ),
+        ),
+      );
+    const dir = new Map(
+      found.map((v) => [`${v.userId}:${v.entityType}:${v.entityId}`, v.value]),
+    );
+    for (const r of pending) {
+      r.voteValue =
+        dir.get(`${r.actorId}:${r.kind === 'vote_word' ? 'word' : 'comment'}:${r.targetId}`) ??
+        null;
+    }
   }
 
   // ----------------------------------------------------------------- build --
@@ -543,6 +587,7 @@ export class ActivityEventFeedRepositoryImpl {
       username: hidden ? null : username,
       displayName: username || displayName ? displayName ?? DELETED_LABEL : null,
       avatarUrl: row.actorDeletedAt ? null : (row.actorAvatarUrl ?? null),
+      isVerifier: hidden ? false : isVerifierRole(row.actorRole ?? ''),
     };
   }
 

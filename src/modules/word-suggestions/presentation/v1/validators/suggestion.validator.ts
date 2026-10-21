@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { wordTypeSchema } from '@/modules/word/presentation/v1/validators/create-word.validator';
 import { choiceId, opaqueId } from '@/shared/validation/id';
 import {
   STOCK_WORD_IMAGE_PROVIDERS,
@@ -40,9 +41,42 @@ const meaningChangeSchema = z.object({
 
 const relationChangeSchema = z.object({
   action: z.enum(['add', 'remove']),
-  relation_type: z.enum(['synonym', 'antonym', 'has_component', 'derived_from']),
+  relation_type: z.enum([
+    'synonym',
+    'antonym',
+    'has_component',
+    'derived_from',
+    'variant_of',
+    'nonstandard_of',
+  ]),
   word_id: ulid,
 });
+
+// PRD relasi-lemma: usul gabung/keluar kelompok makna, atau usul kelompok baru.
+const groupChangeSchema = z
+  .object({
+    action: z.enum(['add', 'remove']),
+    group_id: ulid.optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(500).nullish(),
+    word_ids: z.array(ulid).max(10).optional(),
+  })
+  .superRefine((g, ctx) => {
+    if (g.action === 'remove') {
+      if (!g.group_id) {
+        ctx.addIssue({ code: 'custom', path: ['group_id'], message: 'action=remove wajib group_id' });
+      }
+      return;
+    }
+    if (g.group_id) return;
+    if (!g.name) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['name'],
+        message: 'Isi group_id untuk kelompok yang sudah ada, atau name untuk kelompok baru',
+      });
+    }
+  });
 
 const variantChangeSchema = z.object({
   action: z.enum(['add', 'remove']),
@@ -95,6 +129,7 @@ const imageChangeSchema = z
 
 const proposedChangesObjectSchema = z
   .object({
+    word_type: wordTypeSchema.optional(),
     lemma: z.string().trim().min(1).max(255).optional(),
     notes: z.string().max(2000).optional(),
     meanings: z.array(meaningChangeSchema).max(10).optional(),
@@ -103,9 +138,11 @@ const proposedChangesObjectSchema = z
     relations: z.array(relationChangeSchema).max(10).optional(),
     variants: z.array(variantChangeSchema).max(10).optional(),
     images: z.array(imageChangeSchema).max(5).optional(),
+    groups: z.array(groupChangeSchema).max(5).optional(),
   })
   .refine(
     (p) =>
+      p.word_type !== undefined ||
       p.lemma !== undefined ||
       p.notes !== undefined ||
       (p.meanings?.length ?? 0) > 0 ||
@@ -113,7 +150,8 @@ const proposedChangesObjectSchema = z
       (p.category_ids_to_remove?.length ?? 0) > 0 ||
       (p.relations?.length ?? 0) > 0 ||
       (p.variants?.length ?? 0) > 0 ||
-      (p.images?.length ?? 0) > 0,
+      (p.images?.length ?? 0) > 0 ||
+      (p.groups?.length ?? 0) > 0,
     { message: 'Minimal satu field perubahan harus diisi' },
   )
   .superRefine((p, ctx) => {
@@ -183,6 +221,7 @@ export function mapProposedChanges(
   raw: CreateSuggestionRequest['proposed_changes'],
 ): ProposedChanges {
   return {
+    wordType: raw.word_type,
     lemma: raw.lemma,
     notes: raw.notes,
     meanings: raw.meanings?.map((m) => ({
@@ -203,12 +242,19 @@ export function mapProposedChanges(
       relationType: r.relation_type,
       wordId: r.word_id,
     })),
-    variants: raw.variants?.map((v) => ({
-      action: v.action,
-      form: v.form,
-      variantType: v.variant_type,
-      dialectId: v.dialect_id ?? null,
-    })),
+      variants: raw.variants?.map((v) => ({
+        action: v.action,
+        form: v.form,
+        variantType: v.variant_type,
+        dialectId: v.dialect_id ?? null,
+      })),
+      groups: raw.groups?.map((g) => ({
+        action: g.action,
+        groupId: g.group_id,
+        name: g.name,
+        description: g.description ?? null,
+        wordIds: g.word_ids ?? [],
+      })),
     images: raw.images?.map((i) => ({
       action: i.action,
       imageId: i.image_id,
@@ -250,13 +296,15 @@ export const suggestionListResponseSchema = z.object({
       summary_changes: z.object({
         lemma: z.string().nullable(),
         notes: z.string().nullable(),
+        word_type: z.string().nullable(),
         meanings_count: z.number(),
-        categories_added: z.number(),
-        categories_removed: z.number(),
-        relations_count: z.number(),
-        variants_count: z.number(),
-        images_count: z.number(),
-      }),
+    categories_added: z.number(),
+    categories_removed: z.number(),
+    relations_count: z.number(),
+    variants_count: z.number(),
+    images_count: z.number(),
+    groups_count: z.number(),
+  }),
     }),
   ),
   meta: z.object({
@@ -285,6 +333,7 @@ export const suggestionDetailResponseSchema = z.object({
     current_word: z.object({
       lemma: z.string(),
       notes: z.string().nullable(),
+      word_type: z.string(),
       meanings: z.array(
         z.object({
           id: z.string().length(26),
@@ -308,6 +357,13 @@ export const suggestionDetailResponseSchema = z.object({
           dialect_id: z.string().nullable(),
         }),
       ),
+      groups: z.array(
+        z.object({
+          group_id: z.string().length(26),
+          name: z.string(),
+          member_word_ids: z.array(z.string().length(26)),
+        }),
+      ),
       images: z.array(
         z.object({
           id: z.string().length(26),
@@ -328,11 +384,17 @@ export const suggestionDetailResponseSchema = z.object({
         proposed: z.string().nullable(),
         changed: z.boolean(),
       }),
+      word_type: z.object({
+        current: z.string().nullable(),
+        proposed: z.string().nullable(),
+        changed: z.boolean(),
+      }),
       meanings: z.array(
         z.object({
           meaning_id: z.string().length(26).nullable(),
           changes: z.array(
             z.object({
+              label: z.string().optional(),
               current: z.string().nullable(),
               proposed: z.string().nullable(),
               changed: z.boolean(),
@@ -360,10 +422,15 @@ export const suggestionDetailResponseSchema = z.object({
           }),
         ),
       }),
-      variants: z.object({
-        added: z.array(z.object({ form: z.string(), variant_type: z.string() })),
-        removed: z.array(z.object({ form: z.string(), variant_type: z.string() })),
-      }),
+    variants: z.object({
+      added: z.array(z.object({ form: z.string(), variant_type: z.string() })),
+      removed: z.array(z.object({ form: z.string(), variant_type: z.string() })),
+    }),
+    groups: z.object({
+      joined: z.array(z.object({ group_id: z.string().length(26), name: z.string() })),
+      left: z.array(z.object({ group_id: z.string().length(26), name: z.string() })),
+      created: z.array(z.object({ name: z.string(), member_lemmas: z.array(z.string()) })),
+    }),
       images: z.object({
         added: z.array(
           z.object({

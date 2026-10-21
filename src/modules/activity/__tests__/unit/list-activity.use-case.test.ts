@@ -9,7 +9,7 @@ function item(kind: ActivityItem['kind'], id: string, at: string): ActivityItem 
     id: `${kind}:${id}`,
     kind,
     createdAt: new Date(at),
-    actor: { username: 'u', displayName: 'U', avatarUrl: null },
+    actor: { username: 'u', displayName: 'U', avatarUrl: null, isVerifier: false },
     body: kind,
     subtitle: null,
     target: null,

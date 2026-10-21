@@ -7,6 +7,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/ap
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
   NewVerifierApplication,
+  SocialScreenshot,
   SocialLink,
   VerifierApplication,
   VerifierApplicationListItem,
@@ -301,5 +302,43 @@ export class VerifierApplicationRepositoryImpl implements VerifierApplicationRep
       .where(and(eq(verifierApplications.id, id), eq(verifierApplications.status, 'pending')))
       .returning();
     return row ? toEntity(row, null) : null;
+  }
+
+  async updateSocialScreenshot(
+    id: string,
+    index: number,
+    screenshot: SocialScreenshot,
+  ): Promise<VerifierApplication> {
+    return this.db.transaction(async (tx) => {
+      const [app] = await tx
+        .select()
+        .from(verifierApplications)
+        .where(eq(verifierApplications.id, id))
+        .limit(1);
+      if (!app) {
+        throw new NotFoundError(
+          'VERIFIER_APPLICATION_NOT_FOUND',
+          'Pengajuan verifikator tidak ditemukan',
+        );
+      }
+      if (app.status !== 'pending') {
+        throw new ConflictError(
+          'APPLICATION_ALREADY_REVIEWED',
+          'Pengajuan sudah memiliki keputusan',
+        );
+      }
+      const links = asLinks(app.socialLinks);
+      if (index >= links.length) {
+        throw new NotFoundError('SOCIAL_LINK_NOT_FOUND', 'Akun media sosial tidak ditemukan');
+      }
+      links[index] = { ...links[index], screenshot };
+      const now = new Date();
+      const [row] = await tx
+        .update(verifierApplications)
+        .set({ socialLinks: links, updatedAt: now })
+        .where(eq(verifierApplications.id, id))
+        .returning();
+      return toEntity(row, null);
+    });
   }
 }

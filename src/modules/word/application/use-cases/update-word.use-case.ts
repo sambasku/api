@@ -50,7 +50,27 @@ export class UpdateWordUseCase {
       ]);
     }
 
-    for (const img of dto.images ?? []) {
+    // 2b. PRD relasi-lemma: relasi tidak boleh ke diri sendiri, dan
+  // derived_from tidak boleh menutup siklus akar (A → B → C → A).
+  // Catatan: create aman otomatis (kata baru = node tanpa edge lama).
+  if (dto.relatedWords.some((r) => r.wordId === id)) {
+    throw new ValidationError([
+      { field: 'related_words', message: 'Kata tidak bisa berelasi dengan dirinya sendiri' },
+    ]);
+  }
+  for (const r of dto.relatedWords) {
+    if (r.relationType !== 'derived_from') continue;
+    if (await this.wordRepo.hasDerivedFromPath(id, r.wordId)) {
+      throw new ValidationError([
+        {
+          field: 'related_words',
+          message: 'Relasi akar ini akan membuat siklus - periksa rujukan akarnya',
+        },
+      ]);
+    }
+  }
+
+  for (const img of dto.images ?? []) {
       assertContributorWordImageProvider(img.provider, actor.role);
     }
 

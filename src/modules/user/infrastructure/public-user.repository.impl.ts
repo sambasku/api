@@ -1,12 +1,14 @@
 import { and, desc, eq, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { userRoles } from '@/shared/database/drizzle/schema';
 import {
+  achievements,
   comments,
   contributionReviews,
   contributions,
   examples,
   meanings,
   pronunciations,
+  userAchievements,
   users,
   votes,
   wordAudios,
@@ -58,6 +60,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
   constructor(private readonly db: AppDatabase) {}
 
   async findPublicByUsername(username: string): Promise<PublicUserRow | null> {
+    // LEFT JOIN border aktif: satu query, tanpa subrequest tambahan.
+    // Border hanya tampil bila award masih ada (deleted_at null).
     const [row] = await this.db
       .select({
         id: users.id,
@@ -66,8 +70,18 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         bio: users.bio,
         joinedAt: users.createdAt,
         avatarUrl: users.avatarUrl,
+        activeBorderUrl: achievements.badgeUrl,
       })
       .from(users)
+      .leftJoin(userAchievements, eq(userAchievements.id, users.activeBorderId))
+      .leftJoin(
+        achievements,
+        and(
+          eq(achievements.id, userAchievements.achievementId),
+          isNull(userAchievements.deletedAt),
+          isNull(achievements.deletedAt),
+        ),
+      )
       .where(and(eq(users.username, username), isNull(users.deletedAt), eq(users.isActive, true)))
       .limit(1);
     if (!row) return null;
@@ -86,11 +100,16 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       role: derivePrimaryRole(roleList),
       joinedAt: row.joinedAt,
       avatarUrl: row.avatarUrl ?? null,
+      activeBorderUrl: row.activeBorderUrl ?? null,
     };
   }
 
   /** Prefix-search username untuk autocomplete mention. Kolom publik saja. */
   async suggestByUsernamePrefix(prefix: string, limit: number): Promise<MentionUserRow[]> {
+    // Range seek, bukan LIKE prefix||'%': LIKE tidak memakai index penuh
+    // (scan setengah index + wildcard user harus di-escape). Charset
+    // username `[a-z0-9._]` - '~' (0x7E) di atas 'z' (0x7A) = batas atas
+    // aman, jadi `>= prefix AND < prefix~` persis prefix-match.
     const rows = await this.db
       .select({
         id: users.id,
@@ -101,7 +120,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       .from(users)
       .where(
         and(
-          sql`${users.username} LIKE ${prefix} || '%'`,
+          sql`${users.username} >= ${prefix}`,
+          sql`${users.username} < ${`${prefix}~`}`,
           isNull(users.deletedAt),
           eq(users.isActive, true),
         ),

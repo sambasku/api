@@ -15,15 +15,30 @@ export interface LinkedProviderItem {
   linkedAt: Date;
 }
 
-export class ListAuthProvidersUseCase {
-  constructor(private readonly identityRepo: AuthIdentityRepository) {}
+export interface AuthProvidersView {
+  providers: LinkedProviderItem[];
+  hasPassword: boolean;
+}
 
-  async execute(userId: string): Promise<LinkedProviderItem[]> {
+export class ListAuthProvidersUseCase {
+  constructor(
+    private readonly identityRepo: AuthIdentityRepository,
+    private readonly userRepo: UserRepository,
+  ) {}
+
+  async execute(userId: string): Promise<AuthProvidersView> {
+    const user = await this.userRepo.findById(userId);
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedError('UNAUTHORIZED', 'Sesi tidak valid');
+    }
     const identities = await this.identityRepo.listActiveByUserId(userId);
-    return identities.map((i) => ({
-      provider: i.provider,
-      linkedAt: i.createdAt,
-    }));
+    return {
+      providers: identities.map((i) => ({
+        provider: i.provider,
+        linkedAt: i.createdAt,
+      })),
+      hasPassword: user.passwordHash !== null,
+    };
   }
 }
 
@@ -72,7 +87,7 @@ export class UnlinkGoogleAccountUseCase {
     if (!hasPassword && otherIdentities.length === 0) {
       throw new ConflictError(
         'LAST_AUTH_METHOD',
-        'Setel password dulu sebelum melepas Google. Gunakan lupa password jika belum punya.',
+        'Setel password dulu sebelum melepas Google. Buat password dari menu profil.',
       );
     }
 

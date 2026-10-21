@@ -155,4 +155,6 @@ crons = ["* * * * *"]
 #   npx wrangler secret put PIXABAY_API_KEY --env staging
 #   npx wrangler secret put UNSPLASH_ACCESS_KEY --env staging
 #   npx wrangler secret put SUPABASE_ANON_KEY --env staging
+#   npx wrangler secret put GITHUB_CLIENT_SECRET --env staging
+#   npx wrangler secret put PLAY_STATS_GCS_BUCKET --env staging
 #   … (Resend, ImageKit, OAuth, FCM - sama seperti sebelumnya)

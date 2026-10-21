@@ -59,6 +59,7 @@ export class RegisterUserUseCase {
       email: email.value,
       phone: dto.phone,
       passwordHash,
+      roles: ['contributor'],
       emailVerified: false,
     });
 

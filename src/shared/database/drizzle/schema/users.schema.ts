@@ -14,6 +14,10 @@ export const users = sqliteTable(
     displayName: text('display_name').notNull().default(''),
     // Bio publik opsional (edit profil).
     bio: text('bio'),
+    /** Id kecamatan (`regions.id`). Null = belum diisi. */
+    regionId: text('region_id'),
+    /** Id desa (`regions.id`, parent = region_id). Null = belum diisi. */
+    villageId: text('village_id'),
     email: text('email').notNull().unique(),
     // Digit internasional tanpa '+', mis. 62899…; NULL kalau user skip.
     phone: text('phone'),
@@ -38,6 +42,16 @@ export const users = sqliteTable(
     avatarProvider: text('avatar_provider'),
     avatarProviderFileId: text('avatar_provider_file_id'),
     avatarSha: text('avatar_sha'),
+    /**
+     * Bingkai avatar aktif (`user_achievements.id`, reward `profile_border`).
+     * Null = tanpa bingkai. Kolom sengaja tanpa `.references()` Drizzle:
+     * `user_achievements` mereferensikan `users` (siklus import) - FK tetap
+     * dibuat di migration SQL `0086_achievements.sql`.
+     *
+     * Kepemilikan border = baris `user_achievements`; kolom ini hanya
+     * "yang sedang dipakai" (sinkron lintas perangkat).
+     */
+    activeBorderId: text('active_border_id'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
     /** Piggyback presence: di-touch dari request authenticated (throttle 5 mnt). */

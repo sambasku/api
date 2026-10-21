@@ -23,6 +23,7 @@ import {
 import { forgotPasswordSchema, forgotPasswordResponseSchema } from './validators/forgot-password.validator';
 import { resetPasswordSchema, resetPasswordResponseSchema } from './validators/reset-password.validator';
 import { changePasswordSchema, changePasswordResponseSchema } from './validators/change-password.validator';
+import { setPasswordSchema, setPasswordResponseSchema } from './validators/set-password.validator';
 import { googleLoginSchema, googleLoginResponseSchema } from './validators/google-login.validator';
 import {
   authProvidersResponseSchema,
@@ -78,6 +79,11 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     '/change-password',
     deps.authenticate,
     rateLimit({ points: 5, duration: 900, keyFn: (c) => `change-password:${c.get('user')?.user_id}` }),
+  );
+  authRoutes.use(
+    '/set-password',
+    deps.authenticate,
+    rateLimit({ points: 5, duration: 900, keyFn: (c) => `set-password:${c.get('user')?.user_id}` }),
   );
   authRoutes.use(
     '/providers',
@@ -320,6 +326,22 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     },
   });
 
+  const setPasswordRoute = createRoute({
+    method: 'post',
+    path: '/set-password',
+    tags: ['Auth'],
+    summary: 'Buat password pertama untuk akun OAuth - semua session direvoke',
+    request: { body: { content: json(setPasswordSchema) } },
+    responses: {
+      200: { description: 'Password dibuat', content: json(setPasswordResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token sesi / bukti provider tidak valid', content: json(errorResponseSchema) },
+      404: { description: 'Provider belum tertaut', content: json(errorResponseSchema) },
+      409: { description: 'Password sudah ada', content: json(errorResponseSchema) },
+      429: { description: 'Terlalu banyak percobaan (5/15 menit per user)', content: json(errorResponseSchema) },
+    },
+  });
+
   const listProvidersRoute = createRoute({
     method: 'get',
     path: '/providers',
@@ -402,6 +424,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
   authRoutes.openapi(forgotPasswordRoute, (c) => deps.controller.forgot(c, c.req.valid('json')) as never);
   authRoutes.openapi(resetPasswordRoute, (c) => deps.controller.reset(c, c.req.valid('json')) as never);
   authRoutes.openapi(changePasswordRoute, (c) => deps.controller.changePassword(c, c.req.valid('json')) as never);
+  authRoutes.openapi(setPasswordRoute, (c) => deps.controller.setPassword(c, c.req.valid('json')) as never);
   authRoutes.openapi(listProvidersRoute, (c) => deps.controller.listProviders(c) as never);
   authRoutes.openapi(linkGoogleRoute, (c) => deps.controller.linkGoogle(c, c.req.valid('json')) as never);
   authRoutes.openapi(unlinkGoogleRoute, (c) => deps.controller.unlinkGoogle(c) as never);

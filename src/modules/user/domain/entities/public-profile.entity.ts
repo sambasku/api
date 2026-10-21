@@ -18,6 +18,8 @@ export interface PublicProfile {
   isVerifier: boolean;
   joinedAt: Date;
   avatarUrl: string | null;
+  /** Bingkai profil aktif (reward `profile_border`); null = tanpa bingkai. */
+  activeBorderUrl: string | null;
   stats: PublicProfileStats;
 }
 
@@ -32,6 +34,8 @@ export interface PublicUserRow {
   role: string;
   joinedAt: Date;
   avatarUrl: string | null;
+  /** Bingkai profil aktif (reward `profile_border`); null = tanpa bingkai. */
+  activeBorderUrl?: string | null;
 }
 
 /** Baris suggest mention (@username autocomplete). Kolom publik minimal. */

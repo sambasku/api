@@ -1,10 +1,12 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { AppDatabase } from './client';
 import { ensureTestDbReady } from './test-client';
 import {
   accountDeletionTokens,
   activityEvents,
   announcements,
+  achievements,
+  userAchievements,
   apiClients,
   appSettings,
   auditLogs,
@@ -24,6 +26,8 @@ import {
   languages,
   legalDocuments,
   lexicalRelations,
+  wordGroupMembers,
+  wordGroups,
   meanings,
   meaningTranslations,
   notificationCampaignRecipients,
@@ -32,6 +36,11 @@ import {
   notificationPushCooldowns,
   notifications,
   passwordResetTokens,
+  placeContributions,
+  placeImages,
+  places,
+  placeCategories,
+  regions,
   pronunciations,
   refreshTokens,
   searchMisses,
@@ -60,6 +69,7 @@ import {
   wordImportSessions,
   wordReports,
   wordCardShares,
+  wordVoteCounts,
   wordVariants,
   words,
 } from './schema';
@@ -195,12 +205,24 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
       },
     ])
     .onConflictDoNothing();
+
+  await db
+    .insert(placeCategories)
+    .values([
+      { id: 'wisata', name: 'Wisata', sortOrder: 0, status: 'published', createdAt: now },
+      { id: 'kuliner', name: 'Kuliner', sortOrder: 1, status: 'published', createdAt: now },
+      { id: 'budaya', name: 'Budaya', sortOrder: 2, status: 'published', createdAt: now },
+    ])
+    .onConflictDoNothing();
 }
 
 // Hapus semua tabel dalam urutan aman FK (anak dulu) - pakai ini di
 // beforeEach/beforeAll integration & e2e test, jangan delete per tabel.
 export async function truncateAll(db: AppDatabase): Promise<void> {
   await ensureTestDbReady();
+  // FK siklus users.active_border_id -> user_achievements.id -> users.id:
+  // kosongkan dulu kolom border aktif SEBELUM hapus tabel manapun.
+  await db.run(sql`update users set active_border_id = null`);
   for (const table of [
     auditLogs,
     wordReports,
@@ -227,6 +249,9 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     waMessageTemplates,
     waUsage,
     lexicalRelations,
+    // PRD relasi-lemma: anak word_groups (FK word_id) + grup (FK created_by) - sebelum words/users.
+    wordGroupMembers,
+    wordGroups,
     pronunciations,
     wordAudios,
     examples,
@@ -241,6 +266,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     searchMisses,
     wordCategories,
     wordImages,
+    wordVoteCounts,
     wordVariants,
     meanings,
     words,
@@ -256,10 +282,20 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     ugcAnonAbuseEvents,
     ugcAnonMutes,
     databaseBackupLogs,
-    // Pengumuman admin (#102) (FK created_by) - sebelum users
-    announcements,
-    // Event feed publik (FK actor_id) - sebelum users
-    activityEvents,
+// Pengumuman admin (#102) (FK created_by) - sebelum users
+announcements,
+// Achievement (FK user_id) - sebelum users
+userAchievements,
+// Katalog achievement - sebelum userAchievements (FK achievement_id)
+achievements,
+    // Places CRUD (FK place_images.place_id) - anak dulu
+    placeContributions,
+    placeImages,
+    places,
+  placeCategories,
+  regions,
+  // Event feed publik (FK actor_id) - sebelum users
+  activityEvents,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,

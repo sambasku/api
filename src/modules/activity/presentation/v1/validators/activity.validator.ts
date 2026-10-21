@@ -25,6 +25,7 @@ const activityActorSchema = z
     username: z.string().nullable(),
     display_name: z.string().nullable(),
     avatar_url: z.string().nullable(),
+    is_verifier: z.boolean(),
   })
   .nullable();
 

@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { UnauthorizedError } from '@/shared/errors/app-error';
+import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
 import {
   GetMyProfileUseCase,
   UpdateMyProfileUseCase,
 } from '../../application/use-cases/update-my-profile.use-case';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { User } from '@/modules/auth/domain/entities/user.entity';
+import type { Region } from '@/modules/region/domain/entities/region.entity';
+import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
 
 const USER_ID = '01TESTMEPROFILE0000000001';
 
@@ -15,6 +17,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     username: 'budi',
     displayName: 'budi',
     bio: null,
+    regionId: null,
+    villageId: null,
     email: 'budi@test.com',
     phone: null,
     passwordHash: 'hash',
@@ -45,6 +49,8 @@ describe('GetMyProfileUseCase', () => {
       username: 'budi',
       displayName: 'Budi Santoso',
       bio: 'Kontributor Sambas',
+      regionId: null,
+      villageId: null,
       avatarUrl: null,
       hasReadContributionGuide: false,
     });
@@ -58,7 +64,31 @@ describe('GetMyProfileUseCase', () => {
   });
 });
 
+function makeRegion(overrides: Partial<Region> & Pick<Region, 'id' | 'type'>): Region {
+  return {
+    slug: overrides.id,
+    name: overrides.id,
+    parentId: null,
+    code: null,
+    lat: null,
+    lng: null,
+    status: 'published',
+    sortOrder: 0,
+    createdAt: new Date(),
+    updatedAt: null,
+    ...overrides,
+  };
+}
+
+function makeRegionRepo(items: Region[] = []): RegionRepository {
+  return {
+    findById: vi.fn(async (id: string) => items.find((item) => item.id === id) ?? null),
+  } as unknown as RegionRepository;
+}
+
 describe('UpdateMyProfileUseCase', () => {
+  const regionRepo = makeRegionRepo();
+
   it('memanggil updateProfile', async () => {
     const updated = makeUser({ displayName: 'Nama Baru', bio: 'Bio baru' });
     const userRepo = {
@@ -66,7 +96,7 @@ describe('UpdateMyProfileUseCase', () => {
       updateProfile: vi.fn().mockResolvedValue(updated),
     } as unknown as UserRepository;
 
-    const result = await new UpdateMyProfileUseCase(userRepo).execute(USER_ID, {
+    const result = await new UpdateMyProfileUseCase(userRepo, regionRepo).execute(USER_ID, {
       displayName: 'Nama Baru',
       bio: 'Bio baru',
     });
@@ -86,7 +116,7 @@ describe('UpdateMyProfileUseCase', () => {
       updateProfile: vi.fn().mockResolvedValue(updated),
     } as unknown as UserRepository;
 
-    const result = await new UpdateMyProfileUseCase(userRepo).execute(USER_ID, {
+    const result = await new UpdateMyProfileUseCase(userRepo, regionRepo).execute(USER_ID, {
       hasReadContributionGuide: true,
     });
 
@@ -102,7 +132,7 @@ describe('UpdateMyProfileUseCase', () => {
       updateProfile: vi.fn().mockResolvedValue(makeUser({ readContributionGuideAt: readAt })),
     } as unknown as UserRepository;
 
-    await new UpdateMyProfileUseCase(userRepo).execute(USER_ID, {
+    await new UpdateMyProfileUseCase(userRepo, regionRepo).execute(USER_ID, {
       hasReadContributionGuide: true,
     });
 
@@ -117,8 +147,64 @@ describe('UpdateMyProfileUseCase', () => {
     } as unknown as UserRepository;
 
     await expect(
-      new UpdateMyProfileUseCase(userRepo).execute(USER_ID, { displayName: 'x' }),
+      new UpdateMyProfileUseCase(userRepo, regionRepo).execute(USER_ID, { displayName: 'x' }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(userRepo.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('desa tanpa kecamatan ditolak', async () => {
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser()),
+      updateProfile: vi.fn(),
+    } as unknown as UserRepository;
+
+    await expect(
+      new UpdateMyProfileUseCase(userRepo, makeRegionRepo()).execute(USER_ID, {
+        villageId: 'pemangkat/perapakan',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestError);
+    expect(userRepo.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('desa yang induknya cocok disimpan', async () => {
+    const updated = makeUser({ regionId: 'pemangkat', villageId: 'pemangkat/perapakan' });
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser()),
+      updateProfile: vi.fn().mockResolvedValue(updated),
+    } as unknown as UserRepository;
+    const regions = makeRegionRepo([
+      makeRegion({ id: 'pemangkat', type: 'kecamatan' }),
+      makeRegion({ id: 'pemangkat/perapakan', type: 'desa', parentId: 'pemangkat' }),
+    ]);
+
+    const result = await new UpdateMyProfileUseCase(userRepo, regions).execute(USER_ID, {
+      regionId: 'pemangkat',
+      villageId: 'pemangkat/perapakan',
+    });
+
+    expect(userRepo.updateProfile).toHaveBeenCalledWith(USER_ID, {
+      regionId: 'pemangkat',
+      villageId: 'pemangkat/perapakan',
+    });
+    expect(result.regionId).toBe('pemangkat');
+    expect(result.villageId).toBe('pemangkat/perapakan');
+  });
+
+  it('desa di kecamatan lain ditolak, termasuk saat region lama dipakai', async () => {
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser({ regionId: 'pemangkat' })),
+      updateProfile: vi.fn(),
+    } as unknown as UserRepository;
+    const regions = makeRegionRepo([
+      makeRegion({ id: 'pemangkat', type: 'kecamatan' }),
+      makeRegion({ id: 'jawai/sarang-burung', type: 'desa', parentId: 'jawai' }),
+    ]);
+
+    await expect(
+      new UpdateMyProfileUseCase(userRepo, regions).execute(USER_ID, {
+        villageId: 'jawai/sarang-burung',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestError);
     expect(userRepo.updateProfile).not.toHaveBeenCalled();
   });
 });

@@ -23,6 +23,7 @@ export const authProvidersResponseSchema = z.object({
         linked_at: z.string(),
       }),
     ),
+    has_password: z.boolean(),
   }),
 });
 

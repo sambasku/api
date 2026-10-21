@@ -29,34 +29,57 @@ export default {
     return loadApp(env).then((m) => m.app.fetch(request as never, env as never, ctx as never));
   },
 
-  /** Cron: lanjutkan campaign sending + jalankan scheduled yang sudah due. */
+/** Cron: lanjutkan campaign sending + jalankan scheduled yang sudah due. */
   async scheduled(
     _controller: { cron: string; scheduledTime: number },
     env: Env,
-	_ctx: { waitUntil: (p: Promise<unknown>) => void },
-): Promise<void> {
-	const m = await loadApp(env);
-	try {
-		const result = await m.runDueNotificationCampaigns();
-		console.log(
-			JSON.stringify({
-				level: 'info',
-				msg: 'notification campaign cron done',
-				processed: result.processed,
-			}),
-		);
-	} catch (error) {
-		// Transient DB/network error (Turso HTTP) tidak boleh jadi unhandled
-		// exception tiap tick cron; tick berikutnya otomatis retry (idempoten).
-		console.error(
-			JSON.stringify({
-				level: 'error',
-				msg: 'notification campaign cron failed',
-				error: error instanceof Error ? error.message : String(error),
-			}),
-		);
-	}
-},
+    _ctx: { waitUntil: (p: Promise<unknown>) => void },
+  ): Promise<void> {
+    const m = await loadApp(env);
+    try {
+      const result = await m.runDueNotificationCampaigns();
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          msg: 'notification campaign cron done',
+          processed: result.processed,
+        }),
+      );
+    } catch (error) {
+      // Transient DB/network error (Turso HTTP) tidak boleh jadi unhandled
+      // exception tiap tick cron; tick berikutnya otomatis retry (idempoten).
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'notification campaign cron failed',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+
+    // Scan achievement (due-check 6 jam di use case). Kegagalan scan tidak
+    // boleh menghentikan cron lain - ditangkap terpisah.
+    try {
+      const result = await m.runDueAchievementScan();
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          msg: 'achievement scan cron done',
+          scanned: result.scanned,
+          awarded: result.awarded,
+          ran: result.ran,
+        }),
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'achievement scan cron failed',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  },
 };
 
 /** bindings string → process.env, SEBELUM app di-import */

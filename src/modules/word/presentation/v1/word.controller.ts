@@ -372,9 +372,11 @@ export class WordController {
   }
 
   /** 28-api-word-of-the-day.md - payload detail + date + is_new_this_week,
-   *  atau data:null saat korpus published kosong (state normal). */
+   *  atau data:null saat korpus published kosong (state normal).
+   *  Cache 5 menit / CDN 1 jam: hasil deterministik per tanggal WIB. */
   async wordOfDay(c: Context) {
     const { date, isNewThisWeek, word } = await this.deps.wordOfDay.execute();
+    c.header('Cache-Control', 'public, max-age=300, s-maxage=3600');
     return c.json({
       success: true as const,
       data: word
@@ -491,6 +493,13 @@ export class WordController {
         is_have_translation: m.isHaveTranslation,
         meaning_source: m.meaningSource,
         order_index: m.orderIndex,
+        created_by: m.creator
+          ? {
+              username: m.creator.username,
+              display_name: m.creator.displayName,
+              role: m.creator.role,
+            }
+          : null,
         translations: m.translations.map((t) => ({
           language_id: t.languageId,
           translation_text: t.translationText,
@@ -572,11 +581,22 @@ export class WordController {
         lemma: rel.lemma,
         relation_type: rel.relationType,
       })),
-      appears_in: word.appearsIn.map((rel) => ({
-        word_id: rel.wordId,
-        lemma: rel.lemma,
-        relation_type: rel.relationType,
+    appears_in: word.appearsIn.map((rel) => ({
+      word_id: rel.wordId,
+      lemma: rel.lemma,
+      relation_type: rel.relationType,
+    })),
+    // PRD relasi-lemma: kelompok makna published (label UX "Makna terkait")
+    meaning_groups: (word.meaningGroups ?? []).map((g) => ({
+      group_id: g.groupId,
+      name: g.name,
+      description: g.description,
+      members: g.members.map((m) => ({
+        word_id: m.wordId,
+        lemma: m.lemma,
+        notes: m.notes,
       })),
+    })),
       variants: word.variants.map((v) => ({
         id: v.id,
         form: v.form,
@@ -1267,6 +1287,7 @@ function toListItem(w: {
   status: string;
   matchedTranslation?: string;
   matchedVariant?: string;
+  matchType?: 'direct' | 'related_group';
   sense?: string | null;
   updatedAt?: Date | null;
 }) {
@@ -1280,8 +1301,10 @@ function toListItem(w: {
     is_verified: w.isVerified,
     status: w.status,
     ...(w.matchedTranslation !== undefined ? { matched_translation: w.matchedTranslation } : {}),
-    ...(w.matchedVariant !== undefined ? { matched_variant: w.matchedVariant } : {}),
-    // A-Z + search: `[n] makan,[v] santap`. Null = belum ada terjemahan published.
+  ...(w.matchedVariant !== undefined ? { matched_variant: w.matchedVariant } : {}),
+  // PRD relasi-lemma: tandai hasil perluasan kelompok makna di /search.
+  ...(w.matchType !== undefined ? { match_type: w.matchType } : {}),
+  // A-Z + search: `[n] makan,[v] santap`. Null = belum ada terjemahan published.
     ...(w.sense !== undefined ? { sense: w.sense } : {}),
     ...(w.updatedAt !== undefined
       ? { updated_at: w.updatedAt ? w.updatedAt.toISOString() : null }

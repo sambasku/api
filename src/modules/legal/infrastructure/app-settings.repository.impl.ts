@@ -47,6 +47,24 @@ export class AppSettingsRepositoryImpl implements AppSettingsRepository {
     return row?.value ?? null;
   }
 
+  async setIfAbsent(
+    key: string,
+    value: string,
+    options?: { type?: AppSettingType; description?: string; updatedBy?: string | null },
+  ): Promise<void> {
+    await this.db
+      .insert(appSettings)
+      .values({
+        key,
+        value,
+        type: options?.type ?? 'string',
+        description: options?.description ?? null,
+        updatedAt: new Date(),
+        updatedBy: options?.updatedBy ?? null,
+      })
+      .onConflictDoNothing();
+  }
+
   async getLegalActiveVersions(): Promise<LegalActiveVersions | null> {
     const rows = await this.getByKeys([LEGAL_TERMS_VERSION_KEY, LEGAL_PRIVACY_VERSION_KEY]);
     const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -60,32 +78,36 @@ export class AppSettingsRepositoryImpl implements AppSettingsRepository {
     entries: { key: string; value: string; type?: AppSettingType; description?: string }[],
     updatedBy: string | null,
   ): Promise<AppSetting[]> {
+    if (entries.length === 0) return [];
     const now = new Date();
-    const results: AppSetting[] = [];
-    for (const entry of entries) {
-      const [row] = await this.db
-        .insert(appSettings)
-        .values({
-          key: entry.key,
-          value: entry.value,
-          type: entry.type ?? 'string',
-          description: entry.description ?? null,
-          updatedAt: now,
-          updatedBy,
-        })
-        .onConflictDoUpdate({
-          target: appSettings.key,
-          set: {
+    // Satu batch = 1 HTTP roundtrip ke Turso (bukan N subrequest).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const batch = this.db.batch(
+      entries.map((entry) =>
+        this.db
+          .insert(appSettings)
+          .values({
+            key: entry.key,
             value: entry.value,
             type: entry.type ?? 'string',
             description: entry.description ?? null,
             updatedAt: now,
             updatedBy,
-          },
-        })
-        .returning();
-      results.push(toEntity(row));
-    }
-    return results;
+          })
+          .onConflictDoUpdate({
+            target: appSettings.key,
+            set: {
+              value: entry.value,
+              type: entry.type ?? 'string',
+              description: entry.description ?? null,
+              updatedAt: now,
+              updatedBy,
+            },
+          })
+          .returning(),
+      ) as any,
+    );
+    const results = (await batch) as unknown as Array<typeof appSettings.$inferSelect>;
+    return results.map((row) => toEntity(row));
   }
 }

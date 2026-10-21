@@ -11,6 +11,7 @@ import {
   users,
   votes,
   wordImages,
+  wordVoteCounts,
   words,
 } from '@/shared/database/drizzle/schema';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
@@ -198,5 +199,64 @@ describe.skipIf(!hasTestDb)('VoteRepositoryImpl (integration, 08 doc)', () => {
     expect(byKey.get(`word:${goneWord}`)?.word).toBeNull();
     expect(byKey.get(`meaning:${missingMeaning}`)?.word).toBeNull();
     expect(page.items).toHaveLength(targets.length + 2);
+  });
+
+  // 0085: ringkasan word_vote_counts (deck vote tidak lagi COUNT(*) correlated).
+  it('ringkasan word_vote_counts: insert/batal/ganti arah/reset hapus sinkron dengan votes', async () => {
+    const db = getTestDb();
+    const target = { entityType: 'word' as const, entityId: WORD };
+    const total = async () => {
+      const [row] = await db
+        .select({ total: wordVoteCounts.total })
+        .from(wordVoteCounts)
+        .where(eq(wordVoteCounts.wordId, WORD));
+      return row?.total ?? 0;
+    };
+
+    expect(await total()).toBe(0);
+    await repo.toggle(USER_A, target, 1);
+    expect(await total()).toBe(1);
+    await repo.toggle(USER_B, target, -1);
+    expect(await total()).toBe(2);
+    // ganti arah = baris yang sama di-update → jumlah baris tetap 2.
+    await repo.toggle(USER_A, target, -1);
+    expect(await total()).toBe(2);
+    // batal vote (arah sama) → baris hilang.
+    await repo.toggle(USER_B, target, -1);
+    expect(await total()).toBe(1);
+
+    // resetTarget menghapus sisa vote kata → ringkasan ikut 0.
+    expect(await repo.resetTarget(target)).toBe(1);
+    expect(await total()).toBe(0);
+  });
+
+  it('ringkasan word_vote_counts: resetByClientId dan deleteById kurangi total', async () => {
+    const db = getTestDb();
+    const target = { entityType: 'word' as const, entityId: WORD };
+    await repo.toggle(USER_A, target, 1, 'client-x');
+    await repo.toggle(USER_B, target, 1, 'client-y');
+    const [row] = await db
+      .select({ total: wordVoteCounts.total })
+      .from(wordVoteCounts)
+      .where(eq(wordVoteCounts.wordId, WORD));
+    expect(row?.total).toBe(2);
+
+    expect(await repo.resetByClientId('client-x')).toBe(1);
+    const [after] = await db
+      .select({ total: wordVoteCounts.total })
+      .from(wordVoteCounts)
+      .where(eq(wordVoteCounts.wordId, WORD));
+    expect(after?.total).toBe(1);
+
+    const [voteRow] = await db
+      .select({ id: votes.id })
+      .from(votes)
+      .where(eq(votes.userId, USER_B));
+    await repo.deleteById(voteRow!.id);
+    const [final] = await db
+      .select({ total: wordVoteCounts.total })
+      .from(wordVoteCounts)
+      .where(eq(wordVoteCounts.wordId, WORD));
+    expect(final?.total).toBe(0);
   });
 });

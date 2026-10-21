@@ -64,5 +64,16 @@ export const words = sqliteTable(
     // Feed beranda: published terbaru (verified_at DESC, id DESC).
     index('words_published_recent_idx').on(t.status, t.verifiedAt, t.id),
     index('words_import_session_id_idx').on(t.importSessionId),
+    // 0083 rows-read: browse A-Z listAtoZ - filter status + ORDER BY
+    // lower(lemma), id dalam SATU index (tanpa TEMP B-TREE sort semua
+    // published per halaman).
+    index('words_status_az_idx').on(t.status, sql`lower(${t.lemma})`, t.id),
+    // 0083 rows-read: feed beranda listLatest - ORDER BY
+    // coalesce(verified_at, created_at) DESC keyset.
+    index('words_published_approved_idx').on(
+      t.status,
+      sql`coalesce(${t.verifiedAt}, ${t.createdAt})`,
+      t.id,
+    ),
   ],
 );

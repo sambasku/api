@@ -41,6 +41,14 @@ describe('checkSuggestionCategoryShape', () => {
     expect(issues).toHaveLength(1);
   });
 
+  it('kategori menolak jenis entri yang dicampur', () => {
+    const issues = checkSuggestionCategoryShape('change_meaning', {
+      wordType: 'ungkapan',
+      meanings: [{ action: 'update', meaningId: MEANING, definition: 'x' }],
+    });
+    expect(issues.map((i) => i.field)).toContain('word_type');
+  });
+
   it('kode lama tidak dicek', () => {
     expect(
       checkSuggestionCategoryShape('typo', {
@@ -60,9 +68,40 @@ describe('checkSuggestionCategoryShape', () => {
       }),
     ).toEqual([]);
   });
+
+  it('relasi baru: tipe lain ditolak, tipe sendiri lolos', () => {
+    expect(
+      checkSuggestionCategoryShape('variant_of', {
+        relations: [{ action: 'add', relationType: 'nonstandard_of', wordId: 'w' }],
+      }).map((i) => i.field),
+    ).toContain('relations');
+    expect(
+      checkSuggestionCategoryShape('derived_from', {
+        relations: [{ action: 'add', relationType: 'derived_from', wordId: 'w' }],
+      }),
+    ).toEqual([]);
+  });
+
+  it('meaning_group hanya terima payload groups', () => {
+    expect(
+      checkSuggestionCategoryShape('meaning_group', {
+        relations: [{ action: 'add', relationType: 'synonym', wordId: 'w' }],
+        groups: [{ action: 'add', name: 'kenapa' }],
+      }).map((i) => i.field),
+    ).toContain('relations');
+    expect(
+      checkSuggestionCategoryShape('meaning_group', {
+        groups: [{ action: 'add', name: 'kenapa' }],
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe('isRevertibleForApplyPending', () => {
+  it('jenis entri boleh dikembalikan saat ditolak', () => {
+    expect(isRevertibleForApplyPending({ wordType: 'ungkapan' })).toBe(true);
+  });
+
   it('teks dan foto baru boleh langsung tayang', () => {
     expect(
       isRevertibleForApplyPending({
@@ -77,6 +116,15 @@ describe('isRevertibleForApplyPending', () => {
     expect(isRevertibleForApplyPending({ relations: [{ action: 'add', relationType: 'synonym', wordId: 'w' }] })).toBe(false);
     expect(isRevertibleForApplyPending({ meanings: [{ action: 'add', definition: 'x' }] })).toBe(false);
     expect(isRevertibleForApplyPending({ images: [{ action: 'remove', imageId: 'img' }] })).toBe(false);
+  });
+
+  it('PRD relasi-lemma: relasi baru dan kelompok masuk antrean dulu', () => {
+    expect(
+      isRevertibleForApplyPending({
+        relations: [{ action: 'add', relationType: 'variant_of', wordId: 'w' }],
+      }),
+    ).toBe(false);
+    expect(isRevertibleForApplyPending({ groups: [{ action: 'add', name: 'kenapa' }] })).toBe(false);
   });
 });
 
@@ -125,5 +173,33 @@ describe('createSuggestionSchema examples', () => {
       },
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it('PRD relasi-lemma: meaning_group dengan kelompok baru lolos', () => {
+    const parsed = createSuggestionSchema.safeParse({
+      reason_code: 'meaning_group',
+      proposed_changes: {
+          groups: [{ action: 'add', name: 'kenapa', word_ids: ['01HZZZZZZZZZZZZZZZZZZZZZZ2'] }],
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('PRD relasi-lemma: hapus kelompok tanpa group_id ditolak', () => {
+    const parsed = createSuggestionSchema.safeParse({
+      reason_code: 'meaning_group',
+      proposed_changes: { groups: [{ action: 'remove' }] },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('PRD relasi-lemma: relasi variant_of sah di payload', () => {
+    const parsed = createSuggestionSchema.safeParse({
+      reason_code: 'variant_of',
+      proposed_changes: {
+          relations: [{ action: 'add', relation_type: 'variant_of', word_id: '01HZZZZZZZZZZZZZZZZZZZZZZ3' }],
+      },
+    });
+    expect(parsed.success).toBe(true);
   });
 });

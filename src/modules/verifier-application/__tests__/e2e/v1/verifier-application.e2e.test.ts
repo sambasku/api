@@ -142,6 +142,32 @@ describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
     expect(pendingPatch.status).toBe(200);
     expect((await pendingPatch.json()).data.status).toBe('pending');
 
+    // Admin ganti screenshot akun sosial yang rusak (issue #50).
+    const shotPath = `/api/v1/admin/verifier-applications/${applicationId}/social-links/0/screenshot`;
+    const asContributor403 = await patch(
+      shotPath,
+      { url: 'https://ik.imagekit.io/test/v2.jpg', provider_file_id: 'file_v2' },
+      contributorToken,
+    );
+    expect(asContributor403.status).toBe(403);
+
+    const badIndex = await patch(
+      `/api/v1/admin/verifier-applications/${applicationId}/social-links/9/screenshot`,
+      { url: 'https://ik.imagekit.io/test/v2.jpg', provider_file_id: 'file_v2' },
+      adminToken,
+    );
+    expect(badIndex.status).toBe(404);
+    expect((await badIndex.json()).error_code).toBe('SOCIAL_LINK_NOT_FOUND');
+
+    const shotUpdated = await patch(
+      shotPath,
+      { url: 'https://ik.imagekit.io/test/verifier-applications/budi-v2.jpg', provider_file_id: 'file_va_budi_v2' },
+      adminToken,
+    );
+    expect(shotUpdated.status).toBe(200);
+    const shotBody = await shotUpdated.json();
+    expect(shotBody.data.social_links[0].screenshot.provider_file_id).toBe('file_va_budi_v2');
+
     const approved = await post(
       `/api/v1/admin/verifier-applications/${applicationId}/approve`,
       {},
@@ -166,5 +192,13 @@ describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
     expect(detailBody.data.status).toBe('approved');
     expect(detailBody.data.reviewed_by_username).toMatch(/^admva/);
     expect(detailBody.data.reviewed_at).toBeTruthy();
+
+    // Setelah decided, ganti screenshot → 409 (pemohon harus resubmit).
+    const decided = await patch(
+      `/api/v1/admin/verifier-applications/${applicationId}/social-links/0/screenshot`,
+      { url: 'https://ik.imagekit.io/test/v3.jpg', provider_file_id: 'file_v3' },
+      adminToken,
+    );
+    expect(decided.status).toBe(409);
   });
 });

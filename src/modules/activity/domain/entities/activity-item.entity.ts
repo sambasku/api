@@ -22,6 +22,8 @@ export interface ActivityActor {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  /** Centang verifikator di samping nama. False untuk akun tersembunyi. */
+  isVerifier: boolean;
 }
 
 export interface ActivityTarget {

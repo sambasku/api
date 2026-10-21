@@ -38,7 +38,7 @@ export class ChangePasswordUseCase {
     if (user.passwordHash === null) {
       throw new BadRequestError(
         'OAUTH_NO_PASSWORD',
-        'Akun ini tidak memiliki password (login via OAuth). Gunakan lupa password untuk membuat password.',
+        'Akun ini tidak memiliki password (login via OAuth). Buat password dari profil.',
       );
     }
 

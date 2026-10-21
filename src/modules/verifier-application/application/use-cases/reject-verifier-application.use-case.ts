@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
@@ -10,6 +10,7 @@ import type { VerifierApplicationRepository } from '../../domain/repositories/ve
 export interface RejectVerifierApplicationCommand {
   applicationId: string;
   actorId: string;
+  actorRoles: string[];
   comment: string;
   requestId?: string | null;
 }
@@ -43,6 +44,9 @@ export class RejectVerifierApplicationUseCase {
   ) {}
 
   async execute(cmd: RejectVerifierApplicationCommand): Promise<RejectVerifierApplicationResult> {
+    if (!cmd.actorRoles.includes('root') && !cmd.actorRoles.includes('admin')) {
+      throw new ForbiddenError('FORBIDDEN', 'Hanya admin dan root yang bisa meninjau pengajuan');
+    }
     const row = await this.appRepo.findById(cmd.applicationId);
     if (!row) {
       throw new NotFoundError(

@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
+import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
   publicAccountDisplayName,
   publicAccountName,
@@ -94,6 +95,7 @@ function toDiscussion(
   username: string | null,
   displayName: string | null,
   avatarUrl: string | null,
+  userRole: string | null = null,
 ): Discussion {
   return {
     id: row.id,
@@ -101,6 +103,7 @@ function toDiscussion(
     username,
     displayName,
     avatarUrl,
+    userRole,
     body: row.body,
     linkUrl: row.linkUrl ?? null,
     images: asImages(row.images),
@@ -182,6 +185,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
+        userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
       })
       .from(discussions)
@@ -194,6 +198,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
       publicAccountName(row.username, row.authorDeletedAt),
       publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
       row.authorDeletedAt ? null : (row.avatarUrl ?? null),
+      row.authorDeletedAt ? null : (row.userRole ?? null),
     );
   }
 
@@ -208,6 +213,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
+        userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
       })
       .from(discussions)
@@ -230,6 +236,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         publicAccountName(r.username, r.authorDeletedAt),
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
         r.authorDeletedAt ? null : (r.avatarUrl ?? null),
+        r.authorDeletedAt ? null : (r.userRole ?? null),
       ),
     );
     return {
@@ -270,6 +277,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
+        userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
         upvotes: upvoteExpr,
       })
@@ -293,6 +301,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         publicAccountName(r.username, r.authorDeletedAt),
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
         r.authorDeletedAt ? null : (r.avatarUrl ?? null),
+        r.authorDeletedAt ? null : (r.userRole ?? null),
       ),
     );
 
@@ -398,7 +407,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
-        userRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${users.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
+        userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
       })
       .from(discussionReplies)
@@ -422,7 +431,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
-        userRole: sql<string | null>`(SELECT ur.role FROM user_roles ur WHERE ur.user_id = ${users.id} ORDER BY CASE ur.role WHEN 'root' THEN 5 WHEN 'admin' THEN 4 WHEN 'reviewer' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC LIMIT 1)`,
+        userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
       })
       .from(discussionReplies)

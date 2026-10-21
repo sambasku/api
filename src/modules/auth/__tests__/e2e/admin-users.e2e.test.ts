@@ -60,6 +60,7 @@ describe.skipIf(!hasTestDb)('Admin Users E2E', () => {
       expect(item).toHaveProperty('role');
       expect(item).toHaveProperty('is_active');
       expect(item).toHaveProperty('created_at');
+      expect(item).toHaveProperty('avatar_url');
       if (item.role !== 'root') contributorId = item.id;
       if (item.role === 'root') rootUserId = item.id;
     }
@@ -267,11 +268,16 @@ describe.skipIf(!hasTestDb)('Admin create user E2E', () => {
       providerUserId: `sub-onboard-${stamp}`,
       emailAtProvider: googleEmail,
     });
+    await db
+      .update(users)
+      .set({ avatarUrl: 'https://cdn.example.com/avatar.png' })
+      .where(eq(users.id, gUser.id));
 
     const res = await request('/api/v1/admin/users?q=gvia', { headers: { authorization: `Bearer ${adminToken}` } });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data[0].auth_providers).toEqual(['google']);
+    expect(body.data[0].avatar_url).toBe('https://cdn.example.com/avatar.png');
 
     // User password biasa (seed describe ini) tidak punya identity → [].
     const plain = await request('/api/v1/admin/users?q=adm', { headers: { authorization: `Bearer ${adminToken}` } });

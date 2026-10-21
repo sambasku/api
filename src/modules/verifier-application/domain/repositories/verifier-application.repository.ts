@@ -1,6 +1,7 @@
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
   NewVerifierApplication,
+  SocialScreenshot,
   VerifierApplication,
   VerifierApplicationListItem,
   VerifierApplicationStatus,
@@ -33,4 +34,9 @@ export interface VerifierApplicationRepository {
   approveAtomically(id: string, reviewerId: string): Promise<VerifierApplication>;
   markApproved(id: string, reviewerId: string): Promise<VerifierApplication | null>;
   markRejected(id: string, reviewerId: string, comment: string): Promise<VerifierApplication | null>;
+  updateSocialScreenshot(
+    id: string,
+    index: number,
+    screenshot: SocialScreenshot,
+  ): Promise<VerifierApplication>;
 }

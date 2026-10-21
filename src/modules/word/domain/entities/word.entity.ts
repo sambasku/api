@@ -70,6 +70,11 @@ export interface WordSummary {
   matchedTranslation?: string;
   /** 11: terisi saat pencarian lemma cocok lewat variasi penulisan (formnya) */
   matchedVariant?: string;
+  /**
+   * PRD relasi-lemma: `related_group` = hasil perluasan kelompok makna
+   * (bukan cocok langsung dengan query). Absen = cocok langsung.
+   */
+  matchType?: 'direct' | 'related_group';
   /** waktu perubahan terakhir (listing A-Z; sitemap web pakai ini sebagai lastmod). Null bila kolom kosong. */
   updatedAt?: Date | null;
   /**
@@ -154,6 +159,16 @@ export interface WordDetail extends Word {
   relatedWords: RelatedWordRef[];
   /** relasi masuk (mis. komponen → "muncul dalam" peribahasa) - derived, tak disimpan */
   appearsIn: RelatedWordRef[];
+  /**
+   * PRD relasi-lemma: kelompok makna published. Hanya berisi anggota LAIN
+   * (kata ini sendiri tidak diulang). Array kosong = tidak ada kelompok.
+   */
+  meaningGroups: {
+    groupId: string;
+    name: string;
+    description: string | null;
+    members: { wordId: string; lemma: string; notes: string | null }[];
+  }[];
   variants: WordVariantRef[];
   /** JOIN users pada words.verified_by; tetap ada meski user soft-deleted */
   verifier: { username: string; displayName: string; role: string } | null;

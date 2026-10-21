@@ -11,6 +11,7 @@ function item(
       username: 'u',
       displayName: 'U',
       avatarUrl: null,
+      isVerifier: false,
     },
     body: partial.body ?? `body-${partial.id}`,
     subtitle: partial.subtitle ?? null,

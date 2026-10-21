@@ -15,6 +15,8 @@ import {
   users,
   wordCategories,
   wordClasses,
+  wordGroupMembers,
+  wordGroups,
   wordImages,
   wordAudios,
   wordVariants,
@@ -27,6 +29,7 @@ import {
   publicAccountDisplayName,
   publicAccountName,
 } from '@/shared/constants/deleted-account';
+import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { ConflictError, ValidationError } from '@/shared/errors/app-error';
 import { wordImageIsAutoVerified } from '../domain/word-image-provider';
 import {
@@ -258,6 +261,12 @@ function mapMediaViolation(err: unknown, uniqueField: string): void {
   }
 }
 
+// PRD relasi-lemma: alias self-join kelompok makna (findDetailById) -
+// cari kelompok lain milik kata ini tanpa query tambahan.
+const wgmSelf = alias(wordGroupMembers, 'wgm_self');
+const wgmOther = alias(wordGroupMembers, 'wgm_other');
+const wgmWord = alias(words, 'wgm_word');
+
 export class WordRepositoryImpl implements WordRepository {
   constructor(
     private readonly db: AppDatabase,
@@ -401,11 +410,14 @@ export class WordRepositoryImpl implements WordRepository {
             inheritedFrom: inheritedByIdx,
           });
 
-          // 3) relasi: source = induk → target = inline
+          // 3) relasi: source = induk → target = inline. Status relasi
+          // ikut status kata inline (PRD relasi-lemma: pending tidak tayang).
           await tx.insert(lexicalRelations).values({
             sourceWordId: wordId,
             targetWordId: inlineId,
             relationType: rel.relationType,
+            status: rel.inlineWord.status === 'published' ? 'published' : 'pending_review',
+            isVerified: rel.inlineWord.isVerified,
             createdBy: actorId,
           });
 
@@ -730,6 +742,9 @@ export class WordRepositoryImpl implements WordRepository {
 
     const wordClassIds = [...new Set(meaningRows.map((m) => m.wordClassId).filter((x): x is string => !!x))];
     const meaningIds = meaningRows.map((m) => m.id);
+    const meaningCreatorIds = [
+      ...new Set(meaningRows.map((m) => m.createdBy).filter((x): x is string => !!x)),
+    ];
 
     // Child SELECTs independen setelah meanings → 1 batch (hemat subrequest Workers).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -739,6 +754,21 @@ export class WordRepositoryImpl implements WordRepository {
     if (wordClassIds.length > 0) {
       batchKeys.push('wc');
       batchQueries.push(this.db.select().from(wordClasses).where(inArray(wordClasses.id, wordClassIds)));
+    }
+    if (meaningCreatorIds.length > 0) {
+      batchKeys.push('meaningCreators');
+      batchQueries.push(
+        this.db
+          .select({
+            id: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            deletedAt: users.deletedAt,
+            role: highestUserRoleSql,
+          })
+          .from(users)
+          .where(inArray(users.id, meaningCreatorIds)),
+      );
     }
     if (meaningIds.length > 0) {
       batchKeys.push('translations');
@@ -830,7 +860,14 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(lexicalRelations.sourceWordId, id),
             isNull(lexicalRelations.deletedAt),
-            includeAll ? undefined : and(eq(words.status, 'published'), isNull(words.deletedAt)),
+            // PRD relasi-lemma: baris pending/rejected tidak tampil publik
+            includeAll
+              ? undefined
+              : and(
+                  eq(lexicalRelations.status, 'published'),
+                  eq(words.status, 'published'),
+                  isNull(words.deletedAt),
+                ),
           ),
         )
         .orderBy(asc(words.lemma)),
@@ -850,19 +887,73 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(lexicalRelations.targetWordId, id),
             isNull(lexicalRelations.deletedAt),
-            includeAll ? undefined : and(eq(words.status, 'published'), isNull(words.deletedAt)),
+            includeAll
+              ? undefined
+              : and(
+                  eq(lexicalRelations.status, 'published'),
+                  eq(words.status, 'published'),
+                  isNull(words.deletedAt),
+                ),
           ),
         )
         .orderBy(asc(words.lemma)),
     );
 
-    batchKeys.push('variants');
-    batchQueries.push(
-      this.db
-        .select()
-        .from(wordVariants)
-        .where(and(eq(wordVariants.wordId, id), isNull(wordVariants.deletedAt))),
-    );
+batchKeys.push('variants');
+batchQueries.push(
+this.db
+.select()
+.from(wordVariants)
+.where(and(eq(wordVariants.wordId, id), isNull(wordVariants.deletedAt))),
+);
+// PRD relasi-lemma: kelompok makna published milik kata ini (hanya saat
+// publik; layar review tidak butuh - anggota pending tidak tayang).
+// Join 2 tingkat dalam 1 query (member → group, member → word) supaya
+// tidak menambah subrequest.
+if (!includeAll) {
+batchKeys.push('groups');
+batchQueries.push(
+this.db
+.select({
+groupId: wordGroups.id,
+groupName: wordGroups.name,
+groupDescription: wordGroups.description,
+memberWordId: wgmWord.id,
+memberNotes: wgmOther.notes,
+memberLemma: wgmWord.lemma,
+})
+.from(wgmSelf)
+.innerJoin(
+wordGroups,
+and(
+eq(wordGroups.id, wgmSelf.groupId),
+eq(wordGroups.status, 'published'),
+isNull(wordGroups.deletedAt),
+),
+)
+.innerJoin(wgmOther, eq(wgmOther.groupId, wgmSelf.groupId))
+.innerJoin(
+wgmWord,
+and(
+eq(wgmWord.id, wgmOther.wordId),
+eq(wgmWord.status, 'published'),
+isNull(wgmWord.deletedAt),
+),
+)
+.where(
+and(
+eq(wgmSelf.wordId, id),
+eq(wgmSelf.status, 'published'),
+isNull(wgmSelf.deletedAt),
+// kecuali kata ini sendiri di dalam kelompoknya
+ne(wgmWord.id, id),
+eq(wgmOther.status, 'published'),
+isNull(wgmOther.deletedAt),
+),
+)
+.orderBy(asc(wordGroups.name), asc(wgmWord.lemma)),
+);
+}
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const batchResults = (await this.db.batch(batchQueries as any)) as any[];
@@ -881,15 +972,32 @@ export class WordRepositoryImpl implements WordRepository {
     }>('wc');
     const wcById = new Map(wcRows.map((wc) => [wc.id, wc]));
 
+    const meaningCreatorRows = pick<{
+      id: string;
+      username: string;
+      displayName: string;
+      deletedAt: Date | null;
+      role: string | null;
+    }>('meaningCreators');
+    const meaningCreatorById = new Map(meaningCreatorRows.map((u) => [u.id, u]));
+
     const translationRows = pick<(typeof meaningTranslations.$inferSelect)>('translations');
     const exampleRows = pick<(typeof examples.$inferSelect)>('examples');
     const categoryRows = pick<{ id: string; name: string }>('categories');
     const pronRows = pick<(typeof pronunciations.$inferSelect)>('pronunciations');
     const imageRows = pick<(typeof wordImages.$inferSelect)>('images');
     const audioRows = pick<(typeof wordAudios.$inferSelect)>('audios');
-    const relatedRows = pick<{ wordId: string; relationType: string; lemma: string }>('related');
-    const appearsRows = pick<{ wordId: string; relationType: string; lemma: string }>('appears');
-    const variantRows = pick<(typeof wordVariants.$inferSelect)>('variants');
+const relatedRows = pick<{ wordId: string; relationType: string; lemma: string }>('related');
+const appearsRows = pick<{ wordId: string; relationType: string; lemma: string }>('appears');
+const variantRows = pick<(typeof wordVariants.$inferSelect)>('variants');
+const groupRows = pick<{
+groupId: string;
+groupName: string;
+groupDescription: string | null;
+memberWordId: string;
+memberNotes: string | null;
+memberLemma: string;
+}>('groups');
 
     return {
       ...toWord(wordRow),
@@ -957,6 +1065,19 @@ export class WordRepositoryImpl implements WordRepository {
         meaningSource: (m.meaningSource as 'manual' | 'kbbi' | 'kbbi_edited') ?? 'manual',
         orderIndex: m.orderIndex,
         notes: m.notes,
+        creator: (() => {
+          if (!m.createdBy) return null;
+          const person = meaningCreatorById.get(m.createdBy);
+          if (!person || person.role == null) return null;
+          const username = publicAccountName(person.username, person.deletedAt);
+          const displayName = publicAccountDisplayName(
+            person.displayName,
+            person.username,
+            person.deletedAt,
+          );
+          if (!username || !displayName) return null;
+          return { username, displayName, role: person.role };
+        })(),
         translations: translationRows
           .filter((t) => t.meaningId === m.id)
           .map((t) => ({
@@ -1063,8 +1184,23 @@ export class WordRepositoryImpl implements WordRepository {
         });
         return wordLevel;
       })(),
-      relatedWords: relatedRows,
-      appearsIn: appearsRows,
+    relatedWords: relatedRows,
+    appearsIn: appearsRows,
+    // PRD relasi-lemma: kelompok makna published (array kosong saat tak ada).
+    meaningGroups: groupRows
+      .map((g) => ({
+        groupId: g.groupId,
+        name: g.groupName,
+        description: g.groupDescription,
+        members: groupRows
+          .filter((m) => m.groupId === g.groupId && m.memberWordId !== wordRow.id)
+          .map((m) => ({
+            wordId: m.memberWordId,
+            lemma: m.memberLemma,
+            notes: m.memberNotes,
+          })),
+      }))
+      .filter((g, i, arr) => arr.findIndex((x) => x.groupId === g.groupId) === i),
       variants: variantRows.map((v) => ({
         id: v.id,
         form: v.form,
@@ -1268,6 +1404,125 @@ export class WordRepositoryImpl implements WordRepository {
       nextCursor,
       hasMore,
     };
+  }
+
+  // PRD relasi-lemma: anggota kelompok published milik kata-kata ini
+  // (Bukan kata-katanya sendiri). Satu query IN + join group + word,
+  // hemat subrequest. Dipakai SearchWordsUseCase untuk perluasan hasil.
+  async findRelatedGroupMembers(wordIds: string[]): Promise<WordSummary[]> {
+    if (wordIds.length === 0) return [];
+    const rows = await this.db
+      .select({
+        id: wgmWord.id,
+        lemma: wgmWord.lemma,
+        languageId: wgmWord.languageId,
+        languageCode: languages.code,
+        wordType: wgmWord.wordType,
+        usageLabels: wgmWord.usageLabels,
+        isVerified: wgmWord.isVerified,
+        status: wgmWord.status,
+      })
+      .from(wgmSelf)
+      .innerJoin(
+        wordGroups,
+        and(
+          eq(wordGroups.id, wgmSelf.groupId),
+          eq(wordGroups.status, 'published'),
+          isNull(wordGroups.deletedAt),
+        ),
+      )
+      .innerJoin(wgmOther, eq(wgmOther.groupId, wgmSelf.groupId))
+      .innerJoin(
+        wgmWord,
+        and(
+          eq(wgmWord.id, wgmOther.wordId),
+          eq(wgmWord.status, 'published'),
+          isNull(wgmWord.deletedAt),
+        ),
+      )
+      .innerJoin(languages, eq(wgmWord.languageId, languages.id))
+      .where(
+        and(
+          inArray(wgmSelf.wordId, wordIds),
+          eq(wgmSelf.status, 'published'),
+          isNull(wgmSelf.deletedAt),
+          eq(wgmOther.status, 'published'),
+          isNull(wgmOther.deletedAt),
+        ),
+      );
+
+    // dedupe: satu kata bisa muncul lewat beberapa kelompok/anggota
+    const seen = new Set(wordIds);
+    const out: WordSummary[] = [];
+    for (const r of rows) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push({
+        id: r.id,
+        lemma: r.lemma,
+        languageId: r.languageId,
+        languageCode: r.languageCode,
+        wordType: r.wordType as Word['wordType'],
+        usageLabels: toUsageLabels(r.usageLabels),
+        isVerified: r.isVerified,
+        status: r.status as WordStatus,
+        sense: null,
+      });
+    }
+    if (out.length > 0) await this.attachListGlosses(out);
+    return out;
+  }
+
+  // PRD relasi-lemma: map wordId → daftar groupId published (audit/perluasan).
+  async listGroupIdsByWordIds(wordIds: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    if (wordIds.length === 0) return out;
+    const rows = await this.db
+      .select({ wordId: wgmSelf.wordId, groupId: wgmSelf.groupId })
+      .from(wgmSelf)
+      .innerJoin(
+        wordGroups,
+        and(
+          eq(wordGroups.id, wgmSelf.groupId),
+          eq(wordGroups.status, 'published'),
+          isNull(wordGroups.deletedAt),
+        ),
+      )
+      .where(
+        and(
+          inArray(wgmSelf.wordId, wordIds),
+          eq(wgmSelf.status, 'published'),
+          isNull(wgmSelf.deletedAt),
+        ),
+      );
+    for (const r of rows) {
+      const list = out.get(r.wordId);
+      if (list) list.push(r.groupId);
+      else out.set(r.wordId, [r.groupId]);
+    }
+    return out;
+  }
+
+  // PRD relasi-lemma: guard siklus derived_from. True bila target sudah
+  // bisa menjangkau source (menambah edge source→target = siklus). Satu
+  // query recursive (aturan hemat subrequest; batas kedalaman 10 pragmatis).
+  async hasDerivedFromPath(sourceWordId: string, targetWordId: string): Promise<boolean> {
+    const rows = await this.db.all<{ hit: number }>(sql`
+      WITH RECURSIVE walk(word_id) AS (
+        SELECT ${targetWordId}
+        UNION
+        SELECT lr.source_word_id
+        FROM lexical_relations lr
+        JOIN walk w ON lr.target_word_id = w.word_id
+        WHERE lr.relation_type = 'derived_from'
+          AND lr.deleted_at IS NULL
+          AND lr.status = 'published'
+          AND w.word_id != ${sourceWordId}
+        LIMIT 1000
+      )
+      SELECT 1 AS hit FROM walk WHERE word_id = ${sourceWordId} LIMIT 1
+    `);
+    return rows.length > 0;
   }
 
   // 18-api-list-words.md - browsing A-Z: keyset (lower(lemma) COLLATE "C", id).
@@ -2501,12 +2756,16 @@ export class WordRepositoryImpl implements WordRepository {
             sourceWordId: newId,
             targetWordId: targetWordId,
             relationType: 'synonym',
+            status: 'published',
+            isVerified: true,
             createdBy: actorId,
           },
           {
             sourceWordId: targetWordId,
             targetWordId: newId,
             relationType: 'synonym',
+            status: 'published',
+            isVerified: true,
             createdBy: actorId,
           },
         ]);
@@ -2974,6 +3233,9 @@ export class WordRepositoryImpl implements WordRepository {
           sourceWordId: wordId,
           targetWordId: rel.wordId,
           relationType: rel.relationType,
+          // PRD relasi-lemma: relasi pada kata non-published ikut pending
+          status: word.status === 'published' ? 'published' : 'pending_review',
+          isVerified: word.isVerified,
           createdBy: actorId,
         })),
       );
