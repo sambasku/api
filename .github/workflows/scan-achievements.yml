@@ -1,0 +1,59 @@
+name: Scan Achievements (manual)
+# Scan achievement via CLI: berikan award ke user yang memenuhi kriteria
+# katalog aktif + kirim notifikasi inbox. Idempoten - aman diulang.
+# Dipakai untuk trigger manual tanpa tunggu cron 6 jam, atau backfill
+# massal setelah seed katalog baru.
+#
+# CLI: gh workflow run scan-achievements.yml --ref staging -f target=staging
+#      gh workflow run scan-achievements.yml --ref main -f target=production -f codes=angkatan-ke-1
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Database target scan'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      codes:
+        description: 'Kode achievement (opsional, pisah koma; kosong = semua katalog aktif)'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: scan-achievements-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Scan staging
+        if: inputs.target == 'staging'
+        run: pnpm scan:achievements ${{ inputs.codes }}
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+          JWT_PRIVATE_KEY: dummy
+          JWT_PUBLIC_KEY: dummy
+          CORS_ALLOWED_ORIGINS: https://console-sambasku-staging.iamutaki.com
+      - name: Scan production
+        if: inputs.target == 'production'
+        run: pnpm scan:achievements ${{ inputs.codes }}
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+          JWT_PRIVATE_KEY: dummy
+          JWT_PUBLIC_KEY: dummy
+          CORS_ALLOWED_ORIGINS: https://sambasku.com,https://console.sambasku.com

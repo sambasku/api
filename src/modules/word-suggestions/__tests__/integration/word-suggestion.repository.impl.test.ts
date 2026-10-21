@@ -347,4 +347,84 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
     await db.update(words).set({ usageLabels: ['kasar'] }).where(eq(words.id, WORD));
     expect(await feed.listRecentAppliedSuggestions(10)).toHaveLength(0);
   });
+
+  it('relasi lemma target belum ada → kata baru dibuat saat approve, makna diwarisi', async () => {
+    const sug = await repo.createSuggestion(
+      KONTRIBUTOR,
+      WORD,
+      { relations: [{ action: 'add', relationType: 'derived_from', lemma: 'anak kete' }] },
+      'x',
+      'derived_from',
+      'contributor',
+    );
+    // Belum ada kata baru sebelum approve.
+    const [before] = await db.select().from(words).where(eq(words.lemma, 'anak kete'));
+    expect(before).toBeUndefined();
+
+    await repo.approveSuggestion(sug.id, REVIEWER, 'ok');
+
+    const [created] = await db.select().from(words).where(eq(words.lemma, 'anak kete'));
+    expect(created).toBeDefined();
+    expect(created.status).toBe('published');
+    expect(created.isVerified).toBe(true);
+    expect(created.createdBy).toBe(KONTRIBUTOR);
+
+    const inherited = await db.select().from(meanings).where(eq(meanings.wordId, created.id));
+    expect(inherited).toHaveLength(1);
+    expect(inherited[0].inheritedFromMeaningId).toBe(MEANING);
+    expect(inherited[0].definition).toBe('definisi lama');
+
+    const [rel] = await db
+      .select()
+      .from(lexicalRelations)
+      .where(eq(lexicalRelations.targetWordId, created.id));
+    expect(rel.sourceWordId).toBe(WORD);
+    expect(rel.relationType).toBe('derived_from');
+  });
+
+  it('relasi lemma target yang sudah ada → pakai kata itu, tidak duplikat', async () => {
+    const sug = await repo.createSuggestion(
+      KONTRIBUTOR,
+      WORD,
+      { relations: [{ action: 'add', relationType: 'synonym', lemma: 'Lain' }] },
+      'x',
+      'synonym',
+      'contributor',
+    );
+    await repo.approveSuggestion(sug.id, REVIEWER, 'ok');
+
+    const rows = await db.select().from(words).where(eq(words.lemma, 'lain'));
+    expect(rows).toHaveLength(1);
+    const [rel] = await db
+      .select()
+      .from(lexicalRelations)
+      .where(eq(lexicalRelations.sourceWordId, WORD));
+    expect(rel.targetWordId).toBe(OTHER_WORD);
+  });
+
+  it('lemma target sama dengan kata ini → self-relation dilewati, tidak 500', async () => {
+    const sug = await repo.createSuggestion(
+      KONTRIBUTOR,
+      WORD,
+      { relations: [{ action: 'add', relationType: 'variant_of', lemma: 'kete' }] },
+      'x',
+      'variant_of',
+      'contributor',
+    );
+    await expect(repo.approveSuggestion(sug.id, REVIEWER, 'ok')).resolves.toBeDefined();
+    const rels = await db.select().from(lexicalRelations).where(eq(lexicalRelations.sourceWordId, WORD));
+    expect(rels).toHaveLength(0);
+  });
+
+  it('pengusul tidak lagi diblokir mengusulkan kata buatannya sendiri', async () => {
+    const sug = await repo.createSuggestion(
+      OWNER,
+      WORD,
+      { notes: 'catatan pemilik' },
+      'x',
+      'lemma_notes',
+      'contributor',
+    );
+    expect(sug.status).toBe('pending');
+  });
 });
