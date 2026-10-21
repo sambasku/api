@@ -5,8 +5,7 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { WebImportRepository } from '../../domain/repositories/web-import.repository';
 import type { NewWebImport, WebImport, WebImportDetail, WebImportStatus } from '../../domain/entities/web-import.entity';
 
-const WORD_CLASS_CODES = ['kb', 'kk', 'ks', 'kt', 'kd'] as const;
-const MAX_ROWS_PER_SUBMIT = 200;
+const MAX_ROWS_PER_SUBMIT = 500;
 
 export type SubmitWebImportInput = {
   officerName: string;
@@ -34,9 +33,23 @@ export type SubmitWebImportResult = {
   createdAt: Date;
 };
 
+const LEGACY_CODE_TO_STANDARD: Record<string, string> = {
+  kb: 'n',
+  kk: 'v',
+  ks: 'adj',
+  kt: 'adv',
+  kd: 'prep',
+};
+
+/**
+ * Normalisasi kolom `type` ke kode linguistik standar DB.
+ * Kode legacy CSV (kb, kk, ks, kt, kd) otomatis dipetakan ke (n, v, adj, adv, prep).
+ */
 function normalizeType(raw: string | null | undefined): string | null {
   const code = raw?.trim().toLowerCase() ?? '';
-  return code === '' || WORD_CLASS_CODES.includes(code as any) ? code : null;
+  if (code === '') return null;
+  if (code.length > 20) return null;
+  return LEGACY_CODE_TO_STANDARD[code] ?? code;
 }
 
 function validateRows(

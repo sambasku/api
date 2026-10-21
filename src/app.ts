@@ -212,6 +212,30 @@ import {
   createSearchMissRoutes,
 } from '@/modules/search-miss/presentation/v1/search-miss.routes';
 import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from '@/modules/announcement/presentation/v1/announcement.routes';
+import { AchievementRepositoryImpl } from '@/modules/achievement/infrastructure/achievement.repository.impl';
+import {
+  CreateAchievementUseCase,
+  DeleteAchievementUseCase,
+  GrantAchievementUseCase,
+  PreviewAchievementUseCase,
+  RevokeUserAchievementUseCase,
+  SetActiveBorderUseCase,
+  UpdateAchievementUseCase,
+} from '@/modules/achievement/application/use-cases/achievement-admin.use-cases';
+import { ScanAchievementUseCase } from '@/modules/achievement/application/use-cases/scan-achievement.use-case';
+import { RunDueAchievementScanUseCase } from '@/modules/achievement/application/use-cases/run-due-achievement-scan.use-case';
+import {
+  ListActiveAchievementsUseCase,
+  ListMyAchievementsUseCase,
+  ListUserAchievementsUseCase,
+} from '@/modules/achievement/application/use-cases/list-achievements.use-case';
+import { AchievementController } from '@/modules/achievement/presentation/v1/achievement.controller';
+import {
+  createAdminAchievementRoutes,
+  createMyAchievementRoutes,
+  createMyProfileBorderRoutes,
+  createPublicAchievementRoutes,
+} from '@/modules/achievement/presentation/v1/achievement.routes';
 import { PlaceRepositoryImpl } from '@/modules/place/infrastructure/place.repository.impl';
 import {
   AppendPlaceImagesUseCase,
@@ -876,6 +900,8 @@ const announcementController = new AnnouncementController(
   announcementRepo,
 );
 
+
+
 const placeRepo = new PlaceRepositoryImpl(db);
 const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
 const placeController = new PlaceController(
@@ -1085,6 +1111,34 @@ const userController = new UserController({
   getMyProfile: new GetMyProfileUseCase(userRepo),
   updateMyProfile: new UpdateMyProfileUseCase(userRepo, regionRepo),
 });
+
+// ---- Modul achievement: katalog reward (border/badge/stiker) + evaluasi
+// cron + border profil. Registry source di domain/achievement-registry. ----
+const achievementRepo = new AchievementRepositoryImpl(db);
+const scanAchievement = new ScanAchievementUseCase(achievementRepo, recordInbox, auditRepo);
+const achievementController = new AchievementController({
+  create: new CreateAchievementUseCase(achievementRepo, auditRepo),
+  update: new UpdateAchievementUseCase(achievementRepo, auditRepo),
+  remove: new DeleteAchievementUseCase(achievementRepo, auditRepo),
+  grant: new GrantAchievementUseCase(achievementRepo, recordInbox, auditRepo),
+  revoke: new RevokeUserAchievementUseCase(achievementRepo, auditRepo),
+  preview: new PreviewAchievementUseCase(achievementRepo),
+  scan: scanAchievement,
+  setBorder: new SetActiveBorderUseCase(achievementRepo, auditRepo),
+  listActive: new ListActiveAchievementsUseCase(achievementRepo),
+  listMine: new ListMyAchievementsUseCase(achievementRepo),
+  listByUsername: new ListUserAchievementsUseCase(achievementRepo, async (username) => {
+    const row = await publicUserRepo.findPublicByUsername(username);
+    return row?.id ?? null;
+  }),
+  repo: achievementRepo,
+});
+const runDueAchievementScanUseCase = new RunDueAchievementScanUseCase(
+  achievementRepo,
+  scanAchievement,
+  appSettingsRepo,
+  auditRepo,
+);
 
 // ---- Modul device (FCM token register/revoke, multi-device) ----
 const deviceController = new DeviceController({
@@ -1471,6 +1525,17 @@ app.route('/api/v1/admin/announcements', createAdminAnnouncementRoutes({ control
 // Publik: detail pengumuman by id (deep link mobile #102).
 app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: announcementController }));
 
+// Achievement (Pencapaian) - katalog reward, milik sendiri, border profil.
+// Publik katalog + badge profil; `/me/achievements` dan `/me/profile/border`
+// butuh auth. Border profil TIDAK lewat /api/v1/users/:username supaya
+// tidak bentrok dengan route profil.
+app.route('/api/v1/achievements', createPublicAchievementRoutes({ controller: achievementController }));
+// Border profil: mount di `/api/v1/me/profile` + path `/border` =
+// PATCH /api/v1/me/profile/border (jangan mount dua-duanya "border").
+app.route('/api/v1/me/achievements', createMyAchievementRoutes({ controller: achievementController, authenticate }));
+app.route('/api/v1/me/profile', createMyProfileBorderRoutes({ controller: achievementController, authenticate }));
+app.route('/api/v1/admin/achievements', createAdminAchievementRoutes({ controller: achievementController, authenticate }));
+
 // Places CRUD - katalog wisata/kuliner/budaya (SoT Turso).
 app.route('/api/v1/admin/places', createAdminPlaceRoutes({ controller: placeController, authenticate }));
 app.route('/api/v1/places', createPublicPlaceRoutes({ controller: placeController, optionalAuthenticate }));
@@ -1830,6 +1895,18 @@ app.route(
 export async function runDueNotificationCampaigns(): Promise<{ processed: number }> {
   await resetWaUsageIfNewPeriod();
   return processDueCampaigns.execute(5);
+}
+
+/**
+ * Cron achievement: scan semua katalog aktif (due-check 6 jam via
+ * app_settings). Idempotent - tick berulang aman.
+ */
+export async function runDueAchievementScan(): Promise<{
+  scanned: number;
+  awarded: number;
+  ran: boolean;
+}> {
+  return runDueAchievementScanUseCase.execute();
 }
 
 /**

@@ -3,11 +3,13 @@ import { closeDb } from '@/shared/database/drizzle/client';
 import { logger } from '@/shared/logging/logger';
 import { seedAccounts } from './seed-accounts';
 import { seedReference } from './seed-reference';
+import { seedAchievements } from './seed-achievements';
 
 /** Lokal/bootstrap: accounts lalu reference. Staging/prod pakai workflow terpisah. */
 async function main() {
   await seedAccounts();
   await seedReference();
+  await seedAchievements();
 }
 
 main()

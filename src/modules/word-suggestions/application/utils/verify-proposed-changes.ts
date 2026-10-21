@@ -20,7 +20,8 @@ export function verifyProposedChanges(changes: ProposedChanges): {
     (changes.categoryIdsToRemove?.length ?? 0) > 0 ||
     (changes.relations?.length ?? 0) > 0 ||
     (changes.variants?.length ?? 0) > 0 ||
-    (changes.images?.length ?? 0) > 0;
+    (changes.images?.length ?? 0) > 0 ||
+    (changes.groups?.length ?? 0) > 0;
 
   if (!hasContent) {
     errors.push({ field: 'proposed_changes', message: 'Minimal satu field harus diisi' });
@@ -165,6 +166,26 @@ export function verifyProposedChanges(changes: ProposedChanges): {
         message: 'Foto yang dihapus tidak bisa sekaligus dijadikan utama',
       });
     }
+  }
+  if (changes.groups && changes.groups.length > 5) {
+    errors.push({ field: 'groups', message: 'Maksimal 5 perubahan kelompok per usulan' });
+  }
+  if (changes.groups) {
+    const seen = new Set<string>();
+    changes.groups.forEach((g, idx) => {
+      const prefix = `groups.${idx}`;
+      const key = g.groupId ?? `new:${g.name?.trim().toLowerCase() ?? ''}`;
+      if (seen.has(key)) {
+        errors.push({ field: prefix, message: 'Kelompok sama muncul dua kali dalam satu usulan' });
+      }
+      seen.add(key);
+      if (g.action === 'add' && !g.groupId && !g.name?.trim()) {
+        errors.push({
+          field: `${prefix}.name`,
+          message: 'Kelompok baru wajib punya nama; atau isi group_id untuk kelompok yang ada',
+        });
+      }
+    });
   }
 
   return { valid: errors.length === 0, errors };

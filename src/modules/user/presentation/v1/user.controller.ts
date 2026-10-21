@@ -42,6 +42,7 @@ export class UserController {
         is_verifier: profile.isVerifier,
         joined_at: profile.joinedAt.toISOString(),
         avatar_url: profile.avatarUrl,
+        active_border_url: profile.activeBorderUrl ?? null,
         stats: {
           contributions_approved: profile.stats.contributionsApproved,
           words_approved: profile.stats.wordsApproved,

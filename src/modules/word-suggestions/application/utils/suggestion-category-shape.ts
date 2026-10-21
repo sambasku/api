@@ -17,7 +17,8 @@ type Part =
   | 'categories'
   | 'relations'
   | 'variants'
-  | 'images';
+  | 'images'
+  | 'groups';
 
 function presentParts(c: ProposedChanges): Set<Part> {
   const parts = new Set<Part>();
@@ -29,6 +30,7 @@ function presentParts(c: ProposedChanges): Set<Part> {
   if (c.relations?.length) parts.add('relations');
   if (c.variants?.length) parts.add('variants');
   if (c.images?.length) parts.add('images');
+  if (c.groups?.length) parts.add('groups');
   return parts;
 }
 
@@ -40,6 +42,10 @@ const ALLOWED: Record<string, Part[]> = {
   change_photo: ['images'],
   synonym: ['relations'],
   antonym: ['relations'],
+  variant_of: ['relations'],
+  nonstandard_of: ['relations'],
+  derived_from: ['relations'],
+  meaning_group: ['groups'],
   spelling_variant: ['variants'],
   lemma_notes: ['lemma', 'notes'],
 };
@@ -124,6 +130,10 @@ export function checkSuggestionCategoryShape(
       break;
     case 'synonym':
     case 'antonym':
+    // PRD relasi-lemma: kategori relasi baru - satu kategori satu tipe.
+    case 'variant_of':
+    case 'nonstandard_of':
+    case 'derived_from':
       if ((c.relations ?? []).some((r) => r.relationType !== code)) {
         issues.push({ field: 'relations', message: 'Jenis relasi tidak sesuai kategori' });
       }
@@ -140,7 +150,7 @@ export function checkSuggestionCategoryShape(
  */
 export function isRevertibleForApplyPending(c: ProposedChanges): boolean {
   if (c.categoryIdsToAdd?.length || c.categoryIdsToRemove?.length) return false;
-  if (c.relations?.length || c.variants?.length) return false;
+  if (c.relations?.length || c.variants?.length || c.groups?.length) return false;
   if ((c.meanings ?? []).some((m) => m.action !== 'update')) return false;
   if ((c.images ?? []).some((i) => i.action !== 'add')) return false;
   return true;

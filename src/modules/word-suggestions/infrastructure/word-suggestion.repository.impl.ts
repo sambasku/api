@@ -12,6 +12,8 @@ import {
   lexicalRelations,
   wordVariants,
   wordImages,
+  wordGroups,
+  wordGroupMembers,
 } from '@/shared/database/drizzle/schema';
 import type { WordSuggestionRepository, ChangeHistoryItem, SuggestionSource } from '../domain/repositories/word-suggestion.repository';
 import type {
@@ -218,8 +220,24 @@ async function assertProposedTargetsCurrent(wordId: string, c: ProposedChanges):
       .limit(1);
     if (!row) throw stale();
   }
-}
 
+  // PRD relasi-lemma: keluar kelompok hanya sah bila masih anggota.
+  for (const g of c.groups ?? []) {
+    if (g.action !== 'remove' || !g.groupId) continue;
+    const [row] = await db
+      .select({ id: wordGroupMembers.id })
+      .from(wordGroupMembers)
+      .where(
+        and(
+          eq(wordGroupMembers.groupId, g.groupId),
+          eq(wordGroupMembers.wordId, wordId),
+          isNull(wordGroupMembers.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) throw stale();
+  }
+}
 /**
  * Kembalikan hanya field yang disentuh usulan ini. Usulan lain (kategori
  * berbeda) bisa tayang bersamaan di kata yang sama. `is_verified` tidak
@@ -371,6 +389,41 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
     .from(wordImages)
     .where(and(eq(wordImages.wordId, wordId), isNull(wordImages.deletedAt)));
 
+  // PRD relasi-lemma: kelompok makna published yang memuat kata ini.
+  const groupRows = await db
+    .select({
+      groupId: wordGroups.id,
+      name: wordGroups.name,
+      memberWordId: wordGroupMembers.wordId,
+    })
+    .from(wordGroupMembers)
+    .innerJoin(
+      wordGroups,
+      and(
+        eq(wordGroups.id, wordGroupMembers.groupId),
+        eq(wordGroups.status, 'published'),
+        isNull(wordGroups.deletedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(wordGroupMembers.wordId, wordId),
+        eq(wordGroupMembers.status, 'published'),
+        isNull(wordGroupMembers.deletedAt),
+      ),
+    );
+
+  const groupMap = new Map<string, { groupId: string; name: string; memberWordIds: string[] }>();
+  for (const g of groupRows) {
+    const cur = groupMap.get(g.groupId) ?? {
+      groupId: g.groupId,
+      name: g.name,
+      memberWordIds: [],
+    };
+    cur.memberWordIds.push(g.memberWordId);
+    groupMap.set(g.groupId, cur);
+  }
+
   return {
     lemma: word.lemma,
     notes: word.notes,
@@ -405,6 +458,7 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
       isPrimary: i.isPrimary,
       altText: i.altText,
     })),
+    groups: [...groupMap.values()],
   };
 }
 
@@ -519,6 +573,56 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
       lemma: lemmaOf.get(r.wordId),
     }));
 
+  // PRD relasi-lemma: diff keanggotaan kelompok makna.
+  const curGroups = new Map(current.groups.map((g) => [g.groupId, g.name]));
+  const groupIds = [
+    ...new Set((proposed.groups ?? []).map((g) => g.groupId).filter((id): id is string => !!id)),
+  ];
+  const groupNames = new Map<string, string>();
+  if (groupIds.length > 0) {
+    const rows = await db
+      .select({ id: wordGroups.id, name: wordGroups.name })
+      .from(wordGroups)
+      .where(and(inArray(wordGroups.id, groupIds), isNull(wordGroups.deletedAt)));
+    for (const row of rows) groupNames.set(row.id, row.name);
+  }
+  const newGroupWordIds = [
+    ...new Set(
+      (proposed.groups ?? [])
+        .filter((g) => g.action === 'add' && !g.groupId)
+        .flatMap((g) => g.wordIds ?? []),
+    ),
+  ];
+  const newGroupLemmas = new Map<string, string>();
+  if (newGroupWordIds.length > 0) {
+    const rows = await db
+      .select({ id: words.id, lemma: words.lemma })
+      .from(words)
+      .where(inArray(words.id, newGroupWordIds));
+    for (const row of rows) newGroupLemmas.set(row.id, row.lemma);
+  }
+  const groupsDiff: DiffResult['groups'] = { joined: [], left: [], created: [] };
+  for (const g of proposed.groups ?? []) {
+    if (g.action === 'add' && g.groupId) {
+      if (curGroups.has(g.groupId)) continue; // sudah anggota - bukan perubahan
+      groupsDiff.joined.push({
+        groupId: g.groupId,
+        name: groupNames.get(g.groupId) ?? curGroups.get(g.groupId) ?? g.groupId,
+      });
+    } else if (g.action === 'add' && !g.groupId) {
+      groupsDiff.created.push({
+        name: g.name ?? '',
+        memberLemmas: (g.wordIds ?? [])
+          .map((id) => newGroupLemmas.get(id) ?? id)
+          // Kata ini sendiri tidak ditampilkan sebagai anggota "lain".
+          .filter((lemma) => lemma !== current.lemma),
+      });
+    } else if (g.action === 'remove' && g.groupId) {
+      if (!curGroups.has(g.groupId)) continue; // bukan anggota - bukan perubahan
+      groupsDiff.left.push({ groupId: g.groupId, name: groupNames.get(g.groupId) ?? g.groupId });
+    }
+  }
+
   return {
     lemma,
     notes,
@@ -553,6 +657,7 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
         .filter((i) => i.action === 'set_primary' && i.imageId)
         .map((i) => ({ imageId: i.imageId! })),
     },
+    groups: groupsDiff,
   };
 }
 
@@ -891,6 +996,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           relationsCount: pc.relations?.length ?? 0,
           variantsCount: pc.variants?.length ?? 0,
           imagesCount: pc.images?.length ?? 0,
+          groupsCount: pc.groups?.length ?? 0,
         },
       };
     });

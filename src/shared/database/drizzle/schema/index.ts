@@ -65,3 +65,4 @@ export * from './wa-message.schema';
 export * from './category-suggestions.schema';
 export * from './email.schema';
 export * from './web-imports.schema';
+export * from './achievements.schema';

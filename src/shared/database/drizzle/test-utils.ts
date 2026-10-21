@@ -1,10 +1,12 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { AppDatabase } from './client';
 import { ensureTestDbReady } from './test-client';
 import {
   accountDeletionTokens,
   activityEvents,
   announcements,
+  achievements,
+  userAchievements,
   apiClients,
   appSettings,
   auditLogs,
@@ -218,6 +220,9 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
 // beforeEach/beforeAll integration & e2e test, jangan delete per tabel.
 export async function truncateAll(db: AppDatabase): Promise<void> {
   await ensureTestDbReady();
+  // FK siklus users.active_border_id -> user_achievements.id -> users.id:
+  // kosongkan dulu kolom border aktif SEBELUM hapus tabel manapun.
+  await db.run(sql`update users set active_border_id = null`);
   for (const table of [
     auditLogs,
     wordReports,
@@ -277,8 +282,12 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     ugcAnonAbuseEvents,
     ugcAnonMutes,
     databaseBackupLogs,
-    // Pengumuman admin (#102) (FK created_by) - sebelum users
-    announcements,
+// Pengumuman admin (#102) (FK created_by) - sebelum users
+announcements,
+// Achievement (FK user_id) - sebelum users
+userAchievements,
+// Katalog achievement - sebelum userAchievements (FK achievement_id)
+achievements,
     // Places CRUD (FK place_images.place_id) - anak dulu
     placeContributions,
     placeImages,

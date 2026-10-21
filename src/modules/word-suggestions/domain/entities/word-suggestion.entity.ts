@@ -6,7 +6,16 @@ export type ChangeAction = 'update' | 'add' | 'delete';
 export type RelationAction = 'add' | 'remove';
 export type VariantAction = 'add' | 'remove';
 export type ImageAction = 'add' | 'remove' | 'set_primary';
-export type RelationType = 'synonym' | 'antonym' | 'has_component' | 'derived_from';
+export type GroupAction = 'add' | 'remove';
+// PRD relasi-lemma: variant_of (variasi bentuk) + nonstandard_of (bentuk
+// tidak baku terverifikasi) ikut bisa diusulkan komunitas.
+export type RelationType =
+  | 'synonym'
+  | 'antonym'
+  | 'has_component'
+  | 'derived_from'
+  | 'variant_of'
+  | 'nonstandard_of';
 
 /** Kategori usulan: bentuk proposed_changes dikunci per kategori. */
 export const SUGGESTION_CATEGORY_CODES = [
@@ -17,6 +26,10 @@ export const SUGGESTION_CATEGORY_CODES = [
   'change_photo',
   'synonym',
   'antonym',
+  'variant_of',
+  'nonstandard_of',
+  'derived_from',
+  'meaning_group',
   'spelling_variant',
   'lemma_notes',
 ] as const;
@@ -56,6 +69,10 @@ export const REASON_CODE_LABELS: Record<SuggestionReasonCode, string> = {
   change_photo: 'Ubah foto',
   synonym: 'Sinonim',
   antonym: 'Antonim',
+  variant_of: 'Variasi bentuk',
+  nonstandard_of: 'Bentuk tidak baku',
+  derived_from: 'Kata turunan',
+  meaning_group: 'Kelompok makna',
   spelling_variant: 'Variasi penulisan',
   lemma_notes: 'Lemma atau catatan',
   typo: 'Kesalahan penulisan',
@@ -110,6 +127,8 @@ export interface ProposedChanges {
   relations?: RelationChange[];
   variants?: VariantChange[];
   images?: ImageChange[];
+  /** PRD relasi-lemma: usulan keanggotaan kelompok makna. */
+  groups?: GroupChange[];
 }
 
 export interface MeaningChange {
@@ -137,6 +156,19 @@ export interface VariantChange {
   form: string;
   variantType?: string;
   dialectId?: string | null;
+}
+
+/**
+ * PRD relasi-lemma: usulan kelompok makna. `groupId` = kelompok yang sudah
+ * ada; `name` + `wordIds` = usul kelompok baru (anggota lain selain kata ini).
+ */
+export interface GroupChange {
+  action: GroupAction;
+  groupId?: string;
+  /** Hanya untuk action=add tanpa groupId (kelompok baru). */
+  name?: string;
+  description?: string | null;
+  wordIds?: string[];
 }
 
 export interface ImageChange {
@@ -168,10 +200,11 @@ export interface SuggestionSummary {
     meaningsCount: number;
     categoriesAdded: number;
     categoriesRemoved: number;
-    relationsCount: number;
-    variantsCount: number;
-    imagesCount: number;
-  };
+  relationsCount: number;
+  variantsCount: number;
+  imagesCount: number;
+  groupsCount: number;
+};
 }
 
 export interface SuggestionDetail {
@@ -189,6 +222,8 @@ export interface CurrentWordSnapshot {
   relations: { relationType: string; wordId: string; lemma: string }[];
   variants: { form: string; variantType: string; dialectId: string | null }[];
   images: { id: string; url: string; isPrimary: boolean; altText: string | null }[];
+  /** PRD relasi-lemma: kelompok makna published yang memuat kata ini. */
+  groups: { groupId: string; name: string; memberWordIds: string[] }[];
 }
 
 export interface CurrentMeaningSnapshot {
@@ -213,6 +248,11 @@ export interface DiffResult {
   variants: {
     added: { form: string; variantType: string }[];
     removed: { form: string; variantType: string }[];
+  };
+  groups: {
+    joined: { groupId: string; name: string }[];
+    left: { groupId: string; name: string }[];
+    created: { name: string; memberLemmas: string[] }[];
   };
   images: {
     added: {

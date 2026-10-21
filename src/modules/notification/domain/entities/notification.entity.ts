@@ -20,17 +20,19 @@ export type InboxNotificationType =
   | 'campaign'
 | 'verifier_application_approved'
 | 'verifier_application_rejected'
-| 'place_contribution_approved'
-| 'place_contribution_rejected';
+  | 'place_contribution_approved'
+  | 'place_contribution_rejected'
+  | 'achievement_awarded';
 
 export type NotificationTargetKind =
   | 'contribution'
   | 'suggestion'
   | 'word'
-| 'discussion'
-| 'campaign'
-| 'verifier_application'
-| 'place_contribution';
+  | 'discussion'
+  | 'campaign'
+  | 'verifier_application'
+  | 'place_contribution'
+  | 'achievement';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
 export type NotificationActionKind =
@@ -188,11 +190,14 @@ title: 'Usulan wisata disetujui',
 body: 'Usulanmu sudah tayang di daftar wisata. Terima kasih!',
 bodyType: 'plain',
 };
-case 'place_contribution_rejected':
-return {
-title: 'Usulan wisata ditolak',
-body: 'Usulanmu belum lolos tinjauan. Buka daftar usulan untuk detailnya.',
-bodyType: 'plain',
-};
-}
+    case 'place_contribution_rejected':
+      return {
+        title: 'Usulan wisata ditolak',
+        body: 'Usulanmu belum lolos tinjauan. Buka daftar usulan untuk detailnya.',
+        bodyType: 'plain',
+      };
+    case 'achievement_awarded':
+      // Title/body spesifik achievement selalu dari caller (bukan copy bawaan).
+      return { title: 'Pencapaian baru', body: '', bodyType: 'plain' };
+    }
 }

@@ -603,6 +603,13 @@
       "when": 1801090000000,
       "tag": "0085_word_vote_counts",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "6",
+      "when": 1801100000000,
+      "tag": "0086_achievements",
+      "breakpoints": true
     }
   ]
 }

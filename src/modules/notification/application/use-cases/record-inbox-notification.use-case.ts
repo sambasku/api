@@ -79,4 +79,48 @@ export class RecordInboxNotificationUseCase {
       );
     }
   }
+
+  /**
+   * Versi batch dari execute() untuk jalur award scan: satu INSERT
+   * multi-baris (createMany) = 1 subrequest, bukan 1 per penerima.
+   * Aksi sendiri tidak relevan di sini (tidak ada actor). Best-effort
+   * sama seperti execute().
+   */
+  async executeBatch(
+    cmds: Array<Omit<RecordInboxNotificationCommand, 'actorId' | 'refreshOnConflict'>>,
+  ): Promise<void> {
+    const inputs = cmds
+      .filter(
+        (cmd) =>
+          !!cmd.userId &&
+          cmd.userId !== ANONIM_USER_ID &&
+          cmd.userId !== CSV_IMPORTER_USER_ID,
+      )
+      .map((cmd) => {
+        const copy = inboxCopyFor(cmd.type);
+        return {
+          userId: cmd.userId,
+          type: cmd.type,
+          title: cmd.title?.trim() ? cmd.title.trim() : copy.title,
+          body: cmd.body?.trim() ? cmd.body.trim() : copy.body,
+          bodyType: cmd.bodyType ?? copy.bodyType,
+          targetKind: cmd.targetKind,
+          targetId: cmd.targetId,
+          actionKind: cmd.actionKind ?? null,
+          actionValue: cmd.actionValue ?? null,
+        };
+      });
+    if (inputs.length === 0) return;
+    try {
+      await this.notificationRepo.createMany(inputs);
+    } catch (err) {
+      logError(
+        {
+          count: inputs.length,
+          error: err instanceof Error ? err.message : String(err),
+        },
+        'inbox notification batch insert failed',
+      );
+    }
+  }
 }

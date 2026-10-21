@@ -153,6 +153,8 @@ export class UserRepositoryImpl implements UserRepository {
           SELECT group_concat(DISTINCT ai.provider) FROM auth_identities ai
           WHERE ai.user_id = users.id AND ai.deleted_at IS NULL
         )`,
+        // Kolom baru migrasi 0086 - hadir supaya cast ke UserRow valid.
+        activeBorderId: users.activeBorderId,
       })
       .from(users)
       .where(
