@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import type { z } from 'zod';
 import type { WordSuggestionRepositoryImpl } from '../../infrastructure/word-suggestion.repository.impl';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { CreateSuggestionRequest } from './validators/suggestion.validator';
@@ -181,8 +182,9 @@ export class WordSuggestionController {
             relations_count: item.summaryChanges.relationsCount,
             variants_count: item.summaryChanges.variantsCount,
             images_count: item.summaryChanges.imagesCount,
+            groups_count: item.summaryChanges.groupsCount,
           },
-        })),
+        }) satisfies z.infer<typeof suggestionListResponseSchema>['data'][number]),
         meta: {
           limit,
           next_cursor: result.nextCursor,
