@@ -73,13 +73,6 @@ function makeMailer(senders: EmailSenderPort[]) {
   };
 }
 
-const PAYLOAD: EmailSendPayload = {
-  to: 'budi@test.com',
-  subject: 'Reset password - SambasKu',
-  text: 'kode',
-  html: '<p>kode</p>',
-};
-
 describe('QuotaAwareMailer provider 4xx', () => {
   it.each([401, 403, 422])(
     'HTTP %s: throw ServiceUnavailableError (bukan silent return) - forgot password jangan 200 palsu',
