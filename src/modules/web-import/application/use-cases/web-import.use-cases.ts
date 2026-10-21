@@ -33,23 +33,22 @@ export type SubmitWebImportResult = {
   createdAt: Date;
 };
 
-const LEGACY_CODE_TO_STANDARD: Record<string, string> = {
-  kb: 'n',
-  kk: 'v',
-  ks: 'adj',
-  kt: 'adv',
-  kd: 'prep',
-};
-
 /**
- * Normalisasi kolom `type` ke kode linguistik standar DB.
- * Kode legacy CSV (kb, kk, ks, kt, kd) otomatis dipetakan ke (n, v, adj, adv, prep).
+ * Normalisasi kolom `type`.
+ *
+ * Dua sistem kode beredar dan keduanya diterima:
+ * - Kode CSV lama (csv/RULES.md): kb, kk, ks, kt, kd
+ * - Kode referensi `word_classes` (GET /api/v1/word-classes): n, v, adj, dst.
+ *
+ * Kode apa pun yang tersisa dikirim apa adanya - kalau tidak dikenal, JANGAN
+ * diam-diam dibuang (fall-through senyap), biar admin review bisa melihat dan
+ * mengoreksi di `web_import_details`.
  */
 function normalizeType(raw: string | null | undefined): string | null {
   const code = raw?.trim().toLowerCase() ?? '';
   if (code === '') return null;
-  if (code.length > 20) return null;
-  return LEGACY_CODE_TO_STANDARD[code] ?? code;
+  if (code.length > 20) return null; // batas kolom + guard input ngawur
+  return code;
 }
 
 function validateRows(
