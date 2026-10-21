@@ -29,6 +29,7 @@ import {
 } from '@/shared/constants/web-importer';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { seedAchievements } from './seed-achievements';
 
 const SEED_LANGUAGES = [
   { code: 'SBS', name: 'Sambas', nativeName: 'Sambas' },
@@ -224,6 +225,9 @@ export async function seedReference(): Promise<void> {
   logger.info(
     `Seed referensi: ${SEED_LANGUAGES.length} bahasa, ${SEED_DIALECTS.length} dialek, ${SEED_WORD_CLASSES.length} kelas kata, ${SEED_CATEGORIES.length} kategori (${missingCategories.length} kategori baru)`,
   );
+  // Katalog achievement (angkatan-ke-1, beta-tester) - idempoten, pisah
+  // fungsi tapi sekali jalan bareng referensi biar satu workflow saja.
+  await seedAchievements();
 }
 
 const isDirectRun =
