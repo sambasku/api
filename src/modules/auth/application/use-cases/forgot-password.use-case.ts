@@ -18,7 +18,9 @@ export class ForgotPasswordUseCase {
 
   // Tidak pernah melempar error "email tidak terdaftar" - response selalu sama
   async execute(dto: ForgotPasswordDto): Promise<void> {
-    const user = await this.userRepo.findByEmail(dto.email);
+    // Normalisasi sama seperti register (Email.create): trim + lowercase,
+    // supaya lookup kapital/varian tetap match ke user tersimpan.
+    const user = await this.userRepo.findByEmail(dto.email.trim().toLowerCase());
     if (!user || user.deletedAt) return;
 
     // OAuth-only atau email sintetis: jangan terbitkan / kirim reset password

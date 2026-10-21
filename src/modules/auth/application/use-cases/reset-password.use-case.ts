@@ -50,7 +50,7 @@ export class ResetPasswordUseCase {
   private async resolveTokenHash(dto: ResetPasswordDto): Promise<string> {
     const digits = dto.code ? normalizeOtpCode(dto.code) : null;
     if (dto.email && digits) {
-      const user = await this.userRepo.findByEmail(dto.email);
+      const user = await this.userRepo.findByEmail(dto.email.trim().toLowerCase());
       if (!user || user.deletedAt) {
         throw new UnauthorizedError('RESET_TOKEN_INVALID', 'Token reset tidak valid atau kadaluarsa');
       }
