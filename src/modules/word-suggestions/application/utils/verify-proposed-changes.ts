@@ -93,17 +93,34 @@ export function verifyProposedChanges(changes: ProposedChanges): {
   }
   if (changes.relations) {
     const seen = new Set<string>();
+    let newLemmaCount = 0;
     changes.relations.forEach((r, idx) => {
       const prefix = `relations.${idx}`;
-      if (!r.wordId) {
-        errors.push({ field: `${prefix}.word_id`, message: 'word_id wajib (Form A saja)' });
+      const lemma = r.lemma?.trim();
+      if (!r.wordId && !lemma) {
+        errors.push({ field: `${prefix}.lemma`, message: 'word_id atau lemma wajib diisi' });
       }
-      const key = `${r.action}|${r.relationType}|${r.wordId}`;
+      if (r.wordId && lemma) {
+        errors.push({
+          field: `${prefix}.lemma`,
+          message: 'Pilih salah satu: word_id atau lemma',
+        });
+      }
+      if (r.action === 'add' && !r.wordId && lemma) newLemmaCount++;
+      const key = `${r.action}|${r.relationType}|${r.wordId ?? `lemma:${lemma?.toLowerCase()}`}`;
       if (seen.has(key)) {
         errors.push({ field: prefix, message: 'Relasi duplikat dalam satu usulan' });
       }
       seen.add(key);
     });
+    // Satu submit yang membuat banyak entri baru = spam; verifikator bisa
+    // mengusulkan sisanya lewat usulan terpisah.
+    if (newLemmaCount > 3) {
+      errors.push({
+        field: 'relations',
+        message: 'Maksimal 3 lemma baru per usulan',
+      });
+    }
   }
 
   if (changes.variants && changes.variants.length > 10) {
@@ -183,6 +200,12 @@ export function verifyProposedChanges(changes: ProposedChanges): {
         errors.push({
           field: `${prefix}.name`,
           message: 'Kelompok baru wajib punya nama; atau isi group_id untuk kelompok yang ada',
+        });
+      }
+      if (g.action === 'remove' && (g.wordIds?.length || g.lemmas?.length)) {
+        errors.push({
+          field: prefix,
+          message: 'action=remove hanya melepas kata ini dari kelompok, tanpa anggota lain',
         });
       }
     });

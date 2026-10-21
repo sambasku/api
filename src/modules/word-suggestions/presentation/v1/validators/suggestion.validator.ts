@@ -39,18 +39,45 @@ const meaningChangeSchema = z.object({
     .optional(),
 });
 
-const relationChangeSchema = z.object({
-  action: z.enum(['add', 'remove']),
-  relation_type: z.enum([
-    'synonym',
-    'antonym',
-    'has_component',
-    'derived_from',
-    'variant_of',
-    'nonstandard_of',
-  ]),
-  word_id: ulid,
-});
+const relationChangeSchema = z
+  .object({
+    action: z.enum(['add', 'remove']),
+    relation_type: z.enum([
+      'synonym',
+      'antonym',
+      'has_component',
+      'derived_from',
+      'variant_of',
+      'nonstandard_of',
+    ]),
+    word_id: ulid.optional(),
+    // PRD relasi-lemma: lemma target; belum ada di kamus = dibuat saat approve.
+    lemma: z.string().trim().min(1, 'Lemma tidak boleh kosong').max(255).optional(),
+  })
+  .superRefine((rel, ctx) => {
+    const hasId = rel.word_id !== undefined;
+    const hasLemma = rel.lemma !== undefined;
+    if (rel.action === 'remove') {
+      if (!hasId) {
+        ctx.addIssue({ code: 'custom', path: ['word_id'], message: 'action=remove wajib word_id' });
+      }
+      return;
+    }
+    if (hasId && hasLemma) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['lemma'],
+        message: 'Pilih salah satu: word_id (kata yang sudah ada) atau lemma',
+      });
+    }
+    if (!hasId && !hasLemma) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['lemma'],
+        message: 'Wajib mengisi word_id atau lemma',
+      });
+    }
+  });
 
 // PRD relasi-lemma: usul gabung/keluar kelompok makna, atau usul kelompok baru.
 const groupChangeSchema = z
@@ -60,6 +87,8 @@ const groupChangeSchema = z
     name: z.string().trim().min(1).max(120).optional(),
     description: z.string().trim().max(500).nullish(),
     word_ids: z.array(ulid).max(10).optional(),
+    // Anggota yang belum ada di kamus - dibuat saat approve.
+    lemmas: z.array(z.string().trim().min(1).max(255)).max(10).optional(),
   })
   .superRefine((g, ctx) => {
     if (g.action === 'remove') {
@@ -241,6 +270,7 @@ export function mapProposedChanges(
       action: r.action,
       relationType: r.relation_type,
       wordId: r.word_id,
+      lemma: r.lemma,
     })),
       variants: raw.variants?.map((v) => ({
         action: v.action,
@@ -254,6 +284,7 @@ export function mapProposedChanges(
         name: g.name,
         description: g.description ?? null,
         wordIds: g.word_ids ?? [],
+        lemmas: g.lemmas ?? [],
       })),
     images: raw.images?.map((i) => ({
       action: i.action,
@@ -410,8 +441,9 @@ export const suggestionDetailResponseSchema = z.object({
         added: z.array(
           z.object({
             relation_type: z.string(),
-            word_id: z.string().length(26),
+            word_id: z.string().length(26).optional(),
             lemma: z.string().optional(),
+            new_word: z.boolean().optional(),
           }),
         ),
         removed: z.array(
@@ -429,7 +461,13 @@ export const suggestionDetailResponseSchema = z.object({
     groups: z.object({
       joined: z.array(z.object({ group_id: z.string().length(26), name: z.string() })),
       left: z.array(z.object({ group_id: z.string().length(26), name: z.string() })),
-      created: z.array(z.object({ name: z.string(), member_lemmas: z.array(z.string()) })),
+      created: z.array(
+        z.object({
+          name: z.string(),
+          member_lemmas: z.array(z.string()),
+          new_word_lemmas: z.array(z.string()).optional(),
+        }),
+      ),
     }),
       images: z.object({
         added: z.array(

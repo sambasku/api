@@ -148,7 +148,10 @@ export interface TranslationChange {
 export interface RelationChange {
   action: RelationAction;
   relationType: RelationType;
-  wordId: string;
+  /** Form A: link ke kata yang sudah ada. */
+  wordId?: string;
+  /** Form B: lemma target; kalau belum ada, kata dibuat saat approve. */
+  lemma?: string;
 }
 
 export interface VariantChange {
@@ -160,7 +163,8 @@ export interface VariantChange {
 
 /**
  * PRD relasi-lemma: usulan kelompok makna. `groupId` = kelompok yang sudah
- * ada; `name` + `wordIds` = usul kelompok baru (anggota lain selain kata ini).
+ * ada; `name` + `wordIds`/`lemmas` = usul kelompok baru (anggota lain selain
+ * kata ini). `lemmas` = anggota yang belum ada di kamus (dibuat saat approve).
  */
 export interface GroupChange {
   action: GroupAction;
@@ -169,6 +173,8 @@ export interface GroupChange {
   name?: string;
   description?: string | null;
   wordIds?: string[];
+  /** Anggota kelompok yang belum ada di kamus. */
+  lemmas?: string[];
 }
 
 export interface ImageChange {
@@ -217,6 +223,8 @@ export interface CurrentWordSnapshot {
   lemma: string;
   notes: string | null;
   wordType: string;
+  /** Bahasa kata - resolve lemma Form B saat build diff. */
+  languageId: string;
   meanings: CurrentMeaningSnapshot[];
   categoryIds: string[];
   relations: { relationType: string; wordId: string; lemma: string }[];
@@ -242,7 +250,7 @@ export interface DiffResult {
   meanings: DiffMeaning[];
   categories: { added: string[]; removed: string[] };
   relations: {
-    added: { relationType: string; wordId: string; lemma?: string }[];
+    added: { relationType: string; wordId?: string; lemma?: string; newWord?: boolean }[];
     removed: { relationType: string; wordId: string; lemma?: string }[];
   };
   variants: {
@@ -252,7 +260,7 @@ export interface DiffResult {
   groups: {
     joined: { groupId: string; name: string }[];
     left: { groupId: string; name: string }[];
-    created: { name: string; memberLemmas: string[] }[];
+    created: { name: string; memberLemmas: string[]; newWordLemmas?: string[] }[];
   };
   images: {
     added: {

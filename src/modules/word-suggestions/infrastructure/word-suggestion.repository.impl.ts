@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull, inArray, notInArray, lt, asc, or } from 'drizzle-orm';
+import { eq, and, desc, isNull, inArray, notInArray, lt, asc, or, sql } from 'drizzle-orm';
 import { db } from '@/shared/database/drizzle/client';
 import {
   words,
@@ -26,7 +26,7 @@ import type {
   SuggestionStatus,
   SuggestionReasonCode,
 } from '../domain/entities/word-suggestion.entity';
-import { NotFoundError, ForbiddenError, BadRequestError, ConflictError } from '@/shared/errors/app-error';
+import { NotFoundError, BadRequestError, ConflictError } from '@/shared/errors/app-error';
 import { ActivityEventRepositoryImpl } from '@/modules/activity/infrastructure/activity-event.repository.impl';
 import type { AppendActivityEventInput } from '@/modules/activity/domain/entities/activity-event.entity';
 import { verifyProposedChanges } from '../application/utils/verify-proposed-changes';
@@ -189,7 +189,7 @@ async function assertProposedTargetsCurrent(wordId: string, c: ProposedChanges):
   }
 
   for (const rel of c.relations ?? []) {
-    if (rel.action !== 'remove') continue;
+    if (rel.action !== 'remove' || !rel.wordId) continue;
     const [row] = await db
       .select({ id: lexicalRelations.id })
       .from(lexicalRelations)
@@ -309,7 +309,12 @@ export async function restoreBaseline(
 
 async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapshot | null> {
   const [word] = await db
-    .select({ lemma: words.lemma, notes: words.notes, wordType: words.wordType })
+    .select({
+      lemma: words.lemma,
+      notes: words.notes,
+      wordType: words.wordType,
+      languageId: words.languageId,
+    })
     .from(words)
     .where(and(eq(words.id, wordId), isNull(words.deletedAt)))
     .limit(1);
@@ -428,6 +433,7 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
     lemma: word.lemma,
     notes: word.notes,
     wordType: word.wordType,
+    languageId: word.languageId,
     meanings: meaningRows.map((m) => ({
       id: m.id,
       wordClassId: m.wordClassId,
@@ -471,7 +477,7 @@ async function relationLemmas(
     ...new Set(
       (proposed.relations ?? [])
         .map((relation) => relation.wordId)
-        .filter((wordId) => !known.get(wordId)),
+        .filter((wordId): wordId is string => !!wordId && !known.get(wordId)),
     ),
   ];
   if (missing.length === 0) return known;
@@ -558,19 +564,46 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
 
   const curCats = new Set(current.categoryIds);
   const lemmaOf = await relationLemmas(proposed, current);
+  // Form B (lemma): kata yang sudah ada → word_id + lemma; belum ada →
+  // lemma + new_word=true (dibuat saat approve).
+  const lemmaIdOf = new Map<string, string>();
+  const relAddedLemmas = [
+    ...new Set(
+      (proposed.relations ?? [])
+        .filter((r) => r.action === 'add' && !r.wordId && r.lemma)
+        .map((r) => r.lemma!.trim().toLowerCase()),
+    ),
+  ];
+  if (relAddedLemmas.length > 0) {
+    const rows = await db
+      .select({ id: words.id, lemma: words.lemma })
+      .from(words)
+      .where(
+        and(
+          eq(words.languageId, current.languageId),
+          inArray(sql`lower(${words.lemma})`, relAddedLemmas),
+          isNull(words.deletedAt),
+        ),
+      );
+    for (const row of rows) lemmaIdOf.set(row.lemma.toLowerCase(), row.id);
+  }
   const relAdded = (proposed.relations ?? [])
     .filter((r) => r.action === 'add')
-    .map((r) => ({
-      relationType: r.relationType,
-      wordId: r.wordId,
-      lemma: lemmaOf.get(r.wordId),
-    }));
+    .map((r) => {
+      if (r.wordId) {
+        return { relationType: r.relationType, wordId: r.wordId, lemma: lemmaOf.get(r.wordId) };
+      }
+      const existingId = lemmaIdOf.get(r.lemma!.trim().toLowerCase());
+      return existingId
+        ? { relationType: r.relationType, wordId: existingId, lemma: r.lemma }
+        : { relationType: r.relationType, lemma: r.lemma, newWord: true };
+    });
   const relRemoved = (proposed.relations ?? [])
-    .filter((r) => r.action === 'remove')
+    .filter((r) => r.action === 'remove' && r.wordId)
     .map((r) => ({
       relationType: r.relationType,
-      wordId: r.wordId,
-      lemma: lemmaOf.get(r.wordId),
+      wordId: r.wordId!,
+      lemma: lemmaOf.get(r.wordId!),
     }));
 
   // PRD relasi-lemma: diff keanggotaan kelompok makna.
@@ -616,6 +649,8 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
           .map((id) => newGroupLemmas.get(id) ?? id)
           // Kata ini sendiri tidak ditampilkan sebagai anggota "lain".
           .filter((lemma) => lemma !== current.lemma),
+        // Anggota dari lemma yang belum ada di kamus (dibuat saat approve).
+        newWordLemmas: (g.lemmas ?? []).map((l) => l.trim()).filter(Boolean),
       });
     } else if (g.action === 'remove' && g.groupId) {
       if (!curGroups.has(g.groupId)) continue; // bukan anggota - bukan perubahan
@@ -765,12 +800,10 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       await assertWordTypeAllowsComponents(wordId, proposedChanges.wordType);
     }
 
-    if (word.createdBy === userId) {
-      throw new ForbiddenError(
-        'CANNOT_SUGGEST_OWN_WORD',
-        'Tidak bisa mengusulkan perubahan pada kata sendiri',
-      );
-    }
+    // Tidak ada guard "kata sendiri": `created_by` itu atribusi, bukan
+    // kepemilikan. Semua usulan tetap masuk antrean verifikator, dan jalur
+    // auto-publish (applyPendingNow) sudah dikunci ke kategori revertible +
+    // kata belum terverifikasi - moderasi tidak terlewati.
 
     // Kategori: satu pending per kata per kategori. Kode lama (campuran)
     // menahan dan tertahan oleh semua usulan.
@@ -1239,6 +1272,17 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       censoredFiles: imageOpts?.censoredFiles,
     });
     const result = await applyChangesToWord(id, reviewerId, 'approve', comment, prepared);
+    // Kata baru dari lemma target belum ada: masuk feed sebagai word_created
+    // (approve = momen kata jadi published).
+    for (const created of result.createdWords) {
+      await this.emitEvent({
+        kind: 'word_created',
+        actorId: row.proposerId ?? reviewerId,
+        targetWordId: created.id,
+        targetId: created.id,
+        dedupeKey: `word:${created.id}`,
+      });
+    }
     // Event feed: usulan diterima (pengusul) + verifikasi kata (reviewer).
     await this.emitEvent({
       kind: 'suggestion_applied',

@@ -264,8 +264,9 @@ export class WordSuggestionController {
             relations: {
               added: detail.diff.relations.added.map((r) => ({
                 relation_type: r.relationType,
-                word_id: r.wordId,
+                ...(r.wordId ? { word_id: r.wordId } : {}),
                 lemma: r.lemma,
+                ...(r.newWord ? { new_word: true } : {}),
               })),
               removed: detail.diff.relations.removed.map((r) => ({
                 relation_type: r.relationType,

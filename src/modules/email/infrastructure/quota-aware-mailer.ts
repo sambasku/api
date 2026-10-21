@@ -224,12 +224,13 @@ export class QuotaAwareMailer implements MailerPort {
           errorCode: status ? `PROVIDER_${status}` : 'PROVIDER_ERROR',
           errorMessage: message.slice(0, 500),
         });
-        // 4xx selain 429 = penerima/request salah; provider lain pasti gagal juga.
-        if (status && status >= 400 && status < 500 && status !== 429) {
-          return { sent: false, provider: sender.provider, messageId: null, errorCode: `PROVIDER_${status}`, errorMessage: message };
-        }
         lastErrorCode = status ? `PROVIDER_${status}` : 'PROVIDER_ERROR';
         lastErrorMessage = message;
+        // 4xx selain 429 = penerima/request salah (API key salah, domain
+        // belum verified, from ditolak); provider lain pasti gagal juga.
+        // Break, JANGAN return - return bikin pemanggil (forgot password,
+        // OTP) mengira email terkirim padahal tidak.
+        if (status && status >= 400 && status < 500 && status !== 429) break;
         continue;
       }
     }

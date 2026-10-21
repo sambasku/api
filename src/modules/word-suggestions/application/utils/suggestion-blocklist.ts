@@ -37,6 +37,12 @@ export function censorSuggestionText(
   const out: ProposedChanges = {
     ...changes,
     notes: changes.notes === undefined ? undefined : censor(changes.notes, 'notes'),
+    // PRD relasi-lemma: lemma target baru = teks bebas user (beda dari
+    // `lemma` kata ini yang sudah punya jalur sendiri).
+    relations: changes.relations?.map((r, i) => ({
+      ...r,
+      lemma: r.lemma === undefined ? undefined : censor(r.lemma, `relations.${i}.lemma`),
+    })),
     // PRD relasi-lemma: nama/deskripsi kelompok baru = teks bebas user.
     groups: changes.groups?.map((g, i) => ({
       ...g,
@@ -45,6 +51,7 @@ export function censorSuggestionText(
         g.description === null || g.description === undefined
           ? g.description
           : censor(g.description, `groups.${i}.description`),
+      lemmas: g.lemmas?.map((l, j) => censor(l, `groups.${i}.lemmas.${j}`)),
     })),
     meanings: changes.meanings?.map((m, i) => ({
       ...m,

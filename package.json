@@ -20,6 +20,7 @@
     "seed:accounts": "tsx src/scripts/seed-accounts.ts",
     "seed:reference": "tsx src/scripts/seed-reference.ts",
     "seed:achievements": "tsx src/scripts/seed-achievements.ts",
+    "scan:achievements": "tsx src/scripts/scan-achievements.ts",
     "seed:places": "tsx src/scripts/seed-places.ts",
     "cleanup-tokens": "tsx src/scripts/cleanup-tokens.ts",
     "dataset:export": "tsx src/scripts/dataset/export-published-dataset.ts",
