@@ -8,7 +8,7 @@ import type {
   PlaceSource,
   PlaceStatus,
   PlaceType,
-} from '../entities/place.entity';
+} from "../entities/place.entity";
 
 export interface PlaceImageInput {
   url: string;
@@ -79,16 +79,48 @@ export interface ListPlacesResult {
   nextCursor: string | null;
 }
 
+/** Laporan view untuk halaman analitik console (/admin/places/views/daily). */
+export interface PlaceViewReport {
+  /** Total view per hari (semua place digabung), urut hari naik. */
+  trend: Array<{ day: string; total: number }>;
+  /** Per place published yang punya view, urut total desc. */
+  items: Array<{
+    placeId: string;
+    name: string;
+    slug: string;
+    category: string;
+    views: number;
+    lastViewed: string | null;
+  }>;
+}
+
 export interface PlaceRepository {
   create(input: CreatePlaceInput): Promise<Place>;
   update(input: UpdatePlaceInput): Promise<Place | null>;
   softDelete(id: string): Promise<boolean>;
   findById(id: string): Promise<Place | null>;
-  findBySlug(slug: string, opts?: { publicOnly?: boolean }): Promise<Place | null>;
+  findBySlug(
+    slug: string,
+    opts?: { publicOnly?: boolean },
+  ): Promise<Place | null>;
   list(input: ListPlacesInput): Promise<ListPlacesResult>;
   findBySlugAny(slug: string): Promise<Place | null>;
-  listImages(placeId: string, offset: number, limit: number): Promise<{ items: PlaceImage[]; total: number }>;
+  listImages(
+    placeId: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ items: PlaceImage[]; total: number }>;
   appendImages(placeId: string, images: PlaceImageInput[]): Promise<void>;
-  countUploadsSince(placeId: string, authorId: string, since: Date): Promise<number>;
+  countUploadsSince(
+    placeId: string,
+    authorId: string,
+    since: Date,
+  ): Promise<number>;
   resolveRelated(related: PlaceRelation[]): Promise<PlaceRelatedCard[]>;
+  /** +1 view untuk place published (upsert place_views per hari WIB). */
+  recordView(slug: string): Promise<void>;
+  /** Total view per place_id sejak `days` hari WIB terakhir (null = semua). */
+  viewTotals(days: number | null): Promise<Map<string, number>>;
+  /** Tren harian + total per place (published) untuk halaman analitik console. */
+  viewReport(days: number): Promise<PlaceViewReport>;
 }

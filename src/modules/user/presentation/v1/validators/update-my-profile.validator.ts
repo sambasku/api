@@ -66,5 +66,7 @@ export const myProfileResponseSchema = z.object({
     village_id: z.string().nullable(),
     avatar_url: z.string().url().nullable(),
     has_read_contribution_guide: z.boolean(),
+    /** True bila user belum setujui terms/privacy versi aktif. */
+    requires_consent: z.boolean(),
   }),
 });

@@ -36,6 +36,8 @@ export interface DiscussionRoutesDeps {
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Gate azp + scope discussion.write pada tulis. */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate persetujuan legal untuk aksi tulis (403 CONSENT_REQUIRED). */
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
   onUgcRateLimited?: (userId: string) => void | Promise<void>;
 }
 
@@ -101,11 +103,12 @@ function replyAudioUserLimit(onUgcRateLimited?: (userId: string) => void | Promi
 export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   const routes = createOpenApiApp();
   const writeClient = deps.requireApprovedClient ? [deps.requireApprovedClient] : [];
+  const legalConsent = deps.requireLegalConsent ? [deps.requireLegalConsent] : [];
   const submitLimit = submitUserLimit(deps.onUgcRateLimited);
   const replyLimit = replyUserLimit(deps.onUgcRateLimited);
   const replyAudioLimit = replyAudioUserLimit(deps.onUgcRateLimited);
 
-  routes.use('/upload-token', deps.authenticate, ...writeClient, tokenUserLimit, tokenIpLimit);
+  routes.use('/upload-token', deps.authenticate, ...writeClient, ...legalConsent, tokenUserLimit, tokenIpLimit);
   routes.use('/', async (c, next) => {
     if (c.req.method === 'POST') return deps.authenticate(c, next);
     return next();
@@ -113,6 +116,11 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   routes.use('/', async (c, next) => {
     if (c.req.method !== 'POST') return next();
     if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
     return next();
   });
   routes.use('/', async (c, next) => {
@@ -125,6 +133,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     '/:id/audio',
     deps.authenticate,
     ...writeClient,
+    ...legalConsent,
     replyAudioLimit,
     bodyLimit({
       maxSize: 6 * 1024 * 1024,
@@ -143,6 +152,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     '/:id/replies/audio',
     deps.authenticate,
     ...writeClient,
+    ...legalConsent,
     replyAudioLimit,
     bodyLimit({
       maxSize: 6 * 1024 * 1024,
@@ -157,8 +167,9 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
         ),
     }),
   );
-  routes.use('/:id/replies', deps.authenticate, ...writeClient, replyLimit);
-  routes.use('/replies/:id', deps.authenticate, ...writeClient);
+  routes.use('/:id/replies', deps.authenticate, ...writeClient, ...legalConsent, replyLimit);
+  // Delete/report balasan - aksi tulis, tetap butuh consent.
+  routes.use('/replies/:id', deps.authenticate, ...writeClient, ...legalConsent);
 
   const uploadTokenRoute = createRoute({
     method: 'get',

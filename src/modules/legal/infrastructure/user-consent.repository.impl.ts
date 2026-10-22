@@ -68,6 +68,27 @@ export class UserConsentRepositoryImpl implements UserConsentRepository {
     return row ? toEntity(row) : null;
   }
 
+  async findLatestByUserAll(
+    userId: string,
+  ): Promise<Partial<Record<ConsentDocumentType, UserConsent>>> {
+    // Semua baris user, urut terbaru duluan; versi pertama per tipe menang.
+    // ponytail: muat semua tipe (max beberapa baris/user) lalu dedupe di
+    // memori. Kalau user terbukti punya ratusan baris consent, upgrade ke
+    // window function MAX(accepted_at) per document_type.
+    const rows = await this.db
+      .select()
+      .from(userConsents)
+      .where(eq(userConsents.userId, userId))
+      .orderBy(desc(userConsents.acceptedAt));
+    const latest: Partial<Record<ConsentDocumentType, UserConsent>> = {};
+    for (const row of rows) {
+      const type = row.documentType as ConsentDocumentType;
+      if (latest[type]) continue;
+      latest[type] = toEntity(row);
+    }
+    return latest;
+  }
+
   async deleteByUserId(userId: string, executor: DbExecutor = this.db): Promise<void> {
     await executor.delete(userConsents).where(eq(userConsents.userId, userId));
   }

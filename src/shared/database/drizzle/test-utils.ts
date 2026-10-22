@@ -1,6 +1,6 @@
-import { eq, sql } from 'drizzle-orm';
-import type { AppDatabase } from './client';
-import { ensureTestDbReady } from './test-client';
+import { eq, sql } from "drizzle-orm";
+import type { AppDatabase } from "./client";
+import { ensureTestDbReady } from "./test-client";
 import {
   accountDeletionTokens,
   activityEvents,
@@ -38,6 +38,7 @@ import {
   passwordResetTokens,
   placeContributions,
   placeImages,
+  placeViews,
   places,
   placeCategories,
   regions,
@@ -72,11 +73,13 @@ import {
   wordVoteCounts,
   wordVariants,
   words,
-} from './schema';
-import { FIRST_PARTY_SCOPE_STRING } from '@/modules/developer-oauth/domain/entities/api-client.entity';
+} from "./schema";
+import { FIRST_PARTY_SCOPE_STRING } from "@/modules/developer-oauth/domain/entities/api-client.entity";
 
-const LEGAL_VERSION = '2026-09-26';
-const FIRST_PARTY_SCOPES_JSON = JSON.stringify(FIRST_PARTY_SCOPE_STRING.split(' '));
+const LEGAL_VERSION = "2026-09-26";
+const FIRST_PARTY_SCOPES_JSON = JSON.stringify(
+  FIRST_PARTY_SCOPE_STRING.split(" "),
+);
 
 /**
  * Seed referensi yang wajib ada setelah truncate (register consent + login
@@ -87,27 +90,47 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
   await db
     .insert(appSettings)
     .values([
-      { key: 'oauth.third_party_registration', value: 'closed', updatedAt: now, updatedBy: null },
-      { key: 'oauth.request_log_retention_days', value: '90', updatedAt: now, updatedBy: null },
-      { key: 'legal.terms_version', value: LEGAL_VERSION, updatedAt: now, updatedBy: null },
-      { key: 'legal.privacy_version', value: LEGAL_VERSION, updatedAt: now, updatedBy: null },
-      // Migrasi 0025 - cooldown push hasil review (default 6 jam)
       {
-        key: 'notification.review_approve_push_cooldown_minutes',
-        value: '360',
+        key: "oauth.third_party_registration",
+        value: "closed",
         updatedAt: now,
         updatedBy: null,
       },
       {
-        key: 'notification.review_reject_push_cooldown_minutes',
-        value: '360',
+        key: "oauth.request_log_retention_days",
+        value: "90",
+        updatedAt: now,
+        updatedBy: null,
+      },
+      {
+        key: "legal.terms_version",
+        value: LEGAL_VERSION,
+        updatedAt: now,
+        updatedBy: null,
+      },
+      {
+        key: "legal.privacy_version",
+        value: LEGAL_VERSION,
+        updatedAt: now,
+        updatedBy: null,
+      },
+      // Migrasi 0025 - cooldown push hasil review (default 6 jam)
+      {
+        key: "notification.review_approve_push_cooldown_minutes",
+        value: "360",
+        updatedAt: now,
+        updatedBy: null,
+      },
+      {
+        key: "notification.review_reject_push_cooldown_minutes",
+        value: "360",
         updatedAt: now,
         updatedBy: null,
       },
       // Migrasi 0029 - cooldown push diskusi komentar (default 3 menit)
       {
-        key: 'notification.word_comment_push_cooldown_minutes',
-        value: '3',
+        key: "notification.word_comment_push_cooldown_minutes",
+        value: "3",
         updatedAt: now,
         updatedBy: null,
       },
@@ -118,12 +141,12 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
     .insert(legalDocuments)
     .values([
       {
-        id: '01LEGALPRIVACY20260926001',
-        documentType: 'privacy',
+        id: "01LEGALPRIVACY20260926001",
+        documentType: "privacy",
         version: LEGAL_VERSION,
-        title: 'Kebijakan Privasi',
-        bodyMarkdown: '# Kebijakan Privasi (test seed)',
-        status: 'published',
+        title: "Kebijakan Privasi",
+        bodyMarkdown: "# Kebijakan Privasi (test seed)",
+        status: "published",
         publishedAt: now,
         createdBy: null,
         updatedBy: null,
@@ -131,12 +154,12 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
         updatedAt: null,
       },
       {
-        id: '01LEGALSTERMS202609260001',
-        documentType: 'terms',
+        id: "01LEGALSTERMS202609260001",
+        documentType: "terms",
         version: LEGAL_VERSION,
-        title: 'Syarat dan Ketentuan',
-        bodyMarkdown: '# Syarat Ketentuan (test seed)',
-        status: 'published',
+        title: "Syarat dan Ketentuan",
+        bodyMarkdown: "# Syarat Ketentuan (test seed)",
+        status: "published",
         publishedAt: now,
         createdBy: null,
         updatedBy: null,
@@ -150,56 +173,56 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
     .insert(apiClients)
     .values([
       {
-        id: '01APICLIENTMOBILE000000001',
-        clientId: 'sambasku-mobile',
+        id: "01APICLIENTMOBILE000000001",
+        clientId: "sambasku-mobile",
         clientSecretHash: null,
-        name: 'SambasKu Mobile',
-        description: 'Test seed',
+        name: "SambasKu Mobile",
+        description: "Test seed",
         ownerUserId: null,
-        status: 'approved',
+        status: "approved",
         isFirstParty: true,
         homepageUrl: null,
         privacyUrl: null,
-        redirectUris: '[]',
+        redirectUris: "[]",
         allowedScopes: FIRST_PARTY_SCOPES_JSON,
         allowedChannels: '["mobile"]',
-        rateLimitTier: 'first_party',
+        rateLimitTier: "first_party",
         createdAt: now,
         updatedAt: null,
       },
       {
-        id: '01APICLIENTWEB00000000001',
-        clientId: 'sambasku-web',
+        id: "01APICLIENTWEB00000000001",
+        clientId: "sambasku-web",
         clientSecretHash: null,
-        name: 'SambasKu Web',
-        description: 'Test seed',
+        name: "SambasKu Web",
+        description: "Test seed",
         ownerUserId: null,
-        status: 'approved',
+        status: "approved",
         isFirstParty: true,
         homepageUrl: null,
         privacyUrl: null,
-        redirectUris: '[]',
+        redirectUris: "[]",
         allowedScopes: FIRST_PARTY_SCOPES_JSON,
         allowedChannels: '["web"]',
-        rateLimitTier: 'first_party',
+        rateLimitTier: "first_party",
         createdAt: now,
         updatedAt: null,
       },
       {
-        id: '01APICLIENTCONSOLE00000001',
-        clientId: 'sambasku-console',
+        id: "01APICLIENTCONSOLE00000001",
+        clientId: "sambasku-console",
         clientSecretHash: null,
-        name: 'SambasKu Console',
-        description: 'Test seed',
+        name: "SambasKu Console",
+        description: "Test seed",
         ownerUserId: null,
-        status: 'approved',
+        status: "approved",
         isFirstParty: true,
         homepageUrl: null,
         privacyUrl: null,
-        redirectUris: '[]',
+        redirectUris: "[]",
         allowedScopes: FIRST_PARTY_SCOPES_JSON,
         allowedChannels: '["web"]',
-        rateLimitTier: 'first_party',
+        rateLimitTier: "first_party",
         createdAt: now,
         updatedAt: null,
       },
@@ -209,9 +232,27 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
   await db
     .insert(placeCategories)
     .values([
-      { id: 'wisata', name: 'Wisata', sortOrder: 0, status: 'published', createdAt: now },
-      { id: 'kuliner', name: 'Kuliner', sortOrder: 1, status: 'published', createdAt: now },
-      { id: 'budaya', name: 'Budaya', sortOrder: 2, status: 'published', createdAt: now },
+      {
+        id: "wisata",
+        name: "Wisata",
+        sortOrder: 0,
+        status: "published",
+        createdAt: now,
+      },
+      {
+        id: "kuliner",
+        name: "Kuliner",
+        sortOrder: 1,
+        status: "published",
+        createdAt: now,
+      },
+      {
+        id: "budaya",
+        name: "Budaya",
+        sortOrder: 2,
+        status: "published",
+        createdAt: now,
+      },
     ])
     .onConflictDoNothing();
 }
@@ -282,20 +323,21 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     ugcAnonAbuseEvents,
     ugcAnonMutes,
     databaseBackupLogs,
-// Pengumuman admin (#102) (FK created_by) - sebelum users
-announcements,
-// Achievement (FK user_id) - sebelum users
-userAchievements,
-// Katalog achievement - sebelum userAchievements (FK achievement_id)
-achievements,
+    // Pengumuman admin (#102) (FK created_by) - sebelum users
+    announcements,
+    // Achievement (FK user_id) - sebelum users
+    userAchievements,
+    // Katalog achievement - sebelum userAchievements (FK achievement_id)
+    achievements,
     // Places CRUD (FK place_images.place_id) - anak dulu
     placeContributions,
     placeImages,
+    placeViews,
     places,
-  placeCategories,
-  regions,
-  // Event feed publik (FK actor_id) - sebelum users
-  activityEvents,
+    placeCategories,
+    regions,
+    // Event feed publik (FK actor_id) - sebelum users
+    activityEvents,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,
@@ -311,7 +353,11 @@ achievements,
 }
 
 /** Set roles user di fixture test (multi role, junction user_roles). */
-export async function setRoles(db: AppDatabase, userId: string, roles: string[]): Promise<void> {
+export async function setRoles(
+  db: AppDatabase,
+  userId: string,
+  roles: string[],
+): Promise<void> {
   await db.delete(userRoles).where(eq(userRoles.userId, userId));
   if (roles.length === 0) return;
   await db

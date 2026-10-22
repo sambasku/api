@@ -1,13 +1,16 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { config } from 'dotenv';
-import { capturedOtpDisplayCode, e2eRegisterBody } from '@/shared/testing/e2e-auth';
-import { eq } from 'drizzle-orm';
+import { describe, it, expect, beforeAll } from "vitest";
+import { config } from "dotenv";
+import {
+  capturedOtpDisplayCode,
+  e2eRegisterBody,
+} from "@/shared/testing/e2e-auth";
+import { eq } from "drizzle-orm";
 
-const { parsed } = config({ path: '.env.test', quiet: true });
+const { parsed } = config({ path: ".env.test", quiet: true });
 const hasTestDb = !!parsed?.DATABASE_URL;
 if (parsed?.DATABASE_URL) process.env.DATABASE_URL = parsed.DATABASE_URL;
 
-describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
+describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let app: any;
   let adminToken: string;
@@ -16,56 +19,58 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
   const request = (path: string, init: RequestInit = {}) =>
     app.request(path, {
       ...init,
-      headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
+      headers: { "content-type": "application/json", ...(init.headers ?? {}) },
     });
   const post = (path: string, body: unknown, token?: string) =>
     request(path, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(body),
       headers: token ? { authorization: `Bearer ${token}` } : {},
     });
   const patch = (path: string, body: unknown, token?: string) =>
     request(path, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(body),
       headers: token ? { authorization: `Bearer ${token}` } : {},
     });
   const get = (path: string, token?: string) =>
-    request(path, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+    request(path, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
   const del = (path: string, token?: string) =>
     request(path, {
-      method: 'DELETE',
+      method: "DELETE",
       headers: token ? { authorization: `Bearer ${token}` } : {},
     });
 
   beforeAll(async () => {
-    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { languages, regions, userRoles, users, wordClasses } = await import(
-      '@/shared/database/drizzle/schema'
-    );
-    const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
+    const { getTestDb } = await import("@/shared/database/drizzle/test-client");
+    const { languages, regions, userRoles, users, wordClasses } =
+      await import("@/shared/database/drizzle/schema");
+    const { truncateAll } =
+      await import("@/shared/database/drizzle/test-utils");
     const db = getTestDb();
     await truncateAll(db);
-    const ulid26 = (prefix: string) => prefix.padEnd(26, '0').slice(0, 26);
+    const ulid26 = (prefix: string) => prefix.padEnd(26, "0").slice(0, 26);
     await db.insert(languages).values([
-      { id: ulid26('01E2ELANGSMB'), code: 'smb', name: 'Sambas' },
-      { id: ulid26('01E2ELANGIDN'), code: 'id', name: 'Indonesia' },
+      { id: ulid26("01E2ELANGSMB"), code: "smb", name: "Sambas" },
+      { id: ulid26("01E2ELANGIDN"), code: "id", name: "Indonesia" },
     ]);
     await db.insert(wordClasses).values({
-      id: ulid26('01E2EWCNOMINA'),
-      code: 'n',
-      name: 'Nomina',
+      id: ulid26("01E2EWCNOMINA"),
+      code: "n",
+      name: "Nomina",
     });
 
-    const appModule = await import('@/app');
+    const appModule = await import("@/app");
     app = appModule.app;
 
     const stamp = Date.now();
     await post(
-      '/api/v1/auth/register',
+      "/api/v1/auth/register",
       e2eRegisterBody({ name: `adm${stamp}`, email: `adm${stamp}@test.com` }),
     );
-    await post('/api/v1/auth/verify-email', {
+    await post("/api/v1/auth/verify-email", {
       email: `adm${stamp}@test.com`,
       code: capturedOtpDisplayCode(),
     });
@@ -74,69 +79,85 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
       .from(users)
       .where(eq(users.email, `adm${stamp}@test.com`))
       .limit(1);
-    if (uid) await db.insert(userRoles).values({ userId: uid.id, role: 'admin' }).onConflictDoNothing();
+    if (uid)
+      await db
+        .insert(userRoles)
+        .values({ userId: uid.id, role: "admin" })
+        .onConflictDoNothing();
     adminToken = (
-      (await (await post('/api/v1/auth/login', { email: `adm${stamp}@test.com`, password: 'Password123' })).json())
-        .data
-    ).access_token;
+      await (
+        await post("/api/v1/auth/login", {
+          email: `adm${stamp}@test.com`,
+          password: "Password123",
+        })
+      ).json()
+    ).data.access_token;
 
     await db.insert(regions).values([
       {
-        id: '01E2EREGIONKEC0000000001',
-        slug: 'pemangkat',
-        name: 'Pemangkat',
-        type: 'kecamatan',
-        status: 'published',
+        id: "01E2EREGIONKEC0000000001",
+        slug: "pemangkat",
+        name: "Pemangkat",
+        type: "kecamatan",
+        status: "published",
       },
       {
-        id: '01E2EREGIONDESA000000001',
-        slug: 'pemangkat/perapakan',
-        name: 'Perapakan',
-        type: 'desa',
-        parentId: '01E2EREGIONKEC0000000001',
-        status: 'published',
+        id: "01E2EREGIONDESA000000001",
+        slug: "pemangkat/perapakan",
+        name: "Perapakan",
+        type: "desa",
+        parentId: "01E2EREGIONKEC0000000001",
+        status: "published",
       },
     ]);
 
     await post(
-      '/api/v1/auth/register',
+      "/api/v1/auth/register",
       e2eRegisterBody({ name: `usr${stamp}`, email: `usr${stamp}@test.com` }),
     );
-    await post('/api/v1/auth/verify-email', {
+    await post("/api/v1/auth/verify-email", {
       email: `usr${stamp}@test.com`,
       code: capturedOtpDisplayCode(),
     });
     userToken = (
-      (await (await post('/api/v1/auth/login', { email: `usr${stamp}@test.com`, password: 'Password123' })).json())
-        .data
-    ).access_token;
+      await (
+        await post("/api/v1/auth/login", {
+          email: `usr${stamp}@test.com`,
+          password: "Password123",
+        })
+      ).json()
+    ).data.access_token;
   });
 
-  it('admin create → publik list/detail → soft delete hilang dari publik', async () => {
+  it("admin create → publik list/detail → soft delete hilang dari publik", async () => {
     const createRes = await post(
-      '/api/v1/admin/places',
+      "/api/v1/admin/places",
       {
-        slug: 'pantai-test-e2e',
-        name: 'Pantai Test E2E',
-        category: 'wisata',
-        type: 'pantai',
+        slug: "pantai-test-e2e",
+        name: "Pantai Test E2E",
+        category: "wisata",
+        type: "pantai",
         lat: 1.35,
         lng: 109.2,
-        short_description: 'Deskripsi singkat untuk uji e2e.',
-        region_id: 'pemangkat',
-        village_id: 'pemangkat/perapakan',
+        short_description: "Deskripsi singkat untuk uji e2e.",
+        region_id: "pemangkat",
+        village_id: "pemangkat/perapakan",
         images: [
           {
-            url: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/test.webp',
+            url: "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/test.webp",
             is_main: true,
-            attribution: { name: 'Tester', provider: 'sambasku', authorId: 'iamutaki' },
+            attribution: {
+              name: "Tester",
+              provider: "sambasku",
+              authorId: "iamutaki",
+            },
           },
         ],
         sources: [
           {
-            name: 'Sumber uji',
-            type: 'web',
-            address: 'https://example.com/sumber',
+            name: "Sumber uji",
+            type: "web",
+            address: "https://example.com/sumber",
           },
         ],
       },
@@ -144,78 +165,92 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
     );
     expect(createRes.status).toBe(200);
     const created = (await createRes.json()).data;
-    expect(created.slug).toBe('pantai-test-e2e');
+    expect(created.slug).toBe("pantai-test-e2e");
     expect(created.images).toHaveLength(1);
     expect(created.images[0].is_main).toBe(true);
-    expect(created.village_id).toBe('pemangkat/perapakan');
+    expect(created.village_id).toBe("pemangkat/perapakan");
 
-    const listRes = await get('/api/v1/places?category=wisata');
+    const listRes = await get("/api/v1/places?category=wisata");
     expect(listRes.status).toBe(200);
     const listBody = (await listRes.json()).data;
-    expect(listBody.items.some((p: { slug: string }) => p.slug === 'pantai-test-e2e')).toBe(
-      true,
-    );
-    expect(listBody.next_cursor === null || typeof listBody.next_cursor === 'string').toBe(
-      true,
-    );
+    expect(
+      listBody.items.some(
+        (p: { slug: string }) => p.slug === "pantai-test-e2e",
+      ),
+    ).toBe(true);
+    expect(
+      listBody.next_cursor === null || typeof listBody.next_cursor === "string",
+    ).toBe(true);
 
-    const typedRes = await get('/api/v1/places?category=wisata&type=pantai&limit=50');
+    const typedRes = await get(
+      "/api/v1/places?category=wisata&type=pantai&limit=50",
+    );
     expect(typedRes.status).toBe(200);
     const typed = (await typedRes.json()).data.items;
-    expect(typed.some((p: { slug: string }) => p.slug === 'pantai-test-e2e')).toBe(true);
+    expect(
+      typed.some((p: { slug: string }) => p.slug === "pantai-test-e2e"),
+    ).toBe(true);
 
-    const otherType = await get('/api/v1/places?category=wisata&type=sejarah&limit=50');
+    const otherType = await get(
+      "/api/v1/places?category=wisata&type=sejarah&limit=50",
+    );
     expect(otherType.status).toBe(200);
     const sejarah = (await otherType.json()).data.items;
-    expect(sejarah.some((p: { slug: string }) => p.slug === 'pantai-test-e2e')).toBe(false);
+    expect(
+      sejarah.some((p: { slug: string }) => p.slug === "pantai-test-e2e"),
+    ).toBe(false);
 
-    const detailRes = await get('/api/v1/places/pantai-test-e2e');
+    const detailRes = await get("/api/v1/places/pantai-test-e2e");
     expect(detailRes.status).toBe(200);
-    expect((await detailRes.json()).data.name).toBe('Pantai Test E2E');
+    expect((await detailRes.json()).data.name).toBe("Pantai Test E2E");
 
     const patchRes = await patch(
       `/api/v1/admin/places/${created.id}`,
-      { name: 'Pantai Test E2E Updated' },
+      { name: "Pantai Test E2E Updated" },
       adminToken,
     );
     expect(patchRes.status).toBe(200);
-    expect((await patchRes.json()).data.name).toBe('Pantai Test E2E Updated');
+    expect((await patchRes.json()).data.name).toBe("Pantai Test E2E Updated");
 
     const delRes = await del(`/api/v1/admin/places/${created.id}`, adminToken);
     expect(delRes.status).toBe(200);
 
-    const gone = await get('/api/v1/places/pantai-test-e2e');
+    const gone = await get("/api/v1/places/pantai-test-e2e");
     expect(gone.status).toBe(404);
   });
 
-  it('slug bentrok → 409 SLUG_TAKEN', async () => {
+  it("slug bentrok → 409 SLUG_TAKEN", async () => {
     const body = {
-      slug: 'slug-dup-e2e',
-      name: 'A',
-      category: 'budaya',
-      short_description: 'x',
+      slug: "slug-dup-e2e",
+      name: "A",
+      category: "budaya",
+      short_description: "x",
     };
-    expect((await post('/api/v1/admin/places', body, adminToken)).status).toBe(200);
-    const dup = await post('/api/v1/admin/places', body, adminToken);
+    expect((await post("/api/v1/admin/places", body, adminToken)).status).toBe(
+      200,
+    );
+    const dup = await post("/api/v1/admin/places", body, adminToken);
     expect(dup.status).toBe(409);
-    expect((await dup.json()).error_code).toBe('SLUG_TAKEN');
+    expect((await dup.json()).error_code).toBe("SLUG_TAKEN");
   });
 
-  it('usulan menunggu tinjauan, foto langsung nempel, related tidak terhapus', async () => {
-    const photo = 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/usulan.webp';
-    const extra = 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/tambahan.webp';
+  it("usulan menunggu tinjauan, foto langsung nempel, related tidak terhapus", async () => {
+    const photo =
+      "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/usulan.webp";
+    const extra =
+      "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/tambahan.webp";
     const submit = await post(
-      '/api/v1/place-contributions',
+      "/api/v1/place-contributions",
       {
-        slug: 'pantai-usulan-e2e',
-        name: 'Pantai Usulan',
-        category: 'wisata',
-        type: 'pantai',
+        slug: "pantai-usulan-e2e",
+        name: "Pantai Usulan",
+        category: "wisata",
+        type: "pantai",
         lat: 1.36,
         lng: 109.3,
-        short_description: 'Usulan dari user.',
-        region_id: '01E2EREGIONKEC0000000001',
-        village_id: '01E2EREGIONDESA000000001',
+        short_description: "Usulan dari user.",
+        region_id: "01E2EREGIONKEC0000000001",
+        village_id: "01E2EREGIONDESA000000001",
         images: [{ url: photo, is_main: true }],
       },
       userToken,
@@ -223,47 +258,64 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
     expect(submit.status).toBe(200);
     const proposalId = (await submit.json()).data.id as string;
 
-    const hidden = await get('/api/v1/places/pantai-usulan-e2e');
+    const hidden = await get("/api/v1/places/pantai-usulan-e2e");
     expect(hidden.status).toBe(404);
 
-    const approve = await post(`/api/v1/admin/place-contributions/${proposalId}/approve`, {}, adminToken);
+    const approve = await post(
+      `/api/v1/admin/place-contributions/${proposalId}/approve`,
+      {},
+      adminToken,
+    );
     expect(approve.status).toBe(200);
 
     // Notifikasi inbox sampai ke pengusul non-anonim setelah approve.
-    const notifRes = await get('/api/v1/notifications?limit=20', userToken);
+    const notifRes = await get("/api/v1/notifications?limit=20", userToken);
     expect(notifRes.status).toBe(200);
-    const notifItems = (await notifRes.json()).data as Array<Record<string, unknown>>;
+    const notifItems = (await notifRes.json()).data as Array<
+      Record<string, unknown>
+    >;
     expect(
       notifItems.find(
-        (n) => n.type === 'place_contribution_approved' && n.target_id === proposalId,
+        (n) =>
+          n.type === "place_contribution_approved" &&
+          n.target_id === proposalId,
       ),
     ).toMatchObject({
-      target_kind: 'place_contribution',
-      title: expect.stringContaining('disetujui'),
-      action_kind: 'place_contribution',
+      target_kind: "place_contribution",
+      title: expect.stringContaining("disetujui"),
+      action_kind: "place_contribution",
     });
 
-    const detail = await get('/api/v1/places/pantai-usulan-e2e');
+    const detail = await get("/api/v1/places/pantai-usulan-e2e");
     expect(detail.status).toBe(200);
     const place = (await detail.json()).data;
     expect(place.images[0].is_main).toBe(true);
-    expect(place.images[0].attribution.provider).toBe('sambasku');
+    expect(place.images[0].attribution.provider).toBe("sambasku");
     expect(place.image_count).toBe(1);
 
-    const live = await post(`/api/v1/places/pantai-usulan-e2e/images`, { urls: [extra] }, userToken);
+    const live = await post(
+      `/api/v1/places/pantai-usulan-e2e/images`,
+      { urls: [extra] },
+      userToken,
+    );
     expect(live.status).toBe(200);
-    const afterPhoto = (await (await get('/api/v1/places/pantai-usulan-e2e')).json()).data;
+    const afterPhoto = (
+      await (await get("/api/v1/places/pantai-usulan-e2e")).json()
+    ).data;
     expect(afterPhoto.image_count).toBe(2);
-    expect(afterPhoto.images.find((img: { url: string }) => img.url === extra).is_main).toBe(false);
+    expect(
+      afterPhoto.images.find((img: { url: string }) => img.url === extra)
+        .is_main,
+    ).toBe(false);
 
     const neighbor = await post(
-      '/api/v1/admin/places',
+      "/api/v1/admin/places",
       {
-        slug: 'tetangga-usulan-e2e',
-        name: 'Tetangga',
-        category: 'wisata',
-        short_description: 'Dekat.',
-        related: [{ kind: 'place', slug: 'pantai-usulan-e2e' }],
+        slug: "tetangga-usulan-e2e",
+        name: "Tetangga",
+        category: "wisata",
+        short_description: "Dekat.",
+        related: [{ kind: "place", slug: "pantai-usulan-e2e" }],
       },
       adminToken,
     );
@@ -271,53 +323,66 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
     const neighborBody = (await neighbor.json()).data;
     await patch(
       `/api/v1/admin/places/${place.id}`,
-      { related: [{ kind: 'place', slug: 'tetangga-usulan-e2e' }, { kind: 'usaha', slug: 'warung-kopi' }] },
+      {
+        related: [
+          { kind: "place", slug: "tetangga-usulan-e2e" },
+          { kind: "usaha", slug: "warung-kopi" },
+        ],
+      },
       adminToken,
     );
 
     const edit = await post(
-      '/api/v1/place-contributions',
+      "/api/v1/place-contributions",
       {
         place_id: place.id,
-        slug: 'pantai-usulan-e2e',
-        name: 'Pantai Usulan Baru',
-        category: 'wisata',
-        type: 'pantai',
+        slug: "pantai-usulan-e2e",
+        name: "Pantai Usulan Baru",
+        category: "wisata",
+        type: "pantai",
         lat: 1.36,
         lng: 109.3,
-        short_description: 'Suntingan.',
-        region_id: '01E2EREGIONKEC0000000001',
-        village_id: '01E2EREGIONDESA000000001',
+        short_description: "Suntingan.",
+        region_id: "01E2EREGIONKEC0000000001",
+        village_id: "01E2EREGIONDESA000000001",
         images: [{ url: extra }],
       },
       userToken,
     );
     expect(edit.status).toBe(200);
     const editId = (await edit.json()).data.id as string;
-    expect((await post(`/api/v1/admin/place-contributions/${editId}/approve`, {}, adminToken)).status).toBe(200);
+    expect(
+      (
+        await post(
+          `/api/v1/admin/place-contributions/${editId}/approve`,
+          {},
+          adminToken,
+        )
+      ).status,
+    ).toBe(200);
 
-    const finalRes = await get('/api/v1/places/pantai-usulan-e2e');
+    const finalRes = await get("/api/v1/places/pantai-usulan-e2e");
     const finalPlace = (await finalRes.json()).data;
-    expect(finalPlace.name).toBe('Pantai Usulan Baru');
+    expect(finalPlace.name).toBe("Pantai Usulan Baru");
     expect(finalPlace.image_count).toBe(2);
     expect(finalPlace.images[0].is_main).toBe(true);
     expect(finalPlace.related.map((r: { slug: string }) => r.slug)).toEqual([
-      'tetangga-usulan-e2e',
-      'warung-kopi',
+      "tetangga-usulan-e2e",
+      "warung-kopi",
     ]);
-    expect(finalPlace.related[0].name).toBe('Tetangga');
+    expect(finalPlace.related[0].name).toBe("Tetangga");
     expect(finalPlace.related[1].name).toBeNull();
-    expect(neighborBody.slug).toBe('tetangga-usulan-e2e');
+    expect(neighborBody.slug).toBe("tetangga-usulan-e2e");
   });
 
-  it('reject usulan wajib beralasan: disimpan, tampil ke pengusul, masuk notifikasi', async () => {
+  it("reject usulan wajib beralasan: disimpan, tampil ke pengusul, masuk notifikasi", async () => {
     const submit = await post(
-      '/api/v1/place-contributions',
+      "/api/v1/place-contributions",
       {
-        slug: 'usulan-ditolak-e2e',
-        name: 'Usulan Ditolak',
-        category: 'wisata',
-        short_description: 'Usulan yang ditolak.',
+        slug: "usulan-ditolak-e2e",
+        name: "Usulan Ditolak",
+        category: "wisata",
+        short_description: "Usulan yang ditolak.",
       },
       userToken,
     );
@@ -326,89 +391,114 @@ describe.skipIf(!hasTestDb)('Place E2E - CRUD admin + list publik', () => {
 
     // Tanpa alasan → 400.
     expect(
-      (await post(`/api/v1/admin/place-contributions/${id}/reject`, {}, adminToken)).status,
+      (
+        await post(
+          `/api/v1/admin/place-contributions/${id}/reject`,
+          {},
+          adminToken,
+        )
+      ).status,
     ).toBe(400);
     // other tanpa catatan → 400.
     expect(
-      (await post(`/api/v1/admin/place-contributions/${id}/reject`, { reason_code: 'other' }, adminToken))
-        .status,
+      (
+        await post(
+          `/api/v1/admin/place-contributions/${id}/reject`,
+          { reason_code: "other" },
+          adminToken,
+        )
+      ).status,
     ).toBe(400);
 
     const ok = await post(
       `/api/v1/admin/place-contributions/${id}/reject`,
-      { reason_code: 'inaccurate', reason_text: 'Koordinat meleset dari desa.' },
+      {
+        reason_code: "inaccurate",
+        reason_text: "Koordinat meleset dari desa.",
+      },
       adminToken,
     );
     expect(ok.status).toBe(200);
 
-    const mine = await get('/api/v1/place-contributions/mine', userToken);
-    const row = ((await mine.json()).data.items as Array<Record<string, unknown>>).find(
-      (r) => r.id === id,
-    );
+    const mine = await get("/api/v1/place-contributions/mine", userToken);
+    const row = (
+      (await mine.json()).data.items as Array<Record<string, unknown>>
+    ).find((r) => r.id === id);
     expect(row).toMatchObject({
-      status: 'rejected',
-      reject_reason_code: 'inaccurate',
-      reject_reason_display: 'Data atau lokasi tidak akurat: Koordinat meleset dari desa.',
+      status: "rejected",
+      reject_reason_code: "inaccurate",
+      reject_reason_display:
+        "Data atau lokasi tidak akurat: Koordinat meleset dari desa.",
     });
 
-    const notif = await get('/api/v1/notifications?limit=20', userToken);
+    const notif = await get("/api/v1/notifications?limit=20", userToken);
     const items = (await notif.json()).data as Array<Record<string, unknown>>;
     const rejectNotif = items.find(
-      (n) => n.type === 'place_contribution_rejected' && n.target_id === id,
+      (n) => n.type === "place_contribution_rejected" && n.target_id === id,
     );
     expect(rejectNotif?.body).toContain(
-      'Alasan: Data atau lokasi tidak akurat: Koordinat meleset dari desa.',
+      "Alasan: Data atau lokasi tidak akurat: Koordinat meleset dari desa.",
     );
   });
 
-  it('self-review tanpa notifikasi: admin approve usulan sendiri', async () => {
+  it("self-review tanpa notifikasi: admin approve usulan sendiri", async () => {
     const submit = await post(
-      '/api/v1/place-contributions',
+      "/api/v1/place-contributions",
       {
-        slug: 'usulan-admin-sendiri-e2e',
-        name: 'Usulan Admin Sendiri',
-        category: 'wisata',
-        short_description: 'Diusulkan admin, direview admin.',
+        slug: "usulan-admin-sendiri-e2e",
+        name: "Usulan Admin Sendiri",
+        category: "wisata",
+        short_description: "Diusulkan admin, direview admin.",
       },
       adminToken,
     );
     expect(submit.status).toBe(200);
     const id = (await submit.json()).data.id as string;
     expect(
-      (await post(`/api/v1/admin/place-contributions/${id}/approve`, {}, adminToken)).status,
+      (
+        await post(
+          `/api/v1/admin/place-contributions/${id}/approve`,
+          {},
+          adminToken,
+        )
+      ).status,
     ).toBe(200);
-    const notif = await get('/api/v1/notifications?limit=20', adminToken);
+    const notif = await get("/api/v1/notifications?limit=20", adminToken);
     const items = (await notif.json()).data as Array<Record<string, unknown>>;
-    expect(items.find((n) => n.type === 'place_contribution_approved' && n.target_id === id)).toBeUndefined();
+    expect(
+      items.find(
+        (n) => n.type === "place_contribution_approved" && n.target_id === id,
+      ),
+    ).toBeUndefined();
   });
 
-  it('rate limit anonim: submit ke-6 tanpa token = 429, token tetap lolos', async () => {
+  it("rate limit anonim: submit ke-6 tanpa token = 429, token tetap lolos", async () => {
     // Submit anonim 5x pertama lolos, ke-6 kena tier 5/jam/IP.
     for (let i = 0; i < 5; i++) {
-      const res = await post('/api/v1/place-contributions', {
+      const res = await post("/api/v1/place-contributions", {
         slug: `anon-rate-e2e-${i}`,
         name: `Usulan Anonim ${i}`,
-        category: 'wisata',
-        short_description: 'Rate limit probe.',
+        category: "wisata",
+        short_description: "Rate limit probe.",
       });
       expect(res.status).toBe(200);
     }
-    const sixth = await post('/api/v1/place-contributions', {
-      slug: 'anon-rate-e2e-5',
-      name: 'Usulan Anonim 5',
-      category: 'wisata',
-      short_description: 'Rate limit probe.',
+    const sixth = await post("/api/v1/place-contributions", {
+      slug: "anon-rate-e2e-5",
+      name: "Usulan Anonim 5",
+      category: "wisata",
+      short_description: "Rate limit probe.",
     });
     expect(sixth.status).toBe(429);
-    expect((await sixth.json()).error_code).toBe('RATE_LIMITED');
+    expect((await sixth.json()).error_code).toBe("RATE_LIMITED");
     // Request terautentikasi tidak ikut kena bucket anonim.
     const authed = await post(
-      '/api/v1/place-contributions',
+      "/api/v1/place-contributions",
       {
-        slug: 'anon-rate-e2e-authed',
-        name: 'Usulan Ber token',
-        category: 'wisata',
-        short_description: 'Rate limit probe.',
+        slug: "anon-rate-e2e-authed",
+        name: "Usulan Ber token",
+        category: "wisata",
+        short_description: "Rate limit probe.",
       },
       userToken,
     );

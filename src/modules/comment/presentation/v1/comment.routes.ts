@@ -25,6 +25,8 @@ export interface CommentRoutesDeps {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Gate azp + scope comment.write pada tulis komentar. */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate persetujuan legal untuk tulis komentar (403 CONSENT_REQUIRED). */
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Best-effort strike saat rate limit tulis UGC. */
   onUgcRateLimited?: (userId: string) => void | Promise<void>;
 }
@@ -46,6 +48,7 @@ export function createWordCommentRoutes(deps: CommentRoutesDeps) {
     '/:wordId/comments',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     wordCommentLimiter(deps.onUgcRateLimited),
   );
   routes.on(
@@ -53,6 +56,7 @@ export function createWordCommentRoutes(deps: CommentRoutesDeps) {
     '/:wordId/comments/audio',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     wordCommentLimiter(deps.onUgcRateLimited),
     bodyLimit({
       maxSize: 6 * 1024 * 1024,
@@ -187,6 +191,7 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
     '/:id',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     wordCommentLimiter(deps.onUgcRateLimited),
   );
 

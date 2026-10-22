@@ -52,6 +52,14 @@ export const activityEvents = sqliteTable(
     index('activity_events_feed_idx').on(t.occurredAt, t.id),
     index('activity_events_actor_idx').on(t.actorId, t.occurredAt, t.id),
     index('activity_events_word_idx').on(t.targetWordId),
+    /**
+     * Filter `kind` feed beranda (chips kategori, mobile#193): equality
+     * prefix `kind` lalu seek waktu. Tanpa index ini query `WHERE kind IN
+     * (...) ORDER BY occurred_at DESC` harus scan mundur seluruh bucket
+     * waktu untuk kategori jarang (pengumuman/warga) - rows read meledak.
+     * Index feed lama tetap dipakai query tanpa filter.
+     */
+    index('activity_events_kind_feed_idx').on(t.kind, t.occurredAt, t.id),
     uniqueIndex('activity_events_dedupe_idx').on(t.dedupeKey),
   ],
 );

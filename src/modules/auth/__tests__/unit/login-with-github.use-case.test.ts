@@ -6,6 +6,9 @@ import type { RefreshTokenRepository } from '../../domain/repositories/refresh-t
 import type { TokenServicePort } from '../../application/ports/token-service.port';
 import type { GithubTokenVerifierPort } from '../../application/ports/github-token-verifier.port';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
+import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
+import { SocialConsentService } from '../../application/utils/social-consent';
 import type { User } from '../../domain/entities/user.entity';
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -84,13 +87,25 @@ describe('LoginWithGithubUseCase', () => {
 
     const auditRepo = { record: vi.fn() } as unknown as AuditLogRepository;
 
-    const useCase = new LoginWithGithubUseCase(
+    // Consent service dengan legal belum dikonfigurasi: tidak ada backfill,
+  // assertion lama tetap valid.
+  const settingsRepo = {
+    getLegalActiveVersions: vi.fn().mockResolvedValue(null),
+    getOauthConsentEnforcement: vi.fn().mockResolvedValue('lenient'),
+  } as unknown as AppSettingsRepository;
+  const consentRepo = {
+    findLatestByUser: vi.fn().mockResolvedValue(null),
+    insertMany: vi.fn().mockResolvedValue(undefined),
+  } as unknown as UserConsentRepository;
+
+  const useCase = new LoginWithGithubUseCase(
       userRepo,
       identityRepo,
       verifier,
       tokenService,
       refreshTokenRepo,
       auditRepo,
+    new SocialConsentService(settingsRepo, consentRepo),
       900,
       2592000,
     );

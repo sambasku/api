@@ -53,6 +53,7 @@ describe('GetMyProfileUseCase', () => {
       villageId: null,
       avatarUrl: null,
       hasReadContributionGuide: false,
+      requiresConsent: false,
     });
   });
 

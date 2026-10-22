@@ -7,6 +7,9 @@ import type { RefreshTokenRepository } from '../../domain/repositories/refresh-t
 import type { TokenServicePort } from '../../application/ports/token-service.port';
 import type { FacebookTokenVerifierPort } from '../../application/ports/facebook-token-verifier.port';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
+import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
+import { SocialConsentService } from '../../application/utils/social-consent';
 import type { User } from '../../domain/entities/user.entity';
 import type { AuthIdentity } from '../../domain/entities/auth-identity.entity';
 
@@ -115,6 +118,17 @@ function makeDeps(opts: {
     list: vi.fn(),
   } as unknown as AuditLogRepository;
 
+  // Consent service dengan legal belum dikonfigurasi: tidak ada backfill,
+  // assertion lama tetap valid.
+  const settingsRepo = {
+    getLegalActiveVersions: vi.fn().mockResolvedValue(null),
+    getOauthConsentEnforcement: vi.fn().mockResolvedValue('lenient'),
+  } as unknown as AppSettingsRepository;
+  const consentRepo = {
+    findLatestByUser: vi.fn().mockResolvedValue(null),
+    insertMany: vi.fn().mockResolvedValue(undefined),
+  } as unknown as UserConsentRepository;
+
   const useCase = new LoginWithFacebookUseCase(
     userRepo,
     identityRepo,
@@ -122,6 +136,7 @@ function makeDeps(opts: {
     tokenService,
     refreshTokenRepo,
     auditRepo,
+    new SocialConsentService(settingsRepo, consentRepo),
     900,
     2592000,
   );

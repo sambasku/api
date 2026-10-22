@@ -33,6 +33,8 @@ export const loginResponseSchema = z.object({
     access_token: z.string(),
     expires_in: z.number().int(),
     refresh_token: z.string().optional(), // hanya ada untuk client_type 'mobile'
+    /** True bila consent baru ditulis saat login - client tampilkan sheet. */
+    requires_consent: z.boolean().optional(),
     user: z.object({
       id: z.string(), // ULID
       username: z.string(),

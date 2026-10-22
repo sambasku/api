@@ -1,4 +1,42 @@
 import type { ActivityItem, ActivityKind } from './entities/activity-item.entity';
+import type { ActivityEventKind } from './entities/activity-event.entity';
+
+/**
+ * #193: kategori chips feed beranda -> kind event DB.
+ *
+ * `null` = TANPA filter (kategori "Semua") - JANGAN `[]`. Repo memakai
+ * `kinds.length > 0` sebelum menambah kondisi SQL, jadi array kosong
+ * berarti filter MATI diam-diam: `category=announcement` akan balikkan
+ * seluruh feed. Test unit mengunci nilai `all === null`.
+ *
+ * "Perbaikan" = kontribusi non-kata + usulan edit, sejalan definisi
+ * `correctionsApproved` di profil publik (semua entity_type selain 'word').
+ */
+export type FeedCategory =
+  | 'all'
+  | 'search_miss'
+  | 'correction'
+  | 'announcement'
+  | 'joined';
+
+export const FEED_CATEGORY_KINDS: Record<
+  FeedCategory,
+  ActivityEventKind[] | null
+> = {
+  all: null,
+  search_miss: ['search_miss'],
+  correction: [
+    'contribution_image',
+    'contribution_audio',
+    'contribution_pron',
+    'contribution_example',
+    'suggestion_created',
+    'suggestion_applied',
+    'suggestion_selfapply',
+  ],
+  announcement: ['announcement'],
+  joined: ['user_joined'],
+};
 
 /** Ambil per sumber sebelum merge (cukup untuk cap + limit). */
 export const ACTIVITY_PER_SOURCE = 8;

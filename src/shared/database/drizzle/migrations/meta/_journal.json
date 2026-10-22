@@ -610,6 +610,27 @@
       "when": 1801100000000,
       "tag": "0086_achievements",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1801110000000,
+      "tag": "0087_activity_kind_feed_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "6",
+      "when": 1801111000000,
+      "tag": "0088_oauth-consent-enforcement",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1801112000000,
+      "tag": "0089_place_views",
+      "breakpoints": true
     }
   ]
 }

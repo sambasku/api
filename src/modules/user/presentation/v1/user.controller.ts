@@ -94,6 +94,7 @@ export class UserController {
         village_id: profile.villageId,
         avatar_url: profile.avatarUrl,
         has_read_contribution_guide: profile.hasReadContributionGuide,
+        requires_consent: profile.requiresConsent,
       },
     });
   }

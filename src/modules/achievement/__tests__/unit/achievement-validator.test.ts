@@ -104,11 +104,58 @@ describe('create achievement body', () => {
     expect(parsed.is_active).toBe(true);
   });
 
-  it('menolak reward_type tak dikenal', () => {
+it('menolak reward_type tak dikenal', () => {
+  expect(
+    createAchievementBodySchema.safeParse({ ...baseBody, reward_type: 'rocket' }).success,
+  ).toBe(false);
+});
+
+describe('badge_url guard (allowlist host)', () => {
+  it('menerima jsDelivr + ImageKit', () => {
     expect(
-      createAchievementBodySchema.safeParse({ ...baseBody, reward_type: 'rocket' }).success,
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/x.png',
+      }).success,
+    ).toBe(true);
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'https://ik.imagekit.io/apinull/achievements/x.png',
+      }).success,
+    ).toBe(true);
+  });
+  it('menolak javascript: scheme', () => {
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'javascript:alert(1)',
+      }).success,
     ).toBe(false);
   });
+  it('menolak http (tanpa TLS)', () => {
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'http://cdn.jsdelivr.net/x.png',
+      }).success,
+    ).toBe(false);
+  });
+  it('menolak host arbitrer + subdomain palsu', () => {
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'https://evil.example.com/x.png',
+      }).success,
+    ).toBe(false);
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'https://cdn.jsdelivr.net.evil.com/x.png',
+      }).success,
+    ).toBe(false);
+  });
+});
 });
 
 describe('set border body', () => {

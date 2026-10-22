@@ -8,9 +8,11 @@ import type { User } from '../../domain/entities/user.entity';
 import type { AuthIdentity } from '../../domain/entities/auth-identity.entity';
 import type { LoginMeta } from '../dto/login.dto';
 import type { GithubLoginDto } from '../dto/github-login.dto';
+import type { ConsentInput } from '@/modules/legal/application/utils/validate-consents';
 import type { GithubTokenVerifierPort } from '../ports/github-token-verifier.port';
 import type { TokenServicePort } from '../ports/token-service.port';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
+import { SocialConsentService } from '../utils/social-consent';
 import { allocateUniqueUsername, syntheticOauthEmail } from '../utils/username-slug';
 
 const GITHUB_PROVIDER = 'github';
@@ -28,6 +30,7 @@ export class LoginWithGithubUseCase {
     private readonly tokenService: TokenServicePort,
     private readonly refreshTokenRepo: RefreshTokenRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly consent: SocialConsentService,
     private readonly accessTokenTtlSeconds: number,
     private readonly refreshTokenTtlSeconds: number,
   ) {}
@@ -37,7 +40,7 @@ export class LoginWithGithubUseCase {
 
     const identity = await this.identityRepo.findByProvider(GITHUB_PROVIDER, claims.id);
     if (identity) {
-      return this.sessionForExistingIdentity(identity, meta);
+      return this.sessionForExistingIdentity(identity, meta, dto.consents);
     }
 
     let providerEmail: string | null = null;
@@ -56,6 +59,9 @@ export class LoginWithGithubUseCase {
     } else {
       email = syntheticOauthEmail('github', claims.id);
     }
+
+    // Consent gate SEBELUM akun dibuat (lihat social-consent.ts).
+    await this.consent.assertForNewUser(dto.consents);
 
     const displayName = (claims.name?.trim() || claims.login || 'Pengguna').slice(0, 100);
     const username = await allocateUniqueUsername(
@@ -82,8 +88,14 @@ export class LoginWithGithubUseCase {
     );
 
     if (!created.created) {
-      return this.sessionForExistingIdentity(created.identity, meta, created.user);
+      return this.sessionForExistingIdentity(created.identity, meta, dto.consents, created.user);
     }
+
+    const { needsConsent } = await this.consent.recordForLogin(
+      created.user.id,
+      dto.consents,
+      { clientId: meta.clientId, requestId: requestId ?? null },
+    );
 
     await this.auditRepo.record({
       userId: created.user.id,
@@ -100,18 +112,26 @@ export class LoginWithGithubUseCase {
       requestId: requestId ?? null,
     });
 
-    return this.issue(created.user, meta);
+    const result = await this.issue(created.user, meta);
+    return needsConsent ? { ...result, requiresConsent: true } : result;
   }
 
   private async sessionForExistingIdentity(
     identity: AuthIdentity,
     meta: LoginMeta,
+    consents: ConsentInput[] | undefined,
     knownUser?: User,
   ): Promise<LoginResult> {
     if (identity.deletedAt) throw invalidGithubToken();
     const user = knownUser ?? (await this.userRepo.findById(identity.userId));
     if (!user || user.deletedAt || !user.isActive) throw invalidGithubToken();
-    return this.issue(user, meta);
+
+    const { needsConsent } = await this.consent.recordForLogin(user.id, consents, {
+      clientId: meta.clientId,
+    });
+
+    const result = await this.issue(user, meta);
+    return needsConsent ? { ...result, requiresConsent: true } : result;
   }
 
   private async issue(user: User, meta: LoginMeta): Promise<LoginResult> {

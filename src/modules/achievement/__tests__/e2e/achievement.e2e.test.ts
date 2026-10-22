@@ -152,6 +152,13 @@ describe.skipIf(!hasTestDb)('Achievement E2E - katalog reward, scan, grant, bord
     const firstData = (await first.json()).data;
     expect(firstData.awarded).toBeGreaterThan(0);
 
+    // Kolom penerima di tabel katalog harus sinkron dengan award nyata
+    // (regresi: subquery korelasi tanpa kualifikasi tabel selalu 0).
+    const afterList = await get('/api/v1/admin/achievements', adminToken);
+    const afterItems = (await afterList.json()).data.items;
+    const afterTarget = afterItems.find((i: { code: string }) => i.code === 'angkatan-ke-1');
+    expect(afterTarget.recipient_count).toBeGreaterThan(0);
+
     const second = await post(`/api/v1/admin/achievements/${target.id}/scan`, {}, adminToken);
     expect(second.status).toBe(200);
     const secondData = (await second.json()).data;

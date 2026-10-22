@@ -30,6 +30,8 @@ export interface VoteRoutesDeps {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Gate azp/scope untuk POST toggle - OAUTH_REQUIRE_AZP=false mengizinkan token tanpa azp. */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate persetujuan legal untuk aksi tulis (403 CONSENT_REQUIRED). */
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 // Vote polymorphic (08-api-upvote-downvote.md): toggle + batch counts +
@@ -41,6 +43,7 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
   const toggleGuards = [
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     rateLimit({
       points: 60,
       duration: 60,
@@ -86,6 +89,7 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
   const skipGuards = [
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     rateLimit({
       points: 60,
       duration: 60,

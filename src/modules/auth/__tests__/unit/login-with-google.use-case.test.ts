@@ -7,6 +7,9 @@ import type { RefreshTokenRepository } from '../../domain/repositories/refresh-t
 import type { TokenServicePort } from '../../application/ports/token-service.port';
 import type { GoogleTokenVerifierPort } from '../../application/ports/google-token-verifier.port';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
+import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
+import { SocialConsentService } from '../../application/utils/social-consent';
 import type { User } from '../../domain/entities/user.entity';
 import type { AuthIdentity } from '../../domain/entities/auth-identity.entity';
 
@@ -67,6 +70,11 @@ function makeDeps(opts: {
   userByEmail?: User | null;
   usernamesTaken?: string[];
   created?: boolean;
+  legal?: {
+    activeVersions?: { termsVersion: string; privacyVersion: string } | null;
+    enforcement?: 'lenient' | 'enforce';
+    latestTerms?: { documentVersion: string } | null;
+  };
 } = {}) {
   const claimsOrErr = opts.claims ?? CLAIMS;
   const verifier: GoogleTokenVerifierPort = {
@@ -116,6 +124,21 @@ function makeDeps(opts: {
     list: vi.fn(),
   } as unknown as AuditLogRepository;
 
+  // Consent service dibuat dengan repo palsu: default legal belum
+  // dikonfigurasi (getLegalActiveVersions null) = tidak ada backfill,
+  // sehingga assertion lama tetap valid. Test consent meng-override.
+  const legal = opts.legal ?? {};
+  const settingsRepo = {
+    getLegalActiveVersions: vi.fn().mockResolvedValue(legal.activeVersions ?? null),
+    getOauthConsentEnforcement: vi.fn().mockResolvedValue(legal.enforcement ?? 'lenient'),
+  } as unknown as AppSettingsRepository;
+  const consentRepo = {
+    findLatestByUser: vi.fn().mockImplementation(async () =>
+      legal.latestTerms === undefined ? null : legal.latestTerms,
+    ),
+    insertMany: vi.fn().mockResolvedValue(undefined),
+  } as unknown as UserConsentRepository;
+
   const useCase = new LoginWithGoogleUseCase(
     userRepo,
     identityRepo,
@@ -123,11 +146,12 @@ function makeDeps(opts: {
     tokenService,
     refreshTokenRepo,
     auditRepo,
+    new SocialConsentService(settingsRepo, consentRepo),
     900,
     2592000,
   );
 
-  return { useCase, userRepo, identityRepo, verifier, refreshTokenRepo, auditRepo };
+  return { useCase, userRepo, identityRepo, verifier, refreshTokenRepo, auditRepo, settingsRepo, consentRepo };
 }
 
 describe('LoginWithGoogleUseCase', () => {
@@ -278,5 +302,199 @@ describe('LoginWithGoogleUseCase', () => {
       errorCode: 'GOOGLE_AUTH_UNAVAILABLE',
       statusCode: 503,
     });
+  });
+
+  // --- Consent legal (rollout OAuth hard gate) ---
+
+  const ACTIVE = { termsVersion: '2026-01-01', privacyVersion: '2026-01-01' };
+
+  it('akun baru + consents valid -> simpan consent source register, tanpa sheet', async () => {
+    const { useCase, consentRepo, identityRepo } = makeDeps({
+      identity: null,
+      legal: { activeVersions: ACTIVE },
+    });
+
+    const result = await useCase.execute({
+      idToken: 'id-token',
+      consents: [
+        { documentType: 'terms', documentVersion: '2026-01-01' },
+        { documentType: 'privacy', documentVersion: '2026-01-01' },
+      ],
+    });
+
+    expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalled();
+    expect(consentRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ documentType: 'terms', documentVersion: '2026-01-01', source: 'register' }),
+      expect.objectContaining({ documentType: 'privacy', documentVersion: '2026-01-01', source: 'register' }),
+    ]);
+    // User sudah centang checkbox di halaman Daftar - tidak perlu sheet lagi.
+    expect(result.requiresConsent).toBeUndefined();
+  });
+
+  it('akun baru + consents versi basi -> LEGAL_CONSENT_OUTDATED, akun tidak dibuat', async () => {
+    const { useCase, consentRepo, identityRepo } = makeDeps({
+      identity: null,
+      legal: { activeVersions: ACTIVE },
+    });
+
+    await expect(
+      useCase.execute({
+        idToken: 'id-token',
+        consents: [
+          { documentType: 'terms', documentVersion: '2025-01-01' },
+          { documentType: 'privacy', documentVersion: '2025-01-01' },
+        ],
+      }),
+    ).rejects.toMatchObject({ errorCode: 'LEGAL_CONSENT_OUTDATED' });
+
+    expect(identityRepo.createUserWithGoogleIdentity).not.toHaveBeenCalled();
+    expect(consentRepo.insertMany).not.toHaveBeenCalled();
+  });
+
+  it('akun baru tanpa consents, mode lenient -> backfill social_gate', async () => {
+    const { useCase, consentRepo, identityRepo } = makeDeps({
+      identity: null,
+      legal: { activeVersions: ACTIVE, enforcement: 'lenient' },
+    });
+
+    const result = await useCase.execute({ idToken: 'id-token' });
+
+    expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalled();
+    expect(consentRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ documentType: 'terms', source: 'social_gate' }),
+      expect.objectContaining({ documentType: 'privacy', source: 'social_gate' }),
+    ]);
+    expect(result.requiresConsent).toBe(true);
+  });
+
+  it('akun baru tanpa consents, mode enforce -> CONSENT_REQUIRED, akun tidak dibuat', async () => {
+    const { useCase, consentRepo, identityRepo } = makeDeps({
+      identity: null,
+      legal: { activeVersions: ACTIVE, enforcement: 'enforce' },
+    });
+
+    await expect(useCase.execute({ idToken: 'id-token' })).rejects.toMatchObject({
+      errorCode: 'CONSENT_REQUIRED',
+      statusCode: 400,
+    });
+    expect(identityRepo.createUserWithGoogleIdentity).not.toHaveBeenCalled();
+    expect(consentRepo.insertMany).not.toHaveBeenCalled();
+  });
+
+  it('akun lama tanpa consent -> backfill social_gate, requiresConsent true', async () => {
+    const { useCase, consentRepo } = makeDeps({
+      identity: makeIdentity(),
+      userById: makeUser(),
+      legal: { activeVersions: ACTIVE, latestTerms: null },
+    });
+
+    const result = await useCase.execute({ idToken: 'id-token' });
+
+    expect(consentRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ documentType: 'terms', source: 'social_gate' }),
+      expect.objectContaining({ documentType: 'privacy', source: 'social_gate' }),
+    ]);
+    expect(result.requiresConsent).toBe(true);
+  });
+
+  it('akun lama dengan consent -> tidak insert baru, requiresConsent undefined', async () => {
+    const { useCase, consentRepo } = makeDeps({
+      identity: makeIdentity(),
+      userById: makeUser(),
+      legal: { activeVersions: ACTIVE, latestTerms: { documentVersion: '2026-01-01' } },
+    });
+
+    const result = await useCase.execute({ idToken: 'id-token' });
+
+    expect(consentRepo.insertMany).not.toHaveBeenCalled();
+    expect(result.requiresConsent).toBeUndefined();
+  });
+
+  it('legal belum dikonfigurasi -> login sukses, tanpa backfill', async () => {
+    const { useCase, consentRepo, identityRepo } = makeDeps({
+      identity: null,
+      legal: { activeVersions: null, enforcement: 'enforce' },
+    });
+
+    const result = await useCase.execute({ idToken: 'id-token' });
+
+    expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalled();
+    expect(consentRepo.insertMany).not.toHaveBeenCalled();
+    expect(result.requiresConsent).toBeUndefined();
+  });
+
+  // --- Anomali: user existing datang lewat halaman Daftar ---
+
+  it('akun lama tanpa consent + centang checkbox di Daftar -> simpan, tanpa sheet', async () => {
+    const { useCase, consentRepo } = makeDeps({
+      identity: makeIdentity(),
+      userById: makeUser(),
+      legal: { activeVersions: ACTIVE, latestTerms: null },
+    });
+
+    const result = await useCase.execute({
+      idToken: 'id-token',
+      consents: [
+        { documentType: 'terms', documentVersion: '2026-01-01' },
+        { documentType: 'privacy', documentVersion: '2026-01-01' },
+      ],
+    });
+
+    // Dulu consents user existing dibuang (recordForLogin(user.id, null))
+    // -> sheet memaksa setuju ulang padahal baru saja centang.
+    expect(consentRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ documentType: 'terms', source: 'register' }),
+      expect.objectContaining({ documentType: 'privacy', source: 'register' }),
+    ]);
+    expect(result.requiresConsent).toBeUndefined();
+  });
+
+  it('akun lama consent versi basi + consents client basi -> tidak timpa, tetap minta sheet', async () => {
+    const { useCase, consentRepo } = makeDeps({
+      identity: makeIdentity(),
+      userById: makeUser(),
+      legal: {
+        activeVersions: ACTIVE,
+        latestTerms: { documentVersion: '2025-01-01' },
+      },
+    });
+
+    const result = await useCase.execute({
+      idToken: 'id-token',
+      consents: [
+        { documentType: 'terms', documentVersion: '2025-01-01' },
+        { documentType: 'privacy', documentVersion: '2025-01-01' },
+      ],
+    });
+
+    // Jangan tulis persetujuan ke versi yang tidak pernah dilihat user
+    // dalam bentuk aktif - riwayat lama utuh, user setuju ulang di sheet.
+    expect(consentRepo.insertMany).not.toHaveBeenCalled();
+    expect(result.requiresConsent).toBe(true);
+  });
+
+  it('akun lama consent versi basi + consents client versi aktif -> upgrade ke versi aktif', async () => {
+    const { useCase, consentRepo } = makeDeps({
+      identity: makeIdentity(),
+      userById: makeUser(),
+      legal: {
+        activeVersions: ACTIVE,
+        latestTerms: { documentVersion: '2025-01-01' },
+      },
+    });
+
+    const result = await useCase.execute({
+      idToken: 'id-token',
+      consents: [
+        { documentType: 'terms', documentVersion: '2026-01-01' },
+        { documentType: 'privacy', documentVersion: '2026-01-01' },
+      ],
+    });
+
+    expect(consentRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ documentType: 'terms', documentVersion: '2026-01-01', source: 'register' }),
+      expect.objectContaining({ documentType: 'privacy', documentVersion: '2026-01-01', source: 'register' }),
+    ]);
+    expect(result.requiresConsent).toBeUndefined();
   });
 });

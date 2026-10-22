@@ -1,27 +1,36 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 const placeCategorySchema = z
   .string()
   .min(1)
   .max(64)
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Kategori harus slug di tabel place_categories');
-const placeTypeSchema = z.enum(['sejarah', 'alam', 'budaya', 'pantai', 'belanja']);
-const placeStatusSchema = z.enum(['draft', 'published', 'archived']);
+  .regex(
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+    "Kategori harus slug di tabel place_categories",
+  );
+const placeTypeSchema = z.enum([
+  "sejarah",
+  "alam",
+  "budaya",
+  "pantai",
+  "belanja",
+]);
+const placeStatusSchema = z.enum(["draft", "published", "archived"]);
 
 const attributionSchema = z
   .object({
     name: z.string().min(1).max(200),
     provider: z.string().max(64).optional(),
-    url: z.string().url().startsWith('https://').nullable().optional(),
+    url: z.string().url().startsWith("https://").nullable().optional(),
     license: z.string().max(128).nullable().optional(),
-    license_url: z.string().url().startsWith('https://').nullable().optional(),
+    license_url: z.string().url().startsWith("https://").nullable().optional(),
     source: z.string().max(128).nullable().optional(),
     authorId: z.string().max(64).nullable().optional(),
   })
   .strict();
 
 const imageSchema = z.object({
-  url: z.string().url().startsWith('https://'),
+  url: z.string().url().startsWith("https://"),
   is_main: z.boolean().optional(),
   sort_order: z.number().int().min(0).optional(),
   attribution: attributionSchema.nullable().optional(),
@@ -29,20 +38,21 @@ const imageSchema = z.object({
 
 const sourceSchema = z.object({
   name: z.string().min(1).max(300),
-  type: z.string().min(1).max(64).default('other'),
+  type: z.string().min(1).max(64).default("other"),
   address: z.string().min(1).max(2000),
   license: z.string().max(200).nullable().optional(),
-  license_url: z.string().url().startsWith('https://').nullable().optional(),
+  license_url: z.string().url().startsWith("https://").nullable().optional(),
 });
 
 export const placeRelationSchema = z.object({
-  kind: z.enum(['place', 'usaha']),
+  kind: z.enum(["place", "usaha"]),
   slug: z.string().min(1).max(120),
 });
 
 function optionalCoord(schema: z.ZodNumber) {
   return z.preprocess(
-    (value) => (value === '' || value === null || value === undefined ? undefined : value),
+    (value) =>
+      value === "" || value === null || value === undefined ? undefined : value,
     schema.optional(),
   );
 }
@@ -57,13 +67,16 @@ export const createPlaceBodySchema = z
       .string()
       .min(1)
       .max(120)
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug hanya huruf kecil, angka, hyphen'),
+      .regex(
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+        "Slug hanya huruf kecil, angka, hyphen",
+      ),
     name: z.string().min(1).max(200),
     category: placeCategorySchema,
     type: placeTypeSchema.nullable().optional(),
     lat: sambasLat,
     lng: sambasLng,
-    maps_url: z.string().url().startsWith('https://').nullable().optional(),
+    maps_url: z.string().url().startsWith("https://").nullable().optional(),
     short_description: z.string().min(1).max(4000),
     region_id: z.string().max(64).nullable().optional(),
     village_id: z.string().max(64).nullable().optional(),
@@ -77,7 +90,10 @@ export const createPlaceBodySchema = z
   })
   .strict();
 
-export const updatePlaceBodySchema = createPlaceBodySchema.partial().omit({ id: true }).strict();
+export const updatePlaceBodySchema = createPlaceBodySchema
+  .partial()
+  .omit({ id: true })
+  .strict();
 
 export const listPlacesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(50),
@@ -87,7 +103,7 @@ export const listPlacesQuerySchema = z.object({
   region_id: z.string().max(64).optional(),
   village_id: z.string().max(64).optional(),
   /** "1" = hanya place yang belum punya desa. */
-  village_unset: z.literal('1').optional(),
+  village_unset: z.literal("1").optional(),
   q: z.string().max(120).optional(),
   status: placeStatusSchema.optional(),
 });
@@ -138,7 +154,7 @@ export const placeItemResponseSchema = z.object({
     ),
     related: z.array(
       z.object({
-        kind: z.enum(['place', 'usaha']),
+        kind: z.enum(["place", "usaha"]),
         slug: z.string(),
         name: z.string().nullable(),
         category: z.string().nullable(),

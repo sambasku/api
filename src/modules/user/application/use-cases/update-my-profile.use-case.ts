@@ -1,6 +1,8 @@
 import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
 import type { User } from '@/modules/auth/domain/entities/user.entity';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
+import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
 import type { UpdateMyProfileDto } from '../dto/update-my-profile.dto';
 
@@ -12,9 +14,11 @@ export interface MyProfileResult {
   villageId: string | null;
   avatarUrl: string | null;
   hasReadContributionGuide: boolean;
+  /** True bila user belum menyetujui terms/privacy versi aktif. */
+  requiresConsent: boolean;
 }
 
-function toMyProfile(user: User): MyProfileResult {
+function toMyProfile(user: User, requiresConsent: boolean): MyProfileResult {
   return {
     username: user.username,
     displayName: user.displayName,
@@ -23,18 +27,41 @@ function toMyProfile(user: User): MyProfileResult {
     villageId: user.villageId,
     avatarUrl: user.avatarUrl,
     hasReadContributionGuide: user.readContributionGuideAt !== null,
+    requiresConsent,
   };
 }
 
 export class GetMyProfileUseCase {
-  constructor(private readonly userRepo: UserRepository) {}
+  constructor(
+    private readonly userRepo: UserRepository,
+    private readonly settingsRepo?: AppSettingsRepository,
+    private readonly consentRepo?: UserConsentRepository,
+  ) {}
 
   async execute(userId: string): Promise<MyProfileResult> {
     const user = await this.userRepo.findById(userId);
     if (!user || user.deletedAt || !user.isActive) {
       throw new UnauthorizedError('UNAUTHORIZED', 'Sesi tidak valid');
     }
-    return toMyProfile(user);
+    const requiresConsent = await this.computeRequiresConsent(userId);
+    return toMyProfile(user, requiresConsent);
+  }
+
+  /**
+   * True bila versi consent terakhir user != versi aktif (atau belum ada
+   * consent sama sekali). Legal belum dikonfigurasi = false (tidak bisa
+   * minta persetujuan tanpa dokumen).
+   */
+  private async computeRequiresConsent(userId: string): Promise<boolean> {
+    if (!this.settingsRepo || !this.consentRepo) return false;
+    const active = await this.settingsRepo.getLegalActiveVersions();
+    if (!active) return false;
+    // 1 query untuk kedua tipe (bukan 2 subrequest terpisah).
+    const latest = await this.consentRepo.findLatestByUserAll(userId);
+    return (
+      latest.terms?.documentVersion !== active.termsVersion ||
+      latest.privacy?.documentVersion !== active.privacyVersion
+    );
   }
 }
 
@@ -99,6 +126,7 @@ export class UpdateMyProfileUseCase {
         : {}),
     });
 
-    return toMyProfile(updated);
+    return toMyProfile(updated, false);
   }
 }
+

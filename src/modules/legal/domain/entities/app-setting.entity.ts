@@ -4,6 +4,7 @@ export const APP_SETTING_KEYS = [
   'oauth.request_log_retention_days',
   'legal.terms_version',
   'legal.privacy_version',
+  'legal.oauth_consent_enforcement',
   'notification.review_approve_push_cooldown_minutes',
   'notification.review_reject_push_cooldown_minutes',
   'notification.word_comment_push_cooldown_minutes',
@@ -16,6 +17,14 @@ export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];
 
 export const LEGAL_TERMS_VERSION_KEY = 'legal.terms_version' as const;
 export const LEGAL_PRIVACY_VERSION_KEY = 'legal.privacy_version' as const;
+export const LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY =
+  'legal.oauth_consent_enforcement' as const;
+
+/** Mode enforcement consent OAuth (lihat docs/api/44-api-consent-oauth.md). */
+export type OauthConsentEnforcement = 'lenient' | 'enforce';
+
+/** Default saat baris belum ada: app lama masih beredar. */
+export const DEFAULT_OAUTH_CONSENT_ENFORCEMENT: OauthConsentEnforcement = 'lenient';
 
 /** Default link grup WA (diskusi + silaturahmi) untuk CTA pesan WA verifikator. */
 export const DEFAULT_WA_GROUP_CTA_URL =

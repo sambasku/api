@@ -136,7 +136,13 @@ export class AuthController {
     const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
     const meta = await this.loginMetaWithClient(c, body.client_type, body.client_id);
     const result = await this.deps.google.execute(
-      { idToken: body.id_token },
+      {
+        idToken: body.id_token,
+        consents: body.consents?.map((item) => ({
+          documentType: item.document_type,
+          documentVersion: item.document_version,
+        })),
+      },
       meta,
       requestId,
     );
@@ -147,7 +153,13 @@ export class AuthController {
     const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
     const meta = await this.loginMetaWithClient(c, body.client_type, body.client_id);
     const result = await this.deps.facebook.execute(
-      { accessToken: body.access_token },
+      {
+        accessToken: body.access_token,
+        consents: body.consents?.map((item) => ({
+          documentType: item.document_type,
+          documentVersion: item.document_version,
+        })),
+      },
       meta,
       requestId,
     );
@@ -158,7 +170,17 @@ export class AuthController {
     const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
     const meta = await this.loginMetaWithClient(c, body.client_type, body.client_id);
     const accessToken = await this.resolveGithubAccessToken(body);
-    const result = await this.deps.github.execute({ accessToken }, meta, requestId);
+    const result = await this.deps.github.execute(
+      {
+        accessToken,
+        consents: body.consents?.map((item) => ({
+          documentType: item.document_type,
+          documentVersion: item.document_version,
+        })),
+      },
+      meta,
+      requestId,
+    );
     return this.loginJson(c, body.client_type, result);
   }
 
@@ -424,6 +446,10 @@ export class AuthController {
       role: result.user.role,
       avatar_url: result.user.avatarUrl,
     };
+    // Opsional: hanya muncul saat consent baru ditulis di jalur login ini.
+    const requiresConsent = result.requiresConsent
+      ? { requires_consent: true as const }
+      : {};
 
     if (clientType === 'mobile') {
       return c.json({
@@ -432,6 +458,7 @@ export class AuthController {
           access_token: result.accessToken,
           expires_in: result.expiresIn,
           refresh_token: result.refreshToken,
+          ...requiresConsent,
           user,
         },
       });
@@ -443,6 +470,7 @@ export class AuthController {
       data: {
         access_token: result.accessToken,
         expires_in: result.expiresIn,
+        ...requiresConsent,
         user,
       },
     });

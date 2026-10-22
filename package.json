@@ -29,7 +29,8 @@
     "test:integration": "vitest run --dir '**/__tests__/integration'",
     "test:e2e": "vitest run --dir '**/__tests__/e2e'",
     "test:watch": "vitest",
-    "db:backfill-activity": "tsx src/scripts/backfill-activity-events.ts"
+    "db:backfill-activity": "tsx src/scripts/backfill-activity-events.ts",
+    "db:backfill-consents": "tsx src/scripts/backfill-user-consents.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

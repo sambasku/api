@@ -1,35 +1,45 @@
-import type { Context } from 'hono';
-import { ANONIM_USER_ID } from '@/shared/constants/anonim';
-import type { AppVariables } from '@/shared/types';
-import type { Place, PlaceImage, PlaceRelatedCard } from '../../domain/entities/place.entity';
+import type { Context } from "hono";
+import { ANONIM_USER_ID } from "@/shared/constants/anonim";
+import type { AppVariables } from "@/shared/types";
+import type {
+  Place,
+  PlaceImage,
+  PlaceRelatedCard,
+} from "../../domain/entities/place.entity";
 import type {
   AppendPlaceImagesUseCase,
   CreatePlaceUseCase,
   DeletePlaceUseCase,
   GetPlaceBySlugUseCase,
+  GetPlaceViewReportUseCase,
   ListPlaceImagesUseCase,
   ListPlacesUseCase,
+  ListPlaceViewsUseCase,
+  RecordPlaceViewUseCase,
   UpdatePlaceUseCase,
-} from '../../application/use-cases/place.use-cases';
-import type { z } from 'zod';
+} from "../../application/use-cases/place.use-cases";
+import type { z } from "zod";
 import type {
   createPlaceBodySchema,
   listPlacesQuerySchema,
   updatePlaceBodySchema,
-} from './validators/place.validator';
+} from "./validators/place.validator";
 
 function serialize(
   p: Place,
   extra?: { imageCount?: number; relatedCards?: PlaceRelatedCard[] },
 ) {
-  const related = (extra?.relatedCards ?? p.related.map((r) => ({
-    kind: r.kind,
-    slug: r.slug,
-    name: null,
-    category: null,
-    type: null,
-    coverUrl: null,
-  }))).map((r) => ({
+  const related = (
+    extra?.relatedCards ??
+    p.related.map((r) => ({
+      kind: r.kind,
+      slug: r.slug,
+      name: null,
+      category: null,
+      type: null,
+      coverUrl: null,
+    }))
+  ).map((r) => ({
     kind: r.kind,
     slug: r.slug,
     name: r.name,
@@ -104,9 +114,7 @@ function serializeImage(img: PlaceImage) {
   };
 }
 
-function mapImages(
-  images?: z.infer<typeof createPlaceBodySchema>['images'],
-) {
+function mapImages(images?: z.infer<typeof createPlaceBodySchema>["images"]) {
   return images?.map((img) => ({
     url: img.url,
     isMain: img.is_main,
@@ -126,7 +134,7 @@ function mapImages(
 }
 
 function mapSources(
-  sources?: z.infer<typeof createPlaceBodySchema>['sources'],
+  sources?: z.infer<typeof createPlaceBodySchema>["sources"],
 ) {
   return sources?.map((s) => ({
     name: s.name,
@@ -146,6 +154,9 @@ export class PlaceController {
     private readonly getBySlugUc: GetPlaceBySlugUseCase,
     private readonly listImagesUc: ListPlaceImagesUseCase,
     private readonly appendImagesUc: AppendPlaceImagesUseCase,
+    private readonly recordViewUc: RecordPlaceViewUseCase,
+    private readonly listViewsUc: ListPlaceViewsUseCase,
+    private readonly viewReportUc: GetPlaceViewReportUseCase,
   ) {}
 
   listPublic(
@@ -160,27 +171,31 @@ export class PlaceController {
         type: query.type,
         regionId: query.region_id,
         villageId: query.village_id,
-        villageUnset: query.village_unset === '1',
+        villageUnset: query.village_unset === "1",
         q: query.q,
         publicOnly: true,
       })
       .then((r) =>
         c.json({
           success: true as const,
-          data: { items: r.items.map((item) => serialize(item)), next_cursor: r.nextCursor },
+          data: {
+            items: r.items.map((item) => serialize(item)),
+            next_cursor: r.nextCursor,
+          },
         }),
       );
   }
 
   getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
-    return this.getBySlugUc
-      .execute(slug, true)
-      .then((p) =>
-        c.json({
-          success: true as const,
-          data: serialize(p, { imageCount: p.imageCount, relatedCards: p.relatedCards }),
+    return this.getBySlugUc.execute(slug, true).then((p) =>
+      c.json({
+        success: true as const,
+        data: serialize(p, {
+          imageCount: p.imageCount,
+          relatedCards: p.relatedCards,
         }),
-      );
+      }),
+    );
   }
 
   listAdmin(
@@ -195,7 +210,7 @@ export class PlaceController {
         type: query.type,
         regionId: query.region_id,
         villageId: query.village_id,
-        villageUnset: query.village_unset === '1',
+        villageUnset: query.village_unset === "1",
         q: query.q,
         status: query.status,
         publicOnly: false,
@@ -203,7 +218,10 @@ export class PlaceController {
       .then((r) =>
         c.json({
           success: true as const,
-          data: { items: r.items.map((item) => serialize(item)), next_cursor: r.nextCursor },
+          data: {
+            items: r.items.map((item) => serialize(item)),
+            next_cursor: r.nextCursor,
+          },
         }),
       );
   }
@@ -265,7 +283,11 @@ export class PlaceController {
       .then((p) => c.json({ success: true as const, data: serialize(p) }));
   }
 
-  listImages(c: Context<{ Variables: AppVariables }>, slug: string, offset: number) {
+  listImages(
+    c: Context<{ Variables: AppVariables }>,
+    slug: string,
+    offset: number,
+  ) {
     return this.listImagesUc.execute(slug, offset).then((page) =>
       c.json({
         success: true as const,
@@ -278,9 +300,13 @@ export class PlaceController {
     );
   }
 
-  appendImages(c: Context<{ Variables: AppVariables }>, slug: string, urls: string[]) {
+  appendImages(
+    c: Context<{ Variables: AppVariables }>,
+    slug: string,
+    urls: string[],
+  ) {
     return this.appendImagesUc
-      .execute(slug, c.get('user')?.user_id ?? ANONIM_USER_ID, urls)
+      .execute(slug, c.get("user")?.user_id ?? ANONIM_USER_ID, urls)
       .then(() => c.json({ success: true as const, data: null }));
   }
 
@@ -288,5 +314,31 @@ export class PlaceController {
     return this.deleteUc
       .execute(id)
       .then(() => c.json({ success: true as const, data: null }));
+  }
+
+  /** Publik: catat view detail. Slug tak dikenal / draft = silent no-op. */
+  recordView(c: Context<{ Variables: AppVariables }>, slug: string) {
+    return this.recordViewUc
+      .execute(slug)
+      .then(() => c.json({ success: true as const, data: null }));
+  }
+
+  /** Admin: total view per place sejak `days` hari (null = semua waktu). */
+  listViews(c: Context<{ Variables: AppVariables }>, days: number | null) {
+    return this.listViewsUc.execute(days).then((map) =>
+      c.json({
+        success: true as const,
+        data: {
+          items: [...map].map(([place_id, views]) => ({ place_id, views })),
+        },
+      }),
+    );
+  }
+
+  /** Admin: laporan tren harian + ranking per place untuk halaman analitik. */
+  listViewsDaily(c: Context<{ Variables: AppVariables }>, days: number) {
+    return this.viewReportUc
+      .execute(days)
+      .then((report) => c.json({ success: true as const, data: report }));
   }
 }

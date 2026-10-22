@@ -1,0 +1,17 @@
+-- Chips filter feed beranda (mobile#193): filter `kind` di `GET
+-- /api/v1/activity?category=...` butuh composite index dengan prefix kind.
+--
+-- Index lama activity_events_feed_idx (occurred_at, id) tidak punya prefix
+-- kind: SQLite harus scan mundur seluruh bucket waktu mencari row yang
+-- kind-nya cocok. Kategori ramai (perbaikan) ketemu cepat, tapi kategori
+-- jarang (announcement / user_joined / search_miss) = baca hampir seluruh
+-- tabel + JOIN per request.
+--
+-- Dengan (kind, occurred_at, id): equality prefix kind lalu seek waktu,
+-- rows read O(limit) per kategori. Index lama DIPERTAHANKAN: query tanpa
+-- filter (category=all) tetap pakai itu.
+--
+-- Catatan biaya: CREATE INDEX = one-time full scan charge (docs Turso
+-- usage-and-billing), ditukar dengan penghematan per-request permanen -
+-- pola sama dengan 0083_rows_read_indexes.sql.
+CREATE INDEX `activity_events_kind_feed_idx` ON `activity_events` (`kind`,`occurred_at`,`id`);

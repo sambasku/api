@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ValidationError } from '@/shared/errors/app-error';
 import type { ActivityItem } from '../../domain/entities/activity-item.entity';
-import { encodeActivityCursor, type ActivityCursor } from '../../domain/merge-activity';
+import type { ActivityEventKind } from '../../domain/entities/activity-event.entity';
+import {
+  encodeActivityCursor,
+  FEED_CATEGORY_KINDS,
+  type ActivityCursor,
+} from '../../domain/merge-activity';
 import { ListActivityUseCase } from '../../application/use-cases/list-activity.use-case';
 
 function item(kind: ActivityItem['kind'], id: string, at: string): ActivityItem {
@@ -23,6 +28,7 @@ function feedRepo(pages: ActivityItem[][]) {
       _limit: number,
       _before?: ActivityCursor,
       _exclude?: string,
+      _kinds?: ActivityEventKind[],
     ): Promise<ActivityItem[]> => {
       const page = pages[Math.min(call, pages.length - 1)];
       call += 1;
@@ -47,8 +53,8 @@ describe('ListActivityUseCase - feed dari activity_events', () => {
         id: 'word:w1',
       }),
     );
-    expect(repo.listFeed).toHaveBeenCalledWith(3, undefined, undefined);
-  });
+  expect(repo.listFeed).toHaveBeenCalledWith(3, undefined, undefined, null);
+});
 
   it('halaman terakhir: hasMore false, cursor null', async () => {
     const items = [item('comment', 'c1', '2026-09-28T11:00:00.000Z')];
@@ -77,12 +83,60 @@ describe('ListActivityUseCase - feed dari activity_events', () => {
   it('excludeUserId diteruskan ke repo', async () => {
     const repo = feedRepo([[]]);
     await new ListActivityUseCase(repo).execute({ limit: 20, excludeUserId: 'u1' });
-    expect(repo.listFeed).toHaveBeenCalledWith(21, undefined, 'u1');
-  });
+  expect(repo.listFeed).toHaveBeenCalledWith(21, undefined, 'u1', null);
+});
 
   it('cursor rusak -> ValidationError', async () => {
     await expect(
       new ListActivityUseCase(feedRepo([[]])).execute({ cursor: 'bukan-base64-json' }),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+});
+
+// #193: filter kategori chips feed beranda.
+describe('ListActivityUseCase - kategori feed (#193)', () => {
+  it('kategori "all" (default) TANPA filter: kinds null ke repo', async () => {
+    const repo = feedRepo([[]]);
+    await new ListActivityUseCase(repo).execute({});
+    expect(repo.listFeed).toHaveBeenCalledWith(21, undefined, undefined, null);
+  });
+
+  it('kategori "joined" -> kinds [user_joined]', async () => {
+    const repo = feedRepo([[]]);
+    await new ListActivityUseCase(repo).execute({ category: 'joined' });
+    expect(repo.listFeed).toHaveBeenCalledWith(
+      21,
+      undefined,
+      undefined,
+      ['user_joined'],
+    );
+  });
+
+  it('kategori "search_miss" -> kinds [search_miss]', async () => {
+    const repo = feedRepo([[]]);
+    await new ListActivityUseCase(repo).execute({ category: 'search_miss' });
+    expect(repo.listFeed).toHaveBeenCalledWith(
+      21,
+      undefined,
+      undefined,
+      ['search_miss'],
+    );
+  });
+
+  it('kategori "correction" = kontribusi media + usulan edit', async () => {
+    const repo = feedRepo([[]]);
+    await new ListActivityUseCase(repo).execute({ category: 'correction' });
+    const kinds = repo.listFeed.mock.calls[0][3];
+    expect(kinds).toContain('contribution_image');
+    expect(kinds).toContain('suggestion_applied');
+    // Bukan kategori kata baru / verifikasi.
+    expect(kinds).not.toContain('word_created');
+    expect(kinds).not.toContain('word_verified');
+  });
+
+  // JEBAKAN: [] = filter MATI diam-diam (repo cek kinds.length > 0).
+  // Mengunci: 'all' HARUS null, bukan [].
+  it('FEED_CATEGORY_KINDS.all === null (bukan [])', () => {
+    expect(FEED_CATEGORY_KINDS['all']).toBeNull();
   });
 });

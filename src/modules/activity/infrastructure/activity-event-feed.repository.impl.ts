@@ -158,15 +158,29 @@ interface FeedRow {
 export class ActivityEventFeedRepositoryImpl {
   constructor(private readonly db: AppDatabase) {}
 
-  /** Halaman feed beranda (semua kind). Keyset (occurred_at, id) desc. */
+  /**
+   * Halaman feed beranda. Keyset (occurred_at, id) desc.
+   *
+   * @param kinds #193: filter kategori chips. `undefined`/kosong = semua
+   *   kind. Dijamin satu query yang sama (tidak ada N+1): visibility kata,
+   *   aktor, dan term search-miss ikut lewat JOIN di `selectVisible`.
+   */
   async listFeed(
     limit: number,
     before?: ActivityCursor,
     excludeUserId?: string,
+    kinds?: ActivityEventKind[],
   ): Promise<ActivityItem[]> {
     // #56: event superseded (usulan yang ceritanya sudah jadi verifikasi)
     // tidak tayang di feed home - profil (listByActor) tetap memuatnya.
-    const rows = await this.selectVisible(limit, before, excludeUserId, undefined, undefined, true);
+    const rows = await this.selectVisible(
+      limit,
+      before,
+      excludeUserId,
+      undefined,
+      kinds,
+      true,
+    );
     return this.buildItems(rows);
   }
 
@@ -229,8 +243,9 @@ export class ActivityEventFeedRepositoryImpl {
         occurredAt: row.occurredAt,
         wordId: row.targetWordId,
         lemma,
-        summary:
-          frozen ?? this.publicSummary(kind, lemma, row.targetId, voteValue),
+        summary: frozen
+          ? this.applyLemmaPlaceholder(frozen, lemma)
+          : this.publicSummary(kind, lemma, row.targetId, voteValue),
       });
     }
     return {
@@ -238,6 +253,16 @@ export class ActivityEventFeedRepositoryImpl {
       nextCursor: hasMore && page[page.length - 1] ? page[page.length - 1]!.id : null,
       hasMore,
     };
+  }
+
+  /**
+   * #56: payload beku boleh menyimpan placeholder `{lemma}` (kata belum
+   * tentu published saat verify). Satu substitusi untuk feed beranda dan
+   * timeline profil. Tanpa lemma JOIN, placeholder dibuang.
+   */
+  private applyLemmaPlaceholder(text: string, lemma: string | null): string {
+    if (lemma) return text.replaceAll('{lemma}', lemma);
+    return text.replaceAll(' {lemma}', '').replace('{lemma}', '');
   }
 
   /** Wording timeline profil: aksi berimbuhan tanpa subjek (docs 23/19). */
@@ -486,9 +511,7 @@ export class ActivityEventFeedRepositoryImpl {
       isAnnouncement
         ? ''
         : frozen !== null
-          ? lemma
-            ? frozen.replaceAll('{lemma}', lemma)
-            : frozen.replaceAll(' {lemma}', '').replace('{lemma}', '')
+          ? this.applyLemmaPlaceholder(frozen, lemma)
           : this.bodyFor(kind, lemma);
     const subtitle = this.subtitleFor(kind, lemma);
     // #99: arah vote dari copy beku (#94) - event kind DB tetap vote_word/

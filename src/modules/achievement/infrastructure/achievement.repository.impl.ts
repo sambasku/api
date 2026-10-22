@@ -182,16 +182,24 @@ export class AchievementRepositoryImpl implements AchievementRepository {
   }
 
   async listAdmin(filter: ListAchievementsFilter) {
-    // Satu query: katalog + hitung penerima via subquery skalar (bukan
-    // loop count per baris).
-    const recipientCount = sql<number>`(
-      select count(*) from ${userAchievements} ua
-      where ua.achievement_id = ${achievements.id} and ua.deleted_at is null
-    )`.mapWith(Number);
+    // Satu query: katalog + hitung penerima via LEFT JOIN subquery agregat
+    // (bukan loop count per baris). Subquery skalar berkorelasi tidak bisa
+    // dipakai di sini: `${achievements.id}` di template sql drizzle tidak
+    // menghasilkan kualifikasi tabel, jadi "id" mengarah ke kolom subquery.
+    const counts = this.db
+      .select({
+        achievementId: userAchievements.achievementId,
+        n: sql<number>`count(*)`.as('n'),
+      })
+      .from(userAchievements)
+      .where(isNull(userAchievements.deletedAt))
+      .groupBy(userAchievements.achievementId)
+      .as('recipient_counts');
 
     const rows = await this.db
-      .select({ row: achievements, recipientCount })
+      .select({ row: achievements, recipientCount: counts.n })
       .from(achievements)
+      .leftJoin(counts, eq(counts.achievementId, achievements.id))
       .where(and(...this.catalogConditions(filter, filter.onlyActive ?? false)))
       .orderBy(desc(achievements.id))
       .limit(filter.limit + 1);
@@ -199,7 +207,7 @@ export class AchievementRepositoryImpl implements AchievementRepository {
     const hasMore = rows.length > filter.limit;
     const page = hasMore ? rows.slice(0, filter.limit) : rows;
     return {
-      items: page.map((r) => ({ ...toDomain(r.row), recipientCount: r.recipientCount })),
+      items: page.map((r) => ({ ...toDomain(r.row), recipientCount: r.recipientCount ?? 0 })),
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1]!.row.id : null,
       hasMore,
     };

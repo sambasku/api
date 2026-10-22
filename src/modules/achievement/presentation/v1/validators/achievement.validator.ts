@@ -3,6 +3,35 @@ import { ACHIEVEMENT_CATEGORIES, REWARD_TYPES } from '@/shared/database/drizzle/
 import { isAchievementSourceKnown } from '../../../domain/achievement-registry';
 
 /**
+ * Host aset reward yang diizinkan. URL ini dirender di profil publik -
+ * bebas domain = vektor tracker/pixel eksternal (atau `javascript:` URL)
+ * bila akun admin dibajak. Add hanyalah ini: host CDN baru = tambah di sini.
+ */
+const ALLOWED_BADGE_HOSTS = new Set([
+  'cdn.jsdelivr.net',
+  'ik.imagekit.io',
+]);
+
+/**
+ * URL aset reward: wajib https + host allowlist. Valid di level schema
+ * supaya create dan update kena aturan sama.
+ */
+export const badgeUrlSchema = z
+  .string()
+  .trim()
+  .url()
+  .max(2048)
+  .refine((v) => v.startsWith('https://'), 'URL aset wajib https')
+  .refine((v) => {
+    try {
+      return ALLOWED_BADGE_HOSTS.has(new URL(v).hostname);
+    } catch {
+      return false;
+    }
+  }, 'Host aset tidak diizinkan (pakai jsDelivr atau ImageKit)');
+
+
+/**
  * Grammar kriteria achievement - divalidasi terhadap REGISTRY, bukan
  * menerima struktur bebas. Source tak dikenal = ACHIEVEMENT_CRITERIA_INVALID.
  *
@@ -70,7 +99,7 @@ export const createAchievementBodySchema = z.object({
   description: z.string().trim().min(3).max(500),
   category: z.enum(ACHIEVEMENT_CATEGORIES),
   reward_type: z.enum(REWARD_TYPES),
-  badge_url: z.string().trim().url().max(2048).nullable(),
+  badge_url: badgeUrlSchema.nullable(),
   criteria: achievementCriteriaSchema,
   family: z.string().trim().min(2).max(60).nullable().optional(),
   level: z.number().int().min(1).max(10).nullable().optional(),
@@ -83,7 +112,7 @@ export const updateAchievementBodySchema = z.object({
   description: z.string().trim().min(3).max(500).optional(),
   category: z.enum(ACHIEVEMENT_CATEGORIES).optional(),
   reward_type: z.enum(REWARD_TYPES).optional(),
-  badge_url: z.string().trim().url().max(2048).nullable().optional(),
+  badge_url: badgeUrlSchema.nullable().optional(),
   criteria: achievementCriteriaSchema.optional(),
   family: z.string().trim().min(2).max(60).nullable().optional(),
   level: z.number().int().min(1).max(10).nullable().optional(),

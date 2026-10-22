@@ -27,6 +27,8 @@ export interface WordSuggestionRoutesDeps {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Gate azp + scope contribute.write pada usulan edit (publik). */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate persetujuan legal untuk tulis usulan (403 CONSENT_REQUIRED). */
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 // PUBLIK: riwayat perubahan kata
@@ -70,6 +72,7 @@ export function createWordSuggestionRoutes(deps: WordSuggestionRoutesDeps) {
     '/:id/suggest-edit',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     authorizeRole('admin', 'editor', 'contributor', 'root', 'reviewer'),
     rateLimit({
       points: 10,

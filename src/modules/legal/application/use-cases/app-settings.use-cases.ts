@@ -2,6 +2,7 @@ import { BadRequestError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import {
   APP_SETTING_KEYS,
+  LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY,
   type AppSettingKey,
   type AppSettingType,
   WA_GROUP_CTA_URL_KEY,
@@ -53,15 +54,24 @@ export class UpdateAppSettingsUseCase {
           { field: 'settings', message: `Key ${s.key} tidak diizinkan` },
         ]);
       }
-      if (s.key === 'oauth.third_party_registration') {
-        if (s.value !== 'open' && s.value !== 'closed') {
-          throw new BadRequestError(
-            'VALIDATION_ERROR',
-            'oauth.third_party_registration harus open atau closed',
-            [{ field: 'settings', message: 'Nilai third_party_registration tidak valid' }],
-          );
-        }
-      }
+  if (s.key === 'oauth.third_party_registration') {
+    if (s.value !== 'open' && s.value !== 'closed') {
+      throw new BadRequestError(
+        'VALIDATION_ERROR',
+        'oauth.third_party_registration harus open atau closed',
+        [{ field: 'settings', message: 'Nilai third_party_registration tidak valid' }],
+      );
+    }
+  }
+  if (s.key === LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY) {
+    if (s.value !== 'lenient' && s.value !== 'enforce') {
+      throw new BadRequestError(
+        'VALIDATION_ERROR',
+        'legal.oauth_consent_enforcement harus lenient atau enforce',
+        [{ field: 'settings', message: 'Nilai oauth_consent_enforcement tidak valid' }],
+      );
+    }
+  }
       if (s.key === 'oauth.request_log_retention_days') {
         const n = Number(s.value);
         if (!Number.isInteger(n) || n < 1 || n > 3650) {

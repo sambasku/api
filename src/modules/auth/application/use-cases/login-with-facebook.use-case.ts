@@ -8,9 +8,11 @@ import type { User } from '../../domain/entities/user.entity';
 import type { AuthIdentity } from '../../domain/entities/auth-identity.entity';
 import type { LoginMeta } from '../dto/login.dto';
 import type { FacebookLoginDto } from '../dto/facebook-login.dto';
+import type { ConsentInput } from '@/modules/legal/application/utils/validate-consents';
 import type { FacebookTokenVerifierPort } from '../ports/facebook-token-verifier.port';
 import type { TokenServicePort } from '../ports/token-service.port';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
+import { SocialConsentService } from '../utils/social-consent';
 import { allocateUniqueUsername, syntheticOauthEmail } from '../utils/username-slug';
 
 const FACEBOOK_PROVIDER = 'facebook';
@@ -28,6 +30,7 @@ export class LoginWithFacebookUseCase {
     private readonly tokenService: TokenServicePort,
     private readonly refreshTokenRepo: RefreshTokenRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly consent: SocialConsentService,
     private readonly accessTokenTtlSeconds: number,
     private readonly refreshTokenTtlSeconds: number,
   ) {}
@@ -38,13 +41,16 @@ export class LoginWithFacebookUseCase {
 
     const identity = await this.identityRepo.findByProvider(FACEBOOK_PROVIDER, claims.facebookUserId);
     if (identity) {
-      return this.sessionForExistingIdentity(identity, meta);
+      return this.sessionForExistingIdentity(identity, meta, dto.consents);
     }
 
     const emailTaken = await this.userRepo.findByEmail(providerEmail);
     const email = emailTaken
       ? syntheticOauthEmail('facebook', claims.facebookUserId)
       : providerEmail;
+
+    // Consent gate SEBELUM akun dibuat (lihat social-consent.ts).
+    await this.consent.assertForNewUser(dto.consents);
 
     const displayName = (claims.name?.trim() || providerEmail.split('@')[0] || 'Pengguna').slice(0, 100);
     const username = await allocateUniqueUsername(
@@ -71,8 +77,14 @@ export class LoginWithFacebookUseCase {
     );
 
     if (!created.created) {
-      return this.sessionForExistingIdentity(created.identity, meta, created.user);
+      return this.sessionForExistingIdentity(created.identity, meta, dto.consents, created.user);
     }
+
+    const { needsConsent } = await this.consent.recordForLogin(
+      created.user.id,
+      dto.consents,
+      { clientId: meta.clientId, requestId: requestId ?? null },
+    );
 
     await this.auditRepo.record({
       userId: created.user.id,
@@ -89,18 +101,26 @@ export class LoginWithFacebookUseCase {
       requestId: requestId ?? null,
     });
 
-    return this.issue(created.user, meta);
+    const result = await this.issue(created.user, meta);
+    return needsConsent ? { ...result, requiresConsent: true } : result;
   }
 
   private async sessionForExistingIdentity(
     identity: AuthIdentity,
     meta: LoginMeta,
+    consents: ConsentInput[] | undefined,
     knownUser?: User,
   ): Promise<LoginResult> {
     if (identity.deletedAt) throw invalidFacebookToken();
     const user = knownUser ?? (await this.userRepo.findById(identity.userId));
     if (!user || user.deletedAt || !user.isActive) throw invalidFacebookToken();
-    return this.issue(user, meta);
+
+    const { needsConsent } = await this.consent.recordForLogin(user.id, consents, {
+      clientId: meta.clientId,
+    });
+
+    const result = await this.issue(user, meta);
+    return needsConsent ? { ...result, requiresConsent: true } : result;
   }
 
   private async issue(user: User, meta: LoginMeta): Promise<LoginResult> {
