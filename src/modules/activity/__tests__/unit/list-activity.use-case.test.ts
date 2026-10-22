@@ -28,7 +28,7 @@ function feedRepo(pages: ActivityItem[][]) {
       _limit: number,
       _before?: ActivityCursor,
       _exclude?: string,
-      _kinds?: ActivityEventKind[],
+      _kinds?: ActivityEventKind[] | null,
     ): Promise<ActivityItem[]> => {
       const page = pages[Math.min(call, pages.length - 1)];
       call += 1;

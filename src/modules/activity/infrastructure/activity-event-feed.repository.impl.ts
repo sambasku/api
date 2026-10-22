@@ -161,15 +161,16 @@ export class ActivityEventFeedRepositoryImpl {
   /**
    * Halaman feed beranda. Keyset (occurred_at, id) desc.
    *
-   * @param kinds #193: filter kategori chips. `undefined`/kosong = semua
-   *   kind. Dijamin satu query yang sama (tidak ada N+1): visibility kata,
-   *   aktor, dan term search-miss ikut lewat JOIN di `selectVisible`.
+   * @param kinds #193: filter kategori chips. `undefined`/`null`/kosong =
+   *   semua kind (`null` = kategori "Semua", jangan `[]`). Dijamin satu
+   *   query yang sama (tidak ada N+1): visibility kata, aktor, dan term
+   *   search-miss ikut lewat JOIN di `selectVisible`.
    */
   async listFeed(
     limit: number,
     before?: ActivityCursor,
     excludeUserId?: string,
-    kinds?: ActivityEventKind[],
+    kinds?: ActivityEventKind[] | null,
   ): Promise<ActivityItem[]> {
     // #56: event superseded (usulan yang ceritanya sudah jadi verifikasi)
     // tidak tayang di feed home - profil (listByActor) tetap memuatnya.
@@ -342,7 +343,7 @@ export class ActivityEventFeedRepositoryImpl {
     before?: ActivityCursor,
     excludeUserId?: string,
     actorId?: string,
-    kinds?: ActivityEventKind[],
+    kinds?: ActivityEventKind[] | null,
     excludeSuperseded?: boolean,
   ) {
     const occurredAt = activityEvents.occurredAt;

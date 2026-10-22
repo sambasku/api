@@ -35,7 +35,7 @@ describe.skipIf(!hasTestDb)('Activity feed kategori #193 - GET /api/v1/activity?
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, languages, words, searchMisses, activityEvents } =
+    const { users, userRoles, languages, words, searchMisses, activityEvents } =
       await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
@@ -109,9 +109,9 @@ describe.skipIf(!hasTestDb)('Activity feed kategori #193 - GET /api/v1/activity?
       .set({
         emailVerified: true,
         emailVerifiedAt: new Date(),
-        roles: '["admin"]',
       })
       .where(eq(users.id, adminId));
+    await db.insert(userRoles).values({ userId: adminId, role: 'admin' });
     adminToken = (
       (await (
         await request('/api/v1/auth/login', {
@@ -262,8 +262,8 @@ describe.skipIf(!hasTestDb)('Activity feed kategori #193 - GET /api/v1/activity?
 
   it('category=all identik dengan tanpa param', async () => {
     const [withAll, withoutParam] = await Promise.all([
-      get('/api/v1/activity?limit=50&category=all').then((r) => r.json()),
-      get('/api/v1/activity?limit=50').then((r) => r.json()),
+      get('/api/v1/activity?limit=50&category=all').then((r: Response) => r.json()),
+      get('/api/v1/activity?limit=50').then((r: Response) => r.json()),
     ]);
     expect(withAll.data.map((i: { id: string }) => i.id)).toEqual(
       withoutParam.data.map((i: { id: string }) => i.id),
