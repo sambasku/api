@@ -2,7 +2,7 @@ import { and, desc, eq, isNull, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { users, userRoles, verifierApplications } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import { isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
+import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/app-error';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
@@ -53,16 +53,25 @@ function toEntity(
 
 const reviewers = alias(users, 'reviewers');
 
-function throwMappedUnique(err: unknown): never | void {
-  if (!isUniqueViolation(err)) return;
-  const haystack = err instanceof Error ? err.message : String(err);
-  if (haystack.includes('verifier_applications_user_id') || haystack.includes('user_id')) {
+// Drizzle membungkus error driver: message top-level = teks SQL ("... user_id ..."),
+// constraint asli ada di rantai `cause`. Cocokkan nama constraint spesifik
+// (rantai penuh), bukan substring generik seperti `user_id`. Unique tak dikenal = lempar ulang.
+function throwMappedUnique(err: unknown): void {
+  if (
+    isUniqueViolationOn(err, 'users.phone') ||
+    isUniqueViolationOn(err, 'users_phone_unique')
+  ) {
+    throw new ConflictError('PHONE_ALREADY_EXISTS', 'Nomor HP sudah terdaftar');
+  }
+  if (
+    isUniqueViolationOn(err, 'verifier_applications.user_id') ||
+    isUniqueViolationOn(err, 'verifier_applications_user_id_unique')
+  ) {
     throw new ConflictError(
       'APPLICATION_ALREADY_EXISTS',
       'Pengajuan verifikator sudah ada. Perbaiki lewat formulir jika ditolak.',
     );
   }
-  throw new ConflictError('PHONE_ALREADY_EXISTS', 'Nomor HP sudah terdaftar');
 }
 
 export class VerifierApplicationRepositoryImpl implements VerifierApplicationRepository {

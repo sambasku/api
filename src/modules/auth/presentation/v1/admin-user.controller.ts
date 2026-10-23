@@ -32,6 +32,7 @@ export class AdminUsersController {
       id: u.id,
       username: u.username,
       email: u.email,
+      phone: u.phone,
       roles: u.roles,
       role: u.role,
       avatar_url: u.avatarUrl,

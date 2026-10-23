@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray, isNull, like, or, lt, sql } from 'drizzle-orm';
 import { users, userRoles } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import { NotFoundError } from '@/shared/errors/app-error';
+import { NotFoundError, ConflictError } from '@/shared/errors/app-error';
+import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { UserRepository } from '../domain/repositories/user.repository';
 import type { NewUser, User, UserListFilter, UserRole } from '../domain/entities/user.entity';
@@ -89,15 +90,38 @@ export class UserRepositoryImpl implements UserRepository {
   }
 
   async save(user: NewUser): Promise<User> {
-    const { roles: newRoles, ...rest } = user;
-    const [row] = await this.db
-      .insert(users)
-      .values({
-        ...rest,
-        displayName: user.displayName ?? user.username,
-        bio: user.bio ?? null,
-      })
-      .returning();
+    const { roles: newRoles, usernameCandidates, ...rest } = user;
+    // Insert-retry atas UNIQUE username (bukan probe-then-insert): DB jadi
+    // arbiter tunggal, race dua register bersamaan aman secara struktural.
+    // Caller boleh kirim kandidat alternatif via `usernameCandidates`
+    // (register/OAuth); tanpa itu, konflik = 409 USERNAME_ALREADY_EXISTS.
+    const candidates = [...new Set(usernameCandidates?.length ? usernameCandidates : [user.username])];
+    let row: UserRow | undefined;
+    for (const candidate of candidates) {
+      try {
+        [row] = await this.db
+          .insert(users)
+          .values({
+            ...rest,
+            username: candidate,
+            displayName: user.displayName ?? candidate,
+            bio: user.bio ?? null,
+          })
+          .returning();
+        break;
+      } catch (err) {
+        // Format pesan SQLite: kolom biasa "users.username", index ekspresi
+        // "index 'users_username_lower_unique'" - 'username' mencakup keduanya.
+        if (isUniqueViolationOn(err, 'users.email') || isUniqueViolationOn(err, 'users_email_unique')) {
+          throw new ConflictError('EMAIL_ALREADY_EXISTS', 'Email sudah terdaftar');
+        }
+        if (!isUniqueViolationOn(err, 'username')) throw err;
+        // username bentrok: coba kandidat berikutnya
+      }
+    }
+    if (!row) {
+      throw new ConflictError('USERNAME_ALREADY_EXISTS', 'Nama sudah dipakai');
+    }
     const roles = newRoles ?? ['contributor'];
     await insertRoles(this.db, row.id, roles);
     return toEntity(row, roles);
@@ -119,6 +143,17 @@ export class UserRepositoryImpl implements UserRepository {
 
   async list(filter: UserListFilter): Promise<{ items: User[]; nextCursor: string | null; hasMore: boolean }> {
     const q = filter.q?.trim();
+    // Query murni angka (08…/8…/+62…/62…) ikut cocokkan users.phone yang
+    // tersimpan sebagai 62…; q teks biasa (mis. "budi2026") tidak memicu ini.
+    const phoneDigits = q?.replace(/\D/g, '') ?? '';
+    const phoneLike =
+      q && /^\+?[\d\s-]{6,}$/.test(q)
+        ? phoneDigits.startsWith('0')
+          ? `62${phoneDigits.slice(1)}`
+          : phoneDigits.startsWith('8')
+            ? `62${phoneDigits}`
+            : phoneDigits
+        : null;
     const rows = await this.db
       .select({
         id: users.id,
@@ -170,8 +205,9 @@ export class UserRepositoryImpl implements UserRepository {
           q
             ? or(
                 like(sql`lower(${users.username})`, `%${q.toLowerCase()}%`),
-                like(sql`lower(${users.email})`, `%${q.toLowerCase()}%`),
-              )
+              like(sql`lower(${users.email})`, `%${q.toLowerCase()}%`),
+              phoneLike ? like(users.phone, `%${phoneLike}%`) : undefined,
+            )
             : undefined,
           filter.cursor ? lt(sql`(${users.createdAt}, ${users.id})`, sql`(SELECT created_at, id FROM users WHERE id = ${filter.cursor})`) : undefined,
         ),

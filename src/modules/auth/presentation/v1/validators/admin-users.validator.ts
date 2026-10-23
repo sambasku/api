@@ -6,7 +6,7 @@ const ALL_ROLES = ['contributor', 'editor', 'reviewer', 'admin', 'root'] as cons
 const roleEnum = z.enum(ALL_ROLES);
 
 export const listAdminUsersQuerySchema = z.object({
-  /** Partial match username ATAU email (case-insensitive ILIKE) */
+  /** Partial match username, email, ATAU nomor HP (query angka: 08…/+62…/62…) */
   q: z.string().max(100).optional(),
   /** Filter exact role (exclude root dari filter UI, tapi backend allow untuk list).
    * Multi role: cocokkan user yang PUNYA role ini. */
@@ -30,6 +30,7 @@ const adminUserWireSchema = z.object({
   id: z.string(),
   username: z.string(),
   email: z.string(),
+  phone: z.string().nullable(),
   roles: z.array(roleEnum).min(1),
   /** @deprecated Derived tertinggi dari roles (wire compat, baca roles). */
   role: roleEnum,
