@@ -93,6 +93,10 @@ function parseAttribution(raw: string | null): PlaceImageAttribution | null {
   }
 }
 
+function visibleImagesOf(placeId: string) {
+  return and(eq(placeImages.placeId, placeId), isNull(placeImages.hiddenAt));
+}
+
 function mapImage(row: ImageRow): PlaceImage {
   return {
     id: row.id,
@@ -167,8 +171,12 @@ async function loadImagesForPlaces(
         ? and(
             inArray(placeImages.placeId, placeIds),
             eq(placeImages.isMain, true),
+            isNull(placeImages.hiddenAt),
           )
-        : inArray(placeImages.placeId, placeIds),
+        : and(
+            inArray(placeImages.placeId, placeIds),
+            isNull(placeImages.hiddenAt),
+          ),
     )
     .orderBy(placeImages.sortOrder);
   for (const row of rows) {
@@ -378,11 +386,11 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     const [totalRow] = await this.db
       .select({ total: count() })
       .from(placeImages)
-      .where(eq(placeImages.placeId, placeId));
+      .where(visibleImagesOf(placeId));
     const rows = await this.db
       .select()
       .from(placeImages)
-      .where(eq(placeImages.placeId, placeId))
+      .where(visibleImagesOf(placeId))
       .orderBy(placeImages.sortOrder)
       .limit(limit)
       .offset(offset);
@@ -414,6 +422,25 @@ export class PlaceRepositoryImpl implements PlaceRepository {
         })),
       );
     });
+  }
+
+  /** #187: takedown admin. Idempoten; null = foto tak ada / sudah disembunyikan. */
+  async hideImage(
+    placeId: string,
+    imageId: string,
+  ): Promise<{ url: string } | null> {
+    const rows = await this.db
+      .update(placeImages)
+      .set({ hiddenAt: new Date() })
+      .where(
+        and(
+          eq(placeImages.id, imageId),
+          eq(placeImages.placeId, placeId),
+          isNull(placeImages.hiddenAt),
+        ),
+      )
+      .returning({ url: placeImages.url });
+    return rows[0] ?? null;
   }
 
   async countUploadsSince(
@@ -497,18 +524,23 @@ export class PlaceRepositoryImpl implements PlaceRepository {
   }
 
   /**
-   * +1 view. SATU query: INSERT..SELECT langsung dari places (hemat
-   * subrequest) supaya slug tidak valid / draft = 0 row terubah.
-   * ponytail: tanpa dedupe per-device di server (rate limit IP + guard
-   * sessionStorage klien); tambah tabel raw event kalau butuh unique viewers.
+   * Catat 1 view untuk 1 pembaca. SATU query: INSERT..SELECT langsung dari
+   * places (hemat subrequest) supaya slug tidak valid / draft = 0 row
+   * terubah.
+   *
+   * Dedupe di server: PK (place_id, day, viewer_key) + ON CONFLICT DO
+   * NOTHING, jadi 1 pembaca = 1 baris per hari walau refresh berkali-kali.
+   * Identitas pembaca (lihat place-views.schema.ts): user login > device id
+   * > IP. Tanpa identifier = satu baris bersama (semua anon tanpa device id
+   * dihitung sebagai 1 - lebih baik daripada membakar row write).
    */
-  async recordView(slug: string): Promise<void> {
+  async recordView(slug: string, viewerKey: string): Promise<void> {
     const result = await this.db.run(sql`
-      INSERT INTO place_views (place_id, day, count)
-      SELECT id, ${searchDayWib(new Date())}, 1
+      INSERT INTO place_views (place_id, day, viewer_key, count)
+      SELECT id, ${searchDayWib(new Date())}, ${viewerKey}, 1
       FROM places
       WHERE slug = ${slug} AND status = 'published' AND deleted_at IS NULL
-      ON CONFLICT (place_id, day) DO UPDATE SET count = count + 1
+      ON CONFLICT (place_id, day, viewer_key) DO NOTHING
     `);
     void result;
   }
@@ -518,7 +550,8 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     const rows = await this.db
       .select({
         placeId: placeViews.placeId,
-        total: sql<number>`sum(${placeViews.count})`.mapWith(Number),
+        // 1 baris = 1 pembaca unik, jadi jumlah = jumlah baris.
+        total: sql<number>`count(*)`.mapWith(Number),
       })
       .from(placeViews)
       .where(conds.length > 0 ? and(...conds) : undefined)
@@ -535,7 +568,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
         name: places.name,
         slug: places.slug,
         category: places.category,
-        views: sql<number>`sum(${placeViews.count})`.mapWith(Number),
+        views: sql<number>`count(*)`.mapWith(Number),
         lastViewed: sql<string>`max(${placeViews.day})`,
       })
       .from(placeViews)
@@ -548,11 +581,11 @@ export class PlaceRepositoryImpl implements PlaceRepository {
         ),
       )
       .groupBy(placeViews.placeId)
-      .orderBy(sql`sum(${placeViews.count}) desc`);
+      .orderBy(sql`count(*) desc`);
     const trendRows = await this.db
       .select({
         day: placeViews.day,
-        total: sql<number>`sum(${placeViews.count})`.mapWith(Number),
+        total: sql<number>`count(*)`.mapWith(Number),
       })
       .from(placeViews)
       .where(gte(placeViews.day, from))

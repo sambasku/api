@@ -19,6 +19,7 @@ import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/clie
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
 import { NotFoundError } from '@/shared/errors/app-error';
+import { seededShuffle } from '@/shared/utils/seeded-shuffle';
 import type {
   AdminVoteCursor,
   AdminVoteListFilter,
@@ -909,9 +910,16 @@ export class VoteRepositoryImpl implements VoteRepository {
     await this.attachDeckSenses(page);
     await this.attachDeckCounts(page);
 
-    const last = page[page.length - 1];
+    // Cursor dihitung dari urutan keyset asli SEBELUM diacak - kalau tidak,
+    // halaman berikutnya bisa lompat/duplikat. Sumber nilai = item page
+    // (sudah lewat attachDeckCounts), bukan row mentah, agar keyset sama
+    // persis dengan yang dipakai query sebelumnya.
+    const last = pageRows.length > 0 ? page[pageRows.length - 1] : undefined;
+    const items = opts.randomize
+      ? seededShuffle(page, `${userId}:${opts.cursor?.id ?? 'first'}`)
+      : page;
     return {
-      items: page,
+      items,
       nextCursor:
         hasMore && last
           ? encodeVoteDeckCursor({

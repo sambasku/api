@@ -23,7 +23,11 @@ describe('GetVoteDeckUseCase', () => {
     const { useCase, voteRepo } = makeDeps();
     const result = await useCase.execute(USER, { limit: 10 });
 
-    expect(voteRepo.listDeckWords).toHaveBeenCalledWith(USER, { limit: 10, cursor: undefined });
+    expect(voteRepo.listDeckWords).toHaveBeenCalledWith(USER, {
+      limit: 10,
+      cursor: undefined,
+      randomize: undefined,
+    });
     expect(result).toMatchObject({
       items: [],
       meta: { limit: 10, next_cursor: null, has_more: false },
@@ -44,6 +48,17 @@ describe('GetVoteDeckUseCase', () => {
     expect(voteRepo.listDeckWords).toHaveBeenCalledWith(USER, {
       limit: 5,
       cursor: { totalVotes: 2, approvedAt, id: '01JDWORDMAKATN0000000000A' },
+      randomize: undefined,
+    });
+  });
+
+  it('randomize diteruskan apa adanya (false = kronologis)', async () => {
+    const { useCase, voteRepo } = makeDeps();
+    await useCase.execute(USER, { limit: 10, randomize: false });
+    expect(voteRepo.listDeckWords).toHaveBeenCalledWith(USER, {
+      limit: 10,
+      cursor: undefined,
+      randomize: false,
     });
   });
 

@@ -251,6 +251,7 @@ import {
 import { PlaceRepositoryImpl } from "@/modules/place/infrastructure/place.repository.impl";
 import {
   AppendPlaceImagesUseCase,
+  HidePlaceImageUseCase,
   CreatePlaceUseCase,
   DeletePlaceUseCase,
   GetPlaceBySlugUseCase,
@@ -273,6 +274,28 @@ import {
   createAdminPlaceContributionRoutes,
   createPlaceContributionRoutes,
 } from "@/modules/place-contribution/presentation/v1/place-contribution.routes";
+import { EventRepositoryImpl } from "@/modules/event/infrastructure/event.repository.impl";
+import {
+  CreateEventUseCase,
+  DeleteEventUseCase,
+  GetEventBySlugUseCase,
+  ListEventCategoriesUseCase,
+  ListEventsUseCase,
+  SetEventCancelledUseCase,
+  UpdateEventUseCase,
+} from "@/modules/event/application/use-cases/event.use-cases";
+import { EventController } from "@/modules/event/presentation/v1/event.controller";
+import {
+  createAdminEventRoutes,
+  createPublicEventRoutes,
+} from "@/modules/event/presentation/v1/event.routes";
+import { EventContributionRepositoryImpl } from "@/modules/event-contribution/infrastructure/event-contribution.repository.impl";
+import { EventContributionUseCases } from "@/modules/event-contribution/application/event-contribution.use-cases";
+import { EventContributionController } from "@/modules/event-contribution/presentation/v1/event-contribution.controller";
+import {
+  createAdminEventContributionRoutes,
+  createEventContributionRoutes,
+} from "@/modules/event-contribution/presentation/v1/event-contribution.routes";
 import { PlaceCategoryRepositoryImpl } from "@/modules/place-category/infrastructure/place-category.repository.impl";
 import {
   CreatePlaceCategoryUseCase,
@@ -668,6 +691,7 @@ const controller = new AuthController({
     resetTokenRepo,
     mailer,
     `${env.webAppUrl}/reset-password`,
+    identityRepo,
   ),
   reset: new ResetPasswordUseCase(
     resetTokenRepo,
@@ -1029,15 +1053,16 @@ const placeRepo = new PlaceRepositoryImpl(db);
 const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
 const placeController = new PlaceController(
   new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
-  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
+  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
   new DeletePlaceUseCase(placeRepo),
   new ListPlacesUseCase(placeRepo),
   new GetPlaceBySlugUseCase(placeRepo),
   new ListPlaceImagesUseCase(placeRepo),
-  new AppendPlaceImagesUseCase(placeRepo, userRepo),
+  new AppendPlaceImagesUseCase(placeRepo, userRepo, activityEvents),
   new RecordPlaceViewUseCase(placeRepo),
   new ListPlaceViewsUseCase(placeRepo),
   new GetPlaceViewReportUseCase(placeRepo),
+  new HidePlaceImageUseCase(placeRepo, activityEvents),
 );
 const placeCategoryController = new PlaceCategoryController(
   new CreatePlaceCategoryUseCase(placeCategoryRepo),
@@ -1056,7 +1081,7 @@ const placeContributionController = new PlaceContributionController(
     regionRepo,
     userRepo,
     new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
-    new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
+    new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
     recordInbox,
     notifyUser,
   ),
@@ -1067,6 +1092,28 @@ const regionController = new RegionController(
   new DeleteRegionUseCase(regionRepo),
   new ListRegionsUseCase(regionRepo),
   new GetRegionByIdUseCase(regionRepo),
+);
+
+// ---- Modul event/acara (PRD event) ----
+const eventRepo = new EventRepositoryImpl(db);
+const eventController = new EventController(
+  new CreateEventUseCase(eventRepo, regionRepo),
+  new UpdateEventUseCase(eventRepo, regionRepo),
+  new DeleteEventUseCase(eventRepo),
+  new ListEventsUseCase(eventRepo),
+  new GetEventBySlugUseCase(eventRepo),
+  new SetEventCancelledUseCase(eventRepo),
+  new ListEventCategoriesUseCase(eventRepo),
+);
+const eventContributionController = new EventContributionController(
+  new EventContributionUseCases(
+    new EventContributionRepositoryImpl(db),
+    eventRepo,
+    regionRepo,
+    new CreateEventUseCase(eventRepo, regionRepo),
+    recordInbox,
+    notifyUser,
+  ),
 );
 
 const categoryRepo = new CategoryRepositoryImpl(db);
@@ -1829,6 +1876,7 @@ app.route(
   createPublicPlaceRoutes({
     controller: placeController,
     optionalAuthenticate,
+    softAuthenticate,
   }),
 );
 app.route(
@@ -1853,6 +1901,34 @@ app.route(
   createAdminPlaceCategoryRoutes({
     controller: placeCategoryController,
     authenticate,
+  }),
+);
+
+// Event/acara - katalog acara + usulan pengguna.
+app.route(
+  "/api/v1/admin/events",
+  createAdminEventRoutes({ controller: eventController, authenticate }),
+);
+app.route(
+  "/api/v1/events",
+  createPublicEventRoutes({
+    controller: eventController,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/event-contributions",
+  createAdminEventContributionRoutes({
+    controller: eventContributionController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/event-contributions",
+  createEventContributionRoutes({
+    controller: eventContributionController,
+    authenticate,
+    optionalAuthenticate,
   }),
 );
 app.route(

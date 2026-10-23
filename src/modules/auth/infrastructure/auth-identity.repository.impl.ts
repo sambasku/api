@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { authIdentities, userRoles, users } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import { isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
+import { isUniqueViolation, isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import { ConflictError } from '@/shared/errors/app-error';
 import { ROLE_RANK, derivePrimaryRole } from '../domain/entities/user.entity';
 import type { NewUser, User } from '../domain/entities/user.entity';
@@ -191,16 +191,36 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
     newUser: NewUser,
     identity: NewGoogleIdentity,
   ): Promise<CreateUserWithGoogleIdentityResult> {
+    const { usernameCandidates, ...userValues } = newUser;
+    const candidates = [...new Set(usernameCandidates?.length ? usernameCandidates : [newUser.username])];
     try {
       return await this.db.transaction(async (tx) => {
-        const [userRow] = await tx
-          .insert(users)
-          .values({
-            ...newUser,
-            displayName: newUser.displayName ?? newUser.username,
-            bio: newUser.bio ?? null,
-          })
-          .returning();
+        // Insert-retry atas UNIQUE username: DB jadi arbiter tunggal (race
+        // dua login OAuth bersamaan aman, bukan probe-then-insert TOCTOU).
+        let userRow: UserRow | undefined;
+        for (const candidate of candidates) {
+          try {
+            [userRow] = await tx
+              .insert(users)
+              .values({
+                ...userValues,
+                username: candidate,
+                displayName: newUser.displayName ?? candidate,
+                bio: newUser.bio ?? null,
+              })
+              .returning();
+            break;
+          } catch (err) {
+            if (isUniqueViolationOn(err, 'users.email') || isUniqueViolationOn(err, 'users_email_unique')) {
+              throw err;
+            }
+            if (!isUniqueViolationOn(err, 'username')) throw err;
+            // username bentrok: coba kandidat berikutnya
+          }
+        }
+        if (!userRow) {
+          throw new ConflictError('USERNAME_ALREADY_EXISTS', 'Nama sudah dipakai');
+        }
         // Wajib: tanpa baris user_roles, JWT roles=[] → verifyAccessToken
         // menolak (normalizeRoleClaims) → GET /users/me 401 meski login 200.
         // Samakan dengan UserRepository.save default ['contributor'].

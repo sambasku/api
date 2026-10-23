@@ -103,6 +103,7 @@ export class VoteController {
     const page = await this.deps.deck.execute(user.user_id, {
       limit: query.limit,
       cursor: query.cursor,
+      randomize: query.randomize,
     });
     return c.json({
       success: true as const,

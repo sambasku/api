@@ -128,6 +128,11 @@ export const myVotesResponseSchema = z.object({
 export const voteDeckQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(10),
   cursor: z.string().min(1).optional(),
+  /** false = urutan kronologis (default: acak per user, lihat 34-api). */
+  randomize: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === undefined || v === true || v === 'true' || v === '1'),
 });
 
 export type VoteDeckQuery = z.infer<typeof voteDeckQuerySchema>;

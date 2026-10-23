@@ -48,7 +48,7 @@ function toPayload(body: z.infer<typeof submitContributionBodySchema>) {
     lat: body.lat ?? null,
     lng: body.lng ?? null,
     mapsUrl: body.maps_url ?? null,
-    shortDescription: body.short_description,
+    shortDescription: body.short_description ?? "",
     regionId: body.region_id ?? null,
     villageId: body.village_id ?? null,
     hours: body.hours ?? null,

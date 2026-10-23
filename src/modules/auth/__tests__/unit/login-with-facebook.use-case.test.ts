@@ -263,18 +263,22 @@ describe('LoginWithFacebookUseCase', () => {
     });
   });
 
-  it('username bentrok → sufiks terpakai', async () => {
-    const { useCase, identityRepo } = makeDeps({
+  it('username bentrok → kandidat disiapkan, retry di repo (tanpa probe SELECT)', async () => {
+    const { useCase, identityRepo, userRepo } = makeDeps({
       identity: null,
       usernamesTaken: ['budi_santoso'],
     });
 
     await useCase.execute({ accessToken: 'fb-token' });
 
-    expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ username: 'budi_santoso_facebook' }),
-      expect.any(Object),
-    );
+    expect(userRepo.findByUsername).not.toHaveBeenCalled();
+    const createUser = identityRepo.createUserWithGoogleIdentity as ReturnType<typeof vi.fn>;
+    const arg = createUser.mock.calls[0][0];
+    expect(arg.username).toBe('budi_santoso');
+    const candidates: string[] = arg.usernameCandidates;
+    expect(candidates[0]).toBe('budi_santoso');
+    expect(candidates[1]).toBe('budi_santoso_facebook');
+    expect(candidates[2]).toMatch(/^budi_santoso_[a-z0-9]{5}_facebook$/);
   });
 
   it('verifier 503 FACEBOOK_AUTH_UNAVAILABLE menjalar', async () => {

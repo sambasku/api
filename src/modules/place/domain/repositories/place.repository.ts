@@ -111,15 +111,21 @@ export interface PlaceRepository {
     limit: number,
   ): Promise<{ items: PlaceImage[]; total: number }>;
   appendImages(placeId: string, images: PlaceImageInput[]): Promise<void>;
+  /** #187: sembunyikan satu foto (takedown admin). Null = tak ditemukan. */
+  hideImage(placeId: string, imageId: string): Promise<{ url: string } | null>;
   countUploadsSince(
     placeId: string,
     authorId: string,
     since: Date,
   ): Promise<number>;
   resolveRelated(related: PlaceRelation[]): Promise<PlaceRelatedCard[]>;
-  /** +1 view untuk place published (upsert place_views per hari WIB). */
-  recordView(slug: string): Promise<void>;
-  /** Total view per place_id sejak `days` hari WIB terakhir (null = semua). */
+  /**
+   * Catat 1 view untuk 1 pembaca. Idempoten per (place, hari, viewerKey):
+   * refresh berulang = 1 baris.
+   * @param viewerKey identitas pembaca (lihat place-views.schema.ts)
+   */
+  recordView(slug: string, viewerKey: string): Promise<void>;
+  /** Total pembaca unik per place_id sejak `days` hari WIB terakhir (null = semua). */
   viewTotals(days: number | null): Promise<Map<string, number>>;
   /** Tren harian + total per place (published) untuk halaman analitik console. */
   viewReport(days: number): Promise<PlaceViewReport>;

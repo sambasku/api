@@ -38,6 +38,10 @@ import {
   passwordResetTokens,
   placeContributions,
   placeImages,
+  eventContributions,
+  eventPlaces,
+  events,
+  eventCategories,
   placeViews,
   places,
   placeCategories,
@@ -75,6 +79,19 @@ import {
   words,
 } from "./schema";
 import { FIRST_PARTY_SCOPE_STRING } from "@/modules/developer-oauth/domain/entities/api-client.entity";
+
+/** Kategori acara awal (pola migrasi 0093). */
+const EVENT_CATEGORY_SEED = [
+  { id: "budaya-tradisi", name: "Budaya dan Tradisi" },
+  { id: "festival-hiburan", name: "Festival dan Hiburan" },
+  { id: "pariwisata", name: "Pariwisata" },
+  { id: "olahraga", name: "Olahraga" },
+  { id: "pendidikan", name: "Pendidikan" },
+  { id: "keagamaan", name: "Keagamaan" },
+  { id: "umkm", name: "UMKM dan Ekonomi Kreatif" },
+  { id: "sosial", name: "Sosial dan Kemasyarakatan" },
+  { id: "lainnya", name: "Lainnya" },
+] as const;
 
 const LEGAL_VERSION = "2026-09-26";
 const FIRST_PARTY_SCOPES_JSON = JSON.stringify(
@@ -255,6 +272,19 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
       },
     ])
     .onConflictDoNothing();
+
+  await db
+    .insert(eventCategories)
+    .values(
+      EVENT_CATEGORY_SEED.map((c, i) => ({
+        id: c.id,
+        name: c.name,
+        sortOrder: i,
+        status: "published" as const,
+        createdAt: now,
+      })),
+    )
+    .onConflictDoNothing();
 }
 
 // Hapus semua tabel dalam urutan aman FK (anak dulu) - pakai ini di
@@ -335,6 +365,11 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     placeViews,
     places,
     placeCategories,
+    // Event/acara (FK event_places -> places/events) - anak dulu
+    eventContributions,
+    eventPlaces,
+    events,
+    eventCategories,
     regions,
     // Event feed publik (FK actor_id) - sebelum users
     activityEvents,

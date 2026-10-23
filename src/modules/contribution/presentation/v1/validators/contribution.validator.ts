@@ -28,6 +28,14 @@ export const listContributionsQuerySchema = z.object({
     .transform((v) => v === true || v === 'true' || v === '1'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().length(26).optional(),
+  /**
+   * true = acak isi halaman per user (mobile). Default false: console
+   * verifikator tetap kronologis.
+   */
+  randomize: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === true || v === 'true' || v === '1'),
   /** true = sembunyikan item yang user auth sudah skip (antrean mobile) */
   hide_skipped: z
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])

@@ -13,7 +13,7 @@ import type { GoogleTokenVerifierPort } from '../ports/google-token-verifier.por
 import type { TokenServicePort } from '../ports/token-service.port';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
 import { SocialConsentService } from '../utils/social-consent';
-import { allocateUniqueUsername, syntheticOauthEmail } from '../utils/username-slug';
+import { buildUsernameCandidates, syntheticOauthEmail } from '../utils/username-slug';
 
 const GOOGLE_PROVIDER = 'google';
 const INVALID_MESSAGE = 'Tidak bisa masuk dengan Google.';
@@ -54,16 +54,12 @@ export class LoginWithGoogleUseCase {
     await this.consent.assertForNewUser(dto.consents);
 
     const displayName = (claims.name?.trim() || providerEmail.split('@')[0] || 'Pengguna').slice(0, 100);
-    const username = await allocateUniqueUsername(
-      (u) => this.userRepo.findByUsername(u),
-      claims.name,
-      providerEmail,
-      'google',
-    );
+    const usernameCandidates = buildUsernameCandidates(claims.name, providerEmail, 'google');
 
     const created = await this.identityRepo.createUserWithGoogleIdentity(
       {
-        username,
+        username: usernameCandidates[0],
+        usernameCandidates,
         displayName,
         email,
         phone: null,

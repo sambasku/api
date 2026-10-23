@@ -181,12 +181,31 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
       );
   }
 
+  async hidePlacePhoto(placeId: string, url: string): Promise<void> {
+    await this.db
+      .update(activityEvents)
+      .set({ hiddenAt: new Date() })
+      .where(
+        and(
+          eq(activityEvents.kind, 'place_photo_added'),
+          eq(activityEvents.targetId, placeId),
+          sql`instr(${activityEvents.dedupeKey}, ${url}) > 0`,
+          sql`${activityEvents.hiddenAt} is null`,
+        ),
+      );
+  }
+
   async syncVoteVisibility(
     actorId: string,
-    targetType: 'word' | 'comment',
+    targetType: 'word' | 'comment' | 'meaning',
     targetId: string,
   ): Promise<void> {
-    const kind: ActivityEventKind = targetType === 'word' ? 'vote_word' : 'vote_comment';
+    const kind: ActivityEventKind =
+      targetType === 'word'
+        ? 'vote_word'
+        : targetType === 'meaning'
+          ? 'vote_meaning'
+          : 'vote_comment';
     const [vote] = await this.db
       .select({ id: votes.id })
       .from(votes)

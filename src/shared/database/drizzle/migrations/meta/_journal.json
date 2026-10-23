@@ -631,6 +631,41 @@
       "when": 1801112000000,
       "tag": "0089_place_views",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1801113000000,
+      "tag": "0090_place_views_viewer_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "6",
+      "when": 1801114000000,
+      "tag": "0091_username_handle_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "6",
+      "when": 1801115000000,
+      "tag": "0092_places_cleansing",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "6",
+      "when": 1801115100000,
+      "tag": "0093_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1801201500000,
+      "tag": "0094_place_image_hidden",
+      "breakpoints": true
     }
   ]
 }

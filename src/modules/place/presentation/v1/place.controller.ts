@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import type { AppVariables } from "@/shared/types";
+import { clientIpKey, normalizedDeviceId } from "@/shared/middlewares/rate-limit.middleware";
 import type {
   Place,
   PlaceImage,
@@ -12,6 +13,7 @@ import type {
   DeletePlaceUseCase,
   GetPlaceBySlugUseCase,
   GetPlaceViewReportUseCase,
+  HidePlaceImageUseCase,
   ListPlaceImagesUseCase,
   ListPlacesUseCase,
   ListPlaceViewsUseCase,
@@ -24,6 +26,18 @@ import type {
   listPlacesQuerySchema,
   updatePlaceBodySchema,
 } from "./validators/place.validator";
+
+/**
+ * Identitas pembaca untuk dedupe view harian: user login > device id > IP.
+ * Prefiks mencegah tabrakan antar ruang nama (user vs device vs ip).
+ */
+export function viewerKey(c: Context<{ Variables: AppVariables }>): string {
+  const userId = c.get("user")?.user_id;
+  if (userId) return `u:${userId}`;
+  const deviceId = normalizedDeviceId(c);
+  if (deviceId) return `d:${deviceId}`;
+  return `ip:${clientIpKey(c)}`;
+}
 
 function serialize(
   p: Place,
@@ -157,6 +171,7 @@ export class PlaceController {
     private readonly recordViewUc: RecordPlaceViewUseCase,
     private readonly listViewsUc: ListPlaceViewsUseCase,
     private readonly viewReportUc: GetPlaceViewReportUseCase,
+    private readonly hideImageUc: HidePlaceImageUseCase,
   ) {}
 
   listPublic(
@@ -240,7 +255,7 @@ export class PlaceController {
         lat: body.lat ?? null,
         lng: body.lng ?? null,
         mapsUrl: body.maps_url ?? null,
-        shortDescription: body.short_description,
+        shortDescription: body.short_description ?? "",
         regionId: body.region_id ?? null,
         villageId: body.village_id ?? null,
         hours: body.hours ?? null,
@@ -310,16 +325,30 @@ export class PlaceController {
       .then(() => c.json({ success: true as const, data: null }));
   }
 
+  /** #187: takedown foto (admin). Foto disembunyikan + event feed ikut. */
+  hideImage(
+    c: Context<{ Variables: AppVariables }>,
+    placeId: string,
+    imageId: string,
+  ) {
+    return this.hideImageUc
+      .execute(placeId, imageId)
+      .then(() => c.json({ success: true as const, data: null }));
+  }
+
   remove(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.deleteUc
       .execute(id)
       .then(() => c.json({ success: true as const, data: null }));
   }
 
-  /** Publik: catat view detail. Slug tak dikenal / draft = silent no-op. */
+  /**
+   * Publik: catat view detail. Slug tak dikenal / draft = silent no-op.
+   * 1 pembaca = 1 view per hari (dedupe server via viewerKey).
+   */
   recordView(c: Context<{ Variables: AppVariables }>, slug: string) {
     return this.recordViewUc
-      .execute(slug)
+      .execute(slug, viewerKey(c))
       .then(() => c.json({ success: true as const, data: null }));
   }
 

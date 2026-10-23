@@ -3,7 +3,10 @@ import {
   ConflictError,
   NotFoundError,
   RateLimitedError,
+  UnauthorizedError,
 } from "@/shared/errors/app-error";
+import { ANONIM_USER_ID } from "@/shared/constants/anonim";
+import type { RecordActivityEventUseCase } from "@/modules/activity/application/use-cases/record-activity-event.use-case";
 import type { UserRepository } from "@/modules/auth/domain/repositories/user.repository";
 import type { PlaceCategoryRepository } from "@/modules/place-category/domain/repositories/place-category.repository";
 import type {
@@ -53,6 +56,7 @@ export class UpdatePlaceUseCase {
   constructor(
     private readonly repo: PlaceRepository,
     private readonly categories: PlaceCategoryRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(input: UpdatePlaceInput): Promise<Place> {
@@ -65,9 +69,25 @@ export class UpdatePlaceUseCase {
         throw new ConflictError("SLUG_TAKEN", "Slug place sudah dipakai");
       }
     }
+    // #187: hapus foto lewat console = takedown. Catat URL yang dibuang
+    // sebelum update (setelah update barisnya sudah tidak ada).
+    const dropped =
+      input.images === undefined
+        ? []
+        : await this.repo
+            .listImages(input.id, 0, PHOTO_CAP)
+            .then((page) =>
+              page.items.filter(
+                (img) => !input.images!.some((next) => next.url === img.url),
+              ),
+            )
+            .catch(() => []);
     const updated = await this.repo.update(input);
     if (!updated) {
       throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
+    }
+    for (const img of dropped) {
+      await this.activityEvents?.safeHidePlacePhoto(input.id, img.url);
     }
     return updated;
   }
@@ -95,9 +115,12 @@ export class ListPlacesUseCase {
 export class RecordPlaceViewUseCase {
   constructor(private readonly repo: PlaceRepository) {}
 
-  /** Idempotent-unsafe by design: 1 panggilan = 1 view. */
-  execute(slug: string): Promise<void> {
-    return this.repo.recordView(slug);
+  /**
+   * Idempoten per (place, hari, viewerKey): 1 pembaca = 1 view per hari,
+   * walau refresh / buka ulang berkali-kali.
+   */
+  execute(slug: string, viewerKey: string): Promise<void> {
+    return this.repo.recordView(slug, viewerKey);
   }
 }
 
@@ -172,9 +195,17 @@ export class AppendPlaceImagesUseCase {
   constructor(
     private readonly repo: PlaceRepository,
     private readonly users: UserRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(slug: string, userId: string, urls: string[]): Promise<void> {
+    // #187: foto wisata tayang publik + masuk feed -> wajib akun.
+    if (userId === ANONIM_USER_ID) {
+      throw new UnauthorizedError(
+        "UNAUTHORIZED",
+        "Masuk dulu untuk menambah foto wisata",
+      );
+    }
     const place = await this.repo.findBySlug(slug, { publicOnly: true });
     if (!place || place.status !== "published") {
       throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
@@ -197,6 +228,7 @@ export class AppendPlaceImagesUseCase {
     }
     const have = new Set(place.images.map((img) => img.url));
     const fresh = urls.filter((url) => !have.has(url));
+    if (fresh.length === 0) return;
     const name = user.displayName || user.username;
     await this.repo.appendImages(
       place.id,
@@ -206,5 +238,35 @@ export class AppendPlaceImagesUseCase {
         attribution: { name, provider: "sambasku", authorId: userId },
       })),
     );
+    // #187: satu event per batch unggah (bukan per foto - 5 foto sekali
+    // unggah tak boleh jadi 5 baris feed). Dedupe = gabungan URL, jadi
+    // retry kiriman sama tidak menulis dua kali.
+    await this.activityEvents?.safe({
+      kind: "place_photo_added",
+      actorId: userId,
+      targetId: place.id,
+      dedupeKey: `place_photo:${place.id}:${fresh.join("|")}`,
+      payload: `Menambahkan foto wisata ${place.name}`,
+    });
+  }
+}
+
+/**
+ * #187: takedown foto oleh admin. Foto disembunyikan permanen (bukan
+ * dihapus: berkasnya masih di CDN) lalu event feed yang menyebut URL itu
+ * ikut disembunyikan - pola hide-on-reject, bukan join read-time.
+ */
+export class HidePlaceImageUseCase {
+  constructor(
+    private readonly repo: PlaceRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
+  ) {}
+
+  async execute(placeId: string, imageId: string): Promise<void> {
+    const image = await this.repo.hideImage(placeId, imageId);
+    if (!image) {
+      throw new NotFoundError("IMAGE_NOT_FOUND", "Foto tidak ditemukan");
+    }
+    await this.activityEvents?.safeHidePlacePhoto(placeId, image.url);
   }
 }

@@ -34,7 +34,7 @@ APP_URL = "https://api.sambasku.com"
 # Domain web publik untuk email + Universal Links (bukan host API).
 WEB_APP_URL = "https://sambasku.com"
 # Hanya origin browser produksi (mobile tidak kena CORS).
-CORS_ALLOWED_ORIGINS = "https://sambasku.com,https://console.sambasku.com"
+CORS_ALLOWED_ORIGINS = "https://sambasku.com,https://console.sambasku.com,https://import.sambasku.com"
 # Cookie refresh_token berlaku untuk SEMUA tier API (api./deno./render.) supaya
 # sesi console tidak putus saat circuit breaker pindah tier. WAJIB identik di
 # deployment Deno dan Render.

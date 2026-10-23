@@ -686,11 +686,102 @@ export class WordRepositoryImpl implements WordRepository {
     return row?.id ?? null;
   }
 
+  async findLinkedMeanings(wordId: string): Promise<WordDetail['meanings']> {
+    const rows = await this.db
+      .select({
+        meaning: meanings,
+        sourceLemma: words.lemma,
+        translationLanguageId: meaningTranslations.languageId,
+        translationText: meaningTranslations.translationText,
+        translationType: meaningTranslations.translationType,
+        translationAllowsComma: meaningTranslations.translationAllowsComma,
+        wcId: wordClasses.id,
+        wcCode: wordClasses.code,
+        wcName: wordClasses.name,
+        wcAlias: wordClasses.alias,
+        wcDescription: wordClasses.description,
+        wcParentId: wordClasses.parentId,
+      })
+      .from(meanings)
+      .innerJoin(words, eq(words.id, meanings.wordId))
+      .leftJoin(
+        meaningTranslations,
+        and(eq(meaningTranslations.meaningId, meanings.id), isNull(meaningTranslations.deletedAt)),
+      )
+      .leftJoin(wordClasses, eq(wordClasses.id, meanings.wordClassId))
+      .where(
+        and(
+          isNull(meanings.deletedAt),
+          isNull(words.deletedAt),
+          ne(words.id, wordId),
+          sql`${meanings.wordId} IN (
+            SELECT lr.target_word_id FROM lexical_relations lr
+            WHERE lr.source_word_id = ${wordId} AND lr.deleted_at IS NULL
+            UNION
+            SELECT lr.source_word_id FROM lexical_relations lr
+            WHERE lr.target_word_id = ${wordId} AND lr.deleted_at IS NULL
+            UNION
+            SELECT other.word_id FROM word_group_members self
+            INNER JOIN word_group_members other
+              ON other.group_id = self.group_id
+             AND other.word_id <> self.word_id
+             AND other.deleted_at IS NULL
+            WHERE self.word_id = ${wordId} AND self.deleted_at IS NULL
+          )`,
+        ),
+      )
+      .orderBy(asc(words.lemma), asc(meanings.orderIndex));
+
+    const byId = new Map<string, WordDetail['meanings'][number]>();
+    for (const row of rows) {
+      const m = row.meaning;
+      let detail = byId.get(m.id);
+      if (!detail) {
+        detail = {
+          id: m.id,
+          wordId: m.wordId,
+          wordClass: row.wcId
+            ? {
+                id: row.wcId,
+                code: row.wcCode ?? '',
+                name: row.wcName ?? '',
+                alias: row.wcAlias,
+                description: row.wcDescription,
+                parentId: row.wcParentId,
+              }
+            : null,
+          inheritedFromMeaningId: m.inheritedFromMeaningId,
+          definition: m.definition,
+          isHaveDefinition: m.isHaveDefinition,
+          isHaveTranslation: m.isHaveTranslation,
+          meaningSource: (m.meaningSource as 'manual' | 'kbbi' | 'kbbi_edited') ?? 'manual',
+          orderIndex: m.orderIndex,
+          notes: m.notes,
+          creator: null,
+          translations: [],
+          examples: [],
+          sourceLemma: row.sourceLemma,
+        };
+        byId.set(m.id, detail);
+      }
+      if (row.translationText && row.translationLanguageId && row.translationType) {
+        detail.translations.push({
+          languageId: row.translationLanguageId,
+          translationText: row.translationText,
+          translationType: row.translationType,
+          translationAllowsComma: row.translationAllowsComma ?? false,
+        });
+      }
+    }
+    return [...byId.values()];
+  }
+
   async findDetailById(
     id: string,
-    opts?: { includeAllStatuses?: boolean },
+    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
   ): Promise<WordDetail | null> {
     const includeAll = opts?.includeAllStatuses === true;
+    const includeDeleted = opts?.includeDeleted === true;
     const verifierUsers = alias(users, 'word_verifier');
     const creatorUsers = alias(users, 'word_creator');
     const [joined] = await this.db
@@ -719,7 +810,7 @@ export class WordRepositoryImpl implements WordRepository {
       )
       .where(
         includeAll
-          ? and(eq(words.id, id), isNull(words.deletedAt))
+          ? and(eq(words.id, id), includeDeleted ? undefined : isNull(words.deletedAt))
           : and(eq(words.id, id), eq(words.status, 'published'), isNull(words.deletedAt)),
       )
       .limit(1);

@@ -339,8 +339,22 @@ export interface WordRepository {
   listMeaningKeys(wordId: string): Promise<
     { definition: string; translation: string; isHaveDefinition: boolean; isHaveTranslation: boolean }[]
   >;
-  /** hanya published + belum soft-deleted; includeAllStatuses = layar review */
-  findDetailById(id: string, opts?: { includeAllStatuses?: boolean }): Promise<WordDetail | null>;
+  /**
+   * Hanya published + belum soft-deleted.
+   * includeAllStatuses = layar review (semua status).
+   * includeDeleted = baris kata yang sudah di-soft-delete tetap dibaca,
+   * supaya review tidak kehilangan lemma dan makna.
+   */
+  findDetailById(
+    id: string,
+    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+  ): Promise<WordDetail | null>;
+  /**
+   * Makna yang sudah ada di kata lain yang tertaut ke wordId ini
+   * (relasi leksikal dua arah, atau saudara satu kelompok makna).
+   * Dipakai saat lemma baru belum menyimpan salinan maknanya sendiri.
+   */
+  findLinkedMeanings(wordId: string): Promise<WordDetail['meanings']>;
   /**
    * Snapshot tipis untuk audit koreksi (lemma/status/is_verified saja).
    * Hindari findDetailById (~12 round-trip) saat old_data audit hanya butuh 3 field.

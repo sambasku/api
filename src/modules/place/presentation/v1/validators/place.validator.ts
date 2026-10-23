@@ -77,7 +77,8 @@ export const createPlaceBodySchema = z
     lat: sambasLat,
     lng: sambasLng,
     maps_url: z.string().url().startsWith("https://").nullable().optional(),
-    short_description: z.string().min(1).max(4000),
+    /** Deskripsi opsional: place bisa disimpan tanpa deskripsi (data dibersihkan). */
+    short_description: z.string().max(4000).optional(),
     region_id: z.string().max(64).nullable().optional(),
     village_id: z.string().max(64).nullable().optional(),
     hours: z.string().max(500).nullable().optional(),

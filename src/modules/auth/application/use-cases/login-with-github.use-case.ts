@@ -13,7 +13,7 @@ import type { GithubTokenVerifierPort } from '../ports/github-token-verifier.por
 import type { TokenServicePort } from '../ports/token-service.port';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
 import { SocialConsentService } from '../utils/social-consent';
-import { allocateUniqueUsername, syntheticOauthEmail } from '../utils/username-slug';
+import { buildUsernameCandidates, syntheticOauthEmail } from '../utils/username-slug';
 
 const GITHUB_PROVIDER = 'github';
 const INVALID_MESSAGE = 'Tidak bisa masuk dengan GitHub.';
@@ -64,16 +64,12 @@ export class LoginWithGithubUseCase {
     await this.consent.assertForNewUser(dto.consents);
 
     const displayName = (claims.name?.trim() || claims.login || 'Pengguna').slice(0, 100);
-    const username = await allocateUniqueUsername(
-      (u) => this.userRepo.findByUsername(u),
-      claims.login,
-      providerEmail,
-      'github',
-    );
+    const usernameCandidates = buildUsernameCandidates(claims.login, providerEmail, 'github');
 
     const created = await this.identityRepo.createUserWithGoogleIdentity(
       {
-        username,
+        username: usernameCandidates[0],
+        usernameCandidates,
         displayName,
         email,
         phone: null,

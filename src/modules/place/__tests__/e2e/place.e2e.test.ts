@@ -299,6 +299,37 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
       userToken,
     );
     expect(live.status).toBe(200);
+
+    // #187: foto wisata = aksi publik -> event feed tertulis (AGENTS.md #25).
+    const { activityEvents } = await import(
+      "@/shared/database/drizzle/schema"
+    );
+    const { getTestDb: getDb } = await import(
+      "@/shared/database/drizzle/test-client"
+    );
+    const events = await getDb()
+      .select()
+      .from(activityEvents)
+      .where(eq(activityEvents.kind, "place_photo_added"));
+    expect(events).toHaveLength(1);
+    expect(events[0].targetId).toBe(place.id);
+    expect(events[0].dedupeKey).toBe(`place_photo:${place.id}:${extra}`);
+    expect(events[0].payload).toBe("Menambahkan foto wisata Pantai Usulan");
+
+    // Feed publik menampilkan event foto wisata.
+    const feed = await get("/api/v1/activity");
+    expect(feed.status).toBe(200);
+    const feedItems = (await feed.json()).data as Array<{
+      kind: string;
+      target: { type: string; id: string } | null;
+      subtitle: string | null;
+    }>;
+    const photoItem = feedItems.find((i) => i.kind === "place_photo");
+    expect(photoItem).toMatchObject({
+      target: { type: "place", id: "pantai-usulan-e2e" },
+      subtitle: "Pantai Usulan",
+    });
+
     const afterPhoto = (
       await (await get("/api/v1/places/pantai-usulan-e2e")).json()
     ).data;
@@ -503,5 +534,70 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
       userToken,
     );
     expect(authed.status).toBe(200);
+  });
+  it("#187: anonim dilarang unggah foto, tamu terautentikasi boleh", async () => {
+    const place = "pantai-usulan-e2e";
+    const anonymous = await post(`/api/v1/places/${place}/images`, {
+      urls: [
+        "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/anon.webp",
+      ],
+    });
+    expect(anonymous.status).toBe(401);
+    expect((await anonymous.json()).error_code).toBe("UNAUTHORIZED");
+  });
+
+  it("#187: takedown foto menyembunyikan foto + event feed-nya", async () => {
+    const place = "pantai-usulan-e2e";
+    const extra =
+      "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/takedown.webp";
+    expect(
+      (await post(`/api/v1/places/${place}/images`, { urls: [extra] }, userToken))
+        .status,
+    ).toBe(200);
+    const before = (await (await get(`/api/v1/places/${place}`)).json()).data;
+    const target = (
+      before.images as Array<{ id: string; url: string }>
+    ).find((img) => img.url === extra);
+    expect(target).toBeTruthy();
+
+    // Takedown admin: foto hilang dari galeri publik.
+    expect(
+      (await del(`/api/v1/admin/places/${before.id}/images/${target!.id}`, adminToken))
+        .status,
+    ).toBe(200);
+    const after = (await (await get(`/api/v1/places/${place}`)).json()).data;
+    expect(
+      (after.images as Array<{ url: string }>).some((img) => img.url === extra),
+    ).toBe(false);
+    expect(after.image_count).toBe(before.image_count - 1);
+
+    // Event batch yang memuat URL itu tersembunyi; batch lain tetap tayang.
+    const { activityEvents } = await import(
+      "@/shared/database/drizzle/schema"
+    );
+    const { getTestDb: getDb } = await import(
+      "@/shared/database/drizzle/test-client"
+    );
+    const events = await getDb()
+      .select()
+      .from(activityEvents)
+      .where(eq(activityEvents.kind, "place_photo_added"));
+    const hidden = events.find((e) => e.dedupeKey?.includes(extra));
+    expect(hidden?.hiddenAt).not.toBeNull();
+    expect(events.filter((e) => e.hiddenAt === null).length).toBe(
+      events.length - 1,
+    );
+  });
+
+  it("#187: takedown foto tak dikenal = 404", async () => {
+    const detail = (
+      await (await get("/api/v1/places/pantai-usulan-e2e")).json()
+    ).data;
+    const res = await del(
+      `/api/v1/admin/places/${detail.id}/images/01NOTAREALIMAGE0000000000`,
+      adminToken,
+    );
+    expect(res.status).toBe(404);
+    expect((await res.json()).error_code).toBe("IMAGE_NOT_FOUND");
   });
 });

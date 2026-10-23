@@ -36,6 +36,8 @@ export function createPublicPlaceRoutes(deps: {
   controller: PlaceController;
   /** Tanpa token = kredit ke user sistem anonim. */
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Tidak pernah 401: token basi = tamu. Dipakai beacon view. */
+  softAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
   routes.use("*", rateLimit({ points: 120, duration: 60 }));
@@ -111,7 +113,8 @@ export function createPublicPlaceRoutes(deps: {
     method: "post",
     path: "/:slug/view",
     tags: ["Places"],
-    summary: "Catat 1 view detail place (web + mobile)",
+    summary:
+      "Catat view detail place (web + mobile), unik per pembaca per hari",
     request: { params: slugParam },
     responses: {
       200: {
@@ -123,6 +126,10 @@ export function createPublicPlaceRoutes(deps: {
 
   routes.use("/:slug/images", async (c, next) => {
     if (c.req.method === "POST") return deps.optionalAuthenticate(c, next);
+    return next();
+  });
+  routes.use("/:slug/view", async (c, next) => {
+    if (c.req.method === "POST") return deps.softAuthenticate(c, next);
     return next();
   });
   routes.openapi(
@@ -250,6 +257,26 @@ export function createAdminPlaceRoutes(deps: {
     },
   });
 
+  const hideImageRoute = createRoute({
+    method: "delete",
+    path: "/:id/images/:imageId",
+    tags: ["Admin Places"],
+    summary: "Takedown foto tempat (sembunyikan + event feed ikut hilang)",
+    request: {
+      params: z.object({
+        id: z.string().min(1).max(64),
+        imageId: z.string().min(1).max(64),
+      }),
+    },
+    responses: {
+      200: { description: "Foto disembunyikan", content: json(okNullResponseSchema) },
+      404: {
+        description: "Foto tidak ditemukan",
+        content: json(errorResponseSchema),
+      },
+    },
+  });
+
   const viewPeriodQuery = z.object({
     days: z.coerce.number().int().min(1).max(365).default(30),
   });
@@ -322,6 +349,15 @@ export function createAdminPlaceRoutes(deps: {
   routes.openapi(
     deleteRoute,
     (c) => deps.controller.remove(c, c.req.param("id")) as never,
+  );
+  routes.openapi(
+    hideImageRoute,
+    (c) =>
+      deps.controller.hideImage(
+        c,
+        c.req.param("id"),
+        c.req.param("imageId"),
+      ) as never,
   );
   return routes;
 }

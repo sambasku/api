@@ -198,4 +198,77 @@ describe('ToggleVoteUseCase', () => {
     expect(activityEvents.safe).not.toHaveBeenCalled();
     expect(activityEvents.safeVoteVisibility).toHaveBeenCalledWith(USER, 'word', WORD_ID);
   });
+
+  // Vote per makna: kind event vote_meaning, wire tetap `vote`.
+  it('cast vote meaning → event vote_meaning tercatat (payload beku)', async () => {
+    const MEANING_ID = '01JDMEANINGMAKATN0000000A';
+    const voteRepo = {
+      targetExists: vi.fn().mockResolvedValue(true),
+      toggle: vi.fn().mockResolvedValue({ myVote: 1, upvotes: 1, downvotes: 0 }),
+      resolveWordOwnerForVoteTarget: vi.fn().mockResolvedValue({
+        wordId: WORD_ID,
+        lemma: 'makatn',
+        ownerUserId: USER,
+      }),
+    } as unknown as VoteRepository;
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined), safeVoteVisibility: vi.fn() };
+    const useCase = new ToggleVoteUseCase(
+      voteRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      activityEvents as never,
+    );
+
+    await useCase.execute({
+      userId: USER,
+      targetType: 'meaning',
+      targetId: MEANING_ID,
+      value: 1,
+    });
+
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'vote_meaning',
+        actorId: USER,
+        targetWordId: WORD_ID,
+        targetId: MEANING_ID,
+        dedupeKey: `vote:${USER}:meaning:${MEANING_ID}`,
+        payload: '"makatn" sudah pas',
+      }),
+    );
+  });
+
+  it('unvote meaning → visibility sync untuk meaning', async () => {
+    const MEANING_ID = '01JDMEANINGMAKATN0000000A';
+    const voteRepo = {
+      targetExists: vi.fn().mockResolvedValue(true),
+      toggle: vi.fn().mockResolvedValue({ myVote: null, upvotes: 0, downvotes: 0 }),
+      resolveWordOwnerForVoteTarget: vi.fn(),
+    } as unknown as VoteRepository;
+    const activityEvents = { safe: vi.fn(), safeVoteVisibility: vi.fn() };
+    const useCase = new ToggleVoteUseCase(
+      voteRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      activityEvents as never,
+    );
+
+    await useCase.execute({
+      userId: USER,
+      targetType: 'meaning',
+      targetId: MEANING_ID,
+      value: 1,
+    });
+
+    expect(activityEvents.safe).not.toHaveBeenCalled();
+    expect(activityEvents.safeVoteVisibility).toHaveBeenCalledWith(
+      USER,
+      'meaning',
+      MEANING_ID,
+    );
+  });
 });

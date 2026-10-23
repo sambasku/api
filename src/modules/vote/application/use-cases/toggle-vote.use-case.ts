@@ -79,8 +79,10 @@ export class ToggleVoteUseCase {
 
     if (result.myVote !== null) {
       // Event feed: vote tayang sebagai aktivitas. targetWordId diresolve
-      // best-effort; vote comment punya wordId lewat komentar induk.
-      if (this.activityEvents && (cmd.targetType === 'word' || cmd.targetType === 'comment')) {
+      // best-effort; vote comment punya wordId lewat komentar induk, vote
+      // meaning lewat makna induk.
+      const feedTargetTypes: VoteTargetType[] = ['word', 'comment', 'meaning'];
+      if (this.activityEvents && feedTargetTypes.includes(cmd.targetType)) {
         const resolved = await this.voteRepo
           .resolveWordOwnerForVoteTarget({ entityType: cmd.targetType, entityId: cmd.targetId })
           .catch(() => null);
@@ -93,7 +95,12 @@ export class ToggleVoteUseCase {
               ? `"${resolved.lemma}" perlu dicek ulang`
               : `"${resolved.lemma}" sudah pas`;
           await this.activityEvents.safe({
-            kind: cmd.targetType === 'word' ? 'vote_word' : 'vote_comment',
+            kind:
+              cmd.targetType === 'word'
+                ? 'vote_word'
+                : cmd.targetType === 'meaning'
+                  ? 'vote_meaning'
+                  : 'vote_comment',
             actorId: cmd.userId,
             targetWordId: resolved.wordId,
             targetId: cmd.targetId,
@@ -109,7 +116,12 @@ export class ToggleVoteUseCase {
         targetId: cmd.targetId,
         value: result.myVote,
       });
-    } else if (this.activityEvents && (cmd.targetType === 'word' || cmd.targetType === 'comment')) {
+    } else if (
+      this.activityEvents &&
+      (cmd.targetType === 'word' ||
+        cmd.targetType === 'comment' ||
+        cmd.targetType === 'meaning')
+    ) {
       // Unvote: baris vote dihapus hard - event feed-nya disembunyikan
       // (bukan dihapus; submit ulang menampilkan kembali, lihat dedupeKey).
       await this.activityEvents.safeVoteVisibility(

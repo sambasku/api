@@ -67,6 +67,11 @@ export type NewUser = Pick<User, 'username' | 'email' | 'passwordHash' | 'phone'
   roles?: UserRole[];
   /** Default DB aktif bila diabaikan. */
   isActive?: boolean;
+  /**
+   * Kandidat username berurutan (register/OAuth). Repo mencoba satu per satu
+   * lewat insert-retry atas UNIQUE; kosong = hanya `username`, konflik 409.
+   */
+  usernameCandidates?: string[];
   /** Default = username bila diabaikan saat save. */
   displayName?: string;
   bio?: string | null;

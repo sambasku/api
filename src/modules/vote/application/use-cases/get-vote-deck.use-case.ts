@@ -8,6 +8,8 @@ import {
 export interface GetVoteDeckQuery {
   limit: number;
   cursor?: string;
+  /** false = kronologis; default true (acak isi halaman per user). */
+  randomize?: boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export class GetVoteDeckUseCase {
     const page = await this.voteRepo.listDeckWords(userId, {
       limit: query.limit,
       cursor,
+      randomize: query.randomize,
     });
 
     return {

@@ -13,7 +13,7 @@ import type { FacebookTokenVerifierPort } from '../ports/facebook-token-verifier
 import type { TokenServicePort } from '../ports/token-service.port';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
 import { SocialConsentService } from '../utils/social-consent';
-import { allocateUniqueUsername, syntheticOauthEmail } from '../utils/username-slug';
+import { buildUsernameCandidates, syntheticOauthEmail } from '../utils/username-slug';
 
 const FACEBOOK_PROVIDER = 'facebook';
 const INVALID_MESSAGE = 'Tidak bisa masuk dengan Facebook.';
@@ -53,16 +53,12 @@ export class LoginWithFacebookUseCase {
     await this.consent.assertForNewUser(dto.consents);
 
     const displayName = (claims.name?.trim() || providerEmail.split('@')[0] || 'Pengguna').slice(0, 100);
-    const username = await allocateUniqueUsername(
-      (u) => this.userRepo.findByUsername(u),
-      claims.name,
-      providerEmail,
-      'facebook',
-    );
+    const usernameCandidates = buildUsernameCandidates(claims.name, providerEmail, 'facebook');
 
     const created = await this.identityRepo.createUserWithGoogleIdentity(
       {
-        username,
+        username: usernameCandidates[0],
+        usernameCandidates,
         displayName,
         email,
         phone: null,

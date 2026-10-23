@@ -273,18 +273,24 @@ describe('LoginWithGoogleUseCase', () => {
     });
   });
 
-  it('username bentrok → sufiks terpakai', async () => {
-    const { useCase, identityRepo } = makeDeps({
+  it('username bentrok → kandidat disiapkan, retry di repo (tanpa probe SELECT)', async () => {
+    const { useCase, identityRepo, userRepo } = makeDeps({
       identity: null,
       usernamesTaken: ['budi_santoso'],
     });
 
     await useCase.execute({ idToken: 'id-token' });
 
-    expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ username: 'budi_santoso_google' }),
-      expect.any(Object),
-    );
+    // Use case tidak lagi probe findByUsername - semua kandidat dikirim ke
+    // repo; urutan preferensi: base → base_provider → base_token_provider.
+    expect(userRepo.findByUsername).not.toHaveBeenCalled();
+    const createUser = identityRepo.createUserWithGoogleIdentity as ReturnType<typeof vi.fn>;
+    const arg = createUser.mock.calls[0][0];
+    expect(arg.username).toBe('budi_santoso');
+    const candidates: string[] = arg.usernameCandidates;
+    expect(candidates[0]).toBe('budi_santoso');
+    expect(candidates[1]).toBe('budi_santoso_google');
+    expect(candidates[2]).toMatch(/^budi_santoso_[a-z0-9]{5}_google$/);
   });
 
   it('verifier 503 GOOGLE_AUTH_UNAVAILABLE menjalar', async () => {

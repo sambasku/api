@@ -3,6 +3,7 @@ import { ForgotPasswordUseCase } from '../../application/use-cases/forgot-passwo
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { PasswordResetTokenRepository } from '../../domain/repositories/password-reset-token.repository';
 import type { MailerPort } from '../../application/ports/mailer.port';
+import type { AuthIdentityRepository } from '../../domain/repositories/auth-identity.repository';
 import type { User } from '../../domain/entities/user.entity';
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -34,28 +35,33 @@ function makeUser(overrides: Partial<User> = {}): User {
   };
 }
 
-function makeDeps(user: User | null) {
-  const userRepo = {
-    findByEmail: vi.fn().mockResolvedValue(user),
-  } as unknown as UserRepository;
-  const resetTokenRepo = {
-    create: vi.fn().mockResolvedValue({}),
-    invalidateUnusedForUser: vi.fn().mockResolvedValue(undefined),
-  } as unknown as PasswordResetTokenRepository;
-  const mailer = {
-    sendResetPasswordEmail: vi.fn().mockResolvedValue(undefined),
-    sendVerificationOtpEmail: vi.fn(),
-  } as unknown as MailerPort;
-  return {
-    resetTokenRepo,
-    mailer,
-    useCase: new ForgotPasswordUseCase(
-      userRepo,
-      resetTokenRepo,
-      mailer,
-      'https://app.test/reset-password',
-    ),
-  };
+function makeDeps(user: User | null, identities: { provider: string }[] = []) {
+const userRepo = {
+findByEmail: vi.fn().mockResolvedValue(user),
+} as unknown as UserRepository;
+const resetTokenRepo = {
+create: vi.fn().mockResolvedValue({}),
+invalidateUnusedForUser: vi.fn().mockResolvedValue(undefined),
+} as unknown as PasswordResetTokenRepository;
+const mailer = {
+sendResetPasswordEmail: vi.fn().mockResolvedValue(undefined),
+sendVerificationOtpEmail: vi.fn(),
+} as unknown as MailerPort;
+const identityRepo = {
+listActiveByUserId: vi.fn().mockResolvedValue(identities),
+} as unknown as AuthIdentityRepository;
+return {
+resetTokenRepo,
+mailer,
+identityRepo,
+useCase: new ForgotPasswordUseCase(
+userRepo,
+resetTokenRepo,
+mailer,
+'https://app.test/reset-password',
+identityRepo,
+),
+};
 }
 
 describe('ForgotPasswordUseCase', () => {
@@ -73,10 +79,37 @@ describe('ForgotPasswordUseCase', () => {
       '01TESTULIDUSERID00000000',
     );
     expect(resetTokenRepo.create).toHaveBeenCalledTimes(2);
-    expect(mailer.sendResetPasswordEmail).toHaveBeenCalledWith(
-      'budi@test.com',
-      expect.stringMatching(/^https:\/\/app\.test\/reset-password\?token=/),
-      expect.stringMatching(/^[0-9A-Z]{3}-[0-9A-Z]{3}$/),
-    );
-  });
+expect(mailer.sendResetPasswordEmail).toHaveBeenCalledWith(
+'budi@test.com',
+expect.stringMatching(/^https:\/\/app\.test\/reset-password\?token=/),
+expect.stringMatching(/^[0-9A-Z]{3}-[0-9A-Z]{3}$/),
+);
+});
+
+it('akun OAuth-only: error OAUTH_ACCOUNT + nama provider, tidak kirim email', async () => {
+const { useCase, mailer, resetTokenRepo } = makeDeps(
+makeUser({ passwordHash: null }),
+[{ provider: 'google' }],
+);
+await expect(useCase.execute({ email: 'budi@test.com' })).rejects.toMatchObject({
+errorCode: 'OAUTH_ACCOUNT',
+});
+expect(resetTokenRepo.create).not.toHaveBeenCalled();
+expect(mailer.sendResetPasswordEmail).not.toHaveBeenCalled();
+});
+
+it('akun OAuth-only + email sintetis: diam (tidak ada yang bisa dikasih tahu)', async () => {
+const { useCase, mailer } = makeDeps(
+makeUser({ passwordHash: null, email: 'go_12345@users.noreply.sambasku.local' }),
+[{ provider: 'google' }],
+);
+await useCase.execute({ email: 'go_12345@users.noreply.sambasku.local' });
+expect(mailer.sendResetPasswordEmail).not.toHaveBeenCalled();
+});
+
+it('akun tanpa password tapi tanpa identity OAuth: diam (tidak bocorkan info)', async () => {
+const { useCase, mailer } = makeDeps(makeUser({ passwordHash: null }), []);
+await useCase.execute({ email: 'budi@test.com' });
+expect(mailer.sendResetPasswordEmail).not.toHaveBeenCalled();
+});
 });

@@ -25,6 +25,16 @@ export interface ActivityEventRepository {
     hidden: boolean,
   ): Promise<void>;
 
-  /** Toggle sesuai keberadaan sumber (vote ada = tampil, vote dihapus = sembunyi). */
-  syncVoteVisibility(actorId: string, targetType: 'word' | 'comment', targetId: string): Promise<void>;
+/**
+   * #187: sembunyikan event foto wisata yang dedupe_key-nya memuat `url`
+   * (takedown admin). `instr`, bukan LIKE: `_` di URL bukan wildcard.
+   */
+  hidePlacePhoto(placeId: string, url: string): Promise<void>;
+
+/** Toggle sesuai keberadaan sumber (vote ada = tampil, vote dihapus = sembunyi). */
+syncVoteVisibility(
+  actorId: string,
+  targetType: 'word' | 'comment' | 'meaning',
+  targetId: string,
+): Promise<void>;
 }

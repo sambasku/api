@@ -19,7 +19,7 @@ export interface AddExampleDto {
 }
 
 // Kontribusi contoh kalimat (sample) pada makna existing
-// (03-api-kontribusi-verifikasi.md). Contributor → pending_review.
+// (03-api-kontribusi-verifikasi.md). Kontributor → pending_review.
 export class AddExampleUseCase {
   constructor(
     private readonly wordRepo: WordRepository,

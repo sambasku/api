@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
-import { activityEvents, searchMisses, users, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, places, searchMisses, users, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -35,9 +35,11 @@ const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   contribution_audio: 'word_audio',
   contribution_pron: 'pronunciation',
   contribution_example: 'example',
+  place_photo_added: 'place_photo',
   comment_created: 'comment',
-  vote_word: 'vote',
-  vote_comment: 'vote',
+vote_word: 'vote',
+vote_comment: 'vote',
+vote_meaning: 'vote',
   discussion_created: 'discussion',
   suggestion_applied: 'suggestion',
   suggestion_selfapply: 'suggestion',
@@ -57,9 +59,11 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   contribution_audio: 'Merekam suara',
   contribution_pron: 'Menambah cara baca',
   contribution_example: 'Menambah contoh kalimat',
+  place_photo_added: 'Menambah foto wisata',
   comment_created: '',
   vote_word: '',
   vote_comment: '',
+  vote_meaning: '',
   discussion_created: '',
   suggestion_applied: 'Mengusulkan perubahan',
   suggestion_selfapply: 'Melengkapi kata',
@@ -70,6 +74,13 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   card_shared: 'Membagikan kartu',
   announcement: 'Pengumuman',
 };
+
+/** Entity type votes untuk kind event vote (legacy hydration #94). */
+function voteEntityTypeOfKind(kind: ActivityEventKind): 'word' | 'comment' | 'meaning' {
+  if (kind === 'vote_word') return 'word';
+  if (kind === 'vote_meaning') return 'meaning';
+  return 'comment';
+}
 
 function quoted(s: string): string {
   return `"${s}"`;
@@ -108,10 +119,11 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'suggestion_applied',
     'suggestion_created',
     'contribution_submitted',
+    'place_photo_added',
   ],
   comment: ['comment_created'],
   verification: ['word_verified', 'suggestion_selfapply'],
-  vote: ['vote_word', 'vote_comment'],
+  vote: ['vote_word', 'vote_comment', 'vote_meaning'],
 };
 
 /** Mode merge profil: 1 query, 13 kind = gabungan 4 kategori (#103). */
@@ -153,6 +165,9 @@ interface FeedRow {
   /** #144: arah search-miss untuk di-wirer ke target.direction di feed. */
   missDirection: string | null;
   voteValue: number | null;
+  /** #187: tempat untuk place_photo_added (LEFT JOIN places, published saja). */
+  placeSlug: string | null;
+  placeName: string | null;
 }
 
 export class ActivityEventFeedRepositoryImpl {
@@ -293,12 +308,15 @@ export class ActivityEventFeedRepositoryImpl {
         return `Mengusulkan perubahan ${q}`.trim();
       case 'contribution_submitted':
         return `Mengusulkan kata baru ${q}`.trim();
+      case 'place_photo_added':
+        return 'Menambahkan foto wisata';
       case 'comment_created':
         return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
       case 'word_verified':
         return `Memverifikasi kata ${q}`.trim();
       case 'vote_word':
       case 'vote_comment':
+      case 'vote_meaning':
         // Kontrak feed lama: akhiran summary = arah vote (mobile parse ini).
         return voteValue === null || voteValue >= 0
           ? `${q} sudah pas`.trim()
@@ -395,6 +413,8 @@ export class ActivityEventFeedRepositoryImpl {
         // fallback arah vote utk event lama tanpa payload (#94) — diisi
         // batch terpisah sesudah rows terfetch (bukan JOIN per baris).
         voteValue: sql<number | null>`null`,
+        placeSlug: places.slug,
+        placeName: places.name,
       })
       .from(activityEvents)
       .leftJoin(
@@ -409,6 +429,15 @@ export class ActivityEventFeedRepositoryImpl {
       )
       .leftJoin(users, eq(users.id, activityEvents.actorId))
       .leftJoin(
+        places,
+        and(
+          eq(activityEvents.kind, 'place_photo_added'),
+          eq(places.id, activityEvents.targetId),
+          eq(places.status, 'published'),
+          sql`${places.deletedAt} is null`,
+        ),
+      )
+      .leftJoin(
         searchMisses,
         and(
           eq(activityEvents.kind, 'search_miss'),
@@ -421,6 +450,8 @@ export class ActivityEventFeedRepositoryImpl {
           // event yang menyebut kata harus lolos visibility kata;
           // event tanpa kata (welcome, search_miss tanpa word) tetap masuk.
           sql`(${activityEvents.targetWordId} is null or ${words.id} is not null)`,
+          // #187: foto wisata hanya tayang selama tempatnya published.
+          sql`(${activityEvents.kind} <> 'place_photo_added' or ${places.id} is not null)`,
         ),
       )
       .orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id))
@@ -438,7 +469,9 @@ export class ActivityEventFeedRepositoryImpl {
   private async hydrateLegacyVoteDirection(rows: FeedRow[]): Promise<void> {
     const pending = rows.filter(
       (r) =>
-        (r.kind === 'vote_word' || r.kind === 'vote_comment') &&
+        (r.kind === 'vote_word' ||
+          r.kind === 'vote_comment' ||
+          r.kind === 'vote_meaning') &&
         !r.payload?.trim() &&
         r.actorId &&
         r.targetId,
@@ -458,7 +491,7 @@ export class ActivityEventFeedRepositoryImpl {
           ...pending.map((r) =>
             and(
               eq(votes.userId, r.actorId!),
-              eq(votes.entityType, r.kind === 'vote_word' ? 'word' : 'comment'),
+              eq(votes.entityType, voteEntityTypeOfKind(r.kind as ActivityEventKind)),
               eq(votes.entityId, r.targetId!),
             ),
           ),
@@ -469,7 +502,9 @@ export class ActivityEventFeedRepositoryImpl {
     );
     for (const r of pending) {
       r.voteValue =
-        dir.get(`${r.actorId}:${r.kind === 'vote_word' ? 'word' : 'comment'}:${r.targetId}`) ??
+        dir.get(
+          `${r.actorId}:${voteEntityTypeOfKind(r.kind as ActivityEventKind)}:${r.targetId}`,
+        ) ??
         null;
     }
   }
@@ -514,7 +549,8 @@ export class ActivityEventFeedRepositoryImpl {
         : frozen !== null
           ? this.applyLemmaPlaceholder(frozen, lemma)
           : this.bodyFor(kind, lemma);
-    const subtitle = this.subtitleFor(kind, lemma);
+    const subtitle =
+      kind === 'place_photo_added' ? row.placeName : this.subtitleFor(kind, lemma);
     // #99: arah vote dari copy beku (#94) - event kind DB tetap vote_word/
     // vote_comment, split cuma di wire supaya feed home variatif tanpa
     // migrasi kinds (kinds DB = kontrak AGENTS.md #25).
@@ -675,6 +711,7 @@ export class ActivityEventFeedRepositoryImpl {
       targetId: string | null;
       targetWordId: string | null;
       missDirection: string | null;
+      placeSlug?: string | null;
     },
     word: { id: string; lemma: string } | null,
   ): ActivityItem['target'] {
@@ -693,8 +730,13 @@ export class ActivityEventFeedRepositoryImpl {
       case 'vote_word':
         return word ? { type: 'word', id: word.id } : null;
       case 'comment_created':
-        return row.targetId ? { type: 'word', id: row.targetId! } : null;
+        // #190: target wire = id KATA (navigasi detail kata), bukan id
+        // komentar yang tersimpan di targetId. Kontrak docs 37 + feed lama
+        // (activity.repository.impl listRecentComments pakai wordId).
+        return row.targetWordId ? { type: 'word', id: row.targetWordId! } : null;
       case 'vote_comment':
+        return row.targetWordId ? { type: 'word', id: row.targetWordId! } : null;
+      case 'vote_meaning':
         return row.targetWordId ? { type: 'word', id: row.targetWordId! } : null;
       case 'discussion_created':
         return row.targetId ? { type: 'discussion', id: row.targetId! } : null;
@@ -710,6 +752,8 @@ export class ActivityEventFeedRepositoryImpl {
                   : null,
             }
           : null;
+      case 'place_photo_added':
+        return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'user_joined':
         return row.targetId ? { type: 'user', id: row.targetId! } : null;
       case 'announcement':

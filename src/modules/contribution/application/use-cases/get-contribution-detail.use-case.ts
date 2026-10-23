@@ -34,7 +34,19 @@ export class GetContributionDetailUseCase {
 
     let entity: unknown;
     if (contribution.entityType === 'word') {
-      entity = await this.wordRepo.findDetailById(contribution.entityId, { includeAllStatuses: true });
+      const word = await this.wordRepo.findDetailById(contribution.entityId, {
+        includeAllStatuses: true,
+        includeDeleted: true,
+      });
+      // Lemma baru sering hanya menaut ke makna yang sudah ada (relasi atau
+      // kelompok). Baris makna sendiri kosong - muat makna sumber supaya
+      // review tidak menampilkan "Tidak ada makna."
+      if (word && Array.isArray(word.meanings) && word.meanings.length === 0) {
+        const linked = await this.wordRepo.findLinkedMeanings(contribution.entityId);
+        entity = linked.length > 0 ? { ...word, meanings: linked } : word;
+      } else {
+        entity = word;
+      }
     } else {
       entity = await this.contributionRepo.findChildWithParent(contribution.entityType, contribution.entityId);
     }

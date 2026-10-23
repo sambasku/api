@@ -171,6 +171,8 @@ export interface VoteDeckCursor {
 export interface VoteDeckListOptions {
   limit: number;
   cursor?: VoteDeckCursor;
+  /** true = acak isi halaman per user (deck mobile tidak seragam). */
+  randomize?: boolean;
 }
 
 export interface VoteDeckListResult {

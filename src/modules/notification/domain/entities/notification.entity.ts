@@ -22,6 +22,9 @@ export type InboxNotificationType =
 | 'verifier_application_rejected'
   | 'place_contribution_approved'
   | 'place_contribution_rejected'
+  | 'event_contribution_approved'
+  | 'event_contribution_rejected'
+  | 'event_contribution_needs_revision'
   | 'achievement_awarded';
 
 export type NotificationTargetKind =
@@ -32,6 +35,7 @@ export type NotificationTargetKind =
   | 'campaign'
   | 'verifier_application'
   | 'place_contribution'
+  | 'event_contribution'
   | 'achievement';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
@@ -41,7 +45,8 @@ export type NotificationActionKind =
   | 'suggestion'
 | 'discussion'
 | 'url'
-| 'place_contribution';
+| 'place_contribution'
+| 'event_contribution';
 
 export interface InboxNotification {
   id: string;
@@ -194,6 +199,24 @@ bodyType: 'plain',
       return {
         title: 'Usulan wisata ditolak',
         body: 'Usulanmu belum lolos tinjauan. Buka daftar usulan untuk detailnya.',
+        bodyType: 'plain',
+      };
+    case 'event_contribution_approved':
+      return {
+        title: 'Usulan acara disetujui',
+        body: 'Usulanmu sudah tayang di daftar acara. Terima kasih!',
+        bodyType: 'plain',
+      };
+    case 'event_contribution_rejected':
+      return {
+        title: 'Usulan acara ditolak',
+        body: 'Usulanmu belum lolos tinjauan. Buka daftar usulan untuk detailnya.',
+        bodyType: 'plain',
+      };
+    case 'event_contribution_needs_revision':
+      return {
+        title: 'Usulan acara perlu revisi',
+        body: 'Ada bagian yang perlu diperbaiki dulu. Buka daftar usulan untuk detailnya.',
         bodyType: 'plain',
       };
     case 'achievement_awarded':

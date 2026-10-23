@@ -14,9 +14,11 @@ export const ACTIVITY_EVENT_KINDS = [
   'contribution_audio',
   'contribution_pron',
   'contribution_example',
+  'place_photo_added',
   'comment_created',
   'vote_word',
   'vote_comment',
+  'vote_meaning',
   'discussion_created',
   'suggestion_applied',
   'suggestion_selfapply',
@@ -46,11 +48,15 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'pronunciation';
     case 'contribution_example':
       return 'example';
+    case 'place_photo_added':
+      return 'place_photo';
     case 'comment_created':
       return 'comment';
     case 'vote_word':
       return 'vote';
     case 'vote_comment':
+      return 'vote';
+    case 'vote_meaning':
       return 'vote';
     case 'discussion_created':
       return 'discussion';

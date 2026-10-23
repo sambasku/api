@@ -8,10 +8,18 @@ import {
 import { places } from "./places.schema";
 
 /**
- * Counter view detail place (wisata/kuliner/budaya) per hari - sumber
- * metrik "terpopuler" di console. Satu baris per (place, hari WIB),
- * upsert count+1 dari POST /places/:slug/view (web + mobile).
- * Pola sama dengan search_daily (docs/api/45-api-place-views.md).
+ * Viewer unik yang membuka detail place per hari - sumber metrik
+ * "terpopuler" di console (docs/api/45-api-place-views.md).
+ *
+ * Satu baris per (place, hari WIB, viewer). `viewer_key` yang menentukan
+ * identitas pembaca, bukan `count`:
+ * - `u:<user_id>`  - user login (stabil lintas perangkat)
+ * - `d:<device_id>` - anonim, device id dari header X-Device-Id
+ * - `ip:<ip>`      - fallback terakhir kalau device id absen
+ * - `legacy`       - baris hasil migrasi 0089 (sudah teragregasi, asal tidak diketahui)
+ *
+ * PK tiga kolom = dedupe di server. Insert pakai ON CONFLICT DO NOTHING,
+ * jadi 1 pembaca = 1 baris per hari (refresh berkali-kali tetap 1).
  */
 export const placeViews = sqliteTable(
   "place_views",
@@ -20,10 +28,13 @@ export const placeViews = sqliteTable(
       .notNull()
       .references(() => places.id),
     day: text("day").notNull(), // 'YYYY-MM-DD' WIB
-    count: integer("count").notNull().default(0),
+    /** Identitas pembaca (lihat daftar di atas). */
+    viewerKey: text("viewer_key").notNull(),
+    /** Selalu 1 - jumlah dihitung dari jumlah baris, bukan kolom ini. */
+    count: integer("count").notNull().default(1),
   },
   (t) => [
-    primaryKey({ columns: [t.placeId, t.day] }),
+    primaryKey({ columns: [t.placeId, t.day, t.viewerKey] }),
     // Rentang per periode (day >= from) lalu agregasi per place.
     index("place_views_day_idx").on(t.day),
   ],

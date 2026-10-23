@@ -33,6 +33,7 @@ export const FEED_CATEGORY_KINDS: Record<
     'suggestion_created',
     'suggestion_applied',
     'suggestion_selfapply',
+    'place_photo_added',
   ],
   announcement: ['announcement'],
   joined: ['user_joined'],

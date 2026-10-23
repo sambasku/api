@@ -246,17 +246,22 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     },
   });
 
-  const forgotPasswordRoute = createRoute({
-    method: 'post',
-    path: '/forgot-password',
-    tags: ['Auth'],
-    summary: 'Minta link reset password (response selalu sama, cegah enumeration)',
-    request: { body: { content: json(forgotPasswordSchema) } },
-    responses: {
-      200: { description: 'Link reset dikirim jika email terdaftar', content: json(forgotPasswordResponseSchema) },
-      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
-    },
-  });
+const forgotPasswordRoute = createRoute({
+method: 'post',
+path: '/forgot-password',
+tags: ['Auth'],
+summary:
+'Minta link reset password (response selalu sama, cegah enumeration). Error 400 OAUTH_ACCOUNT kalau akun login lewat OAuth',
+request: { body: { content: json(forgotPasswordSchema) } },
+responses: {
+200: { description: 'Link reset dikirim jika email terdaftar', content: json(forgotPasswordResponseSchema) },
+400: {
+description:
+'Body tidak valid, atau OAUTH_ACCOUNT (akun login via OAuth - reset password tidak bisa diproses)',
+content: json(errorResponseSchema),
+},
+},
+});
 
   const resetPasswordRoute = createRoute({
     method: 'post',

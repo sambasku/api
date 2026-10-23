@@ -33,26 +33,26 @@
     "db:backfill-consents": "tsx src/scripts/backfill-user-consents.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.1",
+    "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",
     "@libsql/client": "^0.18.0",
-    "@scalar/hono-api-reference": "^0.12.1",
+    "@scalar/hono-api-reference": "^0.12.13",
     "dotenv": "^17.4.2",
-    "drizzle-orm": "^0.45.2",
-    "hono": "^4.13.7",
-    "jose": "^6.2.12",
-    "nodemailer": "^10.0.1",
-    "rate-limiter-flexible": "^11.2.0",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "jose": "^6.2.13",
+    "nodemailer": "^10.2.0",
+    "rate-limiter-flexible": "^11.2.3",
     "tsx": "^4.23.15",
     "ulid": "^3.0.2",
-    "zod": "^4.5.4"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.5.0",
-    "@types/nodemailer": "^8.0.1",
-    "drizzle-kit": "^0.31.10",
+    "@types/node": "^26.6.5",
+    "@types/nodemailer": "^8.0.2",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0",
-    "wrangler": "^4.0.0"
+    "vitest": "^5.0.5",
+    "wrangler": "^4.151.3"
   }
 }
