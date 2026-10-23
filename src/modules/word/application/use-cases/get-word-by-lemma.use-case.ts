@@ -7,14 +7,10 @@ export class GetWordByLemmaUseCase {
   constructor(private readonly wordRepo: WordRepository) {}
 
   async execute(lemma: string): Promise<WordDetail> {
-    const id = await this.wordRepo.findPublishedIdByLemma(lemma);
-    if (!id) {
-      throw new NotFoundError('WORD_NOT_FOUND', 'Kata dengan lemma tersebut tidak ditemukan');
-    }
-    // Reuse logika detail by id (children published-only, dsb.)
-    const detail = await this.wordRepo.findDetailById(id);
+    // Resolusi lemma + detail dalam 2 round-trip Turso (dulu: 4 - id dulu,
+    // baru detail). Homonim & guard published ditangani repository.
+    const detail = await this.wordRepo.findPublishedDetailByLemma(lemma);
     if (!detail) {
-      // Race tipis: publish dicabut di antara dua query - treat 404
       throw new NotFoundError('WORD_NOT_FOUND', 'Kata dengan lemma tersebut tidak ditemukan');
     }
     return detail;

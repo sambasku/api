@@ -19,7 +19,7 @@ export function assertConsentsMatchActiveVersions(
   if (!active?.termsVersion || !active?.privacyVersion) {
     throw new BadRequestError(
       'CONSENT_REQUIRED',
-      'Dokumen legal belum dikonfigurasi. Coba lagi nanti.',
+      'Dokumen legal belum dikonfigurasi. Coba lagi dalam beberapa saat.',
     );
   }
 

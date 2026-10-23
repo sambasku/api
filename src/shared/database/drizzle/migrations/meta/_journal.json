@@ -666,6 +666,13 @@
       "when": 1801201500000,
       "tag": "0094_place_image_hidden",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1801201600000,
+      "tag": "0095_examples_meaning_idx",
+      "breakpoints": true
     }
   ]
 }

@@ -39,7 +39,7 @@ function errorMessage(kind: AnalyticsProviderErrorKind): string {
     case 'rate_limited':
       return 'Kuota Google Cloud Storage lagi penuh. Coba lagi beberapa menit lagi.';
     case 'upstream':
-      return 'Play Console export lagi bermasalah. Coba lagi nanti.';
+      return 'Play Console export lagi bermasalah. Coba lagi dalam beberapa saat.';
     case 'network':
       return 'Server gagal menghubungi Google Cloud Storage. Coba lagi sebentar lagi.';
   }

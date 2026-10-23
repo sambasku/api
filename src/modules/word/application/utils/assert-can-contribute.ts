@@ -37,7 +37,7 @@ export async function assertCanContribute(userId: string): Promise<void> {
   if (mutedUntil && mutedUntil.getTime() > Date.now()) {
     throw new ForbiddenError(
       'CONTRIBUTION_MUTED',
-      'Akun ini sementara tidak bisa mengirim konten. Coba lagi nanti.',
+      'Akun ini sementara tidak bisa mengirim konten. Coba lagi dalam beberapa saat.',
       [{ field: 'muted_until', message: mutedUntil.toISOString() }],
     );
   }

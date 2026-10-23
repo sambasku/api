@@ -32,7 +32,7 @@ function errorMessage(kind: MobileAnalyticsProviderErrorKind): string {
     case 'rate_limited':
       return 'Kuota Google lagi penuh. Coba lagi beberapa menit lagi.';
     case 'upstream':
-      return 'Google Analytics mobile lagi bermasalah. Coba lagi nanti.';
+      return 'Google Analytics mobile lagi bermasalah. Coba lagi dalam beberapa saat.';
     case 'network':
       return 'Server gagal menghubungi Google. Coba lagi sebentar lagi.';
   }

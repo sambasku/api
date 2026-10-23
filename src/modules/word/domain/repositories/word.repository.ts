@@ -360,9 +360,10 @@ export interface WordRepository {
    * Hindari findDetailById (~12 round-trip) saat old_data audit hanya butuh 3 field.
    */
   findAuditSnapshotById(id: string): Promise<WordAuditSnapshot | null>;
-  /** Resolusi URL publik /words/<lemma> → id entri published. Homonim
-   *  (lemma sama di >1 entri): terverifikasi & terlama menang (deterministik). */
-  findPublishedIdByLemma(lemma: string): Promise<string | null>;
+  /** URL publik /words/<lemma> - resolusi lemma + detail full dalam 2 round-trip
+   *  (word+meanings batch, children batch). Null = lemma tidak ada / tak published.
+   *  Homonim: terverifikasi & terlama menang (deterministik). */
+  findPublishedDetailByLemma(lemma: string): Promise<WordDetail | null>;
   /**
    * 28-api-word-of-the-day.md: id kata published untuk tanggal WIB
    * ('YYYY-MM-DD'). Deterministik: ORDER BY md5(id || ':' || date) -

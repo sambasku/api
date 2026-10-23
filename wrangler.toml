@@ -79,6 +79,12 @@ GITHUB_CLIENT_ID="Ov23liuhFjUQj3bh5uWE"
 [observability]
 enabled = true
 
+# Worker ditempatkan dekat DB (Turso) bukan dekat user: request ini 2-4 query
+# berantai, jadi tiap round-trip DB dibayar berkali-kali. Smart Placement
+# menganalisis pola trafik otomatis; tersedia di semua plan (Free termasuk).
+[placement]
+mode = "smart"
+
 # Lanjutkan campaign chunk + kirim yang terjadwal.
 [triggers]
 crons = ["* * * * *"]
@@ -141,6 +147,9 @@ GITHUB_CLIENT_ID="Ov23liEGNkEDuPNAhiTj"
 # [env.staging.limits] DIHAPUS - lihat catatan [limits] di atas (Free plan).
 [env.staging.observability]
 enabled = true
+
+[env.staging.placement]
+mode = "smart"
 
 [env.staging.triggers]
 crons = ["* * * * *"]

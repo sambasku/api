@@ -669,23 +669,6 @@ export class WordRepositoryImpl implements WordRepository {
     return [...byMeaning.values()];
   }
 
-  async findPublishedIdByLemma(lemma: string): Promise<string | null> {
-    const [row] = await this.db
-      .select({ id: words.id })
-      .from(words)
-      .where(
-        and(
-          sql`lower(${words.lemma}) = lower(${lemma.trim()})`,
-          eq(words.status, 'published'),
-          isNull(words.deletedAt),
-        ),
-      )
-      // Homonim: entri terverifikasi duluan, lalu terlama (deterministik)
-      .orderBy(desc(words.isVerified), words.createdAt)
-      .limit(1);
-    return row?.id ?? null;
-  }
-
   async findLinkedMeanings(wordId: string): Promise<WordDetail['meanings']> {
     const rows = await this.db
       .select({
@@ -780,11 +763,26 @@ export class WordRepositoryImpl implements WordRepository {
     id: string,
     opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
   ): Promise<WordDetail | null> {
+    return this.loadDetail({ kind: 'id', id }, opts);
+  }
+
+  /** URL publik /words/<lemma> - resolusi lemma + detail dalam SATU round-trip.
+   *  Sebelumnya use-case memanggil findPublishedIdByLemma lalu findDetailById
+   *  = 4 round-trip Turso; sekarang word+meanings di-batch (1) + children (1). */
+  async findPublishedDetailByLemma(lemma: string): Promise<WordDetail | null> {
+    return this.loadDetail({ kind: 'lemma', lemma });
+  }
+
+  private async loadDetail(
+    key: { kind: 'id'; id: string } | { kind: 'lemma'; lemma: string },
+    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+  ): Promise<WordDetail | null> {
     const includeAll = opts?.includeAllStatuses === true;
     const includeDeleted = opts?.includeDeleted === true;
     const verifierUsers = alias(users, 'word_verifier');
     const creatorUsers = alias(users, 'word_creator');
-    const [joined] = await this.db
+    const isLemma = key.kind === 'lemma';
+    const wordQuery = this.db
       .select({
         word: words,
         verifierUsername: verifierUsers.username,
@@ -809,20 +807,33 @@ export class WordRepositoryImpl implements WordRepository {
         eq(words.importSessionId, wordImportSessions.id),
       )
       .where(
-        includeAll
-          ? and(eq(words.id, id), includeDeleted ? undefined : isNull(words.deletedAt))
-          : and(eq(words.id, id), eq(words.status, 'published'), isNull(words.deletedAt)),
+        isLemma
+          ? and(
+              sql`lower(${words.lemma}) = lower(${key.lemma.trim()})`,
+              eq(words.status, 'published'),
+              isNull(words.deletedAt),
+            )
+          : includeAll
+            ? and(eq(words.id, key.id), includeDeleted ? undefined : isNull(words.deletedAt))
+            : and(eq(words.id, key.id), eq(words.status, 'published'), isNull(words.deletedAt)),
       )
+      // Homonim (mode lemma): entri terverifikasi duluan, lalu terlama.
+      // id-mode selalu <=1 baris (PK), jadi order ini sisa sort 1 baris - murah.
+      .orderBy(desc(words.isVerified), words.createdAt)
       .limit(1);
-    if (!joined) return null;
-    const wordRow = joined.word;
 
-    const meaningRows = await this.db
+    const meaningQuery = this.db
       .select()
       .from(meanings)
       .where(
         and(
-          eq(meanings.wordId, id),
+          // Correlated subquery lemma-mode supaya TIDAK perlu id word dulu
+          // (hemat round-trip); id-mode langsung literal id.
+          sql`${meanings.wordId} = ${
+            isLemma
+              ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.lemma.trim()}) AND w2.status = 'published' AND w2.deleted_at IS NULL ORDER BY w2.is_verified DESC, w2.created_at LIMIT 1)`
+              : key.id
+          }`,
           isNull(meanings.deletedAt),
           // 17: makna kontribusi (pending_review) tidak tayang publik -
           // pola examples/pronunciations di bawah; admin memakai includeAll
@@ -830,6 +841,33 @@ export class WordRepositoryImpl implements WordRepository {
         ),
       )
       .orderBy(meanings.orderIndex);
+
+    // word + meanings = 1 HTTP request (db.batch = 1 subrequest Hrana).
+    const mainResults = (await this.db.batch([wordQuery, meaningQuery] as never)) as unknown as [
+      Record<string, unknown>[],
+      (typeof meanings.$inferSelect)[],
+    ];
+    const joined = mainResults[0][0] as
+      | {
+          word: typeof words.$inferSelect;
+          verifierUsername: string | null;
+          verifierDisplayName: string | null;
+          verifierRole: string | null;
+          verifierDeletedAt: Date | null;
+          creatorUsername: string | null;
+          creatorDisplayName: string | null;
+          creatorRole: string | null;
+          creatorDeletedAt: Date | null;
+          sessionSupportName: string | null;
+          sessionSupportType: string | null;
+          sessionSupportAddress: string | null;
+          sessionSupportTitle: string | null;
+          sessionSupportDesc: string | null;
+        }
+      | undefined;
+    if (!joined) return null;
+    const wordRow = joined.word as typeof words.$inferSelect;
+    const meaningRows = mainResults[1];
 
     const wordClassIds = [...new Set(meaningRows.map((m) => m.wordClassId).filter((x): x is string => !!x))];
     const meaningIds = meaningRows.map((m) => m.id);
@@ -892,7 +930,7 @@ export class WordRepositoryImpl implements WordRepository {
         .select({ id: categories.id, name: categories.name })
         .from(wordCategories)
         .innerJoin(categories, eq(wordCategories.categoryId, categories.id))
-        .where(eq(wordCategories.wordId, id)),
+        .where(eq(wordCategories.wordId, wordRow.id)),
     );
 
     batchKeys.push('pronunciations');
@@ -902,7 +940,7 @@ export class WordRepositoryImpl implements WordRepository {
         .from(pronunciations)
         .where(
           and(
-            eq(pronunciations.wordId, id),
+            eq(pronunciations.wordId, wordRow.id),
             isNull(pronunciations.deletedAt),
             includeAll ? undefined : eq(pronunciations.status, 'published'),
           ),
@@ -916,7 +954,7 @@ export class WordRepositoryImpl implements WordRepository {
         .from(wordImages)
         .where(
           and(
-            eq(wordImages.wordId, id),
+            eq(wordImages.wordId, wordRow.id),
             isNull(wordImages.deletedAt),
             includeAll ? undefined : eq(wordImages.status, 'published'),
           ),
@@ -930,7 +968,7 @@ export class WordRepositoryImpl implements WordRepository {
         .from(wordAudios)
         .where(
           and(
-            eq(wordAudios.wordId, id),
+            eq(wordAudios.wordId, wordRow.id),
             isNull(wordAudios.deletedAt),
             includeAll ? undefined : eq(wordAudios.status, 'published'),
           ),
@@ -949,7 +987,7 @@ export class WordRepositoryImpl implements WordRepository {
         .innerJoin(words, eq(words.id, lexicalRelations.targetWordId))
         .where(
           and(
-            eq(lexicalRelations.sourceWordId, id),
+            eq(lexicalRelations.sourceWordId, wordRow.id),
             isNull(lexicalRelations.deletedAt),
             // PRD relasi-lemma: baris pending/rejected tidak tampil publik
             includeAll
@@ -976,7 +1014,7 @@ export class WordRepositoryImpl implements WordRepository {
         .innerJoin(words, eq(words.id, lexicalRelations.sourceWordId))
         .where(
           and(
-            eq(lexicalRelations.targetWordId, id),
+            eq(lexicalRelations.targetWordId, wordRow.id),
             isNull(lexicalRelations.deletedAt),
             includeAll
               ? undefined
@@ -995,7 +1033,7 @@ batchQueries.push(
 this.db
 .select()
 .from(wordVariants)
-.where(and(eq(wordVariants.wordId, id), isNull(wordVariants.deletedAt))),
+.where(and(eq(wordVariants.wordId, wordRow.id), isNull(wordVariants.deletedAt))),
 );
 // PRD relasi-lemma: kelompok makna published milik kata ini (hanya saat
 // publik; layar review tidak butuh - anggota pending tidak tayang).
@@ -1033,11 +1071,11 @@ isNull(wgmWord.deletedAt),
 )
 .where(
 and(
-eq(wgmSelf.wordId, id),
+eq(wgmSelf.wordId, wordRow.id),
 eq(wgmSelf.status, 'published'),
 isNull(wgmSelf.deletedAt),
 // kecuali kata ini sendiri di dalam kelompoknya
-ne(wgmWord.id, id),
+ne(wgmWord.id, wordRow.id),
 eq(wgmOther.status, 'published'),
 isNull(wgmOther.deletedAt),
 ),

@@ -37,7 +37,7 @@
     "@hono/zod-openapi": "^1.6.3",
     "@libsql/client": "^0.18.0",
     "@scalar/hono-api-reference": "^0.12.13",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.8",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.13",
     "jose": "^6.2.13",

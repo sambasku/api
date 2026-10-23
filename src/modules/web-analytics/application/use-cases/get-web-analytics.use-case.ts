@@ -63,7 +63,7 @@ function errorMessage(key: ProviderKey, kind: AnalyticsProviderErrorKind): strin
     case 'rate_limited':
       return `Kuota ${name} lagi penuh. Coba lagi beberapa menit lagi.`;
     case 'upstream':
-      return `${name} lagi bermasalah. Coba lagi nanti.`;
+      return `${name} lagi bermasalah. Coba lagi dalam beberapa saat.`;
     case 'network':
       return `Server gagal menghubungi ${name}. Coba lagi sebentar lagi.`;
   }
