@@ -673,6 +673,13 @@
       "when": 1801201600000,
       "tag": "0095_examples_meaning_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1801211000000,
+      "tag": "0096_events_poster_urls",
+      "breakpoints": true
     }
   ]
 }

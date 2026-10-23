@@ -145,7 +145,7 @@ export class EventContributionUseCases {
       lat: p.lat,
       lng: p.lng,
       mapsUrl: p.mapsUrl,
-      posterUrl: p.posterUrl,
+      posterUrls: p.posterUrls ?? [],
       organizer: p.organizer,
       sourceUrl: p.sourceUrl,
       sourceType: p.sourceType,

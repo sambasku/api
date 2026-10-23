@@ -48,6 +48,7 @@ export interface MentionUserRow {
 
 export type PublicActivityKind =
   | 'contribution'
+  | 'correction'
   | 'comment'
   | 'verification'
   | 'vote';

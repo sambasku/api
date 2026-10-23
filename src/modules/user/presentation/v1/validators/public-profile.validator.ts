@@ -46,7 +46,7 @@ export const publicProfileResponseSchema = z.object({
 });
 
 export const publicActivityQuerySchema = z.object({
-  kind: z.enum(['contribution', 'comment', 'verification', 'vote']).optional(),
+  kind: z.enum(['contribution', 'correction', 'comment', 'verification', 'vote']).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: opaqueId.optional(),
 });
@@ -59,7 +59,7 @@ export const publicActivityResponseSchema = z.object({
     items: z.array(
       z.object({
         id: z.string().length(26),
-        kind: z.enum(['contribution', 'comment', 'verification', 'vote']),
+        kind: z.enum(['contribution', 'correction', 'comment', 'verification', 'vote']),
         occurred_at: z.string(),
         word_id: z.string().nullable(),
         lemma: z.string().nullable(),

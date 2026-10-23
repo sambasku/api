@@ -31,7 +31,11 @@ export const submitEventContributionBodySchema = z
     lat: sambasLat,
     lng: sambasLng,
     maps_url: z.string().url().startsWith("https://").nullable().optional(),
-    poster_url: z.string().url().startsWith("https://").nullable().optional(),
+    poster_urls: z
+    .array(z.string().url().startsWith("https://"))
+    .max(10)
+    .optional(),
+
     organizer: z.string().max(200).nullable().optional(),
     /** Link original konten (FB/IG/website). Disimpan BERSIH tanpa UTM. */
     source_url: z.string().url().startsWith("https://").nullable().optional(),

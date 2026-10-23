@@ -33,7 +33,7 @@ function serialize(
     lat: number | null;
     lng: number | null;
     mapsUrl: string | null;
-    posterUrl: string | null;
+    posterUrls: string[];
     organizer: string | null;
     sourceUrl: string | null;
     sourceType: string | null;
@@ -71,7 +71,7 @@ function serialize(
     lat: event.lat,
     lng: event.lng,
     maps_url: event.mapsUrl,
-    poster_url: event.posterUrl,
+    poster_urls: event.posterUrls,
     organizer: event.organizer,
     source_url: event.sourceUrl,
     source_type: event.sourceType,
@@ -202,7 +202,7 @@ export class EventController {
         lat: body.lat,
         lng: body.lng,
         mapsUrl: body.maps_url,
-        posterUrl: body.poster_url,
+        posterUrls: body.poster_urls ?? [],
         organizer: body.organizer,
         sourceUrl: body.source_url,
         sourceType: body.source_type,
@@ -238,7 +238,7 @@ export class EventController {
         lat: body.lat,
         lng: body.lng,
         mapsUrl: body.maps_url,
-        posterUrl: body.poster_url,
+        posterUrls: body.poster_urls ?? [],
         organizer: body.organizer,
         sourceUrl: body.source_url,
         sourceType: body.source_type,

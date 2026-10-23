@@ -309,6 +309,20 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     expect(body.meta).toBeDefined();
   });
 
+  it('GET /users/:username/activity?kind=correction → set Perbaikan feed', async () => {
+    // #193: chip "Perbaikan" profil = kategori Perbaikan feed beranda
+    // (kontribusi media + usulan edit), bukan `contribution` lama.
+    const res = await get(
+      `/api/v1/users/${contributorUsername}/activity?kind=correction`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    for (const item of body.data.items) {
+      expect(item.kind).toBe('correction');
+    }
+    expect(body.meta).toBeDefined();
+  });
+
   it('GET username acak → 404 USER_NOT_FOUND', async () => {
     const res = await get('/api/v1/users/tidakada999');
     expect(res.status).toBe(404);

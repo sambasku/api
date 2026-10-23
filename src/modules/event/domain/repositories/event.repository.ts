@@ -19,7 +19,7 @@ export interface CreateEventInput {
   lat?: number | null;
   lng?: number | null;
   mapsUrl?: string | null;
-  posterUrl?: string | null;
+  posterUrls?: string[];
   organizer?: string | null;
   sourceUrl?: string | null;
   sourceType?: EventSourceType | null;
@@ -43,7 +43,7 @@ export interface UpdateEventInput {
   lat?: number | null;
   lng?: number | null;
   mapsUrl?: string | null;
-  posterUrl?: string | null;
+  posterUrls?: string[];
   organizer?: string | null;
   sourceUrl?: string | null;
   sourceType?: EventSourceType | null;

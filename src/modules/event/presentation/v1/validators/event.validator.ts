@@ -54,7 +54,11 @@ const eventBodyFields = {
   lat: sambasLat,
   lng: sambasLng,
   maps_url: z.string().url().startsWith("https://").nullable().optional(),
-  poster_url: z.string().url().startsWith("https://").nullable().optional(),
+  poster_urls: z
+    .array(z.string().url().startsWith("https://"))
+    .max(10)
+    .optional(),
+
   organizer: z.string().max(200).nullable().optional(),
   /** Link original konten (FB/IG/website). Disimpan BERSIH tanpa UTM. */
   source_url: z.string().url().startsWith("https://").nullable().optional(),
@@ -160,7 +164,7 @@ export const eventResponseSchema = z.object({
   lat: z.number().nullable(),
   lng: z.number().nullable(),
   maps_url: z.string().nullable(),
-  poster_url: z.string().nullable(),
+  poster_urls: z.array(z.string().nullable()),
   organizer: z.string().nullable(),
   source_url: z.string().nullable(),
   source_type: eventSourceTypeSchema.nullable(),

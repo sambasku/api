@@ -35,3 +35,8 @@ export function buildCampaignImagePath(mimeType: string): string {
 export function buildPlaceImagePath(mimeType: string): string {
   return `assets/places/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path poster acara: assets/events/<ulid>.<ext> */
+export function buildEventImagePath(mimeType: string): string {
+  return `assets/events/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

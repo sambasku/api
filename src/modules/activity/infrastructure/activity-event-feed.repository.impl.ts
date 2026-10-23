@@ -12,7 +12,7 @@ import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
-import type { ActivityCursor } from '../domain/merge-activity';
+import { FEED_CATEGORY_KINDS, type ActivityCursor } from '../domain/merge-activity';
 
 /**
  * Baca feed dari `activity_events` (write-through log) - pengganti agregasi
@@ -103,11 +103,18 @@ function cursorFromEventId(id: string): { id: string; createdAt: Date } {
 }
 
 /** Kategori timeline profil publik (19-api-profil-publik). */
-type ProfileCategory = 'contribution' | 'comment' | 'verification' | 'vote';
+type ProfileCategory =
+  | 'contribution'
+  | 'correction'
+  | 'comment'
+  | 'verification'
+  | 'vote';
 
 /**
- * Kind event -> kategori profil. Persis 4 set lama; kind lain (welcome,
- * search_miss, discussion, card_shared) memang tak pernah tayang di profil.
+ * Kind event -> kategori profil. Empat set lama (kontrak 19-api-profil-publik)
+ * tetap utuh; `correction` ditambahkan agar chip "Perbaikan" profil = set
+ * "Perbaikan" feed beranda (#193), bukan `contribution` yang masih memuat
+ * `word_created`/`contribution_submitted`.
  */
 const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
   contribution: [
@@ -121,6 +128,7 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'contribution_submitted',
     'place_photo_added',
   ],
+  correction: FEED_CATEGORY_KINDS.correction!,
   comment: ['comment_created'],
   verification: ['word_verified', 'suggestion_selfapply'],
   vote: ['vote_word', 'vote_comment', 'vote_meaning'],

@@ -43,7 +43,11 @@ export const events = sqliteTable(
     lat: real('lat'),
     lng: real('lng'),
     mapsUrl: text('maps_url'),
-    posterUrl: text('poster_url'),
+    /** Poster acara (bisa lebih dari satu). Urutan = urutan unggah, [0] dipakai sebagai sampul. */
+    posterUrls: text('poster_urls', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'`),
     /** Penyelenggara opsional (PRD 6.2): teks, bukan entitas. UI skip jika kosong. */
     organizer: text('organizer'),
     /** Link original konten (FB/IG/website) - disimpan bersih, UTM disisip saat render. */

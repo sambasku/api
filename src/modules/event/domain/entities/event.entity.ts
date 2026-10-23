@@ -35,7 +35,8 @@ export interface Event {
   lat: number | null;
   lng: number | null;
   mapsUrl: string | null;
-  posterUrl: string | null;
+  /** Poster acara (bisa lebih dari satu). [0] dipakai sebagai sampul. */
+  posterUrls: string[];
   /** Penyelenggara opsional (PRD 6.2): teks, bukan entitas. */
   organizer: string | null;
   /** Link original konten (FB/IG/website). Disimpan BERSIH tanpa UTM. */

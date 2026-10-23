@@ -57,7 +57,7 @@ function mapEvent(
     lat: row.lat ?? null,
     lng: row.lng ?? null,
     mapsUrl: row.mapsUrl ?? null,
-    posterUrl: row.posterUrl ?? null,
+    posterUrls: Array.isArray(row.posterUrls) ? row.posterUrls : [],
     organizer: row.organizer ?? null,
     sourceUrl: row.sourceUrl ?? null,
     sourceType: row.sourceType ?? null,
@@ -138,7 +138,7 @@ export class EventRepositoryImpl implements EventRepository {
           lat: input.lat ?? null,
           lng: input.lng ?? null,
           mapsUrl: input.mapsUrl ?? null,
-          posterUrl: input.posterUrl ?? null,
+          posterUrls: input.posterUrls ?? [],
           organizer: input.organizer ?? null,
           sourceUrl: input.sourceUrl ?? null,
           sourceType: input.sourceType ?? null,
@@ -184,7 +184,7 @@ export class EventRepositoryImpl implements EventRepository {
     if (input.lat !== undefined) values.lat = input.lat;
     if (input.lng !== undefined) values.lng = input.lng;
     if (input.mapsUrl !== undefined) values.mapsUrl = input.mapsUrl;
-    if (input.posterUrl !== undefined) values.posterUrl = input.posterUrl;
+    if (input.posterUrls !== undefined) values.posterUrls = input.posterUrls;
     if (input.organizer !== undefined) values.organizer = input.organizer;
     if (input.sourceUrl !== undefined) values.sourceUrl = input.sourceUrl;
     if (input.sourceType !== undefined) values.sourceType = input.sourceType;

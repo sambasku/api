@@ -174,6 +174,50 @@ describe.skipIf(!hasTestDb)("Event E2E - CRUD admin + usulan moderasi", () => {
     expect((await detail.json()).data.id).toBe(created.id);
   });
 
+  it("poster_urls multi gambar: tersimpan urut, [0] sampul, tolak >10", async () => {
+    const posters = Array.from(
+      { length: 3 },
+      (_, i) => `https://cdn.example.com/poster-${i + 1}.webp`,
+    );
+    const res = await post(
+      "/api/v1/admin/events",
+      eventBody({ slug: "multi-poster-e2e", poster_urls: posters }),
+      adminToken,
+    );
+    expect(res.status).toBe(200);
+    const created = (await res.json()).data;
+    expect(created.poster_urls).toEqual(posters);
+
+    // Detail publik juga membawa array urut.
+    const detail = await get("/api/v1/events/multi-poster-e2e");
+    expect(detail.status).toBe(200);
+    expect((await detail.json()).data.poster_urls).toEqual(posters);
+
+    // Usulan anonim membawa poster_urls -> payload tersimpan utuh.
+    const submit = await post(
+      "/api/v1/event-contributions",
+      eventBody({ slug: "diabaikan", poster_urls: posters.slice(0, 2) }),
+    );
+    expect(submit.status).toBe(200);
+    expect((await submit.json()).data.payload.poster_urls).toEqual(
+      posters.slice(0, 2),
+    );
+
+    // Lebih dari 10 poster ditolak validasi.
+    const overflow = await post(
+      "/api/v1/admin/events",
+      eventBody({
+        slug: "poster-overflow-e2e",
+        poster_urls: Array.from(
+          { length: 11 },
+          (_, i) => `https://cdn.example.com/too-many-${i}.webp`,
+        ),
+      }),
+      adminToken,
+    );
+    expect(overflow.status).toBe(400);
+  });
+
   it("katalog kategori acara: publik hanya published, admin boleh semua", async () => {
     const pub = await get("/api/v1/events/categories");
     expect(pub.status).toBe(200);

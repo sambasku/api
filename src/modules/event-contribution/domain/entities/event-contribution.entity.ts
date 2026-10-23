@@ -21,7 +21,7 @@ export interface EventContributionPayload {
   lat: number | null;
   lng: number | null;
   mapsUrl: string | null;
-  posterUrl: string | null;
+  posterUrls: string[];
   organizer: string | null;
   /** Link original konten (FB/IG/website) - disimpan BERSIH tanpa UTM. */
   sourceUrl: string | null;

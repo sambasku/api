@@ -27,7 +27,7 @@ const payload: EventContributionPayload = {
   lat: null,
   lng: null,
   mapsUrl: null,
-  posterUrl: null,
+  posterUrls: [],
   organizer: "Panitia",
   sourceUrl: "https://facebook.com/pawai.blocks",
   sourceType: "facebook",

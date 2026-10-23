@@ -1929,6 +1929,8 @@ app.route(
     controller: eventContributionController,
     authenticate,
     optionalAuthenticate,
+    uploadEventImage: (c) =>
+      publicImageController.upload(c, { purpose: "event" }),
   }),
 );
 app.route(

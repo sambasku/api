@@ -1,4 +1,5 @@
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import { authorizeRole } from "@/shared/middlewares/authorize-role.middleware";
@@ -37,6 +38,7 @@ export function createEventContributionRoutes(deps: {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Tanpa token, usulan diatribusikan ke user sistem anonim. */
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  uploadEventImage: (c: Context) => Promise<Response> | Response;
 }) {
   const routes = createOpenApiApp();
   routes.use("*", rateLimit({ points: 30, duration: 60 }));
@@ -44,12 +46,45 @@ export function createEventContributionRoutes(deps: {
     if (c.req.method === "POST") return deps.optionalAuthenticate(c, next);
     return deps.authenticate(c, next);
   });
-  // Tier ketat untuk request TANPA token (usulan anonim): 5/jam per IP.
+  // Tier ketat untuk request TANPA token (usulan anonim): submit 5/jam per IP,
+  // unggah poster 10/jam per IP (1 poster per usulan + margin).
   const anonSubmitLimit = rateLimit({ points: 5, duration: 60 * 60 });
+  const anonImageLimit = rateLimit({ points: 10, duration: 60 * 60 });
   routes.use("*", async (c, next) => {
     if (c.req.method !== "POST" || c.get("user")) return next();
-    return anonSubmitLimit(c, next);
+    const limiter = c.req.path.endsWith("/images") ? anonImageLimit : anonSubmitLimit;
+    return limiter(c, next);
   });
+  routes.use(
+    "/images",
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) =>
+        c.json(
+          {
+            success: false as const,
+            error_code: "IMAGE_TOO_LARGE",
+            message: "File gambar terlalu besar (maks 5 MB)",
+          },
+          400,
+        ),
+    }),
+  );
+
+  const uploadRoute = createRoute({
+    method: "post",
+    path: "/images",
+    tags: ["Event contributions"],
+    summary: "Unggah poster usulan acara (boleh tanpa login) - multipart field `file`",
+    responses: {
+      201: {
+        description: "Poster tersimpan",
+        content: json(z.object({ success: z.literal(true) }).passthrough()),
+      },
+      400: { description: "File tidak valid", content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(uploadRoute, (c) => deps.uploadEventImage(c) as never);
 
   const submitRoute = createRoute({
     method: "post",
