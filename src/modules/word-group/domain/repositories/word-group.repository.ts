@@ -48,7 +48,8 @@ export interface WordGroupRepository {
   create(input: CreateWordGroupInput): Promise<WordGroupRecord>;
   update(input: UpdateWordGroupInput): Promise<WordGroupRecord | null>;
   softDelete(id: string, deletedBy: string): Promise<boolean>;
-  findById(id: string): Promise<WordGroupRecord | null>;
+  /** publicOnly=true: hanya anggota status published & kata published. */
+  findById(id: string, publicOnly?: boolean): Promise<WordGroupRecord | null>;
   list(input: ListWordGroupsInput): Promise<ListWordGroupsResult>;
   addMember(input: AddWordGroupMemberInput): Promise<WordGroupRecord | null>;
   removeMember(groupId: string, wordId: string, deletedBy: string): Promise<boolean>;

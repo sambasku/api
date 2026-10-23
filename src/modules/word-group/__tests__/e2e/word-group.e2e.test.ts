@@ -205,6 +205,45 @@ describe.skipIf(!hasTestDb)('Word group E2E v1 - kelompok makna + moderasi (PRD 
       adminToken,
     );
     expect(rmAgain.status).toBe(404);
+
+    // Re-add setelah keluar harus sukses (revive baris soft-deleted),
+    // bukan 409 UNIQUE (edgecase: pernah keluar lalu mau masuk lagi).
+    const reAdd = await post(
+      `/api/v1/word-groups/by-id/members?id=${groupId}`,
+      { word_id: wordId2 },
+      adminToken,
+    );
+    expect(reAdd.status).toBe(200);
+    const reMembers = ((await reAdd.json()).data.members as { word_id: string }[]).map(
+      (m) => m.word_id,
+    );
+    expect(reMembers).toContain(wordId2);
+  });
+
+  it('endpoint publik hanya menampilkan anggota published dari kata published', async () => {
+    // Anggota pending_review: kata published tapi keanggotaan belum tayang.
+    const w3 = await post('/api/v1/admin/words', wordBody('selodang'), adminToken);
+    const wordId3 = (await w3.json()).data.word_id;
+    const memberPending = await post(
+      `/api/v1/word-groups/by-id/members?id=${groupId}`,
+      { word_id: wordId3, status: 'pending_review' },
+      adminToken,
+    );
+    expect(memberPending.status).toBe(200);
+
+    const publicOne = await get(`/api/v1/word-groups/by-id?id=${groupId}`);
+    expect(publicOne.status).toBe(200);
+    const publicIds = ((await publicOne.json()).data.members as { word_id: string }[]).map(
+      (m) => m.word_id,
+    );
+    expect(publicIds).not.toContain(wordId3);
+
+    // Endpoint admin tetap melihat yang pending (antrean moderasi).
+    const adminOne = await get(`/api/v1/word-groups/all/by-id?id=${groupId}`, adminToken);
+    const adminIds = ((await adminOne.json()).data.members as { word_id: string }[]).map(
+      (m) => m.word_id,
+    );
+    expect(adminIds).toContain(wordId3);
   });
 
   it('update nama/status → 200; soft-delete kelompok → hilang dari list', async () => {
