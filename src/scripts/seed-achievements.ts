@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 /**
  * Seed katalog achievement kohort:
  * - angkatan-ke-1 (profile_border): terdaftar sepanjang 2026 WIB.
- * - beta-tester (badge): pengguna fase closed testing 2024 - pertengahan 2025.
+ * - beta-tester (badge): pengguna fase closed testing 2024 - 12 Oktober 2026.
  *
  * Idempotent: INSERT ... ON CONFLICT(code) DO NOTHING. Award TIDAK
  * diberikan di sini - jalankan Scan di console (atau cron) untuk backfill.
@@ -36,7 +36,7 @@ const SEED_ACHIEVEMENTS = [
     badgeUrl: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/achievements/beta-tester.png',
     criteria: {
       source: 'registration',
-      window: { from: '2024-01-01T00:00:00+07:00', to: '2025-06-30T00:00:00+07:00' },
+      window: { from: '2024-01-01T00:00:00+07:00', to: '2026-10-13T00:00:00+07:00' },
     },
   },
 ] as const;
