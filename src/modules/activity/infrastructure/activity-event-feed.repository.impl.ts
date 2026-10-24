@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
-import { activityEvents, places, searchMisses, users, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -48,6 +48,7 @@ vote_meaning: 'vote',
   search_miss: 'search_miss',
   user_joined: 'welcome',
   card_shared: 'card_share',
+  usaha_published: 'usaha',
   announcement: 'announcement',
 };
 
@@ -72,6 +73,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   search_miss: '',
   user_joined: 'Bergabung di SambasKu',
   card_shared: 'Membagikan kartu',
+  usaha_published: 'Menambahkan usaha',
   announcement: 'Pengumuman',
 };
 
@@ -127,6 +129,7 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'suggestion_created',
     'contribution_submitted',
     'place_photo_added',
+    'usaha_published',
   ],
   correction: FEED_CATEGORY_KINDS.correction!,
   comment: ['comment_created'],
@@ -176,6 +179,9 @@ interface FeedRow {
   /** #187: tempat untuk place_photo_added (LEFT JOIN places, published saja). */
   placeSlug: string | null;
   placeName: string | null;
+  /** Usaha untuk usaha_published (LEFT JOIN usahas, published saja). */
+  usahaSlug: string | null;
+  usahaName: string | null;
 }
 
 export class ActivityEventFeedRepositoryImpl {
@@ -316,8 +322,10 @@ export class ActivityEventFeedRepositoryImpl {
         return `Mengusulkan perubahan ${q}`.trim();
       case 'contribution_submitted':
         return `Mengusulkan kata baru ${q}`.trim();
-      case 'place_photo_added':
-        return 'Menambahkan foto wisata';
+    case 'place_photo_added':
+      return 'Menambahkan foto wisata';
+    case 'usaha_published':
+      return 'Menambahkan usaha';
       case 'comment_created':
         return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
       case 'word_verified':
@@ -421,10 +429,12 @@ export class ActivityEventFeedRepositoryImpl {
         // fallback arah vote utk event lama tanpa payload (#94) — diisi
         // batch terpisah sesudah rows terfetch (bukan JOIN per baris).
         voteValue: sql<number | null>`null`,
-        placeSlug: places.slug,
-        placeName: places.name,
-      })
-      .from(activityEvents)
+      placeSlug: places.slug,
+      placeName: places.name,
+      usahaSlug: usahas.slug,
+      usahaName: usahas.name,
+    })
+    .from(activityEvents)
       .leftJoin(
         words,
         and(
@@ -445,21 +455,32 @@ export class ActivityEventFeedRepositoryImpl {
           sql`${places.deletedAt} is null`,
         ),
       )
-      .leftJoin(
-        searchMisses,
-        and(
-          eq(activityEvents.kind, 'search_miss'),
-          eq(searchMisses.id, activityEvents.targetId),
-        ),
-      )
+    .leftJoin(
+      usahas,
+      and(
+        eq(activityEvents.kind, 'usaha_published'),
+        eq(usahas.id, activityEvents.targetId),
+        eq(usahas.publishStatus, 'published'),
+        sql`${usahas.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      searchMisses,
+      and(
+        eq(activityEvents.kind, 'search_miss'),
+        eq(searchMisses.id, activityEvents.targetId),
+      ),
+    )
       .where(
         and(
           ...conds,
           // event yang menyebut kata harus lolos visibility kata;
           // event tanpa kata (welcome, search_miss tanpa word) tetap masuk.
           sql`(${activityEvents.targetWordId} is null or ${words.id} is not null)`,
-          // #187: foto wisata hanya tayang selama tempatnya published.
-          sql`(${activityEvents.kind} <> 'place_photo_added' or ${places.id} is not null)`,
+        // #187: foto wisata hanya tayang selama tempatnya published.
+        sql`(${activityEvents.kind} <> 'place_photo_added' or ${places.id} is not null)`,
+        // Usaha hanya tayang selama masih published (visibility read-time).
+        sql`(${activityEvents.kind} <> 'usaha_published' or ${usahas.id} is not null)`,
         ),
       )
       .orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id))
@@ -558,7 +579,11 @@ export class ActivityEventFeedRepositoryImpl {
           ? this.applyLemmaPlaceholder(frozen, lemma)
           : this.bodyFor(kind, lemma);
     const subtitle =
-      kind === 'place_photo_added' ? row.placeName : this.subtitleFor(kind, lemma);
+      kind === 'place_photo_added'
+        ? row.placeName
+        : kind === 'usaha_published'
+          ? row.usahaName
+          : this.subtitleFor(kind, lemma);
     // #99: arah vote dari copy beku (#94) - event kind DB tetap vote_word/
     // vote_comment, split cuma di wire supaya feed home variatif tanpa
     // migrasi kinds (kinds DB = kontrak AGENTS.md #25).
@@ -669,8 +694,10 @@ export class ActivityEventFeedRepositoryImpl {
         return lemma ? `Mengusulkan perubahan · ${quoted(lemma)}` : 'Mengusulkan perubahan';
       case 'suggestion_selfapply':
         return lemma ? `Melengkapi kata · ${quoted(lemma)}` : 'Melengkapi kata';
-      case 'card_shared':
-        return lemma ? `Membagikan kartu · ${quoted(lemma)}` : 'Membagikan kartu';
+    case 'card_shared':
+      return lemma ? `Membagikan kartu · ${quoted(lemma)}` : 'Membagikan kartu';
+    case 'usaha_published':
+      return KIND_BODY[kind];
       case 'search_miss':
         return lemma ? `Mencari "${lemma}" - belum ada di kamus.` : 'Mencari - belum ada di kamus.';
       case 'contribution_submitted':
@@ -720,6 +747,7 @@ export class ActivityEventFeedRepositoryImpl {
       targetWordId: string | null;
       missDirection: string | null;
       placeSlug?: string | null;
+      usahaSlug?: string | null;
     },
     word: { id: string; lemma: string } | null,
   ): ActivityItem['target'] {
@@ -762,6 +790,8 @@ export class ActivityEventFeedRepositoryImpl {
           : null;
       case 'place_photo_added':
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
+      case 'usaha_published':
+        return row.usahaSlug ? { type: 'usaha', id: row.usahaSlug } : null;
       case 'user_joined':
         return row.targetId ? { type: 'user', id: row.targetId! } : null;
       case 'announcement':

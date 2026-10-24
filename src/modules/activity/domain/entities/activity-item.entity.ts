@@ -17,7 +17,8 @@ export type ActivityKind =
   | 'vote_up'
   | 'vote_down'
   | 'announcement'
-  | 'place_photo';
+  | 'place_photo'
+  | 'usaha';
 
 export interface ActivityActor {
   username: string | null;

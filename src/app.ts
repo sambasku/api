@@ -296,6 +296,61 @@ import {
   createAdminEventContributionRoutes,
   createEventContributionRoutes,
 } from "@/modules/event-contribution/presentation/v1/event-contribution.routes";
+// Fitur Usaha (PRD usaha): direktori usaha + usulan + klaim + laporan.
+import { UsahaCategoryRepositoryImpl } from "@/modules/usaha-category/infrastructure/usaha-category.repository.impl";
+import {
+  CreateUsahaCategoryUseCase,
+  DeleteUsahaCategoryUseCase,
+  GetUsahaCategoryUseCase,
+  ListUsahaCategoriesUseCase as ListUsahaCategoryCatalogUseCase,
+  UpdateUsahaCategoryUseCase,
+} from "@/modules/usaha-category/application/use-cases/usaha-category.use-cases";
+import { UsahaCategoryController } from "@/modules/usaha-category/presentation/v1/usaha-category.controller";
+import {
+  createAdminUsahaCategoryRoutes,
+  createPublicUsahaCategoryRoutes,
+} from "@/modules/usaha-category/presentation/v1/usaha-category.routes";
+import { UsahaRepositoryImpl } from "@/modules/usaha/infrastructure/usaha.repository.impl";
+import {
+  CreateUsahaUseCase,
+  DeleteUsahaUseCase,
+  FindUsahaDuplicatesUseCase,
+  GetUsahaBySlugUseCase,
+  ListUsahaCategoriesUseCase,
+  ListUsahasUseCase,
+  RestoreUsahaUseCase,
+  RestrictUsahaUseCase,
+  UniqueUsahaSlugUseCase,
+  UpdateUsahaUseCase,
+} from "@/modules/usaha/application/use-cases/usaha.use-cases";
+import { ListMyUsahaUseCase } from "@/modules/usaha/application/use-cases/list-my-usaha.use-case";
+import { UsahaController } from "@/modules/usaha/presentation/v1/usaha.controller";
+import {
+  createAdminUsahaRoutes,
+  createPublicUsahaRoutes,
+} from "@/modules/usaha/presentation/v1/usaha.routes";
+import { createUsahaMineRoutes } from "@/modules/usaha/presentation/v1/usaha-mine.routes";
+import { UsahaContributionRepositoryImpl } from "@/modules/usaha-contribution/infrastructure/usaha-contribution.repository.impl";
+import { UsahaContributionUseCases } from "@/modules/usaha-contribution/application/usaha-contribution.use-cases";
+import { UsahaContributionController } from "@/modules/usaha-contribution/presentation/v1/usaha-contribution.controller";
+import {
+  createAdminUsahaContributionRoutes,
+  createUsahaContributionRoutes,
+} from "@/modules/usaha-contribution/presentation/v1/usaha-contribution.routes";
+import { UsahaClaimRepositoryImpl } from "@/modules/usaha-claim/infrastructure/usaha-claim.repository.impl";
+import { UsahaClaimUseCases } from "@/modules/usaha-claim/application/usaha-claim.use-cases";
+import { UsahaClaimController } from "@/modules/usaha-claim/presentation/v1/usaha-claim.controller";
+import {
+  createAdminUsahaClaimRoutes,
+  createUsahaClaimRoutes,
+} from "@/modules/usaha-claim/presentation/v1/usaha-claim.routes";
+import { UsahaReportRepositoryImpl } from "@/modules/usaha-report/infrastructure/usaha-report.repository.impl";
+import { UsahaReportUseCases } from "@/modules/usaha-report/application/usaha-report.use-cases";
+import { UsahaReportController } from "@/modules/usaha-report/presentation/v1/usaha-report.controller";
+import {
+  createAdminUsahaReportRoutes,
+  createUsahaReportRoutes,
+} from "@/modules/usaha-report/presentation/v1/usaha-report.routes";
 import { PlaceCategoryRepositoryImpl } from "@/modules/place-category/infrastructure/place-category.repository.impl";
 import {
   CreatePlaceCategoryUseCase,
@@ -1114,6 +1169,63 @@ const eventContributionController = new EventContributionController(
     recordInbox,
     notifyUser,
   ),
+);
+
+// ---- Fitur Usaha (PRD usaha) - direktori usaha & jasa lokal ----
+const usahaRepo = new UsahaRepositoryImpl(db);
+const usahaCategoryRepo = new UsahaCategoryRepositoryImpl(db);
+const usahaCategoryController = new UsahaCategoryController(
+  new CreateUsahaCategoryUseCase(usahaCategoryRepo),
+  new UpdateUsahaCategoryUseCase(usahaCategoryRepo),
+  new DeleteUsahaCategoryUseCase(usahaCategoryRepo),
+  new ListUsahaCategoryCatalogUseCase(usahaCategoryRepo),
+  new GetUsahaCategoryUseCase(usahaCategoryRepo),
+);
+const createUsahaUc = new CreateUsahaUseCase(usahaRepo, regionRepo);
+const usahaController = new UsahaController(
+  createUsahaUc,
+  new UpdateUsahaUseCase(usahaRepo, regionRepo),
+  new DeleteUsahaUseCase(usahaRepo),
+  new ListUsahasUseCase(usahaRepo),
+  new GetUsahaBySlugUseCase(usahaRepo),
+  new RestrictUsahaUseCase(usahaRepo),
+  new RestoreUsahaUseCase(usahaRepo),
+  new ListUsahaCategoriesUseCase(usahaRepo),
+  new FindUsahaDuplicatesUseCase(usahaRepo),
+);
+const usahaContributionRepo = new UsahaContributionRepositoryImpl(db);
+const usahaClaimRepo = new UsahaClaimRepositoryImpl(db);
+const usahaContributionUseCases = new UsahaContributionUseCases(
+  usahaContributionRepo,
+  usahaRepo,
+  regionRepo,
+  createUsahaUc,
+  new UniqueUsahaSlugUseCase(usahaRepo),
+  usahaClaimRepo,
+  auditRepo,
+  recordInbox,
+  notifyUser,
+  activityEventRepo,
+);
+const usahaContributionController = new UsahaContributionController(
+  usahaContributionUseCases,
+);
+const usahaClaimUseCases = new UsahaClaimUseCases(
+  usahaClaimRepo,
+  usahaRepo,
+  auditRepo,
+  recordInbox,
+  notifyUser,
+  activityEventRepo,
+);
+const usahaClaimController = new UsahaClaimController(usahaClaimUseCases);
+const usahaReportController = new UsahaReportController(
+  new UsahaReportUseCases(new UsahaReportRepositoryImpl(db), usahaRepo, auditRepo),
+);
+const listMyUsahaUc = new ListMyUsahaUseCase(
+  usahaRepo,
+  usahaContributionRepo,
+  usahaClaimRepo,
 );
 
 const categoryRepo = new CategoryRepositoryImpl(db);
@@ -1936,6 +2048,70 @@ app.route(
 app.route(
   "/api/v1/place-categories",
   createPublicPlaceCategoryRoutes({ controller: placeCategoryController }),
+);
+
+// Fitur Usaha - direktori usaha & jasa lokal (PRD usaha).
+// Urutan penting: `/usaha/mine` + usulan/klaim/laporan didaftarkan SEBELUM
+// route publik `/usaha/:slug` supaya segmen statis tidak tertelan param.
+app.route(
+  "/api/v1/admin/usaha",
+  createAdminUsahaRoutes({ controller: usahaController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/usaha-categories",
+  createAdminUsahaCategoryRoutes({
+    controller: usahaCategoryController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/usaha-contributions",
+  createAdminUsahaContributionRoutes({
+    controller: usahaContributionController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/usaha-claims",
+  createAdminUsahaClaimRoutes({
+    controller: usahaClaimController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/usaha-reports",
+  createAdminUsahaReportRoutes({
+    controller: usahaReportController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/usaha",
+  createUsahaMineRoutes({ listMyUc: listMyUsahaUc, authenticate }),
+);
+app.route(
+  "/api/v1/usaha",
+  createUsahaClaimRoutes({ controller: usahaClaimController, authenticate }),
+);
+app.route(
+  "/api/v1/usaha",
+  createUsahaReportRoutes({ controller: usahaReportController, authenticate }),
+);
+app.route(
+  "/api/v1/usaha-contributions",
+  createUsahaContributionRoutes({
+    controller: usahaContributionController,
+    authenticate,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/usaha-categories",
+  createPublicUsahaCategoryRoutes({ controller: usahaCategoryController }),
+);
+app.route(
+  "/api/v1/usaha",
+  createPublicUsahaRoutes({ controller: usahaController, optionalAuthenticate }),
 );
 // PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
 app.route(

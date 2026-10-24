@@ -38,6 +38,12 @@ import {
   passwordResetTokens,
   placeContributions,
   placeImages,
+  usahaContributions,
+  usahaClaims,
+  usahaReports,
+  usahaItems,
+  usahas,
+  usahaCategories,
   eventContributions,
   eventPlaces,
   events,
@@ -285,6 +291,30 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
       })),
     )
     .onConflictDoNothing();
+
+  // Seed sama dengan migrasi 0097_usaha (truncateAll menghapus katalog).
+  await db
+    .insert(usahaCategories)
+    .values(
+      [
+        ["kuliner", "Kuliner"],
+        ["jasa", "Jasa"],
+        ["toko-kelontong", "Toko dan Kelontong"],
+        ["pertanian", "Pertanian"],
+        ["perikanan", "Perikanan"],
+        ["kerajinan", "Kerajinan"],
+        ["jasa-otomotif", "Jasa Otomotif"],
+        ["laundry", "Laundry"],
+        ["lainnya", "Lainnya"],
+      ].map(([id, name], i) => ({
+        id: id!,
+        name: name!,
+        sortOrder: i,
+        status: "published" as const,
+        createdAt: now,
+      })),
+    )
+    .onConflictDoNothing();
 }
 
 // Hapus semua tabel dalam urutan aman FK (anak dulu) - pakai ini di
@@ -365,6 +395,13 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     placeViews,
     places,
     placeCategories,
+    // Usaha (anak dulu: contributions/claims/reports -> items -> usahas)
+    usahaContributions,
+    usahaClaims,
+    usahaReports,
+    usahaItems,
+    usahas,
+    usahaCategories,
     // Event/acara (FK event_places -> places/events) - anak dulu
     eventContributions,
     eventPlaces,

@@ -17,6 +17,8 @@ import {
   places,
 } from "@/shared/database/drizzle/schema/places.schema";
 import { placeViews } from "@/shared/database/drizzle/schema/place-views.schema";
+import { usahas } from "@/shared/database/drizzle/schema/usahas.schema";
+import { usahaCategories } from "@/shared/database/drizzle/schema/usaha-categories.schema";
 import { searchDayWib } from "@/shared/database/drizzle/schema/search-daily.schema";
 import { ilikeCompat } from "@/shared/database/drizzle/ilike-compat";
 import { generateId } from "@/shared/utils/ulid";
@@ -469,7 +471,40 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     const placeSlugs = related
       .filter((r) => r.kind === "place")
       .map((r) => r.slug);
+    const usahaSlugs = related
+      .filter((r) => r.kind === "usaha")
+      .map((r) => r.slug);
     const found = new Map<string, PlaceRelatedCard>();
+    const usahaFound = new Map<string, PlaceRelatedCard>();
+    if (usahaSlugs.length > 0) {
+      // Satu query batch (rule #26: JOIN/IN, bukan N panggilan).
+      const rows = await this.db
+        .select({
+          slug: usahas.slug,
+          name: usahas.name,
+          coverUrl: usahas.coverUrl,
+          categoryName: usahaCategories.name,
+        })
+        .from(usahas)
+        .leftJoin(usahaCategories, eq(usahaCategories.id, usahas.categoryId))
+        .where(
+          and(
+            inArray(usahas.slug, usahaSlugs),
+            eq(usahas.publishStatus, "published"),
+            isNull(usahas.deletedAt),
+          ),
+        );
+      for (const row of rows) {
+        usahaFound.set(row.slug, {
+          kind: "usaha",
+          slug: row.slug,
+          name: row.name,
+          category: row.categoryName ?? null,
+          type: null,
+          coverUrl: row.coverUrl ?? null,
+        });
+      }
+    }
     if (placeSlugs.length > 0) {
       const rows = await this.db
         .select({
@@ -507,14 +542,17 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     const cards: PlaceRelatedCard[] = [];
     for (const item of related) {
       if (item.kind === "usaha") {
-        cards.push({
-          kind: "usaha",
-          slug: item.slug,
-          name: null,
-          category: null,
-          type: null,
-          coverUrl: null,
-        });
+        const usaha = usahaFound.get(item.slug);
+        cards.push(
+          usaha ?? {
+            kind: "usaha",
+            slug: item.slug,
+            name: null,
+            category: null,
+            type: null,
+            coverUrl: null,
+          },
+        );
         continue;
       }
       const card = found.get(item.slug);

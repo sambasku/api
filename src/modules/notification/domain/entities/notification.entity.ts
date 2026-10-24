@@ -25,6 +25,11 @@ export type InboxNotificationType =
   | 'event_contribution_approved'
   | 'event_contribution_rejected'
   | 'event_contribution_needs_revision'
+  | 'usaha_contribution_approved'
+  | 'usaha_contribution_rejected'
+  | 'usaha_contribution_needs_revision'
+  | 'usaha_claim_approved'
+  | 'usaha_claim_rejected'
   | 'achievement_awarded';
 
 export type NotificationTargetKind =
@@ -36,6 +41,8 @@ export type NotificationTargetKind =
   | 'verifier_application'
   | 'place_contribution'
   | 'event_contribution'
+  | 'usaha_contribution'
+  | 'usaha_claim'
   | 'achievement';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
@@ -46,7 +53,9 @@ export type NotificationActionKind =
 | 'discussion'
 | 'url'
 | 'place_contribution'
-| 'event_contribution';
+| 'event_contribution'
+| 'usaha_contribution'
+| 'usaha_claim';
 
 export interface InboxNotification {
   id: string;
@@ -219,8 +228,38 @@ bodyType: 'plain',
         body: 'Ada bagian yang perlu diperbaiki dulu. Buka daftar usulan untuk detailnya.',
         bodyType: 'plain',
       };
-    case 'achievement_awarded':
-      // Title/body spesifik achievement selalu dari caller (bukan copy bawaan).
-      return { title: 'Pencapaian baru', body: '', bodyType: 'plain' };
-    }
+  case 'achievement_awarded':
+    // Title/body spesifik achievement selalu dari caller (bukan copy bawaan).
+    return { title: 'Pencapaian baru', body: '', bodyType: 'plain' };
+  case 'usaha_contribution_approved':
+    return {
+      title: 'Usulan usaha disetujui',
+      body: 'Usulanmu sudah tayang di daftar usaha. Terima kasih!',
+      bodyType: 'plain',
+    };
+  case 'usaha_contribution_rejected':
+    return {
+      title: 'Usulan usaha ditolak',
+      body: 'Usulanmu belum lolos tinjauan. Buka daftar usulan untuk detailnya.',
+      bodyType: 'plain',
+    };
+  case 'usaha_contribution_needs_revision':
+    return {
+      title: 'Usulan usaha perlu revisi',
+      body: 'Ada bagian yang perlu diperbaiki dulu. Buka daftar usulan untuk detailnya.',
+      bodyType: 'plain',
+    };
+  case 'usaha_claim_approved':
+    return {
+      title: 'Klaim usaha disetujui',
+      body: 'Kamu sekarang jadi pengelola usaha ini. Buka Usaha Saya untuk mulai mengelola.',
+      bodyType: 'plain',
+    };
+  case 'usaha_claim_rejected':
+    return {
+      title: 'Klaim usaha ditolak',
+      body: 'Klaim belum bisa disetujui. Buka Usaha Saya untuk lihat alasannya.',
+      bodyType: 'plain',
+    };
+}
 }

@@ -70,3 +70,8 @@ export * from "./category-suggestions.schema";
 export * from "./email.schema";
 export * from "./web-imports.schema";
 export * from "./achievements.schema";
+export * from "./usaha-categories.schema";
+export * from "./usahas.schema";
+export * from "./usaha-contributions.schema";
+export * from "./usaha-claims.schema";
+export * from "./usaha-reports.schema";
