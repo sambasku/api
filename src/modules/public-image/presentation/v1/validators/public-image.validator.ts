@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const uploadPublicImageQuerySchema = z.object({
-  purpose: z.enum(['word', 'campaign', 'place', 'event', 'usaha']).default('word'),
+  purpose: z.enum(['word', 'campaign', 'place', 'event', 'usaha', 'culinary']).default('word'),
 });
 
 export const uploadPublicImageResponseSchema = z.object({

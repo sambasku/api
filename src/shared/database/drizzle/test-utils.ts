@@ -44,6 +44,13 @@ import {
   usahaItems,
   usahas,
   usahaCategories,
+  culinaryCategories,
+  cuisines,
+  culinaryPlaces,
+  culinaryPlaceCuisines,
+  culinaryContributions,
+  culinaryClaims,
+  culinaryReports,
   eventContributions,
   eventPlaces,
   events,
@@ -315,6 +322,26 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
       })),
     )
     .onConflictDoNothing();
+  // Seed sama dengan migrasi 0098_culinary (truncateAll menghapus katalog).
+  await db
+    .insert(culinaryCategories)
+    .values(
+      [
+        ["makanan-utama", "Makanan Utama"],
+        ["camilan", "Camilan"],
+        ["minuman", "Minuman"],
+        ["jajanan-pasar", "Jajanan Pasar"],
+        ["kue-tradisional", "Kue Tradisional"],
+        ["lainnya", "Lainnya"],
+      ].map(([id, name], i) => ({
+        id: id!,
+        name: name!,
+        sortOrder: i,
+        status: "published" as const,
+        createdAt: now,
+      })),
+    )
+    .onConflictDoNothing();
 }
 
 // Hapus semua tabel dalam urutan aman FK (anak dulu) - pakai ini di
@@ -395,13 +422,21 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     placeViews,
     places,
     placeCategories,
-    // Usaha (anak dulu: contributions/claims/reports -> items -> usahas)
-    usahaContributions,
-    usahaClaims,
-    usahaReports,
-    usahaItems,
-    usahas,
-    usahaCategories,
+	// Usaha (anak dulu: contributions/claims/reports -> items -> usahas)
+	usahaContributions,
+	usahaClaims,
+	usahaReports,
+	usahaItems,
+	usahas,
+	usahaCategories,
+	// Kuliner (anak dulu: contributions/claims/reports -> relasi -> entitas -> kategori)
+	culinaryContributions,
+	culinaryClaims,
+	culinaryReports,
+	culinaryPlaceCuisines,
+	cuisines,
+	culinaryPlaces,
+	culinaryCategories,
     // Event/acara (FK event_places -> places/events) - anak dulu
     eventContributions,
     eventPlaces,

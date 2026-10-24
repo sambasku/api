@@ -16,6 +16,7 @@ export type FeedCategory =
   | 'all'
   | 'search_miss'
   | 'correction'
+  | 'explore'
   | 'announcement'
   | 'joined';
 
@@ -33,6 +34,14 @@ export const FEED_CATEGORY_KINDS: Record<
     'suggestion_created',
     'suggestion_applied',
     'suggestion_selfapply',
+    'place_photo_added',
+  ],
+  /** Eksplorasi: entitas baru tayang (wisata, usaha, acara) + foto wisata. */
+  explore: [
+    'place_published',
+    'usaha_published',
+    'cuisine_published',
+    'event_published',
     'place_photo_added',
   ],
   announcement: ['announcement'],

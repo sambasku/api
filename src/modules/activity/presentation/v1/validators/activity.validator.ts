@@ -8,7 +8,9 @@ export const listActivityQuerySchema = z.object({
    * filter, identik dengan permintaan tanpa param - klien lama (web)
    * tidak berubah perilaku.
    */
-  category: z.enum(['all', 'search_miss', 'correction', 'announcement', 'joined']).default('all'),
+  category: z
+    .enum(['all', 'search_miss', 'correction', 'explore', 'announcement', 'joined'])
+    .default('all'),
   /**
    * #167: deprecated, no-op. Bearer sah → server selalu membuang baris milik
    * sendiri; tamu tetap feed publik penuh. Diterima (dan dinormalisasi ke
@@ -62,6 +64,8 @@ export const activityItemSchema = z.object({
     'card_share',
     'suggestion',
     'contribution',
+    'place_listing',
+    'event',
   ]),
   created_at: z.string(),
   actor: activityActorSchema,

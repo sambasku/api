@@ -30,6 +30,11 @@ export type InboxNotificationType =
   | 'usaha_contribution_needs_revision'
   | 'usaha_claim_approved'
   | 'usaha_claim_rejected'
+  | 'culinary_contribution_approved'
+  | 'culinary_contribution_rejected'
+  | 'culinary_contribution_needs_revision'
+  | 'culinary_claim_approved'
+  | 'culinary_claim_rejected'
   | 'achievement_awarded';
 
 export type NotificationTargetKind =
@@ -43,6 +48,8 @@ export type NotificationTargetKind =
   | 'event_contribution'
   | 'usaha_contribution'
   | 'usaha_claim'
+  | 'culinary_contribution'
+  | 'culinary_claim'
   | 'achievement';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
@@ -55,7 +62,9 @@ export type NotificationActionKind =
 | 'place_contribution'
 | 'event_contribution'
 | 'usaha_contribution'
-| 'usaha_claim';
+| 'usaha_claim'
+| 'culinary_contribution'
+| 'culinary_claim';
 
 export interface InboxNotification {
   id: string;
@@ -259,6 +268,36 @@ bodyType: 'plain',
     return {
       title: 'Klaim usaha ditolak',
       body: 'Klaim belum bisa disetujui. Buka Usaha Saya untuk lihat alasannya.',
+      bodyType: 'plain',
+    };
+  case 'culinary_contribution_approved':
+    return {
+      title: 'Usulan kuliner disetujui',
+      body: 'Usulanmu sudah tayang di Jelajah Kuliner. Terima kasih!',
+      bodyType: 'plain',
+    };
+  case 'culinary_contribution_rejected':
+    return {
+      title: 'Usulan kuliner ditolak',
+      body: 'Usulanmu belum lolos tinjauan. Buka daftar usulan untuk detailnya.',
+      bodyType: 'plain',
+    };
+  case 'culinary_contribution_needs_revision':
+    return {
+      title: 'Usulan kuliner perlu revisi',
+      body: 'Ada bagian yang perlu diperbaiki dulu. Buka daftar usulan untuk detailnya.',
+      bodyType: 'plain',
+    };
+  case 'culinary_claim_approved':
+    return {
+      title: 'Klaim tempat disetujui',
+      body: 'Kamu sekarang jadi pengelola tempat ini. Buka Jelajah Kuliner untuk mulai mengelola.',
+      bodyType: 'plain',
+    };
+  case 'culinary_claim_rejected':
+    return {
+      title: 'Klaim tempat ditolak',
+      body: 'Klaim belum bisa disetujui. Buka daftar klaim untuk lihat alasannya.',
       bodyType: 'plain',
     };
 }

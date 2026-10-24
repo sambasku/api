@@ -351,6 +351,59 @@ import {
   createAdminUsahaReportRoutes,
   createUsahaReportRoutes,
 } from "@/modules/usaha-report/presentation/v1/usaha-report.routes";
+// Fitur Kuliner (PRD kuliner): jelajah kuliner + tempat + usulan + klaim + laporan.
+import { CulinaryCategoryRepositoryImpl } from "@/modules/culinary-category/infrastructure/culinary-category.repository.impl";
+import {
+  CreateCulinaryCategoryUseCase,
+  DeleteCulinaryCategoryUseCase,
+  GetCulinaryCategoryUseCase,
+  ListKulinerCategoriesUseCase as ListCulinaryCategoryCatalogUseCase,
+  UpdateCulinaryCategoryUseCase,
+} from "@/modules/culinary-category/application/use-cases/culinary-category.use-cases";
+import { CulinaryCategoryController } from "@/modules/culinary-category/presentation/v1/culinary-category.controller";
+import {
+  createAdminCulinaryCategoryRoutes,
+  createPublicCulinaryCategoryRoutes,
+} from "@/modules/culinary-category/presentation/v1/culinary-category.routes";
+import { CulinaryRepositoryImpl } from "@/modules/culinary/infrastructure/culinary.repository.impl";
+import {
+  DeleteCulinaryUseCase,
+  FindCulinaryDuplicatesUseCase,
+  GetCuisineBySlugUseCase,
+  GetCulinaryPlaceBySlugUseCase,
+  ListCuisinesUseCase,
+  ListCulinaryCategoriesUseCase,
+  ListCulinaryPlacesUseCase,
+  RestoreCulinaryUseCase,
+  RestrictCulinaryUseCase,
+  UniqueCulinarySlugUseCase,
+} from "@/modules/culinary/application/use-cases/culinary.use-cases";
+import { CulinaryController } from "@/modules/culinary/presentation/v1/culinary.controller";
+import {
+  createAdminCulinaryRoutes,
+  createPublicCulinaryRoutes,
+} from "@/modules/culinary/presentation/v1/culinary.routes";
+import { CulinaryContributionRepositoryImpl } from "@/modules/culinary-contribution/infrastructure/culinary-contribution.repository.impl";
+import { CulinaryContributionUseCases } from "@/modules/culinary-contribution/application/culinary-contribution.use-cases";
+import { CulinaryContributionController } from "@/modules/culinary-contribution/presentation/v1/culinary-contribution.controller";
+import {
+  createAdminCulinaryContributionRoutes,
+  createCulinaryContributionRoutes,
+} from "@/modules/culinary-contribution/presentation/v1/culinary-contribution.routes";
+import { CulinaryClaimRepositoryImpl } from "@/modules/culinary-claim/infrastructure/culinary-claim.repository.impl";
+import { CulinaryClaimUseCases } from "@/modules/culinary-claim/application/culinary-claim.use-cases";
+import { CulinaryClaimController } from "@/modules/culinary-claim/presentation/v1/culinary-claim.controller";
+import {
+  createAdminCulinaryClaimRoutes,
+  createCulinaryClaimRoutes,
+} from "@/modules/culinary-claim/presentation/v1/culinary-claim.routes";
+import { CulinaryReportRepositoryImpl } from "@/modules/culinary-report/infrastructure/culinary-report.repository.impl";
+import { CulinaryReportUseCases } from "@/modules/culinary-report/application/culinary-report.use-cases";
+import { CulinaryReportController } from "@/modules/culinary-report/presentation/v1/culinary-report.controller";
+import {
+  createAdminCulinaryReportRoutes,
+  createCulinaryReportRoutes,
+} from "@/modules/culinary-report/presentation/v1/culinary-report.routes";
 import { PlaceCategoryRepositoryImpl } from "@/modules/place-category/infrastructure/place-category.repository.impl";
 import {
   CreatePlaceCategoryUseCase,
@@ -1107,7 +1160,7 @@ const announcementController = new AnnouncementController(
 const placeRepo = new PlaceRepositoryImpl(db);
 const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
 const placeController = new PlaceController(
-  new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
+  new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
   new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
   new DeletePlaceUseCase(placeRepo),
   new ListPlacesUseCase(placeRepo),
@@ -1135,7 +1188,7 @@ const placeContributionController = new PlaceContributionController(
     placeCategoryRepo,
     regionRepo,
     userRepo,
-    new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
+    new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
     new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
     recordInbox,
     notifyUser,
@@ -1152,8 +1205,8 @@ const regionController = new RegionController(
 // ---- Modul event/acara (PRD event) ----
 const eventRepo = new EventRepositoryImpl(db);
 const eventController = new EventController(
-  new CreateEventUseCase(eventRepo, regionRepo),
-  new UpdateEventUseCase(eventRepo, regionRepo),
+  new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
+  new UpdateEventUseCase(eventRepo, regionRepo, activityEvents),
   new DeleteEventUseCase(eventRepo),
   new ListEventsUseCase(eventRepo),
   new GetEventBySlugUseCase(eventRepo),
@@ -1165,7 +1218,7 @@ const eventContributionController = new EventContributionController(
     new EventContributionRepositoryImpl(db),
     eventRepo,
     regionRepo,
-    new CreateEventUseCase(eventRepo, regionRepo),
+    new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
     recordInbox,
     notifyUser,
   ),
@@ -1226,6 +1279,65 @@ const listMyUsahaUc = new ListMyUsahaUseCase(
   usahaRepo,
   usahaContributionRepo,
   usahaClaimRepo,
+);
+
+// ---- Fitur Kuliner (PRD kuliner) - jelajah kuliner & tempat makan ----
+const culinaryRepo = new CulinaryRepositoryImpl(db);
+const culinaryCategoryRepo = new CulinaryCategoryRepositoryImpl(db);
+const culinaryCategoryController = new CulinaryCategoryController(
+  new CreateCulinaryCategoryUseCase(culinaryCategoryRepo),
+  new UpdateCulinaryCategoryUseCase(culinaryCategoryRepo),
+  new DeleteCulinaryCategoryUseCase(culinaryCategoryRepo),
+  new ListCulinaryCategoryCatalogUseCase(culinaryCategoryRepo),
+  new GetCulinaryCategoryUseCase(culinaryCategoryRepo),
+);
+const culinaryController = new CulinaryController(
+  culinaryRepo,
+  new ListCuisinesUseCase(culinaryRepo),
+  new GetCuisineBySlugUseCase(culinaryRepo),
+  new ListCulinaryPlacesUseCase(culinaryRepo),
+  new GetCulinaryPlaceBySlugUseCase(culinaryRepo),
+  new ListCulinaryCategoriesUseCase(culinaryRepo),
+  new FindCulinaryDuplicatesUseCase(culinaryRepo, 'cuisine'),
+  new FindCulinaryDuplicatesUseCase(culinaryRepo, 'place'),
+  new RestrictCulinaryUseCase(culinaryRepo, 'cuisine'),
+  new RestoreCulinaryUseCase(culinaryRepo, 'cuisine'),
+  new DeleteCulinaryUseCase(culinaryRepo, 'cuisine'),
+  new RestrictCulinaryUseCase(culinaryRepo, 'place'),
+  new RestoreCulinaryUseCase(culinaryRepo, 'place'),
+  new DeleteCulinaryUseCase(culinaryRepo, 'place'),
+);
+const culinaryContributionRepo = new CulinaryContributionRepositoryImpl(db);
+const culinaryClaimRepo = new CulinaryClaimRepositoryImpl(db);
+const culinaryContributionUseCases = new CulinaryContributionUseCases(
+  culinaryContributionRepo,
+  culinaryRepo,
+  new UniqueCulinarySlugUseCase(culinaryRepo, 'cuisine'),
+  new UniqueCulinarySlugUseCase(culinaryRepo, 'place'),
+  auditRepo,
+  recordInbox,
+  notifyUser,
+  activityEventRepo,
+);
+const culinaryContributionController = new CulinaryContributionController(
+  culinaryContributionUseCases,
+);
+const culinaryClaimController = new CulinaryClaimController(
+  new CulinaryClaimUseCases(
+    culinaryClaimRepo,
+    culinaryRepo,
+    auditRepo,
+    recordInbox,
+    notifyUser,
+    activityEventRepo,
+  ),
+);
+const culinaryReportController = new CulinaryReportController(
+  new CulinaryReportUseCases(
+    new CulinaryReportRepositoryImpl(db),
+    culinaryRepo,
+    auditRepo,
+  ),
 );
 
 const categoryRepo = new CategoryRepositoryImpl(db);
@@ -2114,6 +2226,71 @@ app.route(
   createPublicUsahaRoutes({ controller: usahaController, optionalAuthenticate }),
 );
 // PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
+// Fitur Kuliner - jelajah kuliner & tempat makan (PRD kuliner).
+// Urutan penting: route usulan/klaim/laporan didaftarkan SEBELUM route
+// publik `/culinary/*/:slug` supaya segmen statis tidak tertelan param.
+app.route(
+  "/api/v1/admin/culinary",
+  createAdminCulinaryRoutes({ controller: culinaryController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/culinary-categories",
+  createAdminCulinaryCategoryRoutes({
+    controller: culinaryCategoryController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/culinary-contributions",
+  createAdminCulinaryContributionRoutes({
+    controller: culinaryContributionController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/culinary-claims",
+  createAdminCulinaryClaimRoutes({
+    controller: culinaryClaimController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/culinary-reports",
+  createAdminCulinaryReportRoutes({
+    controller: culinaryReportController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/culinary",
+  createCulinaryClaimRoutes({
+    controller: culinaryClaimController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/culinary",
+  createCulinaryReportRoutes({
+    controller: culinaryReportController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/culinary/contributions",
+  createCulinaryContributionRoutes({
+    controller: culinaryContributionController,
+    authenticate,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/culinary-categories",
+  createPublicCulinaryCategoryRoutes({ controller: culinaryCategoryController }),
+);
+app.route(
+  "/api/v1/culinary",
+  createPublicCulinaryRoutes({ controller: culinaryController, optionalAuthenticate }),
+);
 app.route(
   "/api/v1/word-groups",
   createWordGroupRoutes({ controller: wordGroupController, authenticate }),

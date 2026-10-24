@@ -41,6 +41,11 @@ export function buildEventImagePath(mimeType: string): string {
   return `assets/events/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
 
+/** Path foto kuliner: assets/culinary/<ulid>.<ext> */
+export function buildCulinaryImagePath(mimeType: string): string {
+  return `assets/culinary/${generateId()}.${extensionForImageMime(mimeType)}`;
+}
+
 /** Path foto usaha: assets/usahas/<ulid>.<ext> */
 export function buildUsahaImagePath(mimeType: string): string {
   return `assets/usahas/${generateId()}.${extensionForImageMime(mimeType)}`;

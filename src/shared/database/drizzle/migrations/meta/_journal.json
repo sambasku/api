@@ -687,6 +687,13 @@
       "when": 1801300000000,
       "tag": "0097_usaha",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1801400000000,
+      "tag": "0098_culinary",
+      "breakpoints": true
     }
   ]
 }

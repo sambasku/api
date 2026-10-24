@@ -40,6 +40,7 @@ export class CreatePlaceUseCase {
   constructor(
     private readonly repo: PlaceRepository,
     private readonly categories: PlaceCategoryRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(input: CreatePlaceInput): Promise<Place> {
@@ -48,8 +49,35 @@ export class CreatePlaceUseCase {
     if (existing) {
       throw new ConflictError("SLUG_TAKEN", "Slug place sudah dipakai");
     }
-    return this.repo.create(input);
+    const place = await this.repo.create(input);
+    // Activity feed: wisata tayang pertama kali = event activity (AGENTS.md #25).
+    if (place.status === "published") {
+      await recordPlacePublished(
+        this.activityEvents,
+        place.id,
+        place.name,
+        input.authorId ?? null,
+      );
+    }
+    return place;
   }
+}
+
+/** Activity `place_published` (AGENTS.md #25) - best-effort, dedupe per tempat. */
+async function recordPlacePublished(
+  activityEvents: RecordActivityEventUseCase | undefined,
+  placeId: string,
+  name: string,
+  authorId: string | null,
+): Promise<void> {
+  await activityEvents?.safe({
+    kind: "place_published",
+    payload: `Menambahkan wisata · "${name}"`,
+    // Anonim = null actor (pola usaha_published).
+    actorId: authorId && authorId !== ANONIM_USER_ID ? authorId : null,
+    targetId: placeId,
+    dedupeKey: `place_published:${placeId}`,
+  });
 }
 
 export class UpdatePlaceUseCase {
@@ -82,9 +110,22 @@ export class UpdatePlaceUseCase {
               ),
             )
             .catch(() => []);
+    const existingBefore = await this.repo.findById(input.id);
     const updated = await this.repo.update(input);
     if (!updated) {
       throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
+    }
+    // Activity feed: draft -> published pertama kali = wisata tayang (AGENTS.md #25).
+    if (
+      updated.status === "published" &&
+      existingBefore?.status !== "published"
+    ) {
+      await recordPlacePublished(
+        this.activityEvents,
+        updated.id,
+        updated.name,
+        updated.authorId ?? null,
+      );
     }
     for (const img of dropped) {
       await this.activityEvents?.safeHidePlacePhoto(input.id, img.url);

@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
-import { activityEvents, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, culinaryPlaces, cuisines, events, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -49,6 +49,9 @@ vote_meaning: 'vote',
   user_joined: 'welcome',
   card_shared: 'card_share',
   usaha_published: 'usaha',
+  cuisine_published: 'culinary',
+  place_published: 'place_listing',
+  event_published: 'event',
   announcement: 'announcement',
 };
 
@@ -74,6 +77,9 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   user_joined: 'Bergabung di SambasKu',
   card_shared: 'Membagikan kartu',
   usaha_published: 'Menambahkan usaha',
+  cuisine_published: 'Menambahkan kuliner',
+  place_published: 'Menambahkan wisata',
+  event_published: 'Menambahkan acara',
   announcement: 'Pengumuman',
 };
 
@@ -130,6 +136,9 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'contribution_submitted',
     'place_photo_added',
     'usaha_published',
+    'cuisine_published',
+    'place_published',
+    'event_published',
   ],
   correction: FEED_CATEGORY_KINDS.correction!,
   comment: ['comment_created'],
@@ -182,6 +191,18 @@ interface FeedRow {
   /** Usaha untuk usaha_published (LEFT JOIN usahas, published saja). */
   usahaSlug: string | null;
   usahaName: string | null;
+  /** Acara untuk event_published (LEFT JOIN events, published saja). */
+  eventSlug: string | null;
+  eventName: string | null;
+  /**
+   * Kuliner untuk cuisine_published (LEFT JOIN cuisines + culinary_places,
+   * published saja). Satu kind dipakai dua entitas: targetId menentukan mana
+   * yang terisi.
+   */
+  cuisineSlug: string | null;
+  cuisineName: string | null;
+  culinaryPlaceSlug: string | null;
+  culinaryPlaceName: string | null;
 }
 
 export class ActivityEventFeedRepositoryImpl {
@@ -326,6 +347,10 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menambahkan foto wisata';
     case 'usaha_published':
       return 'Menambahkan usaha';
+    case 'place_published':
+      return 'Menambahkan wisata';
+    case 'event_published':
+      return 'Menambahkan acara';
       case 'comment_created':
         return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
       case 'word_verified':
@@ -433,6 +458,12 @@ export class ActivityEventFeedRepositoryImpl {
       placeName: places.name,
       usahaSlug: usahas.slug,
       usahaName: usahas.name,
+      eventSlug: events.slug,
+      eventName: events.name,
+      cuisineSlug: cuisines.slug,
+      cuisineName: cuisines.name,
+      culinaryPlaceSlug: culinaryPlaces.slug,
+      culinaryPlaceName: culinaryPlaces.name,
     })
     .from(activityEvents)
       .leftJoin(
@@ -449,7 +480,8 @@ export class ActivityEventFeedRepositoryImpl {
       .leftJoin(
         places,
         and(
-          eq(activityEvents.kind, 'place_photo_added'),
+          // #187 foto wisata + wisata baru tayang: dua kind, satu JOIN.
+          sql`${activityEvents.kind} in ('place_photo_added', 'place_published')`,
           eq(places.id, activityEvents.targetId),
           eq(places.status, 'published'),
           sql`${places.deletedAt} is null`,
@@ -462,6 +494,33 @@ export class ActivityEventFeedRepositoryImpl {
         eq(usahas.id, activityEvents.targetId),
         eq(usahas.publishStatus, 'published'),
         sql`${usahas.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      cuisines,
+      and(
+        eq(activityEvents.kind, 'cuisine_published'),
+        eq(cuisines.id, activityEvents.targetId),
+        eq(cuisines.publishStatus, 'published'),
+        sql`${cuisines.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      culinaryPlaces,
+      and(
+        eq(activityEvents.kind, 'cuisine_published'),
+        eq(culinaryPlaces.id, activityEvents.targetId),
+        eq(culinaryPlaces.publishStatus, 'published'),
+        sql`${culinaryPlaces.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      events,
+      and(
+        eq(activityEvents.kind, 'event_published'),
+        eq(events.id, activityEvents.targetId),
+        eq(events.status, 'published'),
+        sql`${events.deletedAt} is null`,
       ),
     )
     .leftJoin(
@@ -479,8 +538,14 @@ export class ActivityEventFeedRepositoryImpl {
           sql`(${activityEvents.targetWordId} is null or ${words.id} is not null)`,
         // #187: foto wisata hanya tayang selama tempatnya published.
         sql`(${activityEvents.kind} <> 'place_photo_added' or ${places.id} is not null)`,
+        // Wisata baru hanya tayang selama masih published (visibility read-time).
+        sql`(${activityEvents.kind} <> 'place_published' or ${places.id} is not null)`,
+        // Acara baru hanya tayang selama masih published (visibility read-time).
+        sql`(${activityEvents.kind} <> 'event_published' or ${events.id} is not null)`,
         // Usaha hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'usaha_published' or ${usahas.id} is not null)`,
+        // Kuliner/tempat kuliner hanya tayang selama masih published.
+        sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null or ${culinaryPlaces.id} is not null)`,
         ),
       )
       .orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id))
@@ -579,11 +644,15 @@ export class ActivityEventFeedRepositoryImpl {
           ? this.applyLemmaPlaceholder(frozen, lemma)
           : this.bodyFor(kind, lemma);
     const subtitle =
-      kind === 'place_photo_added'
+      kind === 'place_photo_added' || kind === 'place_published'
         ? row.placeName
+        : kind === 'cuisine_published'
+          ? (row.cuisineName ?? row.culinaryPlaceName)
         : kind === 'usaha_published'
           ? row.usahaName
-          : this.subtitleFor(kind, lemma);
+          : kind === 'event_published'
+            ? row.eventName
+            : this.subtitleFor(kind, lemma);
     // #99: arah vote dari copy beku (#94) - event kind DB tetap vote_word/
     // vote_comment, split cuma di wire supaya feed home variatif tanpa
     // migrasi kinds (kinds DB = kontrak AGENTS.md #25).
@@ -697,6 +766,9 @@ export class ActivityEventFeedRepositoryImpl {
     case 'card_shared':
       return lemma ? `Membagikan kartu · ${quoted(lemma)}` : 'Membagikan kartu';
     case 'usaha_published':
+    case 'cuisine_published':
+    case 'place_published':
+    case 'event_published':
       return KIND_BODY[kind];
       case 'search_miss':
         return lemma ? `Mencari "${lemma}" - belum ada di kamus.` : 'Mencari - belum ada di kamus.';
@@ -748,6 +820,9 @@ export class ActivityEventFeedRepositoryImpl {
       missDirection: string | null;
       placeSlug?: string | null;
       usahaSlug?: string | null;
+      eventSlug?: string | null;
+      cuisineSlug?: string | null;
+      culinaryPlaceSlug?: string | null;
     },
     word: { id: string; lemma: string } | null,
   ): ActivityItem['target'] {
@@ -792,6 +867,15 @@ export class ActivityEventFeedRepositoryImpl {
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'usaha_published':
         return row.usahaSlug ? { type: 'usaha', id: row.usahaSlug } : null;
+      case 'place_published':
+        return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
+      case 'event_published':
+        return row.eventSlug ? { type: 'event', id: row.eventSlug } : null;
+      case 'cuisine_published':
+        if (row.cuisineSlug) return { type: 'culinary', id: row.cuisineSlug };
+        return row.culinaryPlaceSlug
+          ? { type: 'culinary_place', id: row.culinaryPlaceSlug }
+          : null;
       case 'user_joined':
         return row.targetId ? { type: 'user', id: row.targetId! } : null;
       case 'announcement':

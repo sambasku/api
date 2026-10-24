@@ -4,6 +4,8 @@ import {
   NotFoundError,
 } from "@/shared/errors/app-error";
 import type { RegionRepository } from "@/modules/region/domain/repositories/region.repository";
+import type { RecordActivityEventUseCase } from "@/modules/activity/application/use-cases/record-activity-event.use-case";
+import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import type {
   EventCategoryRef,
   EventListItem,
@@ -85,6 +87,7 @@ export class CreateEventUseCase {
   constructor(
     private readonly repo: EventRepository,
     private readonly regions: RegionRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(input: CreateEventInput): Promise<EventListItem> {
@@ -102,14 +105,50 @@ export class CreateEventUseCase {
     if (existing) {
       throw new ConflictError("SLUG_TAKEN", "Slug event sudah dipakai");
     }
-    return this.repo.create(input);
+    const event = await this.repo.create(input);
+    // Activity feed: acara tayang pertama kali = event activity (AGENTS.md #25).
+    if (event.status === "published") {
+      await this.recordPublished(event.id, event.name, input.authorId ?? null);
+    }
+    return event;
   }
+
+  /**
+   * Activity `event_published` (AGENTS.md #25) - best-effort. Dedupe key
+   * per event: draft->published ulang tidak bikin feed dobel.
+   */
+  private async recordPublished(
+    eventId: string,
+    name: string,
+    authorId: string | null,
+  ): Promise<void> {
+    await recordEventPublished(this.activityEvents, eventId, name, authorId);
+  }
+}
+
+/** Activity `event_published` (AGENTS.md #25) - best-effort, dedupe per acara. */
+async function recordEventPublished(
+  activityEvents: RecordActivityEventUseCase | undefined,
+  eventId: string,
+  name: string,
+  authorId: string | null,
+): Promise<void> {
+  await activityEvents?.safe({
+    kind: "event_published",
+    payload: `Menambahkan acara · "${name}"`,
+    // Anonim = null actor: feed tetap ada jejak "acara baru" tanpa
+    // membocorkan identitas (pola usaha_published).
+    actorId: authorId && authorId !== ANONIM_USER_ID ? authorId : null,
+    targetId: eventId,
+    dedupeKey: `event_published:${eventId}`,
+  });
 }
 
 export class UpdateEventUseCase {
   constructor(
     private readonly repo: EventRepository,
     private readonly regions: RegionRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(input: UpdateEventInput): Promise<EventListItem> {
@@ -144,6 +183,15 @@ export class UpdateEventUseCase {
     const updated = await this.repo.update(input);
     if (!updated) {
       throw new NotFoundError("EVENT_NOT_FOUND", "Event tidak ditemukan");
+    }
+    // Activity feed: draft -> published pertama kali = acara tayang (AGENTS.md #25).
+    if (updated.status === "published" && existing.status !== "published") {
+      await recordEventPublished(
+        this.activityEvents,
+        updated.id,
+        updated.name,
+        updated.authorId ?? null,
+      );
     }
     return updated;
   }

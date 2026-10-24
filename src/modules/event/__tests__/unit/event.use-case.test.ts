@@ -99,6 +99,48 @@ describe("CreateEventUseCase", () => {
     uc = new CreateEventUseCase(repo as unknown as EventRepository, regions);
   });
 
+  it("catat event_published saat acara tayang (AGENTS.md #25)", async () => {
+    const safe = vi.fn().mockResolvedValue(undefined);
+    repo.create.mockResolvedValue({
+      id: "01EVENT0000000000000000001",
+      name: "Pawai Blocks",
+      slug: "pawai-blocks",
+      status: "published",
+      authorId: "01USER00000000000000000001",
+    });
+    const ucWithActivity = new CreateEventUseCase(
+      repo as unknown as EventRepository,
+      regions,
+      { safe } as never,
+    );
+    await ucWithActivity.execute(baseInput);
+    expect(safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "event_published",
+        targetId: "01EVENT0000000000000000001",
+        dedupeKey: "event_published:01EVENT0000000000000000001",
+      }),
+    );
+  });
+
+  it("draft tidak menulis event_published", async () => {
+    const safe = vi.fn().mockResolvedValue(undefined);
+    repo.create.mockResolvedValue({
+      id: "01EVENT0000000000000000002",
+      name: "Draft",
+      slug: "draft",
+      status: "draft",
+      authorId: "01USER00000000000000000001",
+    });
+    const ucWithActivity = new CreateEventUseCase(
+      repo as unknown as EventRepository,
+      regions,
+      { safe } as never,
+    );
+    await ucWithActivity.execute({ ...baseInput, status: "draft" });
+    expect(safe).not.toHaveBeenCalled();
+  });
+
   it("buat event valid", async () => {
     const out = await uc.execute(baseInput);
     expect(repo.create).toHaveBeenCalledWith(baseInput);
