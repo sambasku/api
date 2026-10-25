@@ -218,7 +218,15 @@ export function createAdminCulinaryContributionRoutes(deps: {
     method: 'post',
     path: '/:id/approve',
     tags: ['Admin culinary contributions'],
-    request: { params: idParam },
+    request: {
+      params: idParam,
+      body: {
+        required: false,
+        content: {
+          'application/json': { schema: approveCulinaryContributionBodySchema },
+        },
+      },
+    },
     responses: {
       200: { description: 'Disetujui', content: json(okNullResponseSchema) },
       409: { description: 'Basi atau bentrok', content: json(errorResponseSchema) },
