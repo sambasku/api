@@ -72,6 +72,7 @@ function makeDeps() {
   };
   const regions: Record<string, ReturnType<typeof vi.fn>> = {
     findById: vi.fn().mockResolvedValue(null),
+    findByIdOrSlug: vi.fn().mockResolvedValue(null),
   };
   const createEvent = {
     execute: vi.fn().mockResolvedValue({ id: "01EVENT0000000000000000001" }),
@@ -143,12 +144,20 @@ describe("EventContributionUseCases - submit", () => {
 
   it("tolak desa yang bukan bagian dari kecamatan yang dipilih", async () => {
     const { uc, regions } = makeDeps();
-    regions.findById.mockResolvedValue({
-      id: "01DESA00000000000000000001",
-      type: "desa",
-      status: "published",
-      parentId: "01KECLAIN00000000000000001",
-    } as never);
+    regions.findByIdOrSlug.mockImplementation(async (ref: string) =>
+      ref === "01KEC000000000000000000001"
+        ? {
+            id: "01KEC000000000000000000001",
+            type: "kecamatan",
+            status: "published",
+          }
+        : {
+            id: "01DESA00000000000000000001",
+            type: "desa",
+            status: "published",
+            parentId: "01KECLAIN00000000000000001",
+          },
+    );
     await expect(
       uc.submit(USER_ID, {
         ...payload,
@@ -156,6 +165,36 @@ describe("EventContributionUseCases - submit", () => {
         villageId: "01DESA00000000000000000001",
       }),
     ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it("slug wilayah dari katalog dinormalisasi jadi ULID", async () => {
+    const { uc, contrib, regions } = makeDeps();
+    regions.findByIdOrSlug.mockImplementation(async (ref: string) =>
+      ref === "sejangkat"
+        ? {
+            id: "01KEC000000000000000000001",
+            type: "kecamatan",
+            status: "published",
+          }
+        : {
+            id: "01DESA00000000000000000002",
+            type: "desa",
+            status: "published",
+            parentId: "01KEC000000000000000000001",
+          },
+    );
+    await uc.submit(USER_ID, {
+      ...payload,
+      regionId: "sejangkat",
+      villageId: "sejangkat-batu",
+    });
+    expect(contrib.create).toHaveBeenCalledWith({
+      userId: USER_ID,
+      payload: expect.objectContaining({
+        regionId: "01KEC000000000000000000001",
+        villageId: "01DESA00000000000000000002",
+      }),
+    });
   });
 
   it("tolak place id yang tidak published", async () => {

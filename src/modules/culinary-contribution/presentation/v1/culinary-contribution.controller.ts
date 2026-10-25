@@ -4,6 +4,7 @@ import type { z } from 'zod';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { CulinaryContributionUseCases } from '../../application/culinary-contribution.use-cases';
 import type {
+  ContributionImage,
   CulinaryContribution,
   CulinaryContributionPayload,
   CulinaryContributionWithTarget,
@@ -216,9 +217,13 @@ export class CulinaryContributionController {
     );
   }
 
-  approve(c: Context<{ Variables: AppVariables }>, id: string) {
+  approve(
+    c: Context<{ Variables: AppVariables }>,
+    id: string,
+    body?: { images?: ContributionImage[] },
+  ) {
     return this.uc
-      .approve(id, c.get('user')?.user_id, this.requestId(c))
+      .approve(id, c.get('user')?.user_id, this.requestId(c), body)
       .then(() => c.json({ success: true as const, data: null }));
   }
 

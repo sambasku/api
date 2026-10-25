@@ -197,4 +197,66 @@ describe('CreateDiscussionReplyUseCase', () => {
     expect(notifyUser.execute).not.toHaveBeenCalled();
     expect(pushCooldown.touchAfterSend).not.toHaveBeenCalled();
   });
+
+  it('mention peserta lama → hanya notif balasan, tanpa notif mention (#198)', async () => {
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const pushCooldown = {
+      maySend: vi.fn().mockResolvedValue(true),
+      touchAfterSend: vi.fn().mockResolvedValue(undefined),
+    };
+    const mentionBody = 'Setuju @pemilik, makanya cek juga @budi';
+    const uc = new CreateDiscussionReplyUseCase(
+      makeRepo({
+        listDistinctReplierUserIds: vi.fn().mockResolvedValue([OWNER, OTHER]),
+        createReply: vi.fn().mockResolvedValue(makeReply({ body: mentionBody })),
+        findReplyById: vi.fn().mockResolvedValue(makeReply({ body: mentionBody })),
+      }),
+      { record: vi.fn().mockResolvedValue(undefined) } as unknown as AuditLogRepository,
+      { listAllActiveWords: vi.fn().mockResolvedValue([]) } as unknown as CommentBlocklistRepository,
+      {
+        findById: vi.fn().mockResolvedValue({
+          id: ACTOR,
+          username: 'ani',
+          displayName: 'Ani',
+        }),
+        // OWNER (pemilik, peserta) di-mention; bukan peserta lain disebut juga.
+        findByUsername: vi
+          .fn()
+          .mockImplementation(async (username: string) =>
+            username === 'pemilik'
+              ? { id: OWNER, username: 'pemilik', displayName: 'Pemilik Thread', isActive: true, deletedAt: null }
+              : { id: '01JDOUTSIDE0000000000000001', username, displayName: 'Orang Luar', isActive: true, deletedAt: null },
+          ),
+      } as never,
+      inbox as never,
+      notifyUser as never,
+      pushCooldown as never,
+    );
+    await uc.execute({
+      discussionId: DISCUSSION_ID,
+      userId: ACTOR,
+      body: mentionBody,
+    });
+
+    // Peserta (OWNER + OTHER) dapat notif balasan; hanya non-peserta yang dapat mention.
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: OWNER, type: 'discussion_reply' }),
+    );
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: OTHER, type: 'discussion_reply' }),
+    );
+    expect(inbox.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({ userId: OWNER, type: 'discussion_mention' }),
+    );
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: '01JDOUTSIDE0000000000000001',
+        type: 'discussion_mention',
+      }),
+    );
+    // Total inbox: 2 reply + 1 mention (non-peserta) = 3, bukan 4.
+    expect(inbox.execute).toHaveBeenCalledTimes(3);
+    expect(notifyUser.execute).toHaveBeenCalledTimes(3);
+  });
 });

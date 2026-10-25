@@ -125,7 +125,7 @@ export class CreateCommentUseCase {
       });
     }
 
-    await this.notifyDiscussionParticipants({
+    const notifiedRecipientIds = await this.notifyDiscussionParticipants({
       wordId: cmd.wordId,
       lemma: word.lemma,
       ownerUserId: word.createdBy,
@@ -138,6 +138,9 @@ export class CreateCommentUseCase {
       lemma: word.lemma,
       actorId: cmd.userId,
       commentBody: comment.body,
+      // Peserta yang sudah dapat notif komentar tidak dikirimi notif mention
+      // (dulu dobel: word_comment + word_comment_mention, issue #198).
+      excludeUserIds: new Set(notifiedRecipientIds),
     });
 
     return (await this.commentRepo.findById(comment.id)) ?? comment;
@@ -149,12 +152,15 @@ export class CreateCommentUseCase {
    * on conflict (tiap mention baris sendiri, tidak menimpa notif komentar),
    * push TANPA cooldown mention (keputusan desain: mention = panggilan
    * langsung, harus selalu sampai).
+   * Penerima yang sudah dapat notif komentar di-skip lewat `excludeUserIds`
+   * supaya tidak dobel (issue #198).
    */
   private async notifyMentionedUsers(input: {
     wordId: string;
     lemma: string;
     actorId: string;
     commentBody: string;
+    excludeUserIds: ReadonlySet<string>;
   }): Promise<void> {
     if (!this.inbox && !this.notifyUser) return;
     if (!this.userRepo) return;
@@ -178,6 +184,7 @@ export class CreateCommentUseCase {
 
       for (const user of mentioned) {
         if (user.id === input.actorId) continue; // jangan self-notify
+        if (input.excludeUserIds.has(user.id)) continue; // sudah dapat word_comment
 
         if (this.inbox) {
           await this.inbox.execute({
@@ -230,8 +237,8 @@ export class CreateCommentUseCase {
     ownerUserId: string | null;
     actorId: string;
     commentBody: string;
-  }): Promise<void> {
-    if (!this.inbox && !this.notifyUser) return;
+  }): Promise<string[]> {
+    if (!this.inbox && !this.notifyUser) return [];
 
     try {
       const priorCommenterIds = await this.commentRepo.listDistinctCommenterUserIds(input.wordId);
@@ -240,7 +247,7 @@ export class CreateCommentUseCase {
         ownerUserId: input.ownerUserId,
         priorParticipantIds: priorCommenterIds,
       });
-      if (recipientIds.length === 0) return;
+      if (recipientIds.length === 0) return [];
 
       let displayName = 'Seseorang';
       if (this.userRepo) {
@@ -294,6 +301,7 @@ export class CreateCommentUseCase {
           }
         }
       }
+      return recipientIds;
     } catch (err) {
       console.error(
         JSON.stringify({
@@ -305,6 +313,7 @@ export class CreateCommentUseCase {
           error: err instanceof Error ? err.message : String(err),
         }),
       );
+      return [];
     }
   }
 }

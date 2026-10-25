@@ -1,5 +1,6 @@
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { createRoute } from '@hono/zod-openapi';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
@@ -11,6 +12,7 @@ import {
 import type { AppVariables } from '@/shared/types';
 import type { CulinaryContributionController } from './culinary-contribution.controller';
 import {
+  approveCulinaryContributionBodySchema,
   culinaryContributionResponseSchema,
   listCulinaryContributionsQuerySchema,
   rejectCulinaryContributionBodySchema,
@@ -39,6 +41,8 @@ export function createCulinaryContributionRoutes(deps: {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Tanpa token, usulan diatribusikan ke user sistem anonim. */
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Unggah foto usulan kuliner (anonim boleh, pola event). */
+  uploadCulinaryImage: (c: Context) => Promise<Response> | Response;
 }) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 30, duration: 60 }));
@@ -55,6 +59,41 @@ export function createCulinaryContributionRoutes(deps: {
     const isWrite = c.req.method === 'POST' || c.req.method === 'PUT';
     if (!isWrite || c.get('user')) return next();
     return anonSubmitLimit(c, next);
+  });
+  // Unggah foto anonim: 10/jam per IP (1 foto per usulan + margin).
+  const anonImageLimit = rateLimit({ points: 10, duration: 60 * 60 });
+  routes.use('/images', async (c, next) => {
+    if (c.req.method !== 'POST' || c.get('user')) return next();
+    return anonImageLimit(c, next);
+  });
+  routes.use(
+    '/images',
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) =>
+        c.json(
+          {
+            success: false as const,
+            error_code: 'IMAGE_TOO_LARGE',
+            message: 'File gambar terlalu besar (maks 5 MB)',
+          },
+          400,
+        ),
+    }),
+  );
+
+  const uploadImageRoute = createRoute({
+    method: 'post',
+    path: '/images',
+    tags: ['Culinary contributions'],
+    summary: 'Unggah foto usulan kuliner (boleh tanpa login) - multipart field `file`',
+    responses: {
+      201: {
+        description: 'Foto tersimpan',
+        content: json(z.object({ success: z.literal(true) }).passthrough()),
+      },
+      400: { description: 'File tidak valid', content: json(errorResponseSchema) },
+    },
   });
 
   const submitRoute = createRoute({
@@ -152,6 +191,7 @@ export function createCulinaryContributionRoutes(deps: {
   routes.openapi(resubmitRoute, (c) =>
     deps.controller.resubmit(c, c.req.param('id'), c.req.valid('json')) as never,
   );
+  routes.openapi(uploadImageRoute, (c) => deps.uploadCulinaryImage(c) as never);
   return routes;
 }
 
@@ -223,7 +263,7 @@ export function createAdminCulinaryContributionRoutes(deps: {
     deps.controller.listAdmin(c, c.req.valid('query')) as never,
   );
   routes.openapi(approveRoute, (c) =>
-    deps.controller.approve(c, c.req.param('id')) as never,
+    deps.controller.approve(c, c.req.param('id'), c.req.valid('json')) as never,
   );
   routes.openapi(rejectRoute, (c) =>
     deps.controller.reject(c, c.req.param('id'), c.req.valid('json')) as never,

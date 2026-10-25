@@ -344,6 +344,15 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     return this.findBySlug(slug, { publicOnly: false });
   }
 
+  async existingSlugs(slugs: string[]): Promise<Set<string>> {
+    if (slugs.length === 0) return new Set();
+    const rows = await this.db
+      .select({ slug: places.slug })
+      .from(places)
+      .where(inArray(places.slug, slugs));
+    return new Set(rows.map((r) => r.slug));
+  }
+
   async list(input: ListPlacesInput): Promise<ListPlacesResult> {
     const conds = [isNull(places.deletedAt)];
     if (input.publicOnly) conds.push(eq(places.status, "published"));

@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
-import { activityEvents, culinaryPlaces, cuisines, events, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { alias } from 'drizzle-orm/sqlite-core';
+import { activityEvents, culinaryPlaces, cuisines, events, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -13,6 +14,8 @@ import { isVerifierRole } from '@/modules/word/application/utils/resolve-publica
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
 import { FEED_CATEGORY_KINDS, type ActivityCursor } from '../domain/merge-activity';
+
+const parentPantuns = alias(pantuns, 'parent_pantuns');
 
 /**
  * Baca feed dari `activity_events` (write-through log) - pengganti agregasi
@@ -52,6 +55,8 @@ vote_meaning: 'vote',
   cuisine_published: 'culinary',
   place_published: 'place_listing',
   event_published: 'event',
+  pantun_created: 'discussion',
+  pantun_reply_created: 'discussion',
   announcement: 'announcement',
 };
 
@@ -80,6 +85,8 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   cuisine_published: 'Menambahkan kuliner',
   place_published: 'Menambahkan wisata',
   event_published: 'Menambahkan acara',
+  pantun_created: 'Menulis pantun',
+  pantun_reply_created: 'Membalas pantun',
   announcement: 'Pengumuman',
 };
 
@@ -190,6 +197,8 @@ interface FeedRow {
   placeName: string | null;
   /** Usaha untuk usaha_published (LEFT JOIN usahas, published saja). */
   usahaSlug: string | null;
+  /** Pantun pembuka untuk pantun_reply_created (LEFT JOIN, published saja). */
+  replyParentId: string | null;
   usahaName: string | null;
   /** Acara untuk event_published (LEFT JOIN events, published saja). */
   eventSlug: string | null;
@@ -351,7 +360,11 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menambahkan wisata';
     case 'event_published':
       return 'Menambahkan acara';
-      case 'comment_created':
+    case 'pantun_created':
+      return 'Menulis pantun';
+    case 'pantun_reply_created':
+      return 'Membalas pantun';
+    case 'comment_created':
         return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
       case 'word_verified':
         return `Memverifikasi kata ${q}`.trim();
@@ -458,6 +471,9 @@ export class ActivityEventFeedRepositoryImpl {
       placeName: places.name,
       usahaSlug: usahas.slug,
       usahaName: usahas.name,
+      // pantun_reply_created: link ke pantun pembuka (balasan takedown →
+      // baris feed ikut sembunyi; induk takedown → sembunyi juga).
+      replyParentId: parentPantuns.id,
       eventSlug: events.slug,
       eventName: events.name,
       cuisineSlug: cuisines.slug,
@@ -524,6 +540,32 @@ export class ActivityEventFeedRepositoryImpl {
       ),
     )
     .leftJoin(
+      pantuns,
+      and(
+        eq(activityEvents.kind, 'pantun_created'),
+        eq(pantuns.id, activityEvents.targetId),
+        eq(pantuns.status, 'published'),
+      ),
+    )
+    // pantun_reply_created: join balasan (published) + pantun induknya.
+    // Balasan takedown/deleted → join kosong → baris feed sembunyi (visibility read-time).
+    .leftJoin(
+      pantunReplies,
+      and(
+        eq(activityEvents.kind, 'pantun_reply_created'),
+        eq(pantunReplies.id, activityEvents.targetId),
+        eq(pantunReplies.status, 'published'),
+      ),
+    )
+    .leftJoin(
+      parentPantuns,
+      and(
+        eq(activityEvents.kind, 'pantun_reply_created'),
+        eq(parentPantuns.id, pantunReplies.parentId),
+        eq(parentPantuns.status, 'published'),
+      ),
+    )
+    .leftJoin(
       searchMisses,
       and(
         eq(activityEvents.kind, 'search_miss'),
@@ -542,6 +584,11 @@ export class ActivityEventFeedRepositoryImpl {
         sql`(${activityEvents.kind} <> 'place_published' or ${places.id} is not null)`,
         // Acara baru hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'event_published' or ${events.id} is not null)`,
+      // Pantun hanya tayang selama masih published (takedown = sembunyi).
+      sql`(${activityEvents.kind} <> 'pantun_created' or ${pantuns.id} is not null)`,
+      // Balasan pantun: balasan & induknya harus published (visibility read-time).
+      sql`(${activityEvents.kind} <> 'pantun_reply_created' or ${pantunReplies.id} is not null)`,
+      sql`(${activityEvents.kind} <> 'pantun_reply_created' or ${parentPantuns.id} is not null)`,
         // Usaha hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'usaha_published' or ${usahas.id} is not null)`,
         // Kuliner/tempat kuliner hanya tayang selama masih published.
@@ -769,6 +816,8 @@ export class ActivityEventFeedRepositoryImpl {
     case 'cuisine_published':
     case 'place_published':
     case 'event_published':
+    case 'pantun_created':
+    case 'pantun_reply_created':
       return KIND_BODY[kind];
       case 'search_miss':
         return lemma ? `Mencari "${lemma}" - belum ada di kamus.` : 'Mencari - belum ada di kamus.';
@@ -823,6 +872,7 @@ export class ActivityEventFeedRepositoryImpl {
       eventSlug?: string | null;
       cuisineSlug?: string | null;
       culinaryPlaceSlug?: string | null;
+      replyParentId?: string | null;
     },
     word: { id: string; lemma: string } | null,
   ): ActivityItem['target'] {
@@ -871,6 +921,13 @@ export class ActivityEventFeedRepositoryImpl {
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'event_published':
         return row.eventSlug ? { type: 'event', id: row.eventSlug } : null;
+    case 'pantun_created':
+      return row.targetId ? { type: 'discussion', id: row.targetId! } : null;
+    case 'pantun_reply_created':
+      // Link ke pantun pembuka yang dibalas (bukan id balasan).
+      return row.replyParentId
+        ? { type: 'discussion', id: row.replyParentId }
+        : null;
       case 'cuisine_published':
         if (row.cuisineSlug) return { type: 'culinary', id: row.cuisineSlug };
         return row.culinaryPlaceSlug

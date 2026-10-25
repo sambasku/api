@@ -61,6 +61,13 @@ const regions = {
         ? { id, type: "kecamatan", status: "published" }
         : { id, type: "desa", status: "published", parentId: "KEC1" },
   ),
+  findByIdOrSlug: vi.fn(async (ref: string) =>
+    ref === "VILLAGE_BAD"
+      ? { id: "VILLAGE_BAD", type: "desa", status: "published", parentId: "OTHER_KEC" }
+      : ref === "KEC1" || ref === "pemangkat"
+        ? { id: "KEC1", type: "kecamatan", status: "published" }
+        : { id: ref, type: "desa", status: "published", parentId: "KEC1" },
+  ),
 };
 
 /** eslint-disable-next-line @typescript-eslint/no-explicit-any */
@@ -135,6 +142,20 @@ describe("UsahaContributionUseCases - usulan baru", () => {
         wantsClaim: false,
       }),
     ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it("slug wilayah dari katalog dinormalisasi jadi ULID", async () => {
+    const contrib = makeContrib();
+    const uc = build(contrib, makeUsaha());
+    await uc.submit("USER1", {
+      payload: { ...newPayload, regionId: "pemangkat", villageId: null },
+      wantsClaim: false,
+    });
+    expect(contrib.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ regionId: "KEC1" }),
+      }),
+    );
   });
 
   it("PENDING_CAP: 10 usulan pending sudah mentok", async () => {

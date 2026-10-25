@@ -22,6 +22,7 @@ import {
 } from '@/shared/errors/app-error';
 import { composeCulinaryRejectDisplay } from '../domain/culinary-contribution.entity';
 import type {
+  ContributionImage,
   CuisineEditPayload,
   CulinaryContribution,
   CulinaryContributionKind,
@@ -35,6 +36,8 @@ import type { CulinaryContributionRepository } from '../domain/culinary-contribu
 
 const PENDING_CAP = 10;
 const MAX_IMAGES = 20;
+/** Lisensi baku foto kuliner dari warga (PRD kuliner 13). */
+const CC_BY_SA = 'CC BY-SA 4.0';
 
 /**
 * Field yang boleh diajukan lewat kind=cuisine_edit. Daftar ini juga dasar
@@ -159,7 +162,7 @@ export class CulinaryContributionUseCases {
       kind: input.kind,
       userId,
       lockedFields: '',
-      payload: input.payload,
+      payload: this.withDefaultLicense(input.payload),
     });
   }
 
@@ -202,7 +205,7 @@ export class CulinaryContributionUseCases {
     } else {
       this.assertNewPlace(input.payload as NewPlacePayload);
     }
-    await this.contrib.replacePayload(id, input.payload, '');
+    await this.contrib.replacePayload(id, this.withDefaultLicense(input.payload), '');
     const updated = await this.contrib.findById(id);
     if (!updated) throw new Error('resubmit gagal - row hilang');
     return updated;
@@ -387,8 +390,22 @@ export class CulinaryContributionUseCases {
     id: string,
     actorId?: string,
     requestId?: string | null,
+    override?: { images?: ContributionImage[] },
   ): Promise<void> {
     const row = await this.mustPending(id);
+    // Admin boleh hapus/ganti foto usulan sebelum tayang (PRD kuliner).
+    if (override?.images !== undefined) {
+      const images = this.normalizeImageAttribution(override.images);
+      this.assertImageAttribution(images);
+      const payload =
+        row.kind === 'new_cuisine'
+          ? ({ ...row.payload, images } as NewCuisinePayload)
+          : row.kind === 'cuisine_edit'
+            ? ({ ...row.payload, images } as CuisineEditPayload)
+            : row.payload;
+      await this.contrib.replacePayload(id, payload, row.lockedFields);
+      row.payload = payload;
+    }
 
     if (row.kind === 'new_cuisine') {
       const p = row.payload as NewCuisinePayload;
@@ -667,7 +684,7 @@ export class CulinaryContributionUseCases {
       cuisineId: target.cuisineId ?? null,
       placeId: target.placeId ?? null,
       lockedFields: locked,
-      payload: input.payload,
+      payload: this.withDefaultLicense(input.payload),
       baseUpdatedAt: target.updatedAt ?? _createdAt,
     });
   }
@@ -758,18 +775,46 @@ export class CulinaryContributionUseCases {
     }
   }
 
+  /**
+   * Foto yang diunggah warga otomatis berlisensi CC BY-SA 4.0 (PRD kuliner).
+   * Nama pemilik tetap wajib - dari akun pengunggah di mobile, atau diisi
+   * admin untuk unggahan console. Lisensi yang kosong diisi default.
+   */
+  private normalizeImageAttribution(
+    images: ContributionImage[] | undefined,
+  ): ContributionImage[] | undefined {
+    if (!images?.length) return images;
+    return images.map((img) => ({
+      ...img,
+      attribution: img.attribution?.name
+        ? { ...img.attribution, license: img.attribution.license || CC_BY_SA }
+        : img.attribution,
+    }));
+  }
+
+  /** Isi lisensi kosong dengan CC BY-SA 4.0 pada payload berisi gambar. */
+  private withDefaultLicense(
+    payload: CulinaryContributionPayload,
+  ): CulinaryContributionPayload {
+    if (!('images' in payload) || !payload.images?.length) return payload;
+    return {
+      ...payload,
+      images: this.normalizeImageAttribution(payload.images),
+    } as CulinaryContributionPayload;
+  }
+
   private assertImageAttribution(
     images: NewCuisinePayload['images'] | undefined,
   ): void {
     for (const img of images ?? []) {
-      if (!img.attribution?.name || !img.attribution?.license) {
+      if (!img.attribution?.name) {
         throw new BadRequestError(
           'ATTRIBUTION_REQUIRED',
-          'Setiap gambar wajib punya sumber dan lisensi',
+          'Setiap gambar wajib punya sumber (nama pemilik)',
           [
             {
               field: 'images',
-              message: 'Lengkapi nama pemilik dan lisensi gambar',
+              message: 'Lengkapi nama pemilik gambar',
             },
           ],
         );

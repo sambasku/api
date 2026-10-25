@@ -309,35 +309,49 @@ export async function applyChangesToWord(
           }
           if (mc.translations && mc.translations.length > 0) {
             for (const t of mc.translations) {
-              // Kata belum terverifikasi: padanan bahasa yang sama diganti di baris
-              // yang sama (restoreBaseline mengembalikan lewat id). Terverifikasi: tambah.
-              if (!word.isVerified) {
-                const current = await db.query.meaningTranslations.findFirst({
-                  where: and(
-                    eq(meaningTranslations.meaningId, mc.meaningId),
-                    eq(meaningTranslations.languageId, t.languageId),
-                    isNull(meaningTranslations.deletedAt),
-                  ),
-                });
-                if (current) {
-                  if (current.translationText !== t.translationText) {
-                    await db
-                      .update(meaningTranslations)
-                      .set({ translationText: t.translationText, updatedAt: new Date() })
-                      .where(eq(meaningTranslations.id, current.id));
-                    changesApplied++;
-                  }
-                  continue;
-                }
-              }
-              const exists = await db.query.meaningTranslations.findFirst({
+              // #191: padanan bahasa yang sama SELALU diganti di baris yang sama,
+              // kata terverifikasi maupun belum (restoreBaseline mengembalikan
+              // lewat id). Dulu kata terverifikasi menambah baris baru -> makna
+              // tampak bertambah setelah approve.
+              const current = await db.query.meaningTranslations.findFirst({
+                where: and(
+                  eq(meaningTranslations.meaningId, mc.meaningId),
+                  eq(meaningTranslations.languageId, t.languageId),
+                  isNull(meaningTranslations.deletedAt),
+                ),
+              });
+              if (current?.translationText === t.translationText) continue;
+              // ponytail: unique (meaning_id, language_id, translation_text)
+              // mencakup baris soft-deleted - teks yang pernah dipakai tidak
+              // bisa di-UPDATE ke baris lain. Kalau baris (aktif/soft-delete)
+              // sudah memegang teks baru: hidupkan baris itu, matikan baris
+              // lama. Kalau belum ada sama sekali: UPDATE/INSERT bersih.
+              const holder = await db.query.meaningTranslations.findFirst({
                 where: and(
                   eq(meaningTranslations.meaningId, mc.meaningId),
                   eq(meaningTranslations.languageId, t.languageId),
                   eq(meaningTranslations.translationText, t.translationText),
                 ),
               });
-              if (!exists) {
+              if (holder) {
+                if (holder.deletedAt) {
+                  await db
+                    .update(meaningTranslations)
+                    .set({ deletedAt: null, updatedAt: new Date() })
+                    .where(eq(meaningTranslations.id, holder.id));
+                }
+                if (current) {
+                  await db
+                    .update(meaningTranslations)
+                    .set({ deletedAt: new Date() })
+                    .where(eq(meaningTranslations.id, current.id));
+                }
+              } else if (current) {
+                await db
+                  .update(meaningTranslations)
+                  .set({ translationText: t.translationText, updatedAt: new Date() })
+                  .where(eq(meaningTranslations.id, current.id));
+              } else {
                 await db
                   .insert(meaningTranslations)
                   .values({
@@ -348,8 +362,8 @@ export async function applyChangesToWord(
                     createdBy: reviewerId,
                   })
                   .onConflictDoNothing();
-                changesApplied++;
               }
+              changesApplied++;
             }
           }
         }

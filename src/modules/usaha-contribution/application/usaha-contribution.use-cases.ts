@@ -130,7 +130,7 @@ export class UsahaContributionUseCases {
     userId: string,
     input: SubmitNewUsahaInput,
   ): Promise<UsahaContribution> {
-    await this.assertNewPayload(input.payload);
+    const payload = await this.assertNewPayload(input.payload);
     const anon = userId === ANONIM_USER_ID;
     if (!anon && (await this.contrib.countPending(userId)) >= PENDING_CAP) {
       throw new ConflictError(
@@ -142,7 +142,7 @@ export class UsahaContributionUseCases {
       kind: 'new',
       userId,
       lockedFields: '',
-      payload: input.payload,
+      payload,
       // Anonim tidak bisa mengklaim (tidak ada akun penerima).
       wantsClaim: input.wantsClaim && !anon,
     });
@@ -191,8 +191,8 @@ export class UsahaContributionUseCases {
         'Usulan ini tidak menunggu revisi',
       );
     }
-    await this.assertNewPayload(input.payload);
-    await this.contrib.replacePayload(id, input.payload, '');
+    const payload = await this.assertNewPayload(input.payload);
+    await this.contrib.replacePayload(id, payload, '');
     const updated = await this.contrib.findById(id);
     if (!updated) throw new Error('resubmit gagal - row hilang');
     return updated;
@@ -233,8 +233,12 @@ export class UsahaContributionUseCases {
     }
 
     const locked = this.lockedFieldsFor(input);
+    let payload = input.payload;
     if (input.kind === 'profile') {
-      await this.assertProfilePayload(input.payload as ProfilePayload, locked);
+      payload = await this.assertProfilePayload(
+        input.payload as ProfilePayload,
+        locked,
+      );
     }
     if (
       input.kind === 'item_add' ||
@@ -270,7 +274,7 @@ export class UsahaContributionUseCases {
       usahaId: usaha.id,
       itemId: input.itemId ?? null,
       lockedFields: locked,
-      payload: input.payload,
+      payload,
       baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
     });
   }
@@ -528,7 +532,9 @@ export class UsahaContributionUseCases {
     }
   }
 
-  private async assertNewPayload(payload: NewUsahaPayload): Promise<void> {
+  private async assertNewPayload(
+    payload: NewUsahaPayload,
+  ): Promise<NewUsahaPayload> {
     if (!payload.name?.trim() || payload.name.trim().length < 3) {
       throw new BadRequestError(
         'NAME_TOO_SHORT',
@@ -562,32 +568,48 @@ export class UsahaContributionUseCases {
         );
       }
     }
-    const region = await this.regions.findById(payload.regionId);
+    return this.normalizeRegionRefs(payload);
+  }
+
+  /**
+   * Klien (mobile) memilih wilayah dari katalog publik yang `id`-nya SLUG,
+   * sedangkan kolom `region_id`/`village_id` menyimpan ULID. Resolusi di sini
+   * supaya payload yang tersimpan selalu ULID dan perbandingan induk akurat.
+   */
+  private async normalizeRegionRefs<T extends NewUsahaPayload>(
+    payload: T,
+  ): Promise<T> {
+    const region = await this.regions.findByIdOrSlug(payload.regionId);
     if (!region || region.type !== 'kecamatan' || region.status !== 'published') {
       throw new BadRequestError('REGION_NOT_FOUND', 'Kecamatan tidak ditemukan');
     }
-    if (payload.villageId) {
-      const village = await this.regions.findById(payload.villageId);
-      if (
-        !village ||
-        village.type !== 'desa' ||
-        village.status !== 'published'
-      ) {
-        throw new BadRequestError('VILLAGE_NOT_FOUND', 'Desa tidak ditemukan');
-      }
-      if (village.parentId !== payload.regionId) {
-        throw new BadRequestError(
-          'VILLAGE_MISMATCH',
-          'Desa bukan bagian dari kecamatan yang dipilih',
-        );
-      }
+    const villageId = payload.villageId
+      ? await this.resolveVillage(payload.villageId, region.id)
+      : null;
+    return { ...payload, regionId: region.id, villageId };
+  }
+
+  private async resolveVillage(
+    ref: string,
+    regionId: string | null,
+  ): Promise<string> {
+    const village = await this.regions.findByIdOrSlug(ref);
+    if (!village || village.type !== 'desa' || village.status !== 'published') {
+      throw new BadRequestError('VILLAGE_NOT_FOUND', 'Desa tidak ditemukan');
     }
+    if (regionId && village.parentId !== regionId) {
+      throw new BadRequestError(
+        'VILLAGE_MISMATCH',
+        'Desa bukan bagian dari kecamatan yang dipilih',
+      );
+    }
+    return village.id;
   }
 
   private async assertProfilePayload(
     payload: ProfilePayload,
     locked: string,
-  ): Promise<void> {
+  ): Promise<ProfilePayload> {
     const fields = locked ? locked.split(',') : [];
     if (fields.length === 0) {
       throw new BadRequestError(
@@ -610,12 +632,25 @@ export class UsahaContributionUseCases {
         );
       }
     }
-    if (payload.villageId) {
-      const village = await this.regions.findById(payload.villageId);
-      if (!village || village.type !== 'desa') {
-        throw new BadRequestError('VILLAGE_NOT_FOUND', 'Desa tidak ditemukan');
-      }
+    if (!payload.regionId) {
+      return payload.villageId
+        ? {
+            ...payload,
+            villageId: await this.resolveVillage(payload.villageId, null),
+          }
+        : payload;
     }
+    const region = await this.regions.findByIdOrSlug(payload.regionId);
+    if (!region || region.type !== 'kecamatan' || region.status !== 'published') {
+      throw new BadRequestError('REGION_NOT_FOUND', 'Kecamatan tidak ditemukan');
+    }
+    return {
+      ...payload,
+      regionId: region.id,
+      villageId: payload.villageId
+        ? await this.resolveVillage(payload.villageId, region.id)
+        : payload.villageId,
+    };
   }
 
   private async assertItemChange(

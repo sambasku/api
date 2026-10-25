@@ -56,7 +56,7 @@ export class PlaceContributionUseCases {
   ) {}
 
   async submit(userId: string, placeId: string | null, payload: ContributionPayload): Promise<PlaceContribution> {
-    await this.assertPayload(payload);
+    const normalized = await this.assertPayload(payload);
     const anon = userId === ANONIM_USER_ID;
     if (!anon && (await this.contrib.countPending(userId)) >= PENDING_CAP) {
       throw new ConflictError('PENDING_CAP', 'Maksimal 10 usulan yang masih menunggu');
@@ -76,7 +76,7 @@ export class PlaceContributionUseCases {
       userId,
       placeId: place?.id ?? null,
       baseUpdatedAt: base,
-      payload,
+      payload: normalized,
     });
   }
 
@@ -106,7 +106,10 @@ export class PlaceContributionUseCases {
     }));
     if (!row.placeId) {
       await this.createPlace.execute({
-        slug: row.payload.slug,
+        // Slug usulan bisa bentrok (auto-slug dari nama di klien): ambil
+        // slug unik dari nama, bukan pakai mentah - approve kedua untuk
+        // nama sama tidak boleh gagal SLUG_TAKEN (pola event/usaha).
+        slug: await this.uniqueSlug(row.payload.name),
         name: row.payload.name,
         category: row.payload.category,
         type: row.payload.type,
@@ -222,11 +225,33 @@ async reject(id: string, reasonCode: string, reasonText?: string | null, actorId
     return row;
   }
 
+  /**
+   * Slug unik dari nama. Semua kandidat dicek dalam SATU query IN (bukan loop
+   * query per kandidat - rule subrequest).
+   */
+  private async uniqueSlug(name: string): Promise<string> {
+    const base =
+      name
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80)
+        .replace(/-+$/g, '') || 'wisata';
+    const candidates = [base];
+    for (let i = 2; i <= 20; i++) candidates.push(`${base}-${i}`);
+    const taken = await this.places.existingSlugs(candidates);
+    for (const slug of candidates) {
+      if (!taken.has(slug)) return slug;
+    }
+    return `${base}-${Date.now()}`;
+  }
+
   private async loadPlace(idOrSlug: string) {
     return (await this.places.findById(idOrSlug)) ?? (await this.places.findBySlugAny(idOrSlug));
   }
 
-  private async assertPayload(payload: ContributionPayload): Promise<void> {
+  private async assertPayload(payload: ContributionPayload): Promise<ContributionPayload> {
     const hasLat = payload.lat != null;
     const hasLng = payload.lng != null;
     if (hasLat !== hasLng) {
@@ -236,24 +261,32 @@ async reject(id: string, reasonCode: string, reasonText?: string | null, actorId
     if (!category || category.status !== 'published') {
       throw new BadRequestError('CATEGORY_NOT_FOUND', 'Kategori tidak ditemukan');
     }
-    if (payload.regionId) {
-      const region = await this.regions.findById(payload.regionId);
-      if (!region || region.type !== 'kecamatan' || region.status !== 'published') {
-        throw new BadRequestError('REGION_NOT_FOUND', 'Kecamatan tidak ditemukan');
-      }
+    // Katalog publik `regions` memakai slug sebagai `id`-nya (mobile kirim
+    // apa adanya), sedangkan kolom FK menyimpan ULID. Normalisasi ke ULID
+    // supaya perbandingan induk desa-kecamatan akurat (pola usaha).
+    const region = payload.regionId
+      ? await this.regions.findByIdOrSlug(payload.regionId)
+      : null;
+    if (payload.regionId && (!region || region.type !== 'kecamatan' || region.status !== 'published')) {
+      throw new BadRequestError('REGION_NOT_FOUND', 'Kecamatan tidak ditemukan');
     }
-    if (payload.villageId) {
-      const village = await this.regions.findById(payload.villageId);
-      if (!village || village.type !== 'desa' || village.status !== 'published') {
-        throw new BadRequestError('VILLAGE_NOT_FOUND', 'Desa tidak ditemukan');
-      }
-      if (payload.regionId && village.parentId !== payload.regionId) {
-        throw new BadRequestError('VILLAGE_MISMATCH', 'Desa bukan bagian dari kecamatan yang dipilih');
-      }
+    const village = payload.villageId
+      ? await this.regions.findByIdOrSlug(payload.villageId)
+      : null;
+    if (payload.villageId && (!village || village.type !== 'desa' || village.status !== 'published')) {
+      throw new BadRequestError('VILLAGE_NOT_FOUND', 'Desa tidak ditemukan');
+    }
+    if (region && village && village.parentId !== region.id) {
+      throw new BadRequestError('VILLAGE_MISMATCH', 'Desa bukan bagian dari kecamatan yang dipilih');
     }
     if (payload.images.length > 20) {
       throw new BadRequestError('IMAGE_CAP', 'Maksimal 20 foto per usulan');
     }
     for (const img of payload.images) assertOurPlaceImage(img.url);
+    return {
+      ...payload,
+      regionId: region?.id ?? payload.regionId,
+      villageId: village?.id ?? payload.villageId,
+    };
   }
 }

@@ -27,10 +27,12 @@ export const ACTIVITY_EVENT_KINDS = [
   'search_miss',
   'user_joined',
   'card_shared',
-  'usaha_published',
-  'cuisine_published',
-  'place_published',
-  'event_published',
+ 'usaha_published',
+ 'cuisine_published',
+ 'place_published',
+ 'event_published',
+  'pantun_created',
+  'pantun_reply_created',
   'announcement',
 ] as const;
 
@@ -82,9 +84,13 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'culinary';
     case 'place_published':
       return 'place_listing';
-    case 'event_published':
-      return 'event';
-    case 'announcement':
+case 'event_published':
+return 'event';
+  case 'pantun_created':
+    return 'discussion';
+  case 'pantun_reply_created':
+    return 'discussion';
+case 'announcement':
       return 'announcement';
   }
 }

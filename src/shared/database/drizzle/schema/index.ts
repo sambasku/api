@@ -82,3 +82,5 @@ export * from "./culinary-place-cuisines.schema";
 export * from "./culinary-contributions.schema";
 export * from "./culinary-claims.schema";
 export * from "./culinary-reports.schema";
+export * from "./mobile-releases.schema";
+export * from "./pantun.schema";

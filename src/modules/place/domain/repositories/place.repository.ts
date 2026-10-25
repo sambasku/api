@@ -105,6 +105,8 @@ export interface PlaceRepository {
   ): Promise<Place | null>;
   list(input: ListPlacesInput): Promise<ListPlacesResult>;
   findBySlugAny(slug: string): Promise<Place | null>;
+  /** Cek daftar slug mana yang sudah terpakai (bulk check). */
+  existingSlugs(slugs: string[]): Promise<Set<string>>;
   listImages(
     placeId: string,
     offset: number,

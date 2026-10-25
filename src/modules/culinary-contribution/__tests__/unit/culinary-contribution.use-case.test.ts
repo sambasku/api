@@ -96,17 +96,59 @@ describe("Culinary contribution - submit usulan baru", () => {
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
-  it("gambar tanpa atribusi ditolak (rule PRD 13)", async () => {
+  it("gambar tanpa nama pemilik ditolak (rule PRD 13)", async () => {
     const uc = build(makeContrib(), makeCulinary());
     await expect(
       uc.submit(ANONIM_USER_ID, {
         kind: "new_cuisine",
         payload: {
           name: "Pengkang",
-          images: [{ url: "https://x.test/a.jpg", attribution: { name: "A" } }],
+          images: [{ url: "https://x.test/a.jpg", attribution: { license: "CC BY-SA 4.0" } }],
         },
       }),
     ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it("lisensi kosong diisi CC BY-SA 4.0 otomatis (PRD kuliner)", async () => {
+    const contrib = makeContrib();
+    const uc = build(contrib, makeCulinary());
+    await uc.submit(ANONIM_USER_ID, {
+      kind: "new_cuisine",
+      payload: {
+        name: "Pengkang",
+        images: [{ url: "https://x.test/a.jpg", attribution: { name: "Warga" } }],
+      },
+    });
+    const arg = contrib.create.mock.calls[0][0] as {
+      payload: { images: Array<{ attribution?: { license?: string } }> };
+    };
+    expect(arg.payload.images[0].attribution?.license).toBe("CC BY-SA 4.0");
+  });
+
+  it("approve dengan override images mengganti foto usulan", async () => {
+    const culinary = makeCulinary();
+    const row = {
+      id: "C9",
+      kind: "new_cuisine",
+      status: "pending",
+      userId: ANONIM_USER_ID,
+      lockedFields: "",
+      payload: {
+        name: "Pengkang",
+        images: [{ url: "https://x.test/a.jpg", attribution: { name: "Warga" } }],
+      },
+    };
+    const contrib = makeContrib({ findById: vi.fn().mockResolvedValue(row) });
+    const uc2 = build(contrib, culinary);
+    await uc2.approve("C9", undefined, null, {
+      images: [{ url: "https://x.test/b.jpg", attribution: { name: "Admin" } }],
+    });
+    expect(contrib.replacePayload).toHaveBeenCalled();
+    const created = culinary.createCuisine.mock.calls[0][0] as {
+      imagesJson: string | null;
+    };
+    expect(created.imagesJson).toContain("b.jpg");
+    expect(created.imagesJson).toContain("Admin");
   });
 
   it("lat tanpa lng ditolak", async () => {

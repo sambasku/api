@@ -55,6 +55,11 @@ export interface RegionRepository {
   softDelete(id: string): Promise<boolean>;
   findById(id: string, opts?: { includeDeleted?: boolean }): Promise<Region | null>;
   findBySlug(slug: string): Promise<Region | null>;
+  /**
+   * Terima ULID (FK) atau slug katalog publik dalam satu query.
+   * Klien memakai katalog (`id` = slug), jadi tulis-path wajib toleran.
+   */
+  findByIdOrSlug(ref: string, opts?: { includeDeleted?: boolean }): Promise<Region | null>;
   list(input: ListRegionsInput): Promise<ListRegionsResult>;
   listPublishedCatalog(): Promise<RegionCatalogItem[]>;
   countActiveChildren(parentId: string): Promise<number>;

@@ -166,6 +166,15 @@ export const requestCulinaryRevisionBodySchema = z
     note: z.string().trim().min(3).max(1000),
   })
   .strict();
+/**
+ * Keputusan approve boleh menyunting gambar usulan (hapus/ganti foto warga
+ * sebelum tayang). Tanpa body = setujui apa adanya.
+ */
+export const approveCulinaryContributionBodySchema = z
+  .object({
+    images: z.array(imageSchema).max(20).optional(),
+  })
+  .strict();
 
 export const listCulinaryContributionsQuerySchema = z.object({
   status: z

@@ -41,6 +41,17 @@ import { SystemDatabaseController } from "@/modules/system/presentation/v1/syste
 import { createSystemDatabaseRoutes } from "@/modules/system/presentation/v1/system-database.routes";
 import { SystemSupabaseController } from "@/modules/system/presentation/v1/system-supabase.controller";
 import { createSystemSupabaseRoutes } from "@/modules/system/presentation/v1/system-supabase.routes";
+import { MobileReleaseRepositoryImpl } from "@/modules/mobile-release/infrastructure/mobile-release.repository.impl";
+import {
+  GetLatestMobileReleaseUseCase,
+  ListMobileReleasesUseCase,
+  UpsertMobileReleaseUseCase,
+} from "@/modules/mobile-release/application/use-cases/mobile-release.use-cases";
+import { MobileReleaseController } from "@/modules/mobile-release/presentation/v1/mobile-release.controller";
+import {
+  createMobileReleasePublicRoutes,
+  createMobileReleaseAdminRoutes,
+} from "@/modules/mobile-release/presentation/v1/mobile-release.routes";
 import { createOpenApiApp } from "@/shared/openapi/openapi-app";
 import { UserRepositoryImpl } from "@/modules/auth/infrastructure/user.repository.impl";
 import { RefreshTokenRepositoryImpl } from "@/modules/auth/infrastructure/refresh-token.repository.impl";
@@ -513,6 +524,18 @@ import { TakedownDiscussionReplyUseCase } from "@/modules/discussion/application
 import { DiscussionController } from "@/modules/discussion/presentation/v1/discussion.controller";
 import { createDiscussionRoutes } from "@/modules/discussion/presentation/v1/discussion.routes";
 import { createAdminDiscussionRoutes } from "@/modules/discussion/presentation/v1/admin-discussion.routes";
+import { PantunRepositoryImpl } from "@/modules/pantun/infrastructure/pantun.repository.impl";
+import { CreatePantunUseCase } from "@/modules/pantun/application/use-cases/create-pantun.use-case";
+import { CreatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply.use-case";
+import { ListPublishedPantunsUseCase } from "@/modules/pantun/application/use-cases/list-published-pantuns.use-case";
+import { GetPantunDetailUseCase } from "@/modules/pantun/application/use-cases/get-pantun-detail.use-case";
+import { TakedownPantunUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun.use-case";
+import { TakedownPantunReplyUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun-reply.use-case";
+import { DeletePantunReplyUseCase } from "@/modules/pantun/application/use-cases/delete-pantun-reply.use-case";
+import { ListAdminPantunsUseCase } from "@/modules/pantun/application/use-cases/list-admin-pantuns.use-case";
+import { PantunController } from "@/modules/pantun/presentation/v1/pantun.controller";
+import { createPantunRoutes } from "@/modules/pantun/presentation/v1/pantun.routes";
+import { createAdminPantunRoutes } from "@/modules/pantun/presentation/v1/admin-pantun.routes";
 import { DashboardController } from "@/modules/dashboard/presentation/v1/dashboard.controller";
 import { createDashboardRoutes } from "@/modules/dashboard/presentation/v1/dashboard.routes";
 import { GetDashboardStatsUseCase } from "@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case";
@@ -934,6 +957,12 @@ const requireContributeWriteIfAuthed = createRequireApprovedClientMiddleware(
   },
 );
 const requireDiscussionWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "discussion.write",
+  },
+);
+const requirePantunWriteClient = createRequireApprovedClientMiddleware(
   apiClientRepo,
   {
     scope: "discussion.write",
@@ -1796,6 +1825,25 @@ app.route(
   }),
 );
 
+// Modul mobile-release (issue mobile#196): publik (cek versi) + admin (upsert)
+const mobileReleaseRepo = new MobileReleaseRepositoryImpl(db);
+const mobileReleaseController = new MobileReleaseController({
+  getLatest: new GetLatestMobileReleaseUseCase(mobileReleaseRepo),
+  list: new ListMobileReleasesUseCase(mobileReleaseRepo),
+  upsert: new UpsertMobileReleaseUseCase(mobileReleaseRepo, auditRepo),
+});
+app.route(
+  "/api/v1/mobile-release",
+  createMobileReleasePublicRoutes({ controller: mobileReleaseController }),
+);
+app.route(
+  "/api/v1/admin/mobile-release",
+  createMobileReleaseAdminRoutes({
+    controller: mobileReleaseController,
+    authenticate,
+  }),
+);
+
 // Modul word - admin (write) + publik (read)
 app.route(
   "/api/v1/admin/words",
@@ -2281,6 +2329,8 @@ app.route(
     controller: culinaryContributionController,
     authenticate,
     optionalAuthenticate,
+    uploadCulinaryImage: (c) =>
+      publicImageController.upload(c, { purpose: "culinary" }),
   }),
 );
 app.route(
@@ -2469,6 +2519,47 @@ app.route(
   "/api/v1/admin/discussions",
   createAdminDiscussionRoutes({
     controller: discussionController,
+    authenticate,
+  }),
+);
+
+const pantunRepo = new PantunRepositoryImpl(db);
+const pantunController = new PantunController({
+  create: new CreatePantunUseCase(
+    pantunRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  createReply: new CreatePantunReplyUseCase(
+    pantunRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  listPublished: new ListPublishedPantunsUseCase(pantunRepo),
+  getDetail: new GetPantunDetailUseCase(pantunRepo),
+  takedown: new TakedownPantunUseCase(pantunRepo, auditRepo),
+  takedownReply: new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
+  deleteReply: new DeletePantunReplyUseCase(pantunRepo, auditRepo),
+  listAdmin: new ListAdminPantunsUseCase(pantunRepo),
+});
+app.route(
+  "/api/v1/pantuns",
+  createPantunRoutes({
+    controller: pantunController,
+    authenticate,
+    requireApprovedClient: requirePantunWriteClient,
+    requireLegalConsent,
+    onUgcRateLimited,
+  }),
+);
+app.route(
+  "/api/v1/admin/pantuns",
+  createAdminPantunRoutes({
+    controller: pantunController,
     authenticate,
   }),
 );

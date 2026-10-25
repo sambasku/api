@@ -42,6 +42,8 @@ export const FEED_CATEGORY_KINDS: Record<
     'usaha_published',
     'cuisine_published',
     'event_published',
+    'pantun_created',
+    'pantun_reply_created',
     'place_photo_added',
   ],
   announcement: ['announcement'],

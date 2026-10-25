@@ -242,7 +242,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     const submit = await post(
       "/api/v1/place-contributions",
       {
-        slug: "pantai-usulan-e2e",
+        slug: "pantai-usulan",
         name: "Pantai Usulan",
         category: "wisata",
         type: "pantai",
@@ -258,7 +258,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     expect(submit.status).toBe(200);
     const proposalId = (await submit.json()).data.id as string;
 
-    const hidden = await get("/api/v1/places/pantai-usulan-e2e");
+    const hidden = await get("/api/v1/places/pantai-usulan");
     expect(hidden.status).toBe(404);
 
     const approve = await post(
@@ -286,15 +286,16 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
       action_kind: "place_contribution",
     });
 
-    const detail = await get("/api/v1/places/pantai-usulan-e2e");
+    const detail = await get("/api/v1/places/pantai-usulan");
     expect(detail.status).toBe(200);
     const place = (await detail.json()).data;
+    expect(place.slug).toBe("pantai-usulan");
     expect(place.images[0].is_main).toBe(true);
     expect(place.images[0].attribution.provider).toBe("sambasku");
     expect(place.image_count).toBe(1);
 
     const live = await post(
-      `/api/v1/places/pantai-usulan-e2e/images`,
+      `/api/v1/places/pantai-usulan/images`,
       { urls: [extra] },
       userToken,
     );
@@ -326,12 +327,12 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     }>;
     const photoItem = feedItems.find((i) => i.kind === "place_photo");
     expect(photoItem).toMatchObject({
-      target: { type: "place", id: "pantai-usulan-e2e" },
+      target: { type: "place", id: "pantai-usulan" },
       subtitle: "Pantai Usulan",
     });
 
     const afterPhoto = (
-      await (await get("/api/v1/places/pantai-usulan-e2e")).json()
+      await (await get("/api/v1/places/pantai-usulan")).json()
     ).data;
     expect(afterPhoto.image_count).toBe(2);
     expect(
@@ -346,7 +347,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
         name: "Tetangga",
         category: "wisata",
         short_description: "Dekat.",
-        related: [{ kind: "place", slug: "pantai-usulan-e2e" }],
+        related: [{ kind: "place", slug: "pantai-usulan" }],
       },
       adminToken,
     );
@@ -367,7 +368,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
       "/api/v1/place-contributions",
       {
         place_id: place.id,
-        slug: "pantai-usulan-e2e",
+        slug: "pantai-usulan",
         name: "Pantai Usulan Baru",
         category: "wisata",
         type: "pantai",
@@ -392,7 +393,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
       ).status,
     ).toBe(200);
 
-    const finalRes = await get("/api/v1/places/pantai-usulan-e2e");
+    const finalRes = await get("/api/v1/places/pantai-usulan");
     const finalPlace = (await finalRes.json()).data;
     expect(finalPlace.name).toBe("Pantai Usulan Baru");
     expect(finalPlace.image_count).toBe(2);
@@ -404,6 +405,31 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     expect(finalPlace.related[0].name).toBe("Tetangga");
     expect(finalPlace.related[1].name).toBeNull();
     expect(neighborBody.slug).toBe("tetangga-usulan-e2e");
+  });
+
+  it("dua usulan nama sama: approve kedua dapat slug bersufiks, bukan SLUG_TAKEN", async () => {
+    const body = {
+      slug: "danau-kembar-e2e",
+      name: "Danau Kembar",
+      category: "wisata",
+      short_description: "Usulan ganda.",
+    };
+    const ids: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const res = await post("/api/v1/place-contributions", body, userToken);
+      expect(res.status).toBe(200);
+      ids.push((await res.json()).data.id as string);
+    }
+    for (const id of ids) {
+      const res = await post(
+        `/api/v1/admin/place-contributions/${id}/approve`,
+        {},
+        adminToken,
+      );
+      expect(res.status).toBe(200);
+    }
+    expect((await get("/api/v1/places/danau-kembar")).status).toBe(200);
+    expect((await get("/api/v1/places/danau-kembar-2")).status).toBe(200);
   });
 
   it("reject usulan wajib beralasan: disimpan, tampil ke pengusul, masuk notifikasi", async () => {
@@ -536,7 +562,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     expect(authed.status).toBe(200);
   });
   it("#187: anonim dilarang unggah foto, tamu terautentikasi boleh", async () => {
-    const place = "pantai-usulan-e2e";
+    const place = "pantai-usulan";
     const anonymous = await post(`/api/v1/places/${place}/images`, {
       urls: [
         "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/anon.webp",
@@ -547,7 +573,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
   });
 
   it("#187: takedown foto menyembunyikan foto + event feed-nya", async () => {
-    const place = "pantai-usulan-e2e";
+    const place = "pantai-usulan";
     const extra =
       "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/takedown.webp";
     expect(
@@ -591,7 +617,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
 
   it("#187: takedown foto tak dikenal = 404", async () => {
     const detail = (
-      await (await get("/api/v1/places/pantai-usulan-e2e")).json()
+      await (await get("/api/v1/places/pantai-usulan")).json()
     ).data;
     const res = await del(
       `/api/v1/admin/places/${detail.id}/images/01NOTAREALIMAGE0000000000`,

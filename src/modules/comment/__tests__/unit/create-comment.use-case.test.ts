@@ -218,6 +218,84 @@ describe('CreateCommentUseCase', () => {
     expect(pushCooldown.touchAfterSend).not.toHaveBeenCalled();
   });
 
+  it('mention peserta lama → hanya notif komentar, tanpa notif mention (#198)', async () => {
+    const mentionBody = '@owner setuju banget dengan @admin di atas';
+    const commentRepo = {
+      create: vi.fn().mockResolvedValue(makeComment({ body: mentionBody })),
+      findById: vi.fn().mockResolvedValue(makeComment({ body: mentionBody })),
+      listDistinctCommenterUserIds: vi.fn().mockResolvedValue([AUTHOR, OWNER]),
+    };
+    const wordRepo = {
+      findById: vi.fn().mockResolvedValue({
+        id: WORD,
+        status: 'published',
+        lemma: 'makatn',
+        createdBy: OWNER,
+      }),
+    };
+    const auditRepo = { record: vi.fn() };
+    const blocklistRepo = { listAllActiveWords: vi.fn().mockResolvedValue([]) };
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const pushCooldown = {
+      maySend: vi.fn().mockResolvedValue(true),
+      touchAfterSend: vi.fn().mockResolvedValue(undefined),
+    };
+    const uc = new CreateCommentUseCase(
+      commentRepo as never,
+      wordRepo as never,
+      auditRepo as never,
+      blocklistRepo as never,
+      {
+        findById: vi.fn().mockResolvedValue({
+          id: AUTHOR,
+          username: 'budi',
+          displayName: 'budi',
+        }),
+        // OWNER (pemilik, peserta) di-mention; ADMIN (non-peserta) juga di-mention.
+        findByUsername: vi
+          .fn()
+          .mockImplementation(async (username: string) => {
+            if (username === 'owner')
+              return { id: OWNER, username: 'owner', displayName: 'Pemilik', isActive: true, deletedAt: null };
+            if (username === 'admin')
+              return { id: ADMIN, username: 'admin', displayName: 'Admin Jaya', isActive: true, deletedAt: null };
+            return null;
+          }),
+      } as never,
+      inbox as never,
+      notifyUser as never,
+      pushCooldown as never,
+    );
+
+    await uc.execute({
+      wordId: WORD,
+      userId: AUTHOR,
+      role: 'contributor',
+      body: mentionBody,
+    });
+
+    // Peserta selain aktor (OWNER) dapat notif komentar; hanya non-peserta (ADMIN) dapat mention.
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: OWNER, type: 'word_comment' }),
+    );
+    expect(inbox.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({ userId: AUTHOR, type: 'word_comment' }),
+    );
+    expect(inbox.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({ userId: OWNER, type: 'word_comment_mention' }),
+    );
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: ADMIN,
+        type: 'word_comment_mention',
+      }),
+    );
+    // Total inbox: 1 comment (OWNER) + 1 mention (ADMIN, non-peserta) = 2, bukan 3.
+    expect(inbox.execute).toHaveBeenCalledTimes(2);
+    expect(notifyUser.execute).toHaveBeenCalledTimes(2);
+  });
+
   it('gagal notify tidak menggagalkan create', async () => {
     const commentRepo = {
       create: vi.fn().mockResolvedValue(makeComment()),

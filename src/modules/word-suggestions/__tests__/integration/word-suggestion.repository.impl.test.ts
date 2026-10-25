@@ -3,12 +3,13 @@ import { config } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { getTestDb } from '@/shared/database/drizzle/test-client';
 import {
-  languages,
-  lexicalRelations,
-  meanings,
-  users,
-  wordEditSuggestions,
-  words, userRoles } from '@/shared/database/drizzle/schema';
+languages,
+lexicalRelations,
+meaningTranslations,
+meanings,
+users,
+wordEditSuggestions,
+words, userRoles } from '@/shared/database/drizzle/schema';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
 import { WordSuggestionRepositoryImpl } from '../../infrastructure/word-suggestion.repository.impl';
 import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
@@ -235,6 +236,44 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
       .where(eq(activityEvents.dedupeKey, `suggestion:${sug.id}`));
     expect(after).toBeDefined();
     expect(after.hiddenAt).not.toBeNull();
+  });
+
+  it('approve ubah makna di kata terverifikasi mengganti padanan, bukan menambah (#191)', async () => {
+    const IDN = ulid26('01TESTLANGIDN');
+    await db.insert(languages).values({ id: IDN, code: 'id', name: 'Indonesia' });
+    await db.insert(meaningTranslations).values({
+      meaningId: MEANING,
+      languageId: IDN,
+      translationText: 'sudah',
+      createdBy: OWNER,
+    });
+    await db.update(words).set({ isVerified: true }).where(eq(words.id, WORD));
+
+    const suggestion = await repo.createSuggestion(
+      KONTRIBUTOR,
+      WORD,
+      {
+        meanings: [
+          {
+            action: 'update',
+            meaningId: MEANING,
+            translations: [{ languageId: IDN, translationText: 'belum', translationType: 'direct' }],
+          },
+        ],
+      },
+      'x',
+      'change_meaning',
+      'contributor',
+    );
+    await repo.approveSuggestion(suggestion.id, REVIEWER, 'ok');
+
+    const active = await db
+      .select()
+      .from(meaningTranslations)
+      .where(eq(meaningTranslations.meaningId, MEANING));
+    const live = active.filter((t) => !t.deletedAt);
+    expect(live).toHaveLength(1);
+    expect(live[0].translationText).toBe('belum');
   });
 
   it('kategori sama masih pending ditolak, kategori lain boleh', async () => {

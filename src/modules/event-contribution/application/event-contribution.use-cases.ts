@@ -68,7 +68,7 @@ export class EventContributionUseCases {
     userId: string,
     payload: EventContributionPayload,
   ): Promise<EventContribution> {
-    await this.assertPayload(payload);
+    const normalized = await this.assertPayload(payload);
     const anon = userId === ANONIM_USER_ID;
     if (!anon && (await this.contrib.countPending(userId)) >= PENDING_CAP) {
       throw new ConflictError(
@@ -76,7 +76,7 @@ export class EventContributionUseCases {
         "Maksimal 10 usulan yang masih menunggu",
       );
     }
-    return this.contrib.create({ userId, payload });
+    return this.contrib.create({ userId, payload: normalized });
   }
 
   async mine(userId: string): Promise<EventContribution[]> {
@@ -120,8 +120,8 @@ export class EventContributionUseCases {
         "Usulan ini tidak menunggu revisi",
       );
     }
-    await this.assertPayload(payload);
-    await this.contrib.replacePayload(id, payload);
+    const normalized = await this.assertPayload(payload);
+    await this.contrib.replacePayload(id, normalized);
     const updated = await this.contrib.findById(id);
     if (!updated) throw new Error("resubmit gagal - row hilang");
     return updated;
@@ -291,7 +291,7 @@ export class EventContributionUseCases {
 
   private async assertPayload(
     payload: EventContributionPayload,
-  ): Promise<void> {
+  ): Promise<EventContributionPayload> {
     const hasLat = payload.lat != null;
     const hasLng = payload.lng != null;
     if (hasLat !== hasLng) {
@@ -321,29 +321,31 @@ export class EventContributionUseCases {
         "Waktu selesai tidak boleh sebelum waktu mulai",
       );
     }
-    if (payload.regionId) {
-      const region = await this.regions.findById(payload.regionId);
-      if (!region || region.type !== "kecamatan" || region.status !== "published") {
-        throw new BadRequestError(
-          "REGION_NOT_FOUND",
-          "Kecamatan tidak ditemukan",
-        );
-      }
+    // Katalog publik `regions` memakai slug sebagai `id`-nya (mobile kirim
+    // apa adanya), kolom FK menyimpan ULID. Normalisasi ke ULID (pola usaha).
+    const region = payload.regionId
+      ? await this.regions.findByIdOrSlug(payload.regionId)
+      : null;
+    if (payload.regionId && (!region || region.type !== "kecamatan" || region.status !== "published")) {
+      throw new BadRequestError(
+        "REGION_NOT_FOUND",
+        "Kecamatan tidak ditemukan",
+      );
     }
-    if (payload.villageId) {
-      const village = await this.regions.findById(payload.villageId);
-      if (!village || village.type !== "desa" || village.status !== "published") {
-        throw new BadRequestError(
-          "VILLAGE_NOT_FOUND",
-          "Desa tidak ditemukan",
-        );
-      }
-      if (payload.regionId && village.parentId !== payload.regionId) {
-        throw new BadRequestError(
-          "VILLAGE_MISMATCH",
-          "Desa bukan bagian dari kecamatan yang dipilih",
-        );
-      }
+    const village = payload.villageId
+      ? await this.regions.findByIdOrSlug(payload.villageId)
+      : null;
+    if (payload.villageId && (!village || village.type !== "desa" || village.status !== "published")) {
+      throw new BadRequestError(
+        "VILLAGE_NOT_FOUND",
+        "Desa tidak ditemukan",
+      );
+    }
+    if (region && village && village.parentId !== region.id) {
+      throw new BadRequestError(
+        "VILLAGE_MISMATCH",
+        "Desa bukan bagian dari kecamatan yang dipilih",
+      );
     }
     if (payload.placeIds.length > 0) {
       const valid = await this.events.validPlaceIds(payload.placeIds);
@@ -356,5 +358,10 @@ export class EventContributionUseCases {
         }
       }
     }
+    return {
+      ...payload,
+      regionId: region?.id ?? payload.regionId,
+      villageId: village?.id ?? payload.villageId,
+    };
   }
 }

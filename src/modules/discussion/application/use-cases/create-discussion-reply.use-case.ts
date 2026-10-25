@@ -121,7 +121,7 @@ export class CreateDiscussionReplyUseCase {
       });
     }
 
-    await this.notifyThreadParticipants({
+    const notifiedRecipientIds = await this.notifyThreadParticipants({
       discussionId: cmd.discussionId,
       topicBody: discussion.body,
       ownerUserId: discussion.userId,
@@ -134,6 +134,9 @@ export class CreateDiscussionReplyUseCase {
       topicBody: discussion.body,
       actorId: cmd.userId,
       replyBody: reply.body,
+      // Peserta yang sudah dapat notif balasan tidak dikirimi notif mention
+      // (dulu dobel: discussion_reply + discussion_mention, issue #198).
+      excludeUserIds: new Set(notifiedRecipientIds),
     });
 
     return (await this.repo.findReplyById(reply.id)) ?? reply;
@@ -143,12 +146,15 @@ export class CreateDiscussionReplyUseCase {
    * Mention (@username) di balasan diskusi: tipe `discussion_mention`.
    * Inbox refreshOnConflict = false (tidak menimpa notif balasan),
    * push TANPA cooldown (sinyal kuat).
+   * Penerima yang sudah dapat notif balasan di-skip lewat `excludeUserIds`
+   * supaya tidak dobel (issue #198).
    */
   private async notifyMentionedUsers(input: {
     discussionId: string;
     topicBody: string | null;
     actorId: string;
     replyBody: string;
+    excludeUserIds: ReadonlySet<string>;
   }): Promise<void> {
     if (!this.inbox && !this.notifyUser) return;
     if (!this.userRepo) return;
@@ -173,6 +179,7 @@ export class CreateDiscussionReplyUseCase {
 
       for (const user of mentioned) {
         if (user.id === input.actorId) continue;
+        if (input.excludeUserIds.has(user.id)) continue;
 
         if (this.inbox) {
           await this.inbox.execute({
@@ -225,8 +232,8 @@ export class CreateDiscussionReplyUseCase {
     ownerUserId: string;
     actorId: string;
     replyBody: string;
-  }): Promise<void> {
-    if (!this.inbox && !this.notifyUser) return;
+  }): Promise<string[]> {
+    if (!this.inbox && !this.notifyUser) return [];
 
     try {
       const priorReplierIds = await this.repo.listDistinctReplierUserIds(input.discussionId);
@@ -235,7 +242,7 @@ export class CreateDiscussionReplyUseCase {
         ownerUserId: input.ownerUserId,
         priorParticipantIds: priorReplierIds,
       });
-      if (recipientIds.length === 0) return;
+      if (recipientIds.length === 0) return [];
 
       let displayName = 'Seseorang';
       if (this.userRepo) {
@@ -288,6 +295,7 @@ export class CreateDiscussionReplyUseCase {
           }
         }
       }
+      return recipientIds;
     } catch (err) {
       console.error(
         JSON.stringify({
@@ -299,6 +307,7 @@ export class CreateDiscussionReplyUseCase {
           error: err instanceof Error ? err.message : String(err),
         }),
       );
+      return [];
     }
   }
 }
