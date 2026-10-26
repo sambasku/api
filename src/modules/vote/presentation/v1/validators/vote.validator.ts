@@ -13,6 +13,8 @@ export const voteTargetTypeEnum = z.enum([
   'comment',
   'discussion_reply',
   'discussion',
+  'pantun',
+  'pantun_reply',
 ]);
 
 export const toggleVoteSchema = z.object({

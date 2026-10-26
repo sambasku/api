@@ -83,6 +83,8 @@ const pantunLineItemSchema = z.object({
   rhyme_scheme: rhymeSchemeSchema,
   lines: z.array(z.string()).length(4),
   status: z.enum(['published', 'taken_down', 'deleted_by_author']),
+  upvotes: z.number(),
+  downvotes: z.number(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });

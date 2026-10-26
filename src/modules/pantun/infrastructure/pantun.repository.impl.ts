@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
   publicAccountDisplayName,
@@ -26,6 +26,17 @@ type ReplyRow = typeof pantunReplies.$inferSelect;
 
 function toLines(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.map((x) => String(x)) : [];
+}
+
+export type PantunSearchHit =
+  | { kind: 'pantun'; pantun: Pantun }
+  | { kind: 'reply'; reply: PantunReply };
+
+/** Term FTS trigram minimal 3 karakter; lebih pendek dilewati (kata pendek "ikan" tetap 3). */
+function ftsMatch(terms: string[]): string | null {
+  const usable = terms.filter((t) => t.length >= 3 && !t.includes('"'));
+  if (usable.length === 0) return null;
+  return usable.map((t) => `"${t}"`).join(' OR ');
 }
 
 function toPantun(

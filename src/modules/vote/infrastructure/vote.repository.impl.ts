@@ -8,6 +8,8 @@ import {
   pronunciations,
   discussionReplies,
   discussions,
+  pantuns,
+  pantunReplies,
   users,
   userSkips,
   votes,
@@ -49,6 +51,13 @@ function clipPreview(s: string): string {
   const t = s.trim().replace(/\s+/g, ' ');
   if (t.length <= PREVIEW_MAX) return t;
   return `${t.slice(0, PREVIEW_MAX - 1)}…`;
+}
+
+/** Baris pertama pantun dari kolom JSON `lines` (string sudah di-parse Drizzle). */
+function firstPantunLine(lines: unknown): string | null {
+  if (!Array.isArray(lines) || lines.length === 0) return null;
+  const first = lines.find((l): l is string => typeof l === 'string' && l.trim().length > 0);
+  return first ?? null;
 }
 
 export class VoteRepositoryImpl implements VoteRepository {
@@ -140,6 +149,18 @@ export class VoteRepositoryImpl implements VoteRepository {
           .where(
             and(eq(discussions.id, target.entityId), eq(discussions.status, 'published')),
           )
+          .limit(1);
+        return rows.length > 0;
+      }
+      case 'pantun':
+      case 'pantun_reply': {
+        // Hanya pantun/balasan tayang yang boleh di-vote (taken_down /
+        // deleted_by_author → 404 VOTE_TARGET_NOT_FOUND).
+        const table = target.entityType === 'pantun' ? pantuns : pantunReplies;
+        const rows = await this.db
+          .select({ id: table.id })
+          .from(table)
+          .where(and(eq(table.id, target.entityId), eq(table.status, 'published')))
           .limit(1);
         return rows.length > 0;
       }
@@ -466,7 +487,9 @@ export class VoteRepositoryImpl implements VoteRepository {
   ): Promise<{ wordId: string; lemma: string; ownerUserId: string | null } | null> {
     if (
       target.entityType === 'discussion' ||
-      target.entityType === 'discussion_reply'
+      target.entityType === 'discussion_reply' ||
+      target.entityType === 'pantun' ||
+      target.entityType === 'pantun_reply'
     ) {
       return null;
     }
@@ -797,6 +820,43 @@ export class VoteRepositoryImpl implements VoteRepository {
               out.set(
                 voteTargetKey({ entityType: 'discussion', entityId: r.id }),
                 clipPreview(r.body?.trim() || 'Pertanyaan diskusi'),
+              );
+            }
+          }),
+      );
+    }
+
+    // Pantun: preview = baris pertama (baris pantun disimpan JSON).
+    const pantunIds = [...new Set(idsByType.get('pantun') ?? [])];
+    if (pantunIds.length > 0) {
+      jobs.push(
+        this.db
+          .select({ id: pantuns.id, lines: pantuns.lines })
+          .from(pantuns)
+          .where(inArray(pantuns.id, pantunIds))
+          .then((rows) => {
+            for (const r of rows) {
+              out.set(
+                voteTargetKey({ entityType: 'pantun', entityId: r.id }),
+                clipPreview(firstPantunLine(r.lines) ?? 'Pantun'),
+              );
+            }
+          }),
+      );
+    }
+
+    const pantunReplyIds = [...new Set(idsByType.get('pantun_reply') ?? [])];
+    if (pantunReplyIds.length > 0) {
+      jobs.push(
+        this.db
+          .select({ id: pantunReplies.id, lines: pantunReplies.lines })
+          .from(pantunReplies)
+          .where(inArray(pantunReplies.id, pantunReplyIds))
+          .then((rows) => {
+            for (const r of rows) {
+              out.set(
+                voteTargetKey({ entityType: 'pantun_reply', entityId: r.id }),
+                clipPreview(firstPantunLine(r.lines) ?? 'Balasan pantun'),
               );
             }
           }),

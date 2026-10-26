@@ -3,6 +3,10 @@ import { UnauthorizedError } from '@/shared/errors/app-error';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { Pantun, PantunReply } from '../../domain/entities/pantun.entity';
+import type {
+  PantunReplyWithVotes,
+  PantunWithVotes,
+} from '../../application/use-cases/get-pantun-detail.use-case';
 import type { CreatePantunUseCase } from '../../application/use-cases/create-pantun.use-case';
 import type { CreatePantunReplyUseCase } from '../../application/use-cases/create-pantun-reply.use-case';
 import type { ListPublishedPantunsUseCase } from '../../application/use-cases/list-published-pantuns.use-case';
@@ -18,7 +22,7 @@ import type {
   ListAdminPantunsQuery,
 } from './validators/pantun.validator';
 
-function toItem(p: Pantun) {
+function toItem(p: Pantun | PantunWithVotes) {
   return {
     id: p.id,
     user_id: p.userId,
@@ -32,12 +36,14 @@ function toItem(p: Pantun) {
     rhyme_scheme: p.rhymeScheme,
     lines: p.lines,
     status: p.status,
+    upvotes: 'upvotes' in p ? p.upvotes : 0,
+    downvotes: 'downvotes' in p ? p.downvotes : 0,
     created_at: p.createdAt.toISOString(),
     updated_at: p.updatedAt?.toISOString() ?? null,
   };
 }
 
-function toReplyItem(r: PantunReply) {
+function toReplyItem(r: PantunReply | PantunReplyWithVotes) {
   return {
     id: r.id,
     user_id: r.userId,
@@ -51,6 +57,8 @@ function toReplyItem(r: PantunReply) {
     rhyme_scheme: r.rhymeScheme,
     lines: r.status === 'published' ? r.lines : [],
     status: r.status,
+    upvotes: 'upvotes' in r ? r.upvotes : 0,
+    downvotes: 'downvotes' in r ? r.downvotes : 0,
     created_at: r.createdAt.toISOString(),
     updated_at: r.updatedAt?.toISOString() ?? null,
   };
