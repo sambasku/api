@@ -14,9 +14,14 @@ export type InboxNotificationType =
   | 'discussion_taken_down'
   | 'discussion_reply'
   | 'discussion_mention'
+  | 'pantun_reply'
+  | 'pantun_mention'
   | 'word_comment'
   | 'word_comment_mention'
   | 'word_vote'
+  /** #133: pemilik kata dapat notif saat contoh/pelafalan tayang. */
+  | 'word_example'
+  | 'word_audio'
   | 'campaign'
 | 'verifier_application_approved'
 | 'verifier_application_rejected'
@@ -35,7 +40,9 @@ export type InboxNotificationType =
   | 'culinary_contribution_needs_revision'
   | 'culinary_claim_approved'
   | 'culinary_claim_rejected'
-  | 'achievement_awarded';
+  | 'achievement_awarded'
+  | 'pantun_reply'
+  | 'pantun_mention';
 
 export type NotificationTargetKind =
   | 'contribution'
@@ -50,7 +57,8 @@ export type NotificationTargetKind =
   | 'usaha_claim'
   | 'culinary_contribution'
   | 'culinary_claim'
-  | 'achievement';
+  | 'achievement'
+  | 'pantun';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
 export type NotificationActionKind =
@@ -64,7 +72,8 @@ export type NotificationActionKind =
 | 'usaha_contribution'
 | 'usaha_claim'
 | 'culinary_contribution'
-| 'culinary_claim';
+| 'culinary_claim'
+| 'pantun';
 
 export interface InboxNotification {
   id: string;
@@ -174,6 +183,18 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
         body: 'Seseorang menyebutmu di Ruang Diskusi.',
         bodyType: 'plain',
       };
+    case 'pantun_reply':
+      return {
+        title: 'Balasan pantun baru',
+        body: 'Ada balasan baru di pantunmu.',
+        bodyType: 'plain',
+      };
+    case 'pantun_mention':
+      return {
+        title: 'Kamu disebut di pantun',
+        body: 'Seseorang menyebutmu di pantun.',
+        bodyType: 'plain',
+      };
     case 'word_comment':
       return {
         title: 'Komentar baru',
@@ -186,12 +207,25 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
         body: 'Seseorang menyebutmu di komentar kosakata.',
         bodyType: 'plain',
       };
-    case 'word_vote':
-      return {
-        title: 'Vote baru',
-        body: 'Ada penilaian baru pada kosakatamu.',
-        bodyType: 'plain',
-      };
+  case 'word_vote':
+    return {
+      title: 'Vote baru',
+      body: 'Ada penilaian baru pada kosakatamu.',
+      bodyType: 'plain',
+    };
+  // #133: copy bawaan tanpa nama aktor; caller mengisi body saat tahu namanya.
+  case 'word_example':
+    return {
+      title: 'Contoh baru',
+      body: 'Ada contoh kalimat baru di kosakatamu.',
+      bodyType: 'plain',
+    };
+  case 'word_audio':
+    return {
+      title: 'Pelafalan baru',
+      body: 'Ada rekaman pelafalan baru di kosakatamu.',
+      bodyType: 'plain',
+    };
     case 'campaign':
       // Title/body campaign selalu dari snapshot admin (bukan copy bawaan).
       return { title: 'Pengumuman', body: '', bodyType: 'plain' };

@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { examples, meanings, pronunciations, wordAudios, wordImages, words } from '@/shared/database/drizzle/schema';
+import { loadMeaningFingerprintById } from '@/modules/word/application/utils/meaning-deduplication';
 
 export type PublishOrMergeResult = {
   wordId: string;
@@ -102,7 +103,9 @@ export async function publishOrMergeMeaningsInTx(
   return { wordId: twin.id, mergedIntoWordId: twin.id };
 }
 
-/** Pindahkan makna (+ contoh) sumber ke twin published; no-op kalau kosong. */
+/** Pindahkan makna (+ contoh) sumber ke twin published; no-op kalau kosong.
+ *  Makna yang sidiknya sudah ada di twin di-soft-delete (jangan dobel) - sumber
+ *  "asin, asin, asin" (#174). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function moveMeaningsToTwin(
   tx: any,
@@ -123,7 +126,19 @@ async function moveMeaningsToTwin(
     .where(and(eq(meanings.wordId, sourceWordId), isNull(meanings.deletedAt)))
     .orderBy(asc(meanings.orderIndex));
 
+  const seenFps = new Set((await loadMeaningFingerprintById(tx, twinWordId)).values());
+  const fpById = await loadMeaningFingerprintById(tx, sourceWordId);
+
   for (const m of sourceMeanings) {
+    const fp = fpById.get(m.id);
+    if (fp && seenFps.has(fp)) {
+      await tx
+        .update(meanings)
+        .set({ deletedAt: now, deletedBy: actorId, updatedBy: actorId, updatedAt: now })
+        .where(eq(meanings.id, m.id));
+      continue;
+    }
+    if (fp) seenFps.add(fp);
     await tx
       .update(meanings)
       .set({

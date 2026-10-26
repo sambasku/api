@@ -10,6 +10,13 @@ Stack: Hono + Drizzle ORM + **Turso (libSQL / SQLite)**, clean architecture
 feature-based (`src/modules/<fitur>/`). Dokumentasi API interaktif di
 `GET /docs` (Scalar) saat server jalan.
 
+## Dikerjakan dengan AI
+
+Kode dan dokumentasi di repo ini ditulis bersama agen AI. Manusia tetap
+yang memutuskan arah produk, meninjau setiap perubahan, dan menjalankan
+verifikasi sebelum rilis. Tidak ada agen yang punya akses commit, merge,
+atau deploy otomatis. Semua keputusan akhir ada di tangan pengelola.
+
 ## Database (tanpa Docker)
 
 Lokal & CI memakai **file SQLite**. Staging/production memakai **Turso Cloud**.

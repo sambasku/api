@@ -15,6 +15,7 @@ import {
   listAdminUsersQuerySchema,
   setUserActiveBodySchema,
   setUserActiveResponseSchema,
+  verifyEmailResponseSchema,
   updateUserRoleBodySchema,
   updateUserRoleResponseSchema,
 } from './validators/admin-users.validator';
@@ -173,14 +174,34 @@ export function createAdminUserRoutes(deps: AdminUserRoutesDeps) {
     },
   });
 
-  routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
+  const verifyEmailRoute = createRoute({
+  method: 'post',
+  path: '/:id/verify-email',
+  tags: ['Admin Users'],
+  summary: 'Verifikasi email user manual (admin & root) - mis. OTP gagal terkirim',
+  request: { params: z.object({ id: opaqueId }) },
+  responses: {
+    200: { description: 'Email ditandai terverifikasi', content: json(verifyEmailResponseSchema) },
+    400: {
+      description: 'User tidak ditemukan / sudah terverifikasi / user sistem anonim',
+      content: json(errorResponseSchema),
+    },
+    401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+    403: { description: 'Role tidak diizinkan (hanya admin/root)', content: json(errorResponseSchema) },
+  },
+});
+
+routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
   routes.openapi(createRouteDef, (c) => deps.controller.create(c, c.req.valid('json')) as never);
   routes.openapi(listAbuseEventsRoute, (c) =>
     deps.controller.listAbuseEvents(c, c.req.valid('param').id, c.req.valid('query')) as never,
   );
-  routes.openapi(setActiveRoute, (c) =>
-    deps.controller.setActive(c, c.req.valid('param').id, c.req.valid('json').is_active) as never,
-  );
+routes.openapi(setActiveRoute, (c) =>
+  deps.controller.setActive(c, c.req.valid('param').id, c.req.valid('json').is_active) as never,
+);
+routes.openapi(verifyEmailRoute, (c) =>
+  deps.controller.verifyEmail(c, c.req.valid('param').id) as never,
+);
   routes.openapi(setContributeRoute, (c) =>
     deps.controller.setCanContribute(c, c.req.valid('param').id, c.req.valid('json').can_contribute) as never,
   );

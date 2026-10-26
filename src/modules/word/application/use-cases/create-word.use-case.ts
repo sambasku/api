@@ -267,29 +267,29 @@ export class CreateWordUseCase {
   }
 
   /**
-   * Exact match lemma + definition + terjemahan Indonesia pada kata
-   * published → 409 DUPLICATE_MEANING (jangan insert).
+   * Makna published dengan lemma + isi yang sama → 409 DUPLICATE_MEANING.
+   * Perbandingan case-insensitive; placeholder "-" pada satu field tidak
+   * membatalkan pengecekan field lainnya (#174).
    */
   private async assertNoDuplicatePublishedMeaning(dto: CreateWordDto): Promise<void> {
     const indonesianLanguageId = await this.wordRepo.findLanguageIdByCode('id');
     if (!indonesianLanguageId) return;
 
     for (const meaning of dto.meanings) {
-      if (meaning.isHaveDefinition === false || meaning.isHaveTranslation === false) {
-        continue;
-      }
-      if (isPlaceholderMeaningText(meaning.definition)) continue;
       const idTranslation = meaning.translations.find(
         (t) => t.languageId === indonesianLanguageId,
       );
-      if (!idTranslation || isPlaceholderMeaningText(idTranslation.translationText)) {
+      const definition = meaning.isHaveDefinition === false ? '' : meaning.definition;
+      const translationText =
+        meaning.isHaveTranslation === false ? '' : (idTranslation?.translationText ?? '');
+      if (isPlaceholderMeaningText(definition) && isPlaceholderMeaningText(translationText)) {
         continue;
       }
       const match = await this.wordRepo.findPublishedDuplicateMeaning({
         languageId: dto.languageId,
         lemma: dto.lemma,
-        definition: meaning.definition,
-        translationText: idTranslation.translationText,
+        definition,
+        translationText,
       });
       if (match) throwDuplicateMeaningConflict(match);
     }

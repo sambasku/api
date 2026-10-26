@@ -708,6 +708,27 @@
       "when": 1801600000000,
       "tag": "0100_pantun",
       "breakpoints": true
-    }
+    },
+    {
+      "idx": 101,
+      "version": "6",
+      "when": 1801601000000,
+      "tag": "0101_meaning_vote_counts",
+      "breakpoints": true
+    },
+  {
+    "idx": 102,
+    "version": "6",
+    "when": 1801602000000,
+    "tag": "0102_usaha_whatsapp_from_phone",
+    "breakpoints": true
+  },
+  {
+    "idx": 103,
+    "version": "6",
+    "when": 1801603000000,
+    "tag": "0103_word_media_push_cooldown",
+    "breakpoints": true
+  }
   ]
 }

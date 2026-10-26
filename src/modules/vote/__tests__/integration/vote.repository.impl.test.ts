@@ -11,7 +11,7 @@ import {
   users,
   votes,
   wordImages,
-  wordVoteCounts,
+  meaningVoteCounts,
   words,
 } from '@/shared/database/drizzle/schema';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
@@ -201,15 +201,16 @@ describe.skipIf(!hasTestDb)('VoteRepositoryImpl (integration, 08 doc)', () => {
     expect(page.items).toHaveLength(targets.length + 2);
   });
 
-  // 0085: ringkasan word_vote_counts (deck vote tidak lagi COUNT(*) correlated).
-  it('ringkasan word_vote_counts: insert/batal/ganti arah/reset hapus sinkron dengan votes', async () => {
+  // 0101: ringkasan meaning_vote_counts (deck vote per makna).
+  it('ringkasan meaning_vote_counts: insert/batal/ganti arah/reset hapus sinkron dengan votes', async () => {
     const db = getTestDb();
-    const target = { entityType: 'word' as const, entityId: WORD };
+    await db.insert(meanings).values({ id: MEANING, wordId: WORD, definition: 'arti' });
+    const target = { entityType: 'meaning' as const, entityId: MEANING };
     const total = async () => {
       const [row] = await db
-        .select({ total: wordVoteCounts.total })
-        .from(wordVoteCounts)
-        .where(eq(wordVoteCounts.wordId, WORD));
+        .select({ total: meaningVoteCounts.total })
+        .from(meaningVoteCounts)
+        .where(eq(meaningVoteCounts.meaningId, MEANING));
       return row?.total ?? 0;
     };
 
@@ -230,22 +231,23 @@ describe.skipIf(!hasTestDb)('VoteRepositoryImpl (integration, 08 doc)', () => {
     expect(await total()).toBe(0);
   });
 
-  it('ringkasan word_vote_counts: resetByClientId dan deleteById kurangi total', async () => {
+  it('ringkasan meaning_vote_counts: resetByClientId dan deleteById kurangi total', async () => {
     const db = getTestDb();
-    const target = { entityType: 'word' as const, entityId: WORD };
+    await db.insert(meanings).values({ id: MEANING, wordId: WORD, definition: 'arti' });
+    const target = { entityType: 'meaning' as const, entityId: MEANING };
     await repo.toggle(USER_A, target, 1, 'client-x');
     await repo.toggle(USER_B, target, 1, 'client-y');
     const [row] = await db
-      .select({ total: wordVoteCounts.total })
-      .from(wordVoteCounts)
-      .where(eq(wordVoteCounts.wordId, WORD));
+      .select({ total: meaningVoteCounts.total })
+      .from(meaningVoteCounts)
+      .where(eq(meaningVoteCounts.meaningId, MEANING));
     expect(row?.total).toBe(2);
 
     expect(await repo.resetByClientId('client-x')).toBe(1);
     const [after] = await db
-      .select({ total: wordVoteCounts.total })
-      .from(wordVoteCounts)
-      .where(eq(wordVoteCounts.wordId, WORD));
+      .select({ total: meaningVoteCounts.total })
+      .from(meaningVoteCounts)
+      .where(eq(meaningVoteCounts.meaningId, MEANING));
     expect(after?.total).toBe(1);
 
     const [voteRow] = await db
@@ -254,9 +256,9 @@ describe.skipIf(!hasTestDb)('VoteRepositoryImpl (integration, 08 doc)', () => {
       .where(eq(votes.userId, USER_B));
     await repo.deleteById(voteRow!.id);
     const [final] = await db
-      .select({ total: wordVoteCounts.total })
-      .from(wordVoteCounts)
-      .where(eq(wordVoteCounts.wordId, WORD));
+      .select({ total: meaningVoteCounts.total })
+      .from(meaningVoteCounts)
+      .where(eq(meaningVoteCounts.meaningId, MEANING));
     expect(final?.total).toBe(0);
   });
 });

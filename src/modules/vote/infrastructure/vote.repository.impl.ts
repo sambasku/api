@@ -12,7 +12,7 @@ import {
   userSkips,
   votes,
   wordImages,
-  wordVoteCounts,
+  meaningVoteCounts,
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
@@ -30,7 +30,7 @@ import type {
   VoteCounts,
   VoteDeckListOptions,
   VoteDeckListResult,
-  VoteDeckWord,
+  VoteDeckMeaning,
   VoteHistoryItem,
   VoteHistoryListOptions,
   VoteHistoryListResult,
@@ -68,10 +68,21 @@ export class VoteRepositoryImpl implements VoteRepository {
         return rows.length > 0;
       }
       case 'meaning': {
+        // Hanya makna published yang belum dihapus. Status kata induk tidak
+        // ikut dicek di sini: endpoint counts/deck sudah memfilter, dan
+        // jalur tulis cukup menolak target mati (404). Tambah cek kata bisa
+        // memblokir vote sah saat status kata masih draft sementara makna
+        // sudah published (jalur kontribusi).
         const rows = await this.db
           .select({ id: meanings.id })
           .from(meanings)
-          .where(and(eq(meanings.id, target.entityId), isNull(meanings.deletedAt)))
+          .where(
+            and(
+              eq(meanings.id, target.entityId),
+              isNull(meanings.deletedAt),
+              eq(meanings.status, 'published'),
+            ),
+          )
           .limit(1);
         return rows.length > 0;
       }
@@ -190,14 +201,14 @@ export class VoteRepositoryImpl implements VoteRepository {
           });
         myVote = value;
 
-        // 0085: ringkasan deck - hanya vote kata yang punya baris di
-        // word_vote_counts; insert baru = +1, ganti arah = net 0.
-        if (target.entityType === 'word' && !existing) {
-          await this.bumpWordVoteCount(tx, target.entityId, 1);
+        // 0101: ringkasan deck - hanya vote makna yang punya baris di
+        // meaning_vote_counts; insert baru = +1, ganti arah = net 0.
+        if (target.entityType === 'meaning' && !existing) {
+          await this.bumpMeaningVoteCount(tx, target.entityId, 1);
         }
-      } else if (target.entityType === 'word') {
+      } else if (target.entityType === 'meaning') {
         // batal vote = baris hilang.
-        await this.bumpWordVoteCount(tx, target.entityId, -1);
+        await this.bumpMeaningVoteCount(tx, target.entityId, -1);
       }
 
       const [row] = await tx
@@ -213,21 +224,25 @@ export class VoteRepositoryImpl implements VoteRepository {
   }
 
   /**
-   * Naik/turunkan `word_vote_counts.total` di transaksi yang sama dengan
-   * tulis vote. `delta` = perubahan JUMLAH baris vote kata itu.
+   * Naik/turunkan `meaning_vote_counts.total` di transaksi yang sama dengan
+   * tulis vote. `delta` = perubahan JUMLAH baris vote makna itu.
    */
-  private async bumpWordVoteCount(
+  private async bumpMeaningVoteCount(
     tx: AppTransaction,
-    wordId: string,
+    meaningId: string,
     delta: number,
   ): Promise<void> {
     await tx
-      .insert(wordVoteCounts)
-      .values({ wordId, total: delta, updatedAt: new Date() })
+      .insert(meaningVoteCounts)
+      .values({ meaningId, total: Math.max(delta, 0), updatedAt: new Date() })
       .onConflictDoUpdate({
-        target: wordVoteCounts.wordId,
+        target: meaningVoteCounts.meaningId,
         set: {
-          total: sql`${wordVoteCounts.total} + ${delta}`,
+          // Clamp di 0: penurunan ganda (race admin reset + unvote, atau
+          // baris yatim pasca-backfill) tidak boleh membuat total negatif -
+          // deck mengurutkan total ASC, nilai negatif akan menyandera kartu
+          // di depan antrean selamanya.
+          total: sql`max(0, ${meaningVoteCounts.total} + ${delta})`,
           updatedAt: new Date(),
         },
       });
@@ -372,8 +387,8 @@ export class VoteRepositoryImpl implements VoteRepository {
         .limit(1);
       if (!row) throw new NotFoundError('VOTE_NOT_FOUND', 'Vote tidak ditemukan');
       await tx.delete(votes).where(eq(votes.id, id));
-      if (row.entityType === 'word') {
-        await this.bumpWordVoteCount(tx, row.entityId, -1);
+      if (row.entityType === 'meaning') {
+        await this.bumpMeaningVoteCount(tx, row.entityId, -1);
       }
     });
   }
@@ -384,8 +399,8 @@ export class VoteRepositoryImpl implements VoteRepository {
         .delete(votes)
         .where(and(eq(votes.entityType, target.entityType), eq(votes.entityId, target.entityId)))
         .returning({ id: votes.id });
-      if (target.entityType === 'word' && removed.length > 0) {
-        await this.bumpWordVoteCount(tx, target.entityId, -removed.length);
+      if (target.entityType === 'meaning' && removed.length > 0) {
+        await this.bumpMeaningVoteCount(tx, target.entityId, -removed.length);
       }
       return removed.length;
     });
@@ -397,14 +412,14 @@ export class VoteRepositoryImpl implements VoteRepository {
         .delete(votes)
         .where(eq(votes.clientId, clientId))
         .returning({ entityType: votes.entityType, entityId: votes.entityId });
-      // Kelompokkan kata terdampak lalu kurangi totalnya masing-masing.
-      const byWord = new Map<string, number>();
+      // Kelompokkan makna terdampak lalu kurangi totalnya masing-masing.
+      const byMeaning = new Map<string, number>();
       for (const r of removed) {
-        if (r.entityType !== 'word') continue;
-        byWord.set(r.entityId, (byWord.get(r.entityId) ?? 0) + 1);
+        if (r.entityType !== 'meaning') continue;
+        byMeaning.set(r.entityId, (byMeaning.get(r.entityId) ?? 0) + 1);
       }
-      for (const [wordId, n] of byWord) {
-        await this.bumpWordVoteCount(tx, wordId, -n);
+      for (const [meaningId, n] of byMeaning) {
+        await this.bumpMeaningVoteCount(tx, meaningId, -n);
       }
       return removed.length;
     });
@@ -793,14 +808,13 @@ export class VoteRepositoryImpl implements VoteRepository {
   }
 
   /**
-   * Antrean deck: published + feed-safe + user belum vote dan belum skip.
-   * Urut totalVotes ASC, approvedAt ASC, id ASC.
+   * Antrean deck per MAKNA (0101): published + feed-safe + user belum vote
+   * dan belum skip. Urut totalVotes ASC, approvedAt ASC, meaningId ASC.
    */
-  async listDeckWords(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult> {
+  async listDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult> {
     const approvedAtExpr = sql`COALESCE(${words.verifiedAt}, ${words.createdAt})`;
-    // 0085: total dari tabel ringkasan (1 baris per kata) - bukan
-    // COUNT(*) correlated yang scan seluruh votes per baris kata.
-    const totalVotesExpr = sql<number>`coalesce(${wordVoteCounts.total}, 0)`.mapWith(Number);
+    // 0101: total dari tabel ringkasan makna - bukan COUNT(*) correlated.
+    const totalVotesExpr = sql<number>`coalesce(${meaningVoteCounts.total}, 0)`.mapWith(Number);
 
     const feedSafe = and(
       ...FEED_EXCLUDED_USAGE_LABELS.map(
@@ -815,8 +829,8 @@ export class VoteRepositoryImpl implements VoteRepository {
         .where(
           and(
             eq(votes.userId, userId),
-            eq(votes.entityType, 'word'),
-            eq(votes.entityId, words.id),
+            eq(votes.entityType, 'meaning'),
+            eq(votes.entityId, meanings.id),
           ),
         ),
     );
@@ -828,8 +842,8 @@ export class VoteRepositoryImpl implements VoteRepository {
         .where(
           and(
             eq(userSkips.userId, userId),
-            eq(userSkips.targetType, 'word'),
-            eq(userSkips.targetId, words.id),
+            eq(userSkips.targetType, 'meaning'),
+            eq(userSkips.targetId, meanings.id),
           ),
         ),
     );
@@ -840,7 +854,7 @@ export class VoteRepositoryImpl implements VoteRepository {
       cursorClause = sql`(
         ${totalVotesExpr},
         ${approvedAtExpr},
-        ${words.id}
+        ${meanings.id}
       ) > (
         ${opts.cursor.totalVotes},
         ${epoch},
@@ -850,7 +864,33 @@ export class VoteRepositoryImpl implements VoteRepository {
 
     const rows = await this.db
       .select({
-        id: words.id,
+        id: meanings.id,
+        wordId: meanings.wordId,
+        // Posisi 1-based antar makna PUBLISHED kata ini, plus totalnya.
+        // `meanings.order_index` mentah tidak bisa dipakai langsung: jalur
+        // tulis campur 0-based (`existingMeanings.length`) dan 1-based
+        // (validator create `min(1)`), jadi "Makna ke-N" bisa salah.
+        // Keduanya scalar subquery ber-index - tetap SATU query.
+        orderIndex: sql<number>`(
+          1 + (
+            select count(*) from ${meanings} m3
+            where m3.word_id = ${meanings.wordId}
+              and m3.deleted_at is null
+              and m3.status = 'published'
+              and (
+                m3.order_index < ${meanings.orderIndex}
+                or (m3.order_index = ${meanings.orderIndex} and m3.id < ${meanings.id})
+              )
+          )
+        )`.mapWith(Number),
+        meaningCount: sql<number>`(
+          select count(*) from ${meanings} m2
+          where m2.word_id = ${meanings.wordId}
+            and m2.deleted_at is null
+            and m2.status = 'published'
+        )`.mapWith(Number),
+        definition: meanings.definition,
+        isHaveDefinition: meanings.isHaveDefinition,
         lemma: words.lemma,
         languageId: words.languageId,
         languageCode: languages.code,
@@ -862,11 +902,14 @@ export class VoteRepositoryImpl implements VoteRepository {
         createdAt: words.createdAt,
         totalVotes: totalVotesExpr,
       })
-      .from(words)
+      .from(meanings)
+      .innerJoin(words, eq(meanings.wordId, words.id))
       .innerJoin(languages, eq(words.languageId, languages.id))
-      .leftJoin(wordVoteCounts, eq(wordVoteCounts.wordId, words.id))
+      .leftJoin(meaningVoteCounts, eq(meaningVoteCounts.meaningId, meanings.id))
       .where(
         and(
+          isNull(meanings.deletedAt),
+          eq(meanings.status, 'published'),
           isNull(words.deletedAt),
           eq(words.status, 'published'),
           feedSafe,
@@ -875,46 +918,88 @@ export class VoteRepositoryImpl implements VoteRepository {
           cursorClause,
         ),
       )
-      .orderBy(asc(totalVotesExpr), asc(approvedAtExpr), asc(words.id))
+      .orderBy(asc(totalVotesExpr), asc(approvedAtExpr), asc(meanings.id))
       .limit(opts.limit + 1);
 
     const hasMore = rows.length > opts.limit;
     const pageRows = hasMore ? rows.slice(0, opts.limit) : rows;
 
-    const page: VoteDeckWord[] = pageRows.map((r) => {
-      const approvedAt = (r.verifiedAt ?? r.createdAt) as Date;
-      // usage_labels is typed UsageLabel[] by the schema. A predicate `x is string`
-      // is illegal there: predicates may only narrow, and string is wider than
-      // the closed union. Widen to unknown so the JSON guard can drop non-strings.
-      const rawLabels: unknown = r.usageLabels;
-      const labels = Array.isArray(rawLabels)
-        ? rawLabels.filter((x): x is string => typeof x === 'string')
-        : [];
-      return {
-        id: r.id,
-        lemma: r.lemma,
-        languageId: r.languageId,
-        languageCode: r.languageCode,
-        wordType: r.wordType,
-        usageLabels: labels,
-        status: r.status,
-        isVerified: r.isVerified,
-        approvedAt,
-        sense: null,
-        upvotes: 0,
-        downvotes: 0,
-        totalVotes: r.totalVotes,
-      };
-    });
+    // usage_labels is typed UsageLabel[] by the schema. A predicate `x is string`
+    // is illegal there: predicates may only narrow, and string is wider than
+    // the closed union. Widen to unknown so the JSON guard can drop non-strings.
+    const page: VoteDeckMeaning[] = pageRows.map((r) => ({
+      id: r.id,
+      wordId: r.wordId,
+      orderIndex: r.orderIndex,
+      meaningCount: r.meaningCount,
+      sense: null,
+      lemma: r.lemma,
+      languageId: r.languageId,
+      languageCode: r.languageCode,
+      wordType: r.wordType,
+      usageLabels: (Array.isArray(r.usageLabels)
+        ? (r.usageLabels as unknown[]).filter((x): x is string => typeof x === 'string')
+        : []) as string[],
+      status: r.status,
+      isVerified: r.isVerified,
+      approvedAt: (r.verifiedAt ?? r.createdAt) as Date,
+      upvotes: 0,
+      downvotes: 0,
+      totalVotes: r.totalVotes,
+    }));
 
-    await this.attachDeckSenses(page);
+    // Sense kartu: definisi makna ITU dari row utama (tanpa query tambahan).
+    const needTranslation: string[] = [];
+    const byId = new Map(page.map((p) => [p.id, p]));
+    for (const r of pageRows) {
+      const item = byId.get(r.id);
+      if (!item) continue;
+      const definition = r.definition.trim();
+      if (r.isHaveDefinition && definition.length > 0 && definition !== '-') {
+        item.sense = definition;
+      } else {
+        needTranslation.push(r.id);
+      }
+    }
+
+    // Fallback terjemahan pertama (semantik listLatest) - hanya makna tanpa
+    // definisi. Query tambahan bersyarat; deck dengan definisi lengkap
+    // tidak membayarnya.
+    if (needTranslation.length > 0) {
+      const translationRows = await this.db
+        .select({
+          meaningId: meaningTranslations.meaningId,
+          translationText: meaningTranslations.translationText,
+        })
+        .from(meaningTranslations)
+        .where(
+          and(
+            inArray(meaningTranslations.meaningId, needTranslation),
+            isNull(meaningTranslations.deletedAt),
+            ne(meaningTranslations.translationText, '-'),
+          ),
+        )
+        .orderBy(asc(meaningTranslations.id));
+
+      const textByMeaning = new Map<string, string>();
+      for (const row of translationRows) {
+        const text = row.translationText.trim();
+        if (!text || textByMeaning.has(row.meaningId)) continue;
+        textByMeaning.set(row.meaningId, text);
+      }
+      for (const id of needTranslation) {
+        const item = byId.get(id)!;
+        item.sense = textByMeaning.get(id) ?? null;
+      }
+    }
+
     await this.attachDeckCounts(page);
 
     // Cursor dihitung dari urutan keyset asli SEBELUM diacak - kalau tidak,
     // halaman berikutnya bisa lompat/duplikat. Sumber nilai = item page
     // (sudah lewat attachDeckCounts), bukan row mentah, agar keyset sama
     // persis dengan yang dipakai query sebelumnya.
-    const last = pageRows.length > 0 ? page[pageRows.length - 1] : undefined;
+    const last = pageRows.length > 0 ? page[page.length - 1] : undefined;
     const items = opts.randomize
       ? seededShuffle(page, `${userId}:${opts.cursor?.id ?? 'first'}`)
       : page;
@@ -932,90 +1017,15 @@ export class VoteRepositoryImpl implements VoteRepository {
     };
   }
 
-  private async attachDeckCounts(page: VoteDeckWord[]): Promise<void> {
+  private async attachDeckCounts(page: VoteDeckMeaning[]): Promise<void> {
     if (page.length === 0) return;
-    const targets = page.map((w) => ({ entityType: 'word' as const, entityId: w.id }));
+    const targets = page.map((m) => ({ entityType: 'meaning' as const, entityId: m.id }));
     const counts = await this.countMany(targets);
     for (const item of page) {
-      const c = counts.get(voteTargetKey({ entityType: 'word', entityId: item.id }));
+      const c = counts.get(voteTargetKey({ entityType: 'meaning', entityId: item.id }));
       item.upvotes = c?.upvotes ?? 0;
       item.downvotes = c?.downvotes ?? 0;
       item.totalVotes = item.upvotes + item.downvotes;
-    }
-  }
-
-  /** Semantik sense sama listLatest (definisi pertama / terjemahan pertama). */
-  private async attachDeckSenses(page: VoteDeckWord[]): Promise<void> {
-    if (page.length === 0) return;
-
-    const meaningRows = await this.db
-      .select({
-        id: meanings.id,
-        wordId: meanings.wordId,
-        definition: meanings.definition,
-        isHaveDefinition: meanings.isHaveDefinition,
-      })
-      .from(meanings)
-      .where(
-        and(
-          inArray(
-            meanings.wordId,
-            page.map((p) => p.id),
-          ),
-          isNull(meanings.deletedAt),
-          eq(meanings.status, 'published'),
-        ),
-      )
-      .orderBy(asc(meanings.orderIndex), asc(meanings.id));
-
-    const firstByWord = new Map<string, (typeof meaningRows)[number]>();
-    for (const row of meaningRows) {
-      if (!firstByWord.has(row.wordId)) firstByWord.set(row.wordId, row);
-    }
-
-    const needTranslation: string[] = [];
-    const meaningIdByWord = new Map<string, string>();
-    for (const item of page) {
-      const meaning = firstByWord.get(item.id);
-      if (!meaning) continue;
-      const definition = meaning.definition.trim();
-      if (meaning.isHaveDefinition && definition.length > 0 && definition !== '-') {
-        item.sense = definition;
-        continue;
-      }
-      needTranslation.push(meaning.id);
-      meaningIdByWord.set(item.id, meaning.id);
-    }
-
-    if (needTranslation.length === 0) return;
-
-    const translationRows = await this.db
-      .select({
-        meaningId: meaningTranslations.meaningId,
-        translationText: meaningTranslations.translationText,
-      })
-      .from(meaningTranslations)
-      .where(
-        and(
-          inArray(meaningTranslations.meaningId, needTranslation),
-          isNull(meaningTranslations.deletedAt),
-          ne(meaningTranslations.translationText, '-'),
-        ),
-      )
-      .orderBy(asc(meaningTranslations.id));
-
-    const textByMeaning = new Map<string, string>();
-    for (const row of translationRows) {
-      const text = row.translationText.trim();
-      if (!text || textByMeaning.has(row.meaningId)) continue;
-      textByMeaning.set(row.meaningId, text);
-    }
-
-    for (const item of page) {
-      if (item.sense) continue;
-      const meaningId = meaningIdByWord.get(item.id);
-      if (!meaningId) continue;
-      item.sense = textByMeaning.get(meaningId) ?? null;
     }
   }
 }

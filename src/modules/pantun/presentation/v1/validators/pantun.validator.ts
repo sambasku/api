@@ -12,12 +12,13 @@ export const pantunLinesSchema = z
   .length(4, 'Pantun harus terdiri dari 4 baris');
 
 export const rhymeSchemeSchema = z.enum(['ABAB', 'AAAA'], {
-  error: 'Pola rima tidak valid. Pilih ABAB atau AAAA.',
+  error: 'Pola rima tidak valid. Pakai ABAB atau AAAA.',
 });
 
 export const createPantunBodySchema = z.object({
   lines: pantunLinesSchema,
-  rhyme_scheme: rhymeSchemeSchema,
+  /** Opsional: server deteksi sendiri ABAB/AAAA dari baris. */
+  rhyme_scheme: rhymeSchemeSchema.optional(),
   /** Tema (row categories); opsional. */
   category_id: opaqueId.nullish(),
   /** Kode bahasa; default 'id'. */
@@ -33,7 +34,8 @@ export type CreatePantunBody = z.infer<typeof createPantunBodySchema>;
 
 export const createPantunReplyBodySchema = z.object({
   lines: pantunLinesSchema,
-  rhyme_scheme: rhymeSchemeSchema,
+  /** Opsional: server deteksi sendiri ABAB/AAAA dari baris. */
+  rhyme_scheme: rhymeSchemeSchema.optional(),
   category_id: opaqueId.nullish(),
   language: z
     .string({ error: 'Bahasa tidak valid' })

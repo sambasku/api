@@ -10,6 +10,7 @@ import {
   lexicalRelations,
   meanings,
   meaningTranslations,
+  meaningVoteCounts,
 wordAudios,
 wordCategories,
 wordImages,
@@ -130,6 +131,50 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     expect(await db.select().from(contributions).where(eq(contributions.entityId, word.id))).toHaveLength(1);
     // published → tidak ada baris review
     expect(await db.select().from(contributionReviews)).toHaveLength(0);
+  });
+
+  it('saveWithRelations: makna duplikat (beda kapital / sama persis) hanya tersimpan sekali (#174)', async () => {
+    const word = await repo.saveWithRelations(
+      baseWord({
+        meanings: [
+          {
+            wordClassId: NOMINA,
+            definition: 'Asin',
+            orderIndex: 1,
+            translations: [{ languageId: IDN, translationText: 'Asin', translationType: 'direct' }],
+          },
+          {
+            wordClassId: NOMINA,
+            definition: 'asin',
+            orderIndex: 2,
+            translations: [{ languageId: IDN, translationText: 'asin', translationType: 'direct' }],
+            examples: [
+              {
+                sourceLanguageId: SMB,
+                sourceSentence: 'Asin bana.',
+                targetLanguageId: IDN,
+                targetSentence: 'Asin sekali.',
+                sourceType: 'native_speaker',
+              },
+            ],
+          },
+          {
+            wordClassId: NOMINA,
+            definition: 'Asin',
+            orderIndex: 3,
+            translations: [{ languageId: IDN, translationText: 'asin', translationType: 'direct' }],
+          },
+        ],
+      }),
+      ACTOR,
+    );
+
+    const rows = await db.select().from(meanings).where(eq(meanings.wordId, word.id));
+    expect(rows).toHaveLength(1);
+    // Contoh dari makna duplikat tetap tersimpan, menempel ke makna bertahan.
+    expect(await db.select().from(examples).where(eq(examples.meaningId, rows[0].id))).toHaveLength(1);
+    const detail = await repo.findDetailById(word.id);
+    expect(detail?.meanings).toHaveLength(1);
   });
 
   it('Section 22 approval gate: baris review HANYA dibuat saat keputusan - status antrean turunan', async () => {
@@ -322,6 +367,25 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     // jejak kontribusi update (action 'update')
     const rows = await db.select().from(contributions).where(eq(contributions.entityId, word.id));
     expect(rows.map((r) => r.action)).toContain('update');
+  });
+
+  it('updateWithRelations tidak gagal FK saat makna sudah punya vote (0101)', async () => {
+    // meaning_vote_counts memegang FK ke meanings: tanpa menghapus ringkasan
+    // lebih dulu, edit kata manapun yang sudah divote maknanya gagal FK ->
+    // 400 "Referensi data tidak valid". Regresi ini tidak terlihat sebelum
+    // 0101 karena dulu hanya word_vote_counts (FK ke words).
+    const word = await repo.saveWithRelations(baseWord(), ACTOR);
+    const [meaning] = await db.select().from(meanings).where(eq(meanings.wordId, word.id));
+    await db.insert(meaningVoteCounts).values({ meaningId: meaning.id, total: 3, updatedAt: new Date() });
+
+    await repo.updateWithRelations(
+      word.id,
+      baseWord({ lemma: 'makatn', meanings: [{ ...baseWord().meanings[0], definition: 'definisi BARU' }] }),
+      ACTOR,
+    );
+
+    // Ringkasan lama ikut hilang (maknanya diganti), tidak ada baris yatim.
+    expect(await db.select().from(meaningVoteCounts)).toHaveLength(0);
   });
 
   it('updateWithRelations mempertahankan audio lemma dan audio contoh (id sama, example_id baru)', async () => {

@@ -4,6 +4,7 @@ import type { UpdateUserRoleUseCase } from '../../application/use-cases/update-u
 import type { SetCanContributeUseCase } from '../../application/use-cases/set-can-contribute.use-case';
 import type { CreateAdminUserUseCase } from '../../application/use-cases/create-admin-user.use-case';
 import type { SetUserActiveUseCase } from '../../application/use-cases/set-user-active.use-case';
+import type { AdminVerifyEmailUseCase } from '../../application/use-cases/admin-verify-email.use-case';
 import type { ListUserAbuseEventsUseCase } from '../../application/use-cases/list-user-abuse-events.use-case';
 import type { User, UserRole } from '../../domain/entities/user.entity';
 import type { AppVariables } from '@/shared/types';
@@ -22,8 +23,9 @@ export class AdminUsersController {
       updateRole: UpdateUserRoleUseCase;
       setCanContribute: SetCanContributeUseCase;
       createUser: CreateAdminUserUseCase;
-      setActive: SetUserActiveUseCase;
-      listAbuseEvents: ListUserAbuseEventsUseCase;
+    setActive: SetUserActiveUseCase;
+    verifyEmail: AdminVerifyEmailUseCase;
+    listAbuseEvents: ListUserAbuseEventsUseCase;
     },
   ) {}
 
@@ -37,12 +39,19 @@ export class AdminUsersController {
       role: u.role,
       avatar_url: u.avatarUrl,
       auth_providers: u.authProviders ?? [],
-      is_active: u.isActive,
-      can_contribute: u.canContribute,
-      contribute_muted_until: u.contributeMutedUntil
-        ? u.contributeMutedUntil.toISOString()
+    is_active: u.isActive,
+    can_contribute: u.canContribute,
+    contribute_muted_until: u.contributeMutedUntil
+      ? u.contributeMutedUntil.toISOString()
+      : null,
+    email_verified: u.emailVerified,
+    email_verified_at: u.emailVerifiedAt ? u.emailVerifiedAt.toISOString() : null,
+    // Enrichment admin: OTP terakhir (list admin saja; default null).
+    otp:
+      u.otpCreatedAt && u.otpExpiresAt
+        ? { created_at: u.otpCreatedAt.toISOString(), expires_at: u.otpExpiresAt.toISOString() }
         : null,
-      created_at: u.createdAt.toISOString(),
+    created_at: u.createdAt.toISOString(),
       updated_at: u.updatedAt ? u.updatedAt.toISOString() : null,
     };
   }
@@ -52,6 +61,7 @@ export class AdminUsersController {
       q: query.q,
       role: query.role as UserRole | undefined,
       canContribute: query.can_contribute,
+      emailVerified: query.email_verified,
       limit: query.limit,
       cursor: query.cursor,
     });
@@ -153,5 +163,22 @@ export class AdminUsersController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: { id: result.id, is_active: result.isActive } });
+  }
+
+  async verifyEmail(c: AdminCtx, targetId: string) {
+    const user = c.get('user')!;
+    const result = await this.deps.verifyEmail.execute({
+      targetUserId: targetId,
+      actorId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({
+      success: true as const,
+      data: {
+        id: result.id,
+        email_verified: true as const,
+        email_verified_at: result.emailVerifiedAt.toISOString(),
+      },
+    });
   }
 }

@@ -9,6 +9,7 @@ export const APP_SETTING_KEYS = [
   'notification.review_reject_push_cooldown_minutes',
   'notification.word_comment_push_cooldown_minutes',
   'notification.word_vote_push_cooldown_minutes',
+  'notification.word_media_push_cooldown_minutes',
   'wa.verifier_enabled',
   'wa.group_cta_url',
 ] as const;
@@ -40,6 +41,9 @@ export const WORD_COMMENT_PUSH_COOLDOWN_MINUTES_KEY =
   'notification.word_comment_push_cooldown_minutes' as const;
 export const WORD_VOTE_PUSH_COOLDOWN_MINUTES_KEY =
   'notification.word_vote_push_cooldown_minutes' as const;
+/** #133: notif media anak kata (contoh kalimat / audio pelafalan). */
+export const WORD_MEDIA_PUSH_COOLDOWN_MINUTES_KEY =
+  'notification.word_media_push_cooldown_minutes' as const;
 
 /** Default jika baris app_settings belum ada. 0 = cooldown mati. */
 export const DEFAULT_REVIEW_PUSH_COOLDOWN_MINUTES = 360;
@@ -49,6 +53,9 @@ export const DEFAULT_WORD_COMMENT_PUSH_COOLDOWN_MINUTES = 3;
 
 /** Default jeda push vote pada kosakata (mode Skip). */
 export const DEFAULT_WORD_VOTE_PUSH_COOLDOWN_MINUTES = 3;
+
+/** Default jeda push media anak kata (#133, mode Skip). */
+export const DEFAULT_WORD_MEDIA_PUSH_COOLDOWN_MINUTES = 3;
 
 export type AppSettingType = 'string' | 'boolean' | 'number' | 'url';
 

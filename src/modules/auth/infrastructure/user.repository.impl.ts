@@ -46,6 +46,7 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     canContribute: row.canContribute,
     contributeMutedUntil: row.contributeMutedUntil ?? null,
     emailVerified: row.emailVerified,
+    emailVerifiedAt: row.emailVerifiedAt ?? null,
     readContributionGuideAt: row.readContributionGuideAt ?? null,
     avatarUrl: row.avatarUrl ?? null,
     avatarProvider: row.avatarProvider ?? null,
@@ -184,10 +185,21 @@ export class UserRepositoryImpl implements UserRepository {
         // CATATAN: tulis `users.id` sebagai teks mentah, BUKAN ${users.id} - Drizzle
         // me-render interpolation jadi "id" unqualified yang ke-shadow ai.id di scope
         // subquery (auth_identities juga punya kolom id) sehingga subquery selalu null.
-        authProviders: sql<string | null>`(
-          SELECT group_concat(DISTINCT ai.provider) FROM auth_identities ai
-          WHERE ai.user_id = users.id AND ai.deleted_at IS NULL
-        )`,
+authProviders: sql<string | null>`(
+SELECT group_concat(DISTINCT ai.provider) FROM auth_identities ai
+WHERE ai.user_id = users.id AND ai.deleted_at IS NULL
+)`,
+// OTP verifikasi terakhir (email_verification_otps) - scalar subquery, tetap
+// 1 query. Kolom timestamps mode 'timestamp' Drizzle; max() di SQLite kembali
+// sebagai epoch integer, konversi manual di mapper bawah.
+otpCreatedAt: sql<number | null>`(
+SELECT max(o.created_at) FROM email_verification_otps o
+WHERE o.user_id = users.id
+)`,
+otpExpiresAt: sql<number | null>`(
+SELECT max(o.expires_at) FROM email_verification_otps o
+WHERE o.user_id = users.id
+)`,
         // Kolom baru migrasi 0086 - hadir supaya cast ke UserRow valid.
         activeBorderId: users.activeBorderId,
       })
@@ -199,9 +211,10 @@ export class UserRepositoryImpl implements UserRepository {
           filter.role
             ? sql`EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = ${users.id} AND ur.role = ${filter.role})`
             : undefined,
-          filter.canContribute === undefined ? undefined : eq(users.canContribute, filter.canContribute),
-          // User sistem anonim tidak masuk daftar akun yang dihentikan.
-          filter.canContribute === false ? sql`${users.id} != ${ANONIM_USER_ID}` : undefined,
+      filter.canContribute === undefined ? undefined : eq(users.canContribute, filter.canContribute),
+      // User sistem anonim tidak masuk daftar akun yang dihentikan.
+      filter.canContribute === false ? sql`${users.id} != ${ANONIM_USER_ID}` : undefined,
+      filter.emailVerified === undefined ? undefined : eq(users.emailVerified, filter.emailVerified),
           q
             ? or(
                 like(sql`lower(${users.username})`, `%${q.toLowerCase()}%`),
@@ -221,11 +234,14 @@ export class UserRepositoryImpl implements UserRepository {
 
 return {
 items: page.map((r) => {
-  const entity = toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? []);
-  return {
-    ...entity,
-    authProviders: r.authProviders ? r.authProviders.split(',') : [],
-  };
+const entity = toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? []);
+return {
+...entity,
+authProviders: r.authProviders ? r.authProviders.split(',') : [],
+// Enrichment OTP admin: epoch integer dari scalar subquery -> Date.
+otpCreatedAt: r.otpCreatedAt != null ? new Date(r.otpCreatedAt) : null,
+otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
+};
 }),
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
       hasMore,

@@ -46,8 +46,10 @@ export const resetTargetVotesBodySchema = z.object({
 export type ResetTargetVotesBody = z.infer<typeof resetTargetVotesBodySchema>;
 
 // Query: GET /api/v1/admin/votes/top-targets
+// 0101: default makna - vote level kata pensiun (baris kata lama tetap
+// bisa di-query eksplisit lewat target_type=word).
 export const topVoteTargetsQuerySchema = z.object({
-  target_type: VoteTargetTypeZodEnum.default('word'),
+  target_type: VoteTargetTypeZodEnum.default('meaning'),
   limit: z.coerce.number().int().min(1).max(200).default(20),
 });
 export type TopVoteTargetsQuery = z.infer<typeof topVoteTargetsQuerySchema>;

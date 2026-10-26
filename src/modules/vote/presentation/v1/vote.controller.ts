@@ -97,7 +97,7 @@ export class VoteController {
     });
   }
 
-  /** GET /api/v1/votes/deck - antrean kata belum di-vote (34-api-vote-deck.md) */
+  /** GET /api/v1/votes/deck - antrean makna belum di-vote (34-api-vote-deck.md, 0101) */
   async deck(c: Context, query: VoteDeckQuery) {
     const user = this.requireUser(c);
     const page = await this.deps.deck.execute(user.user_id, {
@@ -107,40 +107,44 @@ export class VoteController {
     });
     return c.json({
       success: true as const,
-      data: page.items.map((w) => ({
-        id: w.id,
-        lemma: w.lemma,
-        language_id: w.languageId,
-        language_code: w.languageCode,
-        word_type: w.wordType,
-        status: w.status,
-        is_verified: w.isVerified,
-        approved_at: w.approvedAt.toISOString(),
-        sense: w.sense,
-        upvotes: w.upvotes,
-        downvotes: w.downvotes,
+      data: page.items.map((m) => ({
+        // 0101: id = ID makna (target vote), bukan ID kata.
+        id: m.id,
+        word_id: m.wordId,
+        lemma: m.lemma,
+        language_id: m.languageId,
+        language_code: m.languageCode,
+        word_type: m.wordType,
+        status: m.status,
+        is_verified: m.isVerified,
+        approved_at: m.approvedAt.toISOString(),
+        sense: m.sense,
+        order_index: m.orderIndex,
+        meaning_count: m.meaningCount,
+        upvotes: m.upvotes,
+        downvotes: m.downvotes,
       })),
       meta: page.meta,
     });
   }
 
-  /** POST /api/v1/votes/skips - lewati kartu deck tanpa vote */
+  /** POST /api/v1/votes/skips - lewati kartu deck (makna) tanpa vote */
   async skipDeck(c: Context, body: SkipVoteDeckBody) {
     const user = this.requireUser(c);
-    await this.deps.skipDeck.skip(user.user_id, body.word_id);
+    await this.deps.skipDeck.skip(user.user_id, body.meaning_id);
     return c.json({
       success: true as const,
-      data: { word_id: body.word_id, skipped: true },
+      data: { meaning_id: body.meaning_id, skipped: true },
     });
   }
 
-  /** DELETE /api/v1/votes/skips/:wordId - undo skip deck */
-  async unskipDeck(c: Context, wordId: string) {
+  /** DELETE /api/v1/votes/skips/:meaningId - undo skip deck */
+  async unskipDeck(c: Context, meaningId: string) {
     const user = this.requireUser(c);
-    await this.deps.skipDeck.unskip(user.user_id, wordId);
+    await this.deps.skipDeck.unskip(user.user_id, meaningId);
     return c.json({
       success: true as const,
-      data: { word_id: wordId, skipped: false },
+      data: { meaning_id: meaningId, skipped: false },
     });
   }
 

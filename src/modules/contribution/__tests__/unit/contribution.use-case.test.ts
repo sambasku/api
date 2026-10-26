@@ -659,6 +659,59 @@ describe('ReviewContributionUseCase', () => {
       useCase.execute({ contributionId: '01CONTRIBULID0000000000000', decision: 'approve', comment: null, actorId: ACTOR.userId }),
     ).rejects.toMatchObject({ errorCode: 'CONTRIBUTION_ALREADY_REVIEWED' });
   });
+
+  it('#133 approve word_audio → notif pemilik kata, contoh tidak', async () => {
+    const { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage } = makeReviewDeps();
+    const notifyOwner = { execute: vi.fn().mockResolvedValue(undefined) };
+    const useCase = new ReviewContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+      wordRepo,
+      publicImageStorage as never,
+      imageStorage as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      notifyOwner as never,
+    );
+
+    contributionRepo.review = vi.fn().mockResolvedValue({
+      contributionId: '01CONTRIBULID0000000000000',
+      entityType: 'word_audio',
+      entityId: '01AUDIOULID00000000000000',
+      status: 'approved',
+      contributorUserId: '01CONTRIBUTORULID0000000000',
+    });
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    expect(notifyOwner.execute).toHaveBeenCalledWith({
+      entityType: 'word_audio',
+      entityId: '01AUDIOULID00000000000000',
+      actorId: '01CONTRIBUTORULID0000000000',
+    });
+
+    notifyOwner.execute.mockClear();
+    contributionRepo.review = vi.fn().mockResolvedValue({
+      contributionId: '01CONTRIBULID0000000000000',
+      entityType: 'example',
+      entityId: '01EXAMPLULID0000000000000',
+      status: 'approved',
+      contributorUserId: '01CONTRIBUTORULID0000000000',
+    });
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    expect(notifyOwner.execute).not.toHaveBeenCalled();
+  });
 });
 
 describe('CorrectContributionUseCase', () => {

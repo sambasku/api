@@ -62,6 +62,18 @@ export class ToggleVoteUseCase {
       ]);
     }
 
+    // 0101: vote level kata pensiun - deck + semua UI vote baru per makna.
+    // Baris vote kata lama tetap tampil di riwayat (read-only), tidak bisa
+    // di-toggle ulang. Mobile/web harus mengirim 'meaning'.
+    if (cmd.targetType === 'word') {
+      throw new ValidationError([
+        {
+          field: 'target_type',
+          message: 'Vote kata sudah tidak tersedia - pilih salah satu makna kata',
+        },
+      ]);
+    }
+
     const target = { entityType: cmd.targetType, entityId: cmd.targetId };
 
     // Eksistensi target hanya dicek di endpoint tulis ini - vote ke target
@@ -80,8 +92,8 @@ export class ToggleVoteUseCase {
     if (result.myVote !== null) {
       // Event feed: vote tayang sebagai aktivitas. targetWordId diresolve
       // best-effort; vote comment punya wordId lewat komentar induk, vote
-      // meaning lewat makna induk.
-      const feedTargetTypes: VoteTargetType[] = ['word', 'comment', 'meaning'];
+      // meaning lewat makna induk. 0101: vote word tidak bisa masuk sini.
+      const feedTargetTypes: VoteTargetType[] = ['comment', 'meaning'];
       if (this.activityEvents && feedTargetTypes.includes(cmd.targetType)) {
         const resolved = await this.voteRepo
           .resolveWordOwnerForVoteTarget({ entityType: cmd.targetType, entityId: cmd.targetId })
@@ -95,12 +107,9 @@ export class ToggleVoteUseCase {
               ? `"${resolved.lemma}" perlu dicek ulang`
               : `"${resolved.lemma}" sudah pas`;
           await this.activityEvents.safe({
-            kind:
-              cmd.targetType === 'word'
-                ? 'vote_word'
-                : cmd.targetType === 'meaning'
-                  ? 'vote_meaning'
-                  : 'vote_comment',
+            // 0101: 'word' tidak bisa masuk (ditolak di atas) - cukup
+            // meaning vs comment.
+            kind: cmd.targetType === 'meaning' ? 'vote_meaning' : 'vote_comment',
             actorId: cmd.userId,
             targetWordId: resolved.wordId,
             targetId: cmd.targetId,
@@ -118,9 +127,7 @@ export class ToggleVoteUseCase {
       });
     } else if (
       this.activityEvents &&
-      (cmd.targetType === 'word' ||
-        cmd.targetType === 'comment' ||
-        cmd.targetType === 'meaning')
+      (cmd.targetType === 'comment' || cmd.targetType === 'meaning')
     ) {
       // Unvote: baris vote dihapus hard - event feed-nya disembunyikan
       // (bukan dihapus; submit ulang menampilkan kembali, lihat dedupeKey).

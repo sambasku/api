@@ -59,6 +59,7 @@ function makeRepo(overrides: Partial<PantunRepository> = {}) {
     createReply: vi.fn().mockResolvedValue(makeReply()),
     findReplyById: vi.fn().mockResolvedValue(makeReply()),
     listReplies: vi.fn().mockResolvedValue([]),
+    listDistinctReplierUserIds: vi.fn().mockResolvedValue([]),
     markReplyDeletedByAuthor: vi.fn().mockResolvedValue(true),
     takedownReply: vi.fn().mockResolvedValue(true),
     takedown: vi.fn().mockResolvedValue(makePantun({ status: 'taken_down' })),
@@ -182,5 +183,106 @@ describe('CreatePantunReplyUseCase', () => {
     ).rejects.toMatchObject({
       details: [expect.objectContaining({ message: expect.stringMatching(/belum berima/) })],
     });
+  });
+});
+
+describe('CreatePantunReplyUseCase - notifikasi peserta thread', () => {
+  const OWNER = '01JDOWNER00000000000000001';
+  const REPLIER2 = '01JDREPLIER20000000000002';
+  const REPLIER3 = '01JDREPLIER30000000000003';
+  const ACTOR4 = '01JDACTOR4000000000000004';
+
+  function buildWithNotif(opts: {
+    priorRepliers: string[];
+    maySend?: boolean;
+  }) {
+    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const pushCooldown = {
+      maySend: vi.fn().mockResolvedValue(opts.maySend ?? true),
+      touchAfterSend: vi.fn().mockResolvedValue(undefined),
+    };
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue({
+        id: ACTOR4,
+        username: 'pemantun4',
+        displayName: 'Pemantun Empat',
+      }),
+    };
+    const repo = makeRepo({
+      findById: vi.fn().mockResolvedValue(makePantun({ userId: OWNER })),
+      listDistinctReplierUserIds: vi
+        .fn()
+        .mockResolvedValue(opts.priorRepliers),
+    });
+    const uc = new CreatePantunReplyUseCase(
+      repo,
+      audit,
+      blocklist as never,
+      undefined,
+      undefined,
+      userRepo as never,
+      inbox as never,
+      notifyUser as never,
+      pushCooldown as never,
+    );
+    return { uc, inbox, notifyUser, pushCooldown, repo };
+  }
+
+  it('user 4 membalas: pemilik + semua pembalas sebelumnya dapat inbox', async () => {
+    const { uc, inbox } = buildWithNotif({
+      priorRepliers: [REPLIER2, REPLIER3, OWNER],
+    });
+    await uc.execute({
+      parentId: PARENT_ID,
+      userId: ACTOR4,
+      lines: ABAB,
+      rhymeScheme: 'ABAB',
+    });
+
+    const targets = inbox.execute.mock.calls.map(
+      (call) => (call[0] as { userId: string; type: string }).userId,
+    );
+    expect(targets.sort()).toEqual([OWNER, REPLIER2, REPLIER3].sort());
+    expect(
+      inbox.execute.mock.calls.every(
+        (call) =>
+          (call[0] as { type: string }).type === 'pantun_reply' &&
+          (call[0] as { targetKind: string }).targetKind === 'pantun',
+      ),
+    ).toBe(true);
+  });
+
+  it('aktor tidak menerima notifikasi balasannya sendiri', async () => {
+    const { uc, inbox } = buildWithNotif({
+      priorRepliers: [ACTOR4, REPLIER2],
+    });
+    await uc.execute({
+      parentId: PARENT_ID,
+      userId: ACTOR4,
+      lines: ABAB,
+      rhymeScheme: 'ABAB',
+    });
+    const targets = inbox.execute.mock.calls.map(
+      (call) => (call[0] as { userId: string }).userId,
+    );
+    // Aktor keluarkan; pemilik pantun tetap peserta sah.
+    expect(targets).not.toContain(ACTOR4);
+    expect(targets.sort()).toEqual([OWNER, REPLIER2].sort());
+  });
+
+  it('push cooldown aktif → push dilewati, inbox tetap ditulis', async () => {
+    const { uc, inbox, notifyUser } = buildWithNotif({
+      priorRepliers: [],
+      maySend: false,
+    });
+    await uc.execute({
+      parentId: PARENT_ID,
+      userId: ACTOR4,
+      lines: ABAB,
+      rhymeScheme: 'ABAB',
+    });
+    expect(inbox.execute).toHaveBeenCalled();
+    expect(notifyUser.execute).not.toHaveBeenCalled();
   });
 });

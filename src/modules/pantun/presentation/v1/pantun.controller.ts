@@ -72,7 +72,7 @@ export class PantunController {
     const row = await this.deps.create.execute({
       userId: user.user_id,
       lines: body.lines,
-      rhymeScheme: body.rhyme_scheme,
+      rhymeScheme: body.rhyme_scheme ?? null,
       categoryId: body.category_id ?? null,
       language: body.language ?? null,
       requestId: this.requestId(c),
@@ -114,7 +114,7 @@ export class PantunController {
       parentId: id,
       userId: user.user_id,
       lines: body.lines,
-      rhymeScheme: body.rhyme_scheme,
+      rhymeScheme: body.rhyme_scheme ?? null,
       categoryId: body.category_id ?? null,
       language: body.language ?? null,
       requestId: this.requestId(c),

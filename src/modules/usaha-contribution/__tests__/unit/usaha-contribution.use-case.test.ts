@@ -346,11 +346,16 @@ describe("UsahaContributionUseCases - approve per kind", () => {
     expect(claims.create).not.toHaveBeenCalled();
   });
 
-  it("profile hanya menerapkan field terkunci", async () => {
+  it("profile hanya menerapkan field terkunci (phone ikut isi whatsapp)", async () => {
     const usaha = makeUsaha();
     const uc = build(makeContrib({ findById: vi.fn().mockResolvedValue(pendingRow()) }), usaha);
     await uc.approve("C1", "ADMIN");
-    expect(usaha.update).toHaveBeenCalledWith({ id: "U1", phone: "0812999" });
+    // Satu nomor HP: whatsapp disamakan dengan phone saat hanya phone diajukan.
+    expect(usaha.update).toHaveBeenCalledWith({
+      id: "U1",
+      phone: "0812999",
+      whatsapp: "0812999",
+    });
   });
 
   it("operational tidak mengubah publish_status", async () => {

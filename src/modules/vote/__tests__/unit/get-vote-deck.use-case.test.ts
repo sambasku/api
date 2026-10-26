@@ -9,7 +9,7 @@ const USER = '01JDUSERKONTRIB0000000000A';
 
 function makeDeps() {
   const voteRepo = {
-    listDeckWords: vi.fn().mockResolvedValue({
+    listDeckMeanings: vi.fn().mockResolvedValue({
       items: [],
       nextCursor: null,
       hasMore: false,
@@ -19,11 +19,11 @@ function makeDeps() {
 }
 
 describe('GetVoteDeckUseCase', () => {
-  it('tanpa cursor → listDeckWords(userId, { limit }) + meta kosong', async () => {
+  it('tanpa cursor → listDeckMeanings(userId, { limit }) + meta kosong', async () => {
     const { useCase, voteRepo } = makeDeps();
     const result = await useCase.execute(USER, { limit: 10 });
 
-    expect(voteRepo.listDeckWords).toHaveBeenCalledWith(USER, {
+    expect(voteRepo.listDeckMeanings).toHaveBeenCalledWith(USER, {
       limit: 10,
       cursor: undefined,
       randomize: undefined,
@@ -45,7 +45,7 @@ describe('GetVoteDeckUseCase', () => {
 
     await useCase.execute(USER, { limit: 5, cursor });
 
-    expect(voteRepo.listDeckWords).toHaveBeenCalledWith(USER, {
+    expect(voteRepo.listDeckMeanings).toHaveBeenCalledWith(USER, {
       limit: 5,
       cursor: { totalVotes: 2, approvedAt, id: '01JDWORDMAKATN0000000000A' },
       randomize: undefined,
@@ -55,7 +55,7 @@ describe('GetVoteDeckUseCase', () => {
   it('randomize diteruskan apa adanya (false = kronologis)', async () => {
     const { useCase, voteRepo } = makeDeps();
     await useCase.execute(USER, { limit: 10, randomize: false });
-    expect(voteRepo.listDeckWords).toHaveBeenCalledWith(USER, {
+    expect(voteRepo.listDeckMeanings).toHaveBeenCalledWith(USER, {
       limit: 10,
       cursor: undefined,
       randomize: false,
@@ -67,6 +67,6 @@ describe('GetVoteDeckUseCase', () => {
     await expect(useCase.execute(USER, { limit: 10, cursor: 'bukan-cursor' })).rejects.toMatchObject(
       { errorCode: 'VALIDATION_ERROR', statusCode: 400 },
     );
-    expect(voteRepo.listDeckWords).not.toHaveBeenCalled();
+    expect(voteRepo.listDeckMeanings).not.toHaveBeenCalled();
   });
 });

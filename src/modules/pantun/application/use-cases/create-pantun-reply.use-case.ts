@@ -1,13 +1,16 @@
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { ReplyPushCooldownGate } from '@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate';
+import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import { resolveDiscussionNotifyRecipients } from '@/modules/comment/application/utils/resolve-discussion-notify-recipients';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
-import {
-  detectRhyme,
-  type RhymeScheme,
-} from '../../application/utils/rhyme-check';
+import { type RhymeScheme } from '../../application/utils/rhyme-check';
+import { resolveRhymeScheme } from '../../application/utils/resolve-rhyme';
 import type { Pantun, PantunReply } from '../../domain/entities/pantun.entity';
 import type { PantunRepository } from '../../domain/repositories/pantun.repository';
 
@@ -15,7 +18,8 @@ export interface CreatePantunReplyCommand {
   parentId: string;
   userId: string;
   lines: string[];
-  rhymeScheme: RhymeScheme;
+  /** Opsional: kosong = server deteksi sendiri (ABAB lalu AAAA). */
+  rhymeScheme?: RhymeScheme | null;
   categoryId?: string | null;
   language?: string | null;
   requestId?: string | null;
@@ -39,6 +43,10 @@ export class CreatePantunReplyUseCase {
         dedupeKey: string;
       }) => Promise<void>;
     },
+    private readonly userRepo?: UserRepository,
+    private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly notifyUser?: NotifyUserUseCase,
+    private readonly pushCooldown?: ReplyPushCooldownGate,
   ) {}
 
   async execute(cmd: CreatePantunReplyCommand): Promise<PantunReply> {
@@ -61,24 +69,7 @@ export class CreatePantunReplyUseCase {
         { field: 'lines', message: 'Total isi pantun maksimal 600 karakter' },
       ]);
     }
-    const check = detectRhyme(cleaned, cmd.rhymeScheme);
-    if (!check.ok) {
-      if (check.reason === 'LAST_WORD_UNDETECTED') {
-        throw new ValidationError([
-          {
-            field: `lines[${check.lineIndex}]`,
-            message: 'Kata akhir baris ini tidak terdeteksi. Perbaiki ya.',
-          },
-        ]);
-      }
-      const pairs = check.pairs.map(([a, b]) => `baris ${a} & ${b}`).join(', ');
-      throw new ValidationError([
-        {
-          field: 'lines',
-          message: `Pola rima ${cmd.rhymeScheme} belum pas: ${pairs} belum berima.`,
-        },
-      ]);
-    }
+    const scheme = resolveRhymeScheme(cleaned, cmd.rhymeScheme);
     void (await assertUgcTextQualityWithStrike(joined, {
       userId: cmd.userId,
       abuse: this.abuse,
@@ -110,7 +101,7 @@ export class CreatePantunReplyUseCase {
       userId: cmd.userId,
       categoryId: cmd.categoryId ?? null,
       language: cmd.language?.trim() || 'id',
-      rhymeScheme: cmd.rhymeScheme,
+      rhymeScheme: scheme,
       lines: cleaned,
     });
 
@@ -129,8 +120,113 @@ export class CreatePantunReplyUseCase {
       targetId: reply.id,
       dedupeKey: `pantun_reply:${reply.id}`,
     });
+    // Notifikasi: pemilik pantun induk + semua peserta yang pernah membalas
+    // (kecuali aktor). Best-effort, tidak menggagalkan create.
+    await this.notifyThreadParticipants({
+      parentId: cmd.parentId,
+      ownerUserId: parent.userId,
+      actorId: cmd.userId,
+      replyLines: cleaned,
+    });
+
     return reply;
   }
+
+  /**
+   * Inbox + push ke seluruh peserta thread pantun.
+   *
+   * Skenario 1 -> 2 -> 3 -> 4: setiap balasan baru memberi tahu pemilik
+   * pantun dan SEMUA penulis balasan sebelumnya (bukan hanya yang terakhir),
+   * pola sama dengan `notifyThreadParticipants` Ruang Diskusi.
+   */
+  private async notifyThreadParticipants(input: {
+    parentId: string;
+    ownerUserId: string;
+    actorId: string;
+    replyLines: string[];
+  }): Promise<void> {
+    if (!this.inbox && !this.notifyUser) return;
+
+    try {
+      const priorReplierIds = await this.repo.listDistinctReplierUserIds(
+        input.parentId,
+      );
+      const recipientIds = resolveDiscussionNotifyRecipients({
+        actorId: input.actorId,
+        ownerUserId: input.ownerUserId,
+        priorParticipantIds: priorReplierIds,
+      });
+      if (recipientIds.length === 0) return;
+
+      let actorName = 'Seseorang';
+      if (this.userRepo) {
+        const actor = await this.userRepo.findById(input.actorId);
+        if (actor) actorName = actor.displayName?.trim() || actor.username;
+      }
+      const snippet = truncateSnippet(input.replyLines.join(' / '));
+      const body = `${actorName} membalas pantunmu: ${snippet}`;
+      const title = 'Balasan pantun baru';
+
+      for (const userId of recipientIds) {
+        if (this.inbox) {
+          await this.inbox.execute({
+            userId,
+            type: 'pantun_reply',
+            targetKind: 'pantun',
+            targetId: input.parentId,
+            actorId: input.actorId,
+            title,
+            body,
+            refreshOnConflict: true,
+            actionKind: 'pantun',
+            actionValue: input.parentId,
+          });
+        }
+        if (!this.notifyUser) continue;
+        const maySend =
+          !this.pushCooldown || (await this.pushCooldown.maySend(userId));
+        if (!maySend) continue;
+        await this.notifyUser.execute({
+          userId,
+          title,
+          body,
+          actorId: input.actorId,
+          data: {
+            type: 'pantun_reply',
+            target_kind: 'pantun',
+            target_id: input.parentId,
+            action_kind: 'pantun',
+            action_value: input.parentId,
+          },
+        });
+        if (input.actorId !== userId) {
+          await this.pushCooldown?.touchAfterSend(userId);
+        }
+      }
+    } catch (err) {
+      // Best-effort: notif gagal tidak boleh menggagalkan balasan yang
+      // sebenarnya sudah tersimpan.
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          time: new Date().toISOString(),
+          msg: 'pantun reply notify failed',
+          parent_id: input.parentId,
+          actor_id: input.actorId,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
+}
+
+const SNIPPET_MAX = 80;
+
+function truncateSnippet(text: string): string {
+  const flat = text.trim().replace(/\s+/g, ' ');
+  return flat.length <= SNIPPET_MAX
+    ? flat
+    : `${flat.slice(0, SNIPPET_MAX - 1).trimEnd()}...`;
 }
 
 export type { Pantun, PantunReply, ConflictError };

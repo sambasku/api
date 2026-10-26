@@ -40,6 +40,7 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
   let adminToken: string;
   let contributorToken: string;
   let wordId: string;
+  let meaningId: string;
 
   const request = (path: string, init: RequestInit = {}) =>
     app.request(path, {
@@ -97,17 +98,28 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     const create = await post('/api/v1/admin/words', validWordBody('kata divote'), adminToken);
     const { data } = await create.json();
     wordId = data.word_id as string;
+    const wordDetail = await get(`/api/v1/words/${wordId}`, contributorToken);
+    const wordDetailBody = (await wordDetail.json()) as { data: { meanings: { id: string }[] } };
+    meaningId = wordDetailBody.data.meanings[0]!.id;
   });
 
-  it('ALUR PENUH: upvote → toggle ulang batal → ganti arah downvote', async () => {
+  it('ALUR PENUH (makna): upvote → toggle ulang batal → ganti arah downvote; word ditolak 400', async () => {
+    // 0101: vote word pensiun. Vote utama sekarang ke makna pertama kata fixture.
+    const wordRejected = await post(
+      '/api/v1/votes',
+      { target_type: 'word', target_id: wordId, value: 1 },
+      contributorToken,
+    );
+    expect(wordRejected.status).toBe(400);
+
     const vote = (value: 1 | -1, token = contributorToken) =>
-      post('/api/v1/votes', { target_type: 'word', target_id: wordId, value }, token);
+      post('/api/v1/votes', { target_type: 'meaning', target_id: meaningId, value }, token);
 
     const on = await vote(1);
     expect(on.status).toBe(200);
     expect(await on.json()).toMatchObject({
       success: true,
-      data: { target_type: 'word', target_id: wordId, my_vote: 1, upvotes: 1, downvotes: 0 },
+      data: { target_type: 'meaning', target_id: meaningId, my_vote: 1, upvotes: 1, downvotes: 0 },
     });
 
     const off = await vote(1); // searah kedua kali = batal
@@ -122,28 +134,28 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
   });
 
   it('counts publik TANPA token → 200 membawa counts target', async () => {
-    const res = await get(`/api/v1/votes/counts?targets=word:${wordId}`);
+    const res = await get(`/api/v1/votes/counts?targets=meaning:${meaningId}`);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       success: true,
-      data: [{ target_type: 'word', target_id: wordId, upvotes: 0, downvotes: 1 }],
+      data: [{ target_type: 'meaning', target_id: meaningId, upvotes: 0, downvotes: 1 }],
     });
   });
 
   it('my dengan token → vote user terlihat; TANPA token → 401', async () => {
-    const res = await get(`/api/v1/votes/my?targets=word:${wordId}`, contributorToken);
+    const res = await get(`/api/v1/votes/my?targets=meaning:${meaningId}`, contributorToken);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
-      data: [{ target_type: 'word', target_id: wordId, value: -1 }],
+      data: [{ target_type: 'meaning', target_id: meaningId, value: -1 }],
     });
 
-    expect((await get(`/api/v1/votes/my?targets=word:${wordId}`)).status).toBe(401);
+    expect((await get(`/api/v1/votes/my?targets=meaning:${meaningId}`)).status).toBe(401);
   });
 
   it('toggle target tidak dikenal → 404 VOTE_TARGET_NOT_FOUND', async () => {
     const res = await post(
       '/api/v1/votes',
-      { target_type: 'word', target_id: ulid26('01U2EWORDNGACAK'), value: 1 },
+      { target_type: 'meaning', target_id: ulid26('01U2EMEANNGACAK'), value: 1 },
       contributorToken,
     );
     expect(res.status).toBe(404);
@@ -161,7 +173,9 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
   });
 
   it('toggle tanpa token → 401; format targets salah → 400', async () => {
-    expect((await post('/api/v1/votes', { target_type: 'word', target_id: wordId, value: 1 })).status).toBe(401);
+    expect(
+      (await post('/api/v1/votes', { target_type: 'meaning', target_id: meaningId, value: 1 })).status,
+    ).toBe(401);
 
     const bad = await get('/api/v1/votes/counts?targets=bogus');
     expect(bad.status).toBe(400);
@@ -172,7 +186,7 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect((await get('/api/v1/votes/my', contributorToken)).status).toBe(400);
     expect((await get('/api/v1/votes/history')).status).toBe(401);
 
-    await post('/api/v1/votes', { target_type: 'word', target_id: wordId, value: 1 }, adminToken);
+    await post('/api/v1/votes', { target_type: 'meaning', target_id: meaningId, value: 1 }, adminToken);
 
     const mine = await get('/api/v1/votes/history', contributorToken);
     expect(mine.status).toBe(200);
@@ -184,9 +198,9 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect(body.data[0].word?.lemma).toBe('kata divote');
     expect(body.meta.has_more).toBe(false);
 
-    const adminHist = await get('/api/v1/votes/history?value=1&target_type=word', adminToken);
+    const adminHist = await get('/api/v1/votes/history?value=1&target_type=meaning', adminToken);
     const adminBody = (await adminHist.json()) as { data: { value: number; target_type: string }[] };
-    expect(adminBody.data).toEqual([expect.objectContaining({ value: 1, target_type: 'word' })]);
+    expect(adminBody.data).toEqual([expect.objectContaining({ value: 1, target_type: 'meaning' })]);
   });
 
   it('history: cursor has_more; word null setelah kata di-soft-delete', async () => {
@@ -218,7 +232,9 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     const db = getTestDb();
     await db.update(words).set({ deletedAt: new Date() }).where(eq(words.id, wordId));
 
-    const after = await get('/api/v1/votes/history?target_type=word', contributorToken);
+    // 0101: vote word pensiun - jalur "word null setelah soft-delete" kini
+    // lewat vote makna (kata induk hilang => word null).
+    const after = await get('/api/v1/votes/history?target_type=meaning', contributorToken);
     const afterBody = (await after.json()) as { data: { word: null }[] };
     expect(afterBody.data.length).toBeGreaterThan(0);
     expect(afterBody.data.every((row) => row.word === null)).toBe(true);
@@ -360,7 +376,7 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect(popBody.data[0]).toMatchObject({ id: discussionId, upvotes: 1 });
   });
 
-  it('GET /votes/deck: 401 tanpa token; login lihat kata; vote → hilang dari deck', async () => {
+  it('GET /votes/deck: 401 tanpa token; login lihat makna; vote makna → hilang dari deck', async () => {
     expect((await get('/api/v1/votes/deck')).status).toBe(401);
 
     // Kata baru - fixture `wordId` sudah di-vote di tes sebelumnya.
@@ -368,62 +384,87 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect(create.status).toBe(201);
     const deckWordId = ((await create.json()) as { data: { word_id: string } }).data.word_id;
 
+    // 0101: item deck = makna; cari makna dari kata itu via detail publik.
+    const detail = await get(`/api/v1/words/${deckWordId}`, contributorToken);
+    expect(detail.status).toBe(200);
+    const detailBody = (await detail.json()) as {
+      data: { id: string; meanings: { id: string; definition: string }[] };
+    };
+    const deckMeaningId = detailBody.data.meanings[0]!.id;
+    expect(deckMeaningId).toBeTruthy();
+
     const deck1 = await get('/api/v1/votes/deck?limit=10', contributorToken);
     expect(deck1.status).toBe(200);
     const body1 = (await deck1.json()) as {
       success: boolean;
-      data: { id: string; lemma: string; sense: string | null }[];
+      data: { id: string; word_id: string; lemma: string; sense: string | null }[];
       meta: { limit: number; has_more: boolean; next_cursor: string | null };
     };
     expect(body1.success).toBe(true);
     expect(body1.meta.limit).toBe(10);
-    expect(body1.data.some((w) => w.id === deckWordId)).toBe(true);
-    const card = body1.data.find((w) => w.id === deckWordId);
+    expect(body1.data.some((m) => m.id === deckMeaningId)).toBe(true);
+    const card = body1.data.find((m) => m.id === deckMeaningId);
+    expect(card?.word_id).toBe(deckWordId);
     expect(card?.lemma).toBe('kata deck');
     expect(card?.sense).toBeTruthy();
 
-    await post(
+    // vote level word ditolak (0101)
+    const wordVote = await post(
       '/api/v1/votes',
       { target_type: 'word', target_id: deckWordId, value: 1 },
+      contributorToken,
+    );
+    expect(wordVote.status).toBe(400);
+
+    await post(
+      '/api/v1/votes',
+      { target_type: 'meaning', target_id: deckMeaningId, value: 1 },
       contributorToken,
     );
 
     const deck2 = await get('/api/v1/votes/deck?limit=10', contributorToken);
     expect(deck2.status).toBe(200);
     const body2 = (await deck2.json()) as { data: { id: string }[] };
-    expect(body2.data.some((w) => w.id === deckWordId)).toBe(false);
+    expect(body2.data.some((m) => m.id === deckMeaningId)).toBe(false);
   });
 
-  it('POST /votes/skips: kata hilang dari deck user itu, vote count tidak naik, undo mengembalikan', async () => {
+  it('POST /votes/skips: makna hilang dari deck user itu, vote count tidak naik, undo mengembalikan', async () => {
     const create = await post('/api/v1/admin/words', validWordBody('kata diskip'), adminToken);
     expect(create.status).toBe(201);
     const skippedWordId = ((await create.json()) as { data: { word_id: string } }).data.word_id;
+    const detail = await get(`/api/v1/words/${skippedWordId}`, contributorToken);
+    const detailBody = (await detail.json()) as {
+      data: { meanings: { id: string }[] };
+    };
+    const skippedMeaningId = detailBody.data.meanings[0]!.id;
 
-    expect((await post('/api/v1/votes/skips', { word_id: skippedWordId })).status).toBe(401);
+    expect((await post('/api/v1/votes/skips', { meaning_id: skippedMeaningId })).status).toBe(401);
 
     const missing = await post(
       '/api/v1/votes/skips',
-      { word_id: ulid26('01TIDAKADA') },
+      { meaning_id: ulid26('01TIDAKADA') },
       contributorToken,
     );
     expect(missing.status).toBe(404);
 
-    const skip = await post('/api/v1/votes/skips', { word_id: skippedWordId }, contributorToken);
+    const skip = await post('/api/v1/votes/skips', { meaning_id: skippedMeaningId }, contributorToken);
     expect(skip.status).toBe(200);
     expect(await skip.json()).toMatchObject({
       success: true,
-      data: { word_id: skippedWordId, skipped: true },
+      data: { meaning_id: skippedMeaningId, skipped: true },
     });
-    expect((await post('/api/v1/votes/skips', { word_id: skippedWordId }, contributorToken)).status).toBe(200);
+    expect(
+      (await post('/api/v1/votes/skips', { meaning_id: skippedMeaningId }, contributorToken)).status,
+    ).toBe(200);
 
-    const counts = await get(`/api/v1/votes/counts?targets=word:${skippedWordId}`);
+    const counts = await get(`/api/v1/votes/counts?targets=meaning:${skippedMeaningId}`);
     expect(await counts.json()).toMatchObject({
-      data: [{ target_type: 'word', target_id: skippedWordId, upvotes: 0, downvotes: 0 }],
+      data: [{ target_type: 'meaning', target_id: skippedMeaningId, upvotes: 0, downvotes: 0 }],
     });
 
     const deck = await get('/api/v1/votes/deck?limit=20', contributorToken);
     const deckBody = (await deck.json()) as { data: { id: string }[] };
-    expect(deckBody.data.some((w) => w.id === skippedWordId)).toBe(false);
+    expect(deckBody.data.some((m) => m.id === skippedMeaningId)).toBe(false);
 
     const stamp = Date.now();
     const email = `lain${stamp}@test.com`;
@@ -435,17 +476,17 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     const otherToken = ((await otherLogin.json()) as { data: { access_token: string } }).data.access_token;
     const otherDeck = await get('/api/v1/votes/deck?limit=20', otherToken);
     const otherBody = (await otherDeck.json()) as { data: { id: string }[] };
-    expect(otherBody.data.some((w) => w.id === skippedWordId)).toBe(true);
+    expect(otherBody.data.some((m) => m.id === skippedMeaningId)).toBe(true);
 
-    const undo = await request(`/api/v1/votes/skips/${skippedWordId}`, {
+    const undo = await request(`/api/v1/votes/skips/${skippedMeaningId}`, {
       method: 'DELETE',
       headers: { authorization: `Bearer ${contributorToken}` },
     });
     expect(undo.status).toBe(200);
-    expect(await undo.json()).toMatchObject({ data: { word_id: skippedWordId, skipped: false } });
+    expect(await undo.json()).toMatchObject({ data: { meaning_id: skippedMeaningId, skipped: false } });
 
     const deckBack = await get('/api/v1/votes/deck?limit=20', contributorToken);
     const backBody = (await deckBack.json()) as { data: { id: string }[] };
-    expect(backBody.data.some((w) => w.id === skippedWordId)).toBe(true);
+    expect(backBody.data.some((m) => m.id === skippedMeaningId)).toBe(true);
   });
 });

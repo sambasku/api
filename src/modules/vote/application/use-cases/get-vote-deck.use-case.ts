@@ -13,7 +13,8 @@ export interface GetVoteDeckQuery {
 }
 
 /**
- * Antrean kata published yang pemohon belum vote (34-api-vote-deck.md).
+ * Antrean MAKNA published yang pemohon belum vote (34-api-vote-deck.md,
+ * 0101: deck per makna - 1 kartu = 1 makna).
  */
 export class GetVoteDeckUseCase {
   constructor(private readonly voteRepo: VoteRepository) {}
@@ -30,7 +31,7 @@ export class GetVoteDeckUseCase {
       }
     }
 
-    const page = await this.voteRepo.listDeckWords(userId, {
+    const page = await this.voteRepo.listDeckMeanings(userId, {
       limit: query.limit,
       cursor,
       randomize: query.randomize,

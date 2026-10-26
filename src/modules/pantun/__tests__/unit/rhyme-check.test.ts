@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   detectRhyme,
   extractLastWord,
+  pickRhymeScheme,
   suffixRhymes,
 } from '../../application/utils/rhyme-check';
+import { resolveRhymeScheme } from '../../application/utils/resolve-rhyme';
 
 describe('extractLastWord', () => {
   it('strip tanda baca trailing', () => {
@@ -88,5 +90,33 @@ describe('detectRhyme', () => {
     );
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.warning).not.toBeNull();
+  });
+});
+
+describe('pickRhymeScheme (auto-deteksi)', () => {
+  it('ABAB terdeteksi duluan untuk pantun klasik', () => {
+    const lines = ['jalan jauh ke kota sambas', 'sungai kecil penuh ikan', 'bawa bekal sekadar sambas', 'pulang cepat jangan tahan'];
+    expect(pickRhymeScheme(lines)).toBe('ABAB');
+  });
+
+  it('AAAA terdeteksi bila semua akhiran sama', () => {
+    const lines = ['pagi hari minum kopi', 'sore hari minum kopi', 'malam hari minum kopi', 'besok pagi minum kopi'];
+    expect(pickRhymeScheme(lines)).toBe('AAAA');
+  });
+
+  it('null bila tak ada skema cocok', () => {
+    const lines = ['baris satu berakhir kucing', 'baris dua berakhir meja', 'baris tiga berakhir kursi', 'baris empat berakhir lampu'];
+    expect(pickRhymeScheme(lines)).toBeNull();
+  });
+
+  it('resolveRhymeScheme pakai skema user bila diberikan', () => {
+    const lines = ['pagi hari minum kopi', 'sore hari minum kopi', 'malam hari minum kopi', 'besok pagi minum kopi'];
+    expect(resolveRhymeScheme(lines, 'AAAA')).toBe('AAAA');
+  });
+
+  it('resolveRhymeScheme lempar ValidationError bila rima tak cocok', () => {
+    const lines = ['baris satu berakhir kucing', 'baris dua berakhir meja', 'baris tiga berakhir kursi', 'baris empat berakhir lampu'];
+    // ValidationError: pesan generik di level Error, detail per-field.
+    expect(() => resolveRhymeScheme(lines, null)).toThrow(/belum sesuai/);
   });
 });

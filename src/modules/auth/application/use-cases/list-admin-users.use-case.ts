@@ -5,6 +5,7 @@ export interface ListAdminUsersCommand {
   q?: string;
   role?: User['role'];
   canContribute?: boolean;
+  emailVerified?: boolean;
   limit?: number;
   cursor?: string;
 }
@@ -25,6 +26,7 @@ export class ListAdminUsersUseCase {
       q: cmd.q,
       role: cmd.role,
       canContribute: cmd.canContribute,
+      emailVerified: cmd.emailVerified,
       limit,
       cursor: cmd.cursor,
     });

@@ -304,9 +304,12 @@ export interface WordRepository {
    *  kata itu sendiri - tanpa ini setiap edit selalu "duplikat" dirinya. */
   findDuplicate(languageId: string, lemma: string, excludeWordId?: string): Promise<boolean>;
   /**
-   * Makna published yang exact-match lemma + definition + terjemahan
-   * Indonesia (normalisasi trim/lowercase/collapse whitespace). Null jika
-   * definition/translation placeholder atau belum ada kembaran tayang.
+   * Makna published yang cocok dengan lemma + definisi + terjemahan Indonesia
+   * (normalisasi trim/lowercase/collapse whitespace).
+   *
+   * Placeholder pada sisi PENCARI = field itu diabaikan ("-" pada definisi
+   * tetap dibandingkan lewat terjemahannya, #174). Minimal satu field nyata
+   * harus dibandingkan; kalau dua-duanya placeholder → null.
    */
   findPublishedDuplicateMeaning(params: {
     languageId: string;
@@ -619,6 +622,15 @@ export interface WordRepository {
   findExampleWithWord(
     exampleId: string,
   ): Promise<{ id: string; meaningId: string; wordId: string } | null>;
+
+  /**
+   * #133: pemilik kata induk untuk media anak (contoh/audio) dalam SATU query.
+   * Null kalau entity atau kata sudah soft-delete.
+   */
+  findWordOwnerByChild(
+    entityType: 'example' | 'word_audio',
+    entityId: string,
+  ): Promise<{ wordId: string; lemma: string; ownerUserId: string | null } | null>;
 
   /** Dialect code by id (untuk path storage); null jika tidak ada */
   findDialectCode(dialectId: string): Promise<string | null>;

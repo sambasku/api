@@ -5,7 +5,6 @@ import type { MeaningMedia } from '../../domain/entities/meaning.entity';
 import { resolveChildPublication } from '../utils/resolve-publication';
 import { assertCanContribute } from '../utils/assert-can-contribute';
 import { throwDuplicateMeaningConflict } from '../utils/throw-duplicate-meaning-conflict';
-import { isPlaceholderMeaningText } from '../utils/normalize-meaning-text';
 import type { Actor } from './create-word.use-case';
 
 export interface AddMeaningDto {
@@ -56,18 +55,17 @@ export class AddMeaningUseCase {
     word: { id: string; languageId: string; lemma: string; status: string },
     dto: AddMeaningDto,
   ): Promise<void> {
-    if (isPlaceholderMeaningText(dto.definition)) return;
     const indonesianLanguageId = await this.wordRepo.findLanguageIdByCode('id');
     if (!indonesianLanguageId) return;
     const idTranslation = dto.translations.find((t) => t.languageId === indonesianLanguageId);
-    if (!idTranslation || isPlaceholderMeaningText(idTranslation.translationText)) return;
 
-    // Exact match pada kata yang sama ATAU lemma kembaran di bahasa yang sama
+    // Definisi placeholder ("-") bukan alasan berhenti: padanan Indonesia
+    // tetap dibandingkan supaya "asin, asin, asin" tertolak (#174).
     const match = await this.wordRepo.findPublishedDuplicateMeaning({
       languageId: word.languageId,
       lemma: word.lemma,
       definition: dto.definition,
-      translationText: idTranslation.translationText,
+      translationText: idTranslation?.translationText ?? '',
     });
     if (match) throwDuplicateMeaningConflict(match);
   }

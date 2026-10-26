@@ -124,7 +124,7 @@ export const myVotesResponseSchema = z.object({
   ),
 });
 
-/** GET /api/v1/votes/deck - antrean kata belum di-vote (34-api-vote-deck.md). */
+/** GET /api/v1/votes/deck - antrean makna belum di-vote (34-api-vote-deck.md, 0101). */
 export const voteDeckQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(10),
   cursor: z.string().min(1).optional(),
@@ -138,19 +138,19 @@ export const voteDeckQuerySchema = z.object({
 export type VoteDeckQuery = z.infer<typeof voteDeckQuerySchema>;
 
 export const skipVoteDeckSchema = z.object({
-  word_id: opaqueId,
+  meaning_id: opaqueId,
 });
 
 export type SkipVoteDeckBody = z.infer<typeof skipVoteDeckSchema>;
 
 export const skipVoteDeckParamsSchema = z.object({
-  wordId: opaqueId,
+  meaningId: opaqueId,
 });
 
 export const skipVoteDeckResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
-    word_id: z.string(),
+    meaning_id: z.string(),
     skipped: z.boolean(),
   }),
 });
@@ -159,7 +159,9 @@ export const voteDeckResponseSchema = z.object({
   success: z.literal(true),
   data: z.array(
     z.object({
+      // 0101: id = ID makna (target vote), bukan ID kata.
       id: z.string(),
+      word_id: z.string(),
       lemma: z.string(),
       language_id: z.string(),
       language_code: z.string(),
@@ -168,6 +170,8 @@ export const voteDeckResponseSchema = z.object({
       is_verified: z.boolean(),
       approved_at: z.string(),
       sense: z.string().nullable(),
+      order_index: z.number().int(),
+      meaning_count: z.number().int(),
       upvotes: z.number().int(),
       downvotes: z.number().int(),
     }),

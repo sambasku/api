@@ -81,24 +81,26 @@ describe.skipIf(!hasTestDb)('Query plan hemat rows read (0083)', () => {
     expect(p).not.toContain('SCAN mt');
   });
 
-  it('deck vote: total dari word_vote_counts join, bukan correlated scan votes', async () => {
-    // Bentuk query listDeckWords: LEFT JOIN ringkasan + NOT EXISTS vote/skip.
+  it('deck vote: total dari meaning_vote_counts join, bukan correlated scan votes', async () => {
+    // Bentuk query listDeckMeanings (0101): LEFT JOIN ringkasan + NOT EXISTS vote/skip.
     const p = await plan(
-      `select words.id, coalesce(word_vote_counts.total, 0)
-       from words
-       left join word_vote_counts on word_vote_counts.word_id = words.id
-       where words.deleted_at is null and words.status = 'published'
+      `select meanings.id, coalesce(meaning_vote_counts.total, 0)
+       from meanings
+       inner join words on words.id = meanings.word_id
+       left join meaning_vote_counts on meaning_vote_counts.meaning_id = meanings.id
+       where meanings.deleted_at is null and meanings.status = 'published'
+         and words.deleted_at is null and words.status = 'published'
          and not exists (
            select 1 from votes
-           where votes.user_id = ? and votes.entity_type = 'word' and votes.entity_id = words.id
+           where votes.user_id = ? and votes.entity_type = 'meaning' and votes.entity_id = meanings.id
          )
-       order by coalesce(word_vote_counts.total, 0) asc, words.id asc
+       order by coalesce(meaning_vote_counts.total, 0) asc, meanings.id asc
        limit 11`,
       ['01UAAAAAAAAAAAAAAAAAAAAAAA'],
     );
-    // COUNT(*) correlated dulu: "SCALAR SUBQUERY" baca votes per baris kata.
+    // COUNT(*) correlated dulu: "SCALAR SUBQUERY" baca votes per baris makna.
     // Sekarang votes hanya muncul sebagai NOT EXISTS (covering unique index).
     expect(p).not.toMatch(/SUBQUERY.*\n.*SCAN votes/);
-    expect(p).toContain('word_vote_counts');
+    expect(p).toContain('meaning_vote_counts');
   });
 });

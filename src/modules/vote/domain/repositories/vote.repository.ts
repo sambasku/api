@@ -143,9 +143,11 @@ export interface VoteHistoryListResult {
   hasMore: boolean;
 }
 
-/** Item antrean deck nilai kata (34-api-vote-deck.md). */
-export interface VoteDeckWord {
+/** Item antrean deck vote per makna (34-api-vote-deck.md, 0101: 1 kartu = 1 makna). */
+export interface VoteDeckMeaning {
+  /** ID makna - target vote + kunci cursor. */
   id: string;
+  wordId: string;
   lemma: string;
   languageId: string;
   languageCode: string;
@@ -153,9 +155,14 @@ export interface VoteDeckWord {
   usageLabels: string[];
   status: string;
   isVerified: boolean;
-  /** COALESCE(verified_at, created_at) */
+  /** COALESCE(words.verified_at, words.created_at) */
   approvedAt: Date;
+  /** Definisi makna ini; fallback ke terjemahan pertama bila kosong. */
   sense: string | null;
+  /** Posisi 1-based antar makna published kata ini - konteks "makna ke-N". */
+  orderIndex: number;
+  /** Jumlah makna published kata ini - konteks "dari M". */
+  meaningCount: number;
   upvotes: number;
   downvotes: number;
   /** upvotes + downvotes - kunci cursor + sort */
@@ -176,7 +183,7 @@ export interface VoteDeckListOptions {
 }
 
 export interface VoteDeckListResult {
-  items: VoteDeckWord[];
+  items: VoteDeckMeaning[];
   nextCursor: string | null;
   hasMore: boolean;
 }
@@ -241,11 +248,11 @@ export interface VoteRepository {
   listByUser(userId: string, opts: VoteHistoryListOptions): Promise<VoteHistoryListResult>;
 
   /**
-   * Antrean kata published yang user belum vote dan belum skip
-   * (34-api-vote-deck.md).
+   * Antrean MAKNA published yang user belum vote dan belum skip
+   * (34-api-vote-deck.md; 0101: deck per makna, bukan per kata).
    * Urut total vote Asc, lalu approved_at Asc, id Asc. LIMIT+1 has_more.
    */
-  listDeckWords(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;
+  listDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;
 
   /**
    * List vote admin cursor pagination compound (created_at, id) desc.

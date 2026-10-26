@@ -630,8 +630,10 @@ import { NotificationPushCooldownRepositoryImpl } from "@/modules/notification/i
 import { RecordInboxNotificationUseCase } from "@/modules/notification/application/use-cases/record-inbox-notification.use-case";
 import { ReviewPushCooldownGate } from "@/modules/notification/application/use-cases/review-push-cooldown-gate";
 import { WordCommentPushCooldownGate } from "@/modules/notification/application/use-cases/word-comment-push-cooldown-gate";
-import { DiscussionReplyPushCooldownGate } from "@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate";
+import { DiscussionReplyPushCooldownGate, ReplyPushCooldownGate } from "@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate";
 import { WordVotePushCooldownGate } from "@/modules/notification/application/use-cases/word-vote-push-cooldown-gate";
+import { WordMediaPushCooldownGate } from "@/modules/notification/application/use-cases/word-media-push-cooldown-gate";
+import { NotifyWordOwnerMediaUseCase } from "@/modules/notification/application/use-cases/notify-word-owner-media.use-case";
 import { ListMyNotificationsUseCase } from "@/modules/notification/application/use-cases/list-my-notifications.use-case";
 import { GetUnreadNotificationCountUseCase } from "@/modules/notification/application/use-cases/get-unread-notification-count.use-case";
 import { MarkNotificationReadUseCase } from "@/modules/notification/application/use-cases/mark-notification-read.use-case";
@@ -991,6 +993,18 @@ const requireProfileWriteClient = createRequireApprovedClientMiddleware(
 // Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
 // Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
 const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
+// #133: notif pemilik kata saat contoh kalimat / audio pelafalan tayang.
+const wordMediaPushCooldown = new WordMediaPushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
+const notifyWordOwnerMedia = new NotifyWordOwnerMediaUseCase(
+  wordRepo,
+  recordInbox,
+  notifyUser,
+  userRepo,
+  wordMediaPushCooldown,
+);
 const wordImportSessionRepo = new WordImportSessionRepositoryImpl(db);
 const wordReportRepo = new WordReportRepositoryImpl(db);
 const takedownWord = new TakedownWordUseCase(
@@ -1074,7 +1088,7 @@ const wordController = new WordController({
     auditRepo,
     publicImageStorage.providerName,
   ),
-  addExample: new AddExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo),
+  addExample: new AddExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo, notifyWordOwnerMedia),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
   importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo),
   batchContributeWords: new BatchContributeWordsUseCase(
@@ -1102,6 +1116,7 @@ const wordController = new WordController({
     wordRepo,
     pronunciationStorage,
     auditRepo,
+    notifyWordOwnerMedia,
   ),
   deletePronunciationAudio: new DeletePronunciationAudioUseCase(
     wordRepo,
@@ -1134,6 +1149,7 @@ const contributionController = new ContributionController({
     new ReviewPushCooldownGate(appSettingsRepo, notificationPushCooldownRepo),
     recordAbuseSignal,
     activityEvents,
+    notifyWordOwnerMedia,
   ),
   correct: new CorrectContributionUseCase(
     contributionRepo,
@@ -1479,6 +1495,11 @@ const wordCommentPushCooldown = new WordCommentPushCooldownGate(
 const discussionReplyPushCooldown = new DiscussionReplyPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
+);
+const pantunReplyPushCooldown = new ReplyPushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+  'pantun_reply',
 );
 const commentController = new CommentController({
   create: new CreateCommentUseCase(
@@ -2538,6 +2559,10 @@ const pantunController = new PantunController({
     commentBlocklistRepo,
     recordAbuseSignal,
     activityEvents,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    pantunReplyPushCooldown,
   ),
   listPublished: new ListPublishedPantunsUseCase(pantunRepo),
   getDetail: new GetPantunDetailUseCase(pantunRepo),

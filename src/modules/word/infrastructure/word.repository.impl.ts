@@ -11,6 +11,7 @@ import {
   lexicalRelations,
   meanings,
   meaningTranslations,
+  meaningVoteCounts,
   pronunciations,
   users,
   wordCategories,
@@ -36,6 +37,7 @@ import {
   isPlaceholderMeaningText,
   normalizeMeaningText,
 } from '../application/utils/normalize-meaning-text';
+import { mapDuplicateMeaningIndexes } from '../application/utils/meaning-deduplication';
 import { publishOrMergeMeaningsInTx } from './publish-or-merge-meanings';
 import { mergeDuplicateWordsInTx } from './merge-duplicate-words';
 import {
@@ -488,14 +490,15 @@ export class WordRepositoryImpl implements WordRepository {
     definition: string;
     translationText: string;
   }): Promise<PublishedDuplicateMeaning | null> {
-    if (
-      isPlaceholderMeaningText(params.definition) ||
-      isPlaceholderMeaningText(params.translationText)
-    ) {
-      return null;
-    }
-    const wantDef = normalizeMeaningText(params.definition);
-    const wantTr = normalizeMeaningText(params.translationText);
+    // Sisi pencari yang placeholder = field itu tidak dibandingkan (#174:
+    // definisi "-" tetap tertolak lewat padanan Indonesia-nya).
+    const wantDef = isPlaceholderMeaningText(params.definition)
+      ? null
+      : normalizeMeaningText(params.definition);
+    const wantTr = isPlaceholderMeaningText(params.translationText)
+      ? null
+      : normalizeMeaningText(params.translationText);
+    if (wantDef === null && wantTr === null) return null;
 
     const rows = await this.db
       .select({
@@ -523,27 +526,26 @@ export class WordRepositoryImpl implements WordRepository {
           isNull(words.deletedAt),
           eq(meanings.status, 'published'),
           isNull(meanings.deletedAt),
-          eq(meanings.isHaveDefinition, true),
-          eq(meanings.isHaveTranslation, true),
           eq(languages.code, 'id'),
-          ne(meanings.definition, '-'),
-          ne(meaningTranslations.translationText, '-'),
         ),
       );
 
     for (const row of rows) {
-      if (
-        normalizeMeaningText(row.definition) === wantDef &&
-        normalizeMeaningText(row.translationText) === wantTr
-      ) {
-        return {
-          wordId: row.wordId,
-          meaningId: row.meaningId,
-          lemma: row.lemma,
-          definition: row.definition,
-          translationText: row.translationText,
-        };
-      }
+      const rowDef = isPlaceholderMeaningText(row.definition)
+        ? null
+        : normalizeMeaningText(row.definition);
+      const rowTr = isPlaceholderMeaningText(row.translationText)
+        ? null
+        : normalizeMeaningText(row.translationText);
+      if (wantDef !== null && rowDef !== wantDef) continue;
+      if (wantTr !== null && rowTr !== wantTr) continue;
+      return {
+        wordId: row.wordId,
+        meaningId: row.meaningId,
+        lemma: row.lemma,
+        definition: row.definition,
+        translationText: row.translationText,
+      };
     }
     return null;
   }
@@ -2646,6 +2648,43 @@ memberLemma: string;
     return row ?? null;
   }
 
+  /** #133: owner kata induk media anak - satu JOIN, bukan dua query berurutan. */
+  async findWordOwnerByChild(
+    entityType: 'example' | 'word_audio',
+    entityId: string,
+  ): Promise<{ wordId: string; lemma: string; ownerUserId: string | null } | null> {
+    const columns = {
+      wordId: words.id,
+      lemma: words.lemma,
+      ownerUserId: words.createdBy,
+    };
+    const [row] =
+      entityType === 'example'
+        ? await this.db
+            .select(columns)
+            .from(examples)
+            .innerJoin(meanings, eq(meanings.id, examples.meaningId))
+            .innerJoin(words, eq(words.id, meanings.wordId))
+            .where(
+              and(
+                eq(examples.id, entityId),
+                isNull(examples.deletedAt),
+                isNull(meanings.deletedAt),
+                isNull(words.deletedAt),
+              ),
+            )
+            .limit(1)
+        : await this.db
+            .select(columns)
+            .from(wordAudios)
+            .innerJoin(words, eq(words.id, wordAudios.wordId))
+            .where(
+              and(eq(wordAudios.id, entityId), isNull(wordAudios.deletedAt), isNull(words.deletedAt)),
+            )
+            .limit(1);
+    return row ?? null;
+  }
+
   async findDialectCode(dialectId: string): Promise<string | null> {
     const [row] = await this.db
       .select({ code: dialects.code })
@@ -3073,6 +3112,12 @@ memberLemma: string;
         await tx.delete(meaningTranslations).where(
           inArray(meaningTranslations.meaningId, tx.select({ id: meanings.id }).from(meanings).where(eq(meanings.wordId, id)),
         ));
+        // Ringkasan vote makna (0101) memegang FK ke meanings - wajib dihapus
+        // sebelum makna, kalau tidak edit kata yang sudah punya vote makna
+        // gagal FK (400 "Referensi data tidak valid").
+        await tx.delete(meaningVoteCounts).where(
+          inArray(meaningVoteCounts.meaningId, tx.select({ id: meanings.id }).from(meanings).where(eq(meanings.wordId, id)),
+        ));
         await tx.delete(meanings).where(eq(meanings.wordId, id));
         await tx.delete(wordCategories).where(eq(wordCategories.wordId, id));
         await tx.delete(lexicalRelations).where(eq(lexicalRelations.sourceWordId, id));
@@ -3296,43 +3341,55 @@ memberLemma: string;
     // Pre-generate ULID makna di Node → satu INSERT multi-row + translations/
     // examples tanpa loop RETURNING (hemat N round-trip di dalam tx Workers).
     const meaningIdByIndex = word.meanings.map(() => generateId());
-    opts?.meaningIdsOut?.push(...meaningIdByIndex);
+    // Duplikat makna (beda kapital / sama persis) dijatuhkan supaya tidak
+    // tayang "asin, asin, asin" (#174). Indeks duplikat menumpang id makna
+    // pertama yang sama agar contoh & provenance tetap sejajar.
+    const { firstIndex, isDuplicate } = mapDuplicateMeaningIndexes(word.meanings);
+    const uniqueIndexes = word.meanings.map((_, i) => i).filter((i) => !isDuplicate[i]);
+    opts?.meaningIdsOut?.push(...firstIndex.map((first) => meaningIdByIndex[first]));
 
-    if (word.meanings.length > 0) {
+    if (uniqueIndexes.length > 0) {
       await tx.insert(meanings).values(
-        word.meanings.map((meaning, index) => ({
-          id: meaningIdByIndex[index],
-          wordId,
-          wordClassId: meaning.wordClassId,
-          inheritedFromMeaningId: opts?.inheritedFrom?.[index] ?? null,
-          definition: meaning.definition,
-          isHaveDefinition: meaning.isHaveDefinition ?? true,
-          isHaveTranslation: meaning.isHaveTranslation ?? meaning.translations.length > 0,
-          meaningSource: meaning.meaningSource ?? 'manual',
-          orderIndex: meaning.orderIndex,
-          status: childStatusOf(word.status),
-          isVerified: word.isVerified,
-          createdBy: actorId,
-        })),
+        uniqueIndexes.map((index) => {
+          const meaning = word.meanings[index];
+          return {
+            id: meaningIdByIndex[index],
+            wordId,
+            wordClassId: meaning.wordClassId,
+            inheritedFromMeaningId: opts?.inheritedFrom?.[index] ?? null,
+            definition: meaning.definition,
+            isHaveDefinition: meaning.isHaveDefinition ?? true,
+            isHaveTranslation: meaning.isHaveTranslation ?? meaning.translations.length > 0,
+            meaningSource: meaning.meaningSource ?? 'manual',
+            orderIndex: meaning.orderIndex,
+            status: childStatusOf(word.status),
+            isVerified: word.isVerified,
+            createdBy: actorId,
+          };
+        }),
       );
 
       const translationValues = word.meanings.flatMap((meaning, index) =>
-        meaning.translations.map((t) => ({
-          meaningId: meaningIdByIndex[index],
-          languageId: t.languageId,
-          translationText: t.translationText,
-          translationType: t.translationType,
-          translationAllowsComma: t.translationAllowsComma ?? false,
-          createdBy: actorId,
-        })),
+        isDuplicate[index]
+          ? []
+          : meaning.translations.map((t) => ({
+              meaningId: meaningIdByIndex[index],
+              languageId: t.languageId,
+              translationText: t.translationText,
+              translationType: t.translationType,
+              translationAllowsComma: t.translationAllowsComma ?? false,
+              createdBy: actorId,
+            })),
       );
       if (translationValues.length > 0) {
         await tx.insert(meaningTranslations).values(translationValues);
       }
 
+      // Contoh dari makna duplikat ditempel ke makna yang bertahan (bukan
+      // dibuang) - teks contoh tetap milik pengirimnya.
       const exampleValues = word.meanings.flatMap((meaning, index) =>
         (meaning.examples ?? []).map((e) => ({
-          meaningId: meaningIdByIndex[index],
+          meaningId: meaningIdByIndex[firstIndex[index]],
           sourceLanguageId: e.sourceLanguageId,
           sourceSentence: e.sourceSentence,
           targetLanguageId: e.targetLanguageId ?? null,

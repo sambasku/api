@@ -45,6 +45,7 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
   let voter1Token: string;
   let voter2Token: string;
   let wordId: string;
+  let meaningId: string;
 
   const request = (path: string, init: RequestInit = {}) =>
     app.request(path, {
@@ -122,9 +123,14 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
     const { data } = await create.json();
     wordId = data.word_id as string;
 
-    // Seed 2 vote up pada kata yang sama (bahan moderasi)
+    // 0101: vote word pensiun - seed vote ke makna pertama kata ini.
+    const detail = await get(`/api/v1/words/${wordId}`, adminToken);
+    const detailBody = (await detail.json()) as { data: { meanings: { id: string }[] } };
+    meaningId = detailBody.data.meanings[0]!.id;
+
+    // Seed 2 vote up pada makna yang sama (bahan moderasi)
     for (const token of [voter1Token, voter2Token]) {
-      const res = await post('/api/v1/votes', { target_type: 'word', target_id: wordId, value: 1 }, token);
+      const res = await post('/api/v1/votes', { target_type: 'meaning', target_id: meaningId, value: 1 }, token);
       expect(res.status).toBe(200);
     }
   });
@@ -147,7 +153,7 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
   });
 
   it('list reviewer: 200 + envelope cursor + TANPA password_hash', async () => {
-    const res = await get(`/api/v1/admin/votes?q=${voter1Name}&target_type=word&limit=2`, reviewerToken);
+    const res = await get(`/api/v1/admin/votes?q=${voter1Name}&target_type=meaning&limit=2`, reviewerToken);
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as {
@@ -160,16 +166,16 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
     expect(body.data.length).toBe(1);
     expect(body.data[0]).toMatchObject({
       voter_username: voter1Name,
-      target_type: 'word',
-      target_id: wordId,
+      target_type: 'meaning',
+      target_id: meaningId,
       value: 1,
     });
     // NFR-5: response TIDAK pernah mengandung password_hash
     expect(Object.keys(body.data[0]).includes('password_hash')).toBe(false);
   });
 
-  it('top-targets: 200 + word seed muncul dengan net=2', async () => {
-    const res = await get('/api/v1/admin/votes/top-targets?target_type=word&limit=50', reviewerToken);
+  it('top-targets: 200 + makna seed muncul dengan net=2', async () => {
+    const res = await get('/api/v1/admin/votes/top-targets?target_type=meaning&limit=50', reviewerToken);
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as {
@@ -177,7 +183,7 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
       data: { target_id: string; upvotes: number; downvotes: number; net: number }[];
     };
     expect(body.success).toBe(true);
-    const hit = body.data.find((r) => r.target_id === wordId);
+    const hit = body.data.find((r) => r.target_id === meaningId);
     expect(hit).toMatchObject({ upvotes: 2, downvotes: 0, net: 2 });
   });
 
@@ -199,14 +205,14 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
     const res = await del(
       '/api/v1/admin/votes/reset-target',
       reviewerToken,
-      { target_type: 'word', target_id: wordId },
+      { target_type: 'meaning', target_id: meaningId },
     );
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as { data: { deleted_count: number } };
     expect(body.data.deleted_count).toBe(1); // vote voter1 sudah dihapus test sebelumnya
 
-    const after = await get(`/api/v1/admin/votes?target_id=${wordId}`, reviewerToken);
+    const after = await get(`/api/v1/admin/votes?target_id=${meaningId}`, reviewerToken);
     const afterBody = (await after.json()) as { data: unknown[] };
     expect(afterBody.data).toHaveLength(0);
   });

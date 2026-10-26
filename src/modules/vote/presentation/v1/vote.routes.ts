@@ -100,7 +100,7 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
     }),
   ];
   routes.use('/skips', ...skipGuards);
-  routes.use('/skips/:wordId', ...skipGuards);
+  routes.use('/skips/:meaningId', ...skipGuards);
 
   const toggleRoute = createRoute({
     method: 'post',
@@ -156,7 +156,7 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
     path: '/deck',
     tags: ['Votes'],
     summary:
-      'Antrean kata published yang user belum vote - deck nilai di tab Kontribusi (login)',
+      'Antrean makna published yang user belum vote - deck nilai di tab Kontribusi (login, 0101: per makna)',
     request: {
       query: voteDeckQuerySchema,
     },
@@ -172,7 +172,7 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
     method: 'post',
     path: '/skips',
     tags: ['Votes'],
-    summary: 'Lewati kartu deck tanpa menulis vote - idempoten, kata hilang dari deck user ini',
+    summary: 'Lewati kartu deck (makna) tanpa menulis vote - idempoten, makna hilang dari deck user ini',
     request: {
       body: { content: json(skipVoteDeckSchema) },
     },
@@ -180,16 +180,16 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
       200: { description: 'Skip tercatat', content: json(skipVoteDeckResponseSchema) },
       400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
-      404: { description: 'Kata tidak ditemukan', content: json(errorResponseSchema) },
+      404: { description: 'Makna tidak ditemukan', content: json(errorResponseSchema) },
       429: { description: 'Terlalu banyak skip (60/menit per user)', content: json(errorResponseSchema) },
     },
   });
 
   const unskipDeckRoute = createRoute({
     method: 'delete',
-    path: '/skips/:wordId',
+    path: '/skips/:meaningId',
     tags: ['Votes'],
-    summary: 'Batalkan skip kartu deck - idempoten, kata boleh muncul lagi',
+    summary: 'Batalkan skip kartu deck - idempoten, makna boleh muncul lagi',
     request: {
       params: skipVoteDeckParamsSchema,
     },
@@ -221,7 +221,7 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
   routes.openapi(historyRoute, (c) => deps.controller.history(c, c.req.valid('query')) as never);
   routes.openapi(deckRoute, (c) => deps.controller.deck(c, c.req.valid('query')) as never);
   routes.openapi(skipDeckRoute, (c) => deps.controller.skipDeck(c, c.req.valid('json')) as never);
-  routes.openapi(unskipDeckRoute, (c) => deps.controller.unskipDeck(c, c.req.valid('param').wordId) as never);
+  routes.openapi(unskipDeckRoute, (c) => deps.controller.unskipDeck(c, c.req.valid('param').meaningId) as never);
   routes.openapi(myRoute, (c) => deps.controller.my(c, c.req.valid('query')) as never);
 
   return routes;

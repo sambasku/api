@@ -18,6 +18,10 @@ import {
 import { contributions } from '@/shared/database/drizzle/schema';
 import { generateId } from '@/shared/utils/ulid';
 import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import {
+  loadMeaningFingerprints,
+  meaningDeduplicationFingerprint,
+} from '@/modules/word/application/utils/meaning-deduplication';
 
 /** Foto utama terhapus tanpa pengganti: foto tersisa paling lama jadi utama. */
 async function ensurePrimaryImage(wordId: string): Promise<void> {
@@ -261,9 +265,20 @@ export async function applyChangesToWord(
       orderBy: (m, { asc }) => [asc(m.orderIndex)],
     });
     const existingMap = new Map(existingMeanings.map((m) => [m.id, m]));
+    // #174: usulan "tambah makna" yang isinya sudah ada (beda kapital /
+    // sama persis) tidak ditambahkan lagi.
+    const seenFps = await loadMeaningFingerprints(db, word.id);
 
     for (const mc of changes.meanings) {
       if (mc.action === 'add' && !mc.meaningId) {
+        const fp = meaningDeduplicationFingerprint({
+          definition: mc.definition ?? '',
+          translations: mc.translations ?? [],
+          isHaveDefinition: true,
+          isHaveTranslation: (mc.translations ?? []).length > 0,
+        });
+        if (seenFps.has(fp)) continue;
+        seenFps.add(fp);
         const newMeaning = await db
           .insert(meanings)
           .values({

@@ -311,7 +311,8 @@ export class UsahaContributionUseCases {
         lat: p.lat ?? null,
         lng: p.lng ?? null,
         phone: p.phone ?? null,
-        whatsapp: p.whatsapp ?? null,
+        // Satu nomor HP: whatsapp ikut phone bila kosong (form cuma satu field).
+        whatsapp: p.whatsapp ?? p.phone ?? null,
         website: p.website ?? null,
         socialUrl: p.socialUrl ?? null,
         coverUrl: p.coverUrl ?? null,
@@ -374,6 +375,10 @@ export class UsahaContributionUseCases {
         const patch: Record<string, unknown> = { id: usaha.id };
         for (const f of fields) {
           if (f in p) patch[f] = (p as Record<string, unknown>)[f];
+        }
+        // Satu nomor HP: whatsapp ikut phone saat yang diajukan hanya phone.
+        if ('phone' in patch && !('whatsapp' in patch)) {
+          patch.whatsapp = patch.phone;
         }
         await this.usahas.update(patch as unknown as UpdateUsahaInput);
         break;

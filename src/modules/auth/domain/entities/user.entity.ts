@@ -48,6 +48,12 @@ export interface User {
   /** Mute sementara; null = tidak di-mute. */
   contributeMutedUntil: Date | null;
   emailVerified: boolean;
+  /** Waktu email terverifikasi (kolom users). Null = belum terverifikasi. */
+  emailVerifiedAt?: Date | null;
+  /** Enrichment list admin (bukan kolom users): OTP terakhir, null = tidak ada. */
+  otpCreatedAt?: Date | null;
+  /** Enrichment list admin: kadaluarsa OTP terakhir. */
+  otpExpiresAt?: Date | null;
   /** Waktu tap "Mengerti" di guide swipe halaman kontribusi; null = belum. */
   readContributionGuideAt: Date | null;
   avatarUrl: string | null;
@@ -82,6 +88,8 @@ export interface UserListFilter {
   /** Filter user yang PUNYA role ini (multi role: EXISTS junction). */
   role?: UserRole;
   canContribute?: boolean;
+  /** Filter status verifikasi email (admin: cari user yang mentok OTP). */
+  emailVerified?: boolean;
   limit: number;
   cursor?: string;
 }

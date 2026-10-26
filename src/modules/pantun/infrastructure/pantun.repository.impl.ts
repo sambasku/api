@@ -226,6 +226,19 @@ export class PantunRepositoryImpl implements PantunRepository {
     );
   }
 
+  async listDistinctReplierUserIds(parentId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ userId: pantunReplies.userId })
+      .from(pantunReplies)
+      .where(
+        and(
+          eq(pantunReplies.parentId, parentId),
+          eq(pantunReplies.status, 'published'),
+        ),
+      );
+    return rows.map((r) => r.userId).filter((id): id is string => !!id);
+  }
+
   async markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
     const updated = await this.db
       .update(pantunReplies)

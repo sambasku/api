@@ -4,17 +4,16 @@ import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { ValidationError } from '@/shared/errors/app-error';
-import {
-  detectRhyme,
-  type RhymeScheme,
-} from '../../application/utils/rhyme-check';
+import { type RhymeScheme } from '../../application/utils/rhyme-check';
+import { resolveRhymeScheme } from '../../application/utils/resolve-rhyme';
 import type { NewPantun, Pantun } from '../../domain/entities/pantun.entity';
 import type { PantunRepository } from '../../domain/repositories/pantun.repository';
 
 export interface CreatePantunCommand {
   userId: string;
   lines: string[];
-  rhymeScheme: RhymeScheme;
+  /** Opsional: kosong = server deteksi sendiri (ABAB lalu AAAA). */
+  rhymeScheme?: RhymeScheme | null;
   categoryId?: string | null;
   language?: string | null;
   requestId?: string | null;
@@ -61,24 +60,7 @@ export class CreatePantunUseCase {
         { field: 'lines', message: 'Total isi pantun maksimal 600 karakter' },
       ]);
     }
-    const check = detectRhyme(cleaned, cmd.rhymeScheme);
-    if (!check.ok) {
-      if (check.reason === 'LAST_WORD_UNDETECTED') {
-        throw new ValidationError([
-          {
-            field: `lines[${check.lineIndex}]`,
-            message: 'Kata akhir baris ini tidak terdeteksi. Perbaiki ya.',
-          },
-        ]);
-      }
-      const pairs = check.pairs.map(([a, b]) => `baris ${a} & ${b}`).join(', ');
-      throw new ValidationError([
-        {
-          field: 'lines',
-          message: `Pola rima ${cmd.rhymeScheme} belum pas: ${pairs} belum berima.`,
-        },
-      ]);
-    }
+    const scheme = resolveRhymeScheme(cleaned, cmd.rhymeScheme);
     // Rima ambigu (suffix pendek): diterima, warning diteruskan ke caller
     // lewat field opsional - tidak memblokir kontribusi.
     const qualityBody = await assertUgcTextQualityWithStrike(joined, {
@@ -104,7 +86,7 @@ export class CreatePantunUseCase {
       userId: cmd.userId,
       categoryId: cmd.categoryId ?? null,
       language: cmd.language?.trim() || 'id',
-      rhymeScheme: cmd.rhymeScheme,
+      rhymeScheme: scheme,
       lines: cleaned,
     });
 

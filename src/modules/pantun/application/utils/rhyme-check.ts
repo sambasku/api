@@ -96,10 +96,40 @@ export function detectRhyme(
   };
 }
 
+// AAAA dulu: semua baris berima = himpunan paling ketat (ABAB ikut lolos),
+// jadi tanpa urutan ini AAAA tak pernah terpilih.
+const AUTO_ORDER: readonly RhymeScheme[] = ['AAAA', 'ABAB'];
+
 function matchedSuffixLen(a: string, b: string): number {
   const maxLen = Math.min(a.length, b.length);
   for (let len = maxLen; len >= 1; len--) {
     if (a.endsWith(b.slice(-len)) && b.endsWith(a.slice(-len))) return len;
   }
   return 0;
+}
+
+/**
+ * Tebak skema rima tanpa user memilih. AAAA dicek dulu (semua baris berima
+ * = pola paling ketat); bila tidak, ABAB (pasangan 1-3 & 2-4). null = tak
+ * ada yang cocok.
+ */
+export function pickRhymeScheme(lines: readonly string[]): RhymeScheme | null {
+  for (const scheme of AUTO_ORDER) {
+    if (detectRhyme(lines, scheme).ok) return scheme;
+  }
+  return null;
+}
+
+/** Skema dengan pasangan gagal paling sedikit - untuk pesan error. */
+export function closestRhymeScheme(lines: readonly string[]): RhymeScheme {
+  let bestScheme: RhymeScheme = 'ABAB';
+  let fewest = Infinity;
+  for (const scheme of AUTO_ORDER) {
+    const r = detectRhyme(lines, scheme);
+    if (!r.ok && r.reason === 'RHYME_MISMATCH' && r.pairs.length < fewest) {
+      fewest = r.pairs.length;
+      bestScheme = scheme;
+    }
+  }
+  return bestScheme;
 }

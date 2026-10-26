@@ -5,6 +5,7 @@ import { resolveChildPublication } from '../utils/resolve-publication';
 import { assertCanContribute } from '../utils/assert-can-contribute';
 import type { Actor } from './create-word.use-case';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
+import type { NotifyWordOwnerMediaUseCase } from '@/modules/notification/application/use-cases/notify-word-owner-media.use-case';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
 import { hasFeedExcludedUsageLabels } from '@/shared/constants/usage-labels';
 import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
@@ -25,6 +26,8 @@ export class AddExampleUseCase {
     private readonly wordRepo: WordRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>,
+    /** #133: notif ke pemilik kata saat contoh tayang. */
+    private readonly notifyOwner?: NotifyWordOwnerMediaUseCase,
   ) {}
 
   async execute(meaningId: string, dto: AddExampleDto, actor: Actor): Promise<ExampleMedia> {
@@ -72,6 +75,16 @@ export class AddExampleUseCase {
       },
       requestId: actor.requestId ?? null,
     });
+
+    // #133: contoh tayang = pemilik kata dapat notif. pending_review
+    // (usulan tamu) menunggu approve lewat jalur review.
+    if (media.status === 'published') {
+      await this.notifyOwner?.execute({
+        entityType: 'example',
+        entityId: media.id,
+        actorId: actor.userId,
+      });
+    }
 
     return media;
   }

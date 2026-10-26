@@ -28,7 +28,6 @@ import {
   lexicalRelations,
   wordGroupMembers,
   wordGroups,
-  meanings,
   meaningTranslations,
   notificationCampaignRecipients,
   notificationCampaigns,
@@ -89,8 +88,9 @@ userConsents,
   wordImportSessions,
   wordReports,
   wordCardShares,
-  wordVoteCounts,
   wordVariants,
+  meaningVoteCounts,
+  meanings,
   words,
 } from "./schema";
 import { FIRST_PARTY_SCOPE_STRING } from "@/modules/developer-oauth/domain/entities/api-client.entity";
@@ -159,13 +159,20 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
         updatedAt: now,
         updatedBy: null,
       },
-      // Migrasi 0029 - cooldown push diskusi komentar (default 3 menit)
-      {
-        key: "notification.word_comment_push_cooldown_minutes",
-        value: "3",
-        updatedAt: now,
-        updatedBy: null,
-      },
+    // Migrasi 0029 - cooldown push diskusi komentar (default 3 menit)
+    {
+      key: "notification.word_comment_push_cooldown_minutes",
+      value: "3",
+      updatedAt: now,
+      updatedBy: null,
+    },
+    // Migrasi 0103 - cooldown push media anak kata (#133, default 3 menit)
+    {
+      key: "notification.word_media_push_cooldown_minutes",
+      value: "3",
+      updatedAt: now,
+      updatedBy: null,
+    },
     ])
     .onConflictDoNothing();
 
@@ -396,8 +403,9 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     searchMisses,
     wordCategories,
     wordImages,
-    wordVoteCounts,
     wordVariants,
+    // meaning_vote_counts FK meanings - wajib sebelum meanings.
+    meaningVoteCounts,
     meanings,
     words,
     // Anak users (FK proposed_by/reviewed_by) - sebelum users.

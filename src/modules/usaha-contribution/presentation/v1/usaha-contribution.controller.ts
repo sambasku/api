@@ -41,6 +41,7 @@ function serialize(r: UsahaContribution | UsahaContributionWithUsaha) {
 function toNewPayload(
   body: z.infer<typeof submitUsahaContributionBodySchema>,
 ): NewUsahaPayload {
+  const phone = body.phone?.trim() || null;
   return {
     name: body.name,
     regionId: body.region_id,
@@ -51,8 +52,9 @@ function toNewPayload(
     addressText: body.address_text ?? null,
     lat: body.lat ?? null,
     lng: body.lng ?? null,
-    phone: body.phone ?? null,
-    whatsapp: body.whatsapp ?? null,
+    phone,
+    // Satu nomor HP untuk telepon + WhatsApp (form hanya isi satu field).
+    whatsapp: body.whatsapp?.trim() || phone,
     website: body.website ?? null,
     socialUrl: body.social_url ?? null,
     coverUrl: body.cover_url ?? null,

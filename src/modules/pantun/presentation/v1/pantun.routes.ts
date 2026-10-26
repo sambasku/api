@@ -152,6 +152,14 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
     if (c.req.method !== 'POST') return next();
     return writeLimit(c, next);
   });
+  // Balas pantun = POST /:id/replies (bukan /replies/:id yang hanya DELETE).
+  routes.use(
+    '/:id/replies',
+    deps.authenticate,
+    ...writeClient,
+    ...legalConsent,
+    writeLimit,
+  );
   routes.use('/replies/:id', deps.authenticate, ...writeClient, ...legalConsent);
 
   routes.openapi(createRouteDef, (c) =>

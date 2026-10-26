@@ -14,6 +14,8 @@ export interface PantunRepository {
   createReply(input: NewPantunReply): Promise<PantunReply>;
   findReplyById(id: string): Promise<PantunReply | null>;
   listReplies(parentId: string): Promise<PantunReply[]>;
+  /** User unik yang pernah membalas pantun published (peserta thread). */
+  listDistinctReplierUserIds(parentId: string): Promise<string[]>;
   markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownReply(id: string, actorId: string): Promise<boolean>;
   takedown(id: string, actorId: string): Promise<Pantun | null>;

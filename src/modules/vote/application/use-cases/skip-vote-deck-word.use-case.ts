@@ -3,8 +3,8 @@ import type { UserSkipRepository } from '@/modules/user-skip/infrastructure/user
 import type { VoteRepository } from '../../domain/repositories/vote.repository';
 
 /**
- * Lewati kartu deck tanpa menulis vote. Idempoten.
- * 404 jika kata tidak ada / sudah dihapus.
+ * Lewati kartu deck (per makna, 0101) tanpa menulis vote. Idempoten.
+ * 404 jika makna tidak ada / sudah dihapus.
  */
 export class SkipVoteDeckWordUseCase {
   constructor(
@@ -12,18 +12,18 @@ export class SkipVoteDeckWordUseCase {
     private readonly skips: UserSkipRepository,
   ) {}
 
-  async skip(userId: string, wordId: string): Promise<void> {
-    const exists = await this.voteRepo.targetExists({ entityType: 'word', entityId: wordId });
+  async skip(userId: string, meaningId: string): Promise<void> {
+    const exists = await this.voteRepo.targetExists({ entityType: 'meaning', entityId: meaningId });
     if (!exists) {
       throw new NotFoundError(
         'VOTE_TARGET_NOT_FOUND',
         'Target vote tidak ditemukan atau sudah dihapus',
       );
     }
-    await this.skips.record(userId, 'word', wordId);
+    await this.skips.record(userId, 'meaning', meaningId);
   }
 
-  async unskip(userId: string, wordId: string): Promise<void> {
-    await this.skips.clear(userId, 'word', wordId);
+  async unskip(userId: string, meaningId: string): Promise<void> {
+    await this.skips.clear(userId, 'meaning', meaningId);
   }
 }
