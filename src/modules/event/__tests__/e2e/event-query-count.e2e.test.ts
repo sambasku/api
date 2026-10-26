@@ -128,4 +128,27 @@ describe.skipIf(!hasTestDb)("Event query budget - list & detail", () => {
     });
     expect(bySlug.items.length).toBe(20);
   });
+
+  it("filter region_id (kecamatan) ikut menjangkau acara yang hanya punya village_id", async () => {
+    const { EventRepositoryImpl } = await import(
+      "@/modules/event/infrastructure/event.repository.impl"
+    );
+    const repo = new EventRepositoryImpl(db);
+    // ULID kecamatan.
+    const byUlid = await repo.list({
+      limit: 20,
+      publicOnly: true,
+      regionId: "01EVKECQCBUDGET0000000001",
+    });
+    expect(byUlid.items.length).toBe(20);
+    // Slug kecamatan katalog publik - hasil sama, tetap satu query.
+    queryCount = 0;
+    const bySlug = await repo.list({
+      limit: 20,
+      publicOnly: true,
+      regionId: "kec-budget",
+    });
+    expect(bySlug.items.length).toBe(20);
+    expect(queryCount).toBeLessThanOrEqual(3);
+  });
 });

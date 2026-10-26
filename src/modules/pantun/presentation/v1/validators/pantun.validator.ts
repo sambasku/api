@@ -73,9 +73,10 @@ export type ListAdminPantunsQuery = z.infer<typeof listAdminPantunsQuerySchema>;
 const pantunLineItemSchema = z.object({
   id: z.string(),
   user_id: z.string(),
-  display_name: z.string().nullable(),
   username: z.string().nullable(),
+  display_name: z.string().nullable(),
   avatar_url: z.string().nullable(),
+  is_verifier: z.boolean(),
   parent_id: z.string().nullable(),
   language: z.string(),
   theme_id: z.string().nullable(),

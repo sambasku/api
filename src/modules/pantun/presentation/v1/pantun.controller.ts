@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { UnauthorizedError } from '@/shared/errors/app-error';
+import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { Pantun, PantunReply } from '../../domain/entities/pantun.entity';
 import type { CreatePantunUseCase } from '../../application/use-cases/create-pantun.use-case';
@@ -24,6 +25,7 @@ function toItem(p: Pantun) {
     username: p.username,
     display_name: p.displayName,
     avatar_url: p.avatarUrl,
+    is_verifier: isVerifierRole(p.userRole ?? ''),
     parent_id: null as string | null,
     language: p.language,
     theme_id: p.categoryId,
@@ -42,6 +44,7 @@ function toReplyItem(r: PantunReply) {
     username: r.username,
     display_name: r.displayName,
     avatar_url: r.avatarUrl,
+    is_verifier: isVerifierRole(r.userRole ?? ''),
     parent_id: r.parentId,
     language: r.language,
     theme_id: r.categoryId,

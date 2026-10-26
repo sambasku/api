@@ -110,6 +110,8 @@ export const listEventsQuerySchema = z.object({
   before: z.string().min(1).max(64).optional(),
   category_id: eventCategorySchema.optional(),
   village_id: z.string().max(64).optional(),
+  /** Filter kecamatan: ULID atau slug katalog publik. */
+  region_id: z.string().max(64).optional(),
   place_id: z.string().max(64).optional(),
   q: z.string().max(120).optional(),
   status: eventStatusSchema.optional(),

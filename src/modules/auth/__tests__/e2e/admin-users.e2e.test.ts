@@ -247,6 +247,117 @@ describe.skipIf(!hasTestDb)('Admin create user E2E', () => {
     expect(body.error_code).toBe('CANNOT_DEACTIVATE_SELF');
   });
 
+  it('POST verify-email admin: verifikasi manual + OTP terhapus + login lolos', async () => {
+    const { getTestDb } = await import('@/shared/database/drizzle/test-client');
+    const { users, emailVerificationOtps, activityEvents } = await import('@/shared/database/drizzle/schema');
+    const { eq, and } = await import('drizzle-orm');
+    const db = getTestDb();
+
+    const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const email = `manualv${stamp}@test.com`;
+    const reg = await request('/api/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(e2eRegisterBody({ name: `manualv${stamp}`, email })),
+    });
+    expect(reg.status).toBe(201);
+    const [target] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    expect(target).toBeDefined();
+
+    // List admin menampilkan state OTP user yang belum terverifikasi.
+    const list = await request(`/api/v1/admin/users?q=manualv${stamp}`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(list.status).toBe(200);
+    const listBody = await list.json();
+    const row = listBody.data[0];
+    expect(row.email_verified).toBe(false);
+    expect(row.email_verified_at).toBeNull();
+    expect(row.otp).not.toBeNull();
+    expect(row.otp.expires_at).toBeTruthy();
+
+    // Guard: tanpa auth 401, sebagai kontributor 403.
+    const anon = await request(`/api/v1/admin/users/${target.id}/verify-email`, { method: 'POST' });
+    expect(anon.status).toBe(401);
+    const forbidden = await request(`/api/v1/admin/users/${target.id}/verify-email`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${contributorToken}` },
+    });
+    expect(forbidden.status).toBe(403);
+
+    // Sukses: 200 + email_verified_at terisi.
+    const ok = await request(`/api/v1/admin/users/${target.id}/verify-email`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(ok.status).toBe(200);
+    const okBody = await ok.json();
+    expect(okBody.success).toBe(true);
+    expect(okBody.data.id).toBe(target.id);
+    expect(okBody.data.email_verified).toBe(true);
+    expect(okBody.data.email_verified_at).toBeTruthy();
+
+    // OTP dihapus, kolom users terisi, event user_joined tercatat.
+    const otpRows = await db
+      .select({ id: emailVerificationOtps.id })
+      .from(emailVerificationOtps)
+      .where(eq(emailVerificationOtps.userId, target.id));
+    expect(otpRows).toHaveLength(0);
+    const [after] = await db
+      .select({ emailVerified: users.emailVerified, emailVerifiedAt: users.emailVerifiedAt })
+      .from(users)
+      .where(eq(users.id, target.id))
+      .limit(1);
+    expect(after.emailVerified).toBe(true);
+    expect(after.emailVerifiedAt).toBeInstanceOf(Date);
+    const events = await db
+      .select({ id: activityEvents.id })
+      .from(activityEvents)
+      .where(and(eq(activityEvents.kind, 'user_joined'), eq(activityEvents.dedupeKey, `joined:${target.id}`)));
+    expect(events.length).toBeGreaterThan(0);
+
+    // Login sekarang lolos (tanpa 403 EMAIL_NOT_VERIFIED).
+    const login = await request('/api/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'Password123' }),
+    });
+    expect(login.status).toBe(200);
+
+    // Verifikasi ulang → 400 ALREADY_VERIFIED.
+    const again = await request(`/api/v1/admin/users/${target.id}/verify-email`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(again.status).toBe(400);
+    expect((await again.json()).error_code).toBe('ALREADY_VERIFIED');
+  });
+
+  it('POST verify-email admin untuk id tak dikenal → 400 USER_NOT_FOUND', async () => {
+    const res = await request('/api/v1/admin/users/01JZZZZZZZZZZZZZZZZZZZZZZZ/verify-email', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error_code).toBe('USER_NOT_FOUND');
+  });
+
+  it('GET /admin/users filter email_verified=false menyaring user belum verifikasi', async () => {
+    const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const email = `unver${stamp}@test.com`;
+    const reg = await request('/api/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(e2eRegisterBody({ name: `unver${stamp}`, email })),
+    });
+    expect(reg.status).toBe(201);
+
+    const res = await request('/api/v1/admin/users?email_verified=false&q=unver', {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.length).toBeGreaterThan(0);
+    for (const item of body.data) expect(item.email_verified).toBe(false);
+  });
+
   it('GET /admin/users menampilkan auth_providers per metode onboard', async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
     const { authIdentities, users } = await import('@/shared/database/drizzle/schema');

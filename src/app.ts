@@ -132,6 +132,7 @@ import { AdminUsersController } from "@/modules/auth/presentation/v1/admin-user.
 import { SetCanContributeUseCase } from "@/modules/auth/application/use-cases/set-can-contribute.use-case";
 import { CreateAdminUserUseCase } from "@/modules/auth/application/use-cases/create-admin-user.use-case";
 import { SetUserActiveUseCase } from "@/modules/auth/application/use-cases/set-user-active.use-case";
+import { AdminVerifyEmailUseCase } from "@/modules/auth/application/use-cases/admin-verify-email.use-case";
 import { ListUserAbuseEventsUseCase } from "@/modules/auth/application/use-cases/list-user-abuse-events.use-case";
 import {
   createAdminUserRoutes,
@@ -2648,8 +2649,9 @@ const adminUsersController = new AdminUsersController({
     recordInbox,
   ),
   createUser: new CreateAdminUserUseCase(userRepo, hasher, auditRepo),
-  setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
-  listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
+setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
+verifyEmail: new AdminVerifyEmailUseCase(userRepo, otpRepo, auditRepo, activityEvents),
+listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
 });
 app.route(
   "/api/v1/admin/users",

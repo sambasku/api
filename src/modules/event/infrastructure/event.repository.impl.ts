@@ -287,6 +287,24 @@ export class EventRepositoryImpl implements EventRepository {
         );
       conds.push(inArray(events.villageId, sub));
     }
+    if (input.regionId) {
+      // `region_id` (kecamatan) bisa ULID atau slug. Acara bisa tercatat via
+      // region_id langsung ATAU hanya village_id desa - dua-duanya dicocokkan
+      // lewat subquery bersarang, tetap SATU statement (budget subrequest).
+      const kecSub = this.db
+        .select({ id: regions.id })
+        .from(regions)
+        .where(
+          or(eq(regions.id, input.regionId), eq(regions.slug, input.regionId)),
+        );
+      const desaSub = this.db
+        .select({ id: regions.id })
+        .from(regions)
+        .where(inArray(regions.parentId, kecSub));
+      conds.push(
+        or(inArray(events.regionId, kecSub), inArray(events.villageId, desaSub))!,
+      );
+    }
     if (input.q?.trim()) {
       const q = `%${input.q.trim()}%`;
       conds.push(or(ilikeCompat(events.name, q), ilikeCompat(events.slug, q))!);

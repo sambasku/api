@@ -61,6 +61,8 @@ export interface ListEventsInput {
   before?: string;
   categoryId?: string;
   villageId?: string;
+  /** Filter kecamatan (ULID atau slug): acara di kecamatan itu + desanya. */
+  regionId?: string;
   placeId?: string;
   q?: string;
   status?: EventStatus;
