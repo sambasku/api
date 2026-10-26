@@ -15,6 +15,8 @@ import {
   pantunReplyIdParamSchema,
   listPantunsQuerySchema,
   listPantunsResponseSchema,
+  pantunSearchQuerySchema,
+  searchPantunsResponseSchema,
   deletePantunResponseSchema,
 } from './validators/pantun.validator';
 
@@ -94,6 +96,18 @@ const detailRoute = createRoute({
   },
 });
 
+const searchRoute = createRoute({
+  method: 'get',
+  path: '/search',
+  tags: ['Pantun'],
+  summary: 'Cari pantun + balasan tayang (FTS, publik)',
+  request: { query: pantunSearchQuerySchema },
+  responses: {
+    200: { description: 'Hasil pencarian', content: json(searchPantunsResponseSchema) },
+    400: { description: 'Kata kunci kosong/invalid', content: json(errorResponseSchema) },
+  },
+});
+
 const createReplyRoute = createRoute({
   method: 'post',
   path: '/:id/replies',
@@ -167,6 +181,10 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
   );
   routes.openapi(listRoute, (c) =>
     deps.controller.listPublished(c, c.req.valid('query')) as never,
+  );
+  // '/search' SEBELUM '/:id': literal harus menang dari param opaqueId.
+  routes.openapi(searchRoute, (c) =>
+    deps.controller.search(c, c.req.valid('query')) as never,
   );
   routes.openapi(detailRoute, (c) =>
     deps.controller.getDetail(c, c.req.valid('param').id) as never,

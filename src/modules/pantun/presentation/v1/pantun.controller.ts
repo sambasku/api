@@ -15,11 +15,14 @@ import type { TakedownPantunUseCase } from '../../application/use-cases/takedown
 import type { TakedownPantunReplyUseCase } from '../../application/use-cases/takedown-pantun-reply.use-case';
 import type { DeletePantunReplyUseCase } from '../../application/use-cases/delete-pantun-reply.use-case';
 import type { ListAdminPantunsUseCase } from '../../application/use-cases/list-admin-pantuns.use-case';
+import type { SearchPantunsUseCase } from '../../application/use-cases/search-pantuns.use-case';
+import type { PantunSearchHit } from '../../domain/repositories/pantun.repository';
 import type {
   CreatePantunBody,
   CreatePantunReplyBody,
   ListPantunsQuery,
   ListAdminPantunsQuery,
+  PantunSearchQuery,
 } from './validators/pantun.validator';
 
 function toItem(p: Pantun | PantunWithVotes) {
@@ -75,6 +78,7 @@ export class PantunController {
       takedownReply: TakedownPantunReplyUseCase;
       deleteReply: DeletePantunReplyUseCase;
       listAdmin: ListAdminPantunsUseCase;
+      search: SearchPantunsUseCase;
     },
   ) {}
 
@@ -105,6 +109,18 @@ export class PantunController {
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
       },
+    });
+  }
+
+  async search(c: Context, query: PantunSearchQuery) {
+    const hits = await this.deps.search.execute(query.q, query.limit);
+    const data = hits.map((hit: PantunSearchHit) =>
+      hit.kind === 'pantun' ? toItem(hit.pantun) : toReplyItem(hit.reply),
+    );
+    return c.json({
+      success: true as const,
+      data,
+      meta: { limit: query.limit, q: query.q },
     });
   }
 

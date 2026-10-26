@@ -15,6 +15,7 @@ import {
   votes,
   wordImages,
   meaningVoteCounts,
+  wordClasses,
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
@@ -960,12 +961,18 @@ export class VoteRepositoryImpl implements VoteRepository {
         status: words.status,
         verifiedAt: words.verifiedAt,
         createdAt: words.createdAt,
+        // Kelas kata milik MAKNA (bukan kata) - chip kartu deck.
+        wcId: wordClasses.id,
+        wcCode: wordClasses.code,
+        wcName: wordClasses.name,
+        wcAlias: wordClasses.alias,
         totalVotes: totalVotesExpr,
       })
       .from(meanings)
       .innerJoin(words, eq(meanings.wordId, words.id))
       .innerJoin(languages, eq(words.languageId, languages.id))
       .leftJoin(meaningVoteCounts, eq(meaningVoteCounts.meaningId, meanings.id))
+      .leftJoin(wordClasses, eq(wordClasses.id, meanings.wordClassId))
       .where(
         and(
           isNull(meanings.deletedAt),
@@ -992,6 +999,9 @@ export class VoteRepositoryImpl implements VoteRepository {
       wordId: r.wordId,
       orderIndex: r.orderIndex,
       meaningCount: r.meaningCount,
+      wordClass: r.wcId
+        ? { id: r.wcId, code: r.wcCode ?? '', name: r.wcName ?? '', alias: r.wcAlias ?? null }
+        : null,
       sense: null,
       lemma: r.lemma,
       languageId: r.languageId,

@@ -534,6 +534,7 @@ import { TakedownPantunUseCase } from "@/modules/pantun/application/use-cases/ta
 import { TakedownPantunReplyUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun-reply.use-case";
 import { DeletePantunReplyUseCase } from "@/modules/pantun/application/use-cases/delete-pantun-reply.use-case";
 import { ListAdminPantunsUseCase } from "@/modules/pantun/application/use-cases/list-admin-pantuns.use-case";
+import { SearchPantunsUseCase } from "@/modules/pantun/application/use-cases/search-pantuns.use-case";
 import { PantunController } from "@/modules/pantun/presentation/v1/pantun.controller";
 import { createPantunRoutes } from "@/modules/pantun/presentation/v1/pantun.routes";
 import { createAdminPantunRoutes } from "@/modules/pantun/presentation/v1/admin-pantun.routes";
@@ -2571,6 +2572,7 @@ const pantunController = new PantunController({
   takedownReply: new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
   deleteReply: new DeletePantunReplyUseCase(pantunRepo, auditRepo),
   listAdmin: new ListAdminPantunsUseCase(pantunRepo),
+  search: new SearchPantunsUseCase(pantunRepo),
 });
 app.route(
   "/api/v1/pantuns",

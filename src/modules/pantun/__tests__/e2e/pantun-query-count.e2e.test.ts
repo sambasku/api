@@ -55,21 +55,47 @@ await seedDb.insert(pantunReplies).values(
     );
   });
 
-  beforeEach(async () => {
-    const { createClient } = await import('@libsql/client');
-    const { drizzle } = await import('drizzle-orm/libsql');
-    const schema = await import('@/shared/database/drizzle/schema');
-    const client = createClient({ url: process.env.DATABASE_URL! });
-    const realExecute = client.execute.bind(client);
-    queryCount = 0;
+beforeEach(async () => {
+  const { createClient } = await import('@libsql/client');
+  const { drizzle } = await import('drizzle-orm/libsql');
+  const schema = await import('@/shared/database/drizzle/schema');
+  const client = createClient({ url: process.env.DATABASE_URL! });
+  const realExecute = client.execute.bind(client);
+  queryCount = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (client as any).execute = async (...args: unknown[]) => {
+    queryCount++;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (client as any).execute = async (...args: unknown[]) => {
-      queryCount++;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (realExecute as any)(...args);
-    };
-    db = drizzle(client, { schema });
+    return (realExecute as any)(...args);
+  };
+  db = drizzle(client, { schema });
+});
+
+it('search FTS pantun + balasan pakai <= 3 query', async () => {
+  const { PantunRepositoryImpl } = await import(
+    '@/modules/pantun/infrastructure/pantun.repository.impl'
+  );
+  const schema = await import('@/shared/database/drizzle/schema');
+  // Baris unik di balasan: membuktikan index ikut menampung balasan, bukan
+  // cuma pantun pembuka (keduanya di feed seed memakai baris yang sama).
+  await db.insert(schema.pantunReplies).values({
+    id: '01PQCS0000000000000000001',
+    // Parent berbeda supaya hitungan balasan test detail (parent 0) tetap 5.
+    parentId: `01PQC${String(1).padStart(21, '0')}`,
+    userId: 'u_pqc1',
+    language: 'id',
+    rhymeScheme: 'ABAB',
+    lines: ['Jalan jauh ke kota', 'Membeli terasi di pasar', 'Pulang bawa cerita', 'Hati senang bersinar'],
+    status: 'published',
+    createdAt: new Date(),
   });
+  queryCount = 0;
+  const repo = new PantunRepositoryImpl(db);
+  const hits = await repo.searchPublished('terasi', 20);
+  expect(hits.length).toBe(1);
+  expect(hits[0]?.kind).toBe('reply');
+  expect(queryCount).toBeLessThanOrEqual(3);
+});
 
   it('list feed pakai <= 1 query per halaman (25 baris)', async () => {
     const { PantunRepositoryImpl } = await import(

@@ -145,6 +145,14 @@ export interface VoteHistoryListResult {
   hasMore: boolean;
 }
 
+/** Kelas kata ringkas untuk chip kartu deck (kelas milik MAKNA). */
+export interface VoteDeckWordClass {
+  id: string;
+  code: string;
+  name: string;
+  alias: string | null;
+}
+
 /** Item antrean deck vote per makna (34-api-vote-deck.md, 0101: 1 kartu = 1 makna). */
 export interface VoteDeckMeaning {
   /** ID makna - target vote + kunci cursor. */
@@ -165,6 +173,8 @@ export interface VoteDeckMeaning {
   orderIndex: number;
   /** Jumlah makna published kata ini - konteks "dari M". */
   meaningCount: number;
+  /** Kelas kata makna ini (bukan kata). null = belum diisi. */
+  wordClass: VoteDeckWordClass | null;
   upvotes: number;
   downvotes: number;
   /** upvotes + downvotes - kunci cursor + sort */

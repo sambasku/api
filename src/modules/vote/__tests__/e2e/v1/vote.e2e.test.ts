@@ -397,7 +397,13 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect(deck1.status).toBe(200);
     const body1 = (await deck1.json()) as {
       success: boolean;
-      data: { id: string; word_id: string; lemma: string; sense: string | null }[];
+      data: {
+        id: string;
+        word_id: string;
+        lemma: string;
+        sense: string | null;
+        word_class: { id: string; code: string; name: string; alias: string | null } | null;
+      }[];
       meta: { limit: number; has_more: boolean; next_cursor: string | null };
     };
     expect(body1.success).toBe(true);
@@ -407,6 +413,9 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect(card?.word_id).toBe(deckWordId);
     expect(card?.lemma).toBe('kata deck');
     expect(card?.sense).toBeTruthy();
+    // Kelas kata milik makna (bukan kata) ikut wire - chip kartu deck.
+    expect(card?.word_class?.id).toBe(NOMINA);
+    expect(card?.word_class?.code).toBe('n');
 
     // vote level word ditolak (0101)
     const wordVote = await post(

@@ -1,9 +1,6 @@
 import type { VoteRepository } from '@/modules/vote/domain/repositories/vote.repository';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
-import type {
-  Pantun,
-  PantunListFilter,
-} from '../../domain/entities/pantun.entity';
+import type { PantunListFilter } from '../../domain/entities/pantun.entity';
 import type { PantunRepository } from '../../domain/repositories/pantun.repository';
 import type { PantunWithVotes } from './get-pantun-detail.use-case';
 

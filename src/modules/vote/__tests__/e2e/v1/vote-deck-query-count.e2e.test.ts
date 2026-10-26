@@ -19,7 +19,7 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
     const schema = await import('@/shared/database/drizzle/schema');
-    const { users, words, meanings, languages } = schema;
+    const { users, words, meanings, languages, wordClasses } = schema;
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     const seedDb = getTestDb();
 
@@ -50,6 +50,9 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
       wordType: 'word',
     }));
     await seedDb.insert(words).values(wordRows);
+    await seedDb
+      .insert(wordClasses)
+      .values({ id: '01DQCCLASS00000000000001', code: 'n', name: 'Nomina', alias: 'Kata Benda' });
 
     const meaningRows = wordRows.flatMap((w, i) =>
       Array.from({ length: 2 }, (_, j) => ({
@@ -59,6 +62,8 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
         isHaveDefinition: j === 0,
         orderIndex: j,
         status: 'published',
+        // Kelas kata menempel di MAKNA; separuh null supaya LEFT JOIN teruji.
+        wordClassId: j === 0 ? '01DQCCLASS00000000000001' : null,
       })),
     );
     await seedDb.insert(meanings).values(meaningRows);
@@ -91,5 +96,12 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
     // Target: 1 query utama + 1 countMany batch (+1 slot buffer fallback
     // terjemahan untuk makna tanpa definisi).
     expect(queryCount).toBeLessThanOrEqual(3);
+
+    // Kelas kata ikut LEFT JOIN yang sama - bukan query tambahan.
+    const withClass = page.items.filter((m) => m.wordClass !== null);
+    expect(withClass.length).toBeGreaterThan(0);
+    expect(withClass[0]!.wordClass!.code).toBe('n');
+    expect(withClass[0]!.wordClass!.alias).toBe('Kata Benda');
+    expect(page.items.some((m) => m.wordClass === null)).toBe(true);
   });
 });

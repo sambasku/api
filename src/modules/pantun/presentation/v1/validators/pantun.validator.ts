@@ -63,6 +63,17 @@ export const listPantunsQuerySchema = z.object({
 
 export type ListPantunsQuery = z.infer<typeof listPantunsQuerySchema>;
 
+export const pantunSearchQuerySchema = z.object({
+  q: z
+    .string({ error: 'Kata kunci pencarian wajib diisi' })
+    .trim()
+    .min(1, 'Kata kunci pencarian wajib diisi')
+    .max(100, 'Kata kunci pencarian maksimal 100 karakter'),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export type PantunSearchQuery = z.infer<typeof pantunSearchQuerySchema>;
+
 export const listAdminPantunsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: opaqueId.optional(),
@@ -103,6 +114,15 @@ export const listPantunsResponseSchema = z.object({
     limit: z.number(),
     next_cursor: z.string().nullable(),
     has_more: z.boolean(),
+  }),
+});
+
+export const searchPantunsResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.array(pantunItemSchema),
+  meta: z.object({
+    limit: z.number(),
+    q: z.string(),
   }),
 });
 

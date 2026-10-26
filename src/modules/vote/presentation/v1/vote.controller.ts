@@ -121,6 +121,8 @@ export class VoteController {
         sense: m.sense,
         order_index: m.orderIndex,
         meaning_count: m.meaningCount,
+        // Kelas kata milik MAKNA ini, bukan kata induk. null = belum diisi.
+        word_class: m.wordClass,
         upvotes: m.upvotes,
         downvotes: m.downvotes,
       })),
