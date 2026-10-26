@@ -12,6 +12,8 @@ const base: SearchMiss = {
   hitCount: 2,
   lastSearchedAt: new Date('2026-09-16T10:00:00Z'),
   isFulfilled: false,
+  pendingContributionCount: 0,
+  pendingContributionId: null,
   isVisible: false,
   createdAt: new Date('2026-09-16T09:00:00Z'),
 };

@@ -359,4 +359,77 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
     );
     expect(found).toBe(true);
   });
+
+  it('usulan kata dari miss → panel tampilkan pending_contribution_count; approve → kembali 0', async () => {
+    // 1. Miss baru
+    await get('/api/v1/words/search?q=pandai');
+    const panel = await get('/api/v1/admin/search-misses', adminToken);
+    const miss = (await panel.json()).data.find((m: { term: string }) => m.term === 'pandai');
+    expect(miss).toMatchObject({ is_fulfilled: false, pending_contribution_count: 0 });
+
+    // 2. Kontributor usul kata dari miss (status pending_review → antrean)
+    const stamp = Date.now();
+    await post('/api/v1/auth/register', e2eRegisterBody({
+        name: `pnd${stamp}`,
+        email: `pnd${stamp}@test.com`,
+    }));
+    await post('/api/v1/auth/verify-email', {
+      email: `pnd${stamp}@test.com`,
+      code: capturedOtpDisplayCode(),
+    });
+    const contribToken = (
+      (await (await post('/api/v1/auth/login', { email: `pnd${stamp}@test.com`, password: 'Password123' })).json())
+        .data
+    ).access_token;
+
+    const submit = await post(
+      '/api/v1/contributions/words',
+      {
+        language_id: SMB,
+        lemma: 'Pandai',
+        word_type: 'word',
+        category_ids: [],
+        related_words: [],
+        meanings: [
+          {
+            word_class_id: NOMINA,
+            definition: 'pintar',
+            order_index: 1,
+            translations: [{ language_id: IDN, translation_text: 'pintar', translation_type: 'direct' }],
+          },
+        ],
+        search_miss_id: miss.id,
+      },
+      contribToken,
+    );
+    expect(submit.status).toBe(201);
+
+    // 3. Panel admin: miss kini menandai usulan menunggu (verifikator tidak
+    //    perlu buat kata dobel - review usulan yang sudah ada dulu)
+    const panelPending = await get('/api/v1/admin/search-misses', adminToken);
+    const pending = (await panelPending.json()).data.find(
+      (m: { term: string }) => m.term === 'pandai',
+    );
+    expect(pending.pending_contribution_count).toBe(1);
+    expect(pending.pending_contribution_id).toBeTruthy();
+
+    // 4. Approve usulan → miss terjawab + tidak ada lagi pending
+    const contributions = await get(
+      `/api/v1/admin/contributions?status=pending&entity_type=word`,
+      adminToken,
+    );
+    expect(contributions.status).toBe(200);
+    const queue = (await contributions.json()).data as { id: string; search_miss_id?: string | null }[];
+    const target = queue.find((c) => c.search_miss_id === miss.id);
+    expect(target).toBeTruthy();
+
+    const approve = await post(`/api/v1/admin/contributions/${target!.id}/approve`, {}, adminToken);
+    expect(approve.status).toBe(200);
+
+    const panelDone = await get('/api/v1/admin/search-misses', adminToken);
+    const done = (await panelDone.json()).data.find((m: { term: string }) => m.term === 'pandai');
+    expect(done.is_fulfilled).toBe(true);
+    expect(done.pending_contribution_count).toBe(0);
+    expect(done.pending_contribution_id).toBeNull();
+  });
 });

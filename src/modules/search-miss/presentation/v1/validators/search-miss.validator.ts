@@ -55,6 +55,10 @@ const searchMissItemSchema = z.object({
   hit_count: z.number().int(),
   last_searched_at: z.string(),
   is_fulfilled: z.boolean(),
+  // Usulan kata baru yang menaut miss ini & masih pending review. 0 = belum
+  // ada usulan; >0 = verifikator sebaiknya review dulu sebelum buat kata baru.
+  pending_contribution_count: z.number().int().nonnegative(),
+  pending_contribution_id: z.string().nullable(),
   is_visible: z.boolean(),
   created_at: z.string(),
 });
