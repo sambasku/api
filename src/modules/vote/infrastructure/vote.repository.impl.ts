@@ -972,7 +972,10 @@ export class VoteRepositoryImpl implements VoteRepository {
       .innerJoin(words, eq(meanings.wordId, words.id))
       .innerJoin(languages, eq(words.languageId, languages.id))
       .leftJoin(meaningVoteCounts, eq(meaningVoteCounts.meaningId, meanings.id))
-      .leftJoin(wordClasses, eq(wordClasses.id, meanings.wordClassId))
+      .leftJoin(
+        wordClasses,
+        and(eq(wordClasses.id, meanings.wordClassId), isNull(wordClasses.deletedAt)),
+      )
       .where(
         and(
           isNull(meanings.deletedAt),

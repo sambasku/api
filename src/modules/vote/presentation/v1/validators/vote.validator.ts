@@ -174,6 +174,15 @@ export const voteDeckResponseSchema = z.object({
       sense: z.string().nullable(),
       order_index: z.number().int(),
       meaning_count: z.number().int(),
+      // Kelas kata milik MAKNA ini (bukan kata induk); null = belum diisi.
+      word_class: z
+        .object({
+          id: z.string(),
+          code: z.string(),
+          name: z.string(),
+          alias: z.string().nullable(),
+        })
+        .nullable(),
       upvotes: z.number().int(),
       downvotes: z.number().int(),
     }),

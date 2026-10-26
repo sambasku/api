@@ -693,7 +693,10 @@ export class WordRepositoryImpl implements WordRepository {
         meaningTranslations,
         and(eq(meaningTranslations.meaningId, meanings.id), isNull(meaningTranslations.deletedAt)),
       )
-      .leftJoin(wordClasses, eq(wordClasses.id, meanings.wordClassId))
+      .leftJoin(
+        wordClasses,
+        and(eq(wordClasses.id, meanings.wordClassId), isNull(wordClasses.deletedAt)),
+      )
       .where(
         and(
           isNull(meanings.deletedAt),
