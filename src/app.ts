@@ -526,6 +526,15 @@ import { DiscussionController } from "@/modules/discussion/presentation/v1/discu
 import { createDiscussionRoutes } from "@/modules/discussion/presentation/v1/discussion.routes";
 import { createAdminDiscussionRoutes } from "@/modules/discussion/presentation/v1/admin-discussion.routes";
 import { PantunRepositoryImpl } from "@/modules/pantun/infrastructure/pantun.repository.impl";
+import { PantunReportRepositoryImpl } from "@/modules/pantun-report/infrastructure/pantun-report.repository.impl";
+import { SubmitPantunReportUseCase } from "@/modules/pantun-report/application/use-cases/submit-pantun-report.use-case";
+import { ListPantunReportsUseCase } from "@/modules/pantun-report/application/use-cases/list-pantun-reports.use-case";
+import { ResolvePantunReportUseCase } from "@/modules/pantun-report/application/use-cases/resolve-pantun-report.use-case";
+import { PantunReportController } from "@/modules/pantun-report/presentation/v1/pantun-report.controller";
+import {
+  createPantunReportRoutes,
+  createAdminPantunReportRoutes,
+} from "@/modules/pantun-report/presentation/v1/pantun-report.routes";
 import { CreatePantunUseCase } from "@/modules/pantun/application/use-cases/create-pantun.use-case";
 import { CreatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply.use-case";
 import { ListPublishedPantunsUseCase } from "@/modules/pantun/application/use-cases/list-published-pantuns.use-case";
@@ -2576,6 +2585,26 @@ const pantunController = new PantunController({
   listAdmin: new ListAdminPantunsUseCase(pantunRepo),
   search: new SearchPantunsUseCase(pantunRepo),
 });
+const pantunReportRepo = new PantunReportRepositoryImpl(db);
+const pantunReportController = new PantunReportController({
+  submit: new SubmitPantunReportUseCase(pantunReportRepo, pantunRepo, auditRepo),
+  list: new ListPantunReportsUseCase(pantunReportRepo),
+  resolve: new ResolvePantunReportUseCase(
+    pantunReportRepo,
+    new TakedownPantunUseCase(pantunRepo, auditRepo),
+    new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
+    auditRepo,
+  ),
+});
+// Didaftarkan SEBELUM route pantun: literal /reports harus menang dari /:id.
+app.route(
+  "/api/v1/pantuns",
+  createPantunReportRoutes({
+    controller: pantunReportController,
+    authenticate,
+    requireLegalConsent,
+  }),
+);
 app.route(
   "/api/v1/pantuns",
   createPantunRoutes({
@@ -2590,6 +2619,13 @@ app.route(
   "/api/v1/admin/pantuns",
   createAdminPantunRoutes({
     controller: pantunController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/pantun-reports",
+  createAdminPantunReportRoutes({
+    controller: pantunReportController,
     authenticate,
   }),
 );

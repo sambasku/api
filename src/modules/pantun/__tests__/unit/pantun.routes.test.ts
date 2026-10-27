@@ -70,4 +70,34 @@ describe('pantun routes auth wiring', () => {
     expect(res.status).toBe(201);
     expect(createReply).toHaveBeenCalledTimes(1);
   });
+
+  it('DELETE /:id butuh login, sementara GET /:id tetap publik', async () => {
+    const deletePantun = vi.fn(
+      async (c: { json: (b: unknown, s: number) => Response }) =>
+        c.json({ success: true, data: null }, 200),
+    );
+    const getDetail = vi.fn(
+      async (c: { json: (b: unknown, s: number) => Response }) =>
+        c.json({ success: true, data: {} }, 200),
+    );
+    const authenticate = createMiddleware<{ Variables: AppVariables }>(
+      async (_c, next) => next(),
+    );
+    const app = createPantunRoutes({
+      controller: { deletePantun, getDetail } as unknown as PantunController,
+      authenticate,
+    });
+
+    const del = await app.request(`/${PANTUN_ID}`, { method: 'DELETE' });
+    expect(del.status).toBe(200);
+    expect(deletePantun).toHaveBeenCalledTimes(1);
+
+    const get = await app.request(`/${PANTUN_ID}`);
+    expect(get.status).toBe(200);
+    expect(getDetail).toHaveBeenCalledTimes(1);
+
+    const search = await app.request('/search?q=ikan');
+    // Tanpa auth: route search tidak boleh tersentuh middleware DELETE.
+    expect(search.status).not.toBe(401);
+  });
 });

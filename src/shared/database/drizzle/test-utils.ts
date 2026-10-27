@@ -64,9 +64,10 @@ searchMisses,
 searchMissSearchers,
 discussionReplies,
 discussions,
-pantunReplies,
-pantuns,
-userConsents,
+  pantunReplies,
+  pantuns,
+  pantunReports,
+  userConsents,
   userRoles,
   users,
   userSkips,
@@ -453,9 +454,10 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
       events,
       eventCategories,
       regions,
-      // Pantun (FK user_id/category_id) - anak dulu
-      pantunReplies,
-      pantuns,
+// Pantun (FK user_id/category_id) - anak dulu
+pantunReports,
+pantunReplies,
+pantuns,
       // Event feed publik (FK actor_id) - sebelum users
       activityEvents,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)

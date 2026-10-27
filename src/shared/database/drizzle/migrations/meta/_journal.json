@@ -743,6 +743,13 @@
       "when": 1801605000000,
       "tag": "0105_backfill_word_votes_to_meanings",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "6",
+      "when": 1801606000000,
+      "tag": "0106_pantun_reports",
+      "breakpoints": true
     }
   ]
 }
