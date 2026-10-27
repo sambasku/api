@@ -1,0 +1,57 @@
+name: Seed Achievements (manual)
+# Seed katalog achievement (angkatan-ke-1, beta-tester, warm-up R1/G3).
+# Insert-if-missing, idempotent. Award TIDAK diberikan di sini - jalankan
+# workflow Scan Achievements setelahnya untuk backfill.
+#
+# CLI: gh workflow run seed-achievements.yml --ref staging -f target=staging
+#      gh workflow run seed-achievements.yml --ref main -f target=production
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Database target seed'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: seed-achievements-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Seed staging
+        if: inputs.target == 'staging'
+        run: pnpm seed:achievements
+        env:
+          NODE_ENV: staging
+          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+          JWT_PRIVATE_KEY: dummy
+          JWT_PUBLIC_KEY: dummy
+          CORS_ALLOWED_ORIGINS: https://console-sambasku-staging.iamutaki.com
+      - name: Seed production
+        if: inputs.target == 'production'
+        run: pnpm seed:achievements
+        env:
+          NODE_ENV: production
+          DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+          JWT_PRIVATE_KEY: dummy
+          JWT_PUBLIC_KEY: dummy
+          CORS_ALLOWED_ORIGINS: https://sambasku.com,https://console.sambasku.com
