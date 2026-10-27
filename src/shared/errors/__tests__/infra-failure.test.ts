@@ -16,12 +16,28 @@ describe('isCapacityFailure', () => {
     expect(isCapacityFailure(wrapped)).toBe(true);
   });
 
-  it('mengenali sinyal kapasitas runtime lain', () => {
-    expect(isCapacityFailure(new Error('Network connection lost.'))).toBe(true);
-    expect(
-      isCapacityFailure(new Error('The script will never generate a response.')),
-    ).toBe(true);
+it('mengenali sinyal kapasitas runtime lain', () => {
+  expect(isCapacityFailure(new Error('Network connection lost.'))).toBe(true);
+  expect(
+    isCapacityFailure(new Error('The script will never generate a response.')),
+  ).toBe(true);
+});
+
+it('mengenali blokir kuota Turso - read/write dilarang, bukan bug query', () => {
+  // Bentuk nyata dari tail staging 2026-10-27: LibsqlError BLOCKED
+  // terbungkus DrizzleQueryError "Failed query: select ...".
+  const tursoBlocked = new Error('Failed query: select "id" from "word_classes"', {
+    cause: new Error(
+      'BLOCKED: Operation was blocked: SQL read operations are forbidden (reads are blocked, do you need to upgrade your plan?)',
+    ),
   });
+  expect(isCapacityFailure(tursoBlocked)).toBe(true);
+  expect(
+    isCapacityFailure(
+      new Error('SQL write operations are forbidden (writes are blocked...)'),
+    ),
+  ).toBe(true);
+});
 
   it('TIDAK menandai bug aplikasi biasa - kalau tidak, breaker pindah tier sia-sia', () => {
     expect(isCapacityFailure(new Error('Cannot read properties of undefined'))).toBe(false);

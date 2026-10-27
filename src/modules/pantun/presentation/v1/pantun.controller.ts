@@ -14,6 +14,7 @@ import type { GetPantunDetailUseCase } from '../../application/use-cases/get-pan
 import type { TakedownPantunUseCase } from '../../application/use-cases/takedown-pantun.use-case';
 import type { TakedownPantunReplyUseCase } from '../../application/use-cases/takedown-pantun-reply.use-case';
 import type { DeletePantunReplyUseCase } from '../../application/use-cases/delete-pantun-reply.use-case';
+import type { DeletePantunUseCase } from '../../application/use-cases/delete-pantun.use-case';
 import type { ListAdminPantunsUseCase } from '../../application/use-cases/list-admin-pantuns.use-case';
 import type { SearchPantunsUseCase } from '../../application/use-cases/search-pantuns.use-case';
 import type { PantunSearchHit } from '../../domain/repositories/pantun.repository';
@@ -77,6 +78,7 @@ export class PantunController {
       takedown: TakedownPantunUseCase;
       takedownReply: TakedownPantunReplyUseCase;
       deleteReply: DeletePantunReplyUseCase;
+      deletePantun: DeletePantunUseCase;
       listAdmin: ListAdminPantunsUseCase;
       search: SearchPantunsUseCase;
     },
@@ -153,6 +155,16 @@ export class PantunController {
     const user = this.requireUser(c);
     await this.deps.deleteReply.execute({
       replyId: id,
+      actorId: user.user_id,
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: null });
+  }
+
+  async deletePantun(c: Context, id: string) {
+    const user = this.requireUser(c);
+    await this.deps.deletePantun.execute({
+      id,
       actorId: user.user_id,
       requestId: this.requestId(c),
     });

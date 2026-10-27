@@ -344,6 +344,25 @@ export class PantunRepositoryImpl implements PantunRepository {
     return updated.length > 0;
   }
 
+  async markDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
+    const updated = await this.db
+      .update(pantuns)
+      .set({
+        status: 'deleted_by_author',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(pantuns.id, id),
+          eq(pantuns.status, 'published'),
+          eq(pantuns.userId, actorId),
+        ),
+      )
+      .returning({ id: pantuns.id });
+
+    return updated.length > 0;
+  }
+
   async takedownReply(id: string, actorId: string): Promise<boolean> {
     const updated = await this.db
       .update(pantunReplies)

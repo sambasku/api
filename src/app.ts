@@ -533,6 +533,7 @@ import { GetPantunDetailUseCase } from "@/modules/pantun/application/use-cases/g
 import { TakedownPantunUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun.use-case";
 import { TakedownPantunReplyUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun-reply.use-case";
 import { DeletePantunReplyUseCase } from "@/modules/pantun/application/use-cases/delete-pantun-reply.use-case";
+import { DeletePantunUseCase } from "@/modules/pantun/application/use-cases/delete-pantun.use-case";
 import { ListAdminPantunsUseCase } from "@/modules/pantun/application/use-cases/list-admin-pantuns.use-case";
 import { SearchPantunsUseCase } from "@/modules/pantun/application/use-cases/search-pantuns.use-case";
 import { PantunController } from "@/modules/pantun/presentation/v1/pantun.controller";
@@ -2571,6 +2572,7 @@ const pantunController = new PantunController({
   takedown: new TakedownPantunUseCase(pantunRepo, auditRepo),
   takedownReply: new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
   deleteReply: new DeletePantunReplyUseCase(pantunRepo, auditRepo),
+  deletePantun: new DeletePantunUseCase(pantunRepo, auditRepo),
   listAdmin: new ListAdminPantunsUseCase(pantunRepo),
   search: new SearchPantunsUseCase(pantunRepo),
 });

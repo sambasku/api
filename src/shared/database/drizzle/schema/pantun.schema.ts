@@ -6,7 +6,11 @@ import { categories } from './categories.schema';
 export const PANTUN_RHYME_SCHEMES = ['ABAB', 'AAAA'] as const;
 export type PantunRhymeScheme = (typeof PANTUN_RHYME_SCHEMES)[number];
 
-export const PANTUN_STATUSES = ['published', 'taken_down'] as const;
+export const PANTUN_STATUSES = [
+  'published',
+  'taken_down',
+  'deleted_by_author',
+] as const;
 export type PantunStatus = (typeof PANTUN_STATUSES)[number];
 
 export const PANTUN_REPLY_STATUSES = [

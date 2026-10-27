@@ -50,8 +50,11 @@ interface CacheEntry {
   result: PlayProviderResult;
 }
 
-function isEmpty(data: { totals: { newInstalls: number; activeInstalls: number; ratingCount: number } }): boolean {
-  return data.totals.newInstalls === 0 && data.totals.activeInstalls === 0 && data.totals.ratingCount === 0;
+function isEmpty(data: { totals: { newInstalls: number; activeInstalls: number; ratingCount: number; averageRating: number } }): boolean {
+  const t = data.totals;
+  // averageRating ikut dicek: export ratings tidak punya kolom jumlah ulasan,
+  // jadi bulan yang hanya berisi rating akan tampak kosong tanpa ini.
+  return t.newInstalls === 0 && t.activeInstalls === 0 && t.ratingCount === 0 && t.averageRating === 0;
 }
 
 /**

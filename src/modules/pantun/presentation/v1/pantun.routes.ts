@@ -140,6 +140,20 @@ const deleteReplyRoute = createRoute({
   },
 });
 
+const deletePantunRoute = createRoute({
+  method: 'delete',
+  path: '/:id',
+  tags: ['Pantun'],
+  summary: 'Hapus pantun sendiri',
+  request: { params: pantunIdParamSchema },
+  responses: {
+    200: { description: 'Dihapus', content: json(deletePantunResponseSchema) },
+    401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+    403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+    404: { description: 'Pantun tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
 export function createPantunRoutes(deps: PantunRoutesDeps) {
   const routes = createOpenApiApp();
   const writeClient = deps.requireApprovedClient
@@ -176,6 +190,23 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
   );
   routes.use('/replies/:id', deps.authenticate, ...writeClient, ...legalConsent);
 
+  // DELETE /:id (hapus pantun sendiri). Hanya DELETE yang digerbangi:
+  // GET /search dan GET /:id tetap publik.
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+
   routes.openapi(createRouteDef, (c) =>
     deps.controller.create(c, c.req.valid('json')) as never,
   );
@@ -199,6 +230,9 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
   // Route /replies/:id sebelum /:id sudah aman: Hono match urutan daftar.
   routes.openapi(deleteReplyRoute, (c) =>
     deps.controller.deleteReply(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(deletePantunRoute, (c) =>
+    deps.controller.deletePantun(c, c.req.valid('param').id) as never,
   );
   return routes;
 }

@@ -24,6 +24,8 @@ export interface PantunRepository {
   /** User unik yang pernah membalas pantun published (peserta thread). */
   listDistinctReplierUserIds(parentId: string): Promise<string[]>;
   markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  /** Hapus pantun sendiri (soft: status deleted_by_author). */
+  markDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownReply(id: string, actorId: string): Promise<boolean>;
   takedown(id: string, actorId: string): Promise<Pantun | null>;
 }
