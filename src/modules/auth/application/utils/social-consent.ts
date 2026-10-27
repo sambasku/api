@@ -15,11 +15,13 @@ export interface SocialConsentOutcome {
  * - consents dikirim (app baru): validasi versi SEBELUM akun dibuat
  *   (LEGAL_CONSENT_OUTDATED bila basi) -> simpan source 'register'.
  * - consents TIDAK dikirim:
- *   - mode lenient -> backfill versi aktif source 'social_gate'
+ *   - mode lenient -> akun dibuat, TANPA baris consent (needsConsent true
+ *     supaya sheet muncul). Backfill otomatis dihapus: baris consent hanya
+ *     boleh lahir dari aksi eksplisit user, bukan dari server.
  *   - mode enforce -> CONSENT_REQUIRED (akun baru dilarang tanpa consent)
- * - Akun existing tanpa consent (app lama/backlog): backfill diam-diam
- *   source 'social_gate', needsConsent = true untuk sheet post-hoc.
- * - Legal belum dikonfigurasi: jangan blok login, jangan backfill.
+ * - Akun existing tanpa consent (app lama/backlog): needsConsent = true,
+ *   tanpa backfill. /users/me tetap requires_consent sampai user setuju.
+ * - Legal belum dikonfigurasi: jangan blok login, jangan tulis consent.
  */
 export class SocialConsentService {
   constructor(
@@ -40,12 +42,15 @@ export class SocialConsentService {
           [{ field: 'consents', message: 'Daftar dulu lewat halaman Daftar ya' }],
         );
       }
-      return; // lenient: buat akun, backfill dilakukan setelahnya
+      return; // lenient: buat akun tanpa consent, sheet yang minta
     }
     assertConsentsMatchActiveVersions(consents, active);
   }
 
-  /** Panggil SETELAH user dibuat/ditemukan. Menulis consent bila perlu. */
+  /**
+   * Panggil SETELAH user dibuat/ditemukan. Menulis consent HANYA bila
+   * client mengirim persetujuan eksplisit (checkbox halaman Daftar).
+   */
   async recordForLogin(
     userId: string,
     consents: ConsentInput[] | null | undefined,
@@ -68,7 +73,7 @@ export class SocialConsentService {
         byType.get('privacy') === active.privacyVersion;
       if (matchesActive) {
         if (!upToDate) {
-          await this.insertBoth(userId, active.termsVersion, active.privacyVersion, 'register', meta);
+          await this.insertBoth(userId, active.termsVersion, active.privacyVersion, meta);
         }
         return { needsConsent: false };
       }
@@ -79,12 +84,12 @@ export class SocialConsentService {
 
     if (upToDate) return { needsConsent: false };
 
-    // Belum pernah setuju: backfill supaya audit trail ada, lalu minta
-    // konfirmasi lewat sheet (needsConsent true).
-    if (!latest) {
-      await this.insertBoth(userId, active.termsVersion, active.privacyVersion, 'social_gate', meta);
-      return { needsConsent: true };
-    }
+    // Belum pernah setuju: JANGAN tulis apa pun. Baris consent hanya boleh
+    // lahir dari aksi eksplisit user (checkbox Daftar atau /accept-legal).
+    // Dulu di sini ada backfill source 'social_gate' - akibatnya
+    // /users/me langsung balas requires_consent false dan sheet tidak
+    // pernah muncul untuk akun baru.
+    if (!latest) return { needsConsent: true };
 
     // Versi basi: sengaja TIDAK ditimpa di sini. Riwayat persetujuan lama
     // tetap utuh; user setuju ulang eksplisit lewat /accept-legal
@@ -96,7 +101,6 @@ export class SocialConsentService {
     userId: string,
     termsVersion: string,
     privacyVersion: string,
-    source: 'register' | 'social_gate',
     meta: { clientId?: string | null; requestId?: string | null },
   ): Promise<void> {
     await this.consentRepo.insertMany([
@@ -104,7 +108,7 @@ export class SocialConsentService {
         userId,
         documentType: 'terms',
         documentVersion: termsVersion,
-        source,
+        source: 'register',
         clientId: meta.clientId ?? null,
         requestId: meta.requestId ?? null,
       },
@@ -112,7 +116,7 @@ export class SocialConsentService {
         userId,
         documentType: 'privacy',
         documentVersion: privacyVersion,
-        source,
+        source: 'register',
         clientId: meta.clientId ?? null,
         requestId: meta.requestId ?? null,
       },

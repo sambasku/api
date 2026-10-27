@@ -357,7 +357,7 @@ describe('LoginWithGoogleUseCase', () => {
     expect(consentRepo.insertMany).not.toHaveBeenCalled();
   });
 
-  it('akun baru tanpa consents, mode lenient -> backfill social_gate', async () => {
+  it('akun baru tanpa consents, mode lenient -> akun dibuat TANPA baris consent', async () => {
     const { useCase, consentRepo, identityRepo } = makeDeps({
       identity: null,
       legal: { activeVersions: ACTIVE, enforcement: 'lenient' },
@@ -366,10 +366,9 @@ describe('LoginWithGoogleUseCase', () => {
     const result = await useCase.execute({ idToken: 'id-token' });
 
     expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalled();
-    expect(consentRepo.insertMany).toHaveBeenCalledWith([
-      expect.objectContaining({ documentType: 'terms', source: 'social_gate' }),
-      expect.objectContaining({ documentType: 'privacy', source: 'social_gate' }),
-    ]);
+    // Consent hanya boleh ditulis dari aksi eksplisit user (checkbox
+    // Daftar / accept-legal), bukan backfill diam-diam di server.
+    expect(consentRepo.insertMany).not.toHaveBeenCalled();
     expect(result.requiresConsent).toBe(true);
   });
 
@@ -387,7 +386,7 @@ describe('LoginWithGoogleUseCase', () => {
     expect(consentRepo.insertMany).not.toHaveBeenCalled();
   });
 
-  it('akun lama tanpa consent -> backfill social_gate, requiresConsent true', async () => {
+  it('akun lama tanpa consent -> tanpa insert, requiresConsent true', async () => {
     const { useCase, consentRepo } = makeDeps({
       identity: makeIdentity(),
       userById: makeUser(),
@@ -396,10 +395,7 @@ describe('LoginWithGoogleUseCase', () => {
 
     const result = await useCase.execute({ idToken: 'id-token' });
 
-    expect(consentRepo.insertMany).toHaveBeenCalledWith([
-      expect.objectContaining({ documentType: 'terms', source: 'social_gate' }),
-      expect.objectContaining({ documentType: 'privacy', source: 'social_gate' }),
-    ]);
+    expect(consentRepo.insertMany).not.toHaveBeenCalled();
     expect(result.requiresConsent).toBe(true);
   });
 
