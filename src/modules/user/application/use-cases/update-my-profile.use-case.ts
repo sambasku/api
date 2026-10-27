@@ -4,7 +4,12 @@ import type { UserRepository } from '@/modules/auth/domain/repositories/user.rep
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { UpdateMyProfileDto } from '../dto/update-my-profile.dto';
+import type { PublicUserRepository } from '../../domain/repositories/public-user.repository';
+import type { PublicProfileLeveling } from '../../domain/entities/public-profile.entity';
+import { buildLeveling } from '@/modules/leveling/domain/leveling';
 
 export interface MyProfileResult {
   username: string;
@@ -16,9 +21,16 @@ export interface MyProfileResult {
   hasReadContributionGuide: boolean;
   /** True bila user belum menyetujui terms/privacy versi aktif. */
   requiresConsent: boolean;
+  leveling: PublicProfileLeveling;
+  notifyStreakReminder: boolean;
+  notifyLevelUp: boolean;
 }
 
-function toMyProfile(user: User, requiresConsent: boolean): MyProfileResult {
+function toMyProfile(
+  user: User,
+  requiresConsent: boolean,
+  leveling: PublicProfileLeveling,
+): MyProfileResult {
   return {
     username: user.username,
     displayName: user.displayName,
@@ -28,6 +40,9 @@ function toMyProfile(user: User, requiresConsent: boolean): MyProfileResult {
     avatarUrl: user.avatarUrl,
     hasReadContributionGuide: user.readContributionGuideAt !== null,
     requiresConsent,
+    leveling,
+    notifyStreakReminder: user.notifyStreakReminder,
+    notifyLevelUp: user.notifyLevelUp,
   };
 }
 
@@ -36,6 +51,9 @@ export class GetMyProfileUseCase {
     private readonly userRepo: UserRepository,
     private readonly settingsRepo?: AppSettingsRepository,
     private readonly consentRepo?: UserConsentRepository,
+    private readonly publicUserRepo?: PublicUserRepository,
+    private readonly recordInbox?: RecordInboxNotificationUseCase,
+    private readonly notifyUser?: NotifyUserUseCase,
   ) {}
 
   async execute(userId: string): Promise<MyProfileResult> {
@@ -44,7 +62,63 @@ export class GetMyProfileUseCase {
       throw new UnauthorizedError('UNAUTHORIZED', 'Sesi tidak valid');
     }
     const requiresConsent = await this.computeRequiresConsent(userId);
-    return toMyProfile(user, requiresConsent);
+    const leveling = this.publicUserRepo
+      ? (await this.publicUserRepo.loadStats(userId)).leveling
+      : buildLeveling({ points: 0, exploration: 0, accuracy: 0, depth: 0 });
+
+    await this.maybeNotifyLevelUp(user, leveling);
+
+    const refreshed =
+      leveling.level > user.levelSeen
+        ? ((await this.userRepo.findById(userId)) ?? user)
+        : user;
+
+    return toMyProfile(refreshed, requiresConsent, leveling);
+  }
+
+  /**
+   * Naik level: inbox + FCM sekali, lalu level_seen = level.
+   * Gagal notif tidak menggagalkan GET /me.
+   */
+  private async maybeNotifyLevelUp(
+    user: User,
+    leveling: PublicProfileLeveling,
+  ): Promise<void> {
+    if (leveling.level <= user.levelSeen) return;
+
+    try {
+      if (user.notifyLevelUp && this.recordInbox && this.notifyUser) {
+        const title = 'Level kamu naik';
+        const body = `Kamu sekarang Level ${leveling.level}. Buka profil untuk lihat progressnya.`;
+        await this.recordInbox.execute({
+          userId: user.id,
+          type: 'level_up',
+          targetKind: 'level',
+          targetId: String(leveling.level),
+          title,
+          body,
+          actionKind: 'url',
+          actionValue: '/profile',
+        });
+        await this.notifyUser.execute({
+          userId: user.id,
+          title,
+          body,
+          data: {
+            type: 'level_up',
+            level: String(leveling.level),
+          },
+        });
+      }
+      await this.userRepo.updateProfile(user.id, {
+        levelSeen: leveling.level,
+      });
+    } catch (err) {
+      console.error(
+        `[level-up] gagal user=${user.id} level=${leveling.level}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
   /**
@@ -101,6 +175,7 @@ export class UpdateMyProfileUseCase {
   constructor(
     private readonly userRepo: UserRepository,
     private readonly regionRepo: RegionRepository,
+    private readonly publicUserRepo?: PublicUserRepository,
   ) {}
 
   async execute(userId: string, dto: UpdateMyProfileDto): Promise<MyProfileResult> {
@@ -124,9 +199,17 @@ export class UpdateMyProfileUseCase {
       ...(dto.hasReadContributionGuide === true && user.readContributionGuideAt === null
         ? { readContributionGuideAt: new Date() }
         : {}),
+      ...(dto.notifyStreakReminder !== undefined
+        ? { notifyStreakReminder: dto.notifyStreakReminder }
+        : {}),
+      ...(dto.notifyLevelUp !== undefined
+        ? { notifyLevelUp: dto.notifyLevelUp }
+        : {}),
     });
 
-    return toMyProfile(updated, false);
+    const leveling = this.publicUserRepo
+      ? (await this.publicUserRepo.loadStats(userId)).leveling
+      : buildLeveling({ points: 0, exploration: 0, accuracy: 0, depth: 0 });
+    return toMyProfile(updated, false, leveling);
   }
 }
-

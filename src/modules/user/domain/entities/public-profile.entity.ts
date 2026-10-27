@@ -8,6 +8,18 @@ export interface PublicProfileStats {
   commentsPublished: number;
 }
 
+/** Leveling derived (docs/LEVELING_AND_STREAK_IMPLEMENT.md). */
+export interface PublicProfileLeveling {
+  points: number;
+  level: number;
+  nextLevelPoints: number | null;
+  titleCode: string;
+  exploration: number;
+  accuracy: number;
+  depth: number;
+  streakDays: number;
+}
+
 export interface PublicProfile {
   username: string;
   displayName: string;
@@ -21,6 +33,7 @@ export interface PublicProfile {
   /** Bingkai profil aktif (reward `profile_border`); null = tanpa bingkai. */
   activeBorderUrl: string | null;
   stats: PublicProfileStats;
+  leveling: PublicProfileLeveling;
 }
 
 /** Baris aman untuk SELECT publik: tanpa email/phone/hash/is_active. */

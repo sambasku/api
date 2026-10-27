@@ -1,7 +1,12 @@
-import { and, asc, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   achievements,
+  comments,
+  contributionReviews,
+  contributions,
+  discussionReplies,
+  discussions,
   userAchievements,
   users,
 } from '@/shared/database/drizzle/schema';
@@ -21,7 +26,19 @@ import type {
   AchievementRepository,
   AwardTarget,
 } from '../domain/repositories/achievement.repository';
-import { findAchievementSource } from '../domain/achievement-registry';
+import {
+  aggregateFactBaseWhere,
+  effectiveAggregateThreshold,
+  findAchievementSource,
+  type AchievementAggregateFact,
+  type AchievementSourceDefinition,
+} from '../domain/achievement-registry';
+
+function mapMatchedAt(v: unknown): Date {
+  if (v instanceof Date) return v;
+  const n = Number(v);
+  return new Date(Number.isFinite(n) && n < 1e12 ? n * 1000 : n);
+}
 
 type AchievementRow = typeof achievements.$inferSelect;
 
@@ -213,6 +230,17 @@ export class AchievementRepositoryImpl implements AchievementRepository {
     };
   }
 
+  async listActiveForScan(): Promise<Achievement[]> {
+    // Tanpa hard-cap 50 (ACHIEVEMENT_ENHANCEMENT Q2). Katalog achievement
+    // aktif biasanya kecil; bila kelak > ratusan, ganti cursor berputar.
+    const rows = await this.db
+      .select()
+      .from(achievements)
+      .where(and(isNull(achievements.deletedAt), eq(achievements.isActive, true)))
+      .orderBy(asc(achievements.id));
+    return rows.map(toDomain);
+  }
+
   async listForUser(
     userId: string,
     filter: Omit<ListAchievementsFilter, 'onlyActive'>,
@@ -347,8 +375,13 @@ export class AchievementRepositoryImpl implements AchievementRepository {
     if (targets.length === 0) return [];
     // Idempotent: UNIQUE (achievement_id, user_id) + onConflictDoNothing.
     // Satu INSERT multi-baris = 1 subrequest (aturan join-bukan-n-panggilan).
+    //
+    // Restore-on-regrant (ACHIEVEMENT_ENHANCEMENT Q1): baris soft-deleted
+    // masih memegang UNIQUE, jadi INSERT conflict diam. Setelah insert,
+    // pair yang belum masuk dicek - kalau soft-deleted → undelete
+    // (awarded_at / granted_via / context baru). Award aktif tetap skip.
     const now = new Date();
-    return this.db
+    const inserted = await this.db
       .insert(userAchievements)
       .values(
         targets.map((target) => ({
@@ -360,7 +393,51 @@ export class AchievementRepositoryImpl implements AchievementRepository {
         })),
       )
       .onConflictDoNothing()
-      .returning({ id: userAchievements.id, userId: userAchievements.userId });
+      .returning({
+        id: userAchievements.id,
+        userId: userAchievements.userId,
+        achievementId: userAchievements.achievementId,
+      });
+
+    const insertedKeys = new Set(
+      inserted.map((row) => `${row.achievementId}:${row.userId}`),
+    );
+    const missing = targets.filter(
+      (t) => !insertedKeys.has(`${t.achievementId}:${t.userId}`),
+    );
+    if (missing.length === 0) {
+      return inserted.map((row) => ({ id: row.id, userId: row.userId }));
+    }
+
+    // Satu db.batch UPDATE = 1 roundtrip untuk semua restore (bukan N HTTP).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const restoreResults = (await this.db.batch(
+      missing.map((target) =>
+        this.db
+          .update(userAchievements)
+          .set({
+            deletedAt: null,
+            deletedBy: null,
+            awardedAt: now,
+            grantedVia,
+            context: target.context ? JSON.stringify(target.context) : null,
+          })
+          .where(
+            and(
+              eq(userAchievements.achievementId, target.achievementId),
+              eq(userAchievements.userId, target.userId),
+              isNotNull(userAchievements.deletedAt),
+            ),
+          )
+          .returning({ id: userAchievements.id, userId: userAchievements.userId }),
+      ) as any,
+    )) as Array<Array<{ id: string; userId: string }>>;
+
+    const restored = restoreResults.flatMap((rows) => rows ?? []);
+    return [
+      ...inserted.map((row) => ({ id: row.id, userId: row.userId })),
+      ...restored,
+    ];
   }
 
   async revokeAward(awardId: string, actorId: string): Promise<boolean> {
@@ -453,12 +530,15 @@ export class AchievementRepositoryImpl implements AchievementRepository {
   // ------------------------------------------------------------ evaluasi --
 
   /**
-   * Anti-join: user yang memenuhi kriteria source DAN belum punya award.
+   * Anti-join user_match: user yang memenuhi buildMatch DAN belum punya award.
    * Semua pengecualian global (anonim / non-aktif / soft-deleted) di sini.
    */
-  private candidateConditions(achievementId: string, criteria: AchievementCriteria) {
-    const source = findAchievementSource(criteria.source);
-    const match = source ? source.buildMatch(criteria) : sql`1 = 0`;
+  private userMatchCandidateConditions(
+    achievementId: string,
+    criteria: AchievementCriteria,
+    source: AchievementSourceDefinition,
+  ) {
+    const match = source.buildMatch?.(criteria) ?? sql`1 = 0`;
     return and(
       isNull(users.deletedAt),
       eq(users.isActive, true),
@@ -473,29 +553,226 @@ export class AchievementRepositoryImpl implements AchievementRepository {
     );
   }
 
+  /** Query builder kandidat - cabang user_match vs aggregate (B2). */
+  private buildCandidateSelect(
+    achievementId: string,
+    criteria: AchievementCriteria,
+    limit: number,
+  ) {
+    const source = findAchievementSource(criteria.source);
+    if (!source || source.manualOnly) {
+      return this.db
+        .select({
+          userId: users.id,
+          username: users.username,
+          displayName: users.displayName,
+          matchedAt: users.createdAt,
+        })
+        .from(users)
+        .where(sql`1 = 0`)
+        .limit(0);
+    }
+
+    if (source.kind === 'aggregate') {
+      return this.buildAggregateCandidateSelect(achievementId, criteria, source, limit);
+    }
+
+    return this.db
+      .select({
+        userId: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        matchedAt: users.createdAt,
+      })
+      .from(users)
+      .where(this.userMatchCandidateConditions(achievementId, criteria, source))
+      .orderBy(asc(users.createdAt))
+      .limit(limit);
+  }
+
+  private emptyCandidateSelect() {
+    return this.db
+      .select({
+        userId: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        matchedAt: users.createdAt,
+      })
+      .from(users)
+      .where(sql`1 = 0`)
+      .limit(0);
+  }
+
+  private antiJoinAward(achievementId: string) {
+    return sql`not exists (
+      select 1 from ${userAchievements} ua
+      where ua.achievement_id = ${achievementId}
+        and ua.user_id = ${users.id}
+        and ua.deleted_at is null
+    )`;
+  }
+
+  private userEligible() {
+    return and(
+      isNull(users.deletedAt),
+      eq(users.isActive, true),
+      sql`${users.id} <> ${ANONIM_USER_ID}`,
+    );
+  }
+
+  /**
+   * Kandidat agregat: GROUP BY user HAVING count >= threshold.
+   * Cabang per `aggregateFact` (contributions / reviews / comments / diskusi).
+   */
+  private buildAggregateCandidateSelect(
+    achievementId: string,
+    criteria: AchievementCriteria,
+    source: AchievementSourceDefinition,
+    limit: number,
+  ) {
+    const fact = source.aggregateFact;
+    if (!fact) return this.emptyCandidateSelect();
+
+    const threshold = effectiveAggregateThreshold(criteria);
+    const extra = source.buildAggregateFilters?.(criteria) ?? [];
+    const base = aggregateFactBaseWhere(fact);
+    const eligible = this.userEligible();
+    const anti = this.antiJoinAward(achievementId);
+
+    switch (fact) {
+      case 'contributions':
+        return this.db
+          .select({
+            userId: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            matchedAt: sql<Date>`max(${contributions.createdAt})`.mapWith(mapMatchedAt),
+          })
+          .from(contributions)
+          .innerJoin(users, eq(users.id, contributions.userId))
+          .where(and(...base, eligible, ...extra, anti))
+          .groupBy(users.id, users.username, users.displayName)
+          .having(sql`count(*) >= ${threshold}`)
+          .orderBy(asc(users.id))
+          .limit(limit);
+      case 'contribution_reviews':
+        return this.db
+          .select({
+            userId: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            matchedAt: sql<Date>`max(${contributionReviews.createdAt})`.mapWith(mapMatchedAt),
+          })
+          .from(contributionReviews)
+          .innerJoin(users, eq(users.id, contributionReviews.reviewerId))
+          .where(and(...base, eligible, ...extra, anti))
+          .groupBy(users.id, users.username, users.displayName)
+          .having(sql`count(*) >= ${threshold}`)
+          .orderBy(asc(users.id))
+          .limit(limit);
+      case 'comments':
+        return this.db
+          .select({
+            userId: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            matchedAt: sql<Date>`max(${comments.createdAt})`.mapWith(mapMatchedAt),
+          })
+          .from(comments)
+          .innerJoin(users, eq(users.id, comments.userId))
+          .where(and(...base, eligible, ...extra, anti))
+          .groupBy(users.id, users.username, users.displayName)
+          .having(sql`count(*) >= ${threshold}`)
+          .orderBy(asc(users.id))
+          .limit(limit);
+      case 'discussions':
+        return this.db
+          .select({
+            userId: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            matchedAt: sql<Date>`max(${discussions.createdAt})`.mapWith(mapMatchedAt),
+          })
+          .from(discussions)
+          .innerJoin(users, eq(users.id, discussions.userId))
+          .where(and(...base, eligible, ...extra, anti))
+          .groupBy(users.id, users.username, users.displayName)
+          .having(sql`count(*) >= ${threshold}`)
+          .orderBy(asc(users.id))
+          .limit(limit);
+      case 'discussion_replies':
+        return this.db
+          .select({
+            userId: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            matchedAt: sql<Date>`max(${discussionReplies.createdAt})`.mapWith(mapMatchedAt),
+          })
+          .from(discussionReplies)
+          .innerJoin(users, eq(users.id, discussionReplies.userId))
+          .where(and(...base, eligible, ...extra, anti))
+          .groupBy(users.id, users.username, users.displayName)
+          .having(sql`count(*) >= ${threshold}`)
+          .orderBy(asc(users.id))
+          .limit(limit);
+      default:
+        return this.emptyCandidateSelect();
+    }
+  }
+
+  /** COUNT(*) fakta untuk satu user (progress locked). */
+  private buildUserProgressCountSelect(userId: string, criteria: AchievementCriteria) {
+    const source = findAchievementSource(criteria.source);
+    const fact = source?.aggregateFact;
+    if (!source || source.kind !== 'aggregate' || !fact) {
+      return this.db
+        .select({ count: sql<number>`0`.mapWith(Number) })
+        .from(users)
+        .where(sql`1 = 0`);
+    }
+    const extra = source.buildAggregateFilters?.(criteria) ?? [];
+    const base = aggregateFactBaseWhere(fact);
+
+    switch (fact as AchievementAggregateFact) {
+      case 'contributions':
+        return this.db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(contributions)
+          .where(and(eq(contributions.userId, userId), ...base, ...extra));
+      case 'contribution_reviews':
+        return this.db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(contributionReviews)
+          .where(and(eq(contributionReviews.reviewerId, userId), ...base, ...extra));
+      case 'comments':
+        return this.db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(comments)
+          .where(and(eq(comments.userId, userId), ...base, ...extra));
+      case 'discussions':
+        return this.db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(discussions)
+          .where(and(eq(discussions.userId, userId), ...base, ...extra));
+      case 'discussion_replies':
+        return this.db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(discussionReplies)
+          .where(and(eq(discussionReplies.userId, userId), ...base, ...extra));
+    }
+  }
+
   async findUnawardedCandidates(
     achievementId: string,
     criteria: AchievementCriteria,
     limit: number,
   ): Promise<AchievementCandidate[]> {
-    const rows = await this.db
-      .select({
-        userId: users.id,
-        username: users.username,
-        displayName: users.displayName,
-        createdAt: users.createdAt,
-      })
-      .from(users)
-      .where(this.candidateConditions(achievementId, criteria))
-      // Id lama = deterministik; preview tidak butuh urutan lain.
-      .orderBy(asc(users.createdAt))
-      .limit(limit);
-
+    const rows = await this.buildCandidateSelect(achievementId, criteria, limit);
     return rows.map((r) => ({
       userId: r.userId,
       username: r.username,
       displayName: r.displayName || r.username,
-      matchedAt: r.createdAt,
+      matchedAt: r.matchedAt instanceof Date ? r.matchedAt : new Date(r.matchedAt),
     }));
   }
 
@@ -509,19 +786,11 @@ export class AchievementRepositoryImpl implements AchievementRepository {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = (await this.db.batch(
       items.map((item) =>
-        this.db
-          .select({
-            userId: users.id,
-            username: users.username,
-            displayName: users.displayName,
-            createdAt: users.createdAt,
-          })
-          .from(users)
-          .where(this.candidateConditions(item.id, item.criteria))
-          .orderBy(asc(users.createdAt))
-          .limit(limitPerAchievement),
+        this.buildCandidateSelect(item.id, item.criteria, limitPerAchievement),
       ) as any,
-    )) as Array<{ userId: string; username: string; displayName: string | null; createdAt: Date }[]>;
+    )) as Array<
+      Array<{ userId: string; username: string; displayName: string | null; matchedAt: Date }>
+    >;
     const map = new Map<string, AchievementCandidate[]>();
     items.forEach((item, i) => {
       map.set(
@@ -530,7 +799,7 @@ export class AchievementRepositoryImpl implements AchievementRepository {
           userId: r.userId,
           username: r.username,
           displayName: r.displayName || r.username,
-          matchedAt: r.createdAt,
+          matchedAt: r.matchedAt instanceof Date ? r.matchedAt : new Date(r.matchedAt),
         })),
       );
     });
@@ -541,11 +810,33 @@ export class AchievementRepositoryImpl implements AchievementRepository {
     achievementId: string,
     criteria: AchievementCriteria,
   ): Promise<number> {
+    const source = findAchievementSource(criteria.source);
+    if (!source || source.manualOnly) return 0;
+
+    if (source.kind === 'aggregate') {
+      // Hitung via kandidat terbatas tinggi - cukup untuk preview admin.
+      // Hindari subquery kompleks ganda; preview limit internal 10_000.
+      const rows = await this.buildCandidateSelect(achievementId, criteria, 10_000);
+      return rows.length;
+    }
+
     const [row] = await this.db
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(users)
-      .where(this.candidateConditions(achievementId, criteria));
+      .where(this.userMatchCandidateConditions(achievementId, criteria, source));
     return row?.count ?? 0;
+  }
+
+  async countUserAggregateProgressBatch(
+    userId: string,
+    criteriaList: AchievementCriteria[],
+  ): Promise<number[]> {
+    if (criteriaList.length === 0) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results = (await this.db.batch(
+      criteriaList.map((c) => this.buildUserProgressCountSelect(userId, c)) as any,
+    )) as Array<Array<{ count: number }>>;
+    return results.map((rows) => rows[0]?.count ?? 0);
   }
 
   // -------------------------------------------------------------- border --

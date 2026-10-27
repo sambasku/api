@@ -1,9 +1,14 @@
 import type {
   MentionUserRow,
   PublicActivityPage,
+  PublicProfileLeveling,
   PublicProfileStats,
   PublicUserRow,
 } from '../entities/public-profile.entity';
+
+export type PublicProfileStatsBundle = PublicProfileStats & {
+  leveling: PublicProfileLeveling;
+};
 
 export interface PublicUserRepository {
   /**
@@ -18,7 +23,7 @@ export interface PublicUserRepository {
    */
   suggestByUsernamePrefix(prefix: string, limit: number): Promise<MentionUserRow[]>;
 
-  loadStats(userId: string): Promise<PublicProfileStats>;
+  loadStats(userId: string): Promise<PublicProfileStatsBundle>;
 
   /**
    * Gabungan sumber aktivitas publik. `limit` = ukuran halaman (repo fetch

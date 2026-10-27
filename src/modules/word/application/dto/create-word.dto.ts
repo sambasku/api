@@ -3,6 +3,7 @@ import type { ImageContentWarning } from '@/shared/constants/image-content-warni
 import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
 
 export interface CreateWordTranslationDto {
+  /** Kosong/`""` dari client lama → diisi IDN di CreateWordUseCase. */
   languageId: string;
   translationText: string;
   translationType: string;
@@ -21,7 +22,8 @@ export interface CreateWordExampleDto {
 export type MeaningSource = 'manual' | 'kbbi' | 'kbbi_edited';
 
 export interface CreateWordMeaningDto {
-  wordClassId: string;
+  /** Null/`""` dari client lama → diisi kelas "umum" di CreateWordUseCase bila ada. */
+  wordClassId: string | null;
   definition: string;
   /** 17-api-usul-definisi.md: false = placeholder "-" (belum ada definisi). */
   isHaveDefinition?: boolean;
@@ -114,6 +116,7 @@ export interface CreateWordVariantDto {
 }
 
 export interface CreateWordDto {
+  /** Kosong dari client lama → diisi SBS di CreateWordUseCase. */
   languageId: string;
   dialectId?: string;
   lemma: string;

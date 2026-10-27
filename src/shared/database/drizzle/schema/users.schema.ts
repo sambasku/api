@@ -56,6 +56,21 @@ export const users = sqliteTable(
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
     /** Piggyback presence: di-touch dari request authenticated (throttle 5 mnt). */
     lastSeenAt: integer('last_seen_at', { mode: 'timestamp' }),
+    /**
+     * Level terakhir yang sudah "dilihat"/dinotifikasi ke user.
+     * GET /me membandingkan leveling.level vs kolom ini untuk push naik level.
+     */
+    levelSeen: integer('level_seen').notNull().default(1),
+    /** Opt-out pengingat streak (cron). Default on. */
+    notifyStreakReminder: integer('notify_streak_reminder', {
+      mode: 'boolean',
+    })
+      .notNull()
+      .default(true),
+    /** Opt-out notifikasi naik level. Default on. */
+    notifyLevelUp: integer('notify_level_up', { mode: 'boolean' })
+      .notNull()
+      .default(true),
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   },
   (t) => [

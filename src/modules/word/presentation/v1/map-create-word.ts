@@ -16,7 +16,9 @@ import type { UpdateWordBody } from './validators/update-word.validator';
 // Provider stock (Media Explorer) dari client; absen/github → storage aktif.
 export function toCreateWordDto(body: CreateWordBody, imageProviderName: string): CreateWordDto {
   return {
-    languageId: body.language_id,
+    // language_id / translation language_id / word_class_id boleh kosong
+    // (client lama) - CreateWordUseCase mengisi default SBS/IDN/umum.
+    languageId: body.language_id ?? '',
     dialectId: body.dialect_id,
     lemma: body.lemma,
     lemmaAllowsComma: body.lemma_allows_comma ?? false,
@@ -24,20 +26,20 @@ export function toCreateWordDto(body: CreateWordBody, imageProviderName: string)
     wordType: body.word_type,
     usageLabels: body.usage_labels,
     meanings: body.meanings.map((m, i) => ({
-      wordClassId: m.word_class_id,
+      wordClassId: m.word_class_id ?? null,
       definition: m.definition,
       isHaveDefinition: m.is_have_definition ?? true,
       isHaveTranslation: m.is_have_translation ?? true,
       meaningSource: m.meaning_source ?? 'manual',
       orderIndex: m.order_index ?? i + 1,
       translations: (m.translations ?? []).map((t) => ({
-        languageId: t.language_id,
+        languageId: t.language_id ?? '',
         translationText: t.translation_text,
         translationType: t.translation_type,
         translationAllowsComma: t.translation_allows_comma ?? false,
       })),
       examples: m.examples?.map((e) => ({
-        sourceLanguageId: e.source_language_id,
+        sourceLanguageId: e.source_language_id ?? '',
         sourceSentence: e.source_sentence,
         targetLanguageId: e.target_language_id,
         targetSentence: e.target_sentence,

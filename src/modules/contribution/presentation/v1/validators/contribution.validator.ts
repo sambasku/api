@@ -1,4 +1,4 @@
-import { choiceId, opaqueId } from '@/shared/validation/id';
+import { choiceId, choiceIdCompat, opaqueId, opaqueIdCompat } from '@/shared/validation/id';
 import { z } from 'zod';
 import {
   createWordBodySchema,
@@ -132,12 +132,12 @@ export const correctContributionSchema = z.discriminatedUnion('entity_type', [
     entity_type: z.literal('meaning'),
     comment: commentField,
     publish: publishField,
-    word_class_id: choiceId('Kelas kata').nullable().optional(),
+    word_class_id: choiceIdCompat('Kelas kata'),
     definition: z.string().trim().min(1, 'Definisi tidak boleh kosong'),
     translations: z
       .array(
         z.object({
-          language_id: opaqueId,
+          language_id: opaqueIdCompat,
           translation_text: z.string().trim().min(1, 'Terjemahan tidak boleh kosong'),
           translation_type: z.enum(['direct', 'descriptive', 'idiomatic']).default('direct'),
         }),

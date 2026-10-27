@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { ACHIEVEMENT_CATEGORIES, REWARD_TYPES } from '@/shared/database/drizzle/schema/achievements.schema';
-import { isAchievementSourceKnown } from '../../../domain/achievement-registry';
+import {
+  findAchievementSource,
+  isAchievementSourceKnown,
+} from '../../../domain/achievement-registry';
 
 /**
  * Host aset reward yang diizinkan. URL ini dirender di profil publik -
@@ -74,13 +77,47 @@ export const achievementCriteriaSchema = z
     filters: z.record(z.string().trim().min(1).max(60), z.string().trim().min(1).max(120)).nullable().optional(),
   })
   .superRefine((c, ctx) => {
-    if (c.source === 'manual') {
-      // Manual: tanpa threshold/window - pure pemberian admin.
-      if (c.threshold != null) {
-        ctx.addIssue({ code: 'custom', path: ['threshold'], message: 'source manual tidak memakai threshold' });
-      }
-      if (c.window != null) {
-        ctx.addIssue({ code: 'custom', path: ['window'], message: 'source manual tidak memakai window' });
+    // Selaraskan grammar dengan registry (ACHIEVEMENT_ENHANCEMENT P0-3 /
+    // Q terkunci): jangan izinkan threshold/window/filters yang mesin
+    // evaluasi abaikan - admin console harus gagal di API, bukan "sukses palsu".
+    const def = findAchievementSource(c.source);
+    if (!def) return; // refine source sudah menolak; jangan dobel pesan.
+
+    if (!def.supportsThreshold && c.threshold != null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['threshold'],
+        message: `source ${c.source} tidak memakai threshold`,
+      });
+    }
+    if (!def.supportsWindow && c.window != null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['window'],
+        message: `source ${c.source} tidak memakai window`,
+      });
+    }
+
+    const filters = c.filters;
+    if (filters && Object.keys(filters).length > 0) {
+      const allowed = new Map(def.filterFields.map((f) => [f.key, f]));
+      for (const [key, value] of Object.entries(filters)) {
+        const field = allowed.get(key);
+        if (!field) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['filters', key],
+            message: `filter "${key}" tidak didukung source ${c.source}`,
+          });
+          continue;
+        }
+        if (field.options && field.options.length > 0 && !field.options.includes(value)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['filters', key],
+            message: `nilai filter "${key}" tidak valid untuk source ${c.source}`,
+          });
+        }
       }
     }
   });
@@ -176,6 +213,14 @@ const achievementOwnershipSchema = achievementItemSchema.extend({
   awarded_at: z.number().int().nullable(),
   /** Border ini sedang dipakai (hanya reward_type profile_border). */
   is_active_border: z.boolean().optional(),
+  /** Locked + source agregat: current/target. Owned/kohort/manual = null. */
+  progress: z
+    .object({
+      current: z.number().int().nonnegative(),
+      target: z.number().int().positive(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const achievementItemResponseSchema = z.object({

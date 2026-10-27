@@ -12,6 +12,8 @@ export const APP_SETTING_KEYS = [
   'notification.word_media_push_cooldown_minutes',
   'wa.verifier_enabled',
   'wa.group_cta_url',
+  /** Kill switch pengingat aktivitas (leveling/streak). Default off sampai dry-run. */
+  'streak_reminder_enabled',
 ] as const;
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];

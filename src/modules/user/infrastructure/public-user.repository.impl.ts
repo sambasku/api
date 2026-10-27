@@ -16,15 +16,34 @@ import {
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { derivePrimaryRole } from '@/shared/utils/derive-primary-role';
+import {
+  IMPORT_POINT_FACTOR,
+  POINT_WEIGHTS,
+  SCARCITY_MULT_COMMON,
+  SCARCITY_MULT_RARE,
+  SCARCITY_MULT_UNCOMMON,
+  SCARCITY_WORD_COUNT_RARE,
+  SCARCITY_WORD_COUNT_UNCOMMON,
+  buildLeveling,
+} from '@/modules/leveling/domain/leveling';
+import {
+  STREAK_ACTIVITY_KINDS,
+  STREAK_WINDOW_DAYS,
+  computeStreakDays,
+  wibDateKey,
+} from '@/modules/leveling/domain/streak';
 import type {
   MentionUserRow,
   PublicActivityItem,
   PublicActivityPage,
-  PublicProfileStats,
   PublicUserRow,
 } from '../domain/entities/public-profile.entity';
-import type { PublicUserRepository } from '../domain/repositories/public-user.repository';
+import type {
+  PublicProfileStatsBundle,
+  PublicUserRepository,
+} from '../domain/repositories/public-user.repository';
 
 const ENTITY_LABEL: Record<string, string> = {
   word: 'Kata',
@@ -54,6 +73,20 @@ function toPage(
     nextCursor: hasMore && last ? last.id : null,
     hasMore,
   };
+}
+
+/** Parse `json_group_array` hari aktif streak dari loadStats (1 kolom). */
+function parseStreakDayKeys(raw: unknown): Set<string> {
+  if (raw == null || raw === '') return new Set();
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(
+      parsed.filter((x): x is string => typeof x === 'string' && x.length > 0),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 export class PublicUserRepositoryImpl implements PublicUserRepository {
@@ -151,50 +184,331 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
     return row?.count ?? 0;
   }
 
-  async loadStats(userId: string): Promise<PublicProfileStats> {
-    // Satu query, empat subquery skalar - hemat subrequest Turso (aturan
-    // join-bukan-n-panggilan). Jalur baca profil publik sebelumnya 3 query.
+  async loadStats(userId: string): Promise<PublicProfileStatsBundle> {
+    if (userId === ANONIM_USER_ID) {
+      return {
+        contributionsApproved: 0,
+        wordsApproved: 0,
+        correctionsApproved: 0,
+        verificationsDone: 0,
+        commentsPublished: 0,
+        leveling: buildLeveling({
+          points: 0,
+          exploration: 0,
+          accuracy: 0,
+          depth: 0,
+          streakDays: 0,
+        }),
+      };
+    }
+
+    // 1 Turso execute: CROSS JOIN aggregate (1 scan/tabel) + streak JSON.
+    // Bukan ~16 subquery skalar + query streak terpisah.
+    const W = POINT_WEIGHTS;
+    const half = IMPORT_POINT_FACTOR;
+    const windowStartSec = Math.floor(
+      (Date.now() - STREAK_WINDOW_DAYS * 24 * 3600 * 1000) / 1000,
+    );
+    const streakKindsSql = sql.join(
+      STREAK_ACTIVITY_KINDS.map((k) => sql`${k}`),
+      sql`, `,
+    );
+
     const [row] = await this.db
       .select({
-        words: sql<number>`(
-          select coalesce(sum(case when ${contributions.entityType} = 'word' then 1 else 0 end), 0)
-          from ${contributions}
-          where ${contributions.userId} = ${userId}
-            and ${contributions.status} in ('approved', 'corrected')
-            and ${contributions.deletedAt} is null
-        )`.mapWith(Number),
-        corrections: sql<number>`(
-          select coalesce(sum(case when ${contributions.entityType} <> 'word' then 1 else 0 end), 0)
-          from ${contributions}
-          where ${contributions.userId} = ${userId}
-            and ${contributions.status} in ('approved', 'corrected')
-            and ${contributions.deletedAt} is null
-        )`.mapWith(Number),
-        verificationsDone: sql<number>`(
-          select count(*)
-          from ${contributionReviews}
-          where ${contributionReviews.reviewerId} = ${userId}
-            and ${contributionReviews.status} <> 'pending'
-            and ${contributionReviews.deletedAt} is null
-        )`.mapWith(Number),
-        commentsPublished: sql<number>`(
-          select count(*)
-          from ${comments}
-          where ${comments.userId} = ${userId}
-            and ${comments.status} = 'published'
-            and ${comments.deletedAt} is null
-        )`.mapWith(Number),
+        wordsCount: sql<number>`contrib.words_count`.mapWith(Number),
+        corrections: sql<number>`contrib.corrections`.mapWith(Number),
+        depthCount: sql<number>`contrib.depth_count`.mapWith(Number),
+        contributionPoints: sql<number>`contrib.contribution_points`.mapWith(
+          Number,
+        ),
+        verificationsDone: sql<number>`rev.verifications_done`.mapWith(Number),
+        verificationsNonSelf: sql<number>`rev.verifications_non_self`.mapWith(
+          Number,
+        ),
+        verificationPoints: sql<number>`rev.verification_points`.mapWith(
+          Number,
+        ),
+        commentsPublished: sql<number>`com.comments_published`.mapWith(Number),
+        placeCount: sql<number>`plc.place_count`.mapWith(Number),
+        usahaPoints: sql<number>`ush.usaha_points`.mapWith(Number),
+        usahaNewCount: sql<number>`ush.usaha_new_count`.mapWith(Number),
+        cuisinePoints: sql<number>`cul.cuisine_points`.mapWith(Number),
+        cuisineNewCount: sql<number>`cul.cuisine_new_count`.mapWith(Number),
+        eventCount: sql<number>`evt.event_count`.mapWith(Number),
+        pantunCount: sql<number>`ptn.pantun_count`.mapWith(Number),
+        voteReceivedPoints: sql<number>`vot.vote_received_points`.mapWith(
+          Number,
+        ),
+        streakDayKeysJson: sql<string | null>`stk.streak_day_keys`,
       })
-      .from(sql`(select 1)`);
+      .from(sql`(
+        select 1
+      ) as _dummy
+      cross join (
+        select
+          coalesce(sum(case when c.entity_type = 'word' then 1 else 0 end), 0)
+            as words_count,
+          coalesce(sum(case when c.entity_type <> 'word' then 1 else 0 end), 0)
+            as corrections,
+          coalesce(sum(case when c.entity_type in (
+            'meaning','example','pronunciation','word_image','word_audio'
+          ) then 1 else 0 end), 0) as depth_count,
+          coalesce(sum(
+            (
+              case c.entity_type
+                when 'word' then case
+                  when w_direct.id is null then 0
+                  when w_direct.import_session_id is not null
+                    then ${W.word * half} else ${W.word} end
+                when 'meaning' then case when w_m.import_session_id is not null
+                  then ${W.meaning * half} else ${W.meaning} end
+                when 'example' then case when w_ex.import_session_id is not null
+                  then ${W.example * half} else ${W.example} end
+                when 'pronunciation' then case when w_p.import_session_id is not null
+                  then ${W.pronunciation * half} else ${W.pronunciation} end
+                when 'word_image' then case when w_i.import_session_id is not null
+                  then ${W.word_image * half} else ${W.word_image} end
+                when 'word_audio' then case when w_a.import_session_id is not null
+                  then ${W.word_audio * half} else ${W.word_audio} end
+                else 0
+              end
+            ) * (
+              case
+                when coalesce(lc.word_count, 999999) < ${SCARCITY_WORD_COUNT_RARE}
+                  then ${SCARCITY_MULT_RARE}
+                when coalesce(lc.word_count, 999999) < ${SCARCITY_WORD_COUNT_UNCOMMON}
+                  then ${SCARCITY_MULT_UNCOMMON}
+                else ${SCARCITY_MULT_COMMON}
+              end
+            )
+          ), 0) as contribution_points
+        from contributions c
+        left join words as w_direct
+          on c.entity_type = 'word' and c.entity_id = w_direct.id
+        left join meanings as m
+          on c.entity_type = 'meaning' and c.entity_id = m.id
+        left join words as w_m on m.word_id = w_m.id
+        left join examples as ex
+          on c.entity_type = 'example' and c.entity_id = ex.id
+        left join meanings as m_ex on ex.meaning_id = m_ex.id
+        left join words as w_ex on m_ex.word_id = w_ex.id
+        left join pronunciations as pr
+          on c.entity_type = 'pronunciation' and c.entity_id = pr.id
+        left join words as w_p on pr.word_id = w_p.id
+        left join word_images as wi
+          on c.entity_type = 'word_image' and c.entity_id = wi.id
+        left join words as w_i on wi.word_id = w_i.id
+        left join word_audios as wa
+          on c.entity_type = 'word_audio' and c.entity_id = wa.id
+        left join words as w_a on wa.word_id = w_a.id
+        left join (
+          select language_id, count(*) as word_count
+          from words
+          where deleted_at is null
+          group by language_id
+        ) as lc on lc.language_id = coalesce(
+          w_direct.language_id, w_m.language_id, w_ex.language_id,
+          w_p.language_id, w_i.language_id, w_a.language_id
+        )
+        where c.user_id = ${userId}
+          and c.status in ('approved', 'corrected')
+          and c.deleted_at is null
+      ) as contrib
+      cross join (
+        select
+          coalesce(count(*), 0) as verifications_done,
+          coalesce(sum(case when c.user_id <> ${userId} then 1 else 0 end), 0)
+            as verifications_non_self,
+          coalesce(sum(case when c.user_id <> ${userId} then 1 else 0 end), 0)
+            * ${W.verification} as verification_points
+        from contribution_reviews cr
+        inner join contributions c on cr.contribution_id = c.id
+        where cr.reviewer_id = ${userId}
+          and cr.status <> 'pending'
+          and cr.deleted_at is null
+      ) as rev
+      cross join (
+        select coalesce(count(*), 0) as comments_published
+        from comments
+        where user_id = ${userId}
+          and status = 'published'
+          and deleted_at is null
+      ) as com
+      cross join (
+        select coalesce(count(*), 0) as place_count
+        from place_contributions
+        where user_id = ${userId} and status = 'approved'
+      ) as plc
+      cross join (
+        select
+          coalesce(sum(
+            case when kind = 'new' then ${W.usaha} else ${W.data_edit} end
+          ), 0) as usaha_points,
+          coalesce(sum(case when kind = 'new' then 1 else 0 end), 0)
+            as usaha_new_count
+        from usaha_contributions
+        where user_id = ${userId} and status = 'approved'
+      ) as ush
+      cross join (
+        select
+          coalesce(sum(
+            case when kind in ('new_cuisine','new_place')
+              then ${W.cuisine} else ${W.data_edit} end
+          ), 0) as cuisine_points,
+          coalesce(sum(
+            case when kind in ('new_cuisine','new_place') then 1 else 0 end
+          ), 0) as cuisine_new_count
+        from culinary_contributions
+        where user_id = ${userId} and status = 'approved'
+      ) as cul
+      cross join (
+        select coalesce(count(*), 0) as event_count
+        from event_contributions
+        where user_id = ${userId} and status = 'approved'
+      ) as evt
+      cross join (
+        select coalesce(count(*), 0) as pantun_count
+        from pantuns
+        where user_id = ${userId} and status = 'published'
+      ) as ptn
+      cross join (
+        select coalesce(count(*), 0) * ${W.vote_received} as vote_received_points
+        from votes v
+        where v.value = 1
+          and v.user_id <> ${userId}
+          and (
+            (
+              v.entity_type = 'word'
+              and exists (
+                select 1 from words w
+                where w.id = v.entity_id
+                  and w.created_by = ${userId}
+                  and w.deleted_at is null
+              )
+            )
+            or (
+              v.entity_type = 'meaning'
+              and exists (
+                select 1 from meanings m
+                where m.id = v.entity_id
+                  and m.created_by = ${userId}
+                  and m.deleted_at is null
+              )
+            )
+            or (
+              v.entity_type = 'example'
+              and exists (
+                select 1 from examples e
+                where e.id = v.entity_id
+                  and e.created_by = ${userId}
+                  and e.deleted_at is null
+              )
+            )
+            or (
+              v.entity_type = 'pronunciation'
+              and exists (
+                select 1 from pronunciations p
+                where p.id = v.entity_id
+                  and p.created_by = ${userId}
+                  and p.deleted_at is null
+              )
+            )
+            or (
+              v.entity_type = 'word_image'
+              and exists (
+                select 1 from word_images wi
+                where wi.id = v.entity_id
+                  and wi.created_by = ${userId}
+                  and wi.deleted_at is null
+              )
+            )
+            or (
+              v.entity_type = 'word_audio'
+              and exists (
+                select 1 from word_audios wa
+                where wa.id = v.entity_id
+                  and wa.created_by = ${userId}
+                  and wa.deleted_at is null
+              )
+            )
+            or (
+              v.entity_type = 'comment'
+              and exists (
+                select 1 from comments cm
+                where cm.id = v.entity_id
+                  and cm.user_id = ${userId}
+                  and cm.status = 'published'
+                  and cm.deleted_at is null
+              )
+            )
+            or (
+              v.entity_type = 'pantun'
+              and exists (
+                select 1 from pantuns pn
+                where pn.id = v.entity_id
+                  and pn.user_id = ${userId}
+                  and pn.status = 'published'
+              )
+            )
+          )
+      ) as vot
+      cross join (
+        select coalesce((
+          select json_group_array(day_key)
+          from (
+            select distinct
+              date(occurred_at, 'unixepoch', '+7 hours') as day_key
+            from activity_events
+            where actor_id = ${userId}
+              and hidden_at is null
+              and occurred_at >= ${windowStartSec}
+              and kind in (${streakKindsSql})
+          )
+        ), '[]') as streak_day_keys
+      ) as stk`);
 
-    const words = row?.words ?? 0;
+    const wordsCount = row?.wordsCount ?? 0;
     const corrections = row?.corrections ?? 0;
+    const verificationsDone = row?.verificationsDone ?? 0;
+    const verificationsNonSelf = row?.verificationsNonSelf ?? 0;
+    const placeCount = row?.placeCount ?? 0;
+    const eventCount = row?.eventCount ?? 0;
+    const pantunCount = row?.pantunCount ?? 0;
+    const points =
+      (row?.contributionPoints ?? 0) +
+      (row?.verificationPoints ?? 0) +
+      (row?.voteReceivedPoints ?? 0) +
+      placeCount * W.place +
+      (row?.usahaPoints ?? 0) +
+      (row?.cuisinePoints ?? 0) +
+      eventCount * W.event +
+      pantunCount * W.pantun;
+    const exploration =
+      wordsCount +
+      placeCount +
+      (row?.usahaNewCount ?? 0) +
+      (row?.cuisineNewCount ?? 0) +
+      eventCount +
+      pantunCount;
+    const streakDays = computeStreakDays(
+      parseStreakDayKeys(row?.streakDayKeysJson),
+      wibDateKey(Date.now()),
+    );
+
     return {
-      contributionsApproved: words + corrections,
-      wordsApproved: words,
+      contributionsApproved: wordsCount + corrections,
+      wordsApproved: wordsCount,
       correctionsApproved: corrections,
-      verificationsDone: row?.verificationsDone ?? 0,
+      verificationsDone,
       commentsPublished: row?.commentsPublished ?? 0,
+      leveling: buildLeveling({
+        points,
+        exploration,
+        accuracy: verificationsNonSelf + corrections,
+        depth: row?.depthCount ?? 0,
+        streakDays,
+      }),
     };
   }
 

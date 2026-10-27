@@ -42,6 +42,16 @@ export const publicProfileResponseSchema = z.object({
       verifications_done: z.number().int(),
       comments_published: z.number().int(),
     }),
+    leveling: z.object({
+      points: z.number().int().nonnegative(),
+      level: z.number().int().min(1).max(15),
+      next_level_points: z.number().int().nonnegative().nullable(),
+      title_code: z.string().min(1),
+      exploration: z.number().int().nonnegative(),
+      accuracy: z.number().int().nonnegative(),
+      depth: z.number().int().nonnegative(),
+      streak_days: z.number().int().nonnegative(),
+    }),
   }),
 });
 

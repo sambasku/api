@@ -233,7 +233,7 @@ describe.skipIf(!hasTestDb)('Achievement E2E - katalog reward, scan, grant, bord
     expect((await unset.json()).data.active_border_id).toBeNull();
   });
 
-  it('daftar penerima + revoke award', async () => {
+  it('daftar penerima + revoke award + regrant (restore soft-delete)', async () => {
     const list = await get('/api/v1/admin/achievements', adminToken);
     const items = (await list.json()).data.items;
     const target = items.find((i: { code: string }) => i.code === 'angkatan-ke-1');
@@ -266,6 +266,41 @@ describe.skipIf(!hasTestDb)('Achievement E2E - katalog reward, scan, grant, bord
     expect(
       afterItems.find((i: { award_id: string }) => i.award_id === recipient.award_id),
     ).toBeUndefined();
+
+    // Regrant setelah revoke harus sukses (restore-on-conflict, Q1).
+    // Sebelum fix: UNIQUE + soft-delete → grant diam (awarded=0).
+    const regrant = await post(
+      `/api/v1/admin/achievements/${target.id}/grant`,
+      { usernames: [recipient.username] },
+      adminToken,
+    );
+    expect(regrant.status).toBe(200);
+    const regrantData = (await regrant.json()).data;
+    expect(regrantData.awarded).toBe(1);
+    expect(regrantData.missing).toHaveLength(0);
+
+    const restored = await get(`/api/v1/admin/achievements/${target.id}/recipients`, adminToken);
+    const restoredItems = (await restored.json()).data.items;
+    expect(
+      restoredItems.find((i: { username: string }) => i.username === recipient.username),
+    ).toBeTruthy();
+  });
+
+  it('create menolak threshold pada source registration (P0-3)', async () => {
+    const bad = await post(
+      '/api/v1/admin/achievements',
+      {
+        ...borderBody,
+        code: 'kohort-palsu-threshold',
+        criteria: {
+          source: 'registration',
+          threshold: 10,
+          window: borderBody.criteria.window,
+        },
+      },
+      adminToken,
+    );
+    expect(bad.status).toBe(400);
   });
 
   it('katalog publik tanpa auth: hanya achievement aktif', async () => {

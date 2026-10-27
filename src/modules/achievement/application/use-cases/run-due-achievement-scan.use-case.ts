@@ -45,11 +45,12 @@ export class RunDueAchievementScanUseCase {
       }
     }
 
-    const catalog = await this.repo.listAdmin({ limit: 50, onlyActive: true });
+    // Semua aktif, tanpa hard-cap page 50 (ACHIEVEMENT_ENHANCEMENT Q2).
+    const catalog = await this.repo.listActiveForScan();
     // Kandidat untuk semua katalog aktif di SATU roundtrip (db.batch),
     // lalu award + notifikasi juga batch. Total subrequest per putaran
     // tetap kecil walau katalog bertambah (aturan join-bukan-n-panggilan).
-    const scannable = catalog.items.filter(
+    const scannable = catalog.filter(
       (a) => !a.criteria.source || a.criteria.source !== 'manual',
     );
     let scanned = 0;

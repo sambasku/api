@@ -331,26 +331,30 @@ describe('createWordSchema - is_have_definition placeholder (17)', () => {
     }
   });
 
-  it('kelas kata kosong → pesan manusiawi, bukan jargon ULID', () => {
+  it('backward compat: language_id / word_class_id / translation language_id "" → lolos schema', () => {
+    // Mobile lama kirim "" saat referensi belum termuat; default diisi di use case.
     const result = createWordSchema.safeParse(
       build({
+        language_id: '',
         meanings: [
           {
             word_class_id: '',
-            definition: 'Aktivitas memasukkan makanan ke mulut',
+            definition: '-',
+            is_have_definition: false,
+            is_have_translation: true,
             order_index: 1,
             translations: [
-              { language_id: ULID('01LANGIDN'), translation_text: 'makan', translation_type: 'direct' },
+              { language_id: '', translation_text: 'test', translation_type: 'direct' },
             ],
           },
         ],
       }),
     );
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const issue = result.error.issues.find((i) => i.path.join('.') === 'meanings.0.word_class_id');
-      expect(issue?.message).toBe('Kelas kata wajib dipilih');
-      expect(issue?.message).not.toMatch(/ULID/i);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.language_id).toBeUndefined();
+      expect(result.data.meanings[0].word_class_id).toBeNull();
+      expect(result.data.meanings[0].translations[0].language_id).toBeUndefined();
     }
   });
 

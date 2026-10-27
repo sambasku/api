@@ -340,7 +340,7 @@ export class ContributionController {
             wordClassId: body.word_class_id ?? null,
             definition: body.definition,
             translations: body.translations.map((t) => ({
-              languageId: t.language_id,
+              languageId: t.language_id ?? '',
               translationText: t.translation_text,
               translationType: t.translation_type,
             })),

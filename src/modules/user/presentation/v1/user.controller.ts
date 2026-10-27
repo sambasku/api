@@ -14,6 +14,18 @@ import type {
 import { MAX_IMAGE_BYTES } from '@/modules/public-image/application/utils/validate-image-file';
 import type { UpdateMyProfileBody } from './validators/update-my-profile.validator';
 import type { PublicActivityQuery } from './validators/public-profile.validator';
+import {
+  levelingToWire,
+  type TitleCode,
+} from '@/modules/leveling/domain/leveling';
+import type { PublicProfileLeveling } from '../../domain/entities/public-profile.entity';
+
+function toLevelingWire(leveling: PublicProfileLeveling) {
+  return levelingToWire({
+    ...leveling,
+    titleCode: leveling.titleCode as TitleCode,
+  });
+}
 
 export class UserController {
   constructor(
@@ -50,6 +62,7 @@ export class UserController {
           verifications_done: profile.stats.verificationsDone,
           comments_published: profile.stats.commentsPublished,
         },
+        leveling: toLevelingWire(profile.leveling),
       },
     });
   }
@@ -95,6 +108,9 @@ export class UserController {
         avatar_url: profile.avatarUrl,
         has_read_contribution_guide: profile.hasReadContributionGuide,
         requires_consent: profile.requiresConsent,
+        leveling: toLevelingWire(profile.leveling),
+        notify_streak_reminder: profile.notifyStreakReminder,
+        notify_level_up: profile.notifyLevelUp,
       },
     });
   }
@@ -131,6 +147,8 @@ export class UserController {
       regionId: body.region_id,
       villageId: body.village_id,
       hasReadContributionGuide: body.has_read_contribution_guide,
+      notifyStreakReminder: body.notify_streak_reminder,
+      notifyLevelUp: body.notify_level_up,
     });
     return c.json({
       success: true as const,
@@ -142,6 +160,10 @@ export class UserController {
         village_id: profile.villageId,
         avatar_url: profile.avatarUrl,
         has_read_contribution_guide: profile.hasReadContributionGuide,
+        requires_consent: profile.requiresConsent,
+        leveling: toLevelingWire(profile.leveling),
+        notify_streak_reminder: profile.notifyStreakReminder,
+        notify_level_up: profile.notifyLevelUp,
       },
     });
   }

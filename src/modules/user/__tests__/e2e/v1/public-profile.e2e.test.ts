@@ -67,12 +67,33 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     const [__uid_66] = await db.select({ id: users.id }).from(users).where(eq(users.id, reviewerId)).limit(1);
     if (__uid_66) await db.insert(userRoles).values({ userId: __uid_66.id, role: 'reviewer' }).onConflictDoNothing();
 
+    // Kata feed-visible + kontribusi: entity_id harus ada di words
+    // (orphan word = 0 poin leveling).
+    const { languages } = await import('@/shared/database/drizzle/schema');
+    const [lang] = await db.select().from(languages).limit(1);
+    const languageId = lang?.id ?? ulid26('01E2ELANGPROF');
+    if (!lang) {
+      await db
+        .insert(languages)
+        .values({ id: languageId, code: 'sbb', name: 'Sambas' });
+    }
+    const contribWordId = ulid26('01E2EWORDPROF');
+    await db.insert(words).values({
+      id: contribWordId,
+      lemma: `lemmaprofcontrib${stamp}`,
+      languageId,
+      status: 'published',
+      isVerified: true,
+      verifiedAt: new Date(),
+      createdBy: contributorId,
+      wordType: 'word',
+    });
     const contributionId = ulid26(`01E2ECON${stamp}`);
     await db.insert(contributions).values({
       id: contributionId,
       userId: contributorId,
       entityType: 'word',
-      entityId: ulid26('01E2EWORDPROF'),
+      entityId: contribWordId,
       action: 'create',
       status: 'approved',
     });
@@ -82,15 +103,6 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
       status: 'approved',
     });
 
-    // Kata feed-visible + vote: item `vote` harus muncul di aktivitas publik.
-    const { languages } = await import('@/shared/database/drizzle/schema');
-    const [lang] = await db.select().from(languages).limit(1);
-    const languageId = lang?.id ?? ulid26('01E2ELANGPROF');
-    if (!lang) {
-      await db
-        .insert(languages)
-        .values({ id: languageId, code: 'sbb', name: 'Sambas' });
-    }
     const wordId = ulid26(`01E2EWORD${stamp}`);
     await db.insert(words).values({
       id: wordId,
@@ -214,6 +226,18 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     expect(body.data.stats.contributions_approved).toBe(1);
     expect(body.data.stats.words_approved).toBe(1);
     expect(body.data.stats.corrections_approved).toBe(0);
+    expect(body.data.leveling).toMatchObject({
+      points: expect.any(Number),
+      level: expect.any(Number),
+      title_code: expect.any(String),
+      exploration: expect.any(Number),
+      accuracy: expect.any(Number),
+      depth: expect.any(Number),
+      streak_days: expect.any(Number),
+    });
+    expect(body.data.leveling.level).toBeGreaterThanOrEqual(1);
+    expect(body.data.leveling.level).toBeLessThanOrEqual(15);
+    expect(body.data.leveling.points).toBeGreaterThanOrEqual(15);
   });
 
   it('GET /users/:username/activity → 200, max 20, bentuk item publik', async () => {

@@ -26,6 +26,8 @@ export const inboxNotificationTypeSchema = z.enum([
   'campaign',
   'verifier_application_approved',
   'verifier_application_rejected',
+  'streak_reminder',
+  'level_up',
 ]);
 
 export const notificationTargetKindSchema = z.enum([
@@ -36,6 +38,8 @@ export const notificationTargetKindSchema = z.enum([
   'campaign',
   'verifier_application',
   'pantun',
+  'day',
+  'level',
 ]);
 
 export const notificationActionKindSchema = z.enum([

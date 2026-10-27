@@ -42,7 +42,9 @@ export type InboxNotificationType =
   | 'culinary_claim_rejected'
   | 'achievement_awarded'
   | 'pantun_reply'
-  | 'pantun_mention';
+  | 'pantun_mention'
+  | 'streak_reminder'
+  | 'level_up';
 
 export type NotificationTargetKind =
   | 'contribution'
@@ -52,13 +54,15 @@ export type NotificationTargetKind =
   | 'campaign'
   | 'verifier_application'
   | 'place_contribution'
+  | 'level'
   | 'event_contribution'
   | 'usaha_contribution'
   | 'usaha_claim'
   | 'culinary_contribution'
   | 'culinary_claim'
   | 'achievement'
-  | 'pantun';
+  | 'pantun'
+  | 'day';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
 export type NotificationActionKind =
@@ -332,6 +336,18 @@ bodyType: 'plain',
     return {
       title: 'Klaim tempat ditolak',
       body: 'Klaim belum bisa disetujui. Buka daftar klaim untuk lihat alasannya.',
+      bodyType: 'plain',
+    };
+  case 'streak_reminder':
+    return {
+      title: 'Sudah lama tidak mampir',
+      body: 'Kalau sempat, isi jejak kecil hari ini ya - usul, tinjau, atau diskusi.',
+      bodyType: 'plain',
+    };
+  case 'level_up':
+    return {
+      title: 'Level kamu naik',
+      body: 'Karya yang disetujui mengantar kamu ke level baru. Buka profil untuk lihat progressnya.',
       bodyType: 'plain',
     };
 }

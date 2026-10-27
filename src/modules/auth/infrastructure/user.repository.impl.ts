@@ -48,6 +48,9 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     emailVerified: row.emailVerified,
     emailVerifiedAt: row.emailVerifiedAt ?? null,
     readContributionGuideAt: row.readContributionGuideAt ?? null,
+    levelSeen: row.levelSeen ?? 1,
+    notifyStreakReminder: row.notifyStreakReminder ?? true,
+    notifyLevelUp: row.notifyLevelUp ?? true,
     avatarUrl: row.avatarUrl ?? null,
     avatarProvider: row.avatarProvider ?? null,
     avatarProviderFileId: row.avatarProviderFileId ?? null,
@@ -405,6 +408,9 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
       readContributionGuideAt?: Date;
       regionId?: string | null;
       villageId?: string | null;
+      levelSeen?: number;
+      notifyStreakReminder?: boolean;
+      notifyLevelUp?: boolean;
     },
   ): Promise<User> {
     const [updated] = await this.db
@@ -416,6 +422,13 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
         ...(data.villageId !== undefined ? { villageId: data.villageId } : {}),
         ...(data.readContributionGuideAt !== undefined
           ? { readContributionGuideAt: data.readContributionGuideAt }
+          : {}),
+        ...(data.levelSeen !== undefined ? { levelSeen: data.levelSeen } : {}),
+        ...(data.notifyStreakReminder !== undefined
+          ? { notifyStreakReminder: data.notifyStreakReminder }
+          : {}),
+        ...(data.notifyLevelUp !== undefined
+          ? { notifyLevelUp: data.notifyLevelUp }
           : {}),
         updatedAt: new Date(),
       })

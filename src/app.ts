@@ -248,6 +248,7 @@ import {
 } from "@/modules/achievement/application/use-cases/achievement-admin.use-cases";
 import { ScanAchievementUseCase } from "@/modules/achievement/application/use-cases/scan-achievement.use-case";
 import { RunDueAchievementScanUseCase } from "@/modules/achievement/application/use-cases/run-due-achievement-scan.use-case";
+import { RunStreakReminderUseCase } from "@/modules/leveling/application/run-streak-reminder.use-case";
 import {
   ListActiveAchievementsUseCase,
   ListMyAchievementsUseCase,
@@ -1581,8 +1582,15 @@ const userController = new UserController({
     userRepo,
     appSettingsRepo,
     userConsentRepo,
+    publicUserRepo,
+    recordInbox,
+    notifyUser,
   ),
-  updateMyProfile: new UpdateMyProfileUseCase(userRepo, regionRepo),
+  updateMyProfile: new UpdateMyProfileUseCase(
+    userRepo,
+    regionRepo,
+    publicUserRepo,
+  ),
 });
 
 // ---- Modul achievement: katalog reward (border/badge/stiker) + evaluasi
@@ -1618,6 +1626,12 @@ const runDueAchievementScanUseCase = new RunDueAchievementScanUseCase(
   scanAchievement,
   appSettingsRepo,
   auditRepo,
+);
+const runStreakReminderUseCase = new RunStreakReminderUseCase(
+  db,
+  appSettingsRepo,
+  recordInbox,
+  notifyUser,
 );
 
 // ---- Modul device (FCM token register/revoke, multi-device) ----
@@ -2906,6 +2920,14 @@ export async function runDueAchievementScan(): Promise<{
   ran: boolean;
 }> {
   return runDueAchievementScanUseCase.execute();
+}
+
+export async function runDueStreakReminder(): Promise<{
+  ran: boolean;
+  sent: number;
+  reason?: string;
+}> {
+  return runStreakReminderUseCase.execute();
 }
 
 /**

@@ -12,7 +12,7 @@ export class GetPublicProfileUseCase {
       throw new NotFoundError('USER_NOT_FOUND', 'User tidak ditemukan');
     }
 
-    const stats = await this.publicUserRepo.loadStats(user.id);
+    const { leveling, ...stats } = await this.publicUserRepo.loadStats(user.id);
 
     return {
       username: user.username,
@@ -25,6 +25,7 @@ export class GetPublicProfileUseCase {
       avatarUrl: user.avatarUrl,
       activeBorderUrl: user.activeBorderUrl ?? null,
       stats,
+      leveling,
     };
   }
 }

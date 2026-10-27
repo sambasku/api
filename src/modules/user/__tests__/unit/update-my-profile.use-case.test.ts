@@ -27,6 +27,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     isActive: true,
     emailVerified: true,
     readContributionGuideAt: null,
+    levelSeen: 1,
+    notifyStreakReminder: true,
+    notifyLevelUp: true,
     avatarUrl: null,
     avatarProvider: null,
     avatarProviderFileId: null,
@@ -54,6 +57,18 @@ describe('GetMyProfileUseCase', () => {
       avatarUrl: null,
       hasReadContributionGuide: false,
       requiresConsent: false,
+      notifyStreakReminder: true,
+      notifyLevelUp: true,
+      leveling: {
+        points: 0,
+        level: 1,
+        nextLevelPoints: 20,
+        titleCode: 'peninjau',
+        exploration: 0,
+        accuracy: 0,
+        depth: 0,
+        streakDays: 0,
+      },
     });
   });
 

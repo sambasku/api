@@ -103,7 +103,11 @@ function makeDeps(missing: Partial<MissingReferences> = {}, duplicate = false, i
       Promise.resolve(inlineDuplicate ? lemma === 'ngamakn' : duplicate),
     ),
     findPublishedDuplicateMeaning: vi.fn().mockResolvedValue(null),
-    findLanguageIdByCode: vi.fn().mockResolvedValue(null),
+    findLanguageIdByCode: vi.fn().mockImplementation((code: string) => {
+      if (code.toUpperCase() === 'SBS') return Promise.resolve('01LANGLANGUAGESMB0000000');
+      if (code.toUpperCase() === 'IDN') return Promise.resolve('01LANGUAGESINDONESIA00000');
+      return Promise.resolve(null);
+    }),
     findById: vi.fn().mockImplementation((id: string) =>
       Promise.resolve(makeWord({ id, status: 'published', isVerified: true })),
     ),
@@ -111,7 +115,9 @@ function makeDeps(missing: Partial<MissingReferences> = {}, duplicate = false, i
     findDetailById: vi.fn(),
     search: vi.fn(),
     findMissingReferences: vi.fn().mockResolvedValue({ ...NO_MISSING, ...missing }),
-    listWordClasses: vi.fn(),
+    listWordClasses: vi.fn().mockResolvedValue([
+      { id: '01WORDCLASSESUMUM000000000', code: 'umum', name: 'Umum' },
+    ]),
   } as unknown as WordRepository;
   const auditRepo = { record: vi.fn().mockResolvedValue(undefined), list: vi.fn() };
   const searchMissRepo = {
@@ -241,6 +247,39 @@ describe('CreateWordUseCase', () => {
     const { useCase } = makeDeps();
     const result = await useCase.execute(makeDto({ status: 'draft' }), CONTRIBUTOR);
     expect(result.word.status).toBe('draft');
+  });
+
+  it('backward compat: ID kosong dari mobile lama → default SBS / IDN / umum', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    await useCase.execute(
+      makeDto({
+        languageId: '',
+        meanings: [
+          {
+            wordClassId: null,
+            definition: '-',
+            isHaveDefinition: false,
+            isHaveTranslation: true,
+            orderIndex: 1,
+            translations: [
+              { languageId: '', translationText: 'test', translationType: 'direct' },
+            ],
+          },
+        ],
+        status: 'published',
+      }),
+      CONTRIBUTOR,
+    );
+    expect(wordRepo.findLanguageIdByCode).toHaveBeenCalledWith('SBS');
+    expect(wordRepo.findLanguageIdByCode).toHaveBeenCalledWith('IDN');
+    expect(wordRepo.listWordClasses).toHaveBeenCalled();
+    const saved = (wordRepo.saveWithRelations as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as {
+      languageId: string;
+      meanings: Array<{ wordClassId: string | null; translations: Array<{ languageId: string }> }>;
+    };
+    expect(saved.languageId).toBe('01LANGLANGUAGESMB0000000');
+    expect(saved.meanings[0].wordClassId).toBe('01WORDCLASSESUMUM000000000');
+    expect(saved.meanings[0].translations[0].languageId).toBe('01LANGUAGESINDONESIA00000');
   });
 
   it('referensi tidak dikenal → VALIDATION_ERROR dengan field bermakna', async () => {

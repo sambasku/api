@@ -56,6 +56,12 @@ export interface User {
   otpExpiresAt?: Date | null;
   /** Waktu tap "Mengerti" di guide swipe halaman kontribusi; null = belum. */
   readContributionGuideAt: Date | null;
+  /** Level terakhir yang sudah dinotifikasi / dilihat (default 1). */
+  levelSeen: number;
+  /** Opt-in pengingat streak. */
+  notifyStreakReminder: boolean;
+  /** Opt-in notifikasi naik level. */
+  notifyLevelUp: boolean;
   avatarUrl: string | null;
   avatarProvider: string | null;
   avatarProviderFileId: string | null;

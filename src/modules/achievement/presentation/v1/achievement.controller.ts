@@ -52,6 +52,14 @@ export function serializeAchievement(
     user_achievement_id: owned.userAchievementId ?? null,
     awarded_at: owned.awardedAt ? Math.floor(owned.awardedAt.getTime() / 1000) : null,
     ...(owned.isActiveBorder === undefined ? {} : { is_active_border: owned.isActiveBorder }),
+    // Progress locked agregat (hanya /me; null = tidak relevan).
+    ...(owned.progress === undefined
+      ? {}
+      : {
+          progress: owned.progress
+            ? { current: owned.progress.current, target: owned.progress.target }
+            : null,
+        }),
   };
 }
 
