@@ -2,7 +2,7 @@
 # Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
 #
 # Default: pull ghcr.io/sambasku/api:staging (pointer bergerak).
-# Pin: API_IMAGE=ghcr.io/sambasku/api:0.1.0-staging ./scripts/staging-up.sh
+# Pin: API_IMAGE=ghcr.io/sambasku/api:v0.1.0-staging ./scripts/staging-up.sh
 # Build lokal: LOCAL_BUILD=1 ./scripts/staging-up.sh
 #
 # Di .env: secret app saja (DATABASE_URL lokal, JWT, …). Tidak perlu GHCR_TOKEN.

@@ -1,12 +1,12 @@
 name: Docker GHCR
 
 # Satu image: ghcr.io/sambasku/api
-# Tag staging (dari package.json version, contoh 0.1.0):
-#   0.1.0-staging   - immutable
+# Tag staging (dari package.json version, contoh 0.1.0 → prefix v, seragam mobile):
+#   v0.1.0-staging  - immutable
 #   staging         - pointer bergerak
 #   sha-<short>     - jejak commit
-# Produksi nanti (workflow terpisah / promote): tag bersih 0.1.0 (tanpa -staging).
-# Homelab default pull: :staging  |  pin: :0.1.0-staging
+# Produksi nanti: v0.1.0 (tanpa -staging).
+# Homelab default: :staging  |  pin: :v0.1.0-staging
 # Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
 #
 # Setelah push pertama: Package settings → Change visibility → Public
@@ -61,7 +61,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
-            type=raw,value=${{ steps.pkg.outputs.version }}-staging
+            type=raw,value=v${{ steps.pkg.outputs.version }}-staging
             type=raw,value=staging
             type=sha,prefix=sha-,format=short
 
