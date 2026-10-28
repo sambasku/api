@@ -13,6 +13,9 @@ import {
   createDiscussionReplyResponseSchema,
   createDiscussionResponseSchema,
   deleteDiscussionReplyResponseSchema,
+  discussionReplyEditHistoryResponseSchema,
+  updateDiscussionReplyBodySchema,
+  updateDiscussionReplyResponseSchema,
   attachDiscussionAudioResponseSchema,
   listMyDiscussionsQuerySchema,
   listDiscussionsQuerySchema,
@@ -168,8 +171,20 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     }),
   );
   routes.use('/:id/replies', deps.authenticate, ...writeClient, ...legalConsent, replyLimit);
-  // Delete/report balasan - aksi tulis, tetap butuh consent.
-  routes.use('/replies/:id', deps.authenticate, ...writeClient, ...legalConsent);
+
+  routes.use(
+    '/replies/:id/edit-history',
+    rateLimit({ points: 100, duration: 60, keyFn: (c) => clientIpKey(c) }),
+  );
+
+  const replyWriteChain = [
+    deps.authenticate,
+    ...writeClient,
+    ...legalConsent,
+    replyLimit,
+  ] as const;
+  routes.on('delete', '/replies/:id', ...replyWriteChain);
+  routes.on('patch', '/replies/:id', ...replyWriteChain);
 
   const uploadTokenRoute = createRoute({
     method: 'get',
@@ -342,6 +357,41 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     },
   });
 
+  const updateReplyRoute = createRoute({
+    method: 'patch',
+    path: '/replies/:id',
+    tags: ['Discussions'],
+    summary: 'Edit balasan sendiri (published; tanpa ganti audio)',
+    request: {
+      params: discussionReplyIdParamSchema,
+      body: { content: json(updateDiscussionReplyBodySchema) },
+    },
+    responses: {
+      200: { description: 'Balasan diperbarui', content: json(updateDiscussionReplyResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+      404: { description: 'Balasan tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
+  const replyEditHistoryRoute = createRoute({
+    method: 'get',
+    path: '/replies/:id/edit-history',
+    tags: ['Discussions'],
+    summary: 'Riwayat sunting balasan (publik; hanya published)',
+    request: { params: discussionReplyIdParamSchema },
+    responses: {
+      200: {
+        description: 'Current + revisions (newest first)',
+        content: json(discussionReplyEditHistoryResponseSchema),
+      },
+      404: { description: 'Balasan tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(
     uploadTokenRoute,
     (c) => deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
@@ -365,6 +415,12 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   );
   routes.openapi(createReplyRoute, (c) =>
     deps.controller.createReply(c, c.req.valid('param').id, c.req.valid('json')) as never,
+  );
+  routes.openapi(replyEditHistoryRoute, (c) =>
+    deps.controller.replyEditHistory(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(updateReplyRoute, (c) =>
+    deps.controller.updateReply(c, c.req.valid('param').id, c.req.valid('json')) as never,
   );
   routes.openapi(deleteReplyRoute, (c) =>
     deps.controller.deleteReply(c, c.req.valid('param').id) as never,

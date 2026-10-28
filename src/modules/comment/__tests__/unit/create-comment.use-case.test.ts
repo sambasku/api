@@ -30,6 +30,8 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     reviewedBy: null,
     reviewedAt: null,
     createdAt: new Date('2026-09-18T10:00:00Z'),
+    updatedAt: null,
+    isEdited: false,
     ...overrides,
   };
 }

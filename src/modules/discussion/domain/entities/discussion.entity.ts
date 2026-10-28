@@ -76,6 +76,16 @@ export interface DiscussionReply {
   reviewedAt: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
+  /** true jika pernah disunting (EXISTS di discussion_reply_revisions). */
+  isEdited?: boolean;
+}
+
+export interface DiscussionReplyRevision {
+  id: string;
+  replyId: string;
+  editorId: string;
+  body: string;
+  createdAt: Date;
 }
 
 export interface NewDiscussionReply {

@@ -6,6 +6,8 @@ import type { CreateCommentUseCase } from '../../application/use-cases/create-co
 import type { CreateCommentAudioUseCase } from '../../application/use-cases/create-comment-audio.use-case';
 import type { ListWordCommentsUseCase } from '../../application/use-cases/list-word-comments.use-case';
 import type { DeleteCommentUseCase } from '../../application/use-cases/delete-comment.use-case';
+import type { UpdateCommentUseCase } from '../../application/use-cases/update-comment.use-case';
+import type { GetCommentEditHistoryUseCase } from '../../application/use-cases/get-comment-edit-history.use-case';
 import type { ListAdminCommentsUseCase } from '../../application/use-cases/list-admin-comments.use-case';
 import type { TakedownCommentUseCase } from '../../application/use-cases/takedown-comment.use-case';
 import type { UncensorCommentUseCase } from '../../application/use-cases/uncensor-comment.use-case';
@@ -18,6 +20,7 @@ import type {
   ListAdminCommentsQueryBody,
   ListCommentsQueryBody,
   ListMyCommentsQueryBody,
+  UpdateCommentBody,
 } from './validators/comment.validator';
 
 function redactPublicBody(cm: Comment): string | null {
@@ -56,6 +59,8 @@ function toPublicCommentFields(cm: Comment) {
     body: redactPublicBody(cm),
     ...redactPublicAudio(cm),
     status: cm.status,
+    is_edited: cm.isEdited ?? false,
+    updated_at: cm.updatedAt?.toISOString() ?? null,
     created_at: cm.createdAt.toISOString(),
   };
 }
@@ -67,6 +72,8 @@ export class CommentController {
       createAudio: CreateCommentAudioUseCase;
       listByWord: ListWordCommentsUseCase;
       delete: DeleteCommentUseCase;
+      update: UpdateCommentUseCase;
+      editHistory: GetCommentEditHistoryUseCase;
       listAdmin: ListAdminCommentsUseCase;
       listMine: ListMyCommentsUseCase;
       takedown: TakedownCommentUseCase;
@@ -172,6 +179,31 @@ export class CommentController {
 
     logger.info({ request_id: this.requestId(c), comment_id: id }, 'comment deleted by author');
     return c.json({ success: true as const, data: null });
+  }
+
+  async update(c: Context, id: string, body: UpdateCommentBody) {
+    const actor = this.requireUser(c);
+    const comment = await this.deps.update.execute({
+      commentId: id,
+      actorId: actor.user_id,
+      body: body.body,
+      requestId: this.requestId(c),
+    });
+
+    logger.info({ request_id: this.requestId(c), comment_id: id }, 'comment updated by author');
+
+    return c.json({
+      success: true as const,
+      data: {
+        ...toPublicCommentFields(comment),
+        body: comment.body.trim().length > 0 ? comment.body : null,
+      },
+    });
+  }
+
+  async editHistory(c: Context, id: string) {
+    const data = await this.deps.editHistory.execute(id);
+    return c.json({ success: true as const, data });
   }
 
   async my(c: Context, query: ListMyCommentsQueryBody) {

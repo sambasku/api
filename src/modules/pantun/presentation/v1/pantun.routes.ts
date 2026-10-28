@@ -9,7 +9,9 @@ import type { PantunController } from './pantun.controller';
 import {
   createPantunBodySchema,
   createPantunReplyBodySchema,
+  updatePantunReplyBodySchema,
   createPantunResponseSchema,
+  pantunReplyEditHistoryResponseSchema,
   pantunDetailResponseSchema,
   pantunIdParamSchema,
   pantunReplyIdParamSchema,
@@ -126,6 +128,40 @@ const createReplyRoute = createRoute({
   },
 });
 
+const updateReplyRoute = createRoute({
+  method: 'patch',
+  path: '/replies/:id',
+  tags: ['Pantun'],
+  summary: 'Edit balasan sendiri (4 baris + rima)',
+  request: {
+    params: pantunReplyIdParamSchema,
+    body: { content: json(updatePantunReplyBodySchema) },
+  },
+  responses: {
+    200: { description: 'Balasan diperbarui', content: json(createPantunResponseSchema) },
+    400: { description: 'Struktur/rima/blocklist tidak valid', content: json(errorResponseSchema) },
+    401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+    403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+    404: { description: 'Balasan tidak ditemukan', content: json(errorResponseSchema) },
+    429: { description: 'Rate limit', content: json(errorResponseSchema) },
+  },
+});
+
+const replyEditHistoryRoute = createRoute({
+  method: 'get',
+  path: '/replies/:id/edit-history',
+  tags: ['Pantun'],
+  summary: 'Riwayat sunting balasan (publik, hanya published)',
+  request: { params: pantunReplyIdParamSchema },
+  responses: {
+    200: {
+      description: 'Versi tayang + snapshot sebelumnya',
+      content: json(pantunReplyEditHistoryResponseSchema),
+    },
+    404: { description: 'Balasan tidak ditemukan / tidak tayang', content: json(errorResponseSchema) },
+  },
+});
+
 const deleteReplyRoute = createRoute({
   method: 'delete',
   path: '/replies/:id',
@@ -188,7 +224,24 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
     ...legalConsent,
     writeLimit,
   );
-  routes.use('/replies/:id', deps.authenticate, ...writeClient, ...legalConsent);
+  routes.use('/replies/:id', async (c, next) => {
+    if (c.req.method === 'GET') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/replies/:id', async (c, next) => {
+    if (c.req.method === 'GET') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/replies/:id', async (c, next) => {
+    if (c.req.method === 'GET') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/replies/:id', async (c, next) => {
+    if (c.req.method === 'PATCH') return writeLimit(c, next);
+    return next();
+  });
 
   // DELETE /:id (hapus pantun sendiri). Hanya DELETE yang digerbangi:
   // GET /search dan GET /:id tetap publik.
@@ -228,6 +281,16 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
     ) as never,
   );
   // Route /replies/:id sebelum /:id sudah aman: Hono match urutan daftar.
+  routes.openapi(replyEditHistoryRoute, (c) =>
+    deps.controller.getReplyEditHistory(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(updateReplyRoute, (c) =>
+    deps.controller.updateReply(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
   routes.openapi(deleteReplyRoute, (c) =>
     deps.controller.deleteReply(c, c.req.valid('param').id) as never,
   );

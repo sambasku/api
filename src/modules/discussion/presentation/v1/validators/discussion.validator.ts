@@ -100,6 +100,15 @@ export const createDiscussionReplyBodySchema = z.object({
 
 export type CreateDiscussionReplyBody = z.infer<typeof createDiscussionReplyBodySchema>;
 
+export const updateDiscussionReplyBodySchema = z.object({
+  body: z
+    .string({ error: 'Balasan tidak valid' })
+    .trim()
+    .max(500, 'Balasan maksimal 500 karakter'),
+});
+
+export type UpdateDiscussionReplyBody = z.infer<typeof updateDiscussionReplyBodySchema>;
+
 export const rejectDiscussionBodySchema = z.object({
   note: z
     .string({ error: 'Alasan penolakan wajib diisi' })
@@ -150,6 +159,8 @@ export const discussionReplyPublicSchema = z.object({
   is_pinned: z.boolean(),
   upvotes: z.number().int(),
   downvotes: z.number().int(),
+  is_edited: z.boolean(),
+  updated_at: z.string().nullable(),
   created_at: z.string(),
 });
 
@@ -293,4 +304,27 @@ export const createDiscussionReplyResponseSchema = z.object({
 export const deleteDiscussionReplyResponseSchema = z.object({
   success: z.literal(true),
   data: z.null(),
+});
+
+export const updateDiscussionReplyResponseSchema = z.object({
+  success: z.literal(true),
+  data: discussionReplyPublicSchema,
+});
+
+export const discussionReplyEditHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    current: z.object({
+      body: z.string().nullable(),
+      updated_at: z.string().nullable(),
+      is_edited: z.boolean(),
+    }),
+    revisions: z.array(
+      z.object({
+        body: z.string(),
+        editor_id: z.string(),
+        created_at: z.string(),
+      }),
+    ),
+  }),
 });

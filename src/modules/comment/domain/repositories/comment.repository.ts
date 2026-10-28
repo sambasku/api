@@ -1,4 +1,12 @@
-import type { Comment, CursorPage, NewComment } from '../entities/comment.entity';
+import type {
+  Comment,
+  CommentRevision,
+  CursorPage,
+  NewComment,
+} from '../entities/comment.entity';
+
+/** Maks snapshot revisi per komentar (hapus yang paling lama). */
+export const COMMENT_REVISION_CAP = 50;
 
 export interface ListCommentsParams {
   limit: number;
@@ -52,4 +60,13 @@ export interface CommentRepository {
    * (status published | taken_down | deleted_by_author, belum soft-delete).
    */
   listDistinctCommenterUserIds(wordId: string): Promise<string[]>;
+
+  updateBodyWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<Comment | null>;
+
+  listRevisions(commentId: string): Promise<CommentRevision[]>;
 }

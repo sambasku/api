@@ -41,3 +41,23 @@ export const comments = sqliteTable(
     index('comments_user_status_id_idx').on(t.userId, t.status, t.id),
   ],
 );
+
+/** Snapshot body tayang sebelum setiap edit (riwayat seperti GitHub). Cap 50 di use case. */
+export const commentRevisions = sqliteTable(
+  'comment_revisions',
+  {
+    id: text('id').primaryKey().$defaultFn(() => generateId()),
+    commentId: text('comment_id')
+      .notNull()
+      .references(() => comments.id, { onDelete: 'cascade' }),
+    editorId: text('editor_id')
+      .notNull()
+      .references(() => users.id),
+    /** Body yang ditampilkan sebelum diganti (pasca-blocklist). */
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index('comment_revisions_comment_created_idx').on(t.commentId, t.createdAt),
+  ],
+);

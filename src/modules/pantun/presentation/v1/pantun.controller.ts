@@ -15,12 +15,15 @@ import type { TakedownPantunUseCase } from '../../application/use-cases/takedown
 import type { TakedownPantunReplyUseCase } from '../../application/use-cases/takedown-pantun-reply.use-case';
 import type { DeletePantunReplyUseCase } from '../../application/use-cases/delete-pantun-reply.use-case';
 import type { DeletePantunUseCase } from '../../application/use-cases/delete-pantun.use-case';
+import type { UpdatePantunReplyUseCase } from '../../application/use-cases/update-pantun-reply.use-case';
+import type { GetPantunReplyEditHistoryUseCase } from '../../application/use-cases/get-pantun-reply-edit-history.use-case';
 import type { ListAdminPantunsUseCase } from '../../application/use-cases/list-admin-pantuns.use-case';
 import type { SearchPantunsUseCase } from '../../application/use-cases/search-pantuns.use-case';
 import type { PantunSearchHit } from '../../domain/repositories/pantun.repository';
 import type {
   CreatePantunBody,
   CreatePantunReplyBody,
+  UpdatePantunReplyBody,
   ListPantunsQuery,
   ListAdminPantunsQuery,
   PantunSearchQuery,
@@ -44,6 +47,7 @@ function toItem(p: Pantun | PantunWithVotes) {
     downvotes: 'downvotes' in p ? p.downvotes : 0,
     created_at: p.createdAt.toISOString(),
     updated_at: p.updatedAt?.toISOString() ?? null,
+    is_edited: false,
   };
 }
 
@@ -65,6 +69,7 @@ function toReplyItem(r: PantunReply | PantunReplyWithVotes) {
     downvotes: 'downvotes' in r ? r.downvotes : 0,
     created_at: r.createdAt.toISOString(),
     updated_at: r.updatedAt?.toISOString() ?? null,
+    is_edited: r.isEdited ?? false,
   };
 }
 
@@ -79,6 +84,8 @@ export class PantunController {
       takedownReply: TakedownPantunReplyUseCase;
       deleteReply: DeletePantunReplyUseCase;
       deletePantun: DeletePantunUseCase;
+      updateReply: UpdatePantunReplyUseCase;
+      getReplyEditHistory: GetPantunReplyEditHistoryUseCase;
       listAdmin: ListAdminPantunsUseCase;
       search: SearchPantunsUseCase;
     },
@@ -159,6 +166,24 @@ export class PantunController {
       requestId: this.requestId(c),
     });
     return c.json({ success: true as const, data: null });
+  }
+
+
+  async updateReply(c: Context, id: string, body: UpdatePantunReplyBody) {
+    const user = this.requireUser(c);
+    const reply = await this.deps.updateReply.execute({
+      replyId: id,
+      actorId: user.user_id,
+      lines: body.lines,
+      rhymeScheme: body.rhyme_scheme ?? null,
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: toReplyItem(reply) });
+  }
+
+  async getReplyEditHistory(c: Context, id: string) {
+    const data = await this.deps.getReplyEditHistory.execute(id);
+    return c.json({ success: true as const, data });
   }
 
   async deletePantun(c: Context, id: string) {

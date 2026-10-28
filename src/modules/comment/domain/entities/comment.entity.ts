@@ -34,6 +34,27 @@ export interface Comment {
   reviewedBy: string | null;
   reviewedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date | null;
+  /** true jika pernah disunting (EXISTS di comment_revisions). */
+  isEdited?: boolean;
+}
+
+export interface CommentRevision {
+  id: string;
+  commentId: string;
+  editorId: string;
+  body: string;
+  createdAt: Date;
+}
+
+/** Riwayat sunting (domain); wire di use case GET edit-history. */
+export interface CommentEditHistory {
+  current: {
+    body: string | null;
+    updatedAt: Date | null;
+    isEdited: boolean;
+  };
+  revisions: CommentRevision[];
 }
 
 export interface NewComment {

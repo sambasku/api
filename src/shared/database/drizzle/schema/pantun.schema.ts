@@ -96,3 +96,30 @@ export const pantunReplies = sqliteTable(
     index('pantun_replies_status_idx').on(t.status, t.id),
   ],
 );
+
+/** Snapshot lines + rhyme_scheme sebelum edit balasan (author-only). Cap 50 di aplikasi. */
+export const pantunReplyRevisions = sqliteTable(
+  'pantun_reply_revisions',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    replyId: text('reply_id')
+      .notNull()
+      .references(() => pantunReplies.id, { onDelete: 'cascade' }),
+    editorId: text('editor_id')
+      .notNull()
+      .references(() => users.id),
+    rhymeScheme: text('rhyme_scheme', {
+      enum: PANTUN_RHYME_SCHEMES,
+    }).notNull(),
+    lines: text('lines', { mode: 'json' }).$type<string[]>().notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index('pantun_reply_revisions_reply_created_idx').on(t.replyId, t.createdAt),
+  ],
+);
+

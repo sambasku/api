@@ -70,6 +70,8 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     listDistinctReplierUserIds: vi.fn().mockResolvedValue([OWNER, OTHER]),
     markReplyDeletedByAuthor: vi.fn(),
     takedownReply: vi.fn(),
+    updateReplyBodyWithRevision: vi.fn(),
+    listReplyRevisions: vi.fn(),
     ...overrides,
   } as unknown as DiscussionRepository;
 }

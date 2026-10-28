@@ -5,6 +5,7 @@ import type {
   Pantun,
   PantunListFilter,
   PantunReply,
+  PantunReplyRevision,
 } from '../entities/pantun.entity';
 
 /** Hasil pencarian: pantun pembuka atau balasan (balasan bawa parentId). */
@@ -24,6 +25,15 @@ export interface PantunRepository {
   /** User unik yang pernah membalas pantun published (peserta thread). */
   listDistinctReplierUserIds(parentId: string): Promise<string[]>;
   markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  updateReplyWithRevision(input: {
+    replyId: string;
+    editorId: string;
+    rhymeScheme: PantunReply['rhymeScheme'];
+    lines: string[];
+    previousRhymeScheme: PantunReply['rhymeScheme'];
+    previousLines: string[];
+  }): Promise<PantunReply | null>;
+  listReplyRevisions(replyId: string): Promise<PantunReplyRevision[]>;
   /** Hapus pantun sendiri (soft: status deleted_by_author). */
   markDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownReply(id: string, actorId: string): Promise<boolean>;

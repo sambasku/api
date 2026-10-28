@@ -6,6 +6,7 @@ import {
 } from '@/shared/constants/deleted-account';
 import {
   discussionReplies,
+  discussionReplyRevisions,
   discussions,
   users,
   votes,
@@ -22,6 +23,7 @@ import type {
   DiscussionListFilter,
   DiscussionReply,
   DiscussionReplyAudio,
+  DiscussionReplyRevision,
   DiscussionReplyStatus,
   DiscussionStatus,
 } from '../domain/entities/discussion.entity';
@@ -29,6 +31,12 @@ import type { DiscussionRepository } from '../domain/repositories/discussion.rep
 
 type DiscussionRow = typeof discussions.$inferSelect;
 type ReplyRow = typeof discussionReplies.$inferSelect;
+
+const MAX_REPLY_REVISIONS = 50;
+
+function replyIsEditedSql() {
+  return sql<boolean>`exists (select 1 from ${discussionReplyRevisions} where ${discussionReplyRevisions.replyId} = ${discussionReplies.id})`;
+}
 
 /** Cursor sort popular: base64url("upvotes:id"). */
 export function encodePopularDiscussionCursor(upvotes: number, id: string): string {
@@ -124,6 +132,7 @@ function toReply(
   displayName: string | null,
   avatarUrl: string | null,
   userRole: string | null,
+  isEdited = false,
 ): DiscussionReply {
   const hasAudio =
     typeof row.audioUrl === 'string' &&
@@ -158,6 +167,7 @@ function toReply(
     reviewedAt: row.reviewedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    isEdited,
   };
 }
 
@@ -397,7 +407,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         status: 'published',
       })
       .returning();
-    return toReply(row, null, null, null, null);
+    return toReply(row, null, null, null, null, false);
   }
 
   async findReplyById(id: string): Promise<DiscussionReply | null> {
@@ -409,6 +419,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         avatarUrl: users.avatarUrl,
         userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
+        isEdited: replyIsEditedSql(),
       })
       .from(discussionReplies)
       .leftJoin(users, eq(users.id, discussionReplies.userId))
@@ -421,6 +432,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
       publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
       row.authorDeletedAt ? null : (row.avatarUrl ?? null),
       row.authorDeletedAt ? null : (row.userRole ?? null),
+      Boolean(row.isEdited),
     );
   }
 
@@ -433,6 +445,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         avatarUrl: users.avatarUrl,
         userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
+        isEdited: replyIsEditedSql(),
       })
       .from(discussionReplies)
       .leftJoin(users, eq(users.id, discussionReplies.userId))
@@ -446,6 +459,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
         r.authorDeletedAt ? null : (r.avatarUrl ?? null),
         r.authorDeletedAt ? null : (r.userRole ?? null),
+        Boolean(r.isEdited),
       ),
     );
   }
@@ -496,4 +510,86 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
       .returning({ id: discussionReplies.id });
     return updated.length > 0;
   }
+
+
+  async updateReplyBodyWithRevision(input: {
+    replyId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<DiscussionReply | null> {
+    const updatedId = await this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(discussionReplies)
+        .where(
+          and(
+            eq(discussionReplies.id, input.replyId),
+            eq(discussionReplies.status, 'published'),
+          ),
+        )
+        .limit(1);
+      if (!existing) return null;
+
+      const nextOriginal = input.bodyOriginal;
+      const sameBody = existing.body === input.body;
+      const sameOriginal =
+        (existing.bodyOriginal ?? null) === (nextOriginal ?? null);
+      if (sameBody && sameOriginal) {
+        return existing.id;
+      }
+
+      await tx.insert(discussionReplyRevisions).values({
+        replyId: input.replyId,
+        editorId: input.editorId,
+        body: existing.body,
+      });
+
+      const stale = await tx
+        .select({ id: discussionReplyRevisions.id })
+        .from(discussionReplyRevisions)
+        .where(eq(discussionReplyRevisions.replyId, input.replyId))
+        .orderBy(asc(discussionReplyRevisions.createdAt), asc(discussionReplyRevisions.id));
+
+      if (stale.length > MAX_REPLY_REVISIONS) {
+        const drop = stale.slice(0, stale.length - MAX_REPLY_REVISIONS);
+        for (const row of drop) {
+          await tx
+            .delete(discussionReplyRevisions)
+            .where(eq(discussionReplyRevisions.id, row.id));
+        }
+      }
+
+      await tx
+        .update(discussionReplies)
+        .set({
+          body: input.body,
+          bodyOriginal: nextOriginal,
+          updatedAt: new Date(),
+        })
+        .where(eq(discussionReplies.id, input.replyId));
+
+      return input.replyId;
+    });
+
+    if (!updatedId) return null;
+    return this.findReplyById(updatedId);
+  }
+
+  async listReplyRevisions(replyId: string): Promise<DiscussionReplyRevision[]> {
+    const rows = await this.db
+      .select()
+      .from(discussionReplyRevisions)
+      .where(eq(discussionReplyRevisions.replyId, replyId))
+      .orderBy(desc(discussionReplyRevisions.createdAt), desc(discussionReplyRevisions.id));
+
+    return rows.map((row) => ({
+      id: row.id,
+      replyId: row.replyId,
+      editorId: row.editorId,
+      body: row.body,
+      createdAt: row.createdAt,
+    }));
+  }
+
 }

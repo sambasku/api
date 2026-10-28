@@ -521,6 +521,8 @@ import { CreateDiscussionReplyUseCase } from "@/modules/discussion/application/u
 import { CreateDiscussionReplyAudioUseCase } from "@/modules/discussion/application/use-cases/create-discussion-reply-audio.use-case";
 import { AttachDiscussionAudioUseCase } from "@/modules/discussion/application/use-cases/attach-discussion-audio.use-case";
 import { DeleteDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/delete-discussion-reply.use-case";
+import { UpdateDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/update-discussion-reply.use-case";
+import { GetDiscussionReplyEditHistoryUseCase } from "@/modules/discussion/application/use-cases/get-discussion-reply-edit-history.use-case";
 import { PinDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/pin-discussion-reply.use-case";
 import { TakedownDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/takedown-discussion-reply.use-case";
 import { DiscussionController } from "@/modules/discussion/presentation/v1/discussion.controller";
@@ -543,6 +545,8 @@ import { GetPantunDetailUseCase } from "@/modules/pantun/application/use-cases/g
 import { TakedownPantunUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun.use-case";
 import { TakedownPantunReplyUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun-reply.use-case";
 import { DeletePantunReplyUseCase } from "@/modules/pantun/application/use-cases/delete-pantun-reply.use-case";
+import { UpdatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/update-pantun-reply.use-case";
+import { GetPantunReplyEditHistoryUseCase } from "@/modules/pantun/application/use-cases/get-pantun-reply-edit-history.use-case";
 import { DeletePantunUseCase } from "@/modules/pantun/application/use-cases/delete-pantun.use-case";
 import { ListAdminPantunsUseCase } from "@/modules/pantun/application/use-cases/list-admin-pantuns.use-case";
 import { SearchPantunsUseCase } from "@/modules/pantun/application/use-cases/search-pantuns.use-case";
@@ -590,6 +594,8 @@ import { CreateCommentUseCase } from "@/modules/comment/application/use-cases/cr
 import { CreateCommentAudioUseCase } from "@/modules/comment/application/use-cases/create-comment-audio.use-case";
 import { ListWordCommentsUseCase } from "@/modules/comment/application/use-cases/list-word-comments.use-case";
 import { DeleteCommentUseCase } from "@/modules/comment/application/use-cases/delete-comment.use-case";
+import { UpdateCommentUseCase } from "@/modules/comment/application/use-cases/update-comment.use-case";
+import { GetCommentEditHistoryUseCase } from "@/modules/comment/application/use-cases/get-comment-edit-history.use-case";
 import { ListAdminCommentsUseCase } from "@/modules/comment/application/use-cases/list-admin-comments.use-case";
 import { ListMyCommentsUseCase } from "@/modules/comment/application/use-cases/list-my-comments.use-case";
 import { TakedownCommentUseCase } from "@/modules/comment/application/use-cases/takedown-comment.use-case";
@@ -1541,6 +1547,14 @@ const commentController = new CommentController({
   ),
   listByWord: new ListWordCommentsUseCase(commentRepo, voteRepo),
   delete: new DeleteCommentUseCase(commentRepo, auditRepo),
+  update: new UpdateCommentUseCase(
+    commentRepo,
+    wordRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  editHistory: new GetCommentEditHistoryUseCase(commentRepo),
   listAdmin: new ListAdminCommentsUseCase(commentRepo),
   listMine: new ListMyCommentsUseCase(commentRepo),
   takedown: new TakedownCommentUseCase(
@@ -2547,6 +2561,13 @@ const discussionController = new DiscussionController({
     auditRepo,
     pronunciationStorage,
   ),
+  updateReply: new UpdateDiscussionReplyUseCase(
+    discussionRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  replyEditHistory: new GetDiscussionReplyEditHistoryUseCase(discussionRepo),
   pinReply: new PinDiscussionReplyUseCase(discussionRepo, auditRepo),
   takedownReply: new TakedownDiscussionReplyUseCase(discussionRepo, auditRepo),
   imageController,
@@ -2595,6 +2616,13 @@ const pantunController = new PantunController({
   takedown: new TakedownPantunUseCase(pantunRepo, auditRepo),
   takedownReply: new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
   deleteReply: new DeletePantunReplyUseCase(pantunRepo, auditRepo),
+  updateReply: new UpdatePantunReplyUseCase(
+    pantunRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  getReplyEditHistory: new GetPantunReplyEditHistoryUseCase(pantunRepo),
   deletePantun: new DeletePantunUseCase(pantunRepo, auditRepo),
   listAdmin: new ListAdminPantunsUseCase(pantunRepo),
   search: new SearchPantunsUseCase(pantunRepo),

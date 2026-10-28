@@ -33,8 +33,19 @@ export interface PantunReply {
   rhymeScheme: PantunRhymeScheme;
   lines: string[];
   status: PantunReplyStatus;
+  /** EXISTS baris di pantun_reply_revisions (bukan sekadar updated_at). */
+  isEdited?: boolean;
   createdAt: Date;
   updatedAt: Date | null;
+}
+
+export interface PantunReplyRevision {
+  id: string;
+  replyId: string;
+  editorId: string;
+  rhymeScheme: PantunRhymeScheme;
+  lines: string[];
+  createdAt: Date;
 }
 
 export interface NewPantun {

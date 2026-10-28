@@ -2,18 +2,21 @@ import type { MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
-import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
+import { clientIpKey, rateLimit } from '@/shared/middlewares/rate-limit.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema, okNullResponseSchema } from '@/shared/openapi/error-response.schema';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { CommentController } from './comment.controller';
 import {
   commentBodySchema,
+  commentEditHistoryResponseSchema,
   createCommentResponseSchema,
   listCommentsQuerySchema,
   listCommentsResponseSchema,
   listMyCommentsQuerySchema,
   myCommentsResponseSchema,
+  updateCommentBodySchema,
+  updateCommentResponseSchema,
 } from './validators/comment.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -188,12 +191,59 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
   routes.openapi(myRoute, (c) => deps.controller.my(c, c.req.valid('query')) as never);
 
   routes.use(
+    '/:id/edit-history',
+    rateLimit({ points: 100, duration: 60, keyFn: (c) => clientIpKey(c) }),
+  );
+
+  const editHistoryRoute = createRoute({
+    method: 'get',
+    path: '/:id/edit-history',
+    tags: ['Comments'],
+    summary: 'Riwayat sunting komentar (publik; hanya published)',
+    request: {
+      params: z.object({ id: ulid26 }),
+    },
+    responses: {
+      200: {
+        description: 'Current + revisions (newest first)',
+        content: json(commentEditHistoryResponseSchema),
+      },
+      404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Terlalu banyak permintaan', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(editHistoryRoute, (c) =>
+    deps.controller.editHistory(c, c.req.param('id')) as never,
+  );
+
+  routes.use(
     '/:id',
     deps.authenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
     ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     wordCommentLimiter(deps.onUgcRateLimited),
   );
+
+  const updateRoute = createRoute({
+    method: 'patch',
+    path: '/:id',
+    tags: ['Comments'],
+    summary: 'Edit komentar oleh penulis (published; tanpa ganti audio)',
+    request: {
+      params: z.object({ id: ulid26 }),
+      body: { content: json(updateCommentBodySchema) },
+    },
+    responses: {
+      200: { description: 'Komentar diperbarui', content: json(updateCommentResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+      404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Kata belum tayang', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
 
   const deleteRoute = createRoute({
     method: 'delete',
@@ -211,6 +261,9 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
     },
   });
 
+  routes.openapi(updateRoute, (c) =>
+    deps.controller.update(c, c.req.param('id'), c.req.valid('json')) as never,
+  );
   routes.openapi(deleteRoute, (c) => deps.controller.delete(c, c.req.param('id')) as never);
 
   return routes;

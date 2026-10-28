@@ -7,6 +7,7 @@ import type {
   DiscussionListFilter,
   DiscussionReply,
   DiscussionReplyAudio,
+  DiscussionReplyRevision,
   DiscussionStatus,
 } from '../entities/discussion.entity';
 
@@ -44,4 +45,13 @@ export interface DiscussionRepository {
 
   markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownReply(id: string, reviewerId: string): Promise<boolean>;
+
+  updateReplyBodyWithRevision(input: {
+    replyId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<DiscussionReply | null>;
+
+  listReplyRevisions(replyId: string): Promise<DiscussionReplyRevision[]>;
 }

@@ -20,6 +20,8 @@ import type { CreateDiscussionReplyUseCase } from '../../application/use-cases/c
 import type { CreateDiscussionReplyAudioUseCase } from '../../application/use-cases/create-discussion-reply-audio.use-case';
 import type { AttachDiscussionAudioUseCase } from '../../application/use-cases/attach-discussion-audio.use-case';
 import type { DeleteDiscussionReplyUseCase } from '../../application/use-cases/delete-discussion-reply.use-case';
+import type { GetDiscussionReplyEditHistoryUseCase } from '../../application/use-cases/get-discussion-reply-edit-history.use-case';
+import type { UpdateDiscussionReplyUseCase } from '../../application/use-cases/update-discussion-reply.use-case';
 import type { PinDiscussionReplyUseCase } from '../../application/use-cases/pin-discussion-reply.use-case';
 import type { TakedownDiscussionReplyUseCase } from '../../application/use-cases/takedown-discussion-reply.use-case';
 import type {
@@ -30,6 +32,7 @@ import type {
   ListDiscussionsQuery,
   PinDiscussionReplyBody,
   RejectDiscussionBody,
+  UpdateDiscussionReplyBody,
 } from './validators/discussion.validator';
 
 function redactReplyBody(reply: DiscussionReply): string | null {
@@ -184,6 +187,8 @@ function toPublicReply(
     is_pinned: pinnedReplyId === reply.id,
     upvotes: reply.upvotes ?? 0,
     downvotes: reply.downvotes ?? 0,
+    is_edited: reply.isEdited ?? false,
+    updated_at: reply.updatedAt?.toISOString() ?? null,
     created_at: reply.createdAt.toISOString(),
   };
 }
@@ -315,6 +320,8 @@ export class DiscussionController {
       createReplyAudio: CreateDiscussionReplyAudioUseCase;
       attachAudio: AttachDiscussionAudioUseCase;
       deleteReply: DeleteDiscussionReplyUseCase;
+      updateReply: UpdateDiscussionReplyUseCase;
+      replyEditHistory: GetDiscussionReplyEditHistoryUseCase;
       pinReply: PinDiscussionReplyUseCase;
       takedownReply: TakedownDiscussionReplyUseCase;
       imageController: ImageController;
@@ -580,6 +587,29 @@ export class DiscussionController {
       requestId: this.requestId(c),
     });
     return c.json({ success: true as const, data: null });
+  }
+
+  async updateReply(c: Context, replyId: string, body: UpdateDiscussionReplyBody) {
+    const user = this.requireUser(c);
+    const reply = await this.deps.updateReply.execute({
+      replyId,
+      actorId: user.user_id,
+      body: body.body,
+      requestId: this.requestId(c),
+    });
+    const help = await this.deps.getDetail.execute({
+      id: reply.discussionId,
+      viewerUserId: user.user_id,
+    });
+    return c.json({
+      success: true as const,
+      data: toPublicReply(reply, help.discussion.pinnedReplyId),
+    });
+  }
+
+  async replyEditHistory(c: Context, replyId: string) {
+    const data = await this.deps.replyEditHistory.execute(replyId);
+    return c.json({ success: true as const, data });
   }
 
   async pinReply(c: Context, discussionId: string, body: PinDiscussionReplyBody) {

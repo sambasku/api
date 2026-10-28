@@ -1,19 +1,29 @@
-import { and, sql, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, sql, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
 import {
   publicAccountDisplayName,
   publicAccountName,
 } from '@/shared/constants/deleted-account';
-import { comments, users, words } from '@/shared/database/drizzle/schema';
+import { commentRevisions, comments, users, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import type { Comment, CommentStatus, CursorPage } from '../domain/entities/comment.entity';
+import type {
+  Comment,
+  CommentRevision,
+  CommentStatus,
+  CursorPage,
+} from '../domain/entities/comment.entity';
 import type {
   CommentRepository,
   ListAdminCommentsParams,
   ListCommentsParams,
   ListMyCommentsParams,
 } from '../domain/repositories/comment.repository';
+import { COMMENT_REVISION_CAP } from '../domain/repositories/comment.repository';
 
 const PUBLIC_STATUSES: CommentStatus[] = ['published', 'taken_down', 'deleted_by_author'];
+
+function commentIsEditedSql() {
+  return sql<boolean>`exists (select 1 from ${commentRevisions} where ${commentRevisions.commentId} = ${comments.id})`;
+}
 
 export class CommentRepositoryImpl implements CommentRepository {
   constructor(private readonly db: AppDatabase) {}
@@ -22,6 +32,7 @@ export class CommentRepositoryImpl implements CommentRepository {
     return this.db
       .select({
         comment: comments,
+        isEdited: commentIsEditedSql(),
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
@@ -96,6 +107,7 @@ export class CommentRepositoryImpl implements CommentRepository {
           row.authorDeletedAt ? null : (row.avatarUrl ?? null),
           row.authorDeletedAt ? null : (row.userRole ?? null),
           row.wordLemma,
+          Boolean(row.isEdited),
         )
       : null;
   }
@@ -161,7 +173,7 @@ export class CommentRepositoryImpl implements CommentRepository {
 
     const hasMore = rows.length > params.limit;
     const page = hasMore ? rows.slice(0, params.limit) : rows;
-    const items = page.map((row) =>
+    let items = page.map((row) =>
       this.toComment(
         row.comment,
         null,
@@ -171,6 +183,7 @@ export class CommentRepositoryImpl implements CommentRepository {
         row.wordDeletedAt ? null : row.wordLemma,
       ),
     );
+    items = await this.hydrateIsEdited(items);
     return { items, nextCursor: hasMore ? items[items.length - 1].id : null, hasMore };
   }
 
@@ -206,6 +219,86 @@ export class CommentRepositoryImpl implements CommentRepository {
     return updated.length > 0;
   }
 
+  async updateBodyWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<Comment | null> {
+    const updatedId = await this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(comments)
+        .where(
+          and(
+            eq(comments.id, input.commentId),
+            eq(comments.status, 'published'),
+            isNull(comments.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!existing) return null;
+
+      const nextOriginal = input.bodyOriginal;
+      const sameBody = existing.body === input.body;
+      const sameOriginal = (existing.bodyOriginal ?? null) === (nextOriginal ?? null);
+      if (sameBody && sameOriginal) {
+        return existing.id;
+      }
+
+      await tx.insert(commentRevisions).values({
+        commentId: input.commentId,
+        editorId: input.editorId,
+        body: existing.body,
+      });
+
+      const stale = await tx
+        .select({ id: commentRevisions.id })
+        .from(commentRevisions)
+        .where(eq(commentRevisions.commentId, input.commentId))
+        .orderBy(asc(commentRevisions.createdAt), asc(commentRevisions.id));
+
+      if (stale.length > COMMENT_REVISION_CAP) {
+        const drop = stale.slice(0, stale.length - COMMENT_REVISION_CAP);
+        for (const row of drop) {
+          await tx
+            .delete(commentRevisions)
+            .where(eq(commentRevisions.id, row.id));
+        }
+      }
+
+      await tx
+        .update(comments)
+        .set({
+          body: input.body,
+          bodyOriginal: nextOriginal,
+          updatedAt: new Date(),
+        })
+        .where(eq(comments.id, input.commentId));
+
+      return input.commentId;
+    });
+
+    if (!updatedId) return null;
+    return this.findById(updatedId);
+  }
+
+  async listRevisions(commentId: string): Promise<CommentRevision[]> {
+    const rows = await this.db
+      .select()
+      .from(commentRevisions)
+      .where(eq(commentRevisions.commentId, commentId))
+      .orderBy(desc(commentRevisions.createdAt), desc(commentRevisions.id));
+
+    return rows.map((row) => ({
+      id: row.id,
+      commentId: row.commentId,
+      editorId: row.editorId,
+      body: row.body,
+      createdAt: row.createdAt,
+    }));
+  }
+
   async listDistinctCommenterUserIds(wordId: string): Promise<string[]> {
     const rows = await this.db
       .selectDistinct({ userId: comments.userId })
@@ -235,9 +328,21 @@ export class CommentRepositoryImpl implements CommentRepository {
         r.authorDeletedAt ? null : (r.avatarUrl ?? null),
         r.authorDeletedAt ? null : (r.userRole ?? null),
         r.wordLemma,
+        Boolean(r.isEdited),
       ),
     );
     return { items, nextCursor: hasMore ? items[items.length - 1].id : null, hasMore };
+  }
+
+  private async hydrateIsEdited(items: Comment[]): Promise<Comment[]> {
+    if (items.length === 0) return items;
+    const ids = items.map((c) => c.id);
+    const editedRows = await this.db
+      .selectDistinct({ commentId: commentRevisions.commentId })
+      .from(commentRevisions)
+      .where(inArray(commentRevisions.commentId, ids));
+    const edited = new Set(editedRows.map((r) => r.commentId));
+    return items.map((c) => ({ ...c, isEdited: edited.has(c.id) }));
   }
 
   private toComment(
@@ -247,6 +352,7 @@ export class CommentRepositoryImpl implements CommentRepository {
     avatarUrl: string | null,
     userRole: string | null,
     wordLemma: string | null,
+    isEdited = false,
   ): Comment {
     const hasAudio =
       typeof row.audioUrl === 'string' &&
@@ -281,6 +387,8 @@ export class CommentRepositoryImpl implements CommentRepository {
       reviewedBy: row.reviewedBy,
       reviewedAt: row.reviewedAt,
       createdAt: row.createdAt,
+      updatedAt: row.updatedAt ?? null,
+      isEdited,
     };
   }
 }

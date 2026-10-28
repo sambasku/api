@@ -38,7 +38,41 @@ const commentDataSchema = z.object({
   audio_mime_type: z.string().nullable(),
   audio_duration_ms: z.number().int().nullable(),
   status: commentStatusSchema,
+  is_edited: z.boolean(),
+  updated_at: z.string().nullable(),
   created_at: z.string(),
+});
+
+export const updateCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Komentar tidak valid' })
+    .trim()
+    .max(1000, 'Komentar maksimal 1000 karakter'),
+});
+
+export type UpdateCommentBody = z.infer<typeof updateCommentBodySchema>;
+
+export const updateCommentResponseSchema = z.object({
+  success: z.literal(true),
+  data: commentDataSchema,
+});
+
+export const commentEditHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    current: z.object({
+      body: z.string().nullable(),
+      updated_at: z.string().nullable(),
+      is_edited: z.boolean(),
+    }),
+    revisions: z.array(
+      z.object({
+        body: z.string(),
+        editor_id: z.string(),
+        created_at: z.string(),
+      }),
+    ),
+  }),
 });
 
 export const createCommentResponseSchema = z.object({

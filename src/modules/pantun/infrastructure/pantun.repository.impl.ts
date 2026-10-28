@@ -1,10 +1,15 @@
-import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
   publicAccountDisplayName,
   publicAccountName,
 } from '@/shared/constants/deleted-account';
-import { pantuns, pantunReplies, users } from '@/shared/database/drizzle/schema';
+import {
+  pantuns,
+  pantunReplies,
+  pantunReplyRevisions,
+  users,
+} from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
@@ -18,11 +23,19 @@ import type {
   Pantun,
   PantunListFilter,
   PantunReply,
+  PantunReplyRevision,
 } from '../domain/entities/pantun.entity';
 import type { PantunRepository, PantunSearchHit } from '../domain/repositories/pantun.repository';
 
 type PantunRow = typeof pantuns.$inferSelect;
 type ReplyRow = typeof pantunReplies.$inferSelect;
+
+const REPLY_REVISION_CAP = 50;
+
+const replyIsEditedSql = sql<boolean>`EXISTS (
+  SELECT 1 FROM ${pantunReplyRevisions}
+  WHERE ${pantunReplyRevisions.replyId} = ${pantunReplies.id}
+)`;
 
 function toLines(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.map((x) => String(x)) : [];
@@ -145,6 +158,7 @@ function toReply(
   displayName: string | null,
   avatarUrl: string | null,
   userRole: string | null,
+  isEdited = false,
 ): PantunReply {
   return {
     id: row.id,
@@ -159,6 +173,7 @@ function toReply(
     rhymeScheme: row.rhymeScheme as PantunRhymeScheme,
     lines: toLines(row.lines),
     status: row.status as PantunReplyStatus,
+    isEdited,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -273,6 +288,7 @@ export class PantunRepositoryImpl implements PantunRepository {
         avatarUrl: users.avatarUrl,
         userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
+        isEdited: replyIsEditedSql,
       })
       .from(pantunReplies)
       .leftJoin(users, eq(users.id, pantunReplies.userId))
@@ -285,6 +301,7 @@ export class PantunRepositoryImpl implements PantunRepository {
       publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
       row.authorDeletedAt ? null : (row.avatarUrl ?? null),
       row.authorDeletedAt ? null : (row.userRole ?? null),
+      Boolean(row.isEdited),
     );
   }
 
@@ -297,6 +314,7 @@ export class PantunRepositoryImpl implements PantunRepository {
         avatarUrl: users.avatarUrl,
         userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
+        isEdited: replyIsEditedSql,
       })
       .from(pantunReplies)
       .leftJoin(users, eq(users.id, pantunReplies.userId))
@@ -309,8 +327,77 @@ export class PantunRepositoryImpl implements PantunRepository {
         publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
         r.authorDeletedAt ? null : (r.avatarUrl ?? null),
         r.authorDeletedAt ? null : (r.userRole ?? null),
+        Boolean(r.isEdited),
       ),
     );
+  }
+
+  async updateReplyWithRevision(input: {
+    replyId: string;
+    editorId: string;
+    rhymeScheme: PantunRhymeScheme;
+    lines: string[];
+    previousRhymeScheme: PantunRhymeScheme;
+    previousLines: string[];
+  }): Promise<PantunReply | null> {
+    const now = new Date();
+    const updated = await this.db.transaction(async (tx) => {
+      await tx.insert(pantunReplyRevisions).values({
+        replyId: input.replyId,
+        editorId: input.editorId,
+        rhymeScheme: input.previousRhymeScheme,
+        lines: input.previousLines,
+        createdAt: now,
+      });
+
+      const excess = await tx
+        .select({ id: pantunReplyRevisions.id })
+        .from(pantunReplyRevisions)
+        .where(eq(pantunReplyRevisions.replyId, input.replyId))
+        .orderBy(desc(pantunReplyRevisions.createdAt))
+        .offset(REPLY_REVISION_CAP);
+      if (excess.length > 0) {
+        await tx
+          .delete(pantunReplyRevisions)
+          .where(inArray(pantunReplyRevisions.id, excess.map((r) => r.id)));
+      }
+
+      const [row] = await tx
+        .update(pantunReplies)
+        .set({
+          lines: input.lines,
+          rhymeScheme: input.rhymeScheme,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(pantunReplies.id, input.replyId),
+            eq(pantunReplies.status, 'published'),
+            eq(pantunReplies.userId, input.editorId),
+          ),
+        )
+        .returning();
+      return row ?? null;
+    });
+
+    if (!updated) return null;
+    return this.findReplyById(updated.id);
+  }
+
+  async listReplyRevisions(replyId: string): Promise<PantunReplyRevision[]> {
+    const rows = await this.db
+      .select()
+      .from(pantunReplyRevisions)
+      .where(eq(pantunReplyRevisions.replyId, replyId))
+      .orderBy(desc(pantunReplyRevisions.createdAt));
+    return rows.map((row) => ({
+      id: row.id,
+      replyId: row.replyId,
+      editorId: row.editorId,
+      rhymeScheme: row.rhymeScheme as PantunRhymeScheme,
+      lines: toLines(row.lines),
+      createdAt: row.createdAt,
+    }));
   }
 
   async listDistinctReplierUserIds(parentId: string): Promise<string[]> {

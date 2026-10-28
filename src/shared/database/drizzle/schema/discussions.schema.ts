@@ -77,3 +77,23 @@ export const discussionReplies = sqliteTable(
     index('discussion_replies_status_idx').on(t.status, t.id),
   ],
 );
+
+/** Snapshot body tayang sebelum edit balasan (author-only). Cap 50 di aplikasi. */
+export const discussionReplyRevisions = sqliteTable(
+  'discussion_reply_revisions',
+  {
+    id: text('id').primaryKey().$defaultFn(() => generateId()),
+    replyId: text('reply_id')
+      .notNull()
+      .references(() => discussionReplies.id, { onDelete: 'cascade' }),
+    editorId: text('editor_id')
+      .notNull()
+      .references(() => users.id),
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index('discussion_reply_revisions_reply_created_idx').on(t.replyId, t.createdAt),
+  ],
+);
+

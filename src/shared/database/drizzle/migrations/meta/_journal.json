@@ -757,6 +757,13 @@
       "when": 1801607000000,
       "tag": "0107_leveling_notify_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "6",
+      "when": 1801608000000,
+      "tag": "0108_ugc_edit_revisions",
+      "breakpoints": true
     }
   ]
 }

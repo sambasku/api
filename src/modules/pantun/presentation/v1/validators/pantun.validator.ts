@@ -47,6 +47,10 @@ export const createPantunReplyBodySchema = z.object({
 
 export type CreatePantunReplyBody = z.infer<typeof createPantunReplyBodySchema>;
 
+export const updatePantunReplyBodySchema = createPantunReplyBodySchema;
+
+export type UpdatePantunReplyBody = z.infer<typeof updatePantunReplyBodySchema>;
+
 export const pantunIdParamSchema = z.object({
   id: opaqueId,
 });
@@ -98,6 +102,7 @@ const pantunLineItemSchema = z.object({
   downvotes: z.number(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
+  is_edited: z.boolean(),
 });
 
 export const pantunItemSchema = pantunLineItemSchema;
@@ -136,4 +141,23 @@ export const pantunDetailResponseSchema = z.object({
 export const deletePantunResponseSchema = z.object({
   success: z.literal(true),
   data: z.null(),
+});
+
+
+const pantunReplyRevisionItemSchema = z.object({
+  lines: z.array(z.string()).length(4),
+  rhyme_scheme: rhymeSchemeSchema,
+  editor_id: z.string(),
+  created_at: z.string(),
+});
+
+export const pantunReplyEditHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    current: z.object({
+      lines: z.array(z.string()).length(4),
+      rhyme_scheme: rhymeSchemeSchema,
+    }),
+    revisions: z.array(pantunReplyRevisionItemSchema),
+  }),
 });
