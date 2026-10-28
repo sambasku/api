@@ -139,12 +139,25 @@ export const voteDeckQuerySchema = z.object({
 
 export type VoteDeckQuery = z.infer<typeof voteDeckQuerySchema>;
 
-export const skipVoteDeckSchema = z.object({
-  meaning_id: opaqueId,
-});
+/** 52: meaning_id (client baru) atau word_id (mobile ≤ v0.4.0). */
+export const skipVoteDeckSchema = z
+  .object({
+    meaning_id: opaqueId.optional(),
+    word_id: opaqueId.optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (!body.meaning_id && !body.word_id) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['meaning_id'],
+        message: 'Wajib mengisi meaning_id atau word_id',
+      });
+    }
+  });
 
 export type SkipVoteDeckBody = z.infer<typeof skipVoteDeckSchema>;
 
+/** Path param: meaning id atau word id (compat 52). */
 export const skipVoteDeckParamsSchema = z.object({
   meaningId: opaqueId,
 });

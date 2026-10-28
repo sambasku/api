@@ -219,7 +219,9 @@ export class CorrectContributionUseCase {
     const missing = await this.wordRepo.findMissingReferences({
       languageId: dto.languageId,
       dialectId: dto.dialectId,
-      wordClassIds: dto.meanings.map((m) => m.wordClassId),
+      wordClassIds: dto.meanings
+        .map((m) => m.wordClassId)
+        .filter((id): id is string => id != null),
       languageIds: collectLanguageIds(dto),
       categoryIds: dto.categoryIds,
       relatedWordIds: dto.relatedWords.filter(isLinkRelation).map((r) => r.wordId),

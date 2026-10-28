@@ -274,6 +274,25 @@ export class VoteRepositoryImpl implements VoteRepository {
     const result = new Map<string, VoteCounts>();
     if (targets.length === 0) return result;
 
+    // 52: word:id → agregat makna published + sisa baris legacy entity_type=word
+    // (multi-makna yang tidak ikut backfill 0101/0105).
+    const wordIds = [...new Set(targets.filter((t) => t.entityType === 'word').map((t) => t.entityId))];
+    const otherTargets = targets.filter((t) => t.entityType !== 'word');
+    const meaningsByWord = await this.publishedMeaningsByWordIds(wordIds);
+    const meaningTargetsFromWords: VoteTarget[] = [];
+    for (const list of meaningsByWord.values()) {
+      for (const m of list) {
+        meaningTargetsFromWords.push({ entityType: 'meaning', entityId: m.id });
+      }
+    }
+    const legacyWordTargets: VoteTarget[] = wordIds.map((id) => ({
+      entityType: 'word',
+      entityId: id,
+    }));
+
+    const queryTargets = [...otherTargets, ...meaningTargetsFromWords, ...legacyWordTargets];
+    if (queryTargets.length === 0) return result;
+
     const rows = await this.db
       .select({
         entityType: votes.entityType,
@@ -284,25 +303,72 @@ export class VoteRepositoryImpl implements VoteRepository {
       .from(votes)
       .where(
         or(
-          ...targets.map((t) =>
+          ...queryTargets.map((t) =>
             and(eq(votes.entityType, t.entityType), eq(votes.entityId, t.entityId)),
           ),
         ),
       )
       .groupBy(votes.entityType, votes.entityId);
 
+    const exact = new Map<string, VoteCounts>();
     for (const row of rows) {
-      result.set(`${row.entityType}:${row.entityId}`, {
+      exact.set(`${row.entityType}:${row.entityId}`, {
         upvotes: row.upvotes,
         downvotes: row.downvotes,
       });
     }
+
+    for (const t of otherTargets) {
+      const c = exact.get(`${t.entityType}:${t.entityId}`);
+      if (c) result.set(`${t.entityType}:${t.entityId}`, c);
+    }
+
+    for (const wordId of wordIds) {
+      const list = meaningsByWord.get(wordId) ?? [];
+      let upvotes = 0;
+      let downvotes = 0;
+      for (const m of list) {
+        const c = exact.get(`meaning:${m.id}`);
+        if (!c) continue;
+        upvotes += c.upvotes;
+        downvotes += c.downvotes;
+      }
+      const legacy = exact.get(`word:${wordId}`);
+      if (legacy) {
+        upvotes += legacy.upvotes;
+        downvotes += legacy.downvotes;
+      }
+      if (upvotes > 0 || downvotes > 0) {
+        result.set(`word:${wordId}`, { upvotes, downvotes });
+      }
+    }
+
     return result;
   }
 
   async findUserVotes(userId: string, targets: VoteTarget[]): Promise<Map<string, 1 | -1>> {
     const result = new Map<string, 1 | -1>();
     if (targets.length === 0) return result;
+
+    // 52: word:id → makna pertama bila ada; fallback baris legacy entity_type=word.
+    const wordIds = [...new Set(targets.filter((t) => t.entityType === 'word').map((t) => t.entityId))];
+    const otherTargets = targets.filter((t) => t.entityType !== 'word');
+    const meaningsByWord = await this.publishedMeaningsByWordIds(wordIds);
+    const firstMeaningByWord = new Map<string, string>();
+    const meaningTargetsFromWords: VoteTarget[] = [];
+    for (const [wordId, list] of meaningsByWord) {
+      const first = list[0];
+      if (!first) continue;
+      firstMeaningByWord.set(wordId, first.id);
+      meaningTargetsFromWords.push({ entityType: 'meaning', entityId: first.id });
+    }
+    const legacyWordTargets: VoteTarget[] = wordIds.map((id) => ({
+      entityType: 'word',
+      entityId: id,
+    }));
+
+    const queryTargets = [...otherTargets, ...meaningTargetsFromWords, ...legacyWordTargets];
+    if (queryTargets.length === 0) return result;
 
     const rows = await this.db
       .select({ entityType: votes.entityType, entityId: votes.entityId, value: votes.value })
@@ -311,17 +377,59 @@ export class VoteRepositoryImpl implements VoteRepository {
         and(
           eq(votes.userId, userId),
           or(
-            ...targets.map((t) =>
+            ...queryTargets.map((t) =>
               and(eq(votes.entityType, t.entityType), eq(votes.entityId, t.entityId)),
             ),
           ),
         ),
       );
 
+    const exact = new Map<string, 1 | -1>();
     for (const row of rows) {
-      result.set(`${row.entityType}:${row.entityId}`, row.value === 1 ? 1 : -1);
+      exact.set(`${row.entityType}:${row.entityId}`, row.value === 1 ? 1 : -1);
     }
+
+    for (const t of otherTargets) {
+      const v = exact.get(`${t.entityType}:${t.entityId}`);
+      if (v !== undefined) result.set(`${t.entityType}:${t.entityId}`, v);
+    }
+
+    for (const wordId of wordIds) {
+      const meaningId = firstMeaningByWord.get(wordId);
+      const fromMeaning = meaningId ? exact.get(`meaning:${meaningId}`) : undefined;
+      const fromLegacy = exact.get(`word:${wordId}`);
+      const v = fromMeaning ?? fromLegacy;
+      if (v !== undefined) result.set(`word:${wordId}`, v);
+    }
+
     return result;
+  }
+
+  /** Makna published per kata, urut order_index lalu id (policy 52). */
+  private async publishedMeaningsByWordIds(
+    wordIds: string[],
+  ): Promise<Map<string, { id: string; wordId: string }[]>> {
+    const out = new Map<string, { id: string; wordId: string }[]>();
+    if (wordIds.length === 0) return out;
+
+    const rows = await this.db
+      .select({ id: meanings.id, wordId: meanings.wordId })
+      .from(meanings)
+      .where(
+        and(
+          inArray(meanings.wordId, wordIds),
+          isNull(meanings.deletedAt),
+          eq(meanings.status, 'published'),
+        ),
+      )
+      .orderBy(asc(meanings.orderIndex), asc(meanings.id));
+
+    for (const row of rows) {
+      const list = out.get(row.wordId) ?? [];
+      list.push(row);
+      out.set(row.wordId, list);
+    }
+    return out;
   }
 
   async listAdmin(
@@ -513,6 +621,46 @@ export class VoteRepositoryImpl implements VoteRepository {
       lemma: row.lemma,
       ownerUserId: row.createdBy,
     };
+  }
+
+  /**
+   * Compat ≤ v0.4.0 (52): id = meaning published → pakai itu; selain itu
+   * word id → makna published pertama (order_index ASC, id ASC).
+   */
+  async resolveLegacyWordVoteTarget(
+    id: string,
+  ): Promise<{ meaningId: string; wordId: string } | null> {
+    const [asMeaning] = await this.db
+      .select({ id: meanings.id, wordId: meanings.wordId })
+      .from(meanings)
+      .where(
+        and(
+          eq(meanings.id, id),
+          isNull(meanings.deletedAt),
+          eq(meanings.status, 'published'),
+        ),
+      )
+      .limit(1);
+    if (asMeaning) {
+      return { meaningId: asMeaning.id, wordId: asMeaning.wordId };
+    }
+
+    const [firstForWord] = await this.db
+      .select({ id: meanings.id, wordId: meanings.wordId })
+      .from(meanings)
+      .where(
+        and(
+          eq(meanings.wordId, id),
+          isNull(meanings.deletedAt),
+          eq(meanings.status, 'published'),
+        ),
+      )
+      .orderBy(asc(meanings.orderIndex), asc(meanings.id))
+      .limit(1);
+    if (firstForWord) {
+      return { meaningId: firstForWord.id, wordId: firstForWord.wordId };
+    }
+    return null;
   }
 
   async listByUser(userId: string, opts: VoteHistoryListOptions): Promise<VoteHistoryListResult> {

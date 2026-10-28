@@ -41,11 +41,12 @@ export class VoteController {
       'vote toggled',
     );
 
+    // 52: wire pakai target efektif (word→meaning), bukan body mentah.
     return c.json({
       success: true as const,
       data: {
-        target_type: body.target_type,
-        target_id: body.target_id,
+        target_type: result.targetType,
+        target_id: result.targetId,
         my_vote: result.myVote,
         upvotes: result.upvotes,
         downvotes: result.downvotes,
@@ -133,20 +134,24 @@ export class VoteController {
   /** POST /api/v1/votes/skips - lewati kartu deck (makna) tanpa vote */
   async skipDeck(c: Context, body: SkipVoteDeckBody) {
     const user = this.requireUser(c);
-    await this.deps.skipDeck.skip(user.user_id, body.meaning_id);
+    // 52: meaning_id diutamakan; word_id = compat mobile ≤ v0.4.0.
+    const { meaningId } = await this.deps.skipDeck.skip(user.user_id, {
+      meaningId: body.meaning_id,
+      wordId: body.word_id,
+    });
     return c.json({
       success: true as const,
-      data: { meaning_id: body.meaning_id, skipped: true },
+      data: { meaning_id: meaningId, skipped: true },
     });
   }
 
-  /** DELETE /api/v1/votes/skips/:meaningId - undo skip deck */
+  /** DELETE /api/v1/votes/skips/:meaningId - undo skip deck (id boleh word) */
   async unskipDeck(c: Context, meaningId: string) {
     const user = this.requireUser(c);
-    await this.deps.skipDeck.unskip(user.user_id, meaningId);
+    const resolved = await this.deps.skipDeck.unskip(user.user_id, meaningId);
     return c.json({
       success: true as const,
-      data: { meaning_id: meaningId, skipped: false },
+      data: { meaning_id: resolved.meaningId, skipped: false },
     });
   }
 

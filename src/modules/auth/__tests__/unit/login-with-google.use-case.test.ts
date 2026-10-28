@@ -39,6 +39,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     canContribute: overrides.canContribute ?? true,
     contributeMutedUntil: overrides.contributeMutedUntil ?? null,
     readContributionGuideAt: overrides.readContributionGuideAt ?? null,
+    levelSeen: overrides.levelSeen ?? 1,
+    notifyStreakReminder: overrides.notifyStreakReminder ?? true,
+    notifyLevelUp: overrides.notifyLevelUp ?? true,
   };
 }
 

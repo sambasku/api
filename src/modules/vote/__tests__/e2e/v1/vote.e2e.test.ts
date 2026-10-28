@@ -103,14 +103,24 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     meaningId = wordDetailBody.data.meanings[0]!.id;
   });
 
-  it('ALUR PENUH (makna): upvote → toggle ulang batal → ganti arah downvote; word ditolak 400', async () => {
-    // 0101: vote word pensiun. Vote utama sekarang ke makna pertama kata fixture.
-    const wordRejected = await post(
+  it('ALUR PENUH (makna): upvote → toggle ulang batal → ganti arah downvote; word remap 52', async () => {
+    // 52: client lama (≤ v0.4.0) kirim word → remap ke makna pertama.
+    const wordCompat = await post(
       '/api/v1/votes',
       { target_type: 'word', target_id: wordId, value: 1 },
       contributorToken,
     );
-    expect(wordRejected.status).toBe(400);
+    expect(wordCompat.status).toBe(200);
+    expect(await wordCompat.json()).toMatchObject({
+      success: true,
+      data: { target_type: 'meaning', target_id: meaningId, my_vote: 1 },
+    });
+    // batal vote hasil remap supaya alur makna di bawah mulai bersih
+    await post(
+      '/api/v1/votes',
+      { target_type: 'meaning', target_id: meaningId, value: 1 },
+      contributorToken,
+    );
 
     const vote = (value: 1 | -1, token = contributorToken) =>
       post('/api/v1/votes', { target_type: 'meaning', target_id: meaningId, value }, token);
@@ -417,19 +427,16 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     expect(card?.word_class?.id).toBe(NOMINA);
     expect(card?.word_class?.code).toBe('n');
 
-    // vote level word ditolak (0101)
+    // 52: vote word di deck (client lama) remap ke makna kartu / makna pertama
     const wordVote = await post(
       '/api/v1/votes',
       { target_type: 'word', target_id: deckWordId, value: 1 },
       contributorToken,
     );
-    expect(wordVote.status).toBe(400);
-
-    await post(
-      '/api/v1/votes',
-      { target_type: 'meaning', target_id: deckMeaningId, value: 1 },
-      contributorToken,
-    );
+    expect(wordVote.status).toBe(200);
+    expect(await wordVote.json()).toMatchObject({
+      data: { target_type: 'meaning', target_id: deckMeaningId, my_vote: 1 },
+    });
 
     const deck2 = await get('/api/v1/votes/deck?limit=10', contributorToken);
     expect(deck2.status).toBe(200);
@@ -497,5 +504,65 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     const deckBack = await get('/api/v1/votes/deck?limit=20', contributorToken);
     const backBody = (await deckBack.json()) as { data: { id: string }[] };
     expect(backBody.data.some((m) => m.id === skippedMeaningId)).toBe(true);
+  });
+
+  // 52-api-mobile-v040-vote-compat: payload berbentuk mobile ≤ v0.4.0.
+  it('compat v0.4.0: word dual-id, skip word_id, counts word agregat makna', async () => {
+    const create = await post('/api/v1/admin/words', validWordBody('kata compat empatnol'), adminToken);
+    expect(create.status).toBe(201);
+    const compatWordId = ((await create.json()) as { data: { word_id: string } }).data.word_id;
+    const detail = await get(`/api/v1/words/${compatWordId}`, contributorToken);
+    const compatMeaningId = (
+      (await detail.json()) as { data: { meanings: { id: string }[] } }
+    ).data.meanings[0]!.id;
+
+    // Dual-id: type word + id = meaning id (deck lama membaca deck.id).
+    const dual = await post(
+      '/api/v1/votes',
+      { target_type: 'word', target_id: compatMeaningId, value: 1 },
+      contributorToken,
+    );
+    expect(dual.status).toBe(200);
+    expect(await dual.json()).toMatchObject({
+      data: { target_type: 'meaning', target_id: compatMeaningId, my_vote: 1, upvotes: 1 },
+    });
+
+    const countsWord = await get(`/api/v1/votes/counts?targets=word:${compatWordId}`);
+    expect(countsWord.status).toBe(200);
+    expect(await countsWord.json()).toMatchObject({
+      data: [{ target_type: 'word', target_id: compatWordId, upvotes: 1, downvotes: 0 }],
+    });
+
+    const myWord = await get(`/api/v1/votes/my?targets=word:${compatWordId}`, contributorToken);
+    expect(myWord.status).toBe(200);
+    expect(await myWord.json()).toMatchObject({
+      data: [{ target_type: 'word', target_id: compatWordId, value: 1 }],
+    });
+
+    // Unvote supaya skip test bersih
+    await post(
+      '/api/v1/votes',
+      { target_type: 'meaning', target_id: compatMeaningId, value: 1 },
+      contributorToken,
+    );
+
+    const skipWord = await post(
+      '/api/v1/votes/skips',
+      { word_id: compatWordId },
+      contributorToken,
+    );
+    expect(skipWord.status).toBe(200);
+    expect(await skipWord.json()).toMatchObject({
+      data: { meaning_id: compatMeaningId, skipped: true },
+    });
+
+    const undoWord = await request(`/api/v1/votes/skips/${compatWordId}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${contributorToken}` },
+    });
+    expect(undoWord.status).toBe(200);
+    expect(await undoWord.json()).toMatchObject({
+      data: { meaning_id: compatMeaningId, skipped: false },
+    });
   });
 });

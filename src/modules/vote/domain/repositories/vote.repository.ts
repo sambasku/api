@@ -310,4 +310,14 @@ export interface VoteRepository {
     lemma: string;
     ownerUserId: string | null;
   } | null>;
+
+  /**
+   * Compat mobile ≤ v0.4.0 (52-api-mobile-v040-vote-compat): id boleh meaning
+   * published ATAU word id. Word → makna published pertama (order_index, id).
+   * Null bila tidak resolve.
+   */
+  resolveLegacyWordVoteTarget(id: string): Promise<{
+    meaningId: string;
+    wordId: string;
+  } | null>;
 }

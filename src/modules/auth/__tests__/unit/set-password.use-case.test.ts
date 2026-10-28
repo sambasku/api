@@ -40,6 +40,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     contributeMutedUntil: null,
     readContributionGuideAt: null,
     ...overrides,
+    levelSeen: overrides.levelSeen ?? 1,
+    notifyStreakReminder: overrides.notifyStreakReminder ?? true,
+    notifyLevelUp: overrides.notifyLevelUp ?? true,
   };
 }
 

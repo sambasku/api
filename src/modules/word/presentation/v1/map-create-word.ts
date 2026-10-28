@@ -99,14 +99,15 @@ function toInlineWordDto(w: InlineWordBody, imageProviderName: string): InlineWo
   const overrides: MeaningOverrideDto[] | undefined = w.meaning_overrides?.map((o) => ({
     meaningIndex: o.meaning_index,
     definition: o.definition,
-    wordClassId: o.word_class_id,
+    // MeaningOverrideDto.wordClassId = string | undefined (bukan null).
+    wordClassId: o.word_class_id ?? undefined,
     translations: o.translations?.map((t) => ({
-      languageId: t.language_id,
+      languageId: t.language_id ?? '',
       translationText: t.translation_text,
       translationType: t.translation_type,
     })),
     examples: o.examples?.map((e) => ({
-      sourceLanguageId: e.source_language_id,
+      sourceLanguageId: e.source_language_id ?? '',
       sourceSentence: e.source_sentence,
       targetLanguageId: e.target_language_id,
       targetSentence: e.target_sentence,
@@ -123,20 +124,20 @@ function toInlineWordDto(w: InlineWordBody, imageProviderName: string): InlineWo
     inheritMeanings: w.inherit_meanings ?? true,
     meaningOverrides: overrides?.length ? overrides : undefined,
     meanings: w.meanings?.map((m, i) => ({
-      wordClassId: m.word_class_id,
+      wordClassId: m.word_class_id ?? null,
       definition: m.definition,
       isHaveDefinition: m.is_have_definition ?? true,
       isHaveTranslation: m.is_have_translation ?? true,
       meaningSource: m.meaning_source ?? 'manual',
       orderIndex: m.order_index ?? i + 1,
       translations: (m.translations ?? []).map((t) => ({
-        languageId: t.language_id,
+        languageId: t.language_id ?? '',
         translationText: t.translation_text,
         translationType: t.translation_type,
         translationAllowsComma: t.translation_allows_comma ?? false,
       })),
       examples: m.examples?.map((e) => ({
-        sourceLanguageId: e.source_language_id,
+        sourceLanguageId: e.source_language_id ?? '',
         sourceSentence: e.source_sentence,
         targetLanguageId: e.target_language_id,
         targetSentence: e.target_sentence,

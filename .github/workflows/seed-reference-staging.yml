@@ -24,6 +24,13 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
 
+      - name: Migrate staging (schema harus mutakhir sebelum seed)
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+
+
       - name: Seed reference staging
         run: pnpm seed:reference
         env:

@@ -39,6 +39,12 @@ jobs:
           fi
           echo "Turso secrets OK"
 
+      - name: Migrate production (schema harus mutakhir sebelum seed)
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+
       - name: Seed reference production
         run: pnpm seed:reference
         env:

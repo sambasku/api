@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { ToggleVoteUseCase } from '../../application/use-cases/toggle-vote.use-case';
 import type { VoteRepository } from '../../domain/repositories/vote.repository';
 
+const USER = '01JDUSERKONTRIB0000000000A';
+const WORD_ID = '01JDWORDMAKATN0000000000A';
+const MEANING_ID = '01JDMEANINGMAKATN0000000A';
+// 0101: happy path memakai target makna; 52: word di-remap ke makna.
+const TARGET = { entityType: 'meaning' as const, entityId: MEANING_ID };
+
 function makeDeps(exists = true) {
   const voteRepo = {
     targetExists: vi.fn().mockResolvedValue(exists),
@@ -9,15 +15,13 @@ function makeDeps(exists = true) {
     countMany: vi.fn(),
     findUserVotes: vi.fn(),
     resolveWordOwnerForVoteTarget: vi.fn().mockResolvedValue(null),
+    resolveLegacyWordVoteTarget: vi.fn().mockResolvedValue({
+      meaningId: MEANING_ID,
+      wordId: WORD_ID,
+    }),
   } as unknown as VoteRepository;
   return { voteRepo, useCase: new ToggleVoteUseCase(voteRepo) };
 }
-
-const USER = '01JDUSERKONTRIB0000000000A';
-const WORD_ID = '01JDWORDMAKATN0000000000A';
-const MEANING_ID = '01JDMEANINGMAKATN0000000A';
-// 0101: vote word pensiun - happy path test memakai target makna.
-const TARGET = { entityType: 'meaning' as const, entityId: MEANING_ID };
 
 describe('ToggleVoteUseCase', () => {
   it('target ada → toggle(userId, target, value) dipanggil, hasil diteruskan', async () => {
@@ -26,7 +30,13 @@ describe('ToggleVoteUseCase', () => {
 
     expect(voteRepo.targetExists).toHaveBeenCalledWith(TARGET);
     expect(voteRepo.toggle).toHaveBeenCalledWith(USER, TARGET, 1, null);
-    expect(result).toEqual({ myVote: 1, upvotes: 1, downvotes: 0 });
+    expect(result).toEqual({
+      myVote: 1,
+      upvotes: 1,
+      downvotes: 0,
+      targetType: 'meaning',
+      targetId: MEANING_ID,
+    });
   });
 
   it('target tidak ada / sudah soft-deleted → 404 VOTE_TARGET_NOT_FOUND, toggle TIDAK dipanggil', async () => {
@@ -37,13 +47,34 @@ describe('ToggleVoteUseCase', () => {
     expect(voteRepo.toggle).not.toHaveBeenCalled();
   });
 
-  // 0101: vote level kata pensiun - ditolak sebelum menyentuh repo.
-  it('target_type word → VALIDATION_ERROR, repo TIDAK dipanggil', async () => {
+  // 52: word di-remap ke makna (compat mobile ≤ v0.4.0).
+  it('target_type word → remap ke meaning, toggle pada makna', async () => {
     const { useCase, voteRepo } = makeDeps();
+    const result = await useCase.execute({
+      userId: USER,
+      targetType: 'word',
+      targetId: WORD_ID,
+      value: 1,
+    });
+
+    expect(voteRepo.resolveLegacyWordVoteTarget).toHaveBeenCalledWith(WORD_ID);
+    expect(voteRepo.targetExists).toHaveBeenCalledWith(TARGET);
+    expect(voteRepo.toggle).toHaveBeenCalledWith(USER, TARGET, 1, null);
+    expect(result).toEqual({
+      myVote: 1,
+      upvotes: 1,
+      downvotes: 0,
+      targetType: 'meaning',
+      targetId: MEANING_ID,
+    });
+  });
+
+  it('target_type word tanpa makna → 404, toggle TIDAK dipanggil', async () => {
+    const { useCase, voteRepo } = makeDeps();
+    (voteRepo.resolveLegacyWordVoteTarget as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     await expect(
       useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 }),
-    ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR', statusCode: 400 });
-    expect(voteRepo.targetExists).not.toHaveBeenCalled();
+    ).rejects.toMatchObject({ errorCode: 'VOTE_TARGET_NOT_FOUND', statusCode: 404 });
     expect(voteRepo.toggle).not.toHaveBeenCalled();
   });
 
