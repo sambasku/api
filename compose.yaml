@@ -1,0 +1,45 @@
+# Staging homelab - service app saja. sqld terpisah di host yang sama.
+# Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
+#
+# Default: pull ghcr.io/sambasku/api:staging (pointer bergerak).
+# Pin: API_IMAGE=ghcr.io/sambasku/api:0.1.0-staging ./scripts/staging-up.sh
+# Build lokal: LOCAL_BUILD=1 ./scripts/staging-up.sh
+#
+# Di .env: secret app saja (DATABASE_URL lokal, JWT, …). Tidak perlu GHCR_TOKEN.
+# Package GHCR: Public supaya pull tanpa login.
+#
+# Bind default 127.0.0.1:8181. Tailscale:
+#   APP_BIND_HOST=100.71.13.88 ./scripts/staging-up.sh
+
+name: sambasku-api-staging
+
+services:
+  app:
+    image: ${API_IMAGE:-ghcr.io/sambasku/api:staging}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sambasku-api-staging
+    restart: unless-stopped
+    pull_policy: ${PULL_POLICY:-always}
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: staging
+      PORT: "8181"
+    ports:
+      - "${APP_BIND_HOST:-127.0.0.1}:8181:8181"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8181/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s

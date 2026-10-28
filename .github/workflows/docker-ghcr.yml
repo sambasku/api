@@ -1,0 +1,77 @@
+name: Docker GHCR
+
+# Satu image: ghcr.io/sambasku/api
+# Tag staging (dari package.json version, contoh 0.1.0):
+#   0.1.0-staging   - immutable
+#   staging         - pointer bergerak
+#   sha-<short>     - jejak commit
+# Produksi nanti (workflow terpisah / promote): tag bersih 0.1.0 (tanpa -staging).
+# Homelab default pull: :staging  |  pin: :0.1.0-staging
+# Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
+#
+# Setelah push pertama: Package settings → Change visibility → Public
+# (pull homelab tanpa PAT). Push tetap GITHUB_TOKEN bawaan Actions.
+
+on:
+  push:
+    branches: [staging, feat/dockerize]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig.json
+      - src/**
+      - .github/workflows/docker-ghcr.yml
+  workflow_dispatch:
+
+concurrency:
+  group: docker-ghcr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Baca version dari package.json
+        id: pkg
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Package version: ${VERSION}"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ steps.pkg.outputs.version }}-staging
+            type=raw,value=staging
+            type=sha,prefix=sha-,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
