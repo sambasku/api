@@ -40,15 +40,19 @@ fi
 
 echo "==> docker compose up (bind ${APP_BIND_HOST:-127.0.0.1}:8181)"
 
-if [[ "${LOCAL_BUILD:-}" == "1" ]]; then
-  echo "==> LOCAL_BUILD=1 → build lokal (tag sebagai image compose)"
-  export PULL_POLICY=never
-  docker compose -f compose.yaml up -d --build
-else
-  echo "==> pull ${API_IMAGE:-ghcr.io/sambasku/api:staging} (package public - tanpa login)"
+# Default: build lokal (image GHCR lama bug tanpa --chown). Pakai GHCR:
+#   USE_GHCR=1 ./scripts/staging-up.sh
+if [[ "${USE_GHCR:-}" == "1" ]]; then
+  echo "==> USE_GHCR=1 → pull ${API_IMAGE:-ghcr.io/sambasku/api:staging}"
+  export API_IMAGE="${API_IMAGE:-ghcr.io/sambasku/api:staging}"
   export PULL_POLICY="${PULL_POLICY:-always}"
   docker compose -f compose.yaml pull app
   docker compose -f compose.yaml up -d --no-build
+else
+  echo "==> build lokal → sambasku-api:local-staging (hindari GHCR lama)"
+  export API_IMAGE="${API_IMAGE:-sambasku-api:local-staging}"
+  export PULL_POLICY=never
+  docker compose -f compose.yaml up -d --build
 fi
 
 echo "==> status"

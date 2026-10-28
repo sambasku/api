@@ -28,9 +28,10 @@ RUN apk add --no-cache curl \
   && corepack enable \
   && corepack prepare pnpm@9.15.9 --activate
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json pnpm-lock.yaml tsconfig.json ./
-COPY src ./src
+# --chown wajib: USER node di bawah; tanpa ini file root-owned → runtime gagal
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node package.json pnpm-lock.yaml tsconfig.json ./
+COPY --chown=node:node src ./src
 
 # Image resmi node menyediakan user `node` (uid 1000)
 USER node

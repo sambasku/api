@@ -1,27 +1,25 @@
 # Staging homelab - service app saja. sqld terpisah di host yang sama.
 # Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
 #
-# Default: pull ghcr.io/sambasku/api:staging (pointer bergerak).
-# Pin: API_IMAGE=ghcr.io/sambasku/api:v0.1.0-staging ./scripts/staging-up.sh
-# Build lokal: LOCAL_BUILD=1 ./scripts/staging-up.sh
+# Default sekarang: BUILD LOKAL (GHCR image lama masih tanpa --chown=node:node).
+# Setelah CI push image baru yang sudah chown:
+#   PULL_POLICY=always API_IMAGE=ghcr.io/sambasku/api:staging docker compose up -d
 #
-# Di .env: secret app saja (DATABASE_URL lokal, JWT, …). Tidak perlu GHCR_TOKEN.
-# Package GHCR: Public supaya pull tanpa login.
-#
-# Bind default 127.0.0.1:8181. Tailscale:
-#   APP_BIND_HOST=100.71.13.88 ./scripts/staging-up.sh
+# Di .env: DATABASE_URL=http://host.docker.internal:8080 + secret staging.
+# Bind: 127.0.0.1:8181 atau APP_BIND_HOST=100.71.13.88
 
 name: sambasku-api-staging
 
 services:
   app:
-    image: ${API_IMAGE:-ghcr.io/sambasku/api:staging}
+    # Tag lokal agar tidak ketarik image GHCR lama yang bug
+    image: ${API_IMAGE:-sambasku-api:local-staging}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: sambasku-api-staging
     restart: unless-stopped
-    pull_policy: ${PULL_POLICY:-always}
+    pull_policy: ${PULL_POLICY:-never}
     env_file:
       - .env
     environment:
