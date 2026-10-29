@@ -1,6 +1,6 @@
 name: Backfill Activity Payload
 
-# Sekali jalan (workflow_dispatch): isi payload event vote lama (#94).
+# Sekali jalan (workflow_dispatch): isi payload event lama (#94 vote, #206 discussion).
 # Idempoten - hanya baris payload IS NULL yang di-update. Jalankan
 # berurutan: staging dulu (environment: staging), lalu production.
 
@@ -25,12 +25,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.target }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
-          node-version: 22
-          cache: pnpm
+          version: 9
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - name: Backfill staging
         if: inputs.target == 'staging'
