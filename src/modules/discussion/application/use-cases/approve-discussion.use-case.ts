@@ -123,8 +123,20 @@ export class ApproveDiscussionUseCase {
 
     if (existing.images.length > 0) {
       const promoted: DiscussionImage[] = [];
+      const toDeleteStaging: string[] = [];
       for (let i = 0; i < existing.images.length; i++) {
         const staging = existing.images[i];
+        // #202 re-approve setelah sunting OP: gambar sudah di GitHub - jangan fetch staging.
+        if (staging.publicUrl) {
+          promoted.push({
+            url: staging.url,
+            providerFileId: staging.providerFileId,
+            publicUrl: staging.publicUrl,
+            contentWarnings: warningsByIndex[i] ?? staging.contentWarnings ?? [],
+          });
+          continue;
+        }
+
         const provided = cmd.censoredFiles?.[i];
         let bytes: Uint8Array;
         let mimeHint: string | null;
@@ -152,12 +164,13 @@ export class ApproveDiscussionUseCase {
           publicUrl: uploaded.url,
           contentWarnings: warningsByIndex[i] ?? [],
         });
+        toDeleteStaging.push(staging.providerFileId);
       }
       nextImages = promoted;
 
-      for (const img of existing.images) {
+      for (const providerFileId of toDeleteStaging) {
         // deleteFile ImageKit sudah best-effort (log internal, tidak lempar)
-        await this.imageStorage.deleteFile(img.providerFileId);
+        await this.imageStorage.deleteFile(providerFileId);
       }
     }
 

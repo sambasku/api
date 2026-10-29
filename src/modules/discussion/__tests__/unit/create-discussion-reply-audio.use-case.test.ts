@@ -35,6 +35,7 @@ function makeDiscussion(overrides: Partial<Discussion> = {}): Discussion {
     avatarUrl: null,
     userRole: null,
     body: 'Apa arti tulisan di papan pasar?',
+    bodyOriginal: null,
     linkUrl: null,
     images: [],
     audio: null,
@@ -92,6 +93,9 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     listReplies: vi.fn(),
     listDistinctReplierUserIds: vi.fn().mockResolvedValue([OWNER]),
     markReplyDeletedByAuthor: vi.fn(),
+    markDiscussionDeletedByAuthor: vi.fn(),
+    updateDiscussionBodyWithRevision: vi.fn(),
+    listDiscussionRevisions: vi.fn().mockResolvedValue([]),
     takedownReply: vi.fn(),
     ...overrides,
   } as unknown as DiscussionRepository;

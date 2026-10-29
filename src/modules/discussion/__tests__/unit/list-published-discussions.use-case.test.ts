@@ -16,6 +16,7 @@ function makeHelp(id: string, overrides: Partial<Discussion> = {}): Discussion {
     avatarUrl: null,
     userRole: null,
     body: 'Apa arti ini?',
+    bodyOriginal: null,
     linkUrl: null,
     images: [],
     audio: null,

@@ -7,6 +7,7 @@ import {
 import {
   discussionReplies,
   discussionReplyRevisions,
+  discussionRevisions,
   discussions,
   users,
   votes,
@@ -26,6 +27,7 @@ import type {
   DiscussionReplyAudio,
   DiscussionReplyRevision,
   DiscussionReplyStatus,
+  DiscussionRevision,
   DiscussionStatus,
 } from '../domain/entities/discussion.entity';
 import { normalizeDiscussionListSort } from '../domain/entities/discussion.entity';
@@ -35,9 +37,14 @@ type DiscussionRow = typeof discussions.$inferSelect;
 type ReplyRow = typeof discussionReplies.$inferSelect;
 
 const MAX_REPLY_REVISIONS = 50;
+const MAX_DISCUSSION_REVISIONS = 50;
 
 function replyIsEditedSql() {
   return sql<boolean>`exists (select 1 from ${discussionReplyRevisions} where ${discussionReplyRevisions.replyId} = ${discussionReplies.id})`;
+}
+
+function discussionIsEditedSql() {
+  return sql<boolean>`exists (select 1 from ${discussionRevisions} where ${discussionRevisions.discussionId} = ${discussions.id})`;
 }
 
 /** Cursor compound: base64url("metric:id") - votes / replies / activity_ms. */
@@ -127,6 +134,7 @@ function toDiscussion(
   displayName: string | null,
   avatarUrl: string | null,
   userRole: string | null = null,
+  isEdited = false,
 ): Discussion {
   return {
     id: row.id,
@@ -136,6 +144,7 @@ function toDiscussion(
     avatarUrl,
     userRole,
     body: row.body,
+    bodyOriginal: row.bodyOriginal ?? null,
     linkUrl: row.linkUrl ?? null,
     images: asImages(row.images),
     audio: toDiscussionAudio(row),
@@ -148,6 +157,7 @@ function toDiscussion(
     publishedReplyCount: row.publishedReplyCount ?? 0,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    isEdited,
   };
 }
 
@@ -222,6 +232,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         avatarUrl: users.avatarUrl,
         userRole: highestUserRoleSql,
         authorDeletedAt: users.deletedAt,
+        isEdited: discussionIsEditedSql(),
       })
       .from(discussions)
       .leftJoin(users, eq(users.id, discussions.userId))
@@ -234,6 +245,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
       publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
       row.authorDeletedAt ? null : (row.avatarUrl ?? null),
       row.authorDeletedAt ? null : (row.userRole ?? null),
+      Boolean(row.isEdited),
     );
   }
 
@@ -858,6 +870,114 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
     return rows.map((row) => ({
       id: row.id,
       replyId: row.replyId,
+      editorId: row.editorId,
+      body: row.body,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async markDiscussionDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
+    const updated = await this.db
+      .update(discussions)
+      .set({
+        status: 'deleted_by_author',
+        reviewedBy: actorId,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(discussions.id, id),
+          eq(discussions.status, 'published'),
+          eq(discussions.userId, actorId),
+        ),
+      )
+      .returning({ id: discussions.id });
+    return updated.length > 0;
+  }
+
+  async updateDiscussionBodyWithRevision(input: {
+    discussionId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+    linkUrl: string | null;
+    requeuePendingReview: boolean;
+  }): Promise<Discussion | null> {
+    const updatedId = await this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(discussions)
+        .where(
+          and(
+            eq(discussions.id, input.discussionId),
+            eq(discussions.status, 'published'),
+          ),
+        )
+        .limit(1);
+      if (!existing) return null;
+
+      const bodyChanged = (existing.body ?? '') !== input.body;
+      if (bodyChanged) {
+        await tx.insert(discussionRevisions).values({
+          discussionId: input.discussionId,
+          editorId: input.editorId,
+          body: existing.body ?? '',
+        });
+
+        const stale = await tx
+          .select({ id: discussionRevisions.id })
+          .from(discussionRevisions)
+          .where(eq(discussionRevisions.discussionId, input.discussionId))
+          .orderBy(asc(discussionRevisions.createdAt), asc(discussionRevisions.id));
+
+        if (stale.length > MAX_DISCUSSION_REVISIONS) {
+          const drop = stale.slice(0, stale.length - MAX_DISCUSSION_REVISIONS);
+          for (const row of drop) {
+            await tx
+              .delete(discussionRevisions)
+              .where(eq(discussionRevisions.id, row.id));
+          }
+        }
+      }
+
+      await tx
+        .update(discussions)
+        .set({
+          body: input.body,
+          bodyOriginal: input.bodyOriginal,
+          linkUrl: input.linkUrl,
+          updatedAt: new Date(),
+          ...(input.requeuePendingReview
+            ? {
+                status: 'pending_review' as const,
+                rejectionNote: null,
+                reviewedBy: null,
+                reviewedAt: null,
+              }
+            : {}),
+        })
+        .where(eq(discussions.id, input.discussionId));
+
+      return input.discussionId;
+    });
+
+    if (!updatedId) return null;
+    return this.findById(updatedId);
+  }
+
+  async listDiscussionRevisions(
+    discussionId: string,
+  ): Promise<DiscussionRevision[]> {
+    const rows = await this.db
+      .select()
+      .from(discussionRevisions)
+      .where(eq(discussionRevisions.discussionId, discussionId))
+      .orderBy(desc(discussionRevisions.createdAt), desc(discussionRevisions.id));
+
+    return rows.map((row) => ({
+      id: row.id,
+      discussionId: row.discussionId,
       editorId: row.editorId,
       body: row.body,
       createdAt: row.createdAt,

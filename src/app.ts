@@ -521,8 +521,11 @@ import { CreateDiscussionReplyUseCase } from "@/modules/discussion/application/u
 import { CreateDiscussionReplyAudioUseCase } from "@/modules/discussion/application/use-cases/create-discussion-reply-audio.use-case";
 import { AttachDiscussionAudioUseCase } from "@/modules/discussion/application/use-cases/attach-discussion-audio.use-case";
 import { DeleteDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/delete-discussion-reply.use-case";
+import { DeleteDiscussionUseCase } from "@/modules/discussion/application/use-cases/delete-discussion.use-case";
 import { UpdateDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/update-discussion-reply.use-case";
+import { UpdateDiscussionUseCase } from "@/modules/discussion/application/use-cases/update-discussion.use-case";
 import { GetDiscussionReplyEditHistoryUseCase } from "@/modules/discussion/application/use-cases/get-discussion-reply-edit-history.use-case";
+import { GetDiscussionEditHistoryUseCase } from "@/modules/discussion/application/use-cases/get-discussion-edit-history.use-case";
 import { PinDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/pin-discussion-reply.use-case";
 import { TakedownDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/takedown-discussion-reply.use-case";
 import { DiscussionController } from "@/modules/discussion/presentation/v1/discussion.controller";
@@ -2597,6 +2600,21 @@ const discussionController = new DiscussionController({
     recordAbuseSignal,
   ),
   replyEditHistory: new GetDiscussionReplyEditHistoryUseCase(discussionRepo),
+  update: new UpdateDiscussionUseCase(
+    discussionRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    userRepo,
+    recordInbox,
+    notifyUser,
+  ),
+  delete: new DeleteDiscussionUseCase(
+    discussionRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
+  editHistory: new GetDiscussionEditHistoryUseCase(discussionRepo),
   pinReply: new PinDiscussionReplyUseCase(discussionRepo, auditRepo),
   takedownReply: new TakedownDiscussionReplyUseCase(discussionRepo, auditRepo),
   imageController,

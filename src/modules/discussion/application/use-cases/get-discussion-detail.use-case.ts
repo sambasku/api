@@ -52,8 +52,14 @@ export class GetDiscussionDetailUseCase {
       }
     }
 
+    const isOwner =
+      input.viewerUserId != null && help.userId === input.viewerUserId;
+    // Balasan tetap dibaca untuk owner saat OP re-queue / cabut (#202).
     const rawReplies =
-      help.status === 'published' || input.asAdmin
+      help.status === 'published' ||
+      input.asAdmin ||
+      (isOwner &&
+        (help.status === 'pending_review' || help.status === 'deleted_by_author'))
         ? await this.repo.listReplies(help.id)
         : [];
 

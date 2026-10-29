@@ -18,6 +18,8 @@ export const discussions = sqliteTable(
       .notNull()
       .references(() => users.id),
     body: text('body'),
+    /** Teks sebelum filter blocklist (null = tidak tersensor). #202 */
+    bodyOriginal: text('body_original'),
     /** Tautan https opsional untuk share konten luar. */
     linkUrl: text('link_url'),
     images: text('images', { mode: 'json' }).$type<DiscussionImageRow[]>().notNull(),
@@ -29,7 +31,7 @@ export const discussions = sqliteTable(
     audioProvider: text('audio_provider'),
     audioProviderFileId: text('audio_provider_file_id'),
     audioSha: text('audio_sha'),
-    // pending_review | published | rejected | taken_down
+    // pending_review | published | rejected | taken_down | deleted_by_author
     status: text('status').notNull().default('pending_review'),
     rejectionNote: text('rejection_note'),
     reviewedBy: text('reviewed_by').references(() => users.id),
@@ -103,6 +105,25 @@ export const discussionReplyRevisions = sqliteTable(
   },
   (t) => [
     index('discussion_reply_revisions_reply_created_idx').on(t.replyId, t.createdAt),
+  ],
+);
+
+/** Snapshot body OP sebelum edit (#202). Cap 50 di aplikasi. */
+export const discussionRevisions = sqliteTable(
+  'discussion_revisions',
+  {
+    id: text('id').primaryKey().$defaultFn(() => generateId()),
+    discussionId: text('discussion_id')
+      .notNull()
+      .references(() => discussions.id, { onDelete: 'cascade' }),
+    editorId: text('editor_id')
+      .notNull()
+      .references(() => users.id),
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index('discussion_revisions_discussion_created_idx').on(t.discussionId, t.createdAt),
   ],
 );
 

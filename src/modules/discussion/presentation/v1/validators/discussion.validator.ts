@@ -55,7 +55,25 @@ export const discussionStatusSchema = z.enum([
   'published',
   'rejected',
   'taken_down',
+  'deleted_by_author',
 ]);
+
+export const updateDiscussionBodySchema = z.object({
+  body: z
+    .string({ error: 'Deskripsi wajib diisi' })
+    .trim()
+    .min(1, 'Deskripsi wajib diisi')
+    .max(1000, 'Deskripsi maksimal 1000 karakter'),
+  /** undefined = biarkan; null/'' = hapus; string = set https. */
+  link_url: z
+    .string({ error: 'Tautan tidak valid' })
+    .trim()
+    .max(2048, 'Tautan maksimal 2048 karakter')
+    .nullable()
+    .optional(),
+});
+
+export type UpdateDiscussionBody = z.infer<typeof updateDiscussionBodySchema>;
 
 export const listDiscussionsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -188,6 +206,8 @@ export const discussionPublicItemSchema = z.object({
   pinned_reply_id: z.string().nullable(),
   upvotes: z.number().int(),
   reply_count: z.number().int(),
+  is_edited: z.boolean(),
+  updated_at: z.string().nullable(),
   created_at: z.string(),
 });
 
@@ -210,6 +230,7 @@ export const discussionOwnerItemSchema = z.object({
   reviewed_at: z.string().nullable(),
   upvotes: z.number().int(),
   reply_count: z.number().int(),
+  is_edited: z.boolean(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });
@@ -234,6 +255,7 @@ export const discussionAdminItemSchema = z.object({
   pinned_reply_id: z.string().nullable(),
   upvotes: z.number().int(),
   reply_count: z.number().int(),
+  is_edited: z.boolean(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });
@@ -321,11 +343,41 @@ export const updateDiscussionReplyResponseSchema = z.object({
   data: discussionReplyPublicSchema,
 });
 
+export const updateDiscussionResponseSchema = z.object({
+  success: z.literal(true),
+  /** Owner wire: setelah sunting status jadi pending_review. */
+  data: discussionOwnerItemSchema,
+});
+
+export const deleteDiscussionResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.null(),
+});
+
 export const discussionReplyEditHistoryResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     current: z.object({
       body: z.string().nullable(),
+      updated_at: z.string().nullable(),
+      is_edited: z.boolean(),
+    }),
+    revisions: z.array(
+      z.object({
+        body: z.string(),
+        editor_id: z.string(),
+        created_at: z.string(),
+      }),
+    ),
+  }),
+});
+
+export const discussionEditHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    current: z.object({
+      body: z.string().nullable(),
+      link_url: z.string().nullable(),
       updated_at: z.string().nullable(),
       is_edited: z.boolean(),
     }),
