@@ -1,26 +1,21 @@
 name: Deploy Staging (Homelab / GHCR)
 
-# Push branch `staging` atau tag `v*-staging`:
-#   test (SQLite) → migrate Turso staging → build+push GHCR (bukan Workers).
+# Push branch `staging` saja (tanpa pipeline tag):
+#   test (SQLite) → migrate Turso staging → publish image :staging + :sha-…
 #
-# Homelab pull: ghcr.io/sambasku/api:staging (atau pin :v0.0.x-staging).
+# Homelab: ghcr.io/sambasku/api:staging → ./scripts/staging-up.sh
 # Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
 #
-# Secrets GitHub:
-#   TURSO_STAGING_DATABASE_URL
-#   TURSO_STAGING_AUTH_TOKEN
-#   (opsional notifikasi) TELEGRAM_*, DISCORD_WEBHOOK_URL
-#
+# Secrets: TURSO_STAGING_DATABASE_URL, TURSO_STAGING_AUTH_TOKEN
 # GITHUB_TOKEN bawaan cukup untuk push package (permissions.packages: write).
 
 on:
   push:
     branches: [staging]
-    tags: ['v*-staging']
   workflow_dispatch:
 
 concurrency:
-  group: deploy-staging-${{ github.ref }}
+  group: deploy-staging
   cancel-in-progress: true
 
 env:
@@ -91,7 +86,7 @@ jobs:
           DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
 
-  deploy-ghcr:
+  publish-image:
     needs: migrate-staging
     runs-on: ubuntu-latest
     permissions:
@@ -99,51 +94,6 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
-
-      - name: Channel + version (branch staging | tag v*-staging)
-        id: channel
-        run: |
-          set -euo pipefail
-          REF="${GITHUB_REF_NAME:-}"
-          EVENT="${GITHUB_EVENT_NAME}"
-
-          if [ "$EVENT" = "workflow_dispatch" ] || [ "$REF" = "staging" ]; then
-            echo "channel=staging" >> "$GITHUB_OUTPUT"
-            echo "version=" >> "$GITHUB_OUTPUT"
-            echo "Branch/manual: image :staging + :sha (package.json tidak diubah)"
-            exit 0
-          fi
-
-          if [[ "$REF" == v*-staging ]]; then
-            VERSION="${REF#v}"
-            echo "channel=staging" >> "$GITHUB_OUTPUT"
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "Tag=${REF} → package.json=${VERSION} + :staging + :${REF}"
-            exit 0
-          fi
-
-          echo "::error::Ref tidak dikenali untuk staging deploy: ${REF}"
-          exit 1
-
-      - name: Sync package.json version dari git tag
-        if: steps.channel.outputs.version != ''
-        env:
-          VERSION: ${{ steps.channel.outputs.version }}
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const version = process.env.VERSION;
-          if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version || '')) {
-            console.error(`VERSION tidak valid: ${version}`);
-            process.exit(1);
-          }
-          const path = 'package.json';
-          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
-          const before = pkg.version;
-          pkg.version = version;
-          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
-          console.log(`package.json version: ${before} → ${version}`);
-          NODE
 
       - uses: docker/setup-buildx-action@v3
 
@@ -158,7 +108,6 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
-            type=ref,event=tag
             type=sha,prefix=sha-,format=short
             type=raw,value=staging
 
@@ -174,7 +123,7 @@ jobs:
           provenance: false
 
   notify:
-    needs: [test, migrate-staging, deploy-ghcr]
+    needs: [test, migrate-staging, publish-image]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -185,7 +134,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_TO }}
           message: |
             ${{ contains(needs.*.result, 'failure') && '❌ Gagal' || (contains(needs.*.result, 'cancelled') && '⚠️ Dibatalkan' || '✅ Sukses') }} CI sambasku/api — Deploy Staging (Homelab / GHCR)
-            Ref: ${{ github.ref_name }} · Commit: ${{ github.sha }}
+            Branch: ${{ github.ref_name }} · Commit: ${{ github.sha }}
             https://github.com/sambasku/api/actions/runs/${{ github.run_id }}
       - name: Kirim hasil CI ke Discord
         if: always()
@@ -203,7 +152,7 @@ jobs:
             exit 0
           fi
           MSG="$STATUS CI $REPO — $WORKFLOW
-          Ref: $BRANCH · Commit: $SHA
+          Branch: $BRANCH · Commit: $SHA
           $RUN_URL"
           jq -n --arg content "$MSG" '{{content: $content}}' \
             | curl -sf -X POST -H 'Content-Type: application/json' \

@@ -2,9 +2,8 @@ name: Docker GHCR
 
 # Satu image: ghcr.io/sambasku/api
 #
-# Staging rilis (wajib test + migrate):
-#   pakai deploy-staging.yml — push branch `staging` atau tag `v*-staging`.
-#   Workflow ini TIDAK lagi build tag staging (hindari image tanpa test).
+# Staging: push branch `staging` → deploy-staging.yml (test → migrate → :staging).
+#   Workflow ini tidak merilis staging. Tag v*-staging diabaikan/ditolak.
 #
 # Produksi:
 #   git tag v0.1.2 && git push origin v0.1.2
@@ -24,7 +23,7 @@ name: Docker GHCR
 on:
   push:
     tags:
-      # Semver polos saja (prod). Tag v*-staging ditangani deploy-staging.yml.
+      # Semver polos saja (prod). Staging = branch push, bukan tag.
       - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
 
@@ -58,10 +57,9 @@ jobs:
             exit 0
           fi
 
-          # Staging tags: pakai deploy-staging.yml (test → migrate → GHCR).
+          # Staging = push branch staging (deploy-staging.yml), bukan tag.
           if [[ "$REF" == v*-staging ]]; then
-            echo "::error::Tag staging ${REF} harus lewat deploy-staging.yml (wajib test)."
-            echo "Push branch staging atau tag v*-staging; jangan pakai Docker GHCR untuk staging."
+            echo "::error::Tag staging dihapus dari pipeline. Push/merge ke branch staging."
             exit 1
           fi
 
@@ -75,7 +73,7 @@ jobs:
           fi
 
           echo "Tag tidak dikenali: ${REF}"
-          echo "Pakai v0.0.x-staging (staging) atau v0.1.2 (prod semver polos)."
+          echo "Staging: push branch staging. Prod: tag v0.1.2 (semver polos)."
           exit 1
 
       - name: Sync package.json version dari git tag
