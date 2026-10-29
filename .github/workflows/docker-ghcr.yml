@@ -2,10 +2,9 @@ name: Docker GHCR
 
 # Satu image: ghcr.io/sambasku/api
 #
-# Staging:
-#   git tag v0.0.5-staging && git push origin v0.0.5-staging
-#   → :v0.0.5-staging + :staging + :sha-…
-#   package.json di image = 0.0.5-staging
+# Staging rilis (wajib test + migrate):
+#   pakai deploy-staging.yml — push branch `staging` atau tag `v*-staging`.
+#   Workflow ini TIDAK lagi build tag staging (hindari image tanpa test).
 #
 # Produksi:
 #   git tag v0.1.2 && git push origin v0.1.2
@@ -13,17 +12,20 @@ name: Docker GHCR
 #   package.json di image = 0.1.2
 #   TIDAK menulis :staging
 #
+# Manual:
+#   Actions → Docker GHCR → workflow_dispatch
+#   → :staging + :manual + :sha (tanpa test/migrate; iterate cepat saja)
+#
 # Sync package.json hanya di runner CI (tidak di-commit balik).
 # Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
-#
-# PENTING: jangan gabung `paths:` dengan `tags:`.
 #
 # Package visibility Public (sekali) supaya pull tanpa PAT.
 
 on:
   push:
     tags:
-      - 'v*'
+      # Semver polos saja (prod). Tag v*-staging ditangani deploy-staging.yml.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
 
 concurrency:
@@ -56,13 +58,11 @@ jobs:
             exit 0
           fi
 
-          # Staging: v0.0.5-staging
+          # Staging tags: pakai deploy-staging.yml (test → migrate → GHCR).
           if [[ "$REF" == v*-staging ]]; then
-            VERSION="${REF#v}"
-            echo "channel=staging" >> "$GITHUB_OUTPUT"
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "Channel=staging tag=${REF} package.json=${VERSION}"
-            exit 0
+            echo "::error::Tag staging ${REF} harus lewat deploy-staging.yml (wajib test)."
+            echo "Push branch staging atau tag v*-staging; jangan pakai Docker GHCR untuk staging."
+            exit 1
           fi
 
           # Produksi: v0.1.2 saja (semver polos, tanpa suffix)
