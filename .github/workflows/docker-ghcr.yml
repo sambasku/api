@@ -1,0 +1,128 @@
+name: Docker GHCR
+
+# Satu image: ghcr.io/sambasku/api
+#
+# Staging:
+#   git tag v0.0.5-staging && git push origin v0.0.5-staging
+#   → :v0.0.5-staging + :staging + :sha-…
+#   package.json di image = 0.0.5-staging
+#
+# Produksi:
+#   git tag v0.1.2 && git push origin v0.1.2
+#   → :v0.1.2 + :production + :sha-…
+#   package.json di image = 0.1.2
+#   TIDAK menulis :staging
+#
+# Sync package.json hanya di runner CI (tidak di-commit balik).
+# Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
+#
+# PENTING: jangan gabung `paths:` dengan `tags:`.
+#
+# Package visibility Public (sekali) supaya pull tanpa PAT.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: docker-ghcr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Klasifikasi tag (staging | production)
+        id: channel
+        run: |
+          set -euo pipefail
+          REF="${GITHUB_REF_NAME:-}"
+          EVENT="${GITHUB_EVENT_NAME}"
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "channel=manual" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: image :staging + :manual + :sha (tidak ubah package.json)"
+            exit 0
+          fi
+
+          # Staging: v0.0.5-staging
+          if [[ "$REF" == v*-staging ]]; then
+            VERSION="${REF#v}"
+            echo "channel=staging" >> "$GITHUB_OUTPUT"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "Channel=staging tag=${REF} package.json=${VERSION}"
+            exit 0
+          fi
+
+          # Produksi: v0.1.2 saja (semver polos, tanpa suffix)
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            VERSION="${REF#v}"
+            echo "channel=production" >> "$GITHUB_OUTPUT"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "Channel=production tag=${REF} package.json=${VERSION}"
+            exit 0
+          fi
+
+          echo "Tag tidak dikenali: ${REF}"
+          echo "Pakai v0.0.x-staging (staging) atau v0.1.2 (prod semver polos)."
+          exit 1
+
+      - name: Sync package.json version dari git tag
+        if: steps.channel.outputs.version != ''
+        run: |
+          export VERSION="${{ steps.channel.outputs.version }}"
+          node <<'NODE'
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version || '')) {
+            console.error(`VERSION tidak valid: ${version}`);
+            process.exit(1);
+          }
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const before = pkg.version;
+          pkg.version = version;
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          console.log(`package.json version: ${before} → ${version}`);
+          NODE
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=ref,event=tag
+            type=sha,prefix=sha-,format=short
+            type=raw,value=staging,enable=${{ steps.channel.outputs.channel == 'staging' || steps.channel.outputs.channel == 'manual' }}
+            type=raw,value=production,enable=${{ steps.channel.outputs.channel == 'production' }}
+            type=raw,value=manual,enable=${{ steps.channel.outputs.channel == 'manual' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
