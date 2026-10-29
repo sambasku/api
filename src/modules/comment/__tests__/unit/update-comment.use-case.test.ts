@@ -38,6 +38,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     body: 'teks lama',
     bodyOriginal: null,
     audio: null,
+    image: null,
     status: 'published',
     reviewedBy: null,
     reviewedAt: null,

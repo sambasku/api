@@ -4,6 +4,9 @@ import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
 import type { AppVariables } from '@/shared/types';
 import type { CreateCommentUseCase } from '../../application/use-cases/create-comment.use-case';
 import type { CreateCommentAudioUseCase } from '../../application/use-cases/create-comment-audio.use-case';
+import type { AttachCommentImageUseCase } from '../../application/use-cases/attach-comment-image.use-case';
+import type { ApproveCommentImageUseCase } from '../../application/use-cases/approve-comment-image.use-case';
+import type { RejectCommentImageUseCase } from '../../application/use-cases/reject-comment-image.use-case';
 import type { ListWordCommentsUseCase } from '../../application/use-cases/list-word-comments.use-case';
 import type { DeleteCommentUseCase } from '../../application/use-cases/delete-comment.use-case';
 import type { UpdateCommentUseCase } from '../../application/use-cases/update-comment.use-case';
@@ -13,13 +16,17 @@ import type { TakedownCommentUseCase } from '../../application/use-cases/takedow
 import type { UncensorCommentUseCase } from '../../application/use-cases/uncensor-comment.use-case';
 import type { ListMyCommentsUseCase } from '../../application/use-cases/list-my-comments.use-case';
 import type { Comment } from '../../domain/entities/comment.entity';
+import type { CreateUploadCredentialsUseCase } from '@/modules/image/application/use-cases/create-upload-credentials.use-case';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type {
+  ApproveCommentImageBody,
+  AttachCommentImageBody,
   CreateCommentBody,
   ListAdminCommentsQueryBody,
   ListCommentsQueryBody,
   ListMyCommentsQueryBody,
+  RejectCommentImageBody,
   UpdateCommentBody,
 } from './validators/comment.validator';
 
@@ -46,6 +53,44 @@ function redactPublicAudio(cm: Comment): {
   };
 }
 
+function redactPublicImage(cm: Comment) {
+  if (cm.status !== 'published' || !cm.image) return null;
+  const img = cm.image;
+  if (img.status === 'published') {
+    return {
+      status: 'published' as const,
+      public_url: img.publicUrl,
+      content_warnings: img.contentWarnings.filter(
+        (w): w is 'kekerasan' => w === 'kekerasan',
+      ),
+    };
+  }
+  if (img.status === 'pending_review') {
+    return {
+      status: 'pending_review' as const,
+      public_url: null,
+      content_warnings: [] as ('kekerasan')[],
+    };
+  }
+  // rejected: jangan tampilkan slot ke publik
+  return null;
+}
+
+function toAdminImage(cm: Comment) {
+  if (!cm.image) return null;
+  const img = cm.image;
+  return {
+    status: img.status,
+    url: img.url || null,
+    provider: img.provider || null,
+    provider_file_id: img.providerFileId || null,
+    public_url: img.publicUrl,
+    content_warnings: img.contentWarnings,
+    reviewed_by: img.reviewedBy,
+    reviewed_at: img.reviewedAt?.toISOString() ?? null,
+  };
+}
+
 function toPublicCommentFields(cm: Comment) {
   return {
     id: cm.id,
@@ -58,6 +103,7 @@ function toPublicCommentFields(cm: Comment) {
     is_verifier: isVerifierRole(cm.userRole ?? ''),
     body: redactPublicBody(cm),
     ...redactPublicAudio(cm),
+    image: redactPublicImage(cm),
     status: cm.status,
     is_edited: cm.isEdited ?? false,
     updated_at: cm.updatedAt?.toISOString() ?? null,
@@ -70,6 +116,9 @@ export class CommentController {
     private readonly deps: {
       create: CreateCommentUseCase;
       createAudio: CreateCommentAudioUseCase;
+      attachImage: AttachCommentImageUseCase;
+      approveImage: ApproveCommentImageUseCase;
+      rejectImage: RejectCommentImageUseCase;
       listByWord: ListWordCommentsUseCase;
       delete: DeleteCommentUseCase;
       update: UpdateCommentUseCase;
@@ -78,8 +127,14 @@ export class CommentController {
       listMine: ListMyCommentsUseCase;
       takedown: TakedownCommentUseCase;
       uncensor: UncensorCommentUseCase;
+      createUploadCredentials: CreateUploadCredentialsUseCase;
     },
   ) {}
+
+  async uploadCredentials(c: Context, folder: string) {
+    const credentials = await this.deps.createUploadCredentials.execute(folder);
+    return c.json({ success: true as const, data: credentials });
+  }
 
   async create(c: Context, wordId: string, body: CreateCommentBody) {
     const actor = this.requireUser(c);
@@ -88,7 +143,10 @@ export class CommentController {
       userId: actor.user_id,
       role: actor.role,
       requestId: this.requestId(c),
-      body: body.body,
+      body: body.body ?? '',
+      image: body.image
+        ? { url: body.image.url, providerFileId: body.image.provider_file_id }
+        : null,
     });
 
     logger.info({ request_id: this.requestId(c), comment_id: comment.id, word_id: wordId }, 'comment created');
@@ -233,6 +291,7 @@ export class CommentController {
     const page = await this.deps.listAdmin.execute({
       status: query.status,
       wordId: query.word_id,
+      imageStatus: query.image_status,
       limit: query.limit,
       cursor: query.cursor,
     });
@@ -250,12 +309,76 @@ export class CommentController {
         body: cm.body,
         body_original: cm.bodyOriginal,
         is_censored: cm.bodyOriginal != null,
+        image: toAdminImage(cm),
         status: cm.status,
+        is_edited: cm.isEdited ?? false,
+        updated_at: cm.updatedAt?.toISOString() ?? null,
         reviewed_by: cm.reviewedBy,
         reviewed_at: cm.reviewedAt ? cm.reviewedAt.toISOString() : null,
         created_at: cm.createdAt.toISOString(),
+        // field wajib di commentDataSchema - audio redacted admin tetap kirim
+        ...redactPublicAudio(cm),
       })),
       meta: { limit: query.limit, next_cursor: page.nextCursor, has_more: page.hasMore },
+    });
+  }
+
+  async attachImage(c: Context, id: string, body: AttachCommentImageBody) {
+    const actor = this.requireUser(c);
+    const comment = await this.deps.attachImage.execute({
+      commentId: id,
+      userId: actor.user_id,
+      url: body.url,
+      providerFileId: body.provider_file_id,
+      requestId: this.requestId(c),
+    });
+    logger.info({ request_id: this.requestId(c), comment_id: id }, 'comment image attached');
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          ...toPublicCommentFields(comment),
+          body: comment.body.trim().length > 0 ? comment.body : null,
+        },
+      },
+      201,
+    );
+  }
+
+  async approveImage(c: Context, id: string, body: ApproveCommentImageBody) {
+    const actor = this.requireUser(c);
+    const comment = await this.deps.approveImage.execute({
+      commentId: id,
+      actorId: actor.user_id,
+      contentWarnings: body.content_warnings ?? [],
+      requestId: this.requestId(c),
+    });
+
+    logger.info({ request_id: this.requestId(c), comment_id: id }, 'comment image approved');
+    return c.json({
+      success: true as const,
+      data: {
+        ...toPublicCommentFields(comment),
+        body: comment.body.trim().length > 0 ? comment.body : null,
+      },
+    });
+  }
+
+  async rejectImage(c: Context, id: string, body: RejectCommentImageBody) {
+    const actor = this.requireUser(c);
+    const comment = await this.deps.rejectImage.execute({
+      commentId: id,
+      actorId: actor.user_id,
+      abusive: body.abusive === true,
+      requestId: this.requestId(c),
+    });
+    logger.info({ request_id: this.requestId(c), comment_id: id }, 'comment image rejected');
+    return c.json({
+      success: true as const,
+      data: {
+        ...toPublicCommentFields(comment),
+        body: comment.body.trim().length > 0 ? comment.body : null,
+      },
     });
   }
 
