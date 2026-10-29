@@ -34,6 +34,10 @@ export interface DiscussionRepository {
   createReply(input: NewDiscussionReply): Promise<DiscussionReply>;
   findReplyById(id: string): Promise<DiscussionReply | null>;
   listReplies(discussionId: string): Promise<DiscussionReply[]>;
+  /** Batch COUNT reply status=published per diskusi (satu query, bukan N+1). */
+  countPublishedRepliesByDiscussionIds(
+    discussionIds: string[],
+  ): Promise<Map<string, number>>;
   /** User unik yang pernah membalas thread (semua status kecuali soft-delete opsional: semua). */
   listDistinctReplierUserIds(discussionId: string): Promise<string[]>;
 

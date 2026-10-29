@@ -104,7 +104,9 @@ function toAdminImages(help: Discussion) {
   return toOwnerImages(help);
 }
 
-export function toPublicItem(help: Discussion & { upvotes?: number }) {
+export function toPublicItem(
+  help: Discussion & { upvotes?: number; replyCount?: number },
+) {
   return {
     id: help.id,
     user_id: help.userId,
@@ -119,11 +121,14 @@ export function toPublicItem(help: Discussion & { upvotes?: number }) {
     status: 'published' as const,
     pinned_reply_id: help.pinnedReplyId,
     upvotes: help.upvotes ?? 0,
+    reply_count: help.replyCount ?? 0,
     created_at: help.createdAt.toISOString(),
   };
 }
 
-export function toOwnerItem(help: Discussion & { upvotes?: number }) {
+export function toOwnerItem(
+  help: Discussion & { upvotes?: number; replyCount?: number },
+) {
   return {
     id: help.id,
     user_id: help.userId,
@@ -142,12 +147,15 @@ export function toOwnerItem(help: Discussion & { upvotes?: number }) {
     pinned_reply_id: help.pinnedReplyId,
     reviewed_at: help.reviewedAt?.toISOString() ?? null,
     upvotes: help.upvotes ?? 0,
+    reply_count: help.replyCount ?? 0,
     created_at: help.createdAt.toISOString(),
     updated_at: help.updatedAt?.toISOString() ?? null,
   };
 }
 
-export function toAdminItem(help: Discussion & { upvotes?: number }) {
+export function toAdminItem(
+  help: Discussion & { upvotes?: number; replyCount?: number },
+) {
   return {
     id: help.id,
     user_id: help.userId,
@@ -165,6 +173,7 @@ export function toAdminItem(help: Discussion & { upvotes?: number }) {
     reviewed_at: help.reviewedAt?.toISOString() ?? null,
     pinned_reply_id: help.pinnedReplyId,
     upvotes: help.upvotes ?? 0,
+    reply_count: help.replyCount ?? 0,
     created_at: help.createdAt.toISOString(),
     updated_at: help.updatedAt?.toISOString() ?? null,
   };
@@ -395,11 +404,12 @@ export class DiscussionController {
     });
 
     const isOwner = user?.user_id === help.userId;
+    const replyCount = replies.filter((r) => r.status === 'published').length;
     if (help.status === 'published') {
       return c.json({
         success: true as const,
         data: {
-          ...toPublicItem(help),
+          ...toPublicItem({ ...help, replyCount }),
           replies: replies.map((r) => toPublicReply(r, help.pinnedReplyId)),
         },
       });
@@ -414,7 +424,7 @@ export class DiscussionController {
     return c.json({
       success: true as const,
       data: {
-        ...toOwnerItem(help),
+        ...toOwnerItem({ ...help, replyCount }),
         replies: replies.map((r) => toPublicReply(r, help.pinnedReplyId)),
       },
     });

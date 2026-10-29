@@ -180,6 +180,7 @@ export const discussionPublicItemSchema = z.object({
   status: z.literal('published'),
   pinned_reply_id: z.string().nullable(),
   upvotes: z.number().int(),
+  reply_count: z.number().int(),
   created_at: z.string(),
 });
 
@@ -201,6 +202,7 @@ export const discussionOwnerItemSchema = z.object({
   pinned_reply_id: z.string().nullable(),
   reviewed_at: z.string().nullable(),
   upvotes: z.number().int(),
+  reply_count: z.number().int(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });
@@ -224,6 +226,7 @@ export const discussionAdminItemSchema = z.object({
   reviewed_at: z.string().nullable(),
   pinned_reply_id: z.string().nullable(),
   upvotes: z.number().int(),
+  reply_count: z.number().int(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });

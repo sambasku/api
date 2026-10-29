@@ -3,8 +3,9 @@ import type { CursorPage } from '@/modules/word/domain/repositories/word.reposit
 import type { Discussion } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
 
-export interface DiscussionWithUpvotes extends Discussion {
+export interface DiscussionWithListCounts extends Discussion {
   upvotes: number;
+  replyCount: number;
 }
 
 export class ListPublishedDiscussionsUseCase {
@@ -17,7 +18,7 @@ export class ListPublishedDiscussionsUseCase {
     limit: number;
     cursor?: string;
     sort?: 'latest' | 'popular';
-  }): Promise<CursorPage<DiscussionWithUpvotes>> {
+  }): Promise<CursorPage<DiscussionWithListCounts>> {
     const sort = input.sort ?? 'latest';
     const page = await this.repo.list({
       status: 'published',
@@ -26,17 +27,25 @@ export class ListPublishedDiscussionsUseCase {
       sort,
     });
 
-    const counts = await this.voteRepo.countMany(
-      page.items.map((h) => ({
-        entityType: 'discussion' as const,
-        entityId: h.id,
-      })),
-    );
+    const ids = page.items.map((h) => h.id);
+    const [counts, replyCounts] = await Promise.all([
+      this.voteRepo.countMany(
+        ids.map((id) => ({
+          entityType: 'discussion' as const,
+          entityId: id,
+        })),
+      ),
+      this.repo.countPublishedRepliesByDiscussionIds(ids),
+    ]);
 
     return {
       items: page.items.map((h) => {
         const v = counts.get(`discussion:${h.id}`) ?? { upvotes: 0, downvotes: 0 };
-        return { ...h, upvotes: v.upvotes };
+        return {
+          ...h,
+          upvotes: v.upvotes,
+          replyCount: replyCounts.get(h.id) ?? 0,
+        };
       }),
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
