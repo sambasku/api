@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
   publicAccountDisplayName,
@@ -462,6 +462,32 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         Boolean(r.isEdited),
       ),
     );
+  }
+
+  async countPublishedRepliesByDiscussionIds(
+    discussionIds: string[],
+  ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (discussionIds.length === 0) return out;
+
+    const rows = await this.db
+      .select({
+        discussionId: discussionReplies.discussionId,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(discussionReplies)
+      .where(
+        and(
+          inArray(discussionReplies.discussionId, discussionIds),
+          eq(discussionReplies.status, 'published'),
+        ),
+      )
+      .groupBy(discussionReplies.discussionId);
+
+    for (const row of rows) {
+      out.set(row.discussionId, Number(row.count) || 0);
+    }
+    return out;
   }
 
   async listDistinctReplierUserIds(discussionId: string): Promise<string[]> {
