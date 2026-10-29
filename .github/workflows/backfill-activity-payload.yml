@@ -38,11 +38,19 @@ jobs:
         if: inputs.target == 'staging'
         run: pnpm db:backfill-activity
         env:
+          NODE_ENV: staging
           DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+          JWT_PRIVATE_KEY: dummy
+          JWT_PUBLIC_KEY: dummy
+          CORS_ALLOWED_ORIGINS: https://console-sambasku-staging.iamutaki.com
       - name: Backfill production
         if: inputs.target == 'production'
         run: pnpm db:backfill-activity
         env:
+          NODE_ENV: production
           DATABASE_URL: ${{ secrets.TURSO_PRODUCTION_DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+          JWT_PRIVATE_KEY: dummy
+          JWT_PUBLIC_KEY: dummy
+          CORS_ALLOWED_ORIGINS: https://console.sambasku.com
