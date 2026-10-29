@@ -18,6 +18,10 @@ export type InboxNotificationType =
   | 'pantun_mention'
   | 'word_comment'
   | 'word_comment_mention'
+  /** #200: foto komentar pre-moderation terpisah dari teks. */
+  | 'comment_image_pending_review'
+  | 'comment_image_approved'
+  | 'comment_image_rejected'
   | 'word_vote'
   /** #133: pemilik kata dapat notif saat contoh/pelafalan tayang. */
   | 'word_example'
@@ -209,6 +213,24 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       return {
         title: 'Kamu disebut di komentar',
         body: 'Seseorang menyebutmu di komentar kosakata.',
+        bodyType: 'plain',
+      };
+    case 'comment_image_pending_review':
+      return {
+        title: 'Foto komentar menunggu cek',
+        body: 'Ada foto komentar yang menunggu pengecekan.',
+        bodyType: 'plain',
+      };
+    case 'comment_image_approved':
+      return {
+        title: 'Foto komentar disetujui',
+        body: 'Fotomu di komentar sudah tayang.',
+        bodyType: 'plain',
+      };
+    case 'comment_image_rejected':
+      return {
+        title: 'Foto komentar tidak lolos',
+        body: 'Fotomu di komentar tidak lolos pengecekan. Teks komentar tetap tayang.',
         bodyType: 'plain',
       };
   case 'word_vote':
