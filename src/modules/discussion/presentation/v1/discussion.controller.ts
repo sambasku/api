@@ -373,6 +373,7 @@ export class DiscussionController {
       limit: query.limit,
       cursor: query.cursor,
       sort: query.sort,
+      order: query.order,
     });
     return c.json({
       success: true as const,

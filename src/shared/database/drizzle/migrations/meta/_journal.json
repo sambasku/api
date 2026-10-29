@@ -771,6 +771,13 @@
       "when": 1801609000000,
       "tag": "0109_comment_images",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "6",
+      "when": 1801610000000,
+      "tag": "0110_discussion_sort_denorm",
+      "breakpoints": true
     }
   ]
 }

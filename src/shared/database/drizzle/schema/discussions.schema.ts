@@ -35,12 +35,21 @@ export const discussions = sqliteTable(
     reviewedBy: text('reviewed_by').references(() => users.id),
     reviewedAt: integer('reviewed_at', { mode: 'timestamp' }),
     pinnedReplyId: text('pinned_reply_id'),
+    /**
+     * Denorm (#204): waktu balasan published terakhir.
+     * Null = belum ada balasan; sort activity pakai COALESCE(last_reply_at, created_at).
+     */
+    lastReplyAt: integer('last_reply_at', { mode: 'timestamp' }),
+    /** Denorm (#204): jumlah balasan status=published (untuk ORDER BY replies). */
+    publishedReplyCount: integer('published_reply_count').notNull().default(0),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
   },
   (t) => [
     index('discussions_status_id_idx').on(t.status, t.id),
     index('discussions_user_id_idx').on(t.userId, t.id),
+    index('discussions_status_last_reply_id_idx').on(t.status, t.lastReplyAt, t.id),
+    index('discussions_status_reply_count_id_idx').on(t.status, t.publishedReplyCount, t.id),
   ],
 );
 

@@ -24,6 +24,8 @@ function makeHelp(id: string, overrides: Partial<Discussion> = {}): Discussion {
     reviewedBy: null,
     reviewedAt: null,
     pinnedReplyId: null,
+    lastReplyAt: null,
+    publishedReplyCount: 0,
     createdAt: new Date('2026-09-24T00:00:00Z'),
     updatedAt: null,
     ...overrides,
@@ -31,20 +33,18 @@ function makeHelp(id: string, overrides: Partial<Discussion> = {}): Discussion {
 }
 
 describe('ListPublishedDiscussionsUseCase', () => {
-  it('melampirkan upvotes + reply_count dari batch (bukan N+1)', async () => {
-    const items = [makeHelp(D1), makeHelp(D2)];
+  it('melampirkan upvotes dari batch vote + replyCount dari denorm (#204)', async () => {
+    const items = [
+      makeHelp(D1, { publishedReplyCount: 3 }),
+      makeHelp(D2, { publishedReplyCount: 0 }),
+    ];
     const repo = {
       list: vi.fn().mockResolvedValue({
         items,
         nextCursor: null,
         hasMore: false,
       }),
-      countPublishedRepliesByDiscussionIds: vi.fn().mockResolvedValue(
-        new Map([
-          [D1, 3],
-          [D2, 0],
-        ]),
-      ),
+      countPublishedRepliesByDiscussionIds: vi.fn(),
     } as unknown as DiscussionRepository;
 
     const voteRepo = {
@@ -60,8 +60,7 @@ describe('ListPublishedDiscussionsUseCase', () => {
     const page = await uc.execute({ limit: 20 });
 
     expect(repo.list).toHaveBeenCalledTimes(1);
-    expect(repo.countPublishedRepliesByDiscussionIds).toHaveBeenCalledTimes(1);
-    expect(repo.countPublishedRepliesByDiscussionIds).toHaveBeenCalledWith([D1, D2]);
+    expect(repo.countPublishedRepliesByDiscussionIds).not.toHaveBeenCalled();
     expect(voteRepo.countMany).toHaveBeenCalledTimes(1);
 
     expect(page.items).toEqual([
@@ -70,14 +69,38 @@ describe('ListPublishedDiscussionsUseCase', () => {
     ]);
   });
 
-  it('replyCount 0 jika tidak ada baris count', async () => {
+  it('meneruskan sort + order ke repo', async () => {
     const repo = {
       list: vi.fn().mockResolvedValue({
         items: [makeHelp(D1)],
         nextCursor: null,
         hasMore: false,
       }),
-      countPublishedRepliesByDiscussionIds: vi.fn().mockResolvedValue(new Map()),
+    } as unknown as DiscussionRepository;
+
+    const voteRepo = {
+      countMany: vi.fn().mockResolvedValue(new Map()),
+    } as unknown as VoteRepository;
+
+    const uc = new ListPublishedDiscussionsUseCase(repo, voteRepo);
+    await uc.execute({ limit: 10, sort: 'replies', order: 'asc' });
+
+    expect(repo.list).toHaveBeenCalledWith({
+      status: 'published',
+      limit: 10,
+      cursor: undefined,
+      sort: 'replies',
+      order: 'asc',
+    });
+  });
+
+  it('replyCount 0 jika denorm 0', async () => {
+    const repo = {
+      list: vi.fn().mockResolvedValue({
+        items: [makeHelp(D1)],
+        nextCursor: null,
+        hasMore: false,
+      }),
     } as unknown as DiscussionRepository;
 
     const voteRepo = {
