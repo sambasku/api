@@ -764,6 +764,13 @@
       "when": 1801608000000,
       "tag": "0108_ugc_edit_revisions",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "6",
+      "when": 1801609000000,
+      "tag": "0109_comment_images",
+      "breakpoints": true
     }
   ]
 }

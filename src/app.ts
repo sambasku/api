@@ -592,6 +592,9 @@ import { GetTopTargetVotesUseCase } from "@/modules/vote/application/use-cases/g
 import { CommentRepositoryImpl } from "@/modules/comment/infrastructure/comment.repository.impl";
 import { CreateCommentUseCase } from "@/modules/comment/application/use-cases/create-comment.use-case";
 import { CreateCommentAudioUseCase } from "@/modules/comment/application/use-cases/create-comment-audio.use-case";
+import { AttachCommentImageUseCase } from "@/modules/comment/application/use-cases/attach-comment-image.use-case";
+import { ApproveCommentImageUseCase } from "@/modules/comment/application/use-cases/approve-comment-image.use-case";
+import { RejectCommentImageUseCase } from "@/modules/comment/application/use-cases/reject-comment-image.use-case";
 import { ListWordCommentsUseCase } from "@/modules/comment/application/use-cases/list-word-comments.use-case";
 import { DeleteCommentUseCase } from "@/modules/comment/application/use-cases/delete-comment.use-case";
 import { UpdateCommentUseCase } from "@/modules/comment/application/use-cases/update-comment.use-case";
@@ -1520,6 +1523,10 @@ const pantunReplyPushCooldown = new ReplyPushCooldownGate(
   notificationPushCooldownRepo,
   'pantun_reply',
 );
+const commentUploadCredentials = new CreateUploadCredentialsUseCase({
+  imageStorage,
+  defaultFolder: "/comments",
+});
 const commentController = new CommentController({
   create: new CreateCommentUseCase(
     commentRepo,
@@ -1545,6 +1552,27 @@ const commentController = new CommentController({
     wordCommentPushCooldown,
     recordAbuseSignal,
   ),
+  attachImage: new AttachCommentImageUseCase(
+    commentRepo,
+    auditRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+  ),
+  approveImage: new ApproveCommentImageUseCase(
+    commentRepo,
+    publicImageStorage,
+    imageStorage,
+    auditRepo,
+    recordInbox,
+  ),
+  rejectImage: new RejectCommentImageUseCase(
+    commentRepo,
+    imageStorage,
+    auditRepo,
+    recordInbox,
+    recordAbuseSignal,
+  ),
   listByWord: new ListWordCommentsUseCase(commentRepo, voteRepo),
   delete: new DeleteCommentUseCase(commentRepo, auditRepo),
   update: new UpdateCommentUseCase(
@@ -1563,6 +1591,7 @@ const commentController = new CommentController({
     recordAbuseSignal,
   ),
   uncensor: new UncensorCommentUseCase(commentRepo, auditRepo),
+  createUploadCredentials: commentUploadCredentials,
 });
 const commentBlocklistController = new CommentBlocklistController({
   create: new CreateBlocklistWordUseCase(commentBlocklistRepo, auditRepo),

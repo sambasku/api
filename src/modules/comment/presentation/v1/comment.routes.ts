@@ -8,8 +8,10 @@ import { errorResponseSchema, okNullResponseSchema } from '@/shared/openapi/erro
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { CommentController } from './comment.controller';
 import {
+  attachCommentImageBodySchema,
   commentBodySchema,
   commentEditHistoryResponseSchema,
+  commentUploadTokenQuerySchema,
   createCommentResponseSchema,
   listCommentsQuerySchema,
   listCommentsResponseSchema,
@@ -17,6 +19,7 @@ import {
   myCommentsResponseSchema,
   updateCommentBodySchema,
   updateCommentResponseSchema,
+  uploadCredentialsResponseSchema,
 } from './validators/comment.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -190,6 +193,43 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
 
   routes.openapi(myRoute, (c) => deps.controller.my(c, c.req.valid('query')) as never);
 
+  const tokenUserLimit = rateLimit({
+    points: 30,
+    duration: 60,
+    keyFn: (c) => {
+      const user = (c.get('user') as AuthUser | undefined) ?? null;
+      return `comment-upload-token:${user?.user_id ?? 'unknown'}`;
+    },
+  });
+  routes.use(
+    '/upload-token',
+    deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
+    tokenUserLimit,
+  );
+
+  const uploadTokenRoute = createRoute({
+    method: 'get',
+    path: '/upload-token',
+    tags: ['Comments'],
+    summary: 'Kredensial direct-upload ImageKit, folder hanya /comments (login)',
+    request: { query: commentUploadTokenQuerySchema },
+    responses: {
+      200: {
+        description: 'Token + signature upload',
+        content: json(uploadCredentialsResponseSchema),
+      },
+      400: { description: 'Folder bukan /comments', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(uploadTokenRoute, (c) =>
+    deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
+  );
+
   routes.use(
     '/:id/edit-history',
     rateLimit({ points: 100, duration: 60, keyFn: (c) => clientIpKey(c) }),
@@ -217,6 +257,15 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
     deps.controller.editHistory(c, c.req.param('id')) as never,
   );
 
+  routes.on(
+    'post',
+    '/:id/image',
+    deps.authenticate,
+    ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
+    wordCommentLimiter(deps.onUgcRateLimited),
+  );
+
   routes.use(
     '/:id',
     deps.authenticate,
@@ -224,6 +273,26 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
     ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     wordCommentLimiter(deps.onUgcRateLimited),
   );
+
+  const attachImageRoute = createRoute({
+    method: 'post',
+    path: '/:id/image',
+    tags: ['Comments'],
+    summary: 'Lampirkan foto staging ke komentar tayang (foto antre pending_review)',
+    request: {
+      params: z.object({ id: ulid26 }),
+      body: { content: json(attachCommentImageBodySchema) },
+    },
+    responses: {
+      201: { description: 'Foto dilampirkan, menunggu cek', content: json(createCommentResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+      404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Sudah ada foto / bukan published', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
 
   const updateRoute = createRoute({
     method: 'patch',
@@ -261,6 +330,9 @@ export function createCommentRoutes(deps: CommentRoutesDeps) {
     },
   });
 
+  routes.openapi(attachImageRoute, (c) =>
+    deps.controller.attachImage(c, c.req.param('id'), c.req.valid('json')) as never,
+  );
   routes.openapi(updateRoute, (c) =>
     deps.controller.update(c, c.req.param('id'), c.req.valid('json')) as never,
   );

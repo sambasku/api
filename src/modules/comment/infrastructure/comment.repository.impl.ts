@@ -7,6 +7,8 @@ import { commentRevisions, comments, users, words } from '@/shared/database/driz
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
   Comment,
+  CommentImage,
+  CommentImageStatus,
   CommentRevision,
   CommentStatus,
   CursorPage,
@@ -18,6 +20,58 @@ import type {
   ListMyCommentsParams,
 } from '../domain/repositories/comment.repository';
 import { COMMENT_REVISION_CAP } from '../domain/repositories/comment.repository';
+
+function parseContentWarnings(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is string => typeof x === 'string');
+  } catch {
+    return [];
+  }
+}
+
+function toCommentImage(row: typeof comments.$inferSelect): CommentImage | null {
+  const status = row.imageStatus as CommentImageStatus | null;
+  if (
+    !status ||
+    (status !== 'pending_review' && status !== 'published' && status !== 'rejected')
+  ) {
+    return null;
+  }
+  if (
+    typeof row.imageUrl !== 'string' ||
+    row.imageUrl.length === 0 ||
+    typeof row.imageProvider !== 'string' ||
+    typeof row.imageProviderFileId !== 'string'
+  ) {
+    // rejected boleh tanpa URL staging
+    if (status === 'rejected') {
+      return {
+        url: row.imageUrl ?? '',
+        provider: row.imageProvider ?? '',
+        providerFileId: row.imageProviderFileId ?? '',
+        publicUrl: null,
+        status,
+        contentWarnings: parseContentWarnings(row.imageContentWarnings),
+        reviewedBy: row.imageReviewedBy ?? null,
+        reviewedAt: row.imageReviewedAt ?? null,
+      };
+    }
+    return null;
+  }
+  return {
+    url: row.imageUrl,
+    provider: row.imageProvider,
+    providerFileId: row.imageProviderFileId,
+    publicUrl: row.imagePublicUrl ?? null,
+    status,
+    contentWarnings: parseContentWarnings(row.imageContentWarnings),
+    reviewedBy: row.imageReviewedBy ?? null,
+    reviewedAt: row.imageReviewedAt ?? null,
+  };
+}
 
 const PUBLIC_STATUSES: CommentStatus[] = ['published', 'taken_down', 'deleted_by_author'];
 
@@ -59,8 +113,14 @@ export class CommentRepositoryImpl implements CommentRepository {
       providerFileId: string;
       sha: string | null;
     } | null;
+    image?: {
+      url: string;
+      provider: string;
+      providerFileId: string;
+    } | null;
   }): Promise<Comment> {
     const audio = data.audio ?? null;
+    const image = data.image ?? null;
     const [row] = await this.db
       .insert(comments)
       .values({
@@ -75,6 +135,12 @@ export class CommentRepositoryImpl implements CommentRepository {
         audioProvider: audio?.provider ?? null,
         audioProviderFileId: audio?.providerFileId ?? null,
         audioSha: audio?.sha ?? null,
+        imageUrl: image?.url ?? null,
+        imageProvider: image?.provider ?? null,
+        imageProviderFileId: image?.providerFileId ?? null,
+        imagePublicUrl: null,
+        imageStatus: image ? 'pending_review' : null,
+        imageContentWarnings: image ? '[]' : null,
         status: 'published',
       })
       .returning();
@@ -146,6 +212,7 @@ export class CommentRepositoryImpl implements CommentRepository {
     const where = and(
       params.status ? eq(comments.status, params.status) : undefined,
       params.wordId ? eq(comments.wordId, params.wordId) : undefined,
+      params.imageStatus ? eq(comments.imageStatus, params.imageStatus) : undefined,
       isNull(comments.deletedAt),
       params.cursor ? lt(comments.id, params.cursor) : undefined,
     );
@@ -313,6 +380,98 @@ export class CommentRepositoryImpl implements CommentRepository {
     return rows.map((r) => r.userId);
   }
 
+  async setPendingImage(
+    commentId: string,
+    image: { url: string; provider: string; providerFileId: string },
+  ): Promise<Comment | null> {
+    // Izinkan set ulang hanya jika belum ada foto, atau status rejected.
+    const updated = await this.db
+      .update(comments)
+      .set({
+        imageUrl: image.url,
+        imageProvider: image.provider,
+        imageProviderFileId: image.providerFileId,
+        imagePublicUrl: null,
+        imageStatus: 'pending_review',
+        imageContentWarnings: '[]',
+        imageReviewedBy: null,
+        imageReviewedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(comments.id, commentId),
+          eq(comments.status, 'published'),
+          isNull(comments.deletedAt),
+          sql`(${comments.imageStatus} IS NULL OR ${comments.imageStatus} = 'rejected')`,
+        ),
+      )
+      .returning({ id: comments.id });
+    if (updated.length === 0) return null;
+    return this.findById(commentId);
+  }
+
+  async approveImage(
+    commentId: string,
+    input: {
+      reviewerId: string;
+      publicUrl: string;
+      provider: string;
+      providerFileId: string;
+      contentWarnings: string[];
+    },
+  ): Promise<Comment | null> {
+    const updated = await this.db
+      .update(comments)
+      .set({
+        imageUrl: input.publicUrl,
+        imageProvider: input.provider,
+        imageProviderFileId: input.providerFileId,
+        imagePublicUrl: input.publicUrl,
+        imageStatus: 'published',
+        imageContentWarnings: JSON.stringify(input.contentWarnings),
+        imageReviewedBy: input.reviewerId,
+        imageReviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(comments.id, commentId),
+          eq(comments.imageStatus, 'pending_review'),
+          isNull(comments.deletedAt),
+        ),
+      )
+      .returning({ id: comments.id });
+    if (updated.length === 0) return null;
+    return this.findById(commentId);
+  }
+
+  async rejectImage(commentId: string, reviewerId: string): Promise<Comment | null> {
+    const updated = await this.db
+      .update(comments)
+      .set({
+        imageUrl: null,
+        imageProvider: null,
+        imageProviderFileId: null,
+        imagePublicUrl: null,
+        imageStatus: 'rejected',
+        imageContentWarnings: '[]',
+        imageReviewedBy: reviewerId,
+        imageReviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(comments.id, commentId),
+          eq(comments.imageStatus, 'pending_review'),
+          isNull(comments.deletedAt),
+        ),
+      )
+      .returning({ id: comments.id });
+    if (updated.length === 0) return null;
+    return this.findById(commentId);
+  }
+
   private async page(where: ReturnType<typeof and> | undefined, limit: number): Promise<CursorPage<Comment>> {
     const rows = await this.selectBase()
       .where(where)
@@ -383,6 +542,7 @@ export class CommentRepositoryImpl implements CommentRepository {
             sha: row.audioSha ?? null,
           }
         : null,
+      image: toCommentImage(row),
       status: row.status as CommentStatus,
       reviewedBy: row.reviewedBy,
       reviewedAt: row.reviewedAt,

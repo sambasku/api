@@ -50,3 +50,8 @@ export function buildCulinaryImagePath(mimeType: string): string {
 export function buildUsahaImagePath(mimeType: string): string {
   return `assets/usahas/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path foto komentar lemma: assets/comments/<ulid>.<ext> */
+export function buildCommentImagePath(mimeType: string): string {
+  return `assets/comments/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

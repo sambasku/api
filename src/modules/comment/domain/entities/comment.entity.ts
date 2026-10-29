@@ -2,6 +2,9 @@
 // via LEFT JOIN users saat baca - null kalau penulis terhapus.
 export type CommentStatus = 'published' | 'taken_down' | 'deleted_by_author';
 
+/** Status foto terpisah dari status komentar (opsi B: teks tayang, foto antre). */
+export type CommentImageStatus = 'pending_review' | 'published' | 'rejected';
+
 export interface CommentAudio {
   url: string;
   mimeType: string;
@@ -10,6 +13,17 @@ export interface CommentAudio {
   provider: string;
   providerFileId: string;
   sha: string | null;
+}
+
+export interface CommentImage {
+  url: string;
+  provider: string;
+  providerFileId: string;
+  publicUrl: string | null;
+  status: CommentImageStatus;
+  contentWarnings: string[];
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
 }
 
 export interface Comment {
@@ -30,6 +44,8 @@ export interface Comment {
   /** Teks asli sebelum sensor; null jika tidak disensor / sudah di-uncensor */
   bodyOriginal: string | null;
   audio: CommentAudio | null;
+  /** Satu foto opsional; null jika tanpa lampiran gambar. */
+  image: CommentImage | null;
   status: CommentStatus;
   reviewedBy: string | null;
   reviewedAt: Date | null;
@@ -63,6 +79,12 @@ export interface NewComment {
   body: string;
   bodyOriginal?: string | null;
   audio?: CommentAudio | null;
+  /** Staging ImageKit; status awal selalu pending_review. */
+  image?: {
+    url: string;
+    provider: string;
+    providerFileId: string;
+  } | null;
 }
 
 export interface CursorPage<T> {

@@ -26,6 +26,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     body: 'halo',
     bodyOriginal: null,
     audio: null,
+    image: null,
     status: 'published',
     reviewedBy: null,
     reviewedAt: null,
@@ -82,6 +83,7 @@ describe('CreateCommentUseCase', () => {
       userId: AUTHOR,
       body: 'Ini *** sekali',
       bodyOriginal: 'Ini Bodoh sekali',
+      image: null,
     });
     expect(created.status).toBe('published');
     expect(auditRepo.record).toHaveBeenCalled();

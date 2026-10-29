@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
@@ -27,6 +27,8 @@ export interface CreateCommentCommand {
   role: string;
   requestId?: string | null;
   body: string;
+  /** Staging ImageKit (satu foto); status foto = pending_review. */
+  image?: { url: string; providerFileId: string } | null;
 }
 
 const COMMENT_SNIPPET_MAX = 80;
@@ -64,13 +66,24 @@ export class CreateCommentUseCase {
   async execute(cmd: CreateCommentCommand): Promise<Comment> {
     await assertCanContribute(cmd.userId);
 
-    const body = await assertUgcTextQualityWithStrike(cmd.body, {
-      userId: cmd.userId,
-      abuse: this.abuse,
-      entityType: 'comment',
-      requestId: cmd.requestId,
-      minMeaningfulChars: 1,
-    });
+    const rawBody = cmd.body?.trim() ?? '';
+    const hasImage = Boolean(cmd.image?.url && cmd.image?.providerFileId);
+    if (rawBody.length === 0 && !hasImage) {
+      throw new ValidationError([
+        { field: 'body', message: 'Komentar atau foto wajib diisi' },
+      ]);
+    }
+
+    let body = rawBody;
+    if (rawBody.length > 0) {
+      body = await assertUgcTextQualityWithStrike(rawBody, {
+        userId: cmd.userId,
+        abuse: this.abuse,
+        entityType: 'comment',
+        requestId: cmd.requestId,
+        minMeaningfulChars: 1,
+      });
+    }
 
     const word = await this.wordRepo.findById(cmd.wordId);
     if (!word) {
@@ -81,17 +94,24 @@ export class CreateCommentUseCase {
     }
 
     const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filteredBody = applyBlocklistFilter(body, blocked);
-    const wasFiltered = filteredBody !== body;
+    const filteredBody = body.length > 0 ? applyBlocklistFilter(body, blocked) : '';
+    const wasFiltered = body.length > 0 && filteredBody !== body;
 
     const comment = await this.commentRepo.create({
       wordId: cmd.wordId,
       userId: cmd.userId,
       body: filteredBody,
       bodyOriginal: wasFiltered ? body : null,
+      image: hasImage
+        ? {
+            url: cmd.image!.url,
+            provider: 'imagekit',
+            providerFileId: cmd.image!.providerFileId,
+          }
+        : null,
     });
 
-    // Event feed: komentar langsung published (post-moderation).
+    // Event feed: komentar langsung published (post-moderation). Foto antre terpisah.
     await this.activityEvents?.safe({
       kind: 'comment_created',
       actorId: cmd.userId,
@@ -111,6 +131,7 @@ export class CreateCommentUseCase {
         body_original: comment.bodyOriginal,
         status: 'published',
         censored: wasFiltered,
+        image_status: comment.image?.status ?? null,
       },
       requestId: cmd.requestId ?? null,
     });
@@ -143,7 +164,80 @@ export class CreateCommentUseCase {
       excludeUserIds: new Set(notifiedRecipientIds),
     });
 
+    if (hasImage) {
+      await this.notifyImageModerators({
+        commentId: comment.id,
+        wordId: cmd.wordId,
+        actorId: cmd.userId,
+        lemma: word.lemma,
+      });
+    }
+
     return (await this.commentRepo.findById(comment.id)) ?? comment;
+  }
+
+  private async notifyImageModerators(input: {
+    commentId: string;
+    wordId: string;
+    actorId: string;
+    lemma: string;
+  }): Promise<void> {
+    if (!this.userRepo || (!this.inbox && !this.notifyUser)) return;
+    try {
+      const moderatorIds = await this.userRepo.listActiveIdsByRoles([
+        'admin',
+        'root',
+        'reviewer',
+        'editor',
+      ]);
+      const recipients = moderatorIds.filter((id) => id !== input.actorId);
+      if (recipients.length === 0) return;
+
+      const body = `Ada foto komentar di "${input.lemma}" yang menunggu pengecekan.`;
+      const title = 'Foto komentar menunggu cek';
+
+      for (const userId of recipients) {
+        if (this.inbox) {
+          await this.inbox.execute({
+            userId,
+            type: 'comment_image_pending_review',
+            targetKind: 'word',
+            targetId: input.wordId,
+            actorId: input.actorId,
+            title,
+            body,
+            actionKind: 'word',
+            actionValue: input.wordId,
+          });
+        }
+        if (this.notifyUser) {
+          await this.notifyUser.execute({
+            userId,
+            title,
+            body,
+            actorId: input.actorId,
+            data: {
+              type: 'comment_image_pending_review',
+              target_kind: 'word',
+              target_id: input.wordId,
+              action_kind: 'word',
+              action_value: input.wordId,
+              comment_id: input.commentId,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          time: new Date().toISOString(),
+          msg: 'comment image pending_review blast failed',
+          comment_id: input.commentId,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 
   /**

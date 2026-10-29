@@ -1,5 +1,6 @@
 import type {
   Comment,
+  CommentImageStatus,
   CommentRevision,
   CursorPage,
   NewComment,
@@ -18,6 +19,8 @@ export interface ListAdminCommentsParams extends ListCommentsParams {
   status?: Comment['status'];
   /** filter komentar satu kata (section komentar di detail admin) */
   wordId?: string;
+  /** Antrean foto: filter image_status (mis. pending_review). */
+  imageStatus?: CommentImageStatus;
 }
 
 export interface ListMyCommentsParams extends ListCommentsParams {
@@ -69,4 +72,28 @@ export interface CommentRepository {
   }): Promise<Comment | null>;
 
   listRevisions(commentId: string): Promise<CommentRevision[]>;
+
+  /**
+   * Lampirkan / ganti foto staging pada komentar published.
+   * Atomic: hanya jika belum ada pending/published, atau allowReplace.
+   */
+  setPendingImage(
+    commentId: string,
+    image: { url: string; provider: string; providerFileId: string },
+  ): Promise<Comment | null>;
+
+  /** Promote foto: pending_review → published + public URL. */
+  approveImage(
+    commentId: string,
+    input: {
+      reviewerId: string;
+      publicUrl: string;
+      provider: string;
+      providerFileId: string;
+      contentWarnings: string[];
+    },
+  ): Promise<Comment | null>;
+
+  /** Tolak foto: pending_review → rejected; bersihkan URL staging di DB. */
+  rejectImage(commentId: string, reviewerId: string): Promise<Comment | null>;
 }
