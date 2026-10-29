@@ -8,6 +8,7 @@ import type {
   DiscussionReply,
   DiscussionReplyAudio,
   DiscussionReplyRevision,
+  DiscussionRevision,
   DiscussionStatus,
 } from '../entities/discussion.entity';
 
@@ -50,6 +51,9 @@ export interface DiscussionRepository {
   markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownReply(id: string, reviewerId: string): Promise<boolean>;
 
+  /** Soft-delete OP oleh penulis (#202): published → deleted_by_author. */
+  markDiscussionDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+
   updateReplyBodyWithRevision(input: {
     replyId: string;
     editorId: string;
@@ -58,4 +62,19 @@ export interface DiscussionRepository {
   }): Promise<DiscussionReply | null>;
 
   listReplyRevisions(replyId: string): Promise<DiscussionReplyRevision[]>;
+
+  /**
+   * Edit OP published (#202): body + link; snapshot revisi bila body berubah.
+   * `requeuePendingReview` → status pending_review (pra-moderasi ulang).
+   */
+  updateDiscussionBodyWithRevision(input: {
+    discussionId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+    linkUrl: string | null;
+    requeuePendingReview: boolean;
+  }): Promise<Discussion | null>;
+
+  listDiscussionRevisions(discussionId: string): Promise<DiscussionRevision[]>;
 }

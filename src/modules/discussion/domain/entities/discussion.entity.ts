@@ -2,7 +2,8 @@ export type DiscussionStatus =
   | 'pending_review'
   | 'published'
   | 'rejected'
-  | 'taken_down';
+  | 'taken_down'
+  | 'deleted_by_author';
 
 export type DiscussionReplyStatus = 'published' | 'taken_down' | 'deleted_by_author';
 
@@ -25,6 +26,8 @@ export interface Discussion {
   /** Role tertinggi penulis. Null jika akun hilang. Dipakai centang verifikator. */
   userRole: string | null;
   body: string | null;
+  /** Teks sebelum filter blocklist (null = tidak tersensor). */
+  bodyOriginal: string | null;
   /** Tautan https luar (opsional). */
   linkUrl: string | null;
   images: DiscussionImage[];
@@ -41,6 +44,16 @@ export interface Discussion {
   publishedReplyCount: number;
   createdAt: Date;
   updatedAt: Date | null;
+  /** true jika pernah disunting (EXISTS di discussion_revisions). */
+  isEdited?: boolean;
+}
+
+export interface DiscussionRevision {
+  id: string;
+  discussionId: string;
+  editorId: string;
+  body: string;
+  createdAt: Date;
 }
 
 export interface NewDiscussion {

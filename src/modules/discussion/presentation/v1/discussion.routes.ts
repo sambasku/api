@@ -13,9 +13,13 @@ import {
   createDiscussionReplyResponseSchema,
   createDiscussionResponseSchema,
   deleteDiscussionReplyResponseSchema,
+  deleteDiscussionResponseSchema,
+  discussionEditHistoryResponseSchema,
   discussionReplyEditHistoryResponseSchema,
+  updateDiscussionBodySchema,
   updateDiscussionReplyBodySchema,
   updateDiscussionReplyResponseSchema,
+  updateDiscussionResponseSchema,
   attachDiscussionAudioResponseSchema,
   listMyDiscussionsQuerySchema,
   listDiscussionsQuerySchema,
@@ -176,6 +180,10 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     '/replies/:id/edit-history',
     rateLimit({ points: 100, duration: 60, keyFn: (c) => clientIpKey(c) }),
   );
+  routes.use(
+    '/:id/edit-history',
+    rateLimit({ points: 100, duration: 60, keyFn: (c) => clientIpKey(c) }),
+  );
 
   const replyWriteChain = [
     deps.authenticate,
@@ -185,6 +193,15 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   ] as const;
   routes.on('delete', '/replies/:id', ...replyWriteChain);
   routes.on('patch', '/replies/:id', ...replyWriteChain);
+
+  const topicWriteChain = [
+    deps.authenticate,
+    ...writeClient,
+    ...legalConsent,
+    submitLimit,
+  ] as const;
+  routes.on('delete', '/:id', ...topicWriteChain);
+  routes.on('patch', '/:id', ...topicWriteChain);
 
   const uploadTokenRoute = createRoute({
     method: 'get',
@@ -376,6 +393,43 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     },
   });
 
+  const updateDiscussionRoute = createRoute({
+    method: 'patch',
+    path: '/:id',
+    tags: ['Discussions'],
+    summary:
+      'Edit OP sendiri (published → pending_review; body+link; gambar/audio tidak diganti)',
+    request: {
+      params: discussionIdParamSchema,
+      body: { content: json(updateDiscussionBodySchema) },
+    },
+    responses: {
+      200: {
+        description: 'Disimpan & menunggu tinjauan ulang',
+        content: json(updateDiscussionResponseSchema),
+      },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
+  const deleteDiscussionRoute = createRoute({
+    method: 'delete',
+    path: '/:id',
+    tags: ['Discussions'],
+    summary: 'Batalkan penayangan OP sendiri → deleted_by_author',
+    request: { params: discussionIdParamSchema },
+    responses: {
+      200: { description: 'Dibatalkan', content: json(deleteDiscussionResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
   const replyEditHistoryRoute = createRoute({
     method: 'get',
     path: '/replies/:id/edit-history',
@@ -388,6 +442,22 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
         content: json(discussionReplyEditHistoryResponseSchema),
       },
       404: { description: 'Balasan tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
+  const discussionEditHistoryRoute = createRoute({
+    method: 'get',
+    path: '/:id/edit-history',
+    tags: ['Discussions'],
+    summary: 'Riwayat sunting OP (publik; hanya published)',
+    request: { params: discussionIdParamSchema },
+    responses: {
+      200: {
+        description: 'Current + revisions (newest first)',
+        content: json(discussionEditHistoryResponseSchema),
+      },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
       429: { description: 'Rate limit', content: json(errorResponseSchema) },
     },
   });
@@ -419,11 +489,20 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   routes.openapi(replyEditHistoryRoute, (c) =>
     deps.controller.replyEditHistory(c, c.req.valid('param').id) as never,
   );
+  routes.openapi(discussionEditHistoryRoute, (c) =>
+    deps.controller.editHistory(c, c.req.valid('param').id) as never,
+  );
   routes.openapi(updateReplyRoute, (c) =>
     deps.controller.updateReply(c, c.req.valid('param').id, c.req.valid('json')) as never,
   );
   routes.openapi(deleteReplyRoute, (c) =>
     deps.controller.deleteReply(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(updateDiscussionRoute, (c) =>
+    deps.controller.update(c, c.req.valid('param').id, c.req.valid('json')) as never,
+  );
+  routes.openapi(deleteDiscussionRoute, (c) =>
+    deps.controller.delete(c, c.req.valid('param').id) as never,
   );
 
   return routes;

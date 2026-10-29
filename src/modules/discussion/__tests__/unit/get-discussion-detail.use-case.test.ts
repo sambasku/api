@@ -23,6 +23,7 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     avatarUrl: null,
     userRole: null,
     body: 'Apa arti ini?',
+    bodyOriginal: null,
     linkUrl: null,
     images: [],
     audio: null,
@@ -74,6 +75,9 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     findReplyById: vi.fn(),
     listReplies: vi.fn().mockResolvedValue([]),
     markReplyDeletedByAuthor: vi.fn(),
+    markDiscussionDeletedByAuthor: vi.fn(),
+    updateDiscussionBodyWithRevision: vi.fn(),
+    listDiscussionRevisions: vi.fn().mockResolvedValue([]),
     takedownReply: vi.fn(),
     listDistinctReplierUserIds: vi.fn().mockResolvedValue([]),
     ...overrides,
@@ -142,7 +146,7 @@ describe('GetDiscussionDetailUseCase', () => {
     );
   });
 
-  it('pending owner → replies kosong (belum published)', async () => {
+  it('pending owner → replies tetap dibaca (#202 re-queue setelah tayang)', async () => {
     const repo = makeRepo({
       findById: vi
         .fn()
@@ -153,9 +157,10 @@ describe('GetDiscussionDetailUseCase', () => {
     const uc = new GetDiscussionDetailUseCase(repo, voteRepo);
 
     const result = await uc.execute({ id: HELP_ID, viewerUserId: USER });
-    expect(result.replies).toEqual([]);
+    expect(result.replies).toHaveLength(1);
     expect(voteRepo.countMany).toHaveBeenCalledWith([
       { entityType: 'discussion', entityId: HELP_ID },
+      { entityType: 'discussion_reply', entityId: R1 },
     ]);
   });
 });

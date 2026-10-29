@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, culinaryPlaces, cuisines, events, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, culinaryPlaces, cuisines, discussions, events, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -540,6 +540,14 @@ export class ActivityEventFeedRepositoryImpl {
       ),
     )
     .leftJoin(
+      discussions,
+      and(
+        eq(activityEvents.kind, 'discussion_created'),
+        eq(discussions.id, activityEvents.targetId),
+        eq(discussions.status, 'published'),
+      ),
+    )
+    .leftJoin(
       pantuns,
       and(
         eq(activityEvents.kind, 'pantun_created'),
@@ -584,6 +592,8 @@ export class ActivityEventFeedRepositoryImpl {
         sql`(${activityEvents.kind} <> 'place_published' or ${places.id} is not null)`,
         // Acara baru hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'event_published' or ${events.id} is not null)`,
+      // Diskusi hanya tayang selama masih published (edit re-queue / cabut = sembunyi).
+      sql`(${activityEvents.kind} <> 'discussion_created' or ${discussions.id} is not null)`,
       // Pantun hanya tayang selama masih published (takedown = sembunyi).
       sql`(${activityEvents.kind} <> 'pantun_created' or ${pantuns.id} is not null)`,
       // Balasan pantun: balasan & induknya harus published (visibility read-time).
