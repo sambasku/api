@@ -19,6 +19,7 @@ const {
   comments,
   contributions,
   contributionReviews,
+  discussions,
   meanings,
   searchMisses,
   users,
@@ -27,6 +28,7 @@ const {
   words,
 } = await import('../shared/database/drizzle/schema');
 import type { ActivityEventKind } from '../modules/activity/domain/entities/activity-event.entity';
+import { discussionCreatedPayload } from '../modules/activity/application/utils/activity-body-snippet';
 
 interface Row {
   kind: ActivityEventKind;
@@ -481,8 +483,54 @@ async function main() {
   }
   console.log(`[backfill-activity] payload vote: ${n9}`);
 
+  // #206: discussion_created tanpa payload → cuplikan dari discussions.body.
+  const discussionEventsForPayload = await db
+    .select({
+      id: activityEvents.id,
+      targetId: activityEvents.targetId,
+    })
+    .from(activityEvents)
+    .where(
+      and(
+        eq(activityEvents.kind, 'discussion_created'),
+        isNull(activityEvents.payload),
+      ),
+    );
+  const discussionIds = [
+    ...new Set(
+      discussionEventsForPayload
+        .map((r) => r.targetId)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  const bodyByDiscussionId = new Map<string, string | null>();
+  for (let i = 0; i < discussionIds.length; i += 500) {
+    const rowsD = await db
+      .select({ id: discussions.id, body: discussions.body })
+      .from(discussions)
+      .where(inArray(discussions.id, discussionIds.slice(i, i + 500)));
+    for (const r of rowsD) bodyByDiscussionId.set(r.id, r.body);
+  }
+  let n10 = 0;
+  for (const ev of discussionEventsForPayload) {
+    if (!ev.targetId) continue;
+    // Diskusi hilang: tetap isi fallback supaya tile tidak kosong.
+    const body = bodyByDiscussionId.has(ev.targetId)
+      ? bodyByDiscussionId.get(ev.targetId)
+      : null;
+    const payload = discussionCreatedPayload(body);
+    await db
+      .update(activityEvents)
+      .set({ payload })
+      .where(eq(activityEvents.id, ev.id));
+    n10++;
+  }
+  console.log(`[backfill-activity] payload discussion_created: ${n10}`);
+
   const total = n1 + n2 + n3 + n4 + n5 + n5b + n6 + n7 + n8;
-  console.log(`[backfill-activity] selesai: ${total} event baru (+${n9} payload vote)`);
+  console.log(
+    `[backfill-activity] selesai: ${total} event baru (+${n9} payload vote, +${n10} payload discussion)`,
+  );
   await closeDb();
 }
 

@@ -148,12 +148,14 @@ describe('ApproveDiscussionUseCase', () => {
     const imageStorage = makeImageStorage();
     const audit = makeAudit();
     const inbox = makeInbox();
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined) };
     const uc = new ApproveDiscussionUseCase(
       repo,
       publicStorage,
       imageStorage,
       audit,
       inbox,
+      activityEvents,
     );
 
     const row = await uc.execute({ id: ID, actorId: ADMIN });
@@ -168,6 +170,39 @@ describe('ApproveDiscussionUseCase', () => {
         userId: USER,
         type: 'discussion_approved',
         targetKind: 'discussion',
+      }),
+    );
+    // #206: payload cuplikan beku untuk home feed
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'discussion_created',
+        actorId: USER,
+        targetId: ID,
+        dedupeKey: `discussion:${ID}`,
+        payload: 'Apa arti tulisan di papan ini?',
+      }),
+    );
+  });
+
+  it('body kosong → payload fallback Membuka ruang diskusi (#206)', async () => {
+    const repo = makeRepo({
+      findById: vi.fn().mockResolvedValue(makeHelp({ body: null })),
+      updateStatus: vi.fn().mockResolvedValue(makeHelp({ body: null, status: 'published' })),
+    });
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined) };
+    const uc = new ApproveDiscussionUseCase(
+      repo,
+      makePublicStorage(),
+      makeImageStorage(),
+      makeAudit(),
+      makeInbox(),
+      activityEvents,
+    );
+
+    await uc.execute({ id: ID, actorId: ADMIN });
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: 'Membuka ruang diskusi',
       }),
     );
   });
