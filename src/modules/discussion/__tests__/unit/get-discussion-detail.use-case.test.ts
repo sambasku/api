@@ -31,6 +31,8 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     reviewedBy: null,
     reviewedAt: null,
     pinnedReplyId: null,
+    lastReplyAt: null,
+    publishedReplyCount: 0,
     createdAt: new Date('2026-09-24T00:00:00Z'),
     updatedAt: null,
     ...overrides,

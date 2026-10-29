@@ -59,9 +59,16 @@ export const discussionStatusSchema = z.enum([
 
 export const listDiscussionsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
-  // latest: ULID; popular: base64url compound (upvotes:id)
+  // created/latest: ULID id; compound sorts: base64url metric:id
   cursor: z.string().min(1).max(200).optional(),
-  sort: z.enum(['latest', 'popular']).default('latest'),
+  /**
+   * #204: created | activity | votes | replies (+ alias latest/popular).
+   * order diabaikan untuk alias latest/popular (selalu desc).
+   */
+  sort: z
+    .enum(['created', 'activity', 'votes', 'replies', 'latest', 'popular'])
+    .default('latest'),
+  order: z.enum(['asc', 'desc']).default('desc'),
 });
 
 export type ListDiscussionsQuery = z.infer<typeof listDiscussionsQuerySchema>;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
   publicAccountDisplayName,
@@ -21,12 +21,14 @@ import type {
   Discussion,
   DiscussionImage,
   DiscussionListFilter,
+  DiscussionListOrder,
   DiscussionReply,
   DiscussionReplyAudio,
   DiscussionReplyRevision,
   DiscussionReplyStatus,
   DiscussionStatus,
 } from '../domain/entities/discussion.entity';
+import { normalizeDiscussionListSort } from '../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../domain/repositories/discussion.repository';
 
 type DiscussionRow = typeof discussions.$inferSelect;
@@ -38,19 +40,40 @@ function replyIsEditedSql() {
   return sql<boolean>`exists (select 1 from ${discussionReplyRevisions} where ${discussionReplyRevisions.replyId} = ${discussionReplies.id})`;
 }
 
-/** Cursor sort popular: base64url("upvotes:id"). */
-export function encodePopularDiscussionCursor(upvotes: number, id: string): string {
-  return Buffer.from(`${upvotes}:${id}`).toString('base64url');
+/** Cursor compound: base64url("metric:id") - votes / replies / activity_ms. */
+export function encodeCompoundDiscussionCursor(metric: number, id: string): string {
+  return Buffer.from(`${metric}:${id}`).toString('base64url');
 }
 
-export function decodePopularDiscussionCursor(raw: string): { upvotes: number; id: string } {
+export function decodeCompoundDiscussionCursor(raw: string): { metric: number; id: string } {
   const decoded = Buffer.from(raw, 'base64url').toString('utf8');
-  const [upRaw, id] = decoded.split(':');
-  const upvotes = Number(upRaw);
-  if (!id || !Number.isFinite(upvotes) || upvotes < 0) {
-    throw new Error('INVALID_POPULAR_CURSOR');
+  const colon = decoded.indexOf(':');
+  if (colon <= 0) throw new Error('INVALID_COMPOUND_CURSOR');
+  const metric = Number(decoded.slice(0, colon));
+  const id = decoded.slice(colon + 1);
+  if (!id || !Number.isFinite(metric)) {
+    throw new Error('INVALID_COMPOUND_CURSOR');
   }
-  return { upvotes, id };
+  return { metric, id };
+}
+
+/** @deprecated pakai encodeCompoundDiscussionCursor */
+export function encodePopularDiscussionCursor(upvotes: number, id: string): string {
+  return encodeCompoundDiscussionCursor(upvotes, id);
+}
+
+/** @deprecated pakai decodeCompoundDiscussionCursor */
+export function decodePopularDiscussionCursor(raw: string): { upvotes: number; id: string } {
+  const { metric, id } = decodeCompoundDiscussionCursor(raw);
+  if (metric < 0) throw new Error('INVALID_POPULAR_CURSOR');
+  return { upvotes: metric, id };
+}
+
+function asUnixMs(value: Date | number | null | undefined): number | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value.getTime();
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function normalizeContentWarnings(raw: unknown): string[] {
@@ -121,6 +144,8 @@ function toDiscussion(
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt,
     pinnedReplyId: row.pinnedReplyId,
+    lastReplyAt: row.lastReplyAt ?? null,
+    publishedReplyCount: row.publishedReplyCount ?? 0,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -213,9 +238,57 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
   }
 
   async list(filter: DiscussionListFilter): Promise<CursorPage<Discussion>> {
-    if (filter.sort === 'popular' && filter.status === 'published' && !filter.userId) {
-      return this.listPublishedPopular(filter.limit, filter.cursor);
+    const { sort, order } = normalizeDiscussionListSort(filter.sort, filter.order);
+
+    // Sort votes/activity/replies hanya untuk feed published publik.
+    if (
+      filter.status === 'published' &&
+      !filter.userId &&
+      (sort === 'votes' || sort === 'activity' || sort === 'replies')
+    ) {
+      if (sort === 'votes') {
+        return this.listPublishedByVotes(filter.limit, order, filter.cursor);
+      }
+      if (sort === 'activity') {
+        return this.listPublishedByActivity(filter.limit, order, filter.cursor);
+      }
+      return this.listPublishedByReplies(filter.limit, order, filter.cursor);
     }
+
+    return this.listByCreated(filter, order);
+  }
+
+  private mapDiscussionRows(
+    rows: Array<{
+      discussion: DiscussionRow;
+      username: string | null;
+      displayName: string | null;
+      avatarUrl: string | null;
+      userRole: string | null;
+      authorDeletedAt: Date | null;
+    }>,
+  ): Discussion[] {
+    return rows.map((r) =>
+      toDiscussion(
+        r.discussion,
+        publicAccountName(r.username, r.authorDeletedAt),
+        publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
+        r.authorDeletedAt ? null : (r.avatarUrl ?? null),
+        r.authorDeletedAt ? null : (r.userRole ?? null),
+      ),
+    );
+  }
+
+  private async listByCreated(
+    filter: DiscussionListFilter,
+    order: DiscussionListOrder,
+  ): Promise<CursorPage<Discussion>> {
+    const idOrder = order === 'asc' ? asc(discussions.id) : desc(discussions.id);
+    const cursorClause = filter.cursor
+      ? order === 'asc'
+        ? gt(discussions.id, filter.cursor)
+        : lt(discussions.id, filter.cursor)
+      : undefined;
 
     const rows = await this.db
       .select({
@@ -232,23 +305,15 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         and(
           filter.status ? eq(discussions.status, filter.status) : undefined,
           filter.userId ? eq(discussions.userId, filter.userId) : undefined,
-          filter.cursor ? lt(discussions.id, filter.cursor) : undefined,
+          cursorClause,
         ),
       )
-      .orderBy(desc(discussions.id))
+      .orderBy(idOrder)
       .limit(filter.limit + 1);
 
     const hasMore = rows.length > filter.limit;
     const page = hasMore ? rows.slice(0, filter.limit) : rows;
-    const items = page.map((r) =>
-      toDiscussion(
-        r.discussion,
-        publicAccountName(r.username, r.authorDeletedAt),
-        publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
-        r.authorDeletedAt ? null : (r.avatarUrl ?? null),
-        r.authorDeletedAt ? null : (r.userRole ?? null),
-      ),
-    );
+    const items = this.mapDiscussionRows(page);
     return {
       items,
       nextCursor: hasMore && items.length > 0 ? items[items.length - 1].id : null,
@@ -256,29 +321,31 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
     };
   }
 
-  private async listPublishedPopular(
+  private async listPublishedByVotes(
     limit: number,
+    order: DiscussionListOrder,
     cursor?: string,
   ): Promise<CursorPage<Discussion>> {
     const upvoteExpr = sql<number>`coalesce(sum(case when ${votes.value} = 1 then 1 else 0 end), 0)`;
 
-    let cursorUp: number | null = null;
+    let cursorMetric: number | null = null;
     let cursorId: string | null = null;
     if (cursor) {
       try {
-        const decoded = decodePopularDiscussionCursor(cursor);
-        cursorUp = decoded.upvotes;
+        const decoded = decodeCompoundDiscussionCursor(cursor);
+        cursorMetric = decoded.metric;
         cursorId = decoded.id;
       } catch {
-        cursorUp = null;
+        cursorMetric = null;
         cursorId = null;
       }
     }
 
-    // Agregat tidak boleh di WHERE - cursor popular memakai HAVING.
     const havingClause =
-      cursorUp != null && cursorId != null
-        ? sql`(${upvoteExpr} < ${cursorUp} or (${upvoteExpr} = ${cursorUp} and ${discussions.id} < ${cursorId}))`
+      cursorMetric != null && cursorId != null
+        ? order === 'asc'
+          ? sql`(${upvoteExpr} > ${cursorMetric} or (${upvoteExpr} = ${cursorMetric} and ${discussions.id} > ${cursorId}))`
+          : sql`(${upvoteExpr} < ${cursorMetric} or (${upvoteExpr} = ${cursorMetric} and ${discussions.id} < ${cursorId}))`
         : undefined;
 
     const rows = await this.db
@@ -300,28 +367,186 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
       .where(eq(discussions.status, 'published'))
       .groupBy(discussions.id)
       .having(havingClause)
-      .orderBy(desc(upvoteExpr), desc(discussions.id))
+      .orderBy(
+        order === 'asc' ? asc(upvoteExpr) : desc(upvoteExpr),
+        order === 'asc' ? asc(discussions.id) : desc(discussions.id),
+      )
       .limit(limit + 1);
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    const items = page.map((r) =>
-      toDiscussion(
-        r.discussion,
-        publicAccountName(r.username, r.authorDeletedAt),
-        publicAccountDisplayName(r.displayName, r.username, r.authorDeletedAt),
-        r.authorDeletedAt ? null : (r.avatarUrl ?? null),
-        r.authorDeletedAt ? null : (r.userRole ?? null),
-      ),
-    );
-
+    const items = this.mapDiscussionRows(page);
     const last = page[page.length - 1];
     const nextCursor =
       hasMore && last
-        ? encodePopularDiscussionCursor(Number(last.upvotes) || 0, last.discussion.id)
+        ? encodeCompoundDiscussionCursor(Number(last.upvotes) || 0, last.discussion.id)
         : null;
-
     return { items, nextCursor, hasMore };
+  }
+
+  private async listPublishedByActivity(
+    limit: number,
+    order: DiscussionListOrder,
+    cursor?: string,
+  ): Promise<CursorPage<Discussion>> {
+    const activityExpr = sql<number>`coalesce(${discussions.lastReplyAt}, ${discussions.createdAt})`;
+
+    let cursorMetric: number | null = null;
+    let cursorId: string | null = null;
+    if (cursor) {
+      try {
+        const decoded = decodeCompoundDiscussionCursor(cursor);
+        cursorMetric = decoded.metric;
+        cursorId = decoded.id;
+      } catch {
+        cursorMetric = null;
+        cursorId = null;
+      }
+    }
+
+    const cursorClause =
+      cursorMetric != null && cursorId != null
+        ? order === 'asc'
+          ? or(
+              gt(activityExpr, cursorMetric),
+              and(eq(activityExpr, cursorMetric), gt(discussions.id, cursorId)),
+            )
+          : or(
+              lt(activityExpr, cursorMetric),
+              and(eq(activityExpr, cursorMetric), lt(discussions.id, cursorId)),
+            )
+        : undefined;
+
+    const rows = await this.db
+      .select({
+        discussion: discussions,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        userRole: highestUserRoleSql,
+        authorDeletedAt: users.deletedAt,
+        activityAt: activityExpr,
+      })
+      .from(discussions)
+      .leftJoin(users, eq(users.id, discussions.userId))
+      .where(and(eq(discussions.status, 'published'), cursorClause))
+      .orderBy(
+        order === 'asc' ? asc(activityExpr) : desc(activityExpr),
+        order === 'asc' ? asc(discussions.id) : desc(discussions.id),
+      )
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const items = this.mapDiscussionRows(page);
+    const last = page[page.length - 1];
+    const activityMs = last ? asUnixMs(last.activityAt as Date | number) : null;
+    const nextCursor =
+      hasMore && last && activityMs != null
+        ? encodeCompoundDiscussionCursor(activityMs, last.discussion.id)
+        : null;
+    return { items, nextCursor, hasMore };
+  }
+
+  private async listPublishedByReplies(
+    limit: number,
+    order: DiscussionListOrder,
+    cursor?: string,
+  ): Promise<CursorPage<Discussion>> {
+    let cursorMetric: number | null = null;
+    let cursorId: string | null = null;
+    if (cursor) {
+      try {
+        const decoded = decodeCompoundDiscussionCursor(cursor);
+        cursorMetric = decoded.metric;
+        cursorId = decoded.id;
+      } catch {
+        cursorMetric = null;
+        cursorId = null;
+      }
+    }
+
+    const countCol = discussions.publishedReplyCount;
+    const cursorClause =
+      cursorMetric != null && cursorId != null
+        ? order === 'asc'
+          ? or(
+              gt(countCol, cursorMetric),
+              and(eq(countCol, cursorMetric), gt(discussions.id, cursorId)),
+            )
+          : or(
+              lt(countCol, cursorMetric),
+              and(eq(countCol, cursorMetric), lt(discussions.id, cursorId)),
+            )
+        : undefined;
+
+    const rows = await this.db
+      .select({
+        discussion: discussions,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        userRole: highestUserRoleSql,
+        authorDeletedAt: users.deletedAt,
+      })
+      .from(discussions)
+      .leftJoin(users, eq(users.id, discussions.userId))
+      .where(and(eq(discussions.status, 'published'), cursorClause))
+      .orderBy(
+        order === 'asc' ? asc(countCol) : desc(countCol),
+        order === 'asc' ? asc(discussions.id) : desc(discussions.id),
+      )
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const items = this.mapDiscussionRows(page);
+    const last = page[page.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? encodeCompoundDiscussionCursor(
+            last.discussion.publishedReplyCount ?? 0,
+            last.discussion.id,
+          )
+        : null;
+    return { items, nextCursor, hasMore };
+  }
+
+  /** Hitung ulang denorm count + last_reply_at dari balasan published. */
+  private async refreshDiscussionReplyStats(discussionId: string): Promise<void> {
+    const [agg] = await this.db
+      .select({
+        count: sql<number>`count(*)`.mapWith(Number),
+        lastAt: sql<number | null>`max(${discussionReplies.createdAt})`,
+      })
+      .from(discussionReplies)
+      .where(
+        and(
+          eq(discussionReplies.discussionId, discussionId),
+          eq(discussionReplies.status, 'published'),
+        ),
+      );
+
+    const count = Number(agg?.count) || 0;
+    const lastRaw = agg?.lastAt as unknown;
+    let lastAt: Date | null = null;
+    if (count > 0 && lastRaw != null) {
+      if (lastRaw instanceof Date) {
+        lastAt = lastRaw;
+      } else {
+        const n = Number(lastRaw);
+        lastAt = Number.isFinite(n) ? new Date(n) : null;
+      }
+    }
+
+    await this.db
+      .update(discussions)
+      .set({
+        publishedReplyCount: count,
+        lastReplyAt: lastAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(discussions.id, discussionId));
   }
 
   async updateStatus(input: {
@@ -407,6 +632,17 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         status: 'published',
       })
       .returning();
+
+    // Denorm #204: naikkan count + last_reply_at (hot path, tanpa full refresh).
+    await this.db
+      .update(discussions)
+      .set({
+        publishedReplyCount: sql`${discussions.publishedReplyCount} + 1`,
+        lastReplyAt: row.createdAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(discussions.id, input.discussionId));
+
     return toReply(row, null, null, null, null, false);
   }
 
@@ -514,8 +750,13 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
           eq(discussionReplies.userId, actorId),
         ),
       )
-      .returning({ id: discussionReplies.id });
-    return updated.length > 0;
+      .returning({
+        id: discussionReplies.id,
+        discussionId: discussionReplies.discussionId,
+      });
+    if (updated.length === 0) return false;
+    await this.refreshDiscussionReplyStats(updated[0].discussionId);
+    return true;
   }
 
   async takedownReply(id: string, reviewerId: string): Promise<boolean> {
@@ -533,8 +774,13 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
           eq(discussionReplies.status, 'published'),
         ),
       )
-      .returning({ id: discussionReplies.id });
-    return updated.length > 0;
+      .returning({
+        id: discussionReplies.id,
+        discussionId: discussionReplies.discussionId,
+      });
+    if (updated.length === 0) return false;
+    await this.refreshDiscussionReplyStats(updated[0].discussionId);
+    return true;
   }
 
 
