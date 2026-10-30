@@ -1,6 +1,8 @@
 name: Deploy Production (Cloudflare Workers)
 
-# Push ke branch `main` → test (file SQLite) → migrate Turso production → deploy Workers.
+# Tag semver polos `vX.Y.Z` (contoh v0.1.2) → test → migrate → Workers + image GHCR.
+# 1:1 dengan deploy-staging (beda: secret prod + target Workers).
+# Tag `v*-staging` ditolak. Branch `main` bukan trigger.
 #
 # Secrets GitHub:
 #   CLOUDFLARE_API_TOKEN
@@ -14,14 +16,25 @@ name: Deploy Production (Cloudflare Workers)
 
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-staging'))
     steps:
       - uses: actions/checkout@v7
+      - name: Pastikan tag produksi vX.Y.Z
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "tag harus vMAJOR.MINOR.PATCH, dapat: $TAG" >&2
+            exit 1
+          fi
       - uses: pnpm/action-setup@v6
         with:
           version: 9
@@ -101,8 +114,62 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+
+  publish-image:
+    needs: migrate-production
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+    steps:
+      - uses: actions/checkout@v7
+      - name: Sync package.json version dari git tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          export VERSION
+          node <<'NODE'
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          if (!/^\d+\.\d+\.\d+$/.test(version || '')) {
+            console.error(`VERSION tidak valid: ${version}`);
+            process.exit(1);
+          }
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const before = pkg.version;
+          pkg.version = version;
+          fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+          console.log(`package.json version: ${before} → ${version}`);
+          NODE
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=production
+            type=sha,prefix=sha-,format=short
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
   notify:
-    needs: [test, migrate-production, deploy]
+    needs: [test, migrate-production, deploy, publish-image]
     if: always()
     runs-on: ubuntu-latest
     steps:

@@ -33,6 +33,7 @@ export class AdminUsersController {
     return {
       id: u.id,
       username: u.username,
+      display_name: u.displayName,
       email: u.email,
       phone: u.phone,
       roles: u.roles,

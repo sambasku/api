@@ -34,6 +34,7 @@ export type UpdateUserRoleBody = z.infer<typeof updateUserRoleBodySchema>;
 const adminUserWireSchema = z.object({
   id: z.string(),
   username: z.string(),
+  display_name: z.string(),
   email: z.string(),
   phone: z.string().nullable(),
   roles: z.array(roleEnum).min(1),

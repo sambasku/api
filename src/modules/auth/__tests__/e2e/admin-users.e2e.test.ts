@@ -57,6 +57,7 @@ describe.skipIf(!hasTestDb)('Admin Users E2E', () => {
       expect(item).not.toHaveProperty('passwordHash');
       expect(item).toHaveProperty('id');
       expect(item).toHaveProperty('username');
+      expect(item).toHaveProperty('display_name');
       expect(item).toHaveProperty('role');
       expect(item).toHaveProperty('is_active');
       expect(item).toHaveProperty('created_at');
