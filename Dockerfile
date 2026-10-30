@@ -19,8 +19,13 @@ RUN pnpm install --frozen-lockfile --prod
 FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app
 
+# Identitas deploy - CI kirim --build-arg GIT_SHA=$GITHUB_SHA.
+# Lokal tanpa arg → unknown (bandingkan lewat GET / atau /api/v1/ping).
+ARG GIT_SHA=unknown
+
 ENV NODE_ENV=staging \
     PORT=8181 \
+    GIT_SHA=${GIT_SHA} \
     # Jangan tulis file sebagai root
     HOME=/home/node
 

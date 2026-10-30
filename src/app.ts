@@ -1747,7 +1747,10 @@ app.get("/", (c) =>
     success: true as const,
     data: {
       name: "Kamus Digital Sambas-Indonesia API",
-      version: "1.0.0",
+      // Semver paket (package.json). Bukan identitas deploy - pakai gitSha.
+      version: "0.1.0",
+      gitSha: env.gitSha,
+      gitShaFull: env.gitShaFull,
       docs: "/docs",
       openapi: "/openapi.json",
     },
@@ -1787,7 +1790,7 @@ const pingRoute = createRoute({
   summary: "Canary CI/CD - verifikasi deploy (tanpa auth, tanpa DB)",
   responses: {
     200: {
-      description: "Pong + info runtime yang melayani",
+      description: "Pong + info runtime + gitSha deploy",
       content: {
         "application/json": {
           schema: z.object({
@@ -1798,6 +1801,8 @@ const pingRoute = createRoute({
               env: z.string(),
               runtime: z.enum(["node", "cloudflare-workers"]),
               host: z.string(),
+              gitSha: z.string(),
+              gitShaFull: z.string(),
             }),
           }),
         },
@@ -1822,6 +1827,9 @@ app.openapi(pingRoute, (c) =>
       // Host yang diminta memastikan tier mana yang benar-benar melayani -
       // dipakai memverifikasi failover mendarat di tempat yang diharapkan.
       host: c.req.header("host") ?? "unknown",
+      // Cocokkan dengan tag GHCR `sha-…` / Commit di Actions.
+      gitSha: env.gitSha,
+      gitShaFull: env.gitShaFull,
     },
   }),
 );

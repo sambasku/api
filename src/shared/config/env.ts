@@ -187,15 +187,31 @@ const envSchema = z.object({
       const n = v.trim().toLowerCase();
       return n === 'true' || n === '1' || n === 'yes';
     }),
+
+  // Identitas deploy (bake saat image build / wrangler --var). Kosong =
+  // lokal/dev → response meta pakai "unknown". Bukan secret.
+  GIT_SHA: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const t = (v ?? '').trim();
+      return t === '' ? undefined : t;
+    }),
 });
 
 const parsed = envSchema.parse(process.env);
+
+const gitShaFull = parsed.GIT_SHA ?? 'unknown';
 
 export const env = {
   ...parsed,
   CORS_ALLOWED_ORIGINS: parsed.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim()),
   /** Domain web publik untuk email + deep link. Fallback APP_URL. */
   webAppUrl: parsed.WEB_APP_URL ?? parsed.APP_URL,
+  /** Full commit SHA (atau "unknown" lokal). */
+  gitShaFull,
+  /** Short 7 char - cocok dengan tag GHCR `sha-…`. */
+  gitSha: gitShaFull === 'unknown' ? 'unknown' : gitShaFull.slice(0, 7),
 };
 
 // Aplikasi CRASH saat start kalau ada env wajib yang hilang/salah format

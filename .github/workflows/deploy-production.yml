@@ -109,8 +109,9 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       # Top-level wrangler.toml = production (sambasku-api). Jangan --env staging.
-      - run: npx wrangler deploy
+      - run: npx wrangler deploy --var "GIT_SHA:${GIT_SHA}"
         env:
+          GIT_SHA: ${{ github.sha }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
@@ -164,6 +165,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false

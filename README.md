@@ -55,6 +55,7 @@ pnpm seed
 # 5. Jalankan API (Hono + Node)
 pnpm dev                    # http://localhost:3000 - docs di /docs
 #    Health: GET /health  →  { "status": "ok", "database": "up" }
+#    Deploy ID: GET /  atau GET /api/v1/ping  →  data.gitSha (bake CI)
 ```
 
 ### Database test (integration & e2e)
