@@ -4,6 +4,8 @@ import { ImportWordsUseCase } from '../../application/use-cases/import-words.use
 import { importWordsBodySchema } from '../../presentation/v1/validators/import-words.validator';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { LanguageRepository } from '@/modules/language/domain/repositories/language.repository';
+import type { AppendResult } from '@/modules/activity/domain/repositories/activity-event.repository';
+import type { AppendActivityEventInput } from '@/modules/activity/domain/entities/activity-event.entity';
 import type { UserLookupPort } from '../../application/ports/user-lookup.port';
 import type { WordClassSummary } from '../../domain/entities/word.entity';
 
@@ -103,7 +105,9 @@ describe('ImportWordsUseCase - word_class_code & example_translation', () => {
     wordRepo?: Partial<WordRepository>;
     languageRepo?: Partial<LanguageRepository>;
     users?: Partial<UserLookupPort>;
-    activityAppend?: ReturnType<typeof vi.fn>;
+    activityAppend?: ReturnType<
+      typeof vi.fn<(input: AppendActivityEventInput) => Promise<AppendResult>>
+    >;
   } = {}) {
     const defaultWordRepo: Partial<WordRepository> = {
       listWordClasses: vi.fn().mockResolvedValue(mockWordClasses),
@@ -128,7 +132,9 @@ describe('ImportWordsUseCase - word_class_code & example_translation', () => {
       findById: vi.fn().mockResolvedValue({ id: '01USER00000000000000000000', isActive: true }),
       ...overrides.users,
     };
-    const activityAppend = overrides.activityAppend ?? vi.fn().mockResolvedValue('appended');
+    const activityAppend =
+      overrides.activityAppend ??
+      vi.fn(async (_input: AppendActivityEventInput): Promise<AppendResult> => 'appended');
     return {
       useCase: new ImportWordsUseCase(
         defaultWordRepo as WordRepository,
