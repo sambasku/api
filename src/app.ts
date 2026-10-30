@@ -1115,7 +1115,7 @@ const wordController = new WordController({
   ),
   addExample: new AddExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo, notifyWordOwnerMedia),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
-  importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo),
+  importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo, activityEventRepo),
   batchContributeWords: new BatchContributeWordsUseCase(
     wordRepo,
     languageRepo,

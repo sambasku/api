@@ -5,14 +5,14 @@ import { isPlaceholderMeaningText, normalizeMeaningText } from './normalize-mean
 /**
  * Fingerprint makna untuk deduplikasi (case-insensitive, placeholder-aware).
  *
- * Beda dari `meaningFingerprint` di `import-words.ts`: fingerprint ini
- * menganggap placeholder "-" dan kosong sebagai DISTINCT (bukan sama),
- * supaya makna tanpa definisi tidak dianggap duplikat dengan makna
- * yang punya definisi berbeda.
+ * Dipakai create/edit dan impor CSV (`meaningFingerprint` di
+ * `import-words.ts` mendelegasi ke sini) supaya "makna sama" konsisten.
+ *
+ * Placeholder "-" dan kosong tidak jadi kunci isi; flag hasDef/hasTr
+ * memisahkan "tanpa definisi" dari "ada definisi" supaya tidak bentrok.
  *
  * Format: `<hasDef>\0<normalizedDef>\0<hasTr>\0<normalizedTr>`
- * - hasDef/hasTr = '1' atau '0' (memisahkan "tanpa definisi" dari
- *   "definisi placeholder" agar tidak dianggap sama).
+ * - hasDef/hasTr = '1' atau '0'
  * - `translations` (opsional): kalau diisi, semua padanan ikut jadi kunci
  *   (urut, dinormalisasi) - dua makna dianggap sama hanya kalau set
  *   padanannya sama, bukan salah satu saja.

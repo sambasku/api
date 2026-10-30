@@ -51,11 +51,38 @@ describe('decideImportPublication', () => {
 });
 
 describe('meaningFingerprint', () => {
-  it('mengabaikan huruf besar dan definisi kosong', () => {
-    expect(meaningFingerprint({ definition: ' Makan ', translation: 'makan', isHaveDefinition: true, isHaveTranslation: true }))
-      .toBe(meaningFingerprint({ definition: 'makan', translation: 'Makan' }));
-    expect(meaningFingerprint({ definition: '-', translation: 'makan', isHaveDefinition: false, isHaveTranslation: true }))
-      .toBe('\nmakan');
+  it('mengabaikan huruf besar, spasi ganda, dan placeholder', () => {
+    expect(
+      meaningFingerprint({
+        definition: ' Makan  Siang ',
+        translation: 'makan',
+        isHaveDefinition: true,
+        isHaveTranslation: true,
+      }),
+    ).toBe(
+      meaningFingerprint({
+        definition: 'makan siang',
+        translation: 'Makan',
+        isHaveDefinition: true,
+        isHaveTranslation: true,
+      }),
+    );
+    // Placeholder "-" / tanpa definisi: tidak jadi kunci isi (sama create).
+    expect(
+      meaningFingerprint({
+        definition: '-',
+        translation: 'makan',
+        isHaveDefinition: false,
+        isHaveTranslation: true,
+      }),
+    ).toBe(
+      meaningFingerprint({
+        definition: '',
+        translation: 'makan',
+        isHaveDefinition: false,
+        isHaveTranslation: true,
+      }),
+    );
   });
 });
 
@@ -76,6 +103,7 @@ describe('ImportWordsUseCase - word_class_code & example_translation', () => {
     wordRepo?: Partial<WordRepository>;
     languageRepo?: Partial<LanguageRepository>;
     users?: Partial<UserLookupPort>;
+    activityAppend?: ReturnType<typeof vi.fn>;
   } = {}) {
     const defaultWordRepo: Partial<WordRepository> = {
       listWordClasses: vi.fn().mockResolvedValue(mockWordClasses),
@@ -100,13 +128,16 @@ describe('ImportWordsUseCase - word_class_code & example_translation', () => {
       findById: vi.fn().mockResolvedValue({ id: '01USER00000000000000000000', isActive: true }),
       ...overrides.users,
     };
+    const activityAppend = overrides.activityAppend ?? vi.fn().mockResolvedValue('appended');
     return {
       useCase: new ImportWordsUseCase(
         defaultWordRepo as WordRepository,
         defaultLanguageRepo as LanguageRepository,
         defaultUsers as UserLookupPort,
+        { append: activityAppend },
       ),
       wordRepo: defaultWordRepo,
+      activityAppend,
     };
   }
 
@@ -280,6 +311,100 @@ describe('ImportWordsUseCase - word_class_code & example_translation', () => {
       }),
       expect.any(String),
     );
+  });
+
+  it('makna sama (beda spasi/kasus) → skipped, tidak addMeaning', async () => {
+    const existingParent = { id: '01PARENT000000000000000000', status: 'published' as const };
+    const { useCase, wordRepo } = createUseCase({
+      wordRepo: {
+        findActiveByLemma: vi.fn().mockResolvedValue(existingParent),
+        listMeaningKeys: vi.fn().mockResolvedValue([
+          {
+            definition: 'memasukkan makanan',
+            translation: 'makan',
+            isHaveDefinition: true,
+            isHaveTranslation: true,
+          },
+        ]),
+      },
+    });
+
+    const result = await useCase.execute(
+      {
+        mode: 'commit',
+        items: [
+          {
+            lemma: 'makan',
+            verify: true,
+            verified: false,
+            meanings: [
+              {
+                definition: '  Memasukkan   Makanan ',
+                translation: 'Makan',
+              },
+            ],
+          },
+        ],
+      },
+      defaultActor,
+    );
+
+    expect(result.items[0]?.outcome).toBe('skipped');
+    expect(wordRepo.addMeaning).not.toHaveBeenCalled();
+  });
+
+  it('kata baru tayang terverifikasi → event word_created', async () => {
+    const { useCase, activityAppend } = createUseCase({
+      wordRepo: {
+        saveWithRelations: vi.fn().mockResolvedValue({
+          id: '01WORDNEW00000000000000000',
+          lemma: 'baru',
+          isVerified: true,
+        }),
+      },
+    });
+
+    await useCase.execute(
+      {
+        mode: 'commit',
+        items: [
+          {
+            lemma: 'baru',
+            verify: true,
+            verified: true,
+            meanings: [{ definition: 'baru dibuat', translation: 'baru' }],
+          },
+        ],
+      },
+      defaultActor,
+    );
+
+    expect(activityAppend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'word_created',
+        targetWordId: '01WORDNEW00000000000000000',
+        dedupeKey: 'word:01WORDNEW00000000000000000',
+      }),
+    );
+  });
+
+  it('kata baru draf → tanpa event aktivitas', async () => {
+    const { useCase, activityAppend } = createUseCase();
+    await useCase.execute(
+      {
+        mode: 'commit',
+        items: [
+          {
+            lemma: 'draf',
+            verify: false,
+            verified: false,
+            meanings: [{ definition: 'masih draf', translation: 'draf' }],
+          },
+        ],
+      },
+      defaultActor,
+    );
+    expect(activityAppend).not.toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,5 @@
 import type { WordStatus } from '../domain/entities/word.entity';
+import { meaningDeduplicationFingerprint } from './utils/meaning-deduplication';
 
 export interface ImportMeaningInput {
   translation?: string;
@@ -41,7 +42,11 @@ export function canVerifyImport(role: string | string[]): boolean {
   return roles.some((r) => VERIFIER_ROLES.has(r));
 }
 
-/** Sidik makna: definisi dan padanan yang memang diisi, huruf kecil. */
+/**
+ * Sidik makna untuk skip duplikat impor.
+ * Satu aturan dengan create/edit: normalizeMeaningText + placeholder-aware
+ * lewat meaningDeduplicationFingerprint (bukan trim+lower kasar).
+ */
 export function meaningFingerprint(input: {
   definition?: string;
   translation?: string;
@@ -50,9 +55,12 @@ export function meaningFingerprint(input: {
 }): string {
   const hasDef = input.isHaveDefinition ?? !!input.definition?.trim();
   const hasTr = input.isHaveTranslation ?? !!input.translation?.trim();
-  const definition = hasDef ? (input.definition ?? '').trim().toLowerCase() : '';
-  const translation = hasTr ? (input.translation ?? '').trim().toLowerCase() : '';
-  return `${definition}\n${translation}`;
+  return meaningDeduplicationFingerprint({
+    definition: input.definition ?? '',
+    translation: input.translation ?? '',
+    isHaveDefinition: hasDef,
+    isHaveTranslation: hasTr,
+  });
 }
 
 export function normalizeLemma(lemma: string): string {
