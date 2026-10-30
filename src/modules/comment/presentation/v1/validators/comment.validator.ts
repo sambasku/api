@@ -19,7 +19,9 @@ export const commentBodySchema = z
       .max(1000, 'Komentar maksimal 1000 karakter')
       .optional()
       .default(''),
-    image: commentImageInputSchema.optional(),
+    // nullish: client (mobile freezed) sering kirim "image": null tanpa foto.
+    // .optional() saja menolak null → VALIDATION_ERROR.
+    image: commentImageInputSchema.nullish(),
   })
   .superRefine((val, ctx) => {
     const hasBody = (val.body?.trim().length ?? 0) > 0;
