@@ -17,8 +17,21 @@ export type UgcTextQualityResult =
 const REPEAT_CHAR_RE = /(.)\1{5,}/u;
 const LETTER_RE = /\p{L}/u;
 
+/**
+ * Rapikan spasi/tab per baris, tapi pertahankan newline.
+ *
+ * Dulu: `.replace(/\s+/g, ' ')` meratakan baris juga → draft balas
+ * `> cuplikan\n\n@user teks` jadi `> cuplikan @user teks`, lalu UI
+ * menganggap seluruh body sebagai satu baris quote (#205).
+ */
 function collapseWs(text: string): string {
-  return text.trim().replace(/\s+/g, ' ');
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /** Hash untuk deteksi duplikat / meta abuse (sha256 hex pendek). */

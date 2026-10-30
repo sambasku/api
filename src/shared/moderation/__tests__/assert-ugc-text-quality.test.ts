@@ -53,6 +53,20 @@ describe('assessUgcTextQuality', () => {
     });
     expect(r.ok).toBe(false);
   });
+
+  it('mempertahankan newline draft quote + balasan', () => {
+    const r = assessUgcTextQuality('> apa\n\n@budi test reply');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.normalized).toBe('> apa\n\n@budi test reply');
+  });
+
+  it('merapikan spasi horizontal tanpa menghapus baris', () => {
+    const r = assessUgcTextQuality('  halo   dunia  \n\n\n  kedua  ');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.normalized).toBe('halo dunia\n\nkedua');
+  });
 });
 
 describe('isHeavyCensor', () => {
