@@ -6,7 +6,8 @@ name: Deploy Staging (Homelab / GHCR)
 # Homelab: ghcr.io/sambasku/api:staging → ./scripts/staging-up.sh
 # Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
 #
-# Secrets: TURSO_STAGING_DATABASE_URL, TURSO_STAGING_AUTH_TOKEN
+# Secrets (org, prioritas): DB_STAGING_TURSO_URL, DB_STAGING_TURSO_AUTH_TOKEN
+# Fallback lama: TURSO_STAGING_DATABASE_URL, TURSO_STAGING_AUTH_TOKEN
 # GITHUB_TOKEN bawaan cukup untuk push package (permissions.packages: write).
 
 on:
@@ -67,24 +68,24 @@ jobs:
           node-version: 24
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - name: Cek secrets Turso staging
+      - name: Cek secrets DB staging (org)
         env:
-          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
-          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+          DATABASE_URL: ${{ secrets.DB_STAGING_TURSO_URL || secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_STAGING_TURSO_AUTH_TOKEN || secrets.TURSO_STAGING_AUTH_TOKEN }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::error::Secret TURSO_STAGING_DATABASE_URL kosong - set di GitHub → Settings → Secrets"
+            echo "::error::Secret DB_STAGING_TURSO_URL (atau TURSO_STAGING_DATABASE_URL) kosong - set di GitHub → Settings → Secrets"
             exit 1
           fi
           if [ -z "$DATABASE_AUTH_TOKEN" ]; then
-            echo "::error::Secret TURSO_STAGING_AUTH_TOKEN kosong - set di GitHub → Settings → Secrets"
+            echo "::error::Secret DB_STAGING_TURSO_AUTH_TOKEN (atau TURSO_STAGING_AUTH_TOKEN) kosong - set di GitHub → Settings → Secrets"
             exit 1
           fi
-          echo "Turso URL host: $(echo "$DATABASE_URL" | sed -E 's#^[a-z]+://##')"
+          echo "DB URL host: $(echo "$DATABASE_URL" | sed -E 's#^[a-z]+://##')"
       - run: pnpm db:migrate
         env:
-          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
-          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+          DATABASE_URL: ${{ secrets.DB_STAGING_TURSO_URL || secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_STAGING_TURSO_AUTH_TOKEN || secrets.TURSO_STAGING_AUTH_TOKEN }}
 
   publish-image:
     needs: migrate-staging

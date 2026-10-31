@@ -372,7 +372,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
       .select()
       .from(places)
       .where(and(...conds))
-      .orderBy(desc(places.id))
+      .orderBy(desc(places.createdAt), desc(places.id))
       .limit(input.limit + 1);
 
     const hasMore = rows.length > input.limit;

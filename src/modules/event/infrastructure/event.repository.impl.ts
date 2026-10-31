@@ -320,8 +320,10 @@ export class EventRepositoryImpl implements EventRepository {
     }
     if (input.before) conds.push(lt(events.id, input.before));
 
+    // Urutkan by created_at (bukan starts_at): entri baru di atas, edit
+    // jadwal tidak menggeser posisi di daftar. Tie-break id untuk cursor.
     const order =
-      input.order === "asc" ? asc(events.startsAt) : desc(events.startsAt);
+      input.order === "asc" ? asc(events.createdAt) : desc(events.createdAt);
     const rows = await this.db
       .select(eventSelect)
       .from(events)

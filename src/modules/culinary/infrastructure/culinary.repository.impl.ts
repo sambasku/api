@@ -258,7 +258,7 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .from(cuisines)
       .leftJoin(culinaryCategories, eq(culinaryCategories.id, cuisines.categoryId))
       .where(and(...conds))
-      .orderBy(desc(cuisines.updatedAt), desc(cuisines.id))
+      .orderBy(desc(cuisines.createdAt), desc(cuisines.id))
       .limit(input.limit + 1);
     const hasMore = rows.length > input.limit;
     const page = hasMore ? rows.slice(0, input.limit) : rows;
@@ -442,7 +442,7 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .select(placeSelect)
       .from(culinaryPlaces)
       .where(and(...conds))
-      .orderBy(desc(culinaryPlaces.updatedAt), desc(culinaryPlaces.id))
+      .orderBy(desc(culinaryPlaces.createdAt), desc(culinaryPlaces.id))
       .limit(input.limit + 1);
     const hasMore = rows.length > input.limit;
     const page = hasMore ? rows.slice(0, input.limit) : rows;

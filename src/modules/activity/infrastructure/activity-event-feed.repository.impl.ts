@@ -55,8 +55,8 @@ vote_meaning: 'vote',
   cuisine_published: 'culinary',
   place_published: 'place_listing',
   event_published: 'event',
-  pantun_created: 'discussion',
-  pantun_reply_created: 'discussion',
+  pantun_created: 'pantun',
+  pantun_reply_created: 'pantun',
   announcement: 'announcement',
 };
 
@@ -932,11 +932,11 @@ export class ActivityEventFeedRepositoryImpl {
       case 'event_published':
         return row.eventSlug ? { type: 'event', id: row.eventSlug } : null;
     case 'pantun_created':
-      return row.targetId ? { type: 'discussion', id: row.targetId! } : null;
+      return row.targetId ? { type: 'pantun', id: row.targetId! } : null;
     case 'pantun_reply_created':
       // Link ke pantun pembuka yang dibalas (bukan id balasan).
       return row.replyParentId
-        ? { type: 'discussion', id: row.replyParentId }
+        ? { type: 'pantun', id: row.replyParentId }
         : null;
       case 'cuisine_published':
         if (row.cuisineSlug) return { type: 'culinary', id: row.cuisineSlug };

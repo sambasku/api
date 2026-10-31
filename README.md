@@ -115,14 +115,17 @@ tier). Semua OTP (verifikasi, reset password, hapus akun) tetap
 
 Push ke branch **`staging`** →
 [.github/workflows/deploy-staging.yml](.github/workflows/deploy-staging.yml):
-test (file SQLite) → migrate Turso → `wrangler deploy --env staging`.
+test (file SQLite) → migrate (`DB_STAGING_TURSO_*`) → image/deploy staging.
 
 | Secret                        | Nilai                                              |
 | ----------------------------- | -------------------------------------------------- |
 | `CLOUDFLARE_API_TOKEN`        | CF → API Tokens → Edit Cloudflare Workers          |
 | `CLOUDFLARE_ACCOUNT_ID`       | `547e27ab971bbd809dfd57626049a131`                 |
-| `TURSO_STAGING_DATABASE_URL`  | `libsql://…` staging                               |
-| `TURSO_STAGING_AUTH_TOKEN`    | token Turso staging                                |
+| `DB_STAGING_TURSO_URL`         | URL libSQL staging (org secret, prioritas)          |
+| `DB_STAGING_TURSO_AUTH_TOKEN`  | token staging                                       |
+| `DB_PRODUCTION_TURSO_URL`      | URL libSQL production (org)                         |
+| `DB_PRODUCTION_TURSO_AUTH_TOKEN` | token production                                  |
+| `TURSO_STAGING_*` / `TURSO_PRODUCTION_*` | fallback lama (opsional)                 |
 
 Secret Worker (JWT, dll.) tidak ikut CI - `wrangler deploy` mempertahankan
 secret yang sudah terpasang. Vars non-secret (termasuk

@@ -21,7 +21,8 @@ export type ActivityKind =
   | 'place_listing'
   | 'event'
   | 'usaha'
-  | 'culinary';
+  | 'culinary'
+  | 'pantun';
 
 export interface ActivityActor {
   username: string | null;

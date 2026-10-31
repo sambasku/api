@@ -276,7 +276,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .leftJoin(usahaCategories, eq(usahaCategories.id, usahas.categoryId))
       .leftJoin(regions, eq(regions.id, usahas.villageId))
       .where(and(...conds))
-      .orderBy(desc(usahas.updatedAt), desc(usahas.id))
+      .orderBy(desc(usahas.createdAt), desc(usahas.id))
       .limit(input.limit + 1);
 
     const hasMore = rows.length > input.limit;

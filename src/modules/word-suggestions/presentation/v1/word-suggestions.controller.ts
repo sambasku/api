@@ -247,6 +247,12 @@ export class WordSuggestionController {
               variant_type: v.variantType,
               dialect_id: v.dialectId,
             })),
+            // PRD relasi-lemma: schema detail wajib `groups` (array, bisa kosong).
+            groups: detail.currentWord.groups.map((g) => ({
+              group_id: g.groupId,
+              name: g.name,
+              member_word_ids: g.memberWordIds,
+            })),
             images: detail.currentWord.images.map((i) => ({
               id: i.id,
               url: i.url,
@@ -284,6 +290,24 @@ export class WordSuggestionController {
               removed: detail.diff.variants.removed.map((v) => ({
                 form: v.form,
                 variant_type: v.variantType,
+              })),
+            },
+            // PRD relasi-lemma: schema detail wajib `groups` (joined/left/created).
+            groups: {
+              joined: detail.diff.groups.joined.map((g) => ({
+                group_id: g.groupId,
+                name: g.name,
+              })),
+              left: detail.diff.groups.left.map((g) => ({
+                group_id: g.groupId,
+                name: g.name,
+              })),
+              created: detail.diff.groups.created.map((g) => ({
+                name: g.name,
+                member_lemmas: g.memberLemmas,
+                ...(g.newWordLemmas?.length
+                  ? { new_word_lemmas: g.newWordLemmas }
+                  : {}),
               })),
             },
             images: {

@@ -87,9 +87,8 @@ export function wireKind(kind: ActivityEventKind): string {
 case 'event_published':
 return 'event';
   case 'pantun_created':
-    return 'discussion';
   case 'pantun_reply_created':
-    return 'discussion';
+    return 'pantun';
 case 'announcement':
       return 'announcement';
   }

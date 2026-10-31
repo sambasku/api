@@ -70,7 +70,7 @@ export interface ListEventsInput {
   publicOnly?: boolean;
   /** Filter pelaksanaan read-time: hanya yang belum selesai. */
   notEnded?: boolean;
-  /** Urutan: asc = paling dekat di depan; desc = terbaru dulu. */
+  /** Urutan by created_at: asc = paling lama dulu; desc = terbaru dulu. */
   order?: "asc" | "desc";
 }
 
