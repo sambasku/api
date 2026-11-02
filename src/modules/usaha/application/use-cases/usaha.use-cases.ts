@@ -4,6 +4,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '@/shared/errors/app-error';
+import type { Region } from '@/modules/region/domain/entities/region.entity';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
 import type {
   UsahaCategoryRef,
@@ -33,10 +34,11 @@ async function assertCategory(
   }
 }
 
-async function assertRegion(
+/** Resolve slug/ULID → Region kecamatan published; throw jika tidak valid. */
+async function resolveKecamatan(
   regions: RegionRepository,
   regionId: string | null | undefined,
-): Promise<void> {
+): Promise<Region> {
   if (!regionId) {
     throw new BadRequestError(
       'REGION_REQUIRED',
@@ -44,7 +46,7 @@ async function assertRegion(
       [{ field: 'region_id', message: 'Pilih kecamatan dulu ya' }],
     );
   }
-  const region = await regions.findById(regionId);
+  const region = await regions.findByIdOrSlug(regionId);
   if (!region || region.type !== 'kecamatan' || region.status !== 'published') {
     throw new BadRequestError(
       'REGION_NOT_FOUND',
@@ -52,15 +54,17 @@ async function assertRegion(
       [{ field: 'region_id', message: 'Pilih kecamatan yang valid' }],
     );
   }
+  return region;
 }
 
-async function assertVillage(
+/** Resolve slug/ULID → Region desa published; cek induk bila regionId (ULID) ada. */
+async function resolveDesa(
   regions: RegionRepository,
   villageId: string | null | undefined,
   regionId?: string | null,
-): Promise<void> {
-  if (!villageId) return;
-  const village = await regions.findById(villageId);
+): Promise<Region | null> {
+  if (!villageId) return null;
+  const village = await regions.findByIdOrSlug(villageId);
   if (!village || village.type !== 'desa' || village.status !== 'published') {
     throw new BadRequestError(
       'VILLAGE_NOT_FOUND',
@@ -74,6 +78,7 @@ async function assertVillage(
       'Desa bukan bagian dari kecamatan yang dipilih',
     );
   }
+  return village;
 }
 
 function assertLatLng(lat?: number | null, lng?: number | null): void {
@@ -93,14 +98,18 @@ export class CreateUsahaUseCase {
 
   async execute(input: CreateUsahaInput): Promise<UsahaListItem> {
     await assertCategory(this.repo, input.categoryId);
-    await assertRegion(this.regions, input.regionId);
-    await assertVillage(this.regions, input.villageId, input.regionId);
+    const kec = await resolveKecamatan(this.regions, input.regionId);
+    const desa = await resolveDesa(this.regions, input.villageId, kec.id);
     assertLatLng(input.lat, input.lng);
     const existing = await this.repo.findBySlug(input.slug);
     if (existing) {
       throw new ConflictError('SLUG_TAKEN', 'Slug usaha sudah dipakai');
     }
-    return this.repo.create(input);
+    return this.repo.create({
+      ...input,
+      regionId: kec.id,
+      villageId: desa?.id ?? input.villageId ?? null,
+    });
   }
 }
 
@@ -118,16 +127,20 @@ export class UpdateUsahaUseCase {
     if (input.categoryId !== undefined) {
       await assertCategory(this.repo, input.categoryId);
     }
+    let regionId = input.regionId;
+    let villageId = input.villageId;
     if (input.regionId !== undefined) {
       // Update boleh mengosongkan region? Tidak - wilayah tetap wajib.
-      await assertRegion(this.regions, input.regionId);
+      const kec = await resolveKecamatan(this.regions, input.regionId);
+      regionId = kec.id;
     }
     if (input.villageId !== undefined) {
-      await assertVillage(
+      const desa = await resolveDesa(
         this.regions,
         input.villageId,
-        input.regionId ?? existing.regionId,
+        regionId ?? existing.regionId,
       );
+      villageId = desa?.id ?? null;
     }
     assertLatLng(input.lat ?? existing.lat, input.lng ?? existing.lng);
     if (input.slug && input.slug !== existing.slug) {
@@ -136,7 +149,11 @@ export class UpdateUsahaUseCase {
         throw new ConflictError('SLUG_TAKEN', 'Slug usaha sudah dipakai');
       }
     }
-    const updated = await this.repo.update(input);
+    const updated = await this.repo.update({
+      ...input,
+      ...(regionId !== undefined ? { regionId } : {}),
+      ...(villageId !== undefined ? { villageId } : {}),
+    });
     if (!updated) {
       throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
     }

@@ -5,8 +5,7 @@ name: Seed Reference Production (manual)
 #
 # CLI: gh workflow run seed-reference-production.yml --ref main
 #
-# Secrets (org, prioritas): DB_PRODUCTION_TURSO_URL, DB_PRODUCTION_TURSO_AUTH_TOKEN
-# Fallback lama: TURSO_PRODUCTION_DATABASE_URL, TURSO_PRODUCTION_AUTH_TOKEN
+# Secrets org: DB_PRODUCTION_TURSO_URL, DB_PRODUCTION_TURSO_AUTH_TOKEN
 
 on:
   workflow_dispatch:
@@ -27,15 +26,15 @@ jobs:
 
       - name: Cek secrets DB production (org)
         env:
-          DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL || secrets.TURSO_PRODUCTION_DATABASE_URL }}
-          DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN || secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+          DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::error::Secret DB_PRODUCTION_TURSO_URL (atau TURSO_PRODUCTION_DATABASE_URL) kosong"
+            echo "::error::Secret DB_PRODUCTION_TURSO_URL kosong"
             exit 1
           fi
           if [ -z "$DATABASE_AUTH_TOKEN" ]; then
-            echo "::error::Secret DB_PRODUCTION_TURSO_AUTH_TOKEN (atau TURSO_PRODUCTION_AUTH_TOKEN) kosong"
+            echo "::error::Secret DB_PRODUCTION_TURSO_AUTH_TOKEN kosong"
             exit 1
           fi
           echo "Turso secrets OK"
@@ -43,15 +42,15 @@ jobs:
       - name: Migrate production (schema harus mutakhir sebelum seed)
         run: pnpm db:migrate
         env:
-          DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL || secrets.TURSO_PRODUCTION_DATABASE_URL }}
-          DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN || secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+          DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN }}
 
       - name: Seed reference production
         run: pnpm seed:reference
         env:
           NODE_ENV: production
-          DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL || secrets.TURSO_PRODUCTION_DATABASE_URL }}
-          DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN || secrets.TURSO_PRODUCTION_AUTH_TOKEN }}
+          DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN }}
           JWT_PRIVATE_KEY: dummy
           JWT_PUBLIC_KEY: dummy
           CORS_ALLOWED_ORIGINS: https://sambasku.com,https://console.sambasku.com

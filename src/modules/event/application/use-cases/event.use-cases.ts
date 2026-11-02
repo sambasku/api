@@ -32,12 +32,13 @@ async function assertCategoryPublished(
   }
 }
 
-async function assertVillage(
+/** Resolve slug/ULID desa → ULID published; null jika kosong. */
+async function resolveVillage(
   regions: RegionRepository,
   villageId: string | null | undefined,
-): Promise<void> {
-  if (!villageId) return;
-  const village = await regions.findById(villageId);
+): Promise<string | null> {
+  if (!villageId) return null;
+  const village = await regions.findByIdOrSlug(villageId);
   if (!village || village.type !== "desa" || village.status !== "published") {
     throw new BadRequestError(
       "VILLAGE_NOT_FOUND",
@@ -52,6 +53,7 @@ async function assertVillage(
       [{ field: "villageId", message: "Desa tanpa kecamatan tidak valid" }],
     );
   }
+  return village.id;
 }
 
 async function assertPlaces(
@@ -99,13 +101,16 @@ export class CreateEventUseCase {
       );
     }
     await assertCategoryPublished(this.repo, input.categoryId);
-    await assertVillage(this.regions, input.villageId);
+    const villageId = await resolveVillage(this.regions, input.villageId);
     await assertPlaces(this.repo, input.placeIds);
     const existing = await this.repo.findBySlug(input.slug);
     if (existing) {
       throw new ConflictError("SLUG_TAKEN", "Slug event sudah dipakai");
     }
-    const event = await this.repo.create(input);
+    const event = await this.repo.create({
+      ...input,
+      villageId,
+    });
     // Activity feed: acara tayang pertama kali = event activity (AGENTS.md #25).
     if (event.status === "published") {
       await this.recordPublished(event.id, event.name, input.authorId ?? null);
@@ -168,8 +173,9 @@ export class UpdateEventUseCase {
     if (input.categoryId) {
       await assertCategoryPublished(this.repo, input.categoryId);
     }
+    let villageId = input.villageId;
     if (input.villageId !== undefined) {
-      await assertVillage(this.regions, input.villageId);
+      villageId = await resolveVillage(this.regions, input.villageId);
     }
     if (input.placeIds !== undefined) {
       await assertPlaces(this.repo, input.placeIds);
@@ -180,7 +186,10 @@ export class UpdateEventUseCase {
         throw new ConflictError("SLUG_TAKEN", "Slug event sudah dipakai");
       }
     }
-    const updated = await this.repo.update(input);
+    const updated = await this.repo.update({
+      ...input,
+      ...(input.villageId !== undefined ? { villageId } : {}),
+    });
     if (!updated) {
       throw new NotFoundError("EVENT_NOT_FOUND", "Event tidak ditemukan");
     }

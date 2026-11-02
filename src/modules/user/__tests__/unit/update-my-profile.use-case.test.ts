@@ -97,8 +97,11 @@ function makeRegion(overrides: Partial<Region> & Pick<Region, 'id' | 'type'>): R
 }
 
 function makeRegionRepo(items: Region[] = []): RegionRepository {
+  const byRef = (ref: string) =>
+    items.find((item) => item.id === ref || item.slug === ref) ?? null;
   return {
     findById: vi.fn(async (id: string) => items.find((item) => item.id === id) ?? null),
+    findByIdOrSlug: vi.fn(async (ref: string) => byRef(ref)),
   } as unknown as RegionRepository;
 }
 
@@ -182,15 +185,22 @@ describe('UpdateMyProfileUseCase', () => {
     expect(userRepo.updateProfile).not.toHaveBeenCalled();
   });
 
-  it('desa yang induknya cocok disimpan', async () => {
-    const updated = makeUser({ regionId: 'pemangkat', villageId: 'pemangkat/perapakan' });
+  it('desa yang induknya cocok disimpan (slug → ULID)', async () => {
+    const kecUlid = '01KECAMATANPEMangkat00001';
+    const desaUlid = '01DESAPERAPAKAN0000000001';
+    const updated = makeUser({ regionId: kecUlid, villageId: desaUlid });
     const userRepo = {
       findById: vi.fn().mockResolvedValue(makeUser()),
       updateProfile: vi.fn().mockResolvedValue(updated),
     } as unknown as UserRepository;
     const regions = makeRegionRepo([
-      makeRegion({ id: 'pemangkat', type: 'kecamatan' }),
-      makeRegion({ id: 'pemangkat/perapakan', type: 'desa', parentId: 'pemangkat' }),
+      makeRegion({ id: kecUlid, slug: 'pemangkat', type: 'kecamatan' }),
+      makeRegion({
+        id: desaUlid,
+        slug: 'pemangkat/perapakan',
+        type: 'desa',
+        parentId: kecUlid,
+      }),
     ]);
 
     const result = await new UpdateMyProfileUseCase(userRepo, regions).execute(USER_ID, {
@@ -199,21 +209,27 @@ describe('UpdateMyProfileUseCase', () => {
     });
 
     expect(userRepo.updateProfile).toHaveBeenCalledWith(USER_ID, {
-      regionId: 'pemangkat',
-      villageId: 'pemangkat/perapakan',
+      regionId: kecUlid,
+      villageId: desaUlid,
     });
-    expect(result.regionId).toBe('pemangkat');
-    expect(result.villageId).toBe('pemangkat/perapakan');
+    expect(result.regionId).toBe(kecUlid);
+    expect(result.villageId).toBe(desaUlid);
   });
 
   it('desa di kecamatan lain ditolak, termasuk saat region lama dipakai', async () => {
+    const kecUlid = '01KECAMATANPEMangkat00001';
     const userRepo = {
-      findById: vi.fn().mockResolvedValue(makeUser({ regionId: 'pemangkat' })),
+      findById: vi.fn().mockResolvedValue(makeUser({ regionId: kecUlid })),
       updateProfile: vi.fn(),
     } as unknown as UserRepository;
     const regions = makeRegionRepo([
-      makeRegion({ id: 'pemangkat', type: 'kecamatan' }),
-      makeRegion({ id: 'jawai/sarang-burung', type: 'desa', parentId: 'jawai' }),
+      makeRegion({ id: kecUlid, slug: 'pemangkat', type: 'kecamatan' }),
+      makeRegion({
+        id: '01DESAJAWAI00000000000001',
+        slug: 'jawai/sarang-burung',
+        type: 'desa',
+        parentId: '01KECAMATANJAWAI000000001',
+      }),
     ]);
 
     await expect(

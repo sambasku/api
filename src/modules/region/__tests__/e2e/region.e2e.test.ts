@@ -112,11 +112,16 @@ describe.skipIf(!hasTestDb)('Region E2E - CRUD admin + list publik', () => {
     expect(catalogRes.status).toBe(200);
     const catalog = (await catalogRes.json()).data.regions as Array<{
       id: string;
+      slug: string;
       parent_id: string | null;
       type: string;
     }>;
-    expect(catalog.find((r) => r.id === 'pemangkat-e2e')?.type).toBe('kecamatan');
-    expect(catalog.find((r) => r.id === 'pemangkat-e2e/perapakan')?.parent_id).toBe('pemangkat-e2e');
+    const kecCat = catalog.find((r) => r.slug === 'pemangkat-e2e');
+    const desaCat = catalog.find((r) => r.slug === 'pemangkat-e2e/perapakan');
+    expect(kecCat?.type).toBe('kecamatan');
+    expect(kecCat?.id).toHaveLength(26);
+    expect(desaCat?.parent_id).toBe(kec.id);
+    expect(desaCat?.id).toBe(desa.id);
 
     const listRes = await get(`/api/v1/regions?type=desa&parent_id=${kec.id}`);
     expect(listRes.status).toBe(200);

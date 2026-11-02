@@ -139,11 +139,15 @@ export class GetMyProfileUseCase {
   }
 }
 
-async function assertLocation(
+/**
+ * Validasi + resolve slug/ULID → ULID SoT.
+ * Katalog lama bisa kirim slug; kolom users.region_id/village_id wajib ULID.
+ */
+async function resolveLocation(
   regionRepo: RegionRepository,
   regionId: string | null,
   villageId: string | null,
-): Promise<void> {
+): Promise<{ regionId: string | null; villageId: string | null }> {
   if (villageId && !regionId) {
     throw new BadRequestError('VALIDATION_ERROR', 'Desa butuh kecamatan', [
       { field: 'village_id', message: 'Pilih kecamatan dulu' },
@@ -151,8 +155,8 @@ async function assertLocation(
   }
 
   const [region, village] = await Promise.all([
-    regionId ? regionRepo.findById(regionId) : Promise.resolve(null),
-    villageId ? regionRepo.findById(villageId) : Promise.resolve(null),
+    regionId ? regionRepo.findByIdOrSlug(regionId) : Promise.resolve(null),
+    villageId ? regionRepo.findByIdOrSlug(villageId) : Promise.resolve(null),
   ]);
 
   if (regionId && (!region || region.type !== 'kecamatan' || region.status !== 'published')) {
@@ -163,12 +167,21 @@ async function assertLocation(
 
   if (
     villageId &&
-    (!village || village.type !== 'desa' || village.status !== 'published' || village.parentId !== regionId)
+    (!village ||
+      village.type !== 'desa' ||
+      village.status !== 'published' ||
+      !region ||
+      village.parentId !== region.id)
   ) {
     throw new BadRequestError('VALIDATION_ERROR', 'Desa tidak valid', [
       { field: 'village_id', message: 'Pilih desa di kecamatan yang sama' },
     ]);
   }
+
+  return {
+    regionId: region?.id ?? null,
+    villageId: village?.id ?? null,
+  };
 }
 
 export class UpdateMyProfileUseCase {
@@ -185,17 +198,23 @@ export class UpdateMyProfileUseCase {
     }
 
     const touchesLocation = dto.regionId !== undefined || dto.villageId !== undefined;
+    let resolvedRegionId: string | null | undefined;
+    let resolvedVillageId: string | null | undefined;
     if (touchesLocation) {
       const regionId = dto.regionId !== undefined ? dto.regionId : user.regionId;
       const villageId = dto.villageId !== undefined ? dto.villageId : user.villageId;
-      await assertLocation(this.regionRepo, regionId, villageId);
+      const resolved = await resolveLocation(this.regionRepo, regionId, villageId);
+      // Selalu tulis ulang keduanya saat lokasi disentuh supaya slug lama
+      // di DB ikut naik ke ULID, dan desa ikut null saat dikosongkan.
+      resolvedRegionId = resolved.regionId;
+      resolvedVillageId = resolved.villageId;
     }
 
     const updated = await this.userRepo.updateProfile(userId, {
       ...(dto.displayName !== undefined ? { displayName: dto.displayName } : {}),
       ...(dto.bio !== undefined ? { bio: dto.bio } : {}),
-      ...(dto.regionId !== undefined ? { regionId: dto.regionId } : {}),
-      ...(dto.villageId !== undefined ? { villageId: dto.villageId } : {}),
+      ...(resolvedRegionId !== undefined ? { regionId: resolvedRegionId } : {}),
+      ...(resolvedVillageId !== undefined ? { villageId: resolvedVillageId } : {}),
       ...(dto.hasReadContributionGuide === true && user.readContributionGuideAt === null
         ? { readContributionGuideAt: new Date() }
         : {}),

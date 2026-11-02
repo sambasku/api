@@ -69,6 +69,7 @@ export class RegionController {
         data: {
           regions: regions.map((r) => ({
             id: r.id,
+            slug: r.slug,
             name: r.name,
             type: r.type,
             parent_id: r.parentId,
