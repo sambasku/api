@@ -1,20 +1,26 @@
-name: Deploy Staging (Cloudflare Workers)
+name: Deploy Staging (Homelab / GHCR)
 
-# Push ke branch `staging` → test (file SQLite) → migrate Turso → deploy Workers.
+# Push branch `staging` saja (tanpa pipeline tag):
+#   test (SQLite) → migrate Turso staging → publish image :staging + :sha-…
 #
-# Secrets GitHub:
-#   CLOUDFLARE_API_TOKEN
-#   CLOUDFLARE_ACCOUNT_ID
-#   DB_STAGING_TURSO_URL / DB_STAGING_TURSO_AUTH_TOKEN (org, prioritas)
-#   fallback: TURSO_STAGING_DATABASE_URL / TURSO_STAGING_AUTH_TOKEN
+# Homelab: ghcr.io/sambasku/api:staging → ./scripts/staging-up.sh
+# Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
 #
-# Secret Worker (DATABASE_URL + DATABASE_AUTH_TOKEN + JWT …) TIDAK perlu di CI -
-# `wrangler deploy` mempertahankan secret yang sudah terpasang.
+# Secrets (org, prioritas): DB_STAGING_TURSO_URL, DB_STAGING_TURSO_AUTH_TOKEN
+# Fallback lama: TURSO_STAGING_DATABASE_URL, TURSO_STAGING_AUTH_TOKEN
+# GITHUB_TOKEN bawaan cukup untuk push package (permissions.packages: write).
 
 on:
   push:
     branches: [staging]
   workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   test:
@@ -75,33 +81,52 @@ jobs:
             echo "::error::Secret DB_STAGING_TURSO_AUTH_TOKEN (atau TURSO_STAGING_AUTH_TOKEN) kosong - set di GitHub → Settings → Secrets"
             exit 1
           fi
-          echo "Turso URL host: $(echo "$DATABASE_URL" | sed -E 's#^[a-z]+://##')"
+          echo "DB URL host: $(echo "$DATABASE_URL" | sed -E 's#^[a-z]+://##')"
       - run: pnpm db:migrate
         env:
           DATABASE_URL: ${{ secrets.DB_STAGING_TURSO_URL || secrets.TURSO_STAGING_DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DB_STAGING_TURSO_AUTH_TOKEN || secrets.TURSO_STAGING_AUTH_TOKEN }}
 
-  deploy:
+  publish-image:
     needs: migrate-staging
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
         with:
-          version: 9
-      - uses: actions/setup-node@v7
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
         with:
-          node-version: 24
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - run: npx wrangler deploy --env staging --var "GIT_SHA:${GIT_SHA}"
-        env:
-          GIT_SHA: ${{ github.sha }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=staging
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
 
   notify:
-    needs: [test, migrate-staging, deploy]
+    needs: [test, migrate-staging, publish-image]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -111,16 +136,16 @@ jobs:
           token: ${{ secrets.TELEGRAM_TOKEN }}
           to: ${{ secrets.TELEGRAM_TO }}
           message: |
-            ${{ contains(needs.*.result, 'failure') && 'GAGAL' || (contains(needs.*.result, 'cancelled') && 'Dibatalkan' || 'Sukses') }} CI sambasku/api - Deploy Staging (Cloudflare Workers)
+            ${{ contains(needs.*.result, 'failure') && '❌ Gagal' || (contains(needs.*.result, 'cancelled') && '⚠️ Dibatalkan' || '✅ Sukses') }} CI sambasku/api — Deploy Staging (Homelab / GHCR)
             Branch: ${{ github.ref_name }} · Commit: ${{ github.sha }}
             https://github.com/sambasku/api/actions/runs/${{ github.run_id }}
       - name: Kirim hasil CI ke Discord
         if: always()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          STATUS: "${{ contains(needs.*.result, 'failure') && 'GAGAL' || (contains(needs.*.result, 'cancelled') && 'Dibatalkan' || 'Sukses') }}"
+          STATUS: "${{ contains(needs.*.result, 'failure') && '❌ Gagal' || (contains(needs.*.result, 'cancelled') && '⚠️ Dibatalkan' || '✅ Sukses') }}"
           REPO: sambasku/api
-          WORKFLOW: Deploy Staging (Cloudflare Workers)
+          WORKFLOW: Deploy Staging (Homelab / GHCR)
           BRANCH: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
           RUN_URL: "https://github.com/sambasku/api/actions/runs/${{ github.run_id }}"
@@ -129,10 +154,10 @@ jobs:
             echo "Skip: DISCORD_WEBHOOK_URL tidak diset."
             exit 0
           fi
-          MSG="$STATUS CI $REPO - $WORKFLOW
+          MSG="$STATUS CI $REPO — $WORKFLOW
           Branch: $BRANCH · Commit: $SHA
           $RUN_URL"
-          jq -n --arg content "$MSG" '{content: $content}' \
+          jq -n --arg content "$MSG" '{{content: $content}}' \
             | curl -sf -X POST -H 'Content-Type: application/json' \
                 -d @- "$DISCORD_WEBHOOK_URL" \
             || echo "Discord webhook gagal (best-effort, job tidak gagal)"
