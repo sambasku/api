@@ -6,12 +6,17 @@ const ALL_ROLES = ['contributor', 'editor', 'reviewer', 'admin', 'root'] as cons
 const roleEnum = z.enum(ALL_ROLES);
 
 export const listAdminUsersQuerySchema = z.object({
-  /** Partial match username ATAU email (case-insensitive ILIKE) */
+  /** Partial match username, email, ATAU nomor HP (query angka: 08…/+62…/62…) */
   q: z.string().max(100).optional(),
   /** Filter exact role (exclude root dari filter UI, tapi backend allow untuk list).
    * Multi role: cocokkan user yang PUNYA role ini. */
   role: roleEnum.optional(),
   can_contribute: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  /** Filter status verifikasi email (false = user mentok OTP / gagal kirim email). */
+  email_verified: z
     .enum(['true', 'false'])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === 'true')),
@@ -29,7 +34,9 @@ export type UpdateUserRoleBody = z.infer<typeof updateUserRoleBodySchema>;
 const adminUserWireSchema = z.object({
   id: z.string(),
   username: z.string(),
+  display_name: z.string(),
   email: z.string(),
+  phone: z.string().nullable(),
   roles: z.array(roleEnum).min(1),
   /** @deprecated Derived tertinggi dari roles (wire compat, baca roles). */
   role: roleEnum,
@@ -37,6 +44,16 @@ const adminUserWireSchema = z.object({
   is_active: z.boolean(),
   can_contribute: z.boolean(),
   contribute_muted_until: z.string().nullable(),
+  email_verified: z.boolean(),
+  /** Waktu verifikasi email (ISO); null = belum terverifikasi. */
+  email_verified_at: z.string().nullable(),
+  /** OTP verifikasi terakhir; null = tidak ada OTP tertunda. */
+  otp: z
+    .object({
+      created_at: z.string(),
+      expires_at: z.string(),
+    })
+    .nullable(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });
@@ -128,5 +145,15 @@ export const updateUserRoleResponseSchema = z.object({
     roles: z.array(roleEnum).min(1),
     /** @deprecated Derived tertinggi dari roles (wire compat, baca roles). */
     role: roleEnum,
+  }),
+});
+
+// Verifikasi email manual oleh admin (mis. OTP gagal terkirim ke user).
+export const verifyEmailResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    id: z.string(),
+    email_verified: z.literal(true),
+    email_verified_at: z.string(),
   }),
 });

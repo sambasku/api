@@ -36,6 +36,9 @@ function user(partial: Partial<User> = {}): User {
     updatedAt: null,
     deletedAt: null,
     ...partial,
+    levelSeen: partial.levelSeen ?? 1,
+    notifyStreakReminder: partial.notifyStreakReminder ?? true,
+    notifyLevelUp: partial.notifyLevelUp ?? true,
   };
 }
 

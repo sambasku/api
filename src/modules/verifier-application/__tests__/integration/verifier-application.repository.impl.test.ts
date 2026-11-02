@@ -30,7 +30,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
 
   it('create UNIQUE user_id, list cursor, resubmit hanya rejected', async () => {
     const user = await users.save({
-      username: 'budi-va',
+      username: 'budi_va',
       email: 'budi-va@test.com',
       phone: null,
       passwordHash: 'hash',
@@ -83,13 +83,13 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
 
   it('createWithPhone unique HP → PHONE_ALREADY_EXISTS; unique user_id → APPLICATION_ALREADY_EXISTS', async () => {
     const owner = await users.save({
-      username: 'owner-hp',
+      username: 'owner_hp',
       email: 'owner-hp@test.com',
       phone: '6281999000001',
       passwordHash: 'hash',
     });
     const applicant = await users.save({
-      username: 'apply-hp',
+      username: 'apply_hp',
       email: 'apply-hp@test.com',
       phone: null,
       passwordHash: 'hash',
@@ -125,19 +125,19 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
 
   it('approveAtomically menolak non-contributor dan pengajuan yang sudah ditolak', async () => {
     const admin = await users.save({
-      username: 'admin-va',
+      username: 'admin_va',
       email: 'admin-va@test.com',
       phone: null,
       passwordHash: 'hash',
     });
     const contributor = await users.save({
-      username: 'kon-va',
+      username: 'kon_va',
       email: 'kon-va@test.com',
       phone: '6281888000001',
       passwordHash: 'hash',
     });
     const editor = await users.save({
-      username: 'ed-va',
+      username: 'ed_va',
       email: 'ed-va@test.com',
       phone: '6281888000002',
       passwordHash: 'hash',
@@ -181,12 +181,12 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
 
     const detail = await repo.findById(pending.id);
     expect(detail?.reviewedBy).toBe(admin.id);
-    expect(detail?.reviewedByUsername).toBe('admin-va');
+    expect(detail?.reviewedByUsername).toBe('admin_va');
   });
 
   it('updateSocialScreenshot: pending → screenshot berganti; decided → 409; index invalid → 404', async () => {
     const contributor = await users.save({
-      username: 'shot-va',
+      username: 'shot_va',
       email: 'shot-va@test.com',
       phone: '6281777000001',
       passwordHash: 'hash',

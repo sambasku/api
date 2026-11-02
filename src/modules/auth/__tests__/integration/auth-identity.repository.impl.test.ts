@@ -21,7 +21,7 @@ describe.skipIf(!hasTestDb)('AuthIdentityRepositoryImpl', () => {
 
   it('findByProvider mengembalikan baris deletedAt terisi', async () => {
     const user = await userRepo.save({
-      username: 'google-user',
+      username: 'google_user',
       email: 'google@test.com',
       phone: null,
       passwordHash: null,
@@ -47,7 +47,7 @@ describe.skipIf(!hasTestDb)('AuthIdentityRepositoryImpl', () => {
   it('unique (provider, sub) + createUserWithGoogleIdentity race → created false', async () => {
     const first = await repo.createUserWithGoogleIdentity(
       {
-        username: 'race-a',
+        username: 'race_a',
         email: 'race@test.com',
         phone: null,
         passwordHash: null,
@@ -60,7 +60,7 @@ describe.skipIf(!hasTestDb)('AuthIdentityRepositoryImpl', () => {
 
     const second = await repo.createUserWithGoogleIdentity(
       {
-        username: 'race-b',
+        username: 'race_b',
         email: 'race-other@test.com',
         phone: null,
         passwordHash: null,

@@ -3,6 +3,7 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { NotifyWordOwnerMediaUseCase } from '@/modules/notification/application/use-cases/notify-word-owner-media.use-case';
 import type { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
 import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
@@ -62,6 +63,8 @@ export class ReviewContributionUseCase {
     private readonly pushCooldown?: ReviewPushCooldownGate,
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    /** #133: approve audio pelafalan → notif pemilik kata. */
+    private readonly notifyWordOwnerMedia?: NotifyWordOwnerMediaUseCase,
   ) {}
 
   async execute(cmd: ReviewContributionCommand): Promise<ReviewOutcome> {
@@ -130,6 +133,16 @@ export class ReviewContributionUseCase {
           });
         }
       }
+    }
+
+    // #133: approve audio pelafalan = media tayang → notif pemilik kata.
+    // Contoh tidak dikirim di sini: sudah dinotif saat create (published).
+    if (cmd.decision === 'approve' && outcome.entityType === 'word_audio') {
+      await this.notifyWordOwnerMedia?.execute({
+        entityType: 'word_audio',
+        entityId: outcome.entityId,
+        actorId: outcome.contributorUserId,
+      });
     }
 
     await this.auditRepo.record({

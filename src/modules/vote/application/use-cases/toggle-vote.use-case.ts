@@ -21,6 +21,12 @@ export interface ToggleVoteCommand {
   clientId?: string | null;
 }
 
+/** Hasil toggle + target efektif (setelah remap word→meaning, 52). */
+export interface ToggleVoteWireResult extends ToggleVoteResult {
+  targetType: VoteTargetType;
+  targetId: string;
+}
+
 const WORD_VOTE_TITLE = 'Vote baru';
 
 function wordVoteBody(
@@ -40,6 +46,9 @@ function wordVoteBody(
 // KEPUTUSAN PRODUK: target `discussion` (pertanyaan) upvote-only -
 // downvote ditolak (komunitas minta jawaban, bukan konten yang di-downvote).
 //
+// 52: target_type word (mobile ≤ v0.4.0) di-remap ke makna - tidak menulis
+// entity_type=word baru. Dual-id: target_id boleh meaning id.
+//
 // Setelah cast (bukan unvote): inbox + push ke pemilik kata induk (best-effort),
 // cooldown Skip per user (default 3 menit). Inbox tidak di-throttle.
 export class ToggleVoteUseCase {
@@ -52,7 +61,7 @@ export class ToggleVoteUseCase {
     private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
-  async execute(cmd: ToggleVoteCommand): Promise<ToggleVoteResult> {
+  async execute(cmd: ToggleVoteCommand): Promise<ToggleVoteWireResult> {
     if (cmd.targetType === 'discussion' && cmd.value === -1) {
       throw new ValidationError([
         {
@@ -62,7 +71,23 @@ export class ToggleVoteUseCase {
       ]);
     }
 
-    const target = { entityType: cmd.targetType, entityId: cmd.targetId };
+    let targetType = cmd.targetType;
+    let targetId = cmd.targetId;
+
+    // 52: client lama kirim word → remap ke makna (flow baru).
+    if (cmd.targetType === 'word') {
+      const resolved = await this.voteRepo.resolveLegacyWordVoteTarget(cmd.targetId);
+      if (!resolved) {
+        throw new NotFoundError(
+          'VOTE_TARGET_NOT_FOUND',
+          'Target vote tidak ditemukan atau sudah dihapus',
+        );
+      }
+      targetType = 'meaning';
+      targetId = resolved.meaningId;
+    }
+
+    const target = { entityType: targetType, entityId: targetId };
 
     // Eksistensi target hanya dicek di endpoint tulis ini - vote ke target
     // yang sudah dihapus → 404 (endpoint counts sengaja tidak mengecek).
@@ -79,10 +104,12 @@ export class ToggleVoteUseCase {
 
     if (result.myVote !== null) {
       // Event feed: vote tayang sebagai aktivitas. targetWordId diresolve
-      // best-effort; vote comment punya wordId lewat komentar induk.
-      if (this.activityEvents && (cmd.targetType === 'word' || cmd.targetType === 'comment')) {
+      // best-effort; vote comment punya wordId lewat komentar induk, vote
+      // meaning lewat makna induk.
+      const feedTargetTypes: VoteTargetType[] = ['comment', 'meaning'];
+      if (this.activityEvents && feedTargetTypes.includes(targetType)) {
         const resolved = await this.voteRepo
-          .resolveWordOwnerForVoteTarget({ entityType: cmd.targetType, entityId: cmd.targetId })
+          .resolveWordOwnerForVoteTarget({ entityType: targetType, entityId: targetId })
           .catch(() => null);
         if (resolved?.wordId) {
           // Copy feed dibekukan di momen kejadian (#94): arah dari nilai vote
@@ -93,33 +120,36 @@ export class ToggleVoteUseCase {
               ? `"${resolved.lemma}" perlu dicek ulang`
               : `"${resolved.lemma}" sudah pas`;
           await this.activityEvents.safe({
-            kind: cmd.targetType === 'word' ? 'vote_word' : 'vote_comment',
+            kind: targetType === 'meaning' ? 'vote_meaning' : 'vote_comment',
             actorId: cmd.userId,
             targetWordId: resolved.wordId,
-            targetId: cmd.targetId,
+            targetId,
             // Satu event per user+target terakhir: flip arah menimpa copy.
-            dedupeKey: `vote:${cmd.userId}:${cmd.targetType}:${cmd.targetId}`,
+            dedupeKey: `vote:${cmd.userId}:${targetType}:${targetId}`,
             payload,
           });
         }
       }
       await this.notifyWordOwner({
         actorId: cmd.userId,
-        targetType: cmd.targetType,
-        targetId: cmd.targetId,
+        targetType,
+        targetId,
         value: result.myVote,
       });
-    } else if (this.activityEvents && (cmd.targetType === 'word' || cmd.targetType === 'comment')) {
+    } else if (
+      this.activityEvents &&
+      (targetType === 'comment' || targetType === 'meaning')
+    ) {
       // Unvote: baris vote dihapus hard - event feed-nya disembunyikan
       // (bukan dihapus; submit ulang menampilkan kembali, lihat dedupeKey).
       await this.activityEvents.safeVoteVisibility(
         cmd.userId,
-        cmd.targetType,
-        cmd.targetId,
+        targetType,
+        targetId,
       );
     }
 
-    return result;
+    return { ...result, targetType, targetId };
   }
 
   private async notifyWordOwner(input: {

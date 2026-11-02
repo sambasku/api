@@ -44,6 +44,9 @@ export interface UserRepository {
       readContributionGuideAt?: Date;
       regionId?: string | null;
       villageId?: string | null;
+      levelSeen?: number;
+      notifyStreakReminder?: boolean;
+      notifyLevelUp?: boolean;
     },
   ): Promise<User>;
 }

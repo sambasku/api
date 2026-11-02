@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
 import {
   meaningTranslations,
   meanings,
@@ -65,6 +65,31 @@ const isFulfilledSql = sql`(
     WHEN ${searchMisses.direction} = 'translation' THEN ${translationFulfilledSql}
     ELSE ${lemmaFulfilledSql}
   END
+)`;
+
+// Antrean usulan kata baru yang menaut miss ini (contributions.search_miss_id,
+// status pending - belum ada keputusan review). Subquery skalar di SELECT
+// utama: tidak menambah jumlah query (tetap hemat subrequest Worker) dan
+// tidak merusak keyset pagination ORDER BY id.
+//
+// PENTING: kolom LUAR wajib ditulis qualified (`search_misses.id`). `${searchMisses.id}`
+// dirender Drizzle sebagai `"id"` polos - di subquery yang punya tabel
+// `contributions c` (kolom `id` juga ada) nama itu ter-resolve ke `c.id`,
+// hasilnya selalu 0.
+const pendingCountSql = sql<number>`(
+  SELECT COUNT(*) FROM contributions c
+  WHERE c.search_miss_id = search_misses.id
+    AND c.status = 'pending'
+    AND c.deleted_at IS NULL
+)`;
+
+const pendingOldestIdSql = sql<string | null>`(
+  SELECT c.id FROM contributions c
+  WHERE c.search_miss_id = search_misses.id
+    AND c.status = 'pending'
+    AND c.deleted_at IS NULL
+  ORDER BY c.created_at ASC
+  LIMIT 1
 )`;
 
 export class SearchMissRepositoryImpl implements SearchMissRepository {
@@ -142,8 +167,14 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
   async list(filter: SearchMissListFilter): Promise<CursorPage<SearchMiss>> {
     const isPublic = filter.scope === 'public';
 
+    // pending* hanya dipakai panel admin, tapi tetap di-select supaya bentuk
+    // row seragam (subquery indeks contributions_search_miss_idx, murah).
     const rows = await this.db
-      .select()
+      .select({
+        ...getTableColumns(searchMisses),
+        pendingCount: pendingCountSql,
+        pendingOldestId: pendingOldestIdSql,
+      })
       .from(searchMisses)
       .where(
         and(
@@ -186,14 +217,16 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
       this.fulfilledTranslationTerms(translationTerms),
     ]);
 
-    const items: SearchMiss[] = page.map((r) =>
-      this.toEntity(
-        r,
-        r.direction === 'translation'
-          ? fulfilledTranslations.has(r.term)
-          : fulfilledLemmas.has(r.term),
-      ),
-    );
+const items: SearchMiss[] = page.map((r) =>
+this.toEntity(
+r,
+r.direction === 'translation'
+? fulfilledTranslations.has(r.term)
+: fulfilledLemmas.has(r.term),
+r.pendingCount ?? 0,
+r.pendingOldestId ?? null,
+),
+);
 
     return {
       items,
@@ -254,21 +287,25 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
     return this.toEntity(row, fulfilled);
   }
 
-  private toEntity(
-    row: typeof searchMisses.$inferSelect,
-    isFulfilled: boolean,
-  ): SearchMiss {
-    return {
-      id: row.id,
-      term: row.term,
-      direction: row.direction as SearchMissDirection,
-      hitCount: row.hitCount,
-      lastSearchedAt: row.lastSearchedAt,
-      isFulfilled,
-      isVisible: row.isVisible,
-      createdAt: row.createdAt,
-    };
-  }
+private toEntity(
+row: typeof searchMisses.$inferSelect,
+isFulfilled: boolean,
+pendingContributionCount = 0,
+pendingContributionId: string | null = null,
+): SearchMiss {
+return {
+id: row.id,
+term: row.term,
+direction: row.direction as SearchMissDirection,
+hitCount: row.hitCount,
+lastSearchedAt: row.lastSearchedAt,
+isFulfilled,
+pendingContributionCount,
+pendingContributionId,
+isVisible: row.isVisible,
+createdAt: row.createdAt,
+};
+}
 
   private async fulfilledLemmaTerms(terms: string[]): Promise<Set<string>> {
     if (terms.length === 0) return new Set();

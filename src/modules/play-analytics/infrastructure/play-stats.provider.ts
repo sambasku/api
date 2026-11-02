@@ -23,8 +23,11 @@ export function totalsFromRows(rows: PlayCsvRow[]): PlayTotals {
   }
   // File overview: satu baris per hari. activeInstalls = nilai hari terakhir.
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
-  const last = sorted[sorted.length - 1]!;
   const sum = (k: 'dailyInstalls' | 'dailyUninstalls' | 'updates') => sorted.reduce((s, r) => s + r[k], 0);
+  // Rating dicari dari baris terakhir yang punya kolomnya: baris installs
+  // tidak punya rating (null), jadi jangan pakai `last` buta.
+  const lastRated = [...sorted].reverse().find((r) => r.totalAverageRating !== null);
+  const lastCounted = [...sorted].reverse().find((r) => r.totalRatingCount > 0);
   // Rating harian berbobot jumlah ulasan; kumulatif dari baris terakhir.
   let wSum = 0;
   let wCount = 0;
@@ -38,9 +41,11 @@ export function totalsFromRows(rows: PlayCsvRow[]): PlayTotals {
     newInstalls: sum('dailyInstalls'),
     uninstalls: sum('dailyUninstalls'),
     updates: sum('updates'),
-    activeInstalls: last.activeInstalls,
-    averageRating: last.totalAverageRating ?? (wCount > 0 ? wSum / wCount : 0),
-    ratingCount: last.totalRatingCount,
+    // Baris country per negara bisa lebih kecil dari total; ambil maksimum
+    // supaya baris overview yang menang.
+    activeInstalls: sorted.reduce((m, r) => (r.activeInstalls > m ? r.activeInstalls : m), 0),
+    averageRating: lastRated?.totalAverageRating ?? (wCount > 0 ? wSum / wCount : 0),
+    ratingCount: lastCounted?.totalRatingCount ?? 0,
   };
 }
 
@@ -97,12 +102,12 @@ export class GcsPlayStatsProvider implements PlayStatsProvider {
 
   async getOverview(range: { current: DateRange; previous: DateRange }): Promise<PlayOverview> {
     const [cur, prev] = await Promise.all([this.loadRange(range.current), this.loadRange(range.previous)]);
-    const trend = trendFromRows(cur.rows, range.current);
+    const trend = trendFromRows(cur.overview, range.current);
     return {
-      totals: totalsFromRows(cur.rows),
-      previous: totalsFromRows(prev.rows),
+      totals: totalsFromRows(cur.overview),
+      previous: totalsFromRows(prev.overview),
       trend,
-      topCountries: countriesFromRows(cur.rows, range.current),
+      topCountries: countriesFromRows(cur.country, range.current),
     };
   }
 
@@ -116,17 +121,23 @@ export class GcsPlayStatsProvider implements PlayStatsProvider {
 
   async getRatings(range: { current: DateRange; previous: DateRange }): Promise<PlayRatings> {
     const [cur, prev] = await Promise.all([this.loadRange(range.current), this.loadRange(range.previous)]);
-    const buckets = ratingBuckets(cur.rows, range.current);
-    return { totals: totalsFromRows(cur.rows), previous: totalsFromRows(prev.rows), buckets };
+    const buckets = ratingBuckets(cur.overview, range.current);
+    return { totals: totalsFromRows(cur.overview), previous: totalsFromRows(prev.overview), buckets };
   }
 
-  /** Unduh semua file bulan yang menutupi rentang (overview + country). */
-  private async loadRange(range: DateRange): Promise<{ rows: PlayCsvRow[] }> {
+  /**
+   * Unduh file bulan yang menutupi rentang, pisahkan baris overview (per hari,
+   * sumber total & tren) dari country (kumulatif per negara, sumber peta
+   * negara). Mencampur keduanya membuat total dobel dan `activeInstalls`
+   * mengambil baris country terakhir.
+   */
+  private async loadRange(range: DateRange): Promise<{ overview: PlayCsvRow[]; country: PlayCsvRow[] }> {
     const { account, bucket, prefix } = this.config;
     if (!account || !bucket) throw new Error('PlayStatsProvider dipanggil tanpa konfigurasi');
     const months = monthsCovering(range);
     const wanted = new Set(months);
-    const all: PlayCsvRow[] = [];
+    const overview: PlayCsvRow[] = [];
+    const country: PlayCsvRow[] = [];
 
     let pageToken: string | undefined;
     do {
@@ -137,12 +148,12 @@ export class GcsPlayStatsProvider implements PlayStatsProvider {
       for (const name of matches) {
         const csv = await downloadGcsObject(account, bucket, name);
         const rows = parsePlayStatsCsv(csv);
-        // File country berisi baris kumulatif bulan; simpan asal - agregator pilih.
-        all.push(...rows.filter((r) => (isOverviewCsv(name) ? true : Boolean(r.country))));
+        if (isOverviewCsv(name)) overview.push(...rows);
+        else country.push(...rows.filter((r) => Boolean(r.country)));
       }
       pageToken = list.nextPageToken ?? undefined;
     } while (pageToken);
-    return { rows: all };
+    return { overview, country };
   }
 }
 

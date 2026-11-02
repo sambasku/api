@@ -7,6 +7,8 @@ import type {
   DiscussionListFilter,
   DiscussionReply,
   DiscussionReplyAudio,
+  DiscussionReplyRevision,
+  DiscussionRevision,
   DiscussionStatus,
 } from '../entities/discussion.entity';
 
@@ -33,6 +35,10 @@ export interface DiscussionRepository {
   createReply(input: NewDiscussionReply): Promise<DiscussionReply>;
   findReplyById(id: string): Promise<DiscussionReply | null>;
   listReplies(discussionId: string): Promise<DiscussionReply[]>;
+  /** Batch COUNT reply status=published per diskusi (satu query, bukan N+1). */
+  countPublishedRepliesByDiscussionIds(
+    discussionIds: string[],
+  ): Promise<Map<string, number>>;
   /** User unik yang pernah membalas thread (semua status kecuali soft-delete opsional: semua). */
   listDistinctReplierUserIds(discussionId: string): Promise<string[]>;
 
@@ -44,4 +50,31 @@ export interface DiscussionRepository {
 
   markReplyDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownReply(id: string, reviewerId: string): Promise<boolean>;
+
+  /** Soft-delete OP oleh penulis (#202): published → deleted_by_author. */
+  markDiscussionDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+
+  updateReplyBodyWithRevision(input: {
+    replyId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<DiscussionReply | null>;
+
+  listReplyRevisions(replyId: string): Promise<DiscussionReplyRevision[]>;
+
+  /**
+   * Edit OP published (#202): body + link; snapshot revisi bila body berubah.
+   * `requeuePendingReview` → status pending_review (pra-moderasi ulang).
+   */
+  updateDiscussionBodyWithRevision(input: {
+    discussionId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+    linkUrl: string | null;
+    requeuePendingReview: boolean;
+  }): Promise<Discussion | null>;
+
+  listDiscussionRevisions(discussionId: string): Promise<DiscussionRevision[]>;
 }

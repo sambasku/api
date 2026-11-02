@@ -101,12 +101,18 @@ export class CreateWordUseCase {
     const linkRelations = dto.relatedWords.filter(isLinkRelation);
     const inlineRelations = dto.relatedWords.filter(isInlineRelation);
 
+    // Client lama kirim language_id / word_class_id / translation language_id
+    // sebagai "" bila referensi belum termuat - isi default SBS / umum / IDN.
+    await this.fillLegacyEmptyIds(dto);
+
     // 1. Validasi referensi eksternal (id harus ada di DB) → SATU panggilan
     //    gabungan (induk + semua kata inline) → field path per-kata.
     const missing = await this.wordRepo.findMissingReferences({
       languageId: dto.languageId,
       dialectId: dto.dialectId,
-      wordClassIds: dto.meanings.map((m) => m.wordClassId),
+      wordClassIds: dto.meanings
+        .map((m) => m.wordClassId)
+        .filter((id): id is string => !!id),
       languageIds: collectLanguageIds(dto),
       categoryIds: dto.categoryIds,
       relatedWordIds: linkRelations.map((r) => r.wordId),
@@ -267,29 +273,29 @@ export class CreateWordUseCase {
   }
 
   /**
-   * Exact match lemma + definition + terjemahan Indonesia pada kata
-   * published → 409 DUPLICATE_MEANING (jangan insert).
+   * Makna published dengan lemma + isi yang sama → 409 DUPLICATE_MEANING.
+   * Perbandingan case-insensitive; placeholder "-" pada satu field tidak
+   * membatalkan pengecekan field lainnya (#174).
    */
   private async assertNoDuplicatePublishedMeaning(dto: CreateWordDto): Promise<void> {
     const indonesianLanguageId = await this.wordRepo.findLanguageIdByCode('id');
     if (!indonesianLanguageId) return;
 
     for (const meaning of dto.meanings) {
-      if (meaning.isHaveDefinition === false || meaning.isHaveTranslation === false) {
-        continue;
-      }
-      if (isPlaceholderMeaningText(meaning.definition)) continue;
       const idTranslation = meaning.translations.find(
         (t) => t.languageId === indonesianLanguageId,
       );
-      if (!idTranslation || isPlaceholderMeaningText(idTranslation.translationText)) {
+      const definition = meaning.isHaveDefinition === false ? '' : meaning.definition;
+      const translationText =
+        meaning.isHaveTranslation === false ? '' : (idTranslation?.translationText ?? '');
+      if (isPlaceholderMeaningText(definition) && isPlaceholderMeaningText(translationText)) {
         continue;
       }
       const match = await this.wordRepo.findPublishedDuplicateMeaning({
         languageId: dto.languageId,
         lemma: dto.lemma,
-        definition: meaning.definition,
-        translationText: idTranslation.translationText,
+        definition,
+        translationText,
       });
       if (match) throwDuplicateMeaningConflict(match);
     }
@@ -383,6 +389,72 @@ export class CreateWordUseCase {
           },
         ],
       );
+    }
+  }
+
+  /**
+   * Backward compat mobile lama: field ID sering dikirim `""` saat daftar
+   * bahasa/kelas kata belum termuat. Isi default:
+   * - language_id kata → SBS (Sambas)
+   * - translation / example language → IDN
+   * - word_class_id → kelas "umum" (atau tetap null bila seed belum ada)
+   */
+  private async fillLegacyEmptyIds(dto: CreateWordDto): Promise<void> {
+    const needsLemmaLang = !dto.languageId.trim();
+    const needsTranslationLang = dto.meanings.some((m) =>
+      m.translations.some((t) => !t.languageId.trim()),
+    );
+    const needsExampleLang = dto.meanings.some((m) =>
+      (m.examples ?? []).some(
+        (ex) =>
+          !ex.sourceLanguageId.trim() ||
+          (ex.targetLanguageId != null && !ex.targetLanguageId.trim()),
+      ),
+    );
+    const needsWordClass = dto.meanings.some((m) => !m.wordClassId?.trim());
+
+    if (needsLemmaLang) {
+      const sambasId = await this.wordRepo.findLanguageIdByCode('SBS');
+      if (!sambasId) {
+        throw new ValidationError([
+          { field: 'language_id', message: 'Bahasa Sambas belum tersedia' },
+        ]);
+      }
+      dto.languageId = sambasId;
+    }
+
+    if (needsTranslationLang || needsExampleLang) {
+      const idnId = await this.wordRepo.findLanguageIdByCode('IDN');
+      if (!idnId) {
+        throw new ValidationError([
+          {
+            field: 'meanings.0.translations.0.language_id',
+            message: 'Bahasa Indonesia belum tersedia',
+          },
+        ]);
+      }
+      for (const meaning of dto.meanings) {
+        for (const t of meaning.translations) {
+          if (!t.languageId.trim()) t.languageId = idnId;
+        }
+        for (const ex of meaning.examples ?? []) {
+          // Contoh: sumber = bahasa lemma (Sambas), target = Indonesia.
+          if (!ex.sourceLanguageId.trim()) ex.sourceLanguageId = dto.languageId;
+          if (ex.targetLanguageId != null && !ex.targetLanguageId.trim()) {
+            ex.targetLanguageId = idnId;
+          }
+        }
+      }
+    }
+
+    if (needsWordClass) {
+      const classes = await this.wordRepo.listWordClasses();
+      const umumId = classes.find((c) => c.code.trim().toLowerCase() === 'umum')?.id ?? null;
+      if (umumId) {
+        for (const meaning of dto.meanings) {
+          if (!meaning.wordClassId?.trim()) meaning.wordClassId = umumId;
+        }
+      }
     }
   }
 }
@@ -539,10 +611,12 @@ function collectInlineLanguageIds(
 export function collectLanguageIds(dto: CreateWordDto): string[] {
   const ids: string[] = [];
   for (const meaning of dto.meanings) {
-    for (const t of meaning.translations) ids.push(t.languageId);
+    for (const t of meaning.translations) {
+      if (t.languageId.trim()) ids.push(t.languageId);
+    }
     for (const ex of meaning.examples ?? []) {
-      ids.push(ex.sourceLanguageId);
-      if (ex.targetLanguageId) ids.push(ex.targetLanguageId);
+      if (ex.sourceLanguageId.trim()) ids.push(ex.sourceLanguageId);
+      if (ex.targetLanguageId?.trim()) ids.push(ex.targetLanguageId);
     }
   }
   return [...new Set(ids)];
@@ -641,8 +715,15 @@ function collectInlineRefPaths(dto: CreateWordDto): InlineRefPath[] {
     });
 
     rel.word.meanings?.forEach((meaning, m) => {
-      refs.push({ type: 'word_class', id: meaning.wordClassId, path: `related_words.${n}.word.meanings.${m}.word_class_id` });
+      if (meaning.wordClassId) {
+        refs.push({
+          type: 'word_class',
+          id: meaning.wordClassId,
+          path: `related_words.${n}.word.meanings.${m}.word_class_id`,
+        });
+      }
       for (const [k, t] of meaning.translations.entries()) {
+        if (!t.languageId.trim()) continue;
         refs.push({ type: 'language', id: t.languageId, path: `related_words.${n}.word.meanings.${m}.translations.${k}.language_id` });
       }
       for (const [k, ex] of (meaning.examples ?? []).entries()) {

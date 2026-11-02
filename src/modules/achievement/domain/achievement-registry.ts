@@ -1,4 +1,11 @@
-import { and, gte, lt, sql, type SQL } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull, lt, ne, sql, type SQL } from 'drizzle-orm';
+import { comments } from '@/shared/database/drizzle/schema/comments.schema';
+import { contributionReviews } from '@/shared/database/drizzle/schema/contribution-reviews.schema';
+import { contributions } from '@/shared/database/drizzle/schema/contributions.schema';
+import {
+  discussionReplies,
+  discussions,
+} from '@/shared/database/drizzle/schema/discussions.schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
 import type { AchievementCriteria } from './entities/achievement.entity';
 
@@ -6,47 +13,44 @@ import type { AchievementCriteria } from './entities/achievement.entity';
  * Registry source achievement - SATU-SATUNYA tempat sumber kriteria
  * didaftarkan.
  *
- * Prinsip: kriteria adalah DATA, bukan kode bebas. Admin memilih `source`
- * dari daftar di sini; backend tidak pernah menerima nama kolom atau
- * ekspresi SQL dari input admin. Menambah jenis achievement baru (mis.
- * kelak kuis) = menambah satu handler di registry + satu baris katalog -
- * evaluator, tabel, API, console, dan mobile tidak berubah.
+ * Dual-mode evaluator (ACHIEVEMENT_ENHANCEMENT Q3 / B2):
+ * - `user_match`: boolean pada baris `users` (kohort registration).
+ * - `aggregate`: GROUP BY user HAVING COUNT(*) >= threshold.
  *
- * Kontrak handler:
- * - `buildMatch(criteria)` mengembalikan ekspresi SQL boolean pada tabel
- *   `users` (kondisi baris). Bentuk seragam ini membuat evaluator cukup
- *   satu anti-join tanpa cabang per source.
- * - Window waktu memakai kolom waktu milik source itu sendiri (untuk
- *   `registration` = `users.created_at`).
+ * `aggregateFact` menunjuk tabel fakta untuk cabang repository.
  */
+
+export type AchievementEvaluatorKind = 'user_match' | 'aggregate';
+
+/** Tabel fakta yang didukung mesin agregat. */
+export type AchievementAggregateFact =
+  | 'contributions'
+  | 'contribution_reviews'
+  | 'comments'
+  | 'discussions'
+  | 'discussion_replies';
+
 export interface AchievementFilterField {
   key: string;
   label: string;
-  /** Opsi tertutup (dipakai admin console sebagai dropdown). */
   options?: string[];
 }
 
 export interface AchievementSourceDefinition {
   source: string;
-  /** Label Indonesia untuk dropdown admin console. */
   label: string;
   description: string;
-  /** Sumber ini punya ambang jumlah (agregat). */
+  kind: AchievementEvaluatorKind;
   supportsThreshold: boolean;
-  /** Sumber ini punya rentang waktu. */
   supportsWindow: boolean;
-  /** Filter opsional yang didukung sumber ini. */
   filterFields: AchievementFilterField[];
-  /**
-   * True = tidak pernah discan (cuma grant manual admin), mis. event
-   * khusus yang tidak punya criteria komputabel.
-   */
   manualOnly?: boolean;
-  /** Ekspresi SQL boolean: user memenuhi kriteria source ini. */
-  buildMatch(criteria: AchievementCriteria): SQL;
+  /** Wajib untuk kind=aggregate. */
+  aggregateFact?: AchievementAggregateFact;
+  buildMatch?(criteria: AchievementCriteria): SQL;
+  buildAggregateFilters?(criteria: AchievementCriteria): SQL[];
 }
 
-/** Parse window ISO 8601 ke Date; throw bila bukan tanggal valid. */
 function parseWindowBound(value: string, field: 'from' | 'to'): Date {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
@@ -55,65 +59,151 @@ function parseWindowBound(value: string, field: 'from' | 'to'): Date {
   return parsed;
 }
 
-/**
- * Source `registration` - user terdaftar dalam rentang waktu tertentu.
- * Basis data: `users.created_at`. Excluded menyeluruh (diterapkan
- * evaluator): akun anonim, akun non-aktif, akun soft-deleted.
- */
+function windowOn(
+  criteria: AchievementCriteria,
+  column: { name?: string } & object,
+): SQL[] {
+  const out: SQL[] = [];
+  const from = criteria.window?.from;
+  const to = criteria.window?.to;
+  if (from) out.push(gte(column as never, parseWindowBound(from, 'from')));
+  if (to) out.push(lt(column as never, parseWindowBound(to, 'to')));
+  return out;
+}
+
 const registrationSource: AchievementSourceDefinition = {
   source: 'registration',
   label: 'Kohort pendaftaran',
   description: 'Pengguna yang terdaftar dalam rentang tanggal tertentu.',
+  kind: 'user_match',
   supportsThreshold: false,
   supportsWindow: true,
   filterFields: [],
   buildMatch(criteria: AchievementCriteria): SQL {
     const from = criteria.window?.from;
     const to = criteria.window?.to;
-    if (!from || !to) {
-      // Tanpa window = seluruh pengguna terdaftar (kohort tak terbatas).
-      return sql`1 = 1`;
-    }
-    const fromDate = parseWindowBound(from, 'from');
-    const toDate = parseWindowBound(to, 'to');
-    // gte/lt (bukan sql template) supaya binding Date ikut tipe kolom
-    // timestamp - libsql menyimpan created_at sebagai unix seconds.
-    return and(gte(users.createdAt, fromDate), lt(users.createdAt, toDate))!;
+    if (!from || !to) return sql`1 = 1`;
+    return and(
+      gte(users.createdAt, parseWindowBound(from, 'from')),
+      lt(users.createdAt, parseWindowBound(to, 'to')),
+    )!;
   },
 };
 
-/**
- * Source `manual` - pemberian admin, tanpa komputasi. Tidak pernah discan;
- * hanya bisa diberikan lewat grant manual (kategori event khusus).
- */
 const manualSource: AchievementSourceDefinition = {
   source: 'manual',
   label: 'Manual (admin)',
   description: 'Diberikan langsung oleh admin, tanpa kondisi otomatis.',
+  kind: 'user_match',
   supportsThreshold: false,
   supportsWindow: false,
   filterFields: [],
   manualOnly: true,
   buildMatch(): SQL {
-    // Tidak pernah cocok - sumber manual tidak pernah discan.
     return sql`1 = 0`;
   },
 };
 
-/**
- * Registry aktif. Kunci = `criteria.source` yang valid.
- *
- * Menambah source baru (mis. `quizzes_completed` saat fitur kuis hidup):
- * 1. Tulis handler di file ini (buildMatch + label + filter fields).
- * 2. Tambah baris di `docs/ACHIEVEMENT.md` (registry sumber).
- * 3. Selesai - tidak ada perubahan tabel, evaluator, API, console, mobile.
- */
+export const CONTRIBUTION_ENTITY_TYPE_OPTIONS = [
+  'word',
+  'pronunciation',
+  'word_image',
+  'word_audio',
+  'example',
+  'meaning',
+] as const;
+
+const contributionsApprovedSource: AchievementSourceDefinition = {
+  source: 'contributions_approved',
+  label: 'Kontribusi disetujui',
+  description:
+    'Jumlah kontribusi berstatus approved/corrected (boleh filter jenis entity).',
+  kind: 'aggregate',
+  aggregateFact: 'contributions',
+  supportsThreshold: true,
+  supportsWindow: true,
+  filterFields: [
+    {
+      key: 'entity_type',
+      label: 'Jenis kontribusi',
+      options: [...CONTRIBUTION_ENTITY_TYPE_OPTIONS],
+    },
+  ],
+  buildAggregateFilters(criteria: AchievementCriteria): SQL[] {
+    const filters: SQL[] = [...windowOn(criteria, contributions.createdAt)];
+    const entityType = criteria.filters?.entity_type;
+    if (entityType) filters.push(eq(contributions.entityType, entityType));
+    return filters;
+  },
+};
+
+/** Keputusan review non-pending per reviewer (bukan pending antrean). */
+const verificationsDoneSource: AchievementSourceDefinition = {
+  source: 'verifications_done',
+  label: 'Verifikasi dilakukan',
+  description: 'Jumlah keputusan review (approved/rejected/corrected) oleh reviewer.',
+  kind: 'aggregate',
+  aggregateFact: 'contribution_reviews',
+  supportsThreshold: true,
+  supportsWindow: true,
+  filterFields: [],
+  buildAggregateFilters(criteria: AchievementCriteria): SQL[] {
+    return windowOn(criteria, contributionReviews.createdAt);
+  },
+};
+
+const commentsPublishedSource: AchievementSourceDefinition = {
+  source: 'comments_published',
+  label: 'Komentar tayang',
+  description: 'Jumlah komentar berstatus published (bukan takedown / hapus penulis).',
+  kind: 'aggregate',
+  aggregateFact: 'comments',
+  supportsThreshold: true,
+  supportsWindow: true,
+  filterFields: [],
+  buildAggregateFilters(criteria: AchievementCriteria): SQL[] {
+    return windowOn(criteria, comments.createdAt);
+  },
+};
+
+const discussionsCreatedSource: AchievementSourceDefinition = {
+  source: 'discussions_created',
+  label: 'Diskusi disetujui',
+  description: 'Jumlah ruang diskusi berstatus published milik user.',
+  kind: 'aggregate',
+  aggregateFact: 'discussions',
+  supportsThreshold: true,
+  supportsWindow: true,
+  filterFields: [],
+  buildAggregateFilters(criteria: AchievementCriteria): SQL[] {
+    return windowOn(criteria, discussions.createdAt);
+  },
+};
+
+const discussionRepliesPublishedSource: AchievementSourceDefinition = {
+  source: 'discussion_replies_published',
+  label: 'Balasan diskusi tayang',
+  description: 'Jumlah balasan diskusi berstatus published.',
+  kind: 'aggregate',
+  aggregateFact: 'discussion_replies',
+  supportsThreshold: true,
+  supportsWindow: true,
+  filterFields: [],
+  buildAggregateFilters(criteria: AchievementCriteria): SQL[] {
+    return windowOn(criteria, discussionReplies.createdAt);
+  },
+};
+
 export const ACHIEVEMENT_SOURCE_REGISTRY: Record<string, AchievementSourceDefinition> = {
   registration: registrationSource,
   manual: manualSource,
+  contributions_approved: contributionsApprovedSource,
+  verifications_done: verificationsDoneSource,
+  comments_published: commentsPublishedSource,
+  discussions_created: discussionsCreatedSource,
+  discussion_replies_published: discussionRepliesPublishedSource,
 };
 
-/** Seluruh source terdaftar (untuk dropdown admin console). */
 export const ACHIEVEMENT_SELECTABLE_SOURCES: AchievementSourceDefinition[] =
   Object.values(ACHIEVEMENT_SOURCE_REGISTRY);
 
@@ -123,4 +213,45 @@ export function findAchievementSource(source: string): AchievementSourceDefiniti
 
 export function isAchievementSourceKnown(source: string): boolean {
   return source in ACHIEVEMENT_SOURCE_REGISTRY;
+}
+
+export function effectiveAggregateThreshold(criteria: AchievementCriteria): number {
+  const t = criteria.threshold;
+  if (t == null || t < 1) return 1;
+  return t;
+}
+
+export const ACHIEVEMENT_CONTRIBUTION_STATUSES = ['approved', 'corrected'] as const;
+
+export function contributionStatusInApproved(): SQL {
+  return inArray(contributions.status, [...ACHIEVEMENT_CONTRIBUTION_STATUSES]);
+}
+
+/** Base WHERE fakta (tanpa window/filter source) - dipakai scan + progress. */
+export function aggregateFactBaseWhere(fact: AchievementAggregateFact): SQL[] {
+  switch (fact) {
+    case 'contributions':
+      return [contributionStatusInApproved(), isNull(contributions.deletedAt)];
+    case 'contribution_reviews':
+      return [
+        ne(contributionReviews.status, 'pending'),
+        isNotNull(contributionReviews.reviewerId),
+        isNull(contributionReviews.deletedAt),
+      ];
+    case 'comments':
+      return [eq(comments.status, 'published'), isNull(comments.deletedAt)];
+    case 'discussions':
+      return [eq(discussions.status, 'published')];
+    case 'discussion_replies':
+      return [eq(discussionReplies.status, 'published')];
+  }
+}
+
+/** Signature criteria untuk dedupe progress (abaikan threshold). */
+export function criteriaProgressSignature(criteria: AchievementCriteria): string {
+  return JSON.stringify({
+    source: criteria.source,
+    window: criteria.window ?? null,
+    filters: criteria.filters ?? null,
+  });
 }

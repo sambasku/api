@@ -4,7 +4,7 @@
  * Usage (dari api/):
  *   DATABASE_URL=... DATABASE_AUTH_TOKEN=... pnpm tsx src/scripts/seed-places.ts [path/ke/places.json]
  *
- * Idempotent: upsert by id (= slug di seed lama). Images diganti penuh per place.
+ * Idempotent: upsert by slug (unique index; id di DB = ULID dari 0072).
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -39,7 +39,7 @@ type SeedPlace = {
   lat?: number | null;
   lng?: number | null;
   mapsUrl?: string | null;
-  shortDescription: string;
+  shortDescription?: string | null;
   regionId?: string | null;
   hours?: string | null;
   contact?: string | { phone?: string | null; email?: string | null } | null;
@@ -100,19 +100,23 @@ for (const p of list) {
   );
 
   await db.transaction(async (tx) => {
-    const [existing] = await tx.select({ id: places.id }).from(places).where(eq(places.id, p.id)).limit(1);
+    // Upsert by slug: slug punya UNIQUE index, id di DB = ULID (bukan slug).
+    // Match by id saja bikin INSERT baru dan bentrok UNIQUE places_slug.
+    const [existing] = await tx.select({ id: places.id }).from(places).where(eq(places.slug, p.slug)).limit(1);
+    // Baris baru: id = ULID (konvensi repo). `p.id` di places.json = slug,
+    // bukan id DB - jangan dipakai sebagai primary key.
+    const placeId = existing?.id ?? generateId();
     if (existing) {
       await tx
         .update(places)
         .set({
-          slug: p.slug,
           name: p.name,
           category: p.category,
           type,
           lat: p.lat ?? null,
           lng: p.lng ?? null,
           mapsUrl: p.mapsUrl ?? null,
-          shortDescription: p.shortDescription,
+          shortDescription: p.shortDescription ?? '',
           regionId: p.regionId ?? null,
           hours: p.hours ?? null,
           contact: formatContact(p.contact),
@@ -122,11 +126,11 @@ for (const p of list) {
           updatedAt: new Date(),
           deletedAt: null,
         })
-        .where(eq(places.id, p.id));
-      await tx.delete(placeImages).where(eq(placeImages.placeId, p.id));
+        .where(eq(places.id, placeId));
+      await tx.delete(placeImages).where(eq(placeImages.placeId, placeId));
     } else {
       await tx.insert(places).values({
-        id: p.id,
+        id: placeId,
         slug: p.slug,
         name: p.name,
         category: p.category,
@@ -134,7 +138,7 @@ for (const p of list) {
         lat: p.lat ?? null,
         lng: p.lng ?? null,
         mapsUrl: p.mapsUrl ?? null,
-        shortDescription: p.shortDescription,
+        shortDescription: p.shortDescription ?? '',
         regionId: p.regionId ?? null,
         hours: p.hours ?? null,
         contact: formatContact(p.contact),
@@ -163,7 +167,7 @@ for (const p of list) {
             : null;
           return {
             id: generateId(),
-            placeId: p.id,
+            placeId,
             url: img.url,
             isMain: isMain || (i === 0 && !imgs.some((x) => x.isMain)),
             sortOrder: i,

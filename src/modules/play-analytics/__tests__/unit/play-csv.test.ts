@@ -58,6 +58,13 @@ describe('nama file', () => {
     expect(isRelevantPlayCsv('stats/crash/crash_pkg_202610_overview.csv')).toBe(false);
   });
 
+  it('varian dimensi tidak diunduh (hemat subrequest, isinya dibuang)', () => {
+    for (const dim of ['app_version', 'carrier', 'device', 'language', 'os_version']) {
+      expect(isRelevantPlayCsv(`stats/installs/installs_pkg_202610_${dim}.csv`)).toBe(false);
+      expect(isRelevantPlayCsv(`stats/ratings/ratings_pkg_202610_${dim}.csv`)).toBe(false);
+    }
+  });
+
   it('bulan dari nama file', () => {
     expect(playCsvMonth('installs_pkg_202610_overview.csv')).toBe('202610');
     expect(playCsvMonth('aneh.csv')).toBeNull();
@@ -93,5 +100,21 @@ describe('agregasi', () => {
     const countries = countriesFromRows(cRows, range);
     expect(countries[0]).toEqual({ country: 'ID', installs: 22 });
     expect(countries[1]).toEqual({ country: 'MY', installs: 2 });
+  });
+
+  it('activeInstalls ambil nilai terbesar, bukan baris terakhir', () => {
+    // Baris country per negara bisa punya activeInstalls kecil dan tanggal
+    // sama; total harus tetap dari baris overview.
+    const rows = parsePlayStatsCsv(
+      'Date,Package Name,Country,Active Device Installs,Daily Device Installs\n2026-10-02,x,ID,1,5\n2026-10-02,x,,294,0',
+    );
+    expect(totalsFromRows(rows).activeInstalls).toBe(294);
+  });
+
+  it('rating tidak tertimpa baris installs (kolom rating null)', () => {
+    const mixed = parsePlayStatsCsv(
+      'Date,Package Name,Daily Device Installs,Total Average Rating\n2026-10-02,x,5,4.5\n2026-10-02,x,0,',
+    );
+    expect(totalsFromRows(mixed).averageRating).toBe(4.5);
   });
 });

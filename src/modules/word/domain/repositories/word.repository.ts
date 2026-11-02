@@ -304,9 +304,12 @@ export interface WordRepository {
    *  kata itu sendiri - tanpa ini setiap edit selalu "duplikat" dirinya. */
   findDuplicate(languageId: string, lemma: string, excludeWordId?: string): Promise<boolean>;
   /**
-   * Makna published yang exact-match lemma + definition + terjemahan
-   * Indonesia (normalisasi trim/lowercase/collapse whitespace). Null jika
-   * definition/translation placeholder atau belum ada kembaran tayang.
+   * Makna published yang cocok dengan lemma + definisi + terjemahan Indonesia
+   * (normalisasi trim/lowercase/collapse whitespace).
+   *
+   * Placeholder pada sisi PENCARI = field itu diabaikan ("-" pada definisi
+   * tetap dibandingkan lewat terjemahannya, #174). Minimal satu field nyata
+   * harus dibandingkan; kalau dua-duanya placeholder → null.
    */
   findPublishedDuplicateMeaning(params: {
     languageId: string;
@@ -339,16 +342,31 @@ export interface WordRepository {
   listMeaningKeys(wordId: string): Promise<
     { definition: string; translation: string; isHaveDefinition: boolean; isHaveTranslation: boolean }[]
   >;
-  /** hanya published + belum soft-deleted; includeAllStatuses = layar review */
-  findDetailById(id: string, opts?: { includeAllStatuses?: boolean }): Promise<WordDetail | null>;
+  /**
+   * Hanya published + belum soft-deleted.
+   * includeAllStatuses = layar review (semua status).
+   * includeDeleted = baris kata yang sudah di-soft-delete tetap dibaca,
+   * supaya review tidak kehilangan lemma dan makna.
+   */
+  findDetailById(
+    id: string,
+    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+  ): Promise<WordDetail | null>;
+  /**
+   * Makna yang sudah ada di kata lain yang tertaut ke wordId ini
+   * (relasi leksikal dua arah, atau saudara satu kelompok makna).
+   * Dipakai saat lemma baru belum menyimpan salinan maknanya sendiri.
+   */
+  findLinkedMeanings(wordId: string): Promise<WordDetail['meanings']>;
   /**
    * Snapshot tipis untuk audit koreksi (lemma/status/is_verified saja).
    * Hindari findDetailById (~12 round-trip) saat old_data audit hanya butuh 3 field.
    */
   findAuditSnapshotById(id: string): Promise<WordAuditSnapshot | null>;
-  /** Resolusi URL publik /words/<lemma> → id entri published. Homonim
-   *  (lemma sama di >1 entri): terverifikasi & terlama menang (deterministik). */
-  findPublishedIdByLemma(lemma: string): Promise<string | null>;
+  /** URL publik /words/<lemma> - resolusi lemma + detail full dalam 2 round-trip
+   *  (word+meanings batch, children batch). Null = lemma tidak ada / tak published.
+   *  Homonim: terverifikasi & terlama menang (deterministik). */
+  findPublishedDetailByLemma(lemma: string): Promise<WordDetail | null>;
   /**
    * 28-api-word-of-the-day.md: id kata published untuk tanggal WIB
    * ('YYYY-MM-DD'). Deterministik: ORDER BY md5(id || ':' || date) -
@@ -604,6 +622,15 @@ export interface WordRepository {
   findExampleWithWord(
     exampleId: string,
   ): Promise<{ id: string; meaningId: string; wordId: string } | null>;
+
+  /**
+   * #133: pemilik kata induk untuk media anak (contoh/audio) dalam SATU query.
+   * Null kalau entity atau kata sudah soft-delete.
+   */
+  findWordOwnerByChild(
+    entityType: 'example' | 'word_audio',
+    entityId: string,
+  ): Promise<{ wordId: string; lemma: string; ownerUserId: string | null } | null>;
 
   /** Dialect code by id (untuk path storage); null jika tidak ada */
   findDialectCode(dialectId: string): Promise<string | null>;

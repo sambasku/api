@@ -19,6 +19,8 @@ const {
   comments,
   contributions,
   contributionReviews,
+  discussions,
+  meanings,
   searchMisses,
   users,
   votes,
@@ -26,6 +28,7 @@ const {
   words,
 } = await import('../shared/database/drizzle/schema');
 import type { ActivityEventKind } from '../modules/activity/domain/entities/activity-event.entity';
+import { discussionCreatedPayload } from '../modules/activity/application/utils/activity-body-snippet';
 
 interface Row {
   kind: ActivityEventKind;
@@ -199,7 +202,7 @@ async function main() {
   );
   console.log(`[backfill-activity] komentar: ${n3}`);
 
-  // 4. Vote aktif (word + comment)
+  // 4. Vote aktif (word + comment + meaning)
   const voteRows = await db
     .select({
       id: votes.id,
@@ -209,12 +212,19 @@ async function main() {
       createdAt: votes.createdAt,
     })
     .from(votes)
-    .where(inArray(votes.entityType, ['word', 'comment']));
+    .where(inArray(votes.entityType, ['word', 'comment', 'meaning']));
   const voteEvents: Row[] = [];
   for (const r of voteRows) {
     let targetWordId: string | null = null;
     if (r.entityType === 'word') {
       targetWordId = r.entityId;
+    } else if (r.entityType === 'meaning') {
+      const [m] = await db
+        .select({ wordId: meanings.wordId })
+        .from(meanings)
+        .where(eq(meanings.id, r.entityId))
+        .limit(1);
+      targetWordId = m?.wordId ?? null;
     } else {
       const [c] = await db
         .select({ wordId: comments.wordId })
@@ -224,7 +234,12 @@ async function main() {
       targetWordId = c?.wordId ?? null;
     }
     voteEvents.push({
-      kind: r.entityType === 'word' ? 'vote_word' : 'vote_comment',
+      kind:
+        r.entityType === 'word'
+          ? 'vote_word'
+          : r.entityType === 'meaning'
+            ? 'vote_meaning'
+            : 'vote_comment',
       actorId: r.userId,
       targetWordId,
       targetId: r.entityId,
@@ -375,7 +390,7 @@ async function main() {
     .from(activityEvents)
     .where(
       and(
-        inArray(activityEvents.kind, ['vote_word', 'vote_comment']),
+        inArray(activityEvents.kind, ['vote_word', 'vote_comment', 'vote_meaning']),
         isNull(activityEvents.payload),
       ),
     );
@@ -413,6 +428,24 @@ async function main() {
         if (lemma) lemmaById.set(r.id, lemma);
       }
     }
+    // Vote makna: label = lemma kata induk (bukan definisi makna).
+    const meaningIds = [
+      ...new Set(
+        voteEventsForPayload
+          .filter((r) => r.kind === 'vote_meaning' && r.targetId)
+          .map((r) => r.targetId as string),
+      ),
+    ];
+    for (let i = 0; i < meaningIds.length; i += 500) {
+      const rowsM = await db
+        .select({ id: meanings.id, wordId: meanings.wordId })
+        .from(meanings)
+        .where(inArray(meanings.id, meaningIds.slice(i, i + 500)));
+      for (const r of rowsM) {
+        const lemma = lemmaById.get(r.wordId) ?? null;
+        if (lemma) lemmaById.set(r.id, lemma);
+      }
+    }
     const voteRows9 = await db
       .select({
         userId: votes.userId,
@@ -421,7 +454,7 @@ async function main() {
         value: votes.value,
       })
       .from(votes)
-      .where(inArray(votes.entityType, ['word', 'comment']));
+      .where(inArray(votes.entityType, ['word', 'comment', 'meaning']));
     for (const v of voteRows9) {
       voteValueByKey.set(`${v.userId}:${v.entityType}:${v.entityId}`, v.value);
     }
@@ -430,7 +463,12 @@ async function main() {
   for (const ev of voteEventsForPayload) {
     const lemma = ev.targetId ? lemmaById.get(ev.targetId) : undefined;
     if (!lemma || !ev.actorId) continue; // kata hilang: fallback bodyFor
-    const entityType = ev.kind === 'vote_word' ? 'word' : 'comment';
+    const entityType =
+      ev.kind === 'vote_word'
+        ? 'word'
+        : ev.kind === 'vote_meaning'
+          ? 'meaning'
+          : 'comment';
     const value = voteValueByKey.get(`${ev.actorId}:${entityType}:${ev.targetId}`);
     if (value === undefined) continue; // vote sudah ditarik: biarkan hidden/fallback
     const payload =
@@ -445,8 +483,54 @@ async function main() {
   }
   console.log(`[backfill-activity] payload vote: ${n9}`);
 
+  // #206: discussion_created tanpa payload → cuplikan dari discussions.body.
+  const discussionEventsForPayload = await db
+    .select({
+      id: activityEvents.id,
+      targetId: activityEvents.targetId,
+    })
+    .from(activityEvents)
+    .where(
+      and(
+        eq(activityEvents.kind, 'discussion_created'),
+        isNull(activityEvents.payload),
+      ),
+    );
+  const discussionIds = [
+    ...new Set(
+      discussionEventsForPayload
+        .map((r) => r.targetId)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  const bodyByDiscussionId = new Map<string, string | null>();
+  for (let i = 0; i < discussionIds.length; i += 500) {
+    const rowsD = await db
+      .select({ id: discussions.id, body: discussions.body })
+      .from(discussions)
+      .where(inArray(discussions.id, discussionIds.slice(i, i + 500)));
+    for (const r of rowsD) bodyByDiscussionId.set(r.id, r.body);
+  }
+  let n10 = 0;
+  for (const ev of discussionEventsForPayload) {
+    if (!ev.targetId) continue;
+    // Diskusi hilang: tetap isi fallback supaya tile tidak kosong.
+    const body = bodyByDiscussionId.has(ev.targetId)
+      ? bodyByDiscussionId.get(ev.targetId)
+      : null;
+    const payload = discussionCreatedPayload(body);
+    await db
+      .update(activityEvents)
+      .set({ payload })
+      .where(eq(activityEvents.id, ev.id));
+    n10++;
+  }
+  console.log(`[backfill-activity] payload discussion_created: ${n10}`);
+
   const total = n1 + n2 + n3 + n4 + n5 + n5b + n6 + n7 + n8;
-  console.log(`[backfill-activity] selesai: ${total} event baru (+${n9} payload vote)`);
+  console.log(
+    `[backfill-activity] selesai: ${total} event baru (+${n9} payload vote, +${n10} payload discussion)`,
+  );
   await closeDb();
 }
 

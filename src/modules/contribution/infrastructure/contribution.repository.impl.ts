@@ -15,6 +15,7 @@ import {
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
 import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { seededShuffle } from '@/shared/utils/seeded-shuffle';
 import { publishOrMergeMeaningsInTx } from '@/modules/word/infrastructure/publish-or-merge-meanings';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
@@ -204,9 +205,16 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           : {}),
       });
     });
+    // Acak isi halaman per user (seeded, stabil untuk request identik) supaya
+    // antrean verifikator tidak seragam. Cursor tetap dari keyset id desc -
+    // diambil SEBELUM acak agar pagination tidak melompat/duplikat.
+    const lastId = sliced[sliced.length - 1]?.id ?? null;
     return {
-      items,
-      nextCursor: hasMore && items.length > 0 ? items[items.length - 1].id : null,
+      items:
+        filter.randomize === true && !filter.mine && filter.viewerId
+          ? seededShuffle(items, `${filter.viewerId}:${filter.status ?? ''}:${filter.cursor ?? ''}`)
+          : items,
+      nextCursor: hasMore ? lastId : null,
       hasMore,
     };
   }

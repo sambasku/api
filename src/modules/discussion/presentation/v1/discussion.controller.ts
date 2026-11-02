@@ -20,6 +20,11 @@ import type { CreateDiscussionReplyUseCase } from '../../application/use-cases/c
 import type { CreateDiscussionReplyAudioUseCase } from '../../application/use-cases/create-discussion-reply-audio.use-case';
 import type { AttachDiscussionAudioUseCase } from '../../application/use-cases/attach-discussion-audio.use-case';
 import type { DeleteDiscussionReplyUseCase } from '../../application/use-cases/delete-discussion-reply.use-case';
+import type { DeleteDiscussionUseCase } from '../../application/use-cases/delete-discussion.use-case';
+import type { GetDiscussionEditHistoryUseCase } from '../../application/use-cases/get-discussion-edit-history.use-case';
+import type { GetDiscussionReplyEditHistoryUseCase } from '../../application/use-cases/get-discussion-reply-edit-history.use-case';
+import type { UpdateDiscussionReplyUseCase } from '../../application/use-cases/update-discussion-reply.use-case';
+import type { UpdateDiscussionUseCase } from '../../application/use-cases/update-discussion.use-case';
 import type { PinDiscussionReplyUseCase } from '../../application/use-cases/pin-discussion-reply.use-case';
 import type { TakedownDiscussionReplyUseCase } from '../../application/use-cases/takedown-discussion-reply.use-case';
 import type {
@@ -30,6 +35,8 @@ import type {
   ListDiscussionsQuery,
   PinDiscussionReplyBody,
   RejectDiscussionBody,
+  UpdateDiscussionBody,
+  UpdateDiscussionReplyBody,
 } from './validators/discussion.validator';
 
 function redactReplyBody(reply: DiscussionReply): string | null {
@@ -101,7 +108,9 @@ function toAdminImages(help: Discussion) {
   return toOwnerImages(help);
 }
 
-export function toPublicItem(help: Discussion & { upvotes?: number }) {
+export function toPublicItem(
+  help: Discussion & { upvotes?: number; replyCount?: number },
+) {
   return {
     id: help.id,
     user_id: help.userId,
@@ -116,11 +125,16 @@ export function toPublicItem(help: Discussion & { upvotes?: number }) {
     status: 'published' as const,
     pinned_reply_id: help.pinnedReplyId,
     upvotes: help.upvotes ?? 0,
+    reply_count: help.replyCount ?? 0,
+    is_edited: help.isEdited ?? false,
+    updated_at: help.updatedAt?.toISOString() ?? null,
     created_at: help.createdAt.toISOString(),
   };
 }
 
-export function toOwnerItem(help: Discussion & { upvotes?: number }) {
+export function toOwnerItem(
+  help: Discussion & { upvotes?: number; replyCount?: number },
+) {
   return {
     id: help.id,
     user_id: help.userId,
@@ -139,12 +153,16 @@ export function toOwnerItem(help: Discussion & { upvotes?: number }) {
     pinned_reply_id: help.pinnedReplyId,
     reviewed_at: help.reviewedAt?.toISOString() ?? null,
     upvotes: help.upvotes ?? 0,
+    reply_count: help.replyCount ?? 0,
+    is_edited: help.isEdited ?? false,
     created_at: help.createdAt.toISOString(),
     updated_at: help.updatedAt?.toISOString() ?? null,
   };
 }
 
-export function toAdminItem(help: Discussion & { upvotes?: number }) {
+export function toAdminItem(
+  help: Discussion & { upvotes?: number; replyCount?: number },
+) {
   return {
     id: help.id,
     user_id: help.userId,
@@ -162,6 +180,8 @@ export function toAdminItem(help: Discussion & { upvotes?: number }) {
     reviewed_at: help.reviewedAt?.toISOString() ?? null,
     pinned_reply_id: help.pinnedReplyId,
     upvotes: help.upvotes ?? 0,
+    reply_count: help.replyCount ?? 0,
+    is_edited: help.isEdited ?? false,
     created_at: help.createdAt.toISOString(),
     updated_at: help.updatedAt?.toISOString() ?? null,
   };
@@ -184,6 +204,8 @@ function toPublicReply(
     is_pinned: pinnedReplyId === reply.id,
     upvotes: reply.upvotes ?? 0,
     downvotes: reply.downvotes ?? 0,
+    is_edited: reply.isEdited ?? false,
+    updated_at: reply.updatedAt?.toISOString() ?? null,
     created_at: reply.createdAt.toISOString(),
   };
 }
@@ -315,6 +337,11 @@ export class DiscussionController {
       createReplyAudio: CreateDiscussionReplyAudioUseCase;
       attachAudio: AttachDiscussionAudioUseCase;
       deleteReply: DeleteDiscussionReplyUseCase;
+      updateReply: UpdateDiscussionReplyUseCase;
+      replyEditHistory: GetDiscussionReplyEditHistoryUseCase;
+      update: UpdateDiscussionUseCase;
+      delete: DeleteDiscussionUseCase;
+      editHistory: GetDiscussionEditHistoryUseCase;
       pinReply: PinDiscussionReplyUseCase;
       takedownReply: TakedownDiscussionReplyUseCase;
       imageController: ImageController;
@@ -357,6 +384,7 @@ export class DiscussionController {
       limit: query.limit,
       cursor: query.cursor,
       sort: query.sort,
+      order: query.order,
     });
     return c.json({
       success: true as const,
@@ -388,11 +416,12 @@ export class DiscussionController {
     });
 
     const isOwner = user?.user_id === help.userId;
+    const replyCount = replies.filter((r) => r.status === 'published').length;
     if (help.status === 'published') {
       return c.json({
         success: true as const,
         data: {
-          ...toPublicItem(help),
+          ...toPublicItem({ ...help, replyCount }),
           replies: replies.map((r) => toPublicReply(r, help.pinnedReplyId)),
         },
       });
@@ -407,7 +436,7 @@ export class DiscussionController {
     return c.json({
       success: true as const,
       data: {
-        ...toOwnerItem(help),
+        ...toOwnerItem({ ...help, replyCount }),
         replies: replies.map((r) => toPublicReply(r, help.pinnedReplyId)),
       },
     });
@@ -580,6 +609,56 @@ export class DiscussionController {
       requestId: this.requestId(c),
     });
     return c.json({ success: true as const, data: null });
+  }
+
+  async updateReply(c: Context, replyId: string, body: UpdateDiscussionReplyBody) {
+    const user = this.requireUser(c);
+    const reply = await this.deps.updateReply.execute({
+      replyId,
+      actorId: user.user_id,
+      body: body.body,
+      requestId: this.requestId(c),
+    });
+    const help = await this.deps.getDetail.execute({
+      id: reply.discussionId,
+      viewerUserId: user.user_id,
+    });
+    return c.json({
+      success: true as const,
+      data: toPublicReply(reply, help.discussion.pinnedReplyId),
+    });
+  }
+
+  async replyEditHistory(c: Context, replyId: string) {
+    const data = await this.deps.replyEditHistory.execute(replyId);
+    return c.json({ success: true as const, data });
+  }
+
+  async update(c: Context, discussionId: string, body: UpdateDiscussionBody) {
+    const user = this.requireUser(c);
+    const row = await this.deps.update.execute({
+      discussionId,
+      actorId: user.user_id,
+      body: body.body,
+      linkUrl: body.link_url,
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: toOwnerItem(row) });
+  }
+
+  async delete(c: Context, discussionId: string) {
+    const user = this.requireUser(c);
+    await this.deps.delete.execute({
+      discussionId,
+      actorId: user.user_id,
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: null });
+  }
+
+  async editHistory(c: Context, discussionId: string) {
+    const data = await this.deps.editHistory.execute(discussionId);
+    return c.json({ success: true as const, data });
   }
 
   async pinReply(c: Context, discussionId: string, body: PinDiscussionReplyBody) {

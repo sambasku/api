@@ -1,24 +1,38 @@
-import { BadRequestError, ConflictError, NotFoundError, RateLimitedError } from '@/shared/errors/app-error';
-import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
-import type { PlaceCategoryRepository } from '@/modules/place-category/domain/repositories/place-category.repository';
-import type { Place, PlaceRelatedCard } from '../../domain/entities/place.entity';
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+  RateLimitedError,
+  UnauthorizedError,
+} from "@/shared/errors/app-error";
+import { ANONIM_USER_ID } from "@/shared/constants/anonim";
+import type { RecordActivityEventUseCase } from "@/modules/activity/application/use-cases/record-activity-event.use-case";
+import type { UserRepository } from "@/modules/auth/domain/repositories/user.repository";
+import type { PlaceCategoryRepository } from "@/modules/place-category/domain/repositories/place-category.repository";
+import type {
+  Place,
+  PlaceRelatedCard,
+} from "../../domain/entities/place.entity";
 import type {
   CreatePlaceInput,
   ListPlacesInput,
   ListPlacesResult,
   PlaceRepository,
+  PlaceViewReport,
   UpdatePlaceInput,
-} from '../../domain/repositories/place.repository';
+} from "../../domain/repositories/place.repository";
 
 async function assertCategory(
   categories: PlaceCategoryRepository,
   id: string,
 ): Promise<void> {
   const row = await categories.findById(id);
-  if (!row || row.status !== 'published') {
-    throw new BadRequestError('CATEGORY_NOT_FOUND', 'Kategori tidak ditemukan', [
-      { field: 'category', message: 'Pilih kategori yang masih published' },
-    ]);
+  if (!row || row.status !== "published") {
+    throw new BadRequestError(
+      "CATEGORY_NOT_FOUND",
+      "Kategori tidak ditemukan",
+      [{ field: "category", message: "Pilih kategori yang masih published" }],
+    );
   }
 }
 
@@ -26,22 +40,51 @@ export class CreatePlaceUseCase {
   constructor(
     private readonly repo: PlaceRepository,
     private readonly categories: PlaceCategoryRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(input: CreatePlaceInput): Promise<Place> {
     await assertCategory(this.categories, input.category);
     const existing = await this.repo.findBySlugAny(input.slug);
     if (existing) {
-      throw new ConflictError('SLUG_TAKEN', 'Slug place sudah dipakai');
+      throw new ConflictError("SLUG_TAKEN", "Slug place sudah dipakai");
     }
-    return this.repo.create(input);
+    const place = await this.repo.create(input);
+    // Activity feed: wisata tayang pertama kali = event activity (AGENTS.md #25).
+    if (place.status === "published") {
+      await recordPlacePublished(
+        this.activityEvents,
+        place.id,
+        place.name,
+        input.authorId ?? null,
+      );
+    }
+    return place;
   }
+}
+
+/** Activity `place_published` (AGENTS.md #25) - best-effort, dedupe per tempat. */
+async function recordPlacePublished(
+  activityEvents: RecordActivityEventUseCase | undefined,
+  placeId: string,
+  name: string,
+  authorId: string | null,
+): Promise<void> {
+  await activityEvents?.safe({
+    kind: "place_published",
+    payload: `Menambahkan wisata · "${name}"`,
+    // Anonim = null actor (pola usaha_published).
+    actorId: authorId && authorId !== ANONIM_USER_ID ? authorId : null,
+    targetId: placeId,
+    dedupeKey: `place_published:${placeId}`,
+  });
 }
 
 export class UpdatePlaceUseCase {
   constructor(
     private readonly repo: PlaceRepository,
     private readonly categories: PlaceCategoryRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(input: UpdatePlaceInput): Promise<Place> {
@@ -51,12 +94,41 @@ export class UpdatePlaceUseCase {
     if (input.slug) {
       const other = await this.repo.findBySlugAny(input.slug);
       if (other && other.id !== input.id) {
-        throw new ConflictError('SLUG_TAKEN', 'Slug place sudah dipakai');
+        throw new ConflictError("SLUG_TAKEN", "Slug place sudah dipakai");
       }
     }
+    // #187: hapus foto lewat console = takedown. Catat URL yang dibuang
+    // sebelum update (setelah update barisnya sudah tidak ada).
+    const dropped =
+      input.images === undefined
+        ? []
+        : await this.repo
+            .listImages(input.id, 0, PHOTO_CAP)
+            .then((page) =>
+              page.items.filter(
+                (img) => !input.images!.some((next) => next.url === img.url),
+              ),
+            )
+            .catch(() => []);
+    const existingBefore = await this.repo.findById(input.id);
     const updated = await this.repo.update(input);
     if (!updated) {
-      throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
+      throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
+    }
+    // Activity feed: draft -> published pertama kali = wisata tayang (AGENTS.md #25).
+    if (
+      updated.status === "published" &&
+      existingBefore?.status !== "published"
+    ) {
+      await recordPlacePublished(
+        this.activityEvents,
+        updated.id,
+        updated.name,
+        updated.authorId ?? null,
+      );
+    }
+    for (const img of dropped) {
+      await this.activityEvents?.safeHidePlacePhoto(input.id, img.url);
     }
     return updated;
   }
@@ -68,7 +140,7 @@ export class DeletePlaceUseCase {
   async execute(id: string): Promise<void> {
     const ok = await this.repo.softDelete(id);
     if (!ok) {
-      throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
+      throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
     }
   }
 }
@@ -81,17 +153,53 @@ export class ListPlacesUseCase {
   }
 }
 
+export class RecordPlaceViewUseCase {
+  constructor(private readonly repo: PlaceRepository) {}
+
+  /**
+   * Idempoten per (place, hari, viewerKey): 1 pembaca = 1 view per hari,
+   * walau refresh / buka ulang berkali-kali.
+   */
+  execute(slug: string, viewerKey: string): Promise<void> {
+    return this.repo.recordView(slug, viewerKey);
+  }
+}
+
+export class ListPlaceViewsUseCase {
+  constructor(private readonly repo: PlaceRepository) {}
+
+  execute(days: number | null): Promise<Map<string, number>> {
+    return this.repo.viewTotals(days);
+  }
+}
+
+export class GetPlaceViewReportUseCase {
+  constructor(private readonly repo: PlaceRepository) {}
+
+  execute(days: number): Promise<PlaceViewReport> {
+    return this.repo.viewReport(days);
+  }
+}
+
 export class GetPlaceBySlugUseCase {
   constructor(private readonly repo: PlaceRepository) {}
 
-  async execute(slug: string, publicOnly = true): Promise<Place & { imageCount: number; relatedCards: PlaceRelatedCard[] }> {
+  async execute(
+    slug: string,
+    publicOnly = true,
+  ): Promise<Place & { imageCount: number; relatedCards: PlaceRelatedCard[] }> {
     const place = await this.repo.findBySlug(slug, { publicOnly });
     if (!place) {
-      throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
+      throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
     }
     const page = await this.repo.listImages(place.id, 0, 12);
     const relatedCards = await this.repo.resolveRelated(place.related);
-    return { ...place, images: page.items, imageCount: page.total, relatedCards };
+    return {
+      ...place,
+      images: page.items,
+      imageCount: page.total,
+      relatedCards,
+    };
   }
 }
 
@@ -100,8 +208,11 @@ const PHOTO_CAP = 100;
 const PHOTO_DAILY = 5;
 
 export function assertOurPlaceImage(url: string): void {
-  if (!url.startsWith('https://cdn.jsdelivr.net/') || !url.includes('/assets/places/')) {
-    throw new BadRequestError('IMAGE_URL', 'Foto harus hasil unggah SambasKu');
+  if (
+    !url.startsWith("https://cdn.jsdelivr.net/") ||
+    !url.includes("/assets/places/")
+  ) {
+    throw new BadRequestError("IMAGE_URL", "Foto harus hasil unggah SambasKu");
   }
 }
 
@@ -110,9 +221,13 @@ export class ListPlaceImagesUseCase {
 
   async execute(slug: string, offset: number) {
     const place = await this.repo.findBySlug(slug, { publicOnly: true });
-    if (!place) throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
+    if (!place)
+      throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
     const page = await this.repo.listImages(place.id, offset, GALLERY_PAGE);
-    const next = offset + page.items.length < page.total ? offset + page.items.length : null;
+    const next =
+      offset + page.items.length < page.total
+        ? offset + page.items.length
+        : null;
     return { items: page.items, total: page.total, nextOffset: next };
   }
 }
@@ -121,35 +236,78 @@ export class AppendPlaceImagesUseCase {
   constructor(
     private readonly repo: PlaceRepository,
     private readonly users: UserRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(slug: string, userId: string, urls: string[]): Promise<void> {
+    // #187: foto wisata tayang publik + masuk feed -> wajib akun.
+    if (userId === ANONIM_USER_ID) {
+      throw new UnauthorizedError(
+        "UNAUTHORIZED",
+        "Masuk dulu untuk menambah foto wisata",
+      );
+    }
     const place = await this.repo.findBySlug(slug, { publicOnly: true });
-    if (!place || place.status !== 'published') {
-      throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
+    if (!place || place.status !== "published") {
+      throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
     }
     for (const url of urls) assertOurPlaceImage(url);
     const user = await this.users.findById(userId);
-    if (!user) throw new NotFoundError('USER_NOT_FOUND', 'User tidak ditemukan');
+    if (!user)
+      throw new NotFoundError("USER_NOT_FOUND", "User tidak ditemukan");
     const total = (await this.repo.listImages(place.id, 0, 1)).total;
     if (total + urls.length > PHOTO_CAP) {
-      throw new BadRequestError('PHOTO_CAP', 'Foto tempat ini sudah penuh (100)');
+      throw new BadRequestError(
+        "PHOTO_CAP",
+        "Foto tempat ini sudah penuh (100)",
+      );
     }
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const today = await this.repo.countUploadsSince(place.id, userId, since);
     if (today + urls.length > PHOTO_DAILY) {
-      throw new RateLimitedError('Maksimal 5 foto per tempat dalam 24 jam');
+      throw new RateLimitedError("Maksimal 5 foto per tempat dalam 24 jam");
     }
     const have = new Set(place.images.map((img) => img.url));
     const fresh = urls.filter((url) => !have.has(url));
+    if (fresh.length === 0) return;
     const name = user.displayName || user.username;
     await this.repo.appendImages(
       place.id,
       fresh.map((url) => ({
         url,
         isMain: false,
-        attribution: { name, provider: 'sambasku', authorId: userId },
+        attribution: { name, provider: "sambasku", authorId: userId },
       })),
     );
+    // #187: satu event per batch unggah (bukan per foto - 5 foto sekali
+    // unggah tak boleh jadi 5 baris feed). Dedupe = gabungan URL, jadi
+    // retry kiriman sama tidak menulis dua kali.
+    await this.activityEvents?.safe({
+      kind: "place_photo_added",
+      actorId: userId,
+      targetId: place.id,
+      dedupeKey: `place_photo:${place.id}:${fresh.join("|")}`,
+      payload: `Menambahkan foto wisata ${place.name}`,
+    });
+  }
+}
+
+/**
+ * #187: takedown foto oleh admin. Foto disembunyikan permanen (bukan
+ * dihapus: berkasnya masih di CDN) lalu event feed yang menyebut URL itu
+ * ikut disembunyikan - pola hide-on-reject, bukan join read-time.
+ */
+export class HidePlaceImageUseCase {
+  constructor(
+    private readonly repo: PlaceRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
+  ) {}
+
+  async execute(placeId: string, imageId: string): Promise<void> {
+    const image = await this.repo.hideImage(placeId, imageId);
+    if (!image) {
+      throw new NotFoundError("IMAGE_NOT_FOUND", "Foto tidak ditemukan");
+    }
+    await this.activityEvents?.safeHidePlacePhoto(placeId, image.url);
   }
 }

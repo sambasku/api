@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import type { z } from 'zod';
 import type { WordSuggestionRepositoryImpl } from '../../infrastructure/word-suggestion.repository.impl';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { CreateSuggestionRequest } from './validators/suggestion.validator';
@@ -181,8 +182,9 @@ export class WordSuggestionController {
             relations_count: item.summaryChanges.relationsCount,
             variants_count: item.summaryChanges.variantsCount,
             images_count: item.summaryChanges.imagesCount,
+            groups_count: item.summaryChanges.groupsCount,
           },
-        })),
+        }) satisfies z.infer<typeof suggestionListResponseSchema>['data'][number]),
         meta: {
           limit,
           next_cursor: result.nextCursor,
@@ -245,6 +247,12 @@ export class WordSuggestionController {
               variant_type: v.variantType,
               dialect_id: v.dialectId,
             })),
+            // PRD relasi-lemma: schema detail wajib `groups` (array, bisa kosong).
+            groups: detail.currentWord.groups.map((g) => ({
+              group_id: g.groupId,
+              name: g.name,
+              member_word_ids: g.memberWordIds,
+            })),
             images: detail.currentWord.images.map((i) => ({
               id: i.id,
               url: i.url,
@@ -282,6 +290,24 @@ export class WordSuggestionController {
               removed: detail.diff.variants.removed.map((v) => ({
                 form: v.form,
                 variant_type: v.variantType,
+              })),
+            },
+            // PRD relasi-lemma: schema detail wajib `groups` (joined/left/created).
+            groups: {
+              joined: detail.diff.groups.joined.map((g) => ({
+                group_id: g.groupId,
+                name: g.name,
+              })),
+              left: detail.diff.groups.left.map((g) => ({
+                group_id: g.groupId,
+                name: g.name,
+              })),
+              created: detail.diff.groups.created.map((g) => ({
+                name: g.name,
+                member_lemmas: g.memberLemmas,
+                ...(g.newWordLemmas?.length
+                  ? { new_word_lemmas: g.newWordLemmas }
+                  : {}),
               })),
             },
             images: {

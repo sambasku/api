@@ -1,4 +1,4 @@
-import type { AppSetting, AppSettingKey, AppSettingType, LegalActiveVersions } from '../entities/app-setting.entity';
+import type { AppSetting, AppSettingKey, AppSettingType, LegalActiveVersions, OauthConsentEnforcement } from '../entities/app-setting.entity';
 
 export interface AppSettingsRepository {
   getAll(): Promise<AppSetting[]>;
@@ -15,6 +15,11 @@ export interface AppSettingsRepository {
     options?: { type?: AppSettingType; description?: string; updatedBy?: string | null },
   ): Promise<void>;
   getLegalActiveVersions(): Promise<LegalActiveVersions | null>;
+  /**
+   * Mode enforcement consent OAuth: 'lenient' (default) atau 'enforce'.
+   * Fallback 'lenient' bila baris app_settings belum ada.
+   */
+  getOauthConsentEnforcement(): Promise<OauthConsentEnforcement>;
   upsertMany(
     entries: { key: AppSettingKey | string; value: string; type?: AppSettingType; description?: string }[],
     updatedBy: string | null,

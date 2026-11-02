@@ -54,6 +54,11 @@ export interface MeaningDetail extends Meaning {
   }[];
   /** JOIN users pada meanings.created_by. Null kalau kolom kosong atau user hilang. */
   creator: { username: string; displayName: string; role: string } | null;
+  /**
+   * Layar review: makna ini bukan baris milik lemma yang sedang direview,
+   * melainkan makna yang sudah tayang di lemma lain (relasi / kelompok).
+   */
+  sourceLemma?: string | null;
 }
 
 /** 17-api-usul-definisi.md: hasil POST /words/:wordId/meanings (per role). */

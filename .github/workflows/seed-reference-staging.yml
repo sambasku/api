@@ -5,7 +5,8 @@ name: Seed Reference Staging (manual)
 #
 # CLI: gh workflow run seed-reference-staging.yml --ref staging
 #
-# Secrets: TURSO_STAGING_DATABASE_URL, TURSO_STAGING_AUTH_TOKEN
+# Secrets (org, prioritas): DB_STAGING_TURSO_URL, DB_STAGING_TURSO_AUTH_TOKEN
+# Fallback lama: TURSO_STAGING_DATABASE_URL, TURSO_STAGING_AUTH_TOKEN
 
 on:
   workflow_dispatch:
@@ -24,12 +25,19 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
 
+      - name: Migrate staging (schema harus mutakhir sebelum seed)
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DB_STAGING_TURSO_URL || secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_STAGING_TURSO_AUTH_TOKEN || secrets.TURSO_STAGING_AUTH_TOKEN }}
+
+
       - name: Seed reference staging
         run: pnpm seed:reference
         env:
           NODE_ENV: staging
-          DATABASE_URL: ${{ secrets.TURSO_STAGING_DATABASE_URL }}
-          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_STAGING_AUTH_TOKEN }}
+          DATABASE_URL: ${{ secrets.DB_STAGING_TURSO_URL || secrets.TURSO_STAGING_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_STAGING_TURSO_AUTH_TOKEN || secrets.TURSO_STAGING_AUTH_TOKEN }}
           JWT_PRIVATE_KEY: dummy
           JWT_PUBLIC_KEY: dummy
           CORS_ALLOWED_ORIGINS: https://console-sambasku-staging.iamutaki.com

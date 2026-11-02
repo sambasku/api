@@ -9,7 +9,11 @@ import type { AppVariables } from '@/shared/types';
 import type { CommentController } from './comment.controller';
 import {
   adminListCommentsResponseSchema,
+  approveCommentImageBodySchema,
+  approveCommentImageResponseSchema,
   listAdminCommentsQuerySchema,
+  rejectCommentImageBodySchema,
+  rejectCommentImageResponseSchema,
   takedownCommentResponseSchema,
   uncensorCommentResponseSchema,
 } from './validators/comment.validator';
@@ -35,6 +39,8 @@ export function createAdminCommentRoutes(deps: AdminCommentRoutesDeps) {
   routes.use('/', ...reviewer);
   routes.use('/:id/takedown', ...reviewer);
   routes.use('/:id/uncensor', ...reviewer);
+  routes.use('/:id/approve-image', ...reviewer);
+  routes.use('/:id/reject-image', ...reviewer);
 
   const listRoute = createRoute({
     method: 'get',
@@ -79,9 +85,51 @@ export function createAdminCommentRoutes(deps: AdminCommentRoutesDeps) {
     },
   });
 
+  const approveImageRoute = createRoute({
+    method: 'post',
+    path: '/:id/approve-image',
+    tags: ['Comments', 'Admin'],
+    summary: 'Approve foto komentar pending → tayang publik (promote GitHub)',
+    request: {
+      params: z.object({ id: z.string().length(26) }),
+      body: { content: json(approveCommentImageBodySchema) },
+    },
+    responses: {
+      200: { description: 'Foto tayang', content: json(approveCommentImageResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan verifikator', content: json(errorResponseSchema) },
+      404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Foto tidak pending', content: json(errorResponseSchema) },
+    },
+  });
+
+  const rejectImageRoute = createRoute({
+    method: 'post',
+    path: '/:id/reject-image',
+    tags: ['Comments', 'Admin'],
+    summary: 'Tolak foto komentar pending (teks tetap tayang)',
+    request: {
+      params: z.object({ id: z.string().length(26) }),
+      body: { content: json(rejectCommentImageBodySchema) },
+    },
+    responses: {
+      200: { description: 'Foto ditolak', content: json(rejectCommentImageResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan verifikator', content: json(errorResponseSchema) },
+      404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Foto tidak pending', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(listRoute, (c) => deps.controller.listAdmin(c, c.req.valid('query')) as never);
   routes.openapi(takedownRoute, (c) => deps.controller.takedown(c, c.req.param('id')) as never);
   routes.openapi(uncensorRoute, (c) => deps.controller.uncensor(c, c.req.param('id')) as never);
+  routes.openapi(approveImageRoute, (c) =>
+    deps.controller.approveImage(c, c.req.param('id'), c.req.valid('json')) as never,
+  );
+  routes.openapi(rejectImageRoute, (c) =>
+    deps.controller.rejectImage(c, c.req.param('id'), c.req.valid('json')) as never,
+  );
 
   return routes;
 }

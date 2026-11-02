@@ -13,6 +13,13 @@ import {
   createDiscussionReplyResponseSchema,
   createDiscussionResponseSchema,
   deleteDiscussionReplyResponseSchema,
+  deleteDiscussionResponseSchema,
+  discussionEditHistoryResponseSchema,
+  discussionReplyEditHistoryResponseSchema,
+  updateDiscussionBodySchema,
+  updateDiscussionReplyBodySchema,
+  updateDiscussionReplyResponseSchema,
+  updateDiscussionResponseSchema,
   attachDiscussionAudioResponseSchema,
   listMyDiscussionsQuerySchema,
   listDiscussionsQuerySchema,
@@ -36,6 +43,8 @@ export interface DiscussionRoutesDeps {
   optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Gate azp + scope discussion.write pada tulis. */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate persetujuan legal untuk aksi tulis (403 CONSENT_REQUIRED). */
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
   onUgcRateLimited?: (userId: string) => void | Promise<void>;
 }
 
@@ -101,11 +110,12 @@ function replyAudioUserLimit(onUgcRateLimited?: (userId: string) => void | Promi
 export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   const routes = createOpenApiApp();
   const writeClient = deps.requireApprovedClient ? [deps.requireApprovedClient] : [];
+  const legalConsent = deps.requireLegalConsent ? [deps.requireLegalConsent] : [];
   const submitLimit = submitUserLimit(deps.onUgcRateLimited);
   const replyLimit = replyUserLimit(deps.onUgcRateLimited);
   const replyAudioLimit = replyAudioUserLimit(deps.onUgcRateLimited);
 
-  routes.use('/upload-token', deps.authenticate, ...writeClient, tokenUserLimit, tokenIpLimit);
+  routes.use('/upload-token', deps.authenticate, ...writeClient, ...legalConsent, tokenUserLimit, tokenIpLimit);
   routes.use('/', async (c, next) => {
     if (c.req.method === 'POST') return deps.authenticate(c, next);
     return next();
@@ -113,6 +123,11 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   routes.use('/', async (c, next) => {
     if (c.req.method !== 'POST') return next();
     if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
     return next();
   });
   routes.use('/', async (c, next) => {
@@ -125,6 +140,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     '/:id/audio',
     deps.authenticate,
     ...writeClient,
+    ...legalConsent,
     replyAudioLimit,
     bodyLimit({
       maxSize: 6 * 1024 * 1024,
@@ -143,6 +159,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     '/:id/replies/audio',
     deps.authenticate,
     ...writeClient,
+    ...legalConsent,
     replyAudioLimit,
     bodyLimit({
       maxSize: 6 * 1024 * 1024,
@@ -157,8 +174,34 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
         ),
     }),
   );
-  routes.use('/:id/replies', deps.authenticate, ...writeClient, replyLimit);
-  routes.use('/replies/:id', deps.authenticate, ...writeClient);
+  routes.use('/:id/replies', deps.authenticate, ...writeClient, ...legalConsent, replyLimit);
+
+  routes.use(
+    '/replies/:id/edit-history',
+    rateLimit({ points: 100, duration: 60, keyFn: (c) => clientIpKey(c) }),
+  );
+  routes.use(
+    '/:id/edit-history',
+    rateLimit({ points: 100, duration: 60, keyFn: (c) => clientIpKey(c) }),
+  );
+
+  const replyWriteChain = [
+    deps.authenticate,
+    ...writeClient,
+    ...legalConsent,
+    replyLimit,
+  ] as const;
+  routes.on('delete', '/replies/:id', ...replyWriteChain);
+  routes.on('patch', '/replies/:id', ...replyWriteChain);
+
+  const topicWriteChain = [
+    deps.authenticate,
+    ...writeClient,
+    ...legalConsent,
+    submitLimit,
+  ] as const;
+  routes.on('delete', '/:id', ...topicWriteChain);
+  routes.on('patch', '/:id', ...topicWriteChain);
 
   const uploadTokenRoute = createRoute({
     method: 'get',
@@ -331,6 +374,94 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     },
   });
 
+  const updateReplyRoute = createRoute({
+    method: 'patch',
+    path: '/replies/:id',
+    tags: ['Discussions'],
+    summary: 'Edit balasan sendiri (published; tanpa ganti audio)',
+    request: {
+      params: discussionReplyIdParamSchema,
+      body: { content: json(updateDiscussionReplyBodySchema) },
+    },
+    responses: {
+      200: { description: 'Balasan diperbarui', content: json(updateDiscussionReplyResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+      404: { description: 'Balasan tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
+  const updateDiscussionRoute = createRoute({
+    method: 'patch',
+    path: '/:id',
+    tags: ['Discussions'],
+    summary:
+      'Edit OP sendiri (published → pending_review; body+link; gambar/audio tidak diganti)',
+    request: {
+      params: discussionIdParamSchema,
+      body: { content: json(updateDiscussionBodySchema) },
+    },
+    responses: {
+      200: {
+        description: 'Disimpan & menunggu tinjauan ulang',
+        content: json(updateDiscussionResponseSchema),
+      },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
+  const deleteDiscussionRoute = createRoute({
+    method: 'delete',
+    path: '/:id',
+    tags: ['Discussions'],
+    summary: 'Batalkan penayangan OP sendiri → deleted_by_author',
+    request: { params: discussionIdParamSchema },
+    responses: {
+      200: { description: 'Dibatalkan', content: json(deleteDiscussionResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const replyEditHistoryRoute = createRoute({
+    method: 'get',
+    path: '/replies/:id/edit-history',
+    tags: ['Discussions'],
+    summary: 'Riwayat sunting balasan (publik; hanya published)',
+    request: { params: discussionReplyIdParamSchema },
+    responses: {
+      200: {
+        description: 'Current + revisions (newest first)',
+        content: json(discussionReplyEditHistoryResponseSchema),
+      },
+      404: { description: 'Balasan tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
+  const discussionEditHistoryRoute = createRoute({
+    method: 'get',
+    path: '/:id/edit-history',
+    tags: ['Discussions'],
+    summary: 'Riwayat sunting OP (publik; hanya published)',
+    request: { params: discussionIdParamSchema },
+    responses: {
+      200: {
+        description: 'Current + revisions (newest first)',
+        content: json(discussionEditHistoryResponseSchema),
+      },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(
     uploadTokenRoute,
     (c) => deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
@@ -355,8 +486,23 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   routes.openapi(createReplyRoute, (c) =>
     deps.controller.createReply(c, c.req.valid('param').id, c.req.valid('json')) as never,
   );
+  routes.openapi(replyEditHistoryRoute, (c) =>
+    deps.controller.replyEditHistory(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(discussionEditHistoryRoute, (c) =>
+    deps.controller.editHistory(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(updateReplyRoute, (c) =>
+    deps.controller.updateReply(c, c.req.valid('param').id, c.req.valid('json')) as never,
+  );
   routes.openapi(deleteReplyRoute, (c) =>
     deps.controller.deleteReply(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(updateDiscussionRoute, (c) =>
+    deps.controller.update(c, c.req.valid('param').id, c.req.valid('json')) as never,
+  );
+  routes.openapi(deleteDiscussionRoute, (c) =>
+    deps.controller.delete(c, c.req.valid('param').id) as never,
   );
 
   return routes;

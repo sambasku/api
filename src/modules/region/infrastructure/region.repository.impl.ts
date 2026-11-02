@@ -112,6 +112,20 @@ export class RegionRepositoryImpl implements RegionRepository {
     return row ? mapRegion(row) : null;
   }
 
+  async findByIdOrSlug(
+    ref: string,
+    opts?: { includeDeleted?: boolean },
+  ): Promise<Region | null> {
+    const conds = [or(eq(regions.id, ref), eq(regions.slug, ref))!];
+    if (!opts?.includeDeleted) conds.push(isNull(regions.deletedAt));
+    const [row] = await this.db
+      .select()
+      .from(regions)
+      .where(and(...conds))
+      .limit(1);
+    return row ? mapRegion(row) : null;
+  }
+
   async list(input: ListRegionsInput): Promise<ListRegionsResult> {
     const conds = [isNull(regions.deletedAt)];
     if (input.publicOnly) conds.push(eq(regions.status, 'published'));

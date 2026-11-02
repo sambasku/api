@@ -13,22 +13,26 @@ import { Pbkdf2PasswordService } from '@/modules/auth/infrastructure/pbkdf2-pass
 import { logger } from '@/shared/logging/logger';
 import { ANONIM_EMAIL, ANONIM_USER_ID, ANONIM_USERNAME } from '@/shared/constants/anonim';
 import {
+  CSV_IMPORTER_DISPLAY_NAME,
   CSV_IMPORTER_EMAIL,
   CSV_IMPORTER_USER_ID,
   CSV_IMPORTER_USERNAME,
 } from '@/shared/constants/csv-importer';
 import {
+  GITHUB_ACTIONS_DISPLAY_NAME,
   GITHUB_ACTIONS_EMAIL,
   GITHUB_ACTIONS_USER_ID,
   GITHUB_ACTIONS_USERNAME,
 } from '@/shared/constants/github-actions';
 import {
+  WEB_IMPORT_DISPLAY_NAME,
   WEB_IMPORT_EMAIL,
   WEB_IMPORT_USER_ID,
   WEB_IMPORT_USERNAME,
 } from '@/shared/constants/web-importer';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { seedAchievements } from './seed-achievements';
 
 const SEED_LANGUAGES = [
   { code: 'SBS', name: 'Sambas', nativeName: 'Sambas' },
@@ -92,6 +96,7 @@ export async function seedReference(): Promise<void> {
   const hasher = new Pbkdf2PasswordService();
 
   // User sistem - password acak hanya saat insert pertama; skip jika id sudah ada.
+  // username = handle slug; displayName = label manusiawi (join feed/console).
   await db
     .insert(users)
     .values({
@@ -106,7 +111,7 @@ export async function seedReference(): Promise<void> {
   // Email/username boleh berganti lewat konstanta; password dan id tetap.
   await db
     .update(users)
-    .set({
+   .set({
       username: ANONIM_USERNAME,
       displayName: ANONIM_USERNAME,
       email: ANONIM_EMAIL,
@@ -119,7 +124,7 @@ export async function seedReference(): Promise<void> {
     .values({
       id: CSV_IMPORTER_USER_ID,
       username: CSV_IMPORTER_USERNAME,
-      displayName: CSV_IMPORTER_USERNAME,
+      displayName: CSV_IMPORTER_DISPLAY_NAME,
       email: CSV_IMPORTER_EMAIL,
       passwordHash: await hasher.hash(crypto.randomUUID()),
       emailVerified: true,
@@ -128,9 +133,9 @@ export async function seedReference(): Promise<void> {
   // Nama tampilan/email boleh berganti; password dan id tetap.
   await db
     .update(users)
-    .set({
+   .set({
       username: CSV_IMPORTER_USERNAME,
-      displayName: CSV_IMPORTER_USERNAME,
+      displayName: CSV_IMPORTER_DISPLAY_NAME,
       email: CSV_IMPORTER_EMAIL,
     })
     .where(eq(users.id, CSV_IMPORTER_USER_ID));
@@ -141,17 +146,17 @@ export async function seedReference(): Promise<void> {
     .values({
       id: GITHUB_ACTIONS_USER_ID,
       username: GITHUB_ACTIONS_USERNAME,
-      displayName: GITHUB_ACTIONS_USERNAME,
+      displayName: GITHUB_ACTIONS_DISPLAY_NAME,
       email: GITHUB_ACTIONS_EMAIL,
       passwordHash: await hasher.hash(crypto.randomUUID()),
       emailVerified: true,
     })
-    .onConflictDoNothing({ target: users.id });
+   .onConflictDoNothing({ target: users.id });
   await db
     .update(users)
     .set({
       username: GITHUB_ACTIONS_USERNAME,
-      displayName: GITHUB_ACTIONS_USERNAME,
+      displayName: GITHUB_ACTIONS_DISPLAY_NAME,
       email: GITHUB_ACTIONS_EMAIL,
     })
     .where(eq(users.id, GITHUB_ACTIONS_USER_ID));
@@ -163,17 +168,17 @@ export async function seedReference(): Promise<void> {
     .values({
       id: WEB_IMPORT_USER_ID,
       username: WEB_IMPORT_USERNAME,
-      displayName: WEB_IMPORT_USERNAME,
+      displayName: WEB_IMPORT_DISPLAY_NAME,
       email: WEB_IMPORT_EMAIL,
       passwordHash: await hasher.hash(crypto.randomUUID()),
       emailVerified: true,
     })
-    .onConflictDoNothing({ target: users.id });
+   .onConflictDoNothing({ target: users.id });
   await db
     .update(users)
     .set({
       username: WEB_IMPORT_USERNAME,
-      displayName: WEB_IMPORT_USERNAME,
+      displayName: WEB_IMPORT_DISPLAY_NAME,
       email: WEB_IMPORT_EMAIL,
     })
     .where(eq(users.id, WEB_IMPORT_USER_ID));
@@ -224,6 +229,9 @@ export async function seedReference(): Promise<void> {
   logger.info(
     `Seed referensi: ${SEED_LANGUAGES.length} bahasa, ${SEED_DIALECTS.length} dialek, ${SEED_WORD_CLASSES.length} kelas kata, ${SEED_CATEGORIES.length} kategori (${missingCategories.length} kategori baru)`,
   );
+  // Katalog achievement (angkatan-ke-1, beta-tester) - idempoten, pisah
+  // fungsi tapi sekali jalan bareng referensi biar satu workflow saja.
+  await seedAchievements();
 }
 
 const isDirectRun =

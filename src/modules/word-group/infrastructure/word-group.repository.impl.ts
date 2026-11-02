@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   wordGroupMembers,
@@ -85,11 +85,17 @@ export class WordGroupRepositoryImpl implements WordGroupRepository {
     return true;
   }
 
-  async findById(id: string): Promise<WordGroupRecord | null> {
+  async findById(id: string, publicOnly = false): Promise<WordGroupRecord | null> {
     const [groupRow] = await this.db
       .select()
       .from(wordGroups)
-      .where(and(eq(wordGroups.id, id), isNull(wordGroups.deletedAt)))
+      .where(
+        and(
+          eq(wordGroups.id, id),
+          isNull(wordGroups.deletedAt),
+          ...(publicOnly ? [eq(wordGroups.status, 'published')] : []),
+        ),
+      )
       .limit(1);
     if (!groupRow) return null;
     const memberRows = await this.db
@@ -107,8 +113,12 @@ export class WordGroupRepositoryImpl implements WordGroupRepository {
         and(
           eq(wordGroupMembers.groupId, id),
           isNull(wordGroupMembers.deletedAt),
-          // Termasuk baris termasuk kata non-published: antrean admin
-          // perlu melihatnya; filter tayang ada di read-path publik.
+          // Antrean admin melihat semua; endpoint publik hanya anggota
+          // published dari kata published (kata draft/soft-deleted bocor
+          // kalau tidak difilter - konsisten findDetailById di word repo).
+          ...(publicOnly
+            ? [eq(wordGroupMembers.status, 'published'), eq(words.status, 'published')]
+            : []),
         ),
       )
       .orderBy(asc(words.lemma));
@@ -156,32 +166,35 @@ export class WordGroupRepositoryImpl implements WordGroupRepository {
     const memberRows =
       ids.length === 0
         ? []
-        : input.wordId
-          ? await this.db
-              .select({
-                groupId: wordGroupMembers.groupId,
-                id: wordGroupMembers.id,
-                wordId: wordGroupMembers.wordId,
-                notes: wordGroupMembers.notes,
-                status: wordGroupMembers.status,
-                createdAt: wordGroupMembers.createdAt,
-                lemma: words.lemma,
-              })
-              .from(wordGroupMembers)
-              .innerJoin(words, eq(words.id, wordGroupMembers.wordId))
-              .where(
-                and(
-                  inArray(wordGroupMembers.groupId, ids),
-                  isNull(wordGroupMembers.deletedAt),
-                ),
-              )
-              .orderBy(asc(words.lemma))
-          : [];
-    // filter wordId: hanya grup yang memuat kata itu
-    const filtered =
-      input.wordId && memberRows.length > 0
-        ? page.filter((g) => memberRows.some((m) => m.groupId === g.id && m.wordId === input.wordId))
-        : page;
+        : await this.db
+            .select({
+              groupId: wordGroupMembers.groupId,
+              id: wordGroupMembers.id,
+              wordId: wordGroupMembers.wordId,
+              notes: wordGroupMembers.notes,
+              status: wordGroupMembers.status,
+              createdAt: wordGroupMembers.createdAt,
+              lemma: words.lemma,
+            })
+            .from(wordGroupMembers)
+            .innerJoin(words, eq(words.id, wordGroupMembers.wordId))
+            .where(
+              and(
+                inArray(wordGroupMembers.groupId, ids),
+                isNull(wordGroupMembers.deletedAt),
+                // Endpoint publik hanya anggota published dari kata published
+                // (admin list tetap lihat semua untuk antrean moderasi).
+                ...(input.publicOnly
+                  ? [eq(wordGroupMembers.status, 'published'), eq(words.status, 'published')]
+                  : []),
+              ),
+            )
+            .orderBy(asc(words.lemma));
+    // filter wordId: hanya grup yang memuat kata itu. Kalau tidak ada yang
+    // cocok harus kosong - jangan jatuh balik ke semua grup.
+    const filtered = input.wordId
+      ? page.filter((g) => memberRows.some((m) => m.groupId === g.id && m.wordId === input.wordId))
+      : page;
 
     const membersByGroup = new Map<string, typeof memberRows>();
     for (const m of memberRows) {
@@ -221,28 +234,52 @@ export class WordGroupRepositoryImpl implements WordGroupRepository {
       .where(and(eq(wordGroups.id, input.groupId), isNull(wordGroups.deletedAt)))
       .limit(1);
     if (!groupRow) return null;
-    try {
-      await this.db.insert(wordGroupMembers).values({
-        groupId: input.groupId,
-        wordId: input.wordId,
+    const now = new Date();
+    // Keanggotaan lama yang soft-deleted dihidupkan lagi - UNIQUE (group_id,
+    // word_id) keras, jadi insert baru untuk pasangan yang pernah keluar akan
+    // selalu konflik. Revive = satu-satunya jalan re-add.
+    const revived = await this.db
+      .update(wordGroupMembers)
+      .set({
+        deletedAt: null,
+        deletedBy: null,
         notes: input.notes ?? null,
         status: input.status,
         createdBy: input.createdBy,
-      });
-    } catch (e) {
-      // Drizzle membungkus error SQLite: teks UNIQUE ada di cause berantai.
-      const msgOf = (err: unknown, depth = 0): string =>
-        err instanceof Error
-          ? err.message + (depth < 3 && err.cause ? ` ${msgOf(err.cause, depth + 1)}` : '')
-          : String(err);
-      const msg = msgOf(e);
-      if (msg.includes('UNIQUE') || msg.includes('unique')) {
-        throw new ConflictError(
-          'WORD_GROUP_MEMBER_CONFLICT',
-          'Kata ini sudah jadi anggota kelompok tersebut',
-        );
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(wordGroupMembers.groupId, input.groupId),
+          eq(wordGroupMembers.wordId, input.wordId),
+          isNotNull(wordGroupMembers.deletedAt),
+        ),
+      )
+      .returning({ id: wordGroupMembers.id });
+    if (revived.length === 0) {
+      try {
+        await this.db.insert(wordGroupMembers).values({
+          groupId: input.groupId,
+          wordId: input.wordId,
+          notes: input.notes ?? null,
+          status: input.status,
+          createdBy: input.createdBy,
+        });
+      } catch (e) {
+        // Drizzle membungkus error SQLite: teks UNIQUE ada di cause berantai.
+        const msgOf = (err: unknown, depth = 0): string =>
+          err instanceof Error
+            ? err.message + (depth < 3 && err.cause ? ` ${msgOf(err.cause, depth + 1)}` : '')
+            : String(err);
+        const msg = msgOf(e);
+        if (msg.includes('UNIQUE') || msg.includes('unique')) {
+          throw new ConflictError(
+            'WORD_GROUP_MEMBER_CONFLICT',
+            'Kata ini sudah jadi anggota kelompok tersebut',
+          );
+        }
+        throw e;
       }
-      throw e;
     }
     return this.findById(input.groupId);
   }

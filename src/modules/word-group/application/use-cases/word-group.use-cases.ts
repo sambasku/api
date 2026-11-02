@@ -77,8 +77,10 @@ export class ListWordGroupsUseCase {
 export class GetWordGroupUseCase {
   constructor(private readonly repo: WordGroupRepository) {}
   async execute(id: string, publicOnly = true): Promise<WordGroupRecord> {
-    const row = await this.repo.findById(id);
-    if (!row || (publicOnly && row.status !== 'published')) {
+    // publicOnly diteruskan ke repo: filter grup published sekaligus anggota
+    // published dari kata published (jangan bocorkan antrean moderasi).
+    const row = await this.repo.findById(id, publicOnly);
+    if (!row) {
       throw new NotFoundError('WORD_GROUP_NOT_FOUND', 'Kelompok kata tidak ditemukan');
     }
     return row;

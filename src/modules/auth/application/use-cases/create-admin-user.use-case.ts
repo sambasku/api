@@ -1,10 +1,12 @@
-import { BadRequestError, ConflictError } from '@/shared/errors/app-error';
+import { BadRequestError, ConflictError, ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import { Email } from '../../domain/value-objects/email.vo';
 import { Password } from '../../domain/value-objects/password.vo';
 import type { User, UserRole } from '../../domain/entities/user.entity';
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { PasswordHasherPort } from '../ports/password-hasher.port';
+import { slugifyUsername, USERNAME_HANDLE_REGEX } from '../utils/username-slug';
+import { isReservedHandle } from '../utils/reserved-handles';
 
 export const ASSIGNABLE_ADMIN_ROLES = ['contributor', 'editor', 'reviewer', 'admin'] as const;
 export type AssignableAdminRole = (typeof ASSIGNABLE_ADMIN_ROLES)[number];
@@ -38,7 +40,20 @@ export class CreateAdminUserUseCase {
     const email = Email.create(cmd.email);
     Password.create(cmd.password);
 
-    if (await this.userRepo.findByUsername(cmd.username)) {
+    // Username admin = handle @mention juga: normalisasi sama seperti register
+    // (lowercase, tanpa spasi/hyphen). Tolak input yang tak menghasilkan
+    // handle valid supaya admin sadar, bukan diam-dima dapat nama lain.
+    const username = slugifyUsername(cmd.username);
+    if (!USERNAME_HANDLE_REGEX.test(username) || isReservedHandle(username)) {
+      throw new ValidationError([
+        {
+          field: 'username',
+          message: `Nama pengguna tidak valid. Coba ${username}_sambas atau nama tanpa spasi.`,
+        },
+      ]);
+    }
+
+    if (await this.userRepo.findByUsername(username)) {
       throw new ConflictError('USERNAME_ALREADY_EXISTS', 'Nama sudah dipakai');
     }
     if (await this.userRepo.findByEmail(email.value)) {
@@ -50,7 +65,7 @@ export class CreateAdminUserUseCase {
 
     const passwordHash = await this.hasher.hash(cmd.password);
     const user = await this.userRepo.save({
-      username: cmd.username,
+      username,
       email: email.value,
       phone: cmd.phone,
       passwordHash,

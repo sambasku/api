@@ -19,7 +19,7 @@ export const userConsents = sqliteTable(
     acceptedAt: integer('accepted_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),
-    /** register | social_gate | reconsent | accept_legal */
+    /** register | social_gate | seed_backfill | reconsent | accept_legal */
     source: text('source').notNull(),
     /** First-party client saat setuju (mobile/web/console) - string bebas di slice ini */
     clientId: text('client_id'),

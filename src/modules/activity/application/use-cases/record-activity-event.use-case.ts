@@ -42,12 +42,28 @@ export class RecordActivityEventUseCase {
   }
 
   /**
+   * #187: takedown foto wisata -> event batch yang memuat URL itu ikut
+   * disembunyikan. ponytail: satu foto bermasalah menyembunyikan seluruh
+   * baris batch (foto lain tetap di galeri); pecah per foto bila perlu.
+   */
+  async safeHidePlacePhoto(placeId: string, url: string): Promise<void> {
+    try {
+      await this.eventRepo.hidePlacePhoto(placeId, url);
+    } catch (err) {
+      console.error('[activity-event] hide foto wisata gagal (diabaikan):', {
+        placeId,
+        err: err instanceof Error ? err.message : err,
+      });
+    }
+  }
+
+  /**
    * Sembunyikan event vote saat vote ditarik (baris votes dihapus hard).
    * Best-effort sama seperti append. `showAgain` untuk submit ulang.
    */
   async safeVoteVisibility(
     actorId: string,
-    targetType: 'word' | 'comment',
+    targetType: 'word' | 'comment' | 'meaning',
     targetId: string,
   ): Promise<void> {
     try {

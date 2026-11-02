@@ -20,6 +20,16 @@ function makeRepo(
     correctionsApproved: 8,
     verificationsDone: 34,
     commentsPublished: 5,
+    leveling: {
+      points: 60,
+      level: 2,
+      nextLevelPoints: 80,
+      titleCode: 'pencatat',
+      exploration: 4,
+      accuracy: 42,
+      depth: 8,
+      streakDays: 0,
+    },
     ...statsOverride,
   };
   return {

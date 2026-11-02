@@ -55,6 +55,12 @@ export interface UserAchievement {
   context: Record<string, unknown> | null;
 }
 
+/** Progres locked untuk source agregat (GET /me/achievements). */
+export interface AchievementProgress {
+  current: number;
+  target: number;
+}
+
 /** Baris katalog + status kepemilikan (endpoint `me` dan profil publik). */
 export interface AchievementWithOwnership extends Achievement {
   /** Award id; null = belum dimiliki (locked). */
@@ -62,6 +68,11 @@ export interface AchievementWithOwnership extends Achievement {
   awardedAt: Date | null;
   /** Border ini sedang dipakai user (dari `users.active_border_id`). */
   isActiveBorder?: boolean;
+  /**
+   * Hanya `/me` + locked + source agregat. Null = kohort/manual/sudah owned
+   * / profil publik.
+   */
+  progress?: AchievementProgress | null;
 }
 
 /** Pemenuh kriteria untuk preview / backfill. */

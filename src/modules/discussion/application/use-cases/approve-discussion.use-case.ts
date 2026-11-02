@@ -5,6 +5,8 @@ import type { PublicImageStoragePort } from '@/modules/public-image/application/
 import { buildDiscussionImagePath } from '@/modules/public-image/application/utils/public-image-path';
 import { validateImageFile } from '@/modules/public-image/application/utils/validate-image-file';
 import { IMAGE_CONTENT_WARNING_SET } from '@/shared/constants/image-content-warnings';
+import { discussionCreatedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type {
   Discussion,
@@ -100,7 +102,7 @@ export class ApproveDiscussionUseCase {
     private readonly imageStorage: ImageStoragePort,
     private readonly auditRepo: AuditLogRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
-    private readonly activityEvents?: { safe: (cmd: { kind: 'discussion_created'; actorId: string; targetId: string; dedupeKey: string }) => Promise<void> },
+    private readonly activityEvents?: Pick<RecordActivityEventUseCase, 'safe'>,
   ) {}
 
   async execute(cmd: ApproveDiscussionCommand): Promise<Discussion> {
@@ -121,8 +123,20 @@ export class ApproveDiscussionUseCase {
 
     if (existing.images.length > 0) {
       const promoted: DiscussionImage[] = [];
+      const toDeleteStaging: string[] = [];
       for (let i = 0; i < existing.images.length; i++) {
         const staging = existing.images[i];
+        // #202 re-approve setelah sunting OP: gambar sudah di GitHub - jangan fetch staging.
+        if (staging.publicUrl) {
+          promoted.push({
+            url: staging.url,
+            providerFileId: staging.providerFileId,
+            publicUrl: staging.publicUrl,
+            contentWarnings: warningsByIndex[i] ?? staging.contentWarnings ?? [],
+          });
+          continue;
+        }
+
         const provided = cmd.censoredFiles?.[i];
         let bytes: Uint8Array;
         let mimeHint: string | null;
@@ -150,12 +164,13 @@ export class ApproveDiscussionUseCase {
           publicUrl: uploaded.url,
           contentWarnings: warningsByIndex[i] ?? [],
         });
+        toDeleteStaging.push(staging.providerFileId);
       }
       nextImages = promoted;
 
-      for (const img of existing.images) {
+      for (const providerFileId of toDeleteStaging) {
         // deleteFile ImageKit sudah best-effort (log internal, tidak lempar)
-        await this.imageStorage.deleteFile(img.providerFileId);
+        await this.imageStorage.deleteFile(providerFileId);
       }
     }
 
@@ -171,12 +186,13 @@ export class ApproveDiscussionUseCase {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');
     }
 
-    // Event feed: diskusi tayang. Actor = pembuat diskusi (existing.userId).
+    // Event feed: diskusi tayang. Actor = pembuat. Payload = cuplikan (#206 / #94).
     await this.activityEvents?.safe({
       kind: 'discussion_created',
       actorId: existing.userId,
       targetId: existing.id,
       dedupeKey: `discussion:${existing.id}`,
+      payload: discussionCreatedPayload(existing.body),
     });
 
     await this.auditRepo.record({

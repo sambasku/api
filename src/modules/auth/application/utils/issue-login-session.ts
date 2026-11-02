@@ -8,6 +8,11 @@ export interface LoginResult {
   accessToken: string;
   expiresIn: number;
   refreshToken: string; // plain - di-hash hanya saat disimpan
+  /**
+   * True bila jalur login ini baru saja menulis baris user_consents
+   * (backfill OAuth). Client wajib menampilkan sheet persetujuan.
+   */
+  requiresConsent?: boolean;
   user: {
     id: string;
     username: string;

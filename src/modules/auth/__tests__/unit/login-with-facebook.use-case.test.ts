@@ -7,6 +7,9 @@ import type { RefreshTokenRepository } from '../../domain/repositories/refresh-t
 import type { TokenServicePort } from '../../application/ports/token-service.port';
 import type { FacebookTokenVerifierPort } from '../../application/ports/facebook-token-verifier.port';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
+import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
+import { SocialConsentService } from '../../application/utils/social-consent';
 import type { User } from '../../domain/entities/user.entity';
 import type { AuthIdentity } from '../../domain/entities/auth-identity.entity';
 
@@ -36,6 +39,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     canContribute: overrides.canContribute ?? true,
     contributeMutedUntil: overrides.contributeMutedUntil ?? null,
     readContributionGuideAt: overrides.readContributionGuideAt ?? null,
+    levelSeen: overrides.levelSeen ?? 1,
+    notifyStreakReminder: overrides.notifyStreakReminder ?? true,
+    notifyLevelUp: overrides.notifyLevelUp ?? true,
   };
 }
 
@@ -115,6 +121,17 @@ function makeDeps(opts: {
     list: vi.fn(),
   } as unknown as AuditLogRepository;
 
+  // Consent service dengan legal belum dikonfigurasi: tidak ada backfill,
+  // assertion lama tetap valid.
+  const settingsRepo = {
+    getLegalActiveVersions: vi.fn().mockResolvedValue(null),
+    getOauthConsentEnforcement: vi.fn().mockResolvedValue('lenient'),
+  } as unknown as AppSettingsRepository;
+  const consentRepo = {
+    findLatestByUser: vi.fn().mockResolvedValue(null),
+    insertMany: vi.fn().mockResolvedValue(undefined),
+  } as unknown as UserConsentRepository;
+
   const useCase = new LoginWithFacebookUseCase(
     userRepo,
     identityRepo,
@@ -122,6 +139,7 @@ function makeDeps(opts: {
     tokenService,
     refreshTokenRepo,
     auditRepo,
+    new SocialConsentService(settingsRepo, consentRepo),
     900,
     2592000,
   );
@@ -248,18 +266,22 @@ describe('LoginWithFacebookUseCase', () => {
     });
   });
 
-  it('username bentrok → sufiks terpakai', async () => {
-    const { useCase, identityRepo } = makeDeps({
+  it('username bentrok → kandidat disiapkan, retry di repo (tanpa probe SELECT)', async () => {
+    const { useCase, identityRepo, userRepo } = makeDeps({
       identity: null,
       usernamesTaken: ['budi_santoso'],
     });
 
     await useCase.execute({ accessToken: 'fb-token' });
 
-    expect(identityRepo.createUserWithGoogleIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ username: 'budi_santoso_facebook' }),
-      expect.any(Object),
-    );
+    expect(userRepo.findByUsername).not.toHaveBeenCalled();
+    const createUser = identityRepo.createUserWithGoogleIdentity as ReturnType<typeof vi.fn>;
+    const arg = createUser.mock.calls[0][0];
+    expect(arg.username).toBe('budi_santoso');
+    const candidates: string[] = arg.usernameCandidates;
+    expect(candidates[0]).toBe('budi_santoso');
+    expect(candidates[1]).toBe('budi_santoso_facebook');
+    expect(candidates[2]).toMatch(/^budi_santoso_[a-z0-9]{5}_facebook$/);
   });
 
   it('verifier 503 FACEBOOK_AUTH_UNAVAILABLE menjalar', async () => {

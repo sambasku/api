@@ -659,6 +659,59 @@ describe('ReviewContributionUseCase', () => {
       useCase.execute({ contributionId: '01CONTRIBULID0000000000000', decision: 'approve', comment: null, actorId: ACTOR.userId }),
     ).rejects.toMatchObject({ errorCode: 'CONTRIBUTION_ALREADY_REVIEWED' });
   });
+
+  it('#133 approve word_audio → notif pemilik kata, contoh tidak', async () => {
+    const { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage } = makeReviewDeps();
+    const notifyOwner = { execute: vi.fn().mockResolvedValue(undefined) };
+    const useCase = new ReviewContributionUseCase(
+      contributionRepo,
+      auditRepo as unknown as AuditLogRepository,
+      wordRepo,
+      publicImageStorage as never,
+      imageStorage as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      notifyOwner as never,
+    );
+
+    contributionRepo.review = vi.fn().mockResolvedValue({
+      contributionId: '01CONTRIBULID0000000000000',
+      entityType: 'word_audio',
+      entityId: '01AUDIOULID00000000000000',
+      status: 'approved',
+      contributorUserId: '01CONTRIBUTORULID0000000000',
+    });
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    expect(notifyOwner.execute).toHaveBeenCalledWith({
+      entityType: 'word_audio',
+      entityId: '01AUDIOULID00000000000000',
+      actorId: '01CONTRIBUTORULID0000000000',
+    });
+
+    notifyOwner.execute.mockClear();
+    contributionRepo.review = vi.fn().mockResolvedValue({
+      contributionId: '01CONTRIBULID0000000000000',
+      entityType: 'example',
+      entityId: '01EXAMPLULID0000000000000',
+      status: 'approved',
+      contributorUserId: '01CONTRIBUTORULID0000000000',
+    });
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      decision: 'approve',
+      comment: null,
+      actorId: ACTOR.userId,
+    });
+    expect(notifyOwner.execute).not.toHaveBeenCalled();
+  });
 });
 
 describe('CorrectContributionUseCase', () => {
@@ -862,10 +915,35 @@ describe('ListContributionsUseCase / GetContributionDetailUseCase', () => {
     const { contributionRepo, wordRepo } = makeDeps();
     const useCase = new GetContributionDetailUseCase(contributionRepo, wordRepo);
     const detail = await useCase.execute('01CONTRIBULID0000000000000');
-    expect(wordRepo.findDetailById).toHaveBeenCalledWith('01WORDULID000000000000000', { includeAllStatuses: true });
+    expect(wordRepo.findDetailById).toHaveBeenCalledWith('01WORDULID000000000000000', {
+      includeAllStatuses: true,
+      includeDeleted: true,
+    });
     expect(detail.entity).toMatchObject({ lemma: 'makatn' });
     expect(detail.review).toBeNull();
     expect(detail.priorReviews).toEqual([]);
+  });
+
+  it('lemma baru tanpa makna sendiri memuat makna kata yang sudah tertaut', async () => {
+    const { contributionRepo, wordRepo } = makeDeps();
+    wordRepo.findDetailById = vi.fn().mockResolvedValue({
+      id: '01WORDULID000000000000000',
+      lemma: 'gelik',
+      status: 'pending_review',
+      isVerified: false,
+      meanings: [],
+    });
+    const linked = {
+      id: '01MEANINGULID0000000000000',
+      definition: 'nama desa',
+      sourceLemma: 'kampung',
+      translations: [{ languageId: 'id', translationText: 'desa', translationType: 'direct' }],
+    };
+    wordRepo.findLinkedMeanings = vi.fn().mockResolvedValue([linked]);
+    const useCase = new GetContributionDetailUseCase(contributionRepo, wordRepo);
+    const detail = await useCase.execute('01CONTRIBULID0000000000000');
+    expect(wordRepo.findLinkedMeanings).toHaveBeenCalledWith('01WORDULID000000000000000');
+    expect(detail.entity).toMatchObject({ lemma: 'gelik', meanings: [linked] });
   });
 
   it('detail pending dengan history → review null, prior_reviews terisi', async () => {

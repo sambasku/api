@@ -19,6 +19,8 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export interface WordReportRoutesDeps {
   controller: WordReportController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate persetujuan legal untuk membuat laporan (403 CONSENT_REQUIRED). */
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 export function createWordReportRoutes(deps: WordReportRoutesDeps) {
@@ -28,6 +30,7 @@ export function createWordReportRoutes(deps: WordReportRoutesDeps) {
   routes.use(
     '/:id/reports',
     deps.authenticate,
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     rateLimit({
       points: 10,
       duration: 3600,

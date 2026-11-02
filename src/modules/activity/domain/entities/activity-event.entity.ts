@@ -14,9 +14,11 @@ export const ACTIVITY_EVENT_KINDS = [
   'contribution_audio',
   'contribution_pron',
   'contribution_example',
+  'place_photo_added',
   'comment_created',
   'vote_word',
   'vote_comment',
+  'vote_meaning',
   'discussion_created',
   'suggestion_applied',
   'suggestion_selfapply',
@@ -25,6 +27,12 @@ export const ACTIVITY_EVENT_KINDS = [
   'search_miss',
   'user_joined',
   'card_shared',
+ 'usaha_published',
+ 'cuisine_published',
+ 'place_published',
+ 'event_published',
+  'pantun_created',
+  'pantun_reply_created',
   'announcement',
 ] as const;
 
@@ -46,11 +54,15 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'pronunciation';
     case 'contribution_example':
       return 'example';
+    case 'place_photo_added':
+      return 'place_photo';
     case 'comment_created':
       return 'comment';
     case 'vote_word':
       return 'vote';
     case 'vote_comment':
+      return 'vote';
+    case 'vote_meaning':
       return 'vote';
     case 'discussion_created':
       return 'discussion';
@@ -66,7 +78,18 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'welcome';
     case 'card_shared':
       return 'card_share';
-    case 'announcement':
+    case 'usaha_published':
+      return 'usaha';
+    case 'cuisine_published':
+      return 'culinary';
+    case 'place_published':
+      return 'place_listing';
+case 'event_published':
+return 'event';
+  case 'pantun_created':
+  case 'pantun_reply_created':
+    return 'pantun';
+case 'announcement':
       return 'announcement';
   }
 }

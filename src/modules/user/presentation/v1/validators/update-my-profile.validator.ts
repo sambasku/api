@@ -40,6 +40,8 @@ export const updateMyProfileSchema = z
       .nullable()
       .optional()
       .transform((v) => v ?? undefined),
+    notify_streak_reminder: z.boolean().optional(),
+    notify_level_up: z.boolean().optional(),
   })
   .refine(
     (body) =>
@@ -47,10 +49,12 @@ export const updateMyProfileSchema = z
       body.bio !== undefined ||
       body.has_read_contribution_guide !== undefined ||
       body.region_id !== undefined ||
-      body.village_id !== undefined,
+      body.village_id !== undefined ||
+      body.notify_streak_reminder !== undefined ||
+      body.notify_level_up !== undefined,
     {
       message:
-        'Minimal satu field (display_name, bio, region_id, village_id, atau has_read_contribution_guide) harus diisi',
+        'Minimal satu field profil atau preferensi notifikasi harus diisi',
     },
   );
 
@@ -66,5 +70,7 @@ export const myProfileResponseSchema = z.object({
     village_id: z.string().nullable(),
     avatar_url: z.string().url().nullable(),
     has_read_contribution_guide: z.boolean(),
+    /** True bila user belum setujui terms/privacy versi aktif. */
+    requires_consent: z.boolean(),
   }),
 });

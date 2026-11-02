@@ -238,7 +238,7 @@ export class QuotaAwareMailer implements MailerPort {
     if (lastErrorCode === SKIP_ERROR || skipped === candidates.length) {
       throw new ServiceUnavailableError(
         SKIP_ERROR,
-        'Kuota email habis. Coba lagi nanti atau hubungi admin.',
+        'Kuota email habis. Coba lagi dalam beberapa saat atau hubungi admin.',
       );
     }
     throw new ServiceUnavailableError(

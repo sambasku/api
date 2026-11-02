@@ -13,7 +13,7 @@ import type { PasswordHasherPort } from '../ports/password-hasher.port';
 import type { MailerPort } from '../ports/mailer.port';
 import type { EmailDomainVerifierPort } from '../ports/email-domain-verifier.port';
 import { formatOtpDisplay, generateOtpCode, hashOtp, OTP_TTL_MS } from '../utils/otp';
-import { allocateUniqueUsername } from '../utils/username-slug';
+import { buildUsernameCandidates } from '../utils/username-slug';
 
 export class RegisterUserUseCase {
   constructor(
@@ -38,12 +38,9 @@ export class RegisterUserUseCase {
     assertConsentsMatchActiveVersions(dto.consents, active);
 
     const displayName = dto.name.trim().slice(0, 100);
-    const username = await allocateUniqueUsername(
-      (u) => this.userRepo.findByUsername(u),
-      dto.name,
-      email.value,
-      'email',
-    );
+    // Kandidat username dihitung tanpa probe SELECT; repo yang insert-retry
+    // atas UNIQUE (konflik = suffix otomatis, race dua register aman).
+    const usernameCandidates = buildUsernameCandidates(dto.name, email.value, 'email');
 
     if (await this.userRepo.findByEmail(email.value)) {
       throw new ConflictError('EMAIL_ALREADY_EXISTS', 'Email sudah terdaftar');
@@ -54,7 +51,8 @@ export class RegisterUserUseCase {
 
     const passwordHash = await this.hasher.hash(dto.password);
     const user = await this.userRepo.save({
-      username,
+      username: usernameCandidates[0],
+      usernameCandidates,
       displayName,
       email: email.value,
       phone: dto.phone,

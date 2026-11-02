@@ -1,6 +1,38 @@
 import { z } from 'zod';
 import { ACHIEVEMENT_CATEGORIES, REWARD_TYPES } from '@/shared/database/drizzle/schema/achievements.schema';
-import { isAchievementSourceKnown } from '../../../domain/achievement-registry';
+import {
+  findAchievementSource,
+  isAchievementSourceKnown,
+} from '../../../domain/achievement-registry';
+
+/**
+ * Host aset reward yang diizinkan. URL ini dirender di profil publik -
+ * bebas domain = vektor tracker/pixel eksternal (atau `javascript:` URL)
+ * bila akun admin dibajak. Add hanyalah ini: host CDN baru = tambah di sini.
+ */
+const ALLOWED_BADGE_HOSTS = new Set([
+  'cdn.jsdelivr.net',
+  'ik.imagekit.io',
+]);
+
+/**
+ * URL aset reward: wajib https + host allowlist. Valid di level schema
+ * supaya create dan update kena aturan sama.
+ */
+export const badgeUrlSchema = z
+  .string()
+  .trim()
+  .url()
+  .max(2048)
+  .refine((v) => v.startsWith('https://'), 'URL aset wajib https')
+  .refine((v) => {
+    try {
+      return ALLOWED_BADGE_HOSTS.has(new URL(v).hostname);
+    } catch {
+      return false;
+    }
+  }, 'Host aset tidak diizinkan (pakai jsDelivr atau ImageKit)');
+
 
 /**
  * Grammar kriteria achievement - divalidasi terhadap REGISTRY, bukan
@@ -45,13 +77,47 @@ export const achievementCriteriaSchema = z
     filters: z.record(z.string().trim().min(1).max(60), z.string().trim().min(1).max(120)).nullable().optional(),
   })
   .superRefine((c, ctx) => {
-    if (c.source === 'manual') {
-      // Manual: tanpa threshold/window - pure pemberian admin.
-      if (c.threshold != null) {
-        ctx.addIssue({ code: 'custom', path: ['threshold'], message: 'source manual tidak memakai threshold' });
-      }
-      if (c.window != null) {
-        ctx.addIssue({ code: 'custom', path: ['window'], message: 'source manual tidak memakai window' });
+    // Selaraskan grammar dengan registry (ACHIEVEMENT_ENHANCEMENT P0-3 /
+    // Q terkunci): jangan izinkan threshold/window/filters yang mesin
+    // evaluasi abaikan - admin console harus gagal di API, bukan "sukses palsu".
+    const def = findAchievementSource(c.source);
+    if (!def) return; // refine source sudah menolak; jangan dobel pesan.
+
+    if (!def.supportsThreshold && c.threshold != null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['threshold'],
+        message: `source ${c.source} tidak memakai threshold`,
+      });
+    }
+    if (!def.supportsWindow && c.window != null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['window'],
+        message: `source ${c.source} tidak memakai window`,
+      });
+    }
+
+    const filters = c.filters;
+    if (filters && Object.keys(filters).length > 0) {
+      const allowed = new Map(def.filterFields.map((f) => [f.key, f]));
+      for (const [key, value] of Object.entries(filters)) {
+        const field = allowed.get(key);
+        if (!field) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['filters', key],
+            message: `filter "${key}" tidak didukung source ${c.source}`,
+          });
+          continue;
+        }
+        if (field.options && field.options.length > 0 && !field.options.includes(value)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['filters', key],
+            message: `nilai filter "${key}" tidak valid untuk source ${c.source}`,
+          });
+        }
       }
     }
   });
@@ -70,7 +136,7 @@ export const createAchievementBodySchema = z.object({
   description: z.string().trim().min(3).max(500),
   category: z.enum(ACHIEVEMENT_CATEGORIES),
   reward_type: z.enum(REWARD_TYPES),
-  badge_url: z.string().trim().url().max(2048).nullable(),
+  badge_url: badgeUrlSchema.nullable(),
   criteria: achievementCriteriaSchema,
   family: z.string().trim().min(2).max(60).nullable().optional(),
   level: z.number().int().min(1).max(10).nullable().optional(),
@@ -83,7 +149,7 @@ export const updateAchievementBodySchema = z.object({
   description: z.string().trim().min(3).max(500).optional(),
   category: z.enum(ACHIEVEMENT_CATEGORIES).optional(),
   reward_type: z.enum(REWARD_TYPES).optional(),
-  badge_url: z.string().trim().url().max(2048).nullable().optional(),
+  badge_url: badgeUrlSchema.nullable().optional(),
   criteria: achievementCriteriaSchema.optional(),
   family: z.string().trim().min(2).max(60).nullable().optional(),
   level: z.number().int().min(1).max(10).nullable().optional(),
@@ -147,6 +213,14 @@ const achievementOwnershipSchema = achievementItemSchema.extend({
   awarded_at: z.number().int().nullable(),
   /** Border ini sedang dipakai (hanya reward_type profile_border). */
   is_active_border: z.boolean().optional(),
+  /** Locked + source agregat: current/target. Owned/kohort/manual = null. */
+  progress: z
+    .object({
+      current: z.number().int().nonnegative(),
+      target: z.number().int().positive(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const achievementItemResponseSchema = z.object({

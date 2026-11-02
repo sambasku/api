@@ -26,6 +26,17 @@ export const comments = sqliteTable(
     audioProvider: text('audio_provider'),
     audioProviderFileId: text('audio_provider_file_id'),
     audioSha: text('audio_sha'),
+    /** Staging / publik foto komentar (satu foto, mobile#200 opsi B). */
+    imageUrl: text('image_url'),
+    imageProvider: text('image_provider'),
+    imageProviderFileId: text('image_provider_file_id'),
+    imagePublicUrl: text('image_public_url'),
+    /** pending_review | published | rejected | null */
+    imageStatus: text('image_status'),
+    /** JSON array string[], mis. ["kekerasan"] */
+    imageContentWarnings: text('image_content_warnings'),
+    imageReviewedBy: text('image_reviewed_by').references(() => users.id),
+    imageReviewedAt: integer('image_reviewed_at', { mode: 'timestamp' }),
     // published | taken_down | deleted_by_author
     status: text('status').notNull().default('published'),
     reviewedBy: text('reviewed_by').references(() => users.id),
@@ -39,5 +50,26 @@ export const comments = sqliteTable(
     index('comments_word_status_idx').on(t.wordId, t.status, t.id),
     index('comments_status_idx').on(t.status, t.id),
     index('comments_user_status_id_idx').on(t.userId, t.status, t.id),
+    index('comments_image_status_idx').on(t.imageStatus, t.id),
+  ],
+);
+
+/** Snapshot body tayang sebelum setiap edit (riwayat seperti GitHub). Cap 50 di use case. */
+export const commentRevisions = sqliteTable(
+  'comment_revisions',
+  {
+    id: text('id').primaryKey().$defaultFn(() => generateId()),
+    commentId: text('comment_id')
+      .notNull()
+      .references(() => comments.id, { onDelete: 'cascade' }),
+    editorId: text('editor_id')
+      .notNull()
+      .references(() => users.id),
+    /** Body yang ditampilkan sebelum diganti (pasca-blocklist). */
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index('comment_revisions_comment_created_idx').on(t.commentId, t.createdAt),
   ],
 );

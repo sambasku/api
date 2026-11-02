@@ -41,6 +41,20 @@ describe.skipIf(!hasTestDb)('UserRepositoryImpl', () => {
     expect((await repo.findById(saved.id))?.email).toBe('siti@test.com');
   });
 
+  it('list q angka cocok ke phone (08…/+62…/62… semua ketemu), q teks tidak', async () => {
+    const saved = await repo.save({
+      username: 'hp_owner',
+      email: 'hp-owner@test.com',
+      phone: '6281234567890',
+      passwordHash: 'hash',
+    });
+    for (const q of ['081234567890', '+62 812-3456-7890', '6281234567890']) {
+      const { items } = await repo.list({ q, limit: 20 });
+      expect(items.map((u) => u.id)).toContain(saved.id);
+    }
+    expect((await repo.list({ q: 'tidak_ada', limit: 20 })).items).toHaveLength(0);
+  });
+
   it('updatePassword mengubah password_hash', async () => {
     const saved = await repo.save({ username: 'rudi', email: 'rudi@test.com', phone: null, passwordHash: 'lama' });
     await repo.updatePassword(saved.id, 'baru');

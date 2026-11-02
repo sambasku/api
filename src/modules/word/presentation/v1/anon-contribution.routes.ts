@@ -33,6 +33,8 @@ export interface AnonContributionRoutesDeps {
    * Pakai allowMissingUser supaya anon tanpa token tetap lolos.
    */
   requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate persetujuan legal - hanya berlaku bila Bearer ada (tamu lolos). */
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
   /** Strike rate_lockout ke ledger IP/device saat 429. */
   onAnonRateLimited?: (ctx: { clientIp: string; deviceId: string | null }) => void | Promise<void>;
 }
@@ -106,6 +108,7 @@ export function createAnonContributionRoutes(deps: AnonContributionRoutesDeps) {
     '/words',
     deps.optionalAuthenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
   );
   // Rate limit hanya untuk tamu (tanpa Bearer). User login tetap pakai gate contribute.
   routes.use('/words', async (c, next) => {
@@ -123,6 +126,7 @@ export function createAnonContributionRoutes(deps: AnonContributionRoutesDeps) {
     '/words/batch',
     deps.optionalAuthenticate,
     ...(deps.requireApprovedClient ? [deps.requireApprovedClient] : []),
+    ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []),
     batchIpLimit,
     batchDeviceLimit,
   );

@@ -7,4 +7,8 @@ export interface UpdateMyProfileDto {
   regionId?: string | null;
   /** Id desa. `null` mengosongkan. Field absen = tidak diubah. */
   villageId?: string | null;
+  /** Opt-in pengingat streak. */
+  notifyStreakReminder?: boolean;
+  /** Opt-in notifikasi naik level. */
+  notifyLevelUp?: boolean;
 }

@@ -20,6 +20,7 @@ describe.skipIf(!hasTestDb)('Verification feed consolidation - #56', () => {
   let db: any;
   let lemma: string;
   let reviewerToken: string;
+  let reviewerUsername: string;
   let contributorUsername: string;
 
   const request = (path: string, init: RequestInit = {}) =>
@@ -81,6 +82,7 @@ describe.skipIf(!hasTestDb)('Verification feed consolidation - #56', () => {
 
     const revEmail = `rev${stamp}@test.com`;
     const rev = await registerVerified(`rev${stamp}`, revEmail);
+    reviewerUsername = rev.username;
     await db.insert(userRoles).values({ userId: rev.user_id, role: 'reviewer' });
     reviewerToken = await login(revEmail);
 
@@ -162,5 +164,21 @@ describe.skipIf(!hasTestDb)('Verification feed consolidation - #56', () => {
       it.summary?.includes(lemma) || it.body?.includes(lemma),
     );
     expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it('profil verifikator: summary mengganti placeholder {lemma}', async () => {
+    const profileRes = await get(`/api/v1/users/${reviewerUsername}/activity?limit=50`);
+    const profile = await profileRes.json();
+    const profileItems = (profile.data as { items?: unknown[] })?.items ?? profile.data;
+    if (!Array.isArray(profileItems)) {
+      throw new Error('profile error: ' + profileRes.status + ' ' + JSON.stringify(profile).slice(0, 300));
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = (profileItems as any[]).filter((it: any) =>
+      typeof it.summary === 'string' && it.summary.includes('Memverifikasi usulan'),
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].summary).toBe(`Memverifikasi usulan ${contributorUsername}: ${lemma}`);
+    expect(rows[0].summary).not.toContain('{lemma}');
   });
 });

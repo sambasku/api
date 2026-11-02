@@ -2,11 +2,14 @@ import { eq, inArray } from 'drizzle-orm';
 import { appSettings } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
+  DEFAULT_OAUTH_CONSENT_ENFORCEMENT,
+  LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY,
   LEGAL_PRIVACY_VERSION_KEY,
   LEGAL_TERMS_VERSION_KEY,
   type AppSetting,
   type AppSettingType,
   type LegalActiveVersions,
+  type OauthConsentEnforcement,
 } from '../domain/entities/app-setting.entity';
 import type { AppSettingsRepository } from '../domain/repositories/app-settings.repository';
 
@@ -72,6 +75,11 @@ export class AppSettingsRepositoryImpl implements AppSettingsRepository {
     const privacyVersion = map[LEGAL_PRIVACY_VERSION_KEY];
     if (!termsVersion || !privacyVersion) return null;
     return { termsVersion, privacyVersion };
+  }
+
+  async getOauthConsentEnforcement(): Promise<OauthConsentEnforcement> {
+    const value = await this.getValue(LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY);
+    return value === 'enforce' ? 'enforce' : DEFAULT_OAUTH_CONSENT_ENFORCEMENT;
   }
 
   async upsertMany(

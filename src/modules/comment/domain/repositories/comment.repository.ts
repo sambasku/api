@@ -1,4 +1,13 @@
-import type { Comment, CursorPage, NewComment } from '../entities/comment.entity';
+import type {
+  Comment,
+  CommentImageStatus,
+  CommentRevision,
+  CursorPage,
+  NewComment,
+} from '../entities/comment.entity';
+
+/** Maks snapshot revisi per komentar (hapus yang paling lama). */
+export const COMMENT_REVISION_CAP = 50;
 
 export interface ListCommentsParams {
   limit: number;
@@ -10,6 +19,8 @@ export interface ListAdminCommentsParams extends ListCommentsParams {
   status?: Comment['status'];
   /** filter komentar satu kata (section komentar di detail admin) */
   wordId?: string;
+  /** Antrean foto: filter image_status (mis. pending_review). */
+  imageStatus?: CommentImageStatus;
 }
 
 export interface ListMyCommentsParams extends ListCommentsParams {
@@ -52,4 +63,37 @@ export interface CommentRepository {
    * (status published | taken_down | deleted_by_author, belum soft-delete).
    */
   listDistinctCommenterUserIds(wordId: string): Promise<string[]>;
+
+  updateBodyWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<Comment | null>;
+
+  listRevisions(commentId: string): Promise<CommentRevision[]>;
+
+  /**
+   * Lampirkan / ganti foto staging pada komentar published.
+   * Atomic: hanya jika belum ada pending/published, atau allowReplace.
+   */
+  setPendingImage(
+    commentId: string,
+    image: { url: string; provider: string; providerFileId: string },
+  ): Promise<Comment | null>;
+
+  /** Promote foto: pending_review → published + public URL. */
+  approveImage(
+    commentId: string,
+    input: {
+      reviewerId: string;
+      publicUrl: string;
+      provider: string;
+      providerFileId: string;
+      contentWarnings: string[];
+    },
+  ): Promise<Comment | null>;
+
+  /** Tolak foto: pending_review → rejected; bersihkan URL staging di DB. */
+  rejectImage(commentId: string, reviewerId: string): Promise<Comment | null>;
 }

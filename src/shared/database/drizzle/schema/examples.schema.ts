@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 import { meanings } from './meanings.schema';
 import { languages } from './languages.schema';
@@ -30,4 +31,10 @@ export const examples = sqliteTable('examples', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   deletedBy: text('deleted_by').references(() => users.id),
-});
+}, (t) => [
+  // 0095: query batch findDetailById (meaning_id IN + deleted_at IS NULL) -
+  // sebelumnya full scan, satu-satunya child table tanpa index.
+  index('examples_meaning_idx')
+    .on(t.meaningId)
+    .where(sql`${t.deletedAt} IS NULL`),
+]);

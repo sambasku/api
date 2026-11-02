@@ -283,6 +283,13 @@ let pendingLemma = '';
     expect(miss!.actor).toBeNull();
     expect(miss!.body).toMatch(/Mencari ".+" - belum ada/);
 
+    // #190: target baris komentar = id KATA (bisa dibuka), bukan id komentar
+    // (pernah salah kirim targetId -> detail 404 "tidak ditemukan").
+    const commentRow = body.data.find((i) => i.kind === 'comment');
+    expect(commentRow).toBeTruthy();
+    expect(commentRow!.target?.type).toBe('word');
+    expect(commentRow!.target?.id).toBe(sharedWordId);
+
     const vote = body.data.find((i) => i.kind === 'vote_up');
     expect(vote?.actor?.username).toBeTruthy();
     // #94: payload beku menang atas fallback bodyFor (vote tanpa payload = '')

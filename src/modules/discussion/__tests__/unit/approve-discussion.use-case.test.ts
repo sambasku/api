@@ -42,6 +42,7 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     avatarUrl: null,
     userRole: null,
     body: 'Apa arti tulisan di papan ini?',
+    bodyOriginal: null,
     linkUrl: null,
     images: [],
     audio: null,
@@ -50,6 +51,8 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     reviewedBy: null,
     reviewedAt: null,
     pinnedReplyId: null,
+    lastReplyAt: null,
+    publishedReplyCount: 0,
     createdAt: new Date('2026-09-24T00:00:00Z'),
     updatedAt: null,
     ...overrides,
@@ -67,6 +70,9 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     findReplyById: vi.fn(),
     listReplies: vi.fn(),
     markReplyDeletedByAuthor: vi.fn(),
+    markDiscussionDeletedByAuthor: vi.fn(),
+    updateDiscussionBodyWithRevision: vi.fn(),
+    listDiscussionRevisions: vi.fn().mockResolvedValue([]),
     takedownReply: vi.fn(),
     listDistinctReplierUserIds: vi.fn().mockResolvedValue([]),
     ...overrides,
@@ -148,12 +154,14 @@ describe('ApproveDiscussionUseCase', () => {
     const imageStorage = makeImageStorage();
     const audit = makeAudit();
     const inbox = makeInbox();
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined) };
     const uc = new ApproveDiscussionUseCase(
       repo,
       publicStorage,
       imageStorage,
       audit,
       inbox,
+      activityEvents,
     );
 
     const row = await uc.execute({ id: ID, actorId: ADMIN });
@@ -168,6 +176,39 @@ describe('ApproveDiscussionUseCase', () => {
         userId: USER,
         type: 'discussion_approved',
         targetKind: 'discussion',
+      }),
+    );
+    // #206: payload cuplikan beku untuk home feed
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'discussion_created',
+        actorId: USER,
+        targetId: ID,
+        dedupeKey: `discussion:${ID}`,
+        payload: 'Apa arti tulisan di papan ini?',
+      }),
+    );
+  });
+
+  it('body kosong → payload fallback Membuka ruang diskusi (#206)', async () => {
+    const repo = makeRepo({
+      findById: vi.fn().mockResolvedValue(makeHelp({ body: null })),
+      updateStatus: vi.fn().mockResolvedValue(makeHelp({ body: null, status: 'published' })),
+    });
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined) };
+    const uc = new ApproveDiscussionUseCase(
+      repo,
+      makePublicStorage(),
+      makeImageStorage(),
+      makeAudit(),
+      makeInbox(),
+      activityEvents,
+    );
+
+    await uc.execute({ id: ID, actorId: ADMIN });
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: 'Membuka ruang diskusi',
       }),
     );
   });

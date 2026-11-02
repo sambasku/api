@@ -18,6 +18,8 @@ const json = <T extends z.ZodType>(schema: T) => ({
 export interface VerifierApplicationRoutesDeps {
   controller: VerifierApplicationController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  /** Gate persetujuan legal untuk mendaftar verifikator (403 CONSENT_REQUIRED). */
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
 const writeLimit = (action: string) =>
@@ -33,7 +35,7 @@ const writeLimit = (action: string) =>
 export function createVerifierApplicationRoutes(deps: VerifierApplicationRoutesDeps) {
   const routes = createOpenApiApp();
 
-  routes.use('/', deps.authenticate, writeLimit('create'));
+  routes.use('/', deps.authenticate, ...(deps.requireLegalConsent ? [deps.requireLegalConsent] : []), writeLimit('create'));
   routes.use('/me', deps.authenticate, writeLimit('me'));
 
   const createRouteDef = createRoute({

@@ -23,6 +23,11 @@ const CAPACITY_SIGNATURES = [
   'script will never generate a response',
   'exceeded cpu time limit',
   'worker exceeded resource limits',
+  // Turso menolak query saat kuota plan habis / org diblokir. Bukan bug query:
+  // semua tabel kena (termasuk `SELECT 1` di /health), jadi ini kapasitas.
+  'sql read operations are forbidden',
+  'sql write operations are forbidden',
+  'do you need to upgrade your plan',
 ] as const;
 
 export function isCapacityFailure(err: unknown): boolean {

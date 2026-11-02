@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { isReservedHandle } from './reserved-handles';
 
 /** Handle mention: a-z, 0-9, titik, underscore. Tanpa hyphen. */
 export const USERNAME_HANDLE_REGEX = /^[a-z0-9._]{3,30}$/;
@@ -32,8 +33,6 @@ export function slugifyUsername(raw: string | null | undefined): string {
   return 'user';
 }
 
-export type FindByUsername = (username: string) => Promise<unknown | null>;
-
 /** 5 karakter acak [a-z0-9] untuk sufiks konflik. */
 export function randomUsernameToken(length = 5): string {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -52,48 +51,53 @@ function fitCandidate(base: string, suffix: string): string {
   return merged.replace(/-/g, '_').slice(0, MAX_LEN);
 }
 
+/** Batas kandidat per alokasi - konflik realistis selesai di 1-2 kandidat. */
+export const USERNAME_CANDIDATE_LADDER = [1, 24, 12, 4] as const;
+
 /**
- * Slug unik.
- * - Bebas → original slug.
- * - Bentrok + provider → coba `base_provider`, lalu `base_xxxxx_provider`
- *   (xxxxx = 5 char acak). Tanpa provider (email): `base_xxxxx`.
+ * Daftar kandidat username berurutan untuk insert-retry (TANPA probe SELECT):
+ * [base, base_provider, base_xxxxx_provider x24, xxxxx_provider x12,
+ * user_xxxxxxxxxx x4].
+ *
+ * Konflik diselesaikan DB lewat UNIQUE constraint (loop insert di repo,
+ * retry kandidat berikutnya) - bukan probe-then-insert yang race-prone
+ * (TOCTOU) dan boros subrequest Turso. Urutan = preferensi tampilan:
+ * kandidat pertama yang lolos insert jadi handle final.
  */
-export async function allocateUniqueUsername(
-  findByUsername: FindByUsername,
+export function buildUsernameCandidates(
   preferredRaw: string | null | undefined,
   emailFallback?: string | null,
   conflictProvider?: UsernameConflictProvider,
-): Promise<string> {
+): string[] {
   const fromEmail = emailFallback?.split('@')[0] ?? '';
   let base = slugifyUsername(preferredRaw || fromEmail || 'user');
   if (base === 'user' && fromEmail) {
     base = slugifyUsername(fromEmail);
   }
 
-  if (!(await findByUsername(base))) return base;
-
   const provider = conflictProvider ?? 'email';
+  // Handle reserved (admin/me/anonim/dll) tidak boleh dipakai user baru -
+  // kalau dibiarkan, user baru bisa "men.shadow" akun sistem di @mention.
+  const base2 = isReservedHandle(base) ? `${base}_user` : base;
+  const out: string[] = [base2];
+  const push = (candidate: string) => {
+    if (!out.includes(candidate)) out.push(candidate);
+  };
 
-  const withProvider = fitCandidate(base, `_${provider}`);
-  if (withProvider !== base && !(await findByUsername(withProvider))) {
-    return withProvider;
+  push(fitCandidate(base2, `_${provider}`));
+  for (let i = 0; i < USERNAME_CANDIDATE_LADDER[1]; i++) {
+    push(fitCandidate(base2, `_${randomUsernameToken(5)}_${provider}`));
   }
-
-  for (let i = 0; i < 24; i++) {
-    const token = randomUsernameToken(5);
-    const candidate = fitCandidate(base, `_${token}_${provider}`);
-    if (!(await findByUsername(candidate))) return candidate;
+  for (let i = 0; i < USERNAME_CANDIDATE_LADDER[2]; i++) {
+    const candidate = `${randomUsernameToken(5)}_${provider}`.slice(0, MAX_LEN);
+    if (USERNAME_HANDLE_REGEX.test(candidate)) push(candidate);
   }
-
-  for (let i = 0; i < 12; i++) {
-    const token = randomUsernameToken(5);
-    const candidate = `${token}_${provider}`.slice(0, MAX_LEN);
-    if (USERNAME_HANDLE_REGEX.test(candidate) && !(await findByUsername(candidate))) {
-      return candidate;
-    }
+  // ponytail: fallback terakhir tanpa kaitan input user - ruang ~36^10,
+  // praktis tak mungkin habis; kalau suatu hari penuh, naikkan panjang token.
+  for (let i = 0; i < USERNAME_CANDIDATE_LADDER[3]; i++) {
+    push(`user_${randomUsernameToken(10)}`);
   }
-
-  return `user${randomInt(0, 1_000_000).toString().padStart(6, '0')}`;
+  return out;
 }
 
 /** Email sintetis saat conflict / email provider tidak tersedia. */

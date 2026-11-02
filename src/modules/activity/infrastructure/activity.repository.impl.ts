@@ -93,7 +93,7 @@ function secondsToDate(seconds: number | null): Date {
   return new Date((seconds ?? 0) * 1000);
 }
 
-const WORD_BOUND_VOTE_TYPES = new Set(['word', 'comment']);
+const WORD_BOUND_VOTE_TYPES = new Set(['word', 'comment', 'meaning']);
 
 const CONTRIB_BODY: Record<string, string> = {
   word_image: 'Menambah foto',
@@ -887,6 +887,27 @@ export class ActivityRepositoryImpl implements ActivityRepository {
         .where(and(inArray(comments.id, commentIds), feedVisibleWordSql()));
       for (const r of rows) {
         out.set(`comment:${r.id}`, { label: r.lemma, wordId: r.wordId });
+      }
+    }
+
+    // Vote makna: label = lemma kata induk (bukan definisi) supaya copy feed
+    // tetap "lempat" - definisi makna bisa panjang dan memuat teks bebas.
+    const meaningIds = idsOf('meaning');
+    if (meaningIds.length > 0) {
+      const rows = await this.db
+        .select({ id: meanings.id, lemma: words.lemma, wordId: meanings.wordId })
+        .from(meanings)
+        .innerJoin(words, eq(words.id, meanings.wordId))
+        .where(
+          and(
+            inArray(meanings.id, meaningIds),
+            isNull(meanings.deletedAt),
+            eq(meanings.status, 'published'),
+            feedVisibleWordSql(),
+          ),
+        );
+      for (const r of rows) {
+        out.set(`meaning:${r.id}`, { label: r.lemma, wordId: r.wordId });
       }
     }
 

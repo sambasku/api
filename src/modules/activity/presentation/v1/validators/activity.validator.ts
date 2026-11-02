@@ -4,6 +4,14 @@ export const listActivityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().min(1).optional(),
   /**
+   * #193: filter kategori chips feed beranda. `all` (default) = tanpa
+   * filter, identik dengan permintaan tanpa param - klien lama (web)
+   * tidak berubah perilaku.
+   */
+  category: z
+    .enum(['all', 'search_miss', 'correction', 'explore', 'announcement', 'joined'])
+    .default('all'),
+  /**
    * #167: deprecated, no-op. Bearer sah → server selalu membuang baris milik
    * sendiri; tamu tetap feed publik penuh. Diterima (dan dinormalisasi ke
    * boolean) agar klien lama yang masih mengirim flag tidak 400.
@@ -56,6 +64,8 @@ export const activityItemSchema = z.object({
     'card_share',
     'suggestion',
     'contribution',
+    'place_listing',
+    'event',
   ]),
   created_at: z.string(),
   actor: activityActorSchema,

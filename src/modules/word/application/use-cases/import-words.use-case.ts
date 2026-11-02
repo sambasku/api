@@ -1,5 +1,6 @@
 import { BadRequestError } from '@/shared/errors/app-error';
 import type { LanguageRepository } from '@/modules/language/domain/repositories/language.repository';
+import type { ActivityEventRepository } from '@/modules/activity/domain/repositories/activity-event.repository';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { Actor } from './create-word.use-case';
 import type { UserLookupPort } from '../ports/user-lookup.port';
@@ -33,6 +34,7 @@ export class ImportWordsUseCase {
     private readonly wordRepo: WordRepository,
     private readonly languageRepo: LanguageRepository,
     private readonly users: UserLookupPort,
+    private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
   ) {}
 
   async execute(
@@ -180,6 +182,9 @@ export class ImportWordsUseCase {
         },
         writeActorId,
       );
+      // Sama CreateWord: draf tanpa event; tayang → word_created atau
+      // contribution_submitted (belum verified). Aktor = atribusi impor.
+      await this.appendCreatedActivity(word.id, publication.status, word.isVerified, writeActorId);
       return {
         lemma: word.lemma,
         outcome: 'created',
@@ -268,6 +273,27 @@ export class ImportWordsUseCase {
       meanings_skipped: skipped,
       message: forcedNote ?? 'Makna ditambahkan tanpa mengubah kata induk',
     };
+  }
+
+  private async appendCreatedActivity(
+    wordId: string,
+    status: 'draft' | 'published',
+    isVerified: boolean,
+    actorId: string,
+  ): Promise<void> {
+    if (!this.activityEvents || status === 'draft') return;
+    const isSubmission = !isVerified;
+    try {
+      await this.activityEvents.append({
+        kind: isSubmission ? 'contribution_submitted' : 'word_created',
+        actorId,
+        targetWordId: wordId,
+        targetId: wordId,
+        dedupeKey: isSubmission ? `contribution:${wordId}` : `word:${wordId}`,
+      });
+    } catch (err) {
+      console.error('[activity-event] import-words append gagal (diabaikan):', err);
+    }
   }
 }
 

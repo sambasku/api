@@ -79,6 +79,27 @@ export default {
         }),
       );
     }
+
+    try {
+      const result = await m.runDueStreakReminder();
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          msg: 'streak reminder cron done',
+          ran: result.ran,
+          sent: result.sent,
+          reason: result.reason ?? null,
+        }),
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'streak reminder cron failed',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
   },
 };
 

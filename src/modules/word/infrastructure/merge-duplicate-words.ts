@@ -12,10 +12,14 @@ import {
   words,
 } from '@/shared/database/drizzle/schema';
 
+import { loadMeaningFingerprintById } from '@/modules/word/application/utils/meaning-deduplication';
+
 /**
  * Gabung manual beberapa entri lemma sama ke satu penunggu (tab Duplikasi).
  * Beda dari publishOrMergeMeanings: penjaga dipilih admin, media ikut pindah,
  * status/verifikasi penjaga tidak diubah.
+ * Makna duplikat (beda kapital / sama persis) di-soft-delete, bukan dipindah
+ * - sumber masalah "asin, asin, asin" (#174).
  */
 export async function mergeDuplicateWordsInTx(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,6 +65,9 @@ export async function mergeDuplicateWordsInTx(
     .where(and(eq(meanings.wordId, keepWordId), isNull(meanings.deletedAt)));
   let nextOrder = Number(maxRow?.max ?? -1) + 1;
 
+  // Sidik makna penunggu - dipakai menolak pindahan yang duplikat (#174).
+  const seenFps = new Set((await loadMeaningFingerprintById(tx, keepWordId)).values());
+
   for (const sourceId of sourceIds) {
     const sourceMeanings = await tx
       .select({ id: meanings.id })
@@ -68,7 +75,20 @@ export async function mergeDuplicateWordsInTx(
       .where(and(eq(meanings.wordId, sourceId), isNull(meanings.deletedAt)))
       .orderBy(asc(meanings.orderIndex));
 
+    // Satu query sidik per kata sumber (bukan per makna).
+    const fpById = await loadMeaningFingerprintById(tx, sourceId);
+
     for (const m of sourceMeanings) {
+      const fp = fpById.get(m.id);
+      // Sudah ada di penunggu (atau sumber sebelumnya) → soft-delete, jangan pindah.
+      if (fp && seenFps.has(fp)) {
+        await tx
+          .update(meanings)
+          .set({ deletedAt: now, deletedBy: actorId, updatedBy: actorId, updatedAt: now })
+          .where(eq(meanings.id, m.id));
+        continue;
+      }
+      if (fp) seenFps.add(fp);
       await tx
         .update(meanings)
         .set({

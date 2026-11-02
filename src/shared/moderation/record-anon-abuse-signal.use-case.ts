@@ -55,7 +55,7 @@ export async function assertAnonWriteAllowed(
   if (latest) {
     throw new ForbiddenError(
       'ANON_CONTRIBUTION_MUTED',
-      'Pengiriman dari perangkat atau jaringan ini sementara dibatasi. Coba lagi nanti.',
+      'Pengiriman dari perangkat atau jaringan ini sementara dibatasi. Coba lagi dalam beberapa saat.',
       [{ field: 'muted_until', message: latest.toISOString() }],
     );
   }

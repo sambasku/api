@@ -42,11 +42,21 @@ export const publicProfileResponseSchema = z.object({
       verifications_done: z.number().int(),
       comments_published: z.number().int(),
     }),
+    leveling: z.object({
+      points: z.number().int().nonnegative(),
+      level: z.number().int().min(1).max(15),
+      next_level_points: z.number().int().nonnegative().nullable(),
+      title_code: z.string().min(1),
+      exploration: z.number().int().nonnegative(),
+      accuracy: z.number().int().nonnegative(),
+      depth: z.number().int().nonnegative(),
+      streak_days: z.number().int().nonnegative(),
+    }),
   }),
 });
 
 export const publicActivityQuerySchema = z.object({
-  kind: z.enum(['contribution', 'comment', 'verification', 'vote']).optional(),
+  kind: z.enum(['contribution', 'correction', 'comment', 'verification', 'vote']).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: opaqueId.optional(),
 });
@@ -59,7 +69,7 @@ export const publicActivityResponseSchema = z.object({
     items: z.array(
       z.object({
         id: z.string().length(26),
-        kind: z.enum(['contribution', 'comment', 'verification', 'vote']),
+        kind: z.enum(['contribution', 'correction', 'comment', 'verification', 'vote']),
         occurred_at: z.string(),
         word_id: z.string().nullable(),
         lemma: z.string().nullable(),

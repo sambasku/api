@@ -18,6 +18,10 @@ import {
 import { contributions } from '@/shared/database/drizzle/schema';
 import { generateId } from '@/shared/utils/ulid';
 import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import {
+  loadMeaningFingerprints,
+  meaningDeduplicationFingerprint,
+} from '@/modules/word/application/utils/meaning-deduplication';
 
 /** Foto utama terhapus tanpa pengganti: foto tersisa paling lama jadi utama. */
 async function ensurePrimaryImage(wordId: string): Promise<void> {
@@ -261,9 +265,20 @@ export async function applyChangesToWord(
       orderBy: (m, { asc }) => [asc(m.orderIndex)],
     });
     const existingMap = new Map(existingMeanings.map((m) => [m.id, m]));
+    // #174: usulan "tambah makna" yang isinya sudah ada (beda kapital /
+    // sama persis) tidak ditambahkan lagi.
+    const seenFps = await loadMeaningFingerprints(db, word.id);
 
     for (const mc of changes.meanings) {
       if (mc.action === 'add' && !mc.meaningId) {
+        const fp = meaningDeduplicationFingerprint({
+          definition: mc.definition ?? '',
+          translations: mc.translations ?? [],
+          isHaveDefinition: true,
+          isHaveTranslation: (mc.translations ?? []).length > 0,
+        });
+        if (seenFps.has(fp)) continue;
+        seenFps.add(fp);
         const newMeaning = await db
           .insert(meanings)
           .values({
@@ -309,35 +324,49 @@ export async function applyChangesToWord(
           }
           if (mc.translations && mc.translations.length > 0) {
             for (const t of mc.translations) {
-              // Kata belum terverifikasi: padanan bahasa yang sama diganti di baris
-              // yang sama (restoreBaseline mengembalikan lewat id). Terverifikasi: tambah.
-              if (!word.isVerified) {
-                const current = await db.query.meaningTranslations.findFirst({
-                  where: and(
-                    eq(meaningTranslations.meaningId, mc.meaningId),
-                    eq(meaningTranslations.languageId, t.languageId),
-                    isNull(meaningTranslations.deletedAt),
-                  ),
-                });
-                if (current) {
-                  if (current.translationText !== t.translationText) {
-                    await db
-                      .update(meaningTranslations)
-                      .set({ translationText: t.translationText, updatedAt: new Date() })
-                      .where(eq(meaningTranslations.id, current.id));
-                    changesApplied++;
-                  }
-                  continue;
-                }
-              }
-              const exists = await db.query.meaningTranslations.findFirst({
+              // #191: padanan bahasa yang sama SELALU diganti di baris yang sama,
+              // kata terverifikasi maupun belum (restoreBaseline mengembalikan
+              // lewat id). Dulu kata terverifikasi menambah baris baru -> makna
+              // tampak bertambah setelah approve.
+              const current = await db.query.meaningTranslations.findFirst({
+                where: and(
+                  eq(meaningTranslations.meaningId, mc.meaningId),
+                  eq(meaningTranslations.languageId, t.languageId),
+                  isNull(meaningTranslations.deletedAt),
+                ),
+              });
+              if (current?.translationText === t.translationText) continue;
+              // ponytail: unique (meaning_id, language_id, translation_text)
+              // mencakup baris soft-deleted - teks yang pernah dipakai tidak
+              // bisa di-UPDATE ke baris lain. Kalau baris (aktif/soft-delete)
+              // sudah memegang teks baru: hidupkan baris itu, matikan baris
+              // lama. Kalau belum ada sama sekali: UPDATE/INSERT bersih.
+              const holder = await db.query.meaningTranslations.findFirst({
                 where: and(
                   eq(meaningTranslations.meaningId, mc.meaningId),
                   eq(meaningTranslations.languageId, t.languageId),
                   eq(meaningTranslations.translationText, t.translationText),
                 ),
               });
-              if (!exists) {
+              if (holder) {
+                if (holder.deletedAt) {
+                  await db
+                    .update(meaningTranslations)
+                    .set({ deletedAt: null, updatedAt: new Date() })
+                    .where(eq(meaningTranslations.id, holder.id));
+                }
+                if (current) {
+                  await db
+                    .update(meaningTranslations)
+                    .set({ deletedAt: new Date() })
+                    .where(eq(meaningTranslations.id, current.id));
+                }
+              } else if (current) {
+                await db
+                  .update(meaningTranslations)
+                  .set({ translationText: t.translationText, updatedAt: new Date() })
+                  .where(eq(meaningTranslations.id, current.id));
+              } else {
                 await db
                   .insert(meaningTranslations)
                   .values({
@@ -348,8 +377,8 @@ export async function applyChangesToWord(
                     createdBy: reviewerId,
                   })
                   .onConflictDoNothing();
-                changesApplied++;
               }
+              changesApplied++;
             }
           }
         }

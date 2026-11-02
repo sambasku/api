@@ -1,218 +1,242 @@
 import { SuggestMentionUsersUseCase } from "./modules/user/application/use-cases/suggest-mention-users.use-case";
-import { apiReference } from '@scalar/hono-api-reference';
-import { createRoute } from '@hono/zod-openapi';
-import { z } from 'zod';
-import { cors } from 'hono/cors';
-import { env } from '@/shared/config/env';
-import { sql } from 'drizzle-orm';
-import { client, db } from '@/shared/database/drizzle/client';
-import { bindCanContributeLookup } from '@/modules/word/application/utils/assert-can-contribute';
-import { lookupCanContribute } from '@/modules/word/application/utils/can-contribute-lookup';
-import { errorHandler } from '@/shared/middlewares/error-handler.middleware';
-import { requestIdMiddleware } from '@/shared/middlewares/request-id.middleware';
-import { requestDb } from '@/shared/middlewares/request-db.middleware';
+import { apiReference } from "@scalar/hono-api-reference";
+import { createRoute } from "@hono/zod-openapi";
+import { z } from "zod";
+import { cors } from "hono/cors";
+import { env } from "@/shared/config/env";
+import { sql } from "drizzle-orm";
+import { client, db } from "@/shared/database/drizzle/client";
+import { bindCanContributeLookup } from "@/modules/word/application/utils/assert-can-contribute";
+import { lookupCanContribute } from "@/modules/word/application/utils/can-contribute-lookup";
+import { errorHandler } from "@/shared/middlewares/error-handler.middleware";
+import { requestIdMiddleware } from "@/shared/middlewares/request-id.middleware";
+import { requestDb } from "@/shared/middlewares/request-db.middleware";
 import {
   createAuthenticateMiddleware,
   createOptionalAuthenticateMiddleware,
   createSoftAuthenticateMiddleware,
   scheduleAuthenticatedSideEffect,
-} from '@/shared/middlewares/authenticate.middleware';
-import { createTouchLastSeen } from '@/modules/auth/infrastructure/touch-last-seen';
-import { createRequireApprovedClientMiddleware } from '@/shared/middlewares/require-approved-client.middleware';
-import { ApiClientRepositoryImpl } from '@/modules/developer-oauth/infrastructure/api-client.repository.impl';
-import { ResolveFirstPartyClientUseCase } from '@/modules/developer-oauth/application/use-cases/resolve-first-party-client.use-case';
+} from "@/shared/middlewares/authenticate.middleware";
+import { createTouchLastSeen } from "@/modules/auth/infrastructure/touch-last-seen";
+import { createRequireApprovedClientMiddleware } from "@/shared/middlewares/require-approved-client.middleware";
+import { createRequireLegalConsentMiddleware } from "@/shared/middlewares/require-legal-consent.middleware";
+import { ApiClientRepositoryImpl } from "@/modules/developer-oauth/infrastructure/api-client.repository.impl";
+import { ResolveFirstPartyClientUseCase } from "@/modules/developer-oauth/application/use-cases/resolve-first-party-client.use-case";
 import {
   CreateAdminApiClientUseCase,
   GetAdminApiClientUseCase,
   ListAdminApiClientsUseCase,
   UpdateAdminApiClientUseCase,
-} from '@/modules/developer-oauth/application/use-cases/admin-api-client.use-cases';
-import { AdminApiClientController } from '@/modules/developer-oauth/presentation/v1/admin-api-client.controller';
-import { createAdminApiClientRoutes } from '@/modules/developer-oauth/presentation/v1/admin-api-client.routes';
-import { GithubActionsDispatchService } from '@/modules/system/infrastructure/github-actions-dispatch';
-import { DatabaseBackupLogRepositoryImpl } from '@/modules/system/infrastructure/database-backup-log.repository.impl';
-import { SupabaseHealthCheckRepositoryImpl } from '@/modules/system/infrastructure/supabase-health-check.repository.impl';
-import { TriggerSqliteBackupUseCase } from '@/modules/system/application/use-cases/trigger-sqlite-backup.use-case';
-import { ListDatabaseBackupLogsUseCase } from '@/modules/system/application/use-cases/list-database-backup-logs.use-case';
-import { ListSupabaseHealthChecksUseCase } from '@/modules/system/application/use-cases/list-supabase-health-checks.use-case';
-import { TriggerSupabaseHealthCheckUseCase } from '@/modules/system/application/use-cases/trigger-supabase-health-check.use-case';
-import { SystemDatabaseController } from '@/modules/system/presentation/v1/system-database.controller';
-import { createSystemDatabaseRoutes } from '@/modules/system/presentation/v1/system-database.routes';
-import { SystemSupabaseController } from '@/modules/system/presentation/v1/system-supabase.controller';
-import { createSystemSupabaseRoutes } from '@/modules/system/presentation/v1/system-supabase.routes';
-import { createOpenApiApp } from '@/shared/openapi/openapi-app';
-import { UserRepositoryImpl } from '@/modules/auth/infrastructure/user.repository.impl';
-import { RefreshTokenRepositoryImpl } from '@/modules/auth/infrastructure/refresh-token.repository.impl';
-import { PasswordResetTokenRepositoryImpl } from '@/modules/auth/infrastructure/password-reset-token.repository.impl';
-import { JwtTokenService } from '@/modules/auth/infrastructure/jwt-token.service';
-import { Pbkdf2PasswordService } from '@/modules/auth/infrastructure/pbkdf2-password.service';
-import { createMailer } from '@/modules/auth/infrastructure/mailer.factory';
-import { EmailQuotaRepositoryImpl, EmailUsageRepositoryImpl, EmailLogRepositoryImpl } from '@/modules/email/infrastructure/email.repository.impl';
-import { createEmailAdminRoutes } from '@/modules/email/presentation/v1/email-admin.routes';
-import { createEmailDomainVerifier } from '@/modules/auth/infrastructure/email-domain-verifier.factory';
-import { EmailVerificationOtpRepositoryImpl } from '@/modules/auth/infrastructure/email-verification-otp.repository.impl';
-import { RegisterUserUseCase } from '@/modules/auth/application/use-cases/register-user.use-case';
-import { AppSettingsRepositoryImpl } from '@/modules/legal/infrastructure/app-settings.repository.impl';
-import { LegalDocumentRepositoryImpl } from '@/modules/legal/infrastructure/legal-document.repository.impl';
-import { UserConsentRepositoryImpl } from '@/modules/legal/infrastructure/user-consent.repository.impl';
+} from "@/modules/developer-oauth/application/use-cases/admin-api-client.use-cases";
+import { AdminApiClientController } from "@/modules/developer-oauth/presentation/v1/admin-api-client.controller";
+import { createAdminApiClientRoutes } from "@/modules/developer-oauth/presentation/v1/admin-api-client.routes";
+import { GithubActionsDispatchService } from "@/modules/system/infrastructure/github-actions-dispatch";
+import { DatabaseBackupLogRepositoryImpl } from "@/modules/system/infrastructure/database-backup-log.repository.impl";
+import { SupabaseHealthCheckRepositoryImpl } from "@/modules/system/infrastructure/supabase-health-check.repository.impl";
+import { TriggerSqliteBackupUseCase } from "@/modules/system/application/use-cases/trigger-sqlite-backup.use-case";
+import { ListDatabaseBackupLogsUseCase } from "@/modules/system/application/use-cases/list-database-backup-logs.use-case";
+import { ListSupabaseHealthChecksUseCase } from "@/modules/system/application/use-cases/list-supabase-health-checks.use-case";
+import { TriggerSupabaseHealthCheckUseCase } from "@/modules/system/application/use-cases/trigger-supabase-health-check.use-case";
+import { SystemDatabaseController } from "@/modules/system/presentation/v1/system-database.controller";
+import { createSystemDatabaseRoutes } from "@/modules/system/presentation/v1/system-database.routes";
+import { SystemSupabaseController } from "@/modules/system/presentation/v1/system-supabase.controller";
+import { createSystemSupabaseRoutes } from "@/modules/system/presentation/v1/system-supabase.routes";
+import { MobileReleaseRepositoryImpl } from "@/modules/mobile-release/infrastructure/mobile-release.repository.impl";
+import {
+  GetLatestMobileReleaseUseCase,
+  ListMobileReleasesUseCase,
+  UpsertMobileReleaseUseCase,
+} from "@/modules/mobile-release/application/use-cases/mobile-release.use-cases";
+import { MobileReleaseController } from "@/modules/mobile-release/presentation/v1/mobile-release.controller";
+import {
+  createMobileReleasePublicRoutes,
+  createMobileReleaseAdminRoutes,
+} from "@/modules/mobile-release/presentation/v1/mobile-release.routes";
+import { createOpenApiApp } from "@/shared/openapi/openapi-app";
+import { UserRepositoryImpl } from "@/modules/auth/infrastructure/user.repository.impl";
+import { RefreshTokenRepositoryImpl } from "@/modules/auth/infrastructure/refresh-token.repository.impl";
+import { PasswordResetTokenRepositoryImpl } from "@/modules/auth/infrastructure/password-reset-token.repository.impl";
+import { JwtTokenService } from "@/modules/auth/infrastructure/jwt-token.service";
+import { Pbkdf2PasswordService } from "@/modules/auth/infrastructure/pbkdf2-password.service";
+import { createMailer } from "@/modules/auth/infrastructure/mailer.factory";
+import {
+  EmailQuotaRepositoryImpl,
+  EmailUsageRepositoryImpl,
+  EmailLogRepositoryImpl,
+} from "@/modules/email/infrastructure/email.repository.impl";
+import { createEmailAdminRoutes } from "@/modules/email/presentation/v1/email-admin.routes";
+import { createEmailDomainVerifier } from "@/modules/auth/infrastructure/email-domain-verifier.factory";
+import { EmailVerificationOtpRepositoryImpl } from "@/modules/auth/infrastructure/email-verification-otp.repository.impl";
+import { RegisterUserUseCase } from "@/modules/auth/application/use-cases/register-user.use-case";
+import { AppSettingsRepositoryImpl } from "@/modules/legal/infrastructure/app-settings.repository.impl";
+import { LegalDocumentRepositoryImpl } from "@/modules/legal/infrastructure/legal-document.repository.impl";
+import { UserConsentRepositoryImpl } from "@/modules/legal/infrastructure/user-consent.repository.impl";
 import {
   GetCurrentLegalUseCase,
   GetLegalDocumentUseCase,
-} from '@/modules/legal/application/use-cases/get-legal.use-cases';
+} from "@/modules/legal/application/use-cases/get-legal.use-cases";
 import {
   ArchiveLegalDocumentUseCase,
   CreateLegalDocumentDraftUseCase,
   ListAdminLegalDocumentsUseCase,
   PublishLegalDocumentUseCase,
   UpdateLegalDocumentDraftUseCase,
-} from '@/modules/legal/application/use-cases/admin-legal.use-cases';
+} from "@/modules/legal/application/use-cases/admin-legal.use-cases";
 import {
   GetAppSettingsUseCase,
   UpdateAppSettingsUseCase,
-} from '@/modules/legal/application/use-cases/app-settings.use-cases';
-import { AcceptLegalUseCase } from '@/modules/legal/application/use-cases/accept-legal.use-case';
-import { LegalController } from '@/modules/legal/presentation/v1/legal.controller';
+} from "@/modules/legal/application/use-cases/app-settings.use-cases";
+import { AcceptLegalUseCase } from "@/modules/legal/application/use-cases/accept-legal.use-case";
+import { LegalController } from "@/modules/legal/presentation/v1/legal.controller";
 import {
   createAdminLegalRoutes,
   createLegalAuthRoutes,
   createLegalPublicRoutes,
-} from '@/modules/legal/presentation/v1/legal.routes';
-import { LoginUserUseCase } from '@/modules/auth/application/use-cases/login-user.use-case';
-import { VerifyEmailUseCase } from '@/modules/auth/application/use-cases/verify-email.use-case';
-import { ResendOtpUseCase } from '@/modules/auth/application/use-cases/resend-otp.use-case';
-import { RefreshTokenUseCase } from '@/modules/auth/application/use-cases/refresh-token.use-case';
-import { LogoutUserUseCase } from '@/modules/auth/application/use-cases/logout-user.use-case';
-import { LogoutAllDevicesUseCase } from '@/modules/auth/application/use-cases/logout-all-devices.use-case';
-import { ForgotPasswordUseCase } from '@/modules/auth/application/use-cases/forgot-password.use-case';
-import { ResetPasswordUseCase } from '@/modules/auth/application/use-cases/reset-password.use-case';
-import { ChangePasswordUseCase } from '@/modules/auth/application/use-cases/change-password.use-case';
-import { SetPasswordUseCase } from '@/modules/auth/application/use-cases/set-password.use-case';
-import { AccountDeletionUseCase } from '@/modules/auth/application/use-cases/account-deletion.use-case';
-import { AccountErasureRepositoryImpl } from '@/modules/auth/infrastructure/account-erasure.repository.impl';
-import { AccountDeletionTokenRepositoryImpl } from '@/modules/auth/infrastructure/account-deletion-token.repository.impl';
-import { AuthController } from '@/modules/auth/presentation/v1/auth.controller';
-import { createAuthRoutes } from '@/modules/auth/presentation/v1/auth.routes';
-import { AuthIdentityRepositoryImpl } from '@/modules/auth/infrastructure/auth-identity.repository.impl';
-import { googleTokenVerifier } from '@/modules/auth/infrastructure/google-token-verifier.holder';
-import { facebookTokenVerifier } from '@/modules/auth/infrastructure/facebook-token-verifier.holder';
-import { githubTokenVerifier } from '@/modules/auth/infrastructure/github-token-verifier.holder';
-import { LoginWithGoogleUseCase } from '@/modules/auth/application/use-cases/login-with-google.use-case';
-import { LoginWithFacebookUseCase } from '@/modules/auth/application/use-cases/login-with-facebook.use-case';
-import { LoginWithGithubUseCase } from '@/modules/auth/application/use-cases/login-with-github.use-case';
+} from "@/modules/legal/presentation/v1/legal.routes";
+import { LoginUserUseCase } from "@/modules/auth/application/use-cases/login-user.use-case";
+import { VerifyEmailUseCase } from "@/modules/auth/application/use-cases/verify-email.use-case";
+import { ResendOtpUseCase } from "@/modules/auth/application/use-cases/resend-otp.use-case";
+import { RefreshTokenUseCase } from "@/modules/auth/application/use-cases/refresh-token.use-case";
+import { LogoutUserUseCase } from "@/modules/auth/application/use-cases/logout-user.use-case";
+import { LogoutAllDevicesUseCase } from "@/modules/auth/application/use-cases/logout-all-devices.use-case";
+import { ForgotPasswordUseCase } from "@/modules/auth/application/use-cases/forgot-password.use-case";
+import { ResetPasswordUseCase } from "@/modules/auth/application/use-cases/reset-password.use-case";
+import { ChangePasswordUseCase } from "@/modules/auth/application/use-cases/change-password.use-case";
+import { SetPasswordUseCase } from "@/modules/auth/application/use-cases/set-password.use-case";
+import { AccountDeletionUseCase } from "@/modules/auth/application/use-cases/account-deletion.use-case";
+import { AccountErasureRepositoryImpl } from "@/modules/auth/infrastructure/account-erasure.repository.impl";
+import { AccountDeletionTokenRepositoryImpl } from "@/modules/auth/infrastructure/account-deletion-token.repository.impl";
+import { AuthController } from "@/modules/auth/presentation/v1/auth.controller";
+import { createAuthRoutes } from "@/modules/auth/presentation/v1/auth.routes";
+import { AuthIdentityRepositoryImpl } from "@/modules/auth/infrastructure/auth-identity.repository.impl";
+import { googleTokenVerifier } from "@/modules/auth/infrastructure/google-token-verifier.holder";
+import { facebookTokenVerifier } from "@/modules/auth/infrastructure/facebook-token-verifier.holder";
+import { githubTokenVerifier } from "@/modules/auth/infrastructure/github-token-verifier.holder";
+import { LoginWithGoogleUseCase } from "@/modules/auth/application/use-cases/login-with-google.use-case";
+import { SocialConsentService } from "@/modules/auth/application/utils/social-consent";
+import { LoginWithFacebookUseCase } from "@/modules/auth/application/use-cases/login-with-facebook.use-case";
+import { LoginWithGithubUseCase } from "@/modules/auth/application/use-cases/login-with-github.use-case";
 import {
   LinkGoogleAccountUseCase,
   ListAuthProvidersUseCase,
   UnlinkGoogleAccountUseCase,
-} from '@/modules/auth/application/use-cases/link-google-account.use-case';
+} from "@/modules/auth/application/use-cases/link-google-account.use-case";
 import {
   LinkGithubAccountUseCase,
   UnlinkGithubAccountUseCase,
-} from '@/modules/auth/application/use-cases/link-github-account.use-case';
-import { GithubOauthCodeExchanger } from '@/modules/auth/infrastructure/github-oauth-code-exchanger';
-import { ListAdminUsersUseCase } from '@/modules/auth/application/use-cases/list-admin-users.use-case';
-import { UpdateUserRoleUseCase } from '@/modules/auth/application/use-cases/update-user-role.use-case';
-import { AdminUsersController } from '@/modules/auth/presentation/v1/admin-user.controller';
-import { SetCanContributeUseCase } from '@/modules/auth/application/use-cases/set-can-contribute.use-case';
-import { CreateAdminUserUseCase } from '@/modules/auth/application/use-cases/create-admin-user.use-case';
-import { SetUserActiveUseCase } from '@/modules/auth/application/use-cases/set-user-active.use-case';
-import { ListUserAbuseEventsUseCase } from '@/modules/auth/application/use-cases/list-user-abuse-events.use-case';
-import { createAdminUserRoutes, createContributionAccessRoutes } from '@/modules/auth/presentation/v1/admin-user.routes';
-import { WordRepositoryImpl } from '@/modules/word/infrastructure/word.repository.impl';
-import { FtsWordSearchIndex } from '@/modules/word/infrastructure/fts-word-search-index';
-import { CreateWordUseCase } from '@/modules/word/application/use-cases/create-word.use-case';
-import { UpdateWordUseCase } from '@/modules/word/application/use-cases/update-word.use-case';
-import { GetWordByIdUseCase } from '@/modules/word/application/use-cases/get-word-by-id.use-case';
-import { GetWordByLemmaUseCase } from '@/modules/word/application/use-cases/get-word-by-lemma.use-case';
-import { GetWordOfDayUseCase } from '@/modules/word/application/use-cases/get-word-of-day.use-case';
-import { SearchWordsUseCase } from '@/modules/word/application/use-cases/search-words.use-case';
-import { ListAdminWordsUseCase } from '@/modules/word/application/use-cases/list-admin-words.use-case';
-import { ListWordsUseCase } from '@/modules/word/application/use-cases/list-words.use-case';
-import { ListLatestWordsUseCase } from '@/modules/word/application/use-cases/list-latest-words.use-case';
-import { ListDuplicateWordsUseCase } from '@/modules/word/application/use-cases/list-duplicate-words.use-case';
-import { MergeDuplicateWordsUseCase } from '@/modules/word/application/use-cases/merge-duplicate-words.use-case';
-import { ListCommaSplitsUseCase } from '@/modules/word/application/use-cases/list-comma-splits.use-case';
-import { ApplyCommaSplitUseCase } from '@/modules/word/application/use-cases/apply-comma-split.use-case';
-import { MarkCommaLiteralUseCase } from '@/modules/word/application/use-cases/mark-comma-literal.use-case';
-import { VerifyWordUseCase } from '@/modules/word/application/use-cases/verify-word.use-case';
-import { PublishWordUseCase } from '@/modules/word/application/use-cases/publish-word.use-case';
-import { SoftDeleteWordUseCase } from '@/modules/word/application/use-cases/soft-delete-word.use-case';
-import { BulkWordsActionUseCase } from '@/modules/word/application/use-cases/bulk-words-action.use-case';
-import { TakedownWordUseCase } from '@/modules/word/application/use-cases/takedown-word.use-case';
-import { RestoreWordUseCase } from '@/modules/word/application/use-cases/restore-word.use-case';
-import { AddPronunciationUseCase } from '@/modules/word/application/use-cases/add-pronunciation.use-case';
-import { AddMeaningUseCase } from '@/modules/word/application/use-cases/add-meaning.use-case';
-import { ImportWordsUseCase } from '@/modules/word/application/use-cases/import-words.use-case';
-import { BatchContributeWordsUseCase } from '@/modules/word/application/use-cases/batch-contribute-words.use-case';
-import { RollbackWordImportSessionUseCase } from '@/modules/word/application/use-cases/rollback-word-import-session.use-case';
+} from "@/modules/auth/application/use-cases/link-github-account.use-case";
+import { GithubOauthCodeExchanger } from "@/modules/auth/infrastructure/github-oauth-code-exchanger";
+import { ListAdminUsersUseCase } from "@/modules/auth/application/use-cases/list-admin-users.use-case";
+import { UpdateUserRoleUseCase } from "@/modules/auth/application/use-cases/update-user-role.use-case";
+import { AdminUsersController } from "@/modules/auth/presentation/v1/admin-user.controller";
+import { SetCanContributeUseCase } from "@/modules/auth/application/use-cases/set-can-contribute.use-case";
+import { CreateAdminUserUseCase } from "@/modules/auth/application/use-cases/create-admin-user.use-case";
+import { SetUserActiveUseCase } from "@/modules/auth/application/use-cases/set-user-active.use-case";
+import { AdminVerifyEmailUseCase } from "@/modules/auth/application/use-cases/admin-verify-email.use-case";
+import { ListUserAbuseEventsUseCase } from "@/modules/auth/application/use-cases/list-user-abuse-events.use-case";
+import {
+  createAdminUserRoutes,
+  createContributionAccessRoutes,
+} from "@/modules/auth/presentation/v1/admin-user.routes";
+import { WordRepositoryImpl } from "@/modules/word/infrastructure/word.repository.impl";
+import { FtsWordSearchIndex } from "@/modules/word/infrastructure/fts-word-search-index";
+import { CreateWordUseCase } from "@/modules/word/application/use-cases/create-word.use-case";
+import { UpdateWordUseCase } from "@/modules/word/application/use-cases/update-word.use-case";
+import { GetWordByIdUseCase } from "@/modules/word/application/use-cases/get-word-by-id.use-case";
+import { GetWordByLemmaUseCase } from "@/modules/word/application/use-cases/get-word-by-lemma.use-case";
+import { GetWordOfDayUseCase } from "@/modules/word/application/use-cases/get-word-of-day.use-case";
+import { SearchWordsUseCase } from "@/modules/word/application/use-cases/search-words.use-case";
+import { ListAdminWordsUseCase } from "@/modules/word/application/use-cases/list-admin-words.use-case";
+import { ListWordsUseCase } from "@/modules/word/application/use-cases/list-words.use-case";
+import { ListLatestWordsUseCase } from "@/modules/word/application/use-cases/list-latest-words.use-case";
+import { ListDuplicateWordsUseCase } from "@/modules/word/application/use-cases/list-duplicate-words.use-case";
+import { MergeDuplicateWordsUseCase } from "@/modules/word/application/use-cases/merge-duplicate-words.use-case";
+import { ListCommaSplitsUseCase } from "@/modules/word/application/use-cases/list-comma-splits.use-case";
+import { ApplyCommaSplitUseCase } from "@/modules/word/application/use-cases/apply-comma-split.use-case";
+import { MarkCommaLiteralUseCase } from "@/modules/word/application/use-cases/mark-comma-literal.use-case";
+import { VerifyWordUseCase } from "@/modules/word/application/use-cases/verify-word.use-case";
+import { PublishWordUseCase } from "@/modules/word/application/use-cases/publish-word.use-case";
+import { SoftDeleteWordUseCase } from "@/modules/word/application/use-cases/soft-delete-word.use-case";
+import { BulkWordsActionUseCase } from "@/modules/word/application/use-cases/bulk-words-action.use-case";
+import { TakedownWordUseCase } from "@/modules/word/application/use-cases/takedown-word.use-case";
+import { RestoreWordUseCase } from "@/modules/word/application/use-cases/restore-word.use-case";
+import { AddPronunciationUseCase } from "@/modules/word/application/use-cases/add-pronunciation.use-case";
+import { AddMeaningUseCase } from "@/modules/word/application/use-cases/add-meaning.use-case";
+import { ImportWordsUseCase } from "@/modules/word/application/use-cases/import-words.use-case";
+import { BatchContributeWordsUseCase } from "@/modules/word/application/use-cases/batch-contribute-words.use-case";
+import { RollbackWordImportSessionUseCase } from "@/modules/word/application/use-cases/rollback-word-import-session.use-case";
 import {
   ClaimWordImportSessionUseCase,
   GetWordImportSessionUseCase,
   ListWordImportSessionsUseCase,
   SaveWordImportSessionUseCase,
-} from '@/modules/word/application/use-cases/word-import-session.use-cases';
-import { WordImportSessionRepositoryImpl } from '@/modules/word/infrastructure/word-import-session.repository.impl';
-import { AddWordImageUseCase } from '@/modules/word/application/use-cases/add-word-image.use-case';
-import { AddExampleUseCase } from '@/modules/word/application/use-cases/add-example.use-case';
-import { UploadPronunciationAudioUseCase } from '@/modules/word/application/use-cases/upload-pronunciation-audio.use-case';
-import { DeletePronunciationAudioUseCase } from '@/modules/word/application/use-cases/delete-pronunciation-audio.use-case';
-import { createPronunciationStorage } from '@/modules/word/infrastructure/pronunciation-storage.factory';
-import { WordController } from '@/modules/word/presentation/v1/word.controller';
+} from "@/modules/word/application/use-cases/word-import-session.use-cases";
+import { WordImportSessionRepositoryImpl } from "@/modules/word/infrastructure/word-import-session.repository.impl";
+import { AddWordImageUseCase } from "@/modules/word/application/use-cases/add-word-image.use-case";
+import { AddExampleUseCase } from "@/modules/word/application/use-cases/add-example.use-case";
+import { UploadPronunciationAudioUseCase } from "@/modules/word/application/use-cases/upload-pronunciation-audio.use-case";
+import { DeletePronunciationAudioUseCase } from "@/modules/word/application/use-cases/delete-pronunciation-audio.use-case";
+import { createPronunciationStorage } from "@/modules/word/infrastructure/pronunciation-storage.factory";
+import { WordController } from "@/modules/word/presentation/v1/word.controller";
 import {
   createAdminWordRoutes,
   createPublicWordRoutes,
-} from '@/modules/word/presentation/v1/word.routes';
+} from "@/modules/word/presentation/v1/word.routes";
 import {
   createMeaningExampleRoutes,
   createWordMediaRoutes,
-} from '@/modules/word/presentation/v1/word-media.routes';
-import { createAnonContributionRoutes } from '@/modules/word/presentation/v1/anon-contribution.routes';
-import { createWordClassRoutes } from '@/modules/word/presentation/v1/word-class.routes';
+} from "@/modules/word/presentation/v1/word-media.routes";
+import { createAnonContributionRoutes } from "@/modules/word/presentation/v1/anon-contribution.routes";
+import { createWordClassRoutes } from "@/modules/word/presentation/v1/word-class.routes";
 import {
   createWordSuggestionRoutes,
   createWordHistoryRoutes,
   createAdminSuggestionRoutes,
-} from '@/modules/word-suggestions/presentation/v1/word-suggestions.routes';
-import { WordSuggestionController } from '@/modules/word-suggestions/presentation/v1/word-suggestions.controller';
-import { WordSuggestionRepositoryImpl } from '@/modules/word-suggestions/infrastructure/word-suggestion.repository.impl';
-import { ContributionRepositoryImpl } from '@/modules/contribution/infrastructure/contribution.repository.impl';
-import { UserSkipRepository } from '@/modules/user-skip/infrastructure/user-skip.repository';
-import { ListContributionsUseCase } from '@/modules/contribution/application/use-cases/list-contributions.use-case';
-import { GetContributionDetailUseCase } from '@/modules/contribution/application/use-cases/get-contribution-detail.use-case';
-import { ReviewContributionUseCase } from '@/modules/contribution/application/use-cases/review-contribution.use-case';
-import { CorrectContributionUseCase } from '@/modules/contribution/application/use-cases/correct-contribution.use-case';
-import { ReopenContributionUseCase } from '@/modules/contribution/application/use-cases/reopen-contribution.use-case';
-import { SkipContributionUseCase } from '@/modules/contribution/application/use-cases/skip-contribution.use-case';
-import { ContributionController } from '@/modules/contribution/presentation/v1/contribution.controller';
-import { createContributionRoutes } from '@/modules/contribution/presentation/v1/contribution.routes';
-import { createMyContributionRoutes } from '@/modules/contribution/presentation/v1/my-contribution.routes';
-import { createDuplicateConfirmRoutes } from '@/modules/contribution/presentation/v1/duplicate-confirm.routes';
-import { ConfirmDuplicateMeaningUseCase } from '@/modules/contribution/application/use-cases/confirm-duplicate-meaning.use-case';
-import { MyContributionController } from '@/modules/contribution/presentation/v1/my-contribution.controller';
-import { ListMyContributionsUseCase } from '@/modules/contribution/application/use-cases/list-my-contributions.use-case';
-import { GetMyContributionDetailUseCase } from '@/modules/contribution/application/use-cases/get-my-contribution-detail.use-case';
-import { SearchMissRepositoryImpl } from '@/modules/search-miss/infrastructure/search-miss.repository.impl';
-import { ListSearchMissesUseCase } from '@/modules/search-miss/application/use-cases/list-search-misses.use-case';
-import { DismissSearchMissUseCase } from '@/modules/search-miss/application/use-cases/dismiss-search-miss.use-case';
-import { BulkDismissSearchMissUseCase } from '@/modules/search-miss/application/use-cases/bulk-dismiss-search-miss.use-case';
-import { SkipSearchMissUseCase } from '@/modules/search-miss/application/use-cases/skip-search-miss.use-case';
-import { UpdateSearchMissUseCase } from '@/modules/search-miss/application/use-cases/update-search-miss.use-case';
-import { ResolveSearchMissUseCase } from '@/modules/search-miss/application/use-cases/resolve-search-miss.use-case';
-import { SearchMissController } from '@/modules/search-miss/presentation/v1/search-miss.controller';
-import { AnnouncementRepositoryImpl } from '@/modules/announcement/infrastructure/announcement.repository.impl';
+} from "@/modules/word-suggestions/presentation/v1/word-suggestions.routes";
+import { WordSuggestionController } from "@/modules/word-suggestions/presentation/v1/word-suggestions.controller";
+import { WordSuggestionRepositoryImpl } from "@/modules/word-suggestions/infrastructure/word-suggestion.repository.impl";
+import { ContributionRepositoryImpl } from "@/modules/contribution/infrastructure/contribution.repository.impl";
+import { UserSkipRepository } from "@/modules/user-skip/infrastructure/user-skip.repository";
+import { ListContributionsUseCase } from "@/modules/contribution/application/use-cases/list-contributions.use-case";
+import { GetContributionDetailUseCase } from "@/modules/contribution/application/use-cases/get-contribution-detail.use-case";
+import { ReviewContributionUseCase } from "@/modules/contribution/application/use-cases/review-contribution.use-case";
+import { CorrectContributionUseCase } from "@/modules/contribution/application/use-cases/correct-contribution.use-case";
+import { ReopenContributionUseCase } from "@/modules/contribution/application/use-cases/reopen-contribution.use-case";
+import { SkipContributionUseCase } from "@/modules/contribution/application/use-cases/skip-contribution.use-case";
+import { ContributionController } from "@/modules/contribution/presentation/v1/contribution.controller";
+import { createContributionRoutes } from "@/modules/contribution/presentation/v1/contribution.routes";
+import { createMyContributionRoutes } from "@/modules/contribution/presentation/v1/my-contribution.routes";
+import { createDuplicateConfirmRoutes } from "@/modules/contribution/presentation/v1/duplicate-confirm.routes";
+import { ConfirmDuplicateMeaningUseCase } from "@/modules/contribution/application/use-cases/confirm-duplicate-meaning.use-case";
+import { MyContributionController } from "@/modules/contribution/presentation/v1/my-contribution.controller";
+import { ListMyContributionsUseCase } from "@/modules/contribution/application/use-cases/list-my-contributions.use-case";
+import { GetMyContributionDetailUseCase } from "@/modules/contribution/application/use-cases/get-my-contribution-detail.use-case";
+import { SearchMissRepositoryImpl } from "@/modules/search-miss/infrastructure/search-miss.repository.impl";
+import { ListSearchMissesUseCase } from "@/modules/search-miss/application/use-cases/list-search-misses.use-case";
+import { DismissSearchMissUseCase } from "@/modules/search-miss/application/use-cases/dismiss-search-miss.use-case";
+import { BulkDismissSearchMissUseCase } from "@/modules/search-miss/application/use-cases/bulk-dismiss-search-miss.use-case";
+import { SkipSearchMissUseCase } from "@/modules/search-miss/application/use-cases/skip-search-miss.use-case";
+import { UpdateSearchMissUseCase } from "@/modules/search-miss/application/use-cases/update-search-miss.use-case";
+import { ResolveSearchMissUseCase } from "@/modules/search-miss/application/use-cases/resolve-search-miss.use-case";
+import { SearchMissController } from "@/modules/search-miss/presentation/v1/search-miss.controller";
+import { AnnouncementRepositoryImpl } from "@/modules/announcement/infrastructure/announcement.repository.impl";
 import {
   CreateAnnouncementUseCase,
   UpdateAnnouncementUseCase,
   DeleteAnnouncementUseCase,
   ListPinnedAnnouncementsUseCase,
-} from '@/modules/announcement/application/use-cases/announcement.use-cases';
-import { ListAnnouncementsUseCase } from '@/modules/announcement/application/use-cases/list-announcements.use-case';
-import { AnnouncementController } from '@/modules/announcement/presentation/v1/announcement.controller';
+} from "@/modules/announcement/application/use-cases/announcement.use-cases";
+import { ListAnnouncementsUseCase } from "@/modules/announcement/application/use-cases/list-announcements.use-case";
+import { AnnouncementController } from "@/modules/announcement/presentation/v1/announcement.controller";
 import {
   createAdminSearchMissRoutes,
   createSearchMissRoutes,
-} from '@/modules/search-miss/presentation/v1/search-miss.routes';
-import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from '@/modules/announcement/presentation/v1/announcement.routes';
-import { AchievementRepositoryImpl } from '@/modules/achievement/infrastructure/achievement.repository.impl';
+} from "@/modules/search-miss/presentation/v1/search-miss.routes";
+import {
+  createAdminAnnouncementRoutes,
+  createPublicAnnouncementRoutes,
+} from "@/modules/announcement/presentation/v1/announcement.routes";
+import { AchievementRepositoryImpl } from "@/modules/achievement/infrastructure/achievement.repository.impl";
 import {
   CreateAchievementUseCase,
   DeleteAchievementUseCase,
@@ -221,59 +245,194 @@ import {
   RevokeUserAchievementUseCase,
   SetActiveBorderUseCase,
   UpdateAchievementUseCase,
-} from '@/modules/achievement/application/use-cases/achievement-admin.use-cases';
-import { ScanAchievementUseCase } from '@/modules/achievement/application/use-cases/scan-achievement.use-case';
-import { RunDueAchievementScanUseCase } from '@/modules/achievement/application/use-cases/run-due-achievement-scan.use-case';
+} from "@/modules/achievement/application/use-cases/achievement-admin.use-cases";
+import { ScanAchievementUseCase } from "@/modules/achievement/application/use-cases/scan-achievement.use-case";
+import { RunDueAchievementScanUseCase } from "@/modules/achievement/application/use-cases/run-due-achievement-scan.use-case";
+import { RunStreakReminderUseCase } from "@/modules/leveling/application/run-streak-reminder.use-case";
 import {
   ListActiveAchievementsUseCase,
   ListMyAchievementsUseCase,
   ListUserAchievementsUseCase,
-} from '@/modules/achievement/application/use-cases/list-achievements.use-case';
-import { AchievementController } from '@/modules/achievement/presentation/v1/achievement.controller';
+} from "@/modules/achievement/application/use-cases/list-achievements.use-case";
+import { AchievementController } from "@/modules/achievement/presentation/v1/achievement.controller";
 import {
   createAdminAchievementRoutes,
   createMyAchievementRoutes,
   createMyProfileBorderRoutes,
   createPublicAchievementRoutes,
-} from '@/modules/achievement/presentation/v1/achievement.routes';
-import { PlaceRepositoryImpl } from '@/modules/place/infrastructure/place.repository.impl';
+} from "@/modules/achievement/presentation/v1/achievement.routes";
+import { PlaceRepositoryImpl } from "@/modules/place/infrastructure/place.repository.impl";
 import {
   AppendPlaceImagesUseCase,
+  HidePlaceImageUseCase,
   CreatePlaceUseCase,
   DeletePlaceUseCase,
   GetPlaceBySlugUseCase,
+  GetPlaceViewReportUseCase,
   ListPlaceImagesUseCase,
+  ListPlaceViewsUseCase,
   ListPlacesUseCase,
+  RecordPlaceViewUseCase,
   UpdatePlaceUseCase,
-} from '@/modules/place/application/use-cases/place.use-cases';
-import { PlaceController } from '@/modules/place/presentation/v1/place.controller';
+} from "@/modules/place/application/use-cases/place.use-cases";
+import { PlaceController } from "@/modules/place/presentation/v1/place.controller";
 import {
   createAdminPlaceRoutes,
   createPublicPlaceRoutes,
-} from '@/modules/place/presentation/v1/place.routes';
-import { PlaceContributionRepositoryImpl } from '@/modules/place-contribution/infrastructure/place-contribution.repository.impl';
-import { PlaceContributionUseCases } from '@/modules/place-contribution/application/place-contribution.use-cases';
-import { PlaceContributionController } from '@/modules/place-contribution/presentation/v1/place-contribution.controller';
+} from "@/modules/place/presentation/v1/place.routes";
+import { PlaceContributionRepositoryImpl } from "@/modules/place-contribution/infrastructure/place-contribution.repository.impl";
+import { PlaceContributionUseCases } from "@/modules/place-contribution/application/place-contribution.use-cases";
+import { PlaceContributionController } from "@/modules/place-contribution/presentation/v1/place-contribution.controller";
 import {
   createAdminPlaceContributionRoutes,
   createPlaceContributionRoutes,
-} from '@/modules/place-contribution/presentation/v1/place-contribution.routes';
-import { PlaceCategoryRepositoryImpl } from '@/modules/place-category/infrastructure/place-category.repository.impl';
+} from "@/modules/place-contribution/presentation/v1/place-contribution.routes";
+import { EventRepositoryImpl } from "@/modules/event/infrastructure/event.repository.impl";
+import {
+  CreateEventUseCase,
+  DeleteEventUseCase,
+  GetEventBySlugUseCase,
+  ListEventCategoriesUseCase,
+  ListEventsUseCase,
+  SetEventCancelledUseCase,
+  UpdateEventUseCase,
+} from "@/modules/event/application/use-cases/event.use-cases";
+import { EventController } from "@/modules/event/presentation/v1/event.controller";
+import {
+  createAdminEventRoutes,
+  createPublicEventRoutes,
+} from "@/modules/event/presentation/v1/event.routes";
+import { EventContributionRepositoryImpl } from "@/modules/event-contribution/infrastructure/event-contribution.repository.impl";
+import { EventContributionUseCases } from "@/modules/event-contribution/application/event-contribution.use-cases";
+import { EventContributionController } from "@/modules/event-contribution/presentation/v1/event-contribution.controller";
+import {
+  createAdminEventContributionRoutes,
+  createEventContributionRoutes,
+} from "@/modules/event-contribution/presentation/v1/event-contribution.routes";
+// Fitur Usaha (PRD usaha): direktori usaha + usulan + klaim + laporan.
+import { UsahaCategoryRepositoryImpl } from "@/modules/usaha-category/infrastructure/usaha-category.repository.impl";
+import {
+  CreateUsahaCategoryUseCase,
+  DeleteUsahaCategoryUseCase,
+  GetUsahaCategoryUseCase,
+  ListUsahaCategoriesUseCase as ListUsahaCategoryCatalogUseCase,
+  UpdateUsahaCategoryUseCase,
+} from "@/modules/usaha-category/application/use-cases/usaha-category.use-cases";
+import { UsahaCategoryController } from "@/modules/usaha-category/presentation/v1/usaha-category.controller";
+import {
+  createAdminUsahaCategoryRoutes,
+  createPublicUsahaCategoryRoutes,
+} from "@/modules/usaha-category/presentation/v1/usaha-category.routes";
+import { UsahaRepositoryImpl } from "@/modules/usaha/infrastructure/usaha.repository.impl";
+import {
+  CreateUsahaUseCase,
+  DeleteUsahaUseCase,
+  FindUsahaDuplicatesUseCase,
+  GetUsahaBySlugUseCase,
+  ListUsahaCategoriesUseCase,
+  ListUsahasUseCase,
+  RestoreUsahaUseCase,
+  RestrictUsahaUseCase,
+  UniqueUsahaSlugUseCase,
+  UpdateUsahaUseCase,
+} from "@/modules/usaha/application/use-cases/usaha.use-cases";
+import { ListMyUsahaUseCase } from "@/modules/usaha/application/use-cases/list-my-usaha.use-case";
+import { UsahaController } from "@/modules/usaha/presentation/v1/usaha.controller";
+import {
+  createAdminUsahaRoutes,
+  createPublicUsahaRoutes,
+} from "@/modules/usaha/presentation/v1/usaha.routes";
+import { createUsahaMineRoutes } from "@/modules/usaha/presentation/v1/usaha-mine.routes";
+import { UsahaContributionRepositoryImpl } from "@/modules/usaha-contribution/infrastructure/usaha-contribution.repository.impl";
+import { UsahaContributionUseCases } from "@/modules/usaha-contribution/application/usaha-contribution.use-cases";
+import { UsahaContributionController } from "@/modules/usaha-contribution/presentation/v1/usaha-contribution.controller";
+import {
+  createAdminUsahaContributionRoutes,
+  createUsahaContributionRoutes,
+} from "@/modules/usaha-contribution/presentation/v1/usaha-contribution.routes";
+import { UsahaClaimRepositoryImpl } from "@/modules/usaha-claim/infrastructure/usaha-claim.repository.impl";
+import { UsahaClaimUseCases } from "@/modules/usaha-claim/application/usaha-claim.use-cases";
+import { UsahaClaimController } from "@/modules/usaha-claim/presentation/v1/usaha-claim.controller";
+import {
+  createAdminUsahaClaimRoutes,
+  createUsahaClaimRoutes,
+} from "@/modules/usaha-claim/presentation/v1/usaha-claim.routes";
+import { UsahaReportRepositoryImpl } from "@/modules/usaha-report/infrastructure/usaha-report.repository.impl";
+import { UsahaReportUseCases } from "@/modules/usaha-report/application/usaha-report.use-cases";
+import { UsahaReportController } from "@/modules/usaha-report/presentation/v1/usaha-report.controller";
+import {
+  createAdminUsahaReportRoutes,
+  createUsahaReportRoutes,
+} from "@/modules/usaha-report/presentation/v1/usaha-report.routes";
+// Fitur Kuliner (PRD kuliner): jelajah kuliner + tempat + usulan + klaim + laporan.
+import { CulinaryCategoryRepositoryImpl } from "@/modules/culinary-category/infrastructure/culinary-category.repository.impl";
+import {
+  CreateCulinaryCategoryUseCase,
+  DeleteCulinaryCategoryUseCase,
+  GetCulinaryCategoryUseCase,
+  ListKulinerCategoriesUseCase as ListCulinaryCategoryCatalogUseCase,
+  UpdateCulinaryCategoryUseCase,
+} from "@/modules/culinary-category/application/use-cases/culinary-category.use-cases";
+import { CulinaryCategoryController } from "@/modules/culinary-category/presentation/v1/culinary-category.controller";
+import {
+  createAdminCulinaryCategoryRoutes,
+  createPublicCulinaryCategoryRoutes,
+} from "@/modules/culinary-category/presentation/v1/culinary-category.routes";
+import { CulinaryRepositoryImpl } from "@/modules/culinary/infrastructure/culinary.repository.impl";
+import {
+  DeleteCulinaryUseCase,
+  FindCulinaryDuplicatesUseCase,
+  GetCuisineBySlugUseCase,
+  GetCulinaryPlaceBySlugUseCase,
+  ListCuisinesUseCase,
+  ListCulinaryCategoriesUseCase,
+  ListCulinaryPlacesUseCase,
+  RestoreCulinaryUseCase,
+  RestrictCulinaryUseCase,
+  UniqueCulinarySlugUseCase,
+} from "@/modules/culinary/application/use-cases/culinary.use-cases";
+import { CulinaryController } from "@/modules/culinary/presentation/v1/culinary.controller";
+import {
+  createAdminCulinaryRoutes,
+  createPublicCulinaryRoutes,
+} from "@/modules/culinary/presentation/v1/culinary.routes";
+import { CulinaryContributionRepositoryImpl } from "@/modules/culinary-contribution/infrastructure/culinary-contribution.repository.impl";
+import { CulinaryContributionUseCases } from "@/modules/culinary-contribution/application/culinary-contribution.use-cases";
+import { CulinaryContributionController } from "@/modules/culinary-contribution/presentation/v1/culinary-contribution.controller";
+import {
+  createAdminCulinaryContributionRoutes,
+  createCulinaryContributionRoutes,
+} from "@/modules/culinary-contribution/presentation/v1/culinary-contribution.routes";
+import { CulinaryClaimRepositoryImpl } from "@/modules/culinary-claim/infrastructure/culinary-claim.repository.impl";
+import { CulinaryClaimUseCases } from "@/modules/culinary-claim/application/culinary-claim.use-cases";
+import { CulinaryClaimController } from "@/modules/culinary-claim/presentation/v1/culinary-claim.controller";
+import {
+  createAdminCulinaryClaimRoutes,
+  createCulinaryClaimRoutes,
+} from "@/modules/culinary-claim/presentation/v1/culinary-claim.routes";
+import { CulinaryReportRepositoryImpl } from "@/modules/culinary-report/infrastructure/culinary-report.repository.impl";
+import { CulinaryReportUseCases } from "@/modules/culinary-report/application/culinary-report.use-cases";
+import { CulinaryReportController } from "@/modules/culinary-report/presentation/v1/culinary-report.controller";
+import {
+  createAdminCulinaryReportRoutes,
+  createCulinaryReportRoutes,
+} from "@/modules/culinary-report/presentation/v1/culinary-report.routes";
+import { PlaceCategoryRepositoryImpl } from "@/modules/place-category/infrastructure/place-category.repository.impl";
 import {
   CreatePlaceCategoryUseCase,
   DeletePlaceCategoryUseCase,
   GetPlaceCategoryUseCase,
   ListPlaceCategoriesUseCase,
   UpdatePlaceCategoryUseCase,
-} from '@/modules/place-category/application/use-cases/place-category.use-cases';
-import { PlaceCategoryController } from '@/modules/place-category/presentation/v1/place-category.controller';
+} from "@/modules/place-category/application/use-cases/place-category.use-cases";
+import { PlaceCategoryController } from "@/modules/place-category/presentation/v1/place-category.controller";
 import {
   createAdminPlaceCategoryRoutes,
   createPublicPlaceCategoryRoutes,
-} from '@/modules/place-category/presentation/v1/place-category.routes';
-import { RegionRepositoryImpl } from '@/modules/region/infrastructure/region.repository.impl';
+} from "@/modules/place-category/presentation/v1/place-category.routes";
+import { RegionRepositoryImpl } from "@/modules/region/infrastructure/region.repository.impl";
 // PRD relasi-lemma: kelompok makna (word_groups) - kelola + tampil publik.
-import { WordGroupRepositoryImpl } from '@/modules/word-group/infrastructure/word-group.repository.impl';
+import { WordGroupRepositoryImpl } from "@/modules/word-group/infrastructure/word-group.repository.impl";
 import {
   AddWordGroupMemberUseCase,
   CreateWordGroupUseCase,
@@ -282,225 +441,268 @@ import {
   ListWordGroupsUseCase,
   RemoveWordGroupMemberUseCase,
   UpdateWordGroupUseCase,
-} from '@/modules/word-group/application/use-cases/word-group.use-cases';
-import { WordGroupController } from '@/modules/word-group/presentation/v1/word-group.controller';
-import { createWordGroupRoutes } from '@/modules/word-group/presentation/v1/word-group.routes';
+} from "@/modules/word-group/application/use-cases/word-group.use-cases";
+import { WordGroupController } from "@/modules/word-group/presentation/v1/word-group.controller";
+import { createWordGroupRoutes } from "@/modules/word-group/presentation/v1/word-group.routes";
 import {
   CreateRegionUseCase,
   DeleteRegionUseCase,
   GetRegionByIdUseCase,
   ListRegionsUseCase,
   UpdateRegionUseCase,
-} from '@/modules/region/application/use-cases/region.use-cases';
-import { RegionController } from '@/modules/region/presentation/v1/region.controller';
+} from "@/modules/region/application/use-cases/region.use-cases";
+import { RegionController } from "@/modules/region/presentation/v1/region.controller";
 import {
   createAdminRegionRoutes,
   createPublicRegionRoutes,
-} from '@/modules/region/presentation/v1/region.routes';
-import { LanguageRepositoryImpl } from '@/modules/language/infrastructure/language.repository.impl';
-import { ListLanguagesUseCase } from '@/modules/language/application/use-cases/list-languages.use-case';
-import { ListDialectsUseCase } from '@/modules/language/application/use-cases/list-dialects.use-case';
-import { LanguageController } from '@/modules/language/presentation/v1/language.controller';
+} from "@/modules/region/presentation/v1/region.routes";
+import { LanguageRepositoryImpl } from "@/modules/language/infrastructure/language.repository.impl";
+import { ListLanguagesUseCase } from "@/modules/language/application/use-cases/list-languages.use-case";
+import { ListDialectsUseCase } from "@/modules/language/application/use-cases/list-dialects.use-case";
+import { LanguageController } from "@/modules/language/presentation/v1/language.controller";
 import {
   createDialectRoutes,
   createLanguageRoutes,
-} from '@/modules/language/presentation/v1/language.routes';
-import { CategoryRepositoryImpl } from '@/modules/category/infrastructure/category.repository.impl';
-import { ListCategoriesUseCase } from '@/modules/category/application/use-cases/list-categories.use-case';
+} from "@/modules/language/presentation/v1/language.routes";
+import { CategoryRepositoryImpl } from "@/modules/category/infrastructure/category.repository.impl";
+import { ListCategoriesUseCase } from "@/modules/category/application/use-cases/list-categories.use-case";
 import {
   CreateCategoryUseCase,
   UpdateCategoryUseCase,
   DeleteCategoryUseCase,
-} from '@/modules/category/application/use-cases/category.use-cases';
-import { CategoryController } from '@/modules/category/presentation/v1/category.controller';
-import { createCategoryRoutes } from '@/modules/category/presentation/v1/category.routes';
-import { AuditLogRepositoryImpl } from '@/modules/audit/infrastructure/audit-log.repository.impl';
-import { ListAuditLogsUseCase } from '@/modules/audit/application/use-cases/list-audit-logs.use-case';
-import { AuditController } from '@/modules/audit/presentation/v1/audit.controller';
-import { createAuditRoutes } from '@/modules/audit/presentation/v1/audit.routes';
-import { AbuseController } from '@/modules/abuse/presentation/v1/abuse.controller';
-import { createAbuseRoutes } from '@/modules/abuse/presentation/v1/abuse.routes';
-import { LiftAbuseMuteUseCase } from '@/modules/abuse/application/use-cases/lift-abuse-mute.use-case';
-import { createImageStorage } from '@/modules/image/infrastructure/image-storage.factory';
-import { CreateUploadCredentialsUseCase } from '@/modules/image/application/use-cases/create-upload-credentials.use-case';
-import { ImageController } from '@/modules/image/presentation/v1/image.controller';
-import { createImageRoutes } from '@/modules/image/presentation/v1/image.routes';
-import { WordReportRepositoryImpl } from '@/modules/word-report/infrastructure/word-report.repository.impl';
-import { CreateWordReportUseCase } from '@/modules/word-report/application/use-cases/create-word-report.use-case';
-import { ListWordReportsUseCase } from '@/modules/word-report/application/use-cases/list-word-reports.use-case';
+} from "@/modules/category/application/use-cases/category.use-cases";
+import { CategoryController } from "@/modules/category/presentation/v1/category.controller";
+import { createCategoryRoutes } from "@/modules/category/presentation/v1/category.routes";
+import { AuditLogRepositoryImpl } from "@/modules/audit/infrastructure/audit-log.repository.impl";
+import { ListAuditLogsUseCase } from "@/modules/audit/application/use-cases/list-audit-logs.use-case";
+import { AuditController } from "@/modules/audit/presentation/v1/audit.controller";
+import { createAuditRoutes } from "@/modules/audit/presentation/v1/audit.routes";
+import { AbuseController } from "@/modules/abuse/presentation/v1/abuse.controller";
+import { createAbuseRoutes } from "@/modules/abuse/presentation/v1/abuse.routes";
+import { LiftAbuseMuteUseCase } from "@/modules/abuse/application/use-cases/lift-abuse-mute.use-case";
+import { createImageStorage } from "@/modules/image/infrastructure/image-storage.factory";
+import { CreateUploadCredentialsUseCase } from "@/modules/image/application/use-cases/create-upload-credentials.use-case";
+import { ImageController } from "@/modules/image/presentation/v1/image.controller";
+import { createImageRoutes } from "@/modules/image/presentation/v1/image.routes";
+import { WordReportRepositoryImpl } from "@/modules/word-report/infrastructure/word-report.repository.impl";
+import { CreateWordReportUseCase } from "@/modules/word-report/application/use-cases/create-word-report.use-case";
+import { ListWordReportsUseCase } from "@/modules/word-report/application/use-cases/list-word-reports.use-case";
 import {
   ResolveWordReportUseCase,
   TakedownWordReportUseCase,
   FlagViolentImageReportUseCase,
-} from '@/modules/word-report/application/use-cases/resolve-word-report.use-case';
-import { SetWordImageContentWarningsUseCase } from '@/modules/word/application/use-cases/set-word-image-content-warnings.use-case';
-import { WordReportController } from '@/modules/word-report/presentation/v1/word-report.controller';
-import { createWordReportRoutes } from '@/modules/word-report/presentation/v1/word-report.routes';
-import { createAdminWordReportRoutes } from '@/modules/word-report/presentation/v1/admin-word-report.routes';
-import { BugReportRepositoryImpl } from '@/modules/bug-report/infrastructure/bug-report.repository.impl';
-import { CreateBugReportUseCase } from '@/modules/bug-report/application/use-cases/create-bug-report.use-case';
-import { ListBugReportsUseCase } from '@/modules/bug-report/application/use-cases/list-bug-reports.use-case';
-import { ResolveBugReportUseCase } from '@/modules/bug-report/application/use-cases/resolve-bug-report.use-case';
-import { BugReportController } from '@/modules/bug-report/presentation/v1/bug-report.controller';
-import { createBugReportRoutes } from '@/modules/bug-report/presentation/v1/bug-report.routes';
-import { createCategorySuggestionModule } from '@/modules/category-suggestion/factories/category-suggestion.factory';
+} from "@/modules/word-report/application/use-cases/resolve-word-report.use-case";
+import { SetWordImageContentWarningsUseCase } from "@/modules/word/application/use-cases/set-word-image-content-warnings.use-case";
+import { WordReportController } from "@/modules/word-report/presentation/v1/word-report.controller";
+import { createWordReportRoutes } from "@/modules/word-report/presentation/v1/word-report.routes";
+import { createAdminWordReportRoutes } from "@/modules/word-report/presentation/v1/admin-word-report.routes";
+import { BugReportRepositoryImpl } from "@/modules/bug-report/infrastructure/bug-report.repository.impl";
+import { CreateBugReportUseCase } from "@/modules/bug-report/application/use-cases/create-bug-report.use-case";
+import { ListBugReportsUseCase } from "@/modules/bug-report/application/use-cases/list-bug-reports.use-case";
+import { ResolveBugReportUseCase } from "@/modules/bug-report/application/use-cases/resolve-bug-report.use-case";
+import { BugReportController } from "@/modules/bug-report/presentation/v1/bug-report.controller";
+import { createBugReportRoutes } from "@/modules/bug-report/presentation/v1/bug-report.routes";
+import { createCategorySuggestionModule } from "@/modules/category-suggestion/factories/category-suggestion.factory";
 import {
   createAdminCategorySuggestionRoutes,
   createCategorySuggestionRoutes,
-} from '@/modules/category-suggestion/presentation/v1/category-suggestion.routes';
-import { createAdminBugReportRoutes } from '@/modules/bug-report/presentation/v1/admin-bug-report.routes';
-import { DiscussionRepositoryImpl } from '@/modules/discussion/infrastructure/discussion.repository.impl';
-import { CreateDiscussionUseCase } from '@/modules/discussion/application/use-cases/create-discussion.use-case';
-import { ListPublishedDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-published-discussions.use-case';
-import { ListMyDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-my-discussions.use-case';
-import { GetDiscussionDetailUseCase } from '@/modules/discussion/application/use-cases/get-discussion-detail.use-case';
-import { ListAdminDiscussionsUseCase } from '@/modules/discussion/application/use-cases/list-admin-discussions.use-case';
-import { ApproveDiscussionUseCase } from '@/modules/discussion/application/use-cases/approve-discussion.use-case';
-import { RejectDiscussionUseCase } from '@/modules/discussion/application/use-cases/reject-discussion.use-case';
-import { TakedownDiscussionUseCase } from '@/modules/discussion/application/use-cases/takedown-discussion.use-case';
-import { CreateDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/create-discussion-reply.use-case';
-import { CreateDiscussionReplyAudioUseCase } from '@/modules/discussion/application/use-cases/create-discussion-reply-audio.use-case';
-import { AttachDiscussionAudioUseCase } from '@/modules/discussion/application/use-cases/attach-discussion-audio.use-case';
-import { DeleteDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/delete-discussion-reply.use-case';
-import { PinDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/pin-discussion-reply.use-case';
-import { TakedownDiscussionReplyUseCase } from '@/modules/discussion/application/use-cases/takedown-discussion-reply.use-case';
-import { DiscussionController } from '@/modules/discussion/presentation/v1/discussion.controller';
-import { createDiscussionRoutes } from '@/modules/discussion/presentation/v1/discussion.routes';
-import { createAdminDiscussionRoutes } from '@/modules/discussion/presentation/v1/admin-discussion.routes';
-import { DashboardController } from '@/modules/dashboard/presentation/v1/dashboard.controller';
-import { createDashboardRoutes } from '@/modules/dashboard/presentation/v1/dashboard.routes';
-import { GetDashboardStatsUseCase } from '@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case';
-import { DashboardRepositoryImpl } from '@/modules/dashboard/infrastructure/dashboard.repository.impl';
-import { WebAnalyticsController } from '@/modules/web-analytics/presentation/v1/web-analytics.controller';
-import { createWebAnalyticsRoutes } from '@/modules/web-analytics/presentation/v1/web-analytics.routes';
-import { GetWebAnalyticsUseCase } from '@/modules/web-analytics/application/use-cases/get-web-analytics.use-case';
-import { createWebAnalyticsProviders } from '@/modules/web-analytics/infrastructure/web-analytics-providers.factory';
-import { PlayAnalyticsController } from '@/modules/play-analytics/presentation/v1/play-analytics.controller';
-import { createPlayAnalyticsRoutes } from '@/modules/play-analytics/presentation/v1/play-analytics.routes';
-import { GetPlayAnalyticsUseCase } from '@/modules/play-analytics/application/use-cases/get-play-analytics.use-case';
-import { createPlayAnalyticsProviders } from '@/modules/play-analytics/infrastructure/play-analytics-providers.factory';
-import { FcmAnalyticsController } from '@/modules/fcm-analytics/presentation/v1/fcm-analytics.controller';
-import { createFcmAnalyticsRoutes } from '@/modules/fcm-analytics/presentation/v1/fcm-analytics.routes';
-import { GetFcmAnalyticsUseCase } from '@/modules/fcm-analytics/application/use-cases/get-fcm-analytics.use-case';
-import { createFcmAnalyticsProviders } from '@/modules/fcm-analytics/infrastructure/fcm-analytics-providers.factory';
-import { MobileAnalyticsController } from '@/modules/mobile-analytics/presentation/v1/mobile-analytics.controller';
-import { createMobileAnalyticsRoutes } from '@/modules/mobile-analytics/presentation/v1/mobile-analytics.routes';
-import { GetMobileAnalyticsUseCase } from '@/modules/mobile-analytics/application/use-cases/get-mobile-analytics.use-case';
-import { createMobileAnalyticsProvider } from '@/modules/mobile-analytics/infrastructure/mobile-analytics-providers.factory';
-import { VoteRepositoryImpl } from '@/modules/vote/infrastructure/vote.repository.impl';
-import { ToggleVoteUseCase } from '@/modules/vote/application/use-cases/toggle-vote.use-case';
-import { GetVoteCountsUseCase } from '@/modules/vote/application/use-cases/get-vote-counts.use-case';
-import { GetMyVotesUseCase } from '@/modules/vote/application/use-cases/get-my-votes.use-case';
-import { ListMyVoteHistoryUseCase } from '@/modules/vote/application/use-cases/list-my-vote-history.use-case';
-import { GetVoteDeckUseCase } from '@/modules/vote/application/use-cases/get-vote-deck.use-case';
-import { SkipVoteDeckWordUseCase } from '@/modules/vote/application/use-cases/skip-vote-deck-word.use-case';
-import { VoteController } from '@/modules/vote/presentation/v1/vote.controller';
-import { createVoteRoutes } from '@/modules/vote/presentation/v1/vote.routes';
-import { AdminVotesController } from '@/modules/vote/presentation/v1/admin-vote.controller';
-import { createAdminVoteRoutes } from '@/modules/vote/presentation/v1/admin-vote.routes';
-import { ListAdminVotesUseCase } from '@/modules/vote/application/use-cases/list-admin-votes.use-case';
-import { DeleteAdminVoteUseCase } from '@/modules/vote/application/use-cases/delete-admin-vote.use-case';
-import { ResetTargetVotesUseCase } from '@/modules/vote/application/use-cases/reset-target-votes.use-case';
-import { ResetVotesByClientUseCase } from '@/modules/vote/application/use-cases/reset-votes-by-client.use-case';
-import { GetTopTargetVotesUseCase } from '@/modules/vote/application/use-cases/get-top-target-votes.use-case';
-import { CommentRepositoryImpl } from '@/modules/comment/infrastructure/comment.repository.impl';
-import { CreateCommentUseCase } from '@/modules/comment/application/use-cases/create-comment.use-case';
-import { CreateCommentAudioUseCase } from '@/modules/comment/application/use-cases/create-comment-audio.use-case';
-import { ListWordCommentsUseCase } from '@/modules/comment/application/use-cases/list-word-comments.use-case';
-import { DeleteCommentUseCase } from '@/modules/comment/application/use-cases/delete-comment.use-case';
-import { ListAdminCommentsUseCase } from '@/modules/comment/application/use-cases/list-admin-comments.use-case';
-import { ListMyCommentsUseCase } from '@/modules/comment/application/use-cases/list-my-comments.use-case';
-import { TakedownCommentUseCase } from '@/modules/comment/application/use-cases/takedown-comment.use-case';
-import { UncensorCommentUseCase } from '@/modules/comment/application/use-cases/uncensor-comment.use-case';
-import { CommentController } from '@/modules/comment/presentation/v1/comment.controller';
-import { createCommentRoutes, createWordCommentRoutes } from '@/modules/comment/presentation/v1/comment.routes';
-import { createAdminCommentRoutes } from '@/modules/comment/presentation/v1/admin-comment.routes';
-import { CommentBlocklistRepositoryImpl } from '@/modules/comment-blocklist/infrastructure/comment-blocklist.repository.impl';
-import { CreateBlocklistWordUseCase } from '@/modules/comment-blocklist/application/use-cases/create-blocklist-word.use-case';
-import { BulkCreateBlocklistWordsUseCase } from '@/modules/comment-blocklist/application/use-cases/bulk-create-blocklist-words.use-case';
-import { ListBlocklistWordsUseCase } from '@/modules/comment-blocklist/application/use-cases/list-blocklist-words.use-case';
-import { DeleteBlocklistWordUseCase } from '@/modules/comment-blocklist/application/use-cases/delete-blocklist-word.use-case';
-import { CommentBlocklistController } from '@/modules/comment-blocklist/presentation/v1/comment-blocklist.controller';
-import { createAdminCommentBlocklistRoutes } from '@/modules/comment-blocklist/presentation/v1/admin-comment-blocklist.routes';
-import { BookmarkRepositoryImpl } from '@/modules/bookmark/infrastructure/bookmark.repository.impl';
-import { ToggleBookmarkUseCase } from '@/modules/bookmark/application/use-cases/toggle-bookmark.use-case';
-import { GetMyBookmarksUseCase } from '@/modules/bookmark/application/use-cases/get-my-bookmarks.use-case';
-import { BookmarkController } from '@/modules/bookmark/presentation/v1/bookmark.controller';
-import { createBookmarkRoutes } from '@/modules/bookmark/presentation/v1/bookmark.routes';
-import { PublicUserRepositoryImpl } from '@/modules/user/infrastructure/public-user.repository.impl';
-import { GetPublicProfileUseCase } from '@/modules/user/application/use-cases/get-public-profile.use-case';
-import { GetPublicActivityUseCase } from '@/modules/user/application/use-cases/get-public-activity.use-case';
-import { UploadAvatarUseCase } from '@/modules/user/application/use-cases/upload-avatar.use-case';
-import { DeleteAvatarUseCase } from '@/modules/user/application/use-cases/delete-avatar.use-case';
-import { UserController } from '@/modules/user/presentation/v1/user.controller';
+} from "@/modules/category-suggestion/presentation/v1/category-suggestion.routes";
+import { createAdminBugReportRoutes } from "@/modules/bug-report/presentation/v1/admin-bug-report.routes";
+import { DiscussionRepositoryImpl } from "@/modules/discussion/infrastructure/discussion.repository.impl";
+import { CreateDiscussionUseCase } from "@/modules/discussion/application/use-cases/create-discussion.use-case";
+import { ListPublishedDiscussionsUseCase } from "@/modules/discussion/application/use-cases/list-published-discussions.use-case";
+import { ListMyDiscussionsUseCase } from "@/modules/discussion/application/use-cases/list-my-discussions.use-case";
+import { GetDiscussionDetailUseCase } from "@/modules/discussion/application/use-cases/get-discussion-detail.use-case";
+import { ListAdminDiscussionsUseCase } from "@/modules/discussion/application/use-cases/list-admin-discussions.use-case";
+import { ApproveDiscussionUseCase } from "@/modules/discussion/application/use-cases/approve-discussion.use-case";
+import { RejectDiscussionUseCase } from "@/modules/discussion/application/use-cases/reject-discussion.use-case";
+import { TakedownDiscussionUseCase } from "@/modules/discussion/application/use-cases/takedown-discussion.use-case";
+import { CreateDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/create-discussion-reply.use-case";
+import { CreateDiscussionReplyAudioUseCase } from "@/modules/discussion/application/use-cases/create-discussion-reply-audio.use-case";
+import { AttachDiscussionAudioUseCase } from "@/modules/discussion/application/use-cases/attach-discussion-audio.use-case";
+import { DeleteDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/delete-discussion-reply.use-case";
+import { DeleteDiscussionUseCase } from "@/modules/discussion/application/use-cases/delete-discussion.use-case";
+import { UpdateDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/update-discussion-reply.use-case";
+import { UpdateDiscussionUseCase } from "@/modules/discussion/application/use-cases/update-discussion.use-case";
+import { GetDiscussionReplyEditHistoryUseCase } from "@/modules/discussion/application/use-cases/get-discussion-reply-edit-history.use-case";
+import { GetDiscussionEditHistoryUseCase } from "@/modules/discussion/application/use-cases/get-discussion-edit-history.use-case";
+import { PinDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/pin-discussion-reply.use-case";
+import { TakedownDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/takedown-discussion-reply.use-case";
+import { DiscussionController } from "@/modules/discussion/presentation/v1/discussion.controller";
+import { createDiscussionRoutes } from "@/modules/discussion/presentation/v1/discussion.routes";
+import { createAdminDiscussionRoutes } from "@/modules/discussion/presentation/v1/admin-discussion.routes";
+import { PantunRepositoryImpl } from "@/modules/pantun/infrastructure/pantun.repository.impl";
+import { PantunReportRepositoryImpl } from "@/modules/pantun-report/infrastructure/pantun-report.repository.impl";
+import { SubmitPantunReportUseCase } from "@/modules/pantun-report/application/use-cases/submit-pantun-report.use-case";
+import { ListPantunReportsUseCase } from "@/modules/pantun-report/application/use-cases/list-pantun-reports.use-case";
+import { ResolvePantunReportUseCase } from "@/modules/pantun-report/application/use-cases/resolve-pantun-report.use-case";
+import { PantunReportController } from "@/modules/pantun-report/presentation/v1/pantun-report.controller";
+import {
+  createPantunReportRoutes,
+  createAdminPantunReportRoutes,
+} from "@/modules/pantun-report/presentation/v1/pantun-report.routes";
+import { CreatePantunUseCase } from "@/modules/pantun/application/use-cases/create-pantun.use-case";
+import { CreatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply.use-case";
+import { ListPublishedPantunsUseCase } from "@/modules/pantun/application/use-cases/list-published-pantuns.use-case";
+import { GetPantunDetailUseCase } from "@/modules/pantun/application/use-cases/get-pantun-detail.use-case";
+import { TakedownPantunUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun.use-case";
+import { TakedownPantunReplyUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun-reply.use-case";
+import { DeletePantunReplyUseCase } from "@/modules/pantun/application/use-cases/delete-pantun-reply.use-case";
+import { UpdatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/update-pantun-reply.use-case";
+import { GetPantunReplyEditHistoryUseCase } from "@/modules/pantun/application/use-cases/get-pantun-reply-edit-history.use-case";
+import { DeletePantunUseCase } from "@/modules/pantun/application/use-cases/delete-pantun.use-case";
+import { ListAdminPantunsUseCase } from "@/modules/pantun/application/use-cases/list-admin-pantuns.use-case";
+import { SearchPantunsUseCase } from "@/modules/pantun/application/use-cases/search-pantuns.use-case";
+import { PantunController } from "@/modules/pantun/presentation/v1/pantun.controller";
+import { createPantunRoutes } from "@/modules/pantun/presentation/v1/pantun.routes";
+import { createAdminPantunRoutes } from "@/modules/pantun/presentation/v1/admin-pantun.routes";
+import { DashboardController } from "@/modules/dashboard/presentation/v1/dashboard.controller";
+import { createDashboardRoutes } from "@/modules/dashboard/presentation/v1/dashboard.routes";
+import { GetDashboardStatsUseCase } from "@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case";
+import { DashboardRepositoryImpl } from "@/modules/dashboard/infrastructure/dashboard.repository.impl";
+import { WebAnalyticsController } from "@/modules/web-analytics/presentation/v1/web-analytics.controller";
+import { createWebAnalyticsRoutes } from "@/modules/web-analytics/presentation/v1/web-analytics.routes";
+import { GetWebAnalyticsUseCase } from "@/modules/web-analytics/application/use-cases/get-web-analytics.use-case";
+import { createWebAnalyticsProviders } from "@/modules/web-analytics/infrastructure/web-analytics-providers.factory";
+import { PlayAnalyticsController } from "@/modules/play-analytics/presentation/v1/play-analytics.controller";
+import { createPlayAnalyticsRoutes } from "@/modules/play-analytics/presentation/v1/play-analytics.routes";
+import { GetPlayAnalyticsUseCase } from "@/modules/play-analytics/application/use-cases/get-play-analytics.use-case";
+import { createPlayAnalyticsProviders } from "@/modules/play-analytics/infrastructure/play-analytics-providers.factory";
+import { FcmAnalyticsController } from "@/modules/fcm-analytics/presentation/v1/fcm-analytics.controller";
+import { createFcmAnalyticsRoutes } from "@/modules/fcm-analytics/presentation/v1/fcm-analytics.routes";
+import { GetFcmAnalyticsUseCase } from "@/modules/fcm-analytics/application/use-cases/get-fcm-analytics.use-case";
+import { createFcmAnalyticsProviders } from "@/modules/fcm-analytics/infrastructure/fcm-analytics-providers.factory";
+import { MobileAnalyticsController } from "@/modules/mobile-analytics/presentation/v1/mobile-analytics.controller";
+import { createMobileAnalyticsRoutes } from "@/modules/mobile-analytics/presentation/v1/mobile-analytics.routes";
+import { GetMobileAnalyticsUseCase } from "@/modules/mobile-analytics/application/use-cases/get-mobile-analytics.use-case";
+import { createMobileAnalyticsProvider } from "@/modules/mobile-analytics/infrastructure/mobile-analytics-providers.factory";
+import { VoteRepositoryImpl } from "@/modules/vote/infrastructure/vote.repository.impl";
+import { ToggleVoteUseCase } from "@/modules/vote/application/use-cases/toggle-vote.use-case";
+import { GetVoteCountsUseCase } from "@/modules/vote/application/use-cases/get-vote-counts.use-case";
+import { GetMyVotesUseCase } from "@/modules/vote/application/use-cases/get-my-votes.use-case";
+import { ListMyVoteHistoryUseCase } from "@/modules/vote/application/use-cases/list-my-vote-history.use-case";
+import { GetVoteDeckUseCase } from "@/modules/vote/application/use-cases/get-vote-deck.use-case";
+import { SkipVoteDeckWordUseCase } from "@/modules/vote/application/use-cases/skip-vote-deck-word.use-case";
+import { VoteController } from "@/modules/vote/presentation/v1/vote.controller";
+import { createVoteRoutes } from "@/modules/vote/presentation/v1/vote.routes";
+import { AdminVotesController } from "@/modules/vote/presentation/v1/admin-vote.controller";
+import { createAdminVoteRoutes } from "@/modules/vote/presentation/v1/admin-vote.routes";
+import { ListAdminVotesUseCase } from "@/modules/vote/application/use-cases/list-admin-votes.use-case";
+import { DeleteAdminVoteUseCase } from "@/modules/vote/application/use-cases/delete-admin-vote.use-case";
+import { ResetTargetVotesUseCase } from "@/modules/vote/application/use-cases/reset-target-votes.use-case";
+import { ResetVotesByClientUseCase } from "@/modules/vote/application/use-cases/reset-votes-by-client.use-case";
+import { GetTopTargetVotesUseCase } from "@/modules/vote/application/use-cases/get-top-target-votes.use-case";
+import { CommentRepositoryImpl } from "@/modules/comment/infrastructure/comment.repository.impl";
+import { CreateCommentUseCase } from "@/modules/comment/application/use-cases/create-comment.use-case";
+import { CreateCommentAudioUseCase } from "@/modules/comment/application/use-cases/create-comment-audio.use-case";
+import { AttachCommentImageUseCase } from "@/modules/comment/application/use-cases/attach-comment-image.use-case";
+import { ApproveCommentImageUseCase } from "@/modules/comment/application/use-cases/approve-comment-image.use-case";
+import { RejectCommentImageUseCase } from "@/modules/comment/application/use-cases/reject-comment-image.use-case";
+import { ListWordCommentsUseCase } from "@/modules/comment/application/use-cases/list-word-comments.use-case";
+import { DeleteCommentUseCase } from "@/modules/comment/application/use-cases/delete-comment.use-case";
+import { UpdateCommentUseCase } from "@/modules/comment/application/use-cases/update-comment.use-case";
+import { GetCommentEditHistoryUseCase } from "@/modules/comment/application/use-cases/get-comment-edit-history.use-case";
+import { ListAdminCommentsUseCase } from "@/modules/comment/application/use-cases/list-admin-comments.use-case";
+import { ListMyCommentsUseCase } from "@/modules/comment/application/use-cases/list-my-comments.use-case";
+import { TakedownCommentUseCase } from "@/modules/comment/application/use-cases/takedown-comment.use-case";
+import { UncensorCommentUseCase } from "@/modules/comment/application/use-cases/uncensor-comment.use-case";
+import { CommentController } from "@/modules/comment/presentation/v1/comment.controller";
+import {
+  createCommentRoutes,
+  createWordCommentRoutes,
+} from "@/modules/comment/presentation/v1/comment.routes";
+import { createAdminCommentRoutes } from "@/modules/comment/presentation/v1/admin-comment.routes";
+import { CommentBlocklistRepositoryImpl } from "@/modules/comment-blocklist/infrastructure/comment-blocklist.repository.impl";
+import { CreateBlocklistWordUseCase } from "@/modules/comment-blocklist/application/use-cases/create-blocklist-word.use-case";
+import { BulkCreateBlocklistWordsUseCase } from "@/modules/comment-blocklist/application/use-cases/bulk-create-blocklist-words.use-case";
+import { ListBlocklistWordsUseCase } from "@/modules/comment-blocklist/application/use-cases/list-blocklist-words.use-case";
+import { DeleteBlocklistWordUseCase } from "@/modules/comment-blocklist/application/use-cases/delete-blocklist-word.use-case";
+import { CommentBlocklistController } from "@/modules/comment-blocklist/presentation/v1/comment-blocklist.controller";
+import { createAdminCommentBlocklistRoutes } from "@/modules/comment-blocklist/presentation/v1/admin-comment-blocklist.routes";
+import { BookmarkRepositoryImpl } from "@/modules/bookmark/infrastructure/bookmark.repository.impl";
+import { ToggleBookmarkUseCase } from "@/modules/bookmark/application/use-cases/toggle-bookmark.use-case";
+import { GetMyBookmarksUseCase } from "@/modules/bookmark/application/use-cases/get-my-bookmarks.use-case";
+import { BookmarkController } from "@/modules/bookmark/presentation/v1/bookmark.controller";
+import { createBookmarkRoutes } from "@/modules/bookmark/presentation/v1/bookmark.routes";
+import { PublicUserRepositoryImpl } from "@/modules/user/infrastructure/public-user.repository.impl";
+import { GetPublicProfileUseCase } from "@/modules/user/application/use-cases/get-public-profile.use-case";
+import { GetPublicActivityUseCase } from "@/modules/user/application/use-cases/get-public-activity.use-case";
+import { UploadAvatarUseCase } from "@/modules/user/application/use-cases/upload-avatar.use-case";
+import { DeleteAvatarUseCase } from "@/modules/user/application/use-cases/delete-avatar.use-case";
+import { UserController } from "@/modules/user/presentation/v1/user.controller";
 import {
   createMeAvatarRoutes,
   createMeProfileRoutes,
   createPublicUserRoutes,
-} from '@/modules/user/presentation/v1/user.routes';
+} from "@/modules/user/presentation/v1/user.routes";
 import {
   GetMyProfileUseCase,
   UpdateMyProfileUseCase,
-} from '@/modules/user/application/use-cases/update-my-profile.use-case';
-import { createPublicImageStorage } from '@/modules/public-image/infrastructure/public-image-storage.factory';
-import { UploadPublicImageUseCase } from '@/modules/public-image/application/use-cases/upload-public-image.use-case';
-import { PublicImageController } from '@/modules/public-image/presentation/v1/public-image.controller';
-import { createPublicImageRoutes } from '@/modules/public-image/presentation/v1/public-image.routes';
-import { DeviceTokenRepositoryImpl } from '@/modules/device/infrastructure/device-token.repository.impl';
-import { RegisterDeviceTokenUseCase } from '@/modules/device/application/use-cases/register-device-token.use-case';
-import { RevokeDeviceTokenUseCase } from '@/modules/device/application/use-cases/revoke-device-token.use-case';
-import { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
-import { createPushSender } from '@/modules/device/infrastructure/push-sender.factory';
-import { DeviceController } from '@/modules/device/presentation/v1/device.controller';
-import { createDeviceRoutes } from '@/modules/device/presentation/v1/device.routes';
-import { NotificationRepositoryImpl } from '@/modules/notification/infrastructure/notification.repository.impl';
-import { NotificationPushCooldownRepositoryImpl } from '@/modules/notification/infrastructure/notification-push-cooldown.repository.impl';
-import { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
-import { ReviewPushCooldownGate } from '@/modules/notification/application/use-cases/review-push-cooldown-gate';
-import { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
-import { DiscussionReplyPushCooldownGate } from '@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate';
-import { WordVotePushCooldownGate } from '@/modules/notification/application/use-cases/word-vote-push-cooldown-gate';
-import { ListMyNotificationsUseCase } from '@/modules/notification/application/use-cases/list-my-notifications.use-case';
-import { GetUnreadNotificationCountUseCase } from '@/modules/notification/application/use-cases/get-unread-notification-count.use-case';
-import { MarkNotificationReadUseCase } from '@/modules/notification/application/use-cases/mark-notification-read.use-case';
-import { MarkAllNotificationsReadUseCase } from '@/modules/notification/application/use-cases/mark-all-notifications-read.use-case';
-import { NotificationController } from '@/modules/notification/presentation/v1/notification.controller';
-import { createNotificationRoutes } from '@/modules/notification/presentation/v1/notification.routes';
-import { createLemmaDefinitionProviderRegistry } from '@/modules/lemma-definition/infrastructure/lemma-definition-provider.factory';
-import { LookupLemmaDefinitionUseCase } from '@/modules/lemma-definition/application/use-cases/lookup-lemma-definition.use-case';
-import { LemmaDefinitionController } from '@/modules/lemma-definition/presentation/v1/lemma-definition.controller';
-import { createLemmaDefinitionRoutes } from '@/modules/lemma-definition/presentation/v1/lemma-definition.routes';
-import { createShareBackgroundProviderRegistry, listShareBackgroundProviderInfos } from '@/modules/share/infrastructure/share-background.factory';
-import { ListShareBackgroundsUseCase } from '@/modules/share/application/use-cases/list-share-backgrounds.use-case';
-import { ShareController } from '@/modules/share/presentation/v1/share.controller';
-import { createShareRoutes } from '@/modules/share/presentation/v1/share.routes';
-import { ActivityRepositoryImpl } from '@/modules/activity/infrastructure/activity.repository.impl';
-import { ActivityEventRepositoryImpl } from '@/modules/activity/infrastructure/activity-event.repository.impl';
-import { ActivityEventFeedRepositoryImpl } from '@/modules/activity/infrastructure/activity-event-feed.repository.impl';
-import { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
-import { ListActivityUseCase } from '@/modules/activity/application/use-cases/list-activity.use-case';
-import { ActivityController } from '@/modules/activity/presentation/v1/activity.controller';
+} from "@/modules/user/application/use-cases/update-my-profile.use-case";
+import { createPublicImageStorage } from "@/modules/public-image/infrastructure/public-image-storage.factory";
+import { UploadPublicImageUseCase } from "@/modules/public-image/application/use-cases/upload-public-image.use-case";
+import { PublicImageController } from "@/modules/public-image/presentation/v1/public-image.controller";
+import { createPublicImageRoutes } from "@/modules/public-image/presentation/v1/public-image.routes";
+import { DeviceTokenRepositoryImpl } from "@/modules/device/infrastructure/device-token.repository.impl";
+import { RegisterDeviceTokenUseCase } from "@/modules/device/application/use-cases/register-device-token.use-case";
+import { RevokeDeviceTokenUseCase } from "@/modules/device/application/use-cases/revoke-device-token.use-case";
+import { NotifyUserUseCase } from "@/modules/device/application/use-cases/notify-user.use-case";
+import { createPushSender } from "@/modules/device/infrastructure/push-sender.factory";
+import { DeviceController } from "@/modules/device/presentation/v1/device.controller";
+import { createDeviceRoutes } from "@/modules/device/presentation/v1/device.routes";
+import { NotificationRepositoryImpl } from "@/modules/notification/infrastructure/notification.repository.impl";
+import { NotificationPushCooldownRepositoryImpl } from "@/modules/notification/infrastructure/notification-push-cooldown.repository.impl";
+import { RecordInboxNotificationUseCase } from "@/modules/notification/application/use-cases/record-inbox-notification.use-case";
+import { ReviewPushCooldownGate } from "@/modules/notification/application/use-cases/review-push-cooldown-gate";
+import { WordCommentPushCooldownGate } from "@/modules/notification/application/use-cases/word-comment-push-cooldown-gate";
+import { DiscussionReplyPushCooldownGate, ReplyPushCooldownGate } from "@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate";
+import { WordVotePushCooldownGate } from "@/modules/notification/application/use-cases/word-vote-push-cooldown-gate";
+import { WordMediaPushCooldownGate } from "@/modules/notification/application/use-cases/word-media-push-cooldown-gate";
+import { NotifyWordOwnerMediaUseCase } from "@/modules/notification/application/use-cases/notify-word-owner-media.use-case";
+import { ListMyNotificationsUseCase } from "@/modules/notification/application/use-cases/list-my-notifications.use-case";
+import { GetUnreadNotificationCountUseCase } from "@/modules/notification/application/use-cases/get-unread-notification-count.use-case";
+import { MarkNotificationReadUseCase } from "@/modules/notification/application/use-cases/mark-notification-read.use-case";
+import { MarkAllNotificationsReadUseCase } from "@/modules/notification/application/use-cases/mark-all-notifications-read.use-case";
+import { NotificationController } from "@/modules/notification/presentation/v1/notification.controller";
+import { createNotificationRoutes } from "@/modules/notification/presentation/v1/notification.routes";
+import { createLemmaDefinitionProviderRegistry } from "@/modules/lemma-definition/infrastructure/lemma-definition-provider.factory";
+import { LookupLemmaDefinitionUseCase } from "@/modules/lemma-definition/application/use-cases/lookup-lemma-definition.use-case";
+import { LemmaDefinitionController } from "@/modules/lemma-definition/presentation/v1/lemma-definition.controller";
+import { createLemmaDefinitionRoutes } from "@/modules/lemma-definition/presentation/v1/lemma-definition.routes";
+import {
+  createShareBackgroundProviderRegistry,
+  listShareBackgroundProviderInfos,
+} from "@/modules/share/infrastructure/share-background.factory";
+import { ListShareBackgroundsUseCase } from "@/modules/share/application/use-cases/list-share-backgrounds.use-case";
+import { ShareController } from "@/modules/share/presentation/v1/share.controller";
+import { createShareRoutes } from "@/modules/share/presentation/v1/share.routes";
+import { ActivityRepositoryImpl } from "@/modules/activity/infrastructure/activity.repository.impl";
+import { ActivityEventRepositoryImpl } from "@/modules/activity/infrastructure/activity-event.repository.impl";
+import { ActivityEventFeedRepositoryImpl } from "@/modules/activity/infrastructure/activity-event-feed.repository.impl";
+import { RecordActivityEventUseCase } from "@/modules/activity/application/use-cases/record-activity-event.use-case";
+import { ListActivityUseCase } from "@/modules/activity/application/use-cases/list-activity.use-case";
+import { ActivityController } from "@/modules/activity/presentation/v1/activity.controller";
 import {
   createActivityRoutes,
   createCardShareRoutes,
-} from '@/modules/activity/presentation/v1/activity.routes';
-import { RecordCardShareUseCase } from '@/modules/activity/application/use-cases/record-card-share.use-case';
-import { VerifierApplicationRepositoryImpl } from '@/modules/verifier-application/infrastructure/verifier-application.repository.impl';
-import { CreateVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/create-verifier-application.use-case';
-import { GetMyVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/get-my-verifier-application.use-case';
-import { ResubmitVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/resubmit-verifier-application.use-case';
-import { ListVerifierApplicationsUseCase } from '@/modules/verifier-application/application/use-cases/list-verifier-applications.use-case';
-import { GetVerifierApplicationDetailUseCase } from '@/modules/verifier-application/application/use-cases/get-verifier-application-detail.use-case';
-import { ApproveVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/approve-verifier-application.use-case';
-import { RejectVerifierApplicationUseCase } from '@/modules/verifier-application/application/use-cases/reject-verifier-application.use-case';
-import { UpdateVerifierApplicationScreenshotUseCase } from '@/modules/verifier-application/application/use-cases/update-verifier-application-screenshot.use-case';
-import { VerifierApplicationController } from '@/modules/verifier-application/presentation/v1/verifier-application.controller';
-import { WebImportController } from '@/modules/web-import/presentation/v1/web-import.controller';
+} from "@/modules/activity/presentation/v1/activity.routes";
+import { RecordCardShareUseCase } from "@/modules/activity/application/use-cases/record-card-share.use-case";
+import { VerifierApplicationRepositoryImpl } from "@/modules/verifier-application/infrastructure/verifier-application.repository.impl";
+import { CreateVerifierApplicationUseCase } from "@/modules/verifier-application/application/use-cases/create-verifier-application.use-case";
+import { GetMyVerifierApplicationUseCase } from "@/modules/verifier-application/application/use-cases/get-my-verifier-application.use-case";
+import { ResubmitVerifierApplicationUseCase } from "@/modules/verifier-application/application/use-cases/resubmit-verifier-application.use-case";
+import { ListVerifierApplicationsUseCase } from "@/modules/verifier-application/application/use-cases/list-verifier-applications.use-case";
+import { GetVerifierApplicationDetailUseCase } from "@/modules/verifier-application/application/use-cases/get-verifier-application-detail.use-case";
+import { ApproveVerifierApplicationUseCase } from "@/modules/verifier-application/application/use-cases/approve-verifier-application.use-case";
+import { RejectVerifierApplicationUseCase } from "@/modules/verifier-application/application/use-cases/reject-verifier-application.use-case";
+import { UpdateVerifierApplicationScreenshotUseCase } from "@/modules/verifier-application/application/use-cases/update-verifier-application-screenshot.use-case";
+import { VerifierApplicationController } from "@/modules/verifier-application/presentation/v1/verifier-application.controller";
+import { WebImportController } from "@/modules/web-import/presentation/v1/web-import.controller";
 import {
   createAdminWebImportRoutes,
   createPublicWebImportRoutes,
-} from '@/modules/web-import/presentation/v1/web-import.routes';
-import { WebImportRepositoryImpl } from '@/modules/web-import/infrastructure/web-import.repository.impl';
+} from "@/modules/web-import/presentation/v1/web-import.routes";
+import { WebImportRepositoryImpl } from "@/modules/web-import/infrastructure/web-import.repository.impl";
 import {
   ApproveWebImportUseCase,
   GetWebImportUseCase,
@@ -508,23 +710,27 @@ import {
   PreviewWebImportUseCase,
   RejectWebImportUseCase,
   SubmitWebImportUseCase,
-} from '@/modules/web-import/application/use-cases/web-import.use-cases';
-import { createVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/verifier-application.routes';
-import { createAdminVerifierApplicationRoutes } from '@/modules/verifier-application/presentation/v1/admin-verifier-application.routes';
-import { WaTemplateRepositoryImpl, WaMessageLogRepositoryImpl, WaUsageRepositoryImpl } from '@/modules/wa/infrastructure/wa-message.repository.impl';
-import { KapsoWaSender } from '@/modules/wa/infrastructure/kapso-wa.sender';
-import { SendWaMessageUseCase } from '@/modules/wa/application/use-cases/send-wa-message.use-case';
-import { SendVerifierWaNotificationUseCase } from '@/modules/wa/application/use-cases/send-verifier-wa.use-case';
-import { createWaAdminRoutes } from '@/modules/wa/presentation/v1/wa-admin.routes';
-import { WA_PROVIDERS } from '@/modules/wa/domain/entities/wa-message.entity';
-import { NotificationCampaignRepositoryImpl } from '@/modules/notification-campaign/infrastructure/notification-campaign.repository.impl';
+} from "@/modules/web-import/application/use-cases/web-import.use-cases";
+import { createVerifierApplicationRoutes } from "@/modules/verifier-application/presentation/v1/verifier-application.routes";
+import { createAdminVerifierApplicationRoutes } from "@/modules/verifier-application/presentation/v1/admin-verifier-application.routes";
+import {
+  WaTemplateRepositoryImpl,
+  WaMessageLogRepositoryImpl,
+  WaUsageRepositoryImpl,
+} from "@/modules/wa/infrastructure/wa-message.repository.impl";
+import { KapsoWaSender } from "@/modules/wa/infrastructure/kapso-wa.sender";
+import { SendWaMessageUseCase } from "@/modules/wa/application/use-cases/send-wa-message.use-case";
+import { SendVerifierWaNotificationUseCase } from "@/modules/wa/application/use-cases/send-verifier-wa.use-case";
+import { createWaAdminRoutes } from "@/modules/wa/presentation/v1/wa-admin.routes";
+import { WA_PROVIDERS } from "@/modules/wa/domain/entities/wa-message.entity";
+import { NotificationCampaignRepositoryImpl } from "@/modules/notification-campaign/infrastructure/notification-campaign.repository.impl";
 import {
   CreateNotificationTemplateUseCase,
   UpdateNotificationTemplateUseCase,
   DeleteNotificationTemplateUseCase,
   ListNotificationTemplatesUseCase,
   GetNotificationTemplateUseCase,
-} from '@/modules/notification-campaign/application/use-cases/template.use-cases';
+} from "@/modules/notification-campaign/application/use-cases/template.use-cases";
 import {
   CreateCampaignDraftUseCase,
   ListCampaignsUseCase,
@@ -535,23 +741,23 @@ import {
   ProcessCampaignDeliveryUseCase,
   ProcessDueCampaignsUseCase,
   EstimateCampaignAudienceUseCase,
-} from '@/modules/notification-campaign/application/use-cases/campaign.use-cases';
-import { NotificationCampaignController } from '@/modules/notification-campaign/presentation/v1/notification-campaign.controller';
+} from "@/modules/notification-campaign/application/use-cases/campaign.use-cases";
+import { NotificationCampaignController } from "@/modules/notification-campaign/presentation/v1/notification-campaign.controller";
 import {
   createAdminNotificationCampaignRoutes,
   createAdminNotificationTemplateRoutes,
-} from '@/modules/notification-campaign/presentation/v1/notification-campaign.routes';
-import { UgcAbuseEventRepositoryImpl } from '@/shared/moderation/ugc-abuse-event.repository';
+} from "@/modules/notification-campaign/presentation/v1/notification-campaign.routes";
+import { UgcAbuseEventRepositoryImpl } from "@/shared/moderation/ugc-abuse-event.repository";
 import {
   RecordAbuseSignalUseCase,
   safeRecordAbuseSignal,
-} from '@/shared/moderation/record-abuse-signal.use-case';
-import { UgcAnonAbuseRepositoryImpl } from '@/shared/moderation/ugc-anon-abuse.repository';
+} from "@/shared/moderation/record-abuse-signal.use-case";
+import { UgcAnonAbuseRepositoryImpl } from "@/shared/moderation/ugc-anon-abuse.repository";
 import {
   RecordAnonAbuseSignalUseCase,
   assertAnonWriteAllowed,
   safeRecordAnonAbuseSignal,
-} from '@/shared/moderation/record-anon-abuse-signal.use-case';
+} from "@/shared/moderation/record-anon-abuse-signal.use-case";
 
 // ---- Composition root: rakit semua dependency (manual DI, api-base-stack.md Section 2) ----
 bindCanContributeLookup(lookupCanContribute);
@@ -564,7 +770,9 @@ const pushSender = createPushSender();
 const notifyUser = new NotifyUserUseCase(deviceTokenRepo, pushSender);
 const notificationRepo = new NotificationRepositoryImpl(db);
 const recordInbox = new RecordInboxNotificationUseCase(notificationRepo);
-const notificationPushCooldownRepo = new NotificationPushCooldownRepositoryImpl(db);
+const notificationPushCooldownRepo = new NotificationPushCooldownRepositoryImpl(
+  db,
+);
 const tokenService = new JwtTokenService({
   privateKeyPem: env.JWT_PRIVATE_KEY,
   publicKeyPem: env.JWT_PUBLIC_KEY,
@@ -593,7 +801,9 @@ const appSettingsRepo = new AppSettingsRepositoryImpl(db);
 const legalDocumentRepo = new LegalDocumentRepositoryImpl(db);
 const userConsentRepo = new UserConsentRepositoryImpl(db);
 const apiClientRepo = new ApiClientRepositoryImpl(db);
-const resolveFirstPartyClient = new ResolveFirstPartyClientUseCase(apiClientRepo);
+const resolveFirstPartyClient = new ResolveFirstPartyClientUseCase(
+  apiClientRepo,
+);
 
 const controller = new AuthController({
   register: new RegisterUserUseCase(
@@ -634,9 +844,26 @@ const controller = new AuthController({
   ),
   logout: new LogoutUserUseCase(refreshTokenRepo),
   logoutAll: new LogoutAllDevicesUseCase(refreshTokenRepo, deviceTokenRepo),
-  forgot: new ForgotPasswordUseCase(userRepo, resetTokenRepo, mailer, `${env.webAppUrl}/reset-password`),
-  reset: new ResetPasswordUseCase(resetTokenRepo, userRepo, hasher, auditRepo, refreshTokenRepo),
-  changePassword: new ChangePasswordUseCase(userRepo, hasher, auditRepo, refreshTokenRepo),
+  forgot: new ForgotPasswordUseCase(
+    userRepo,
+    resetTokenRepo,
+    mailer,
+    `${env.webAppUrl}/reset-password`,
+    identityRepo,
+  ),
+  reset: new ResetPasswordUseCase(
+    resetTokenRepo,
+    userRepo,
+    hasher,
+    auditRepo,
+    refreshTokenRepo,
+  ),
+  changePassword: new ChangePasswordUseCase(
+    userRepo,
+    hasher,
+    auditRepo,
+    refreshTokenRepo,
+  ),
   setPassword: new SetPasswordUseCase(
     userRepo,
     identityRepo,
@@ -654,6 +881,7 @@ const controller = new AuthController({
     tokenService,
     refreshTokenRepo,
     auditRepo,
+    new SocialConsentService(appSettingsRepo, userConsentRepo),
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
   ),
@@ -664,6 +892,7 @@ const controller = new AuthController({
     tokenService,
     refreshTokenRepo,
     auditRepo,
+    new SocialConsentService(appSettingsRepo, userConsentRepo),
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
   ),
@@ -674,15 +903,27 @@ const controller = new AuthController({
     tokenService,
     refreshTokenRepo,
     auditRepo,
+    new SocialConsentService(appSettingsRepo, userConsentRepo),
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
   ),
   listProviders: new ListAuthProvidersUseCase(identityRepo, userRepo),
-  linkGoogle: new LinkGoogleAccountUseCase(userRepo, identityRepo, googleTokenVerifier),
+  linkGoogle: new LinkGoogleAccountUseCase(
+    userRepo,
+    identityRepo,
+    googleTokenVerifier,
+  ),
   unlinkGoogle: new UnlinkGoogleAccountUseCase(userRepo, identityRepo),
-  linkGithub: new LinkGithubAccountUseCase(userRepo, identityRepo, githubTokenVerifier),
+  linkGithub: new LinkGithubAccountUseCase(
+    userRepo,
+    identityRepo,
+    githubTokenVerifier,
+  ),
   unlinkGithub: new UnlinkGithubAccountUseCase(userRepo, identityRepo),
-  githubCodeExchanger: new GithubOauthCodeExchanger(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET),
+  githubCodeExchanger: new GithubOauthCodeExchanger(
+    env.GITHUB_CLIENT_ID,
+    env.GITHUB_CLIENT_SECRET,
+  ),
   resolveFirstPartyClient,
 });
 
@@ -702,46 +943,101 @@ const optionalAuthenticate = createOptionalAuthenticateMiddleware(
   onAuthenticated,
 );
 /**
+ * Gerbang consent legal untuk aksi tulis kontributor (403 CONSENT_REQUIRED).
+ * Read path tidak digerbang. Lihat docs/api/44-api-consent-oauth.md.
+ */
+const requireLegalConsent = createRequireLegalConsentMiddleware(
+  appSettingsRepo,
+  userConsentRepo,
+);
+/**
  * Feed beranda: token sah → bisa sembunyikan karya sendiri; token apa pun
  * selain itu tetap dapat feed publik. Tidak 401, dan tanpa presence touch.
  */
 const softAuthenticate = createSoftAuthenticateMiddleware((token) =>
   tokenService.verifyAccessToken(token),
 );
-const requireVoteWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'vote.write',
-});
-const requireCommentWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'comment.write',
-});
-const requireContributeWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'contribute.write',
-});
+const requireVoteWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "vote.write",
+  },
+);
+const requireCommentWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "comment.write",
+  },
+);
+const requireContributeWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "contribute.write",
+  },
+);
 /** Kontribusi kata publik: anon tanpa token lolos; Bearer wajib azp/scope. */
-const requireContributeWriteIfAuthed = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'contribute.write',
-  allowMissingUser: true,
-});
-const requireDiscussionWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'discussion.write',
-});
-const requireBookmarkWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'bookmark.write',
-});
-const requireDeviceWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'device.write',
-});
-const requireProfileWriteClient = createRequireApprovedClientMiddleware(apiClientRepo, {
-  scope: 'profile.read',
-});
+const requireContributeWriteIfAuthed = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "contribute.write",
+    allowMissingUser: true,
+  },
+);
+const requireDiscussionWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "discussion.write",
+  },
+);
+const requirePantunWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "discussion.write",
+  },
+);
+const requireBookmarkWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "bookmark.write",
+  },
+);
+const requireDeviceWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "device.write",
+  },
+);
+const requireProfileWriteClient = createRequireApprovedClientMiddleware(
+  apiClientRepo,
+  {
+    scope: "profile.read",
+  },
+);
 
 // ---- Modul word (+ language & category sebagai data referensi form admin) ----
 // Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
 // Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
 const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
+// #133: notif pemilik kata saat contoh kalimat / audio pelafalan tayang.
+const wordMediaPushCooldown = new WordMediaPushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
+const notifyWordOwnerMedia = new NotifyWordOwnerMediaUseCase(
+  wordRepo,
+  recordInbox,
+  notifyUser,
+  userRepo,
+  wordMediaPushCooldown,
+);
 const wordImportSessionRepo = new WordImportSessionRepositoryImpl(db);
 const wordReportRepo = new WordReportRepositoryImpl(db);
-const takedownWord = new TakedownWordUseCase(wordRepo, auditRepo, wordReportRepo, recordInbox);
+const takedownWord = new TakedownWordUseCase(
+  wordRepo,
+  auditRepo,
+  wordReportRepo,
+  recordInbox,
+);
 const restoreWord = new RestoreWordUseCase(wordRepo, auditRepo);
 // Provider gambar dipilih via env IMAGE_PROVIDER (default imagekit) -
 // pola factory yang sama dengan createMailer (Section 8)
@@ -761,18 +1057,23 @@ const recordAbuseSignal = new RecordAbuseSignalUseCase(
   recordInbox,
 );
 const ugcAnonAbuseRepo = new UgcAnonAbuseRepositoryImpl(db);
-const recordAnonAbuseSignal = new RecordAnonAbuseSignalUseCase(ugcAnonAbuseRepo);
+const recordAnonAbuseSignal = new RecordAnonAbuseSignalUseCase(
+  ugcAnonAbuseRepo,
+);
 const onUgcRateLimited = async (userId: string) => {
   await safeRecordAbuseSignal(recordAbuseSignal, {
     userId,
-    signal: 'rate_lockout',
+    signal: "rate_lockout",
   });
 };
-const onAnonRateLimited = async (ctx: { clientIp: string; deviceId: string | null }) => {
+const onAnonRateLimited = async (ctx: {
+  clientIp: string;
+  deviceId: string | null;
+}) => {
   await safeRecordAnonAbuseSignal(recordAnonAbuseSignal, {
     clientIp: ctx.clientIp,
     deviceId: ctx.deviceId,
-    signal: 'rate_lockout',
+    signal: "rate_lockout",
   });
 };
 const publishWord = new PublishWordUseCase(wordRepo, auditRepo);
@@ -807,20 +1108,30 @@ const wordController = new WordController({
   takedownWord,
   restoreWord,
   addPronunciation: new AddPronunciationUseCase(wordRepo, auditRepo),
-  addWordImage: new AddWordImageUseCase(wordRepo, auditRepo, publicImageStorage.providerName),
-  addExample: new AddExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo),
+  addWordImage: new AddWordImageUseCase(
+    wordRepo,
+    auditRepo,
+    publicImageStorage.providerName,
+  ),
+  addExample: new AddExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo, notifyWordOwnerMedia),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
-  importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo),
+  importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo, activityEventRepo),
   batchContributeWords: new BatchContributeWordsUseCase(
     wordRepo,
     languageRepo,
     wordImportSessionRepo,
     recordAnonAbuseSignal,
   ),
-  saveImportSession: new SaveWordImportSessionUseCase(wordImportSessionRepo, userRepo),
+  saveImportSession: new SaveWordImportSessionUseCase(
+    wordImportSessionRepo,
+    userRepo,
+  ),
   listImportSessions: new ListWordImportSessionsUseCase(wordImportSessionRepo),
   getImportSession: new GetWordImportSessionUseCase(wordImportSessionRepo),
-  claimImportSession: new ClaimWordImportSessionUseCase(wordImportSessionRepo, userRepo),
+  claimImportSession: new ClaimWordImportSessionUseCase(
+    wordImportSessionRepo,
+    userRepo,
+  ),
   rollbackImportSession: new RollbackWordImportSessionUseCase(
     wordImportSessionRepo,
     wordRepo,
@@ -830,6 +1141,7 @@ const wordController = new WordController({
     wordRepo,
     pronunciationStorage,
     auditRepo,
+    notifyWordOwnerMedia,
   ),
   deletePronunciationAudio: new DeletePronunciationAudioUseCase(
     wordRepo,
@@ -839,7 +1151,8 @@ const wordController = new WordController({
   listWordClasses: () => wordRepo.listWordClasses(),
   // Stempel provider gambar kata = GitHub publik (bukan ImageKit)
   imageProviderName: publicImageStorage.providerName,
-  assertAnonWriteAllowed: (ctx) => assertAnonWriteAllowed(ugcAnonAbuseRepo, ctx),
+  assertAnonWriteAllowed: (ctx) =>
+    assertAnonWriteAllowed(ugcAnonAbuseRepo, ctx),
 });
 
 // ---- Modul contribution - antrean review (Section 22 approval gate,
@@ -861,8 +1174,14 @@ const contributionController = new ContributionController({
     new ReviewPushCooldownGate(appSettingsRepo, notificationPushCooldownRepo),
     recordAbuseSignal,
     activityEvents,
+    notifyWordOwnerMedia,
   ),
-  correct: new CorrectContributionUseCase(contributionRepo, wordRepo, auditRepo, recordInbox),
+  correct: new CorrectContributionUseCase(
+    contributionRepo,
+    wordRepo,
+    auditRepo,
+    recordInbox,
+  ),
   reopen: new ReopenContributionUseCase(contributionRepo, auditRepo),
   skip: new SkipContributionUseCase(contributionRepo, userSkipRepo),
   imageProviderName: publicImageStorage.providerName,
@@ -872,7 +1191,11 @@ const searchMissController = new SearchMissController({
   list: new ListSearchMissesUseCase(searchMissRepo),
   dismiss: new DismissSearchMissUseCase(searchMissRepo, auditRepo),
   bulkDismiss: new BulkDismissSearchMissUseCase(searchMissRepo, auditRepo),
-  update: new UpdateSearchMissUseCase(searchMissRepo, auditRepo, activityEvents),
+  update: new UpdateSearchMissUseCase(
+    searchMissRepo,
+    auditRepo,
+    activityEvents,
+  ),
   skip: new SkipSearchMissUseCase(searchMissRepo, userSkipRepo),
   resolve: new ResolveSearchMissUseCase(
     searchMissRepo,
@@ -895,23 +1218,29 @@ const announcementController = new AnnouncementController(
   new ListAnnouncementsUseCase(announcementRepo),
   new ListPinnedAnnouncementsUseCase(announcementRepo),
   (cmd) =>
-    new UpdateAnnouncementUseCase(announcementRepo, activityEvents, auditRepo).execute(cmd),
+    new UpdateAnnouncementUseCase(
+      announcementRepo,
+      activityEvents,
+      auditRepo,
+    ).execute(cmd),
   new DeleteAnnouncementUseCase(announcementRepo, activityEvents, auditRepo),
   announcementRepo,
 );
 
-
-
 const placeRepo = new PlaceRepositoryImpl(db);
 const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
 const placeController = new PlaceController(
-  new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
-  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
+  new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
+  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
   new DeletePlaceUseCase(placeRepo),
   new ListPlacesUseCase(placeRepo),
   new GetPlaceBySlugUseCase(placeRepo),
   new ListPlaceImagesUseCase(placeRepo),
-  new AppendPlaceImagesUseCase(placeRepo, userRepo),
+  new AppendPlaceImagesUseCase(placeRepo, userRepo, activityEvents),
+  new RecordPlaceViewUseCase(placeRepo),
+  new ListPlaceViewsUseCase(placeRepo),
+  new GetPlaceViewReportUseCase(placeRepo),
+  new HidePlaceImageUseCase(placeRepo, activityEvents),
 );
 const placeCategoryController = new PlaceCategoryController(
   new CreatePlaceCategoryUseCase(placeCategoryRepo),
@@ -923,17 +1252,17 @@ const placeCategoryController = new PlaceCategoryController(
 
 const regionRepo = new RegionRepositoryImpl(db);
 const placeContributionController = new PlaceContributionController(
-new PlaceContributionUseCases(
-new PlaceContributionRepositoryImpl(db),
-placeRepo,
-placeCategoryRepo,
-regionRepo,
-userRepo,
-new CreatePlaceUseCase(placeRepo, placeCategoryRepo),
-new UpdatePlaceUseCase(placeRepo, placeCategoryRepo),
-recordInbox,
-notifyUser,
-),
+  new PlaceContributionUseCases(
+    new PlaceContributionRepositoryImpl(db),
+    placeRepo,
+    placeCategoryRepo,
+    regionRepo,
+    userRepo,
+    new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
+    new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
+    recordInbox,
+    notifyUser,
+  ),
 );
 const regionController = new RegionController(
   new CreateRegionUseCase(regionRepo),
@@ -941,6 +1270,144 @@ const regionController = new RegionController(
   new DeleteRegionUseCase(regionRepo),
   new ListRegionsUseCase(regionRepo),
   new GetRegionByIdUseCase(regionRepo),
+);
+
+// ---- Modul event/acara (PRD event) ----
+const eventRepo = new EventRepositoryImpl(db);
+const eventController = new EventController(
+  new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
+  new UpdateEventUseCase(eventRepo, regionRepo, activityEvents),
+  new DeleteEventUseCase(eventRepo),
+  new ListEventsUseCase(eventRepo),
+  new GetEventBySlugUseCase(eventRepo),
+  new SetEventCancelledUseCase(eventRepo),
+  new ListEventCategoriesUseCase(eventRepo),
+);
+const eventContributionController = new EventContributionController(
+  new EventContributionUseCases(
+    new EventContributionRepositoryImpl(db),
+    eventRepo,
+    regionRepo,
+    new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
+    recordInbox,
+    notifyUser,
+  ),
+);
+
+// ---- Fitur Usaha (PRD usaha) - direktori usaha & jasa lokal ----
+const usahaRepo = new UsahaRepositoryImpl(db);
+const usahaCategoryRepo = new UsahaCategoryRepositoryImpl(db);
+const usahaCategoryController = new UsahaCategoryController(
+  new CreateUsahaCategoryUseCase(usahaCategoryRepo),
+  new UpdateUsahaCategoryUseCase(usahaCategoryRepo),
+  new DeleteUsahaCategoryUseCase(usahaCategoryRepo),
+  new ListUsahaCategoryCatalogUseCase(usahaCategoryRepo),
+  new GetUsahaCategoryUseCase(usahaCategoryRepo),
+);
+const createUsahaUc = new CreateUsahaUseCase(usahaRepo, regionRepo);
+const usahaController = new UsahaController(
+  createUsahaUc,
+  new UpdateUsahaUseCase(usahaRepo, regionRepo),
+  new DeleteUsahaUseCase(usahaRepo),
+  new ListUsahasUseCase(usahaRepo),
+  new GetUsahaBySlugUseCase(usahaRepo),
+  new RestrictUsahaUseCase(usahaRepo),
+  new RestoreUsahaUseCase(usahaRepo),
+  new ListUsahaCategoriesUseCase(usahaRepo),
+  new FindUsahaDuplicatesUseCase(usahaRepo),
+);
+const usahaContributionRepo = new UsahaContributionRepositoryImpl(db);
+const usahaClaimRepo = new UsahaClaimRepositoryImpl(db);
+const usahaContributionUseCases = new UsahaContributionUseCases(
+  usahaContributionRepo,
+  usahaRepo,
+  regionRepo,
+  createUsahaUc,
+  new UniqueUsahaSlugUseCase(usahaRepo),
+  usahaClaimRepo,
+  auditRepo,
+  recordInbox,
+  notifyUser,
+  activityEventRepo,
+);
+const usahaContributionController = new UsahaContributionController(
+  usahaContributionUseCases,
+);
+const usahaClaimUseCases = new UsahaClaimUseCases(
+  usahaClaimRepo,
+  usahaRepo,
+  auditRepo,
+  recordInbox,
+  notifyUser,
+  activityEventRepo,
+);
+const usahaClaimController = new UsahaClaimController(usahaClaimUseCases);
+const usahaReportController = new UsahaReportController(
+  new UsahaReportUseCases(new UsahaReportRepositoryImpl(db), usahaRepo, auditRepo),
+);
+const listMyUsahaUc = new ListMyUsahaUseCase(
+  usahaRepo,
+  usahaContributionRepo,
+  usahaClaimRepo,
+);
+
+// ---- Fitur Kuliner (PRD kuliner) - jelajah kuliner & tempat makan ----
+const culinaryRepo = new CulinaryRepositoryImpl(db);
+const culinaryCategoryRepo = new CulinaryCategoryRepositoryImpl(db);
+const culinaryCategoryController = new CulinaryCategoryController(
+  new CreateCulinaryCategoryUseCase(culinaryCategoryRepo),
+  new UpdateCulinaryCategoryUseCase(culinaryCategoryRepo),
+  new DeleteCulinaryCategoryUseCase(culinaryCategoryRepo),
+  new ListCulinaryCategoryCatalogUseCase(culinaryCategoryRepo),
+  new GetCulinaryCategoryUseCase(culinaryCategoryRepo),
+);
+const culinaryController = new CulinaryController(
+  culinaryRepo,
+  new ListCuisinesUseCase(culinaryRepo),
+  new GetCuisineBySlugUseCase(culinaryRepo),
+  new ListCulinaryPlacesUseCase(culinaryRepo),
+  new GetCulinaryPlaceBySlugUseCase(culinaryRepo),
+  new ListCulinaryCategoriesUseCase(culinaryRepo),
+  new FindCulinaryDuplicatesUseCase(culinaryRepo, 'cuisine'),
+  new FindCulinaryDuplicatesUseCase(culinaryRepo, 'place'),
+  new RestrictCulinaryUseCase(culinaryRepo, 'cuisine'),
+  new RestoreCulinaryUseCase(culinaryRepo, 'cuisine'),
+  new DeleteCulinaryUseCase(culinaryRepo, 'cuisine'),
+  new RestrictCulinaryUseCase(culinaryRepo, 'place'),
+  new RestoreCulinaryUseCase(culinaryRepo, 'place'),
+  new DeleteCulinaryUseCase(culinaryRepo, 'place'),
+);
+const culinaryContributionRepo = new CulinaryContributionRepositoryImpl(db);
+const culinaryClaimRepo = new CulinaryClaimRepositoryImpl(db);
+const culinaryContributionUseCases = new CulinaryContributionUseCases(
+  culinaryContributionRepo,
+  culinaryRepo,
+  new UniqueCulinarySlugUseCase(culinaryRepo, 'cuisine'),
+  new UniqueCulinarySlugUseCase(culinaryRepo, 'place'),
+  auditRepo,
+  recordInbox,
+  notifyUser,
+  activityEventRepo,
+);
+const culinaryContributionController = new CulinaryContributionController(
+  culinaryContributionUseCases,
+);
+const culinaryClaimController = new CulinaryClaimController(
+  new CulinaryClaimUseCases(
+    culinaryClaimRepo,
+    culinaryRepo,
+    auditRepo,
+    recordInbox,
+    notifyUser,
+    activityEventRepo,
+  ),
+);
+const culinaryReportController = new CulinaryReportController(
+  new CulinaryReportUseCases(
+    new CulinaryReportRepositoryImpl(db),
+    culinaryRepo,
+    auditRepo,
+  ),
 );
 
 const categoryRepo = new CategoryRepositoryImpl(db);
@@ -1054,6 +1521,15 @@ const discussionReplyPushCooldown = new DiscussionReplyPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
 );
+const pantunReplyPushCooldown = new ReplyPushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+  'pantun_reply',
+);
+const commentUploadCredentials = new CreateUploadCredentialsUseCase({
+  imageStorage,
+  defaultFolder: "/comments",
+});
 const commentController = new CommentController({
   create: new CreateCommentUseCase(
     commentRepo,
@@ -1079,16 +1555,53 @@ const commentController = new CommentController({
     wordCommentPushCooldown,
     recordAbuseSignal,
   ),
+  attachImage: new AttachCommentImageUseCase(
+    commentRepo,
+    auditRepo,
+    userRepo,
+    recordInbox,
+    notifyUser,
+  ),
+  approveImage: new ApproveCommentImageUseCase(
+    commentRepo,
+    publicImageStorage,
+    imageStorage,
+    auditRepo,
+    recordInbox,
+  ),
+  rejectImage: new RejectCommentImageUseCase(
+    commentRepo,
+    imageStorage,
+    auditRepo,
+    recordInbox,
+    recordAbuseSignal,
+  ),
   listByWord: new ListWordCommentsUseCase(commentRepo, voteRepo),
   delete: new DeleteCommentUseCase(commentRepo, auditRepo),
+  update: new UpdateCommentUseCase(
+    commentRepo,
+    wordRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  editHistory: new GetCommentEditHistoryUseCase(commentRepo),
   listAdmin: new ListAdminCommentsUseCase(commentRepo),
   listMine: new ListMyCommentsUseCase(commentRepo),
-  takedown: new TakedownCommentUseCase(commentRepo, auditRepo, recordAbuseSignal),
+  takedown: new TakedownCommentUseCase(
+    commentRepo,
+    auditRepo,
+    recordAbuseSignal,
+  ),
   uncensor: new UncensorCommentUseCase(commentRepo, auditRepo),
+  createUploadCredentials: commentUploadCredentials,
 });
 const commentBlocklistController = new CommentBlocklistController({
   create: new CreateBlocklistWordUseCase(commentBlocklistRepo, auditRepo),
-  bulkCreate: new BulkCreateBlocklistWordsUseCase(commentBlocklistRepo, auditRepo),
+  bulkCreate: new BulkCreateBlocklistWordsUseCase(
+    commentBlocklistRepo,
+    auditRepo,
+  ),
   list: new ListBlocklistWordsUseCase(commentBlocklistRepo),
   delete: new DeleteBlocklistWordUseCase(commentBlocklistRepo, auditRepo),
 });
@@ -1104,18 +1617,36 @@ const bookmarkController = new BookmarkController({
 const publicUserRepo = new PublicUserRepositoryImpl(db);
 const userController = new UserController({
   getPublicProfile: new GetPublicProfileUseCase(publicUserRepo),
-  getPublicActivity: new GetPublicActivityUseCase(publicUserRepo, activityEventFeedRepo),
+  getPublicActivity: new GetPublicActivityUseCase(
+    publicUserRepo,
+    activityEventFeedRepo,
+  ),
   suggestMention: new SuggestMentionUsersUseCase(publicUserRepo),
   uploadAvatar: new UploadAvatarUseCase(userRepo, publicImageStorage),
   deleteAvatar: new DeleteAvatarUseCase(userRepo, publicImageStorage),
-  getMyProfile: new GetMyProfileUseCase(userRepo),
-  updateMyProfile: new UpdateMyProfileUseCase(userRepo, regionRepo),
+  getMyProfile: new GetMyProfileUseCase(
+    userRepo,
+    appSettingsRepo,
+    userConsentRepo,
+    publicUserRepo,
+    recordInbox,
+    notifyUser,
+  ),
+  updateMyProfile: new UpdateMyProfileUseCase(
+    userRepo,
+    regionRepo,
+    publicUserRepo,
+  ),
 });
 
 // ---- Modul achievement: katalog reward (border/badge/stiker) + evaluasi
 // cron + border profil. Registry source di domain/achievement-registry. ----
 const achievementRepo = new AchievementRepositoryImpl(db);
-const scanAchievement = new ScanAchievementUseCase(achievementRepo, recordInbox, auditRepo);
+const scanAchievement = new ScanAchievementUseCase(
+  achievementRepo,
+  recordInbox,
+  auditRepo,
+);
 const achievementController = new AchievementController({
   create: new CreateAchievementUseCase(achievementRepo, auditRepo),
   update: new UpdateAchievementUseCase(achievementRepo, auditRepo),
@@ -1127,10 +1658,13 @@ const achievementController = new AchievementController({
   setBorder: new SetActiveBorderUseCase(achievementRepo, auditRepo),
   listActive: new ListActiveAchievementsUseCase(achievementRepo),
   listMine: new ListMyAchievementsUseCase(achievementRepo),
-  listByUsername: new ListUserAchievementsUseCase(achievementRepo, async (username) => {
-    const row = await publicUserRepo.findPublicByUsername(username);
-    return row?.id ?? null;
-  }),
+  listByUsername: new ListUserAchievementsUseCase(
+    achievementRepo,
+    async (username) => {
+      const row = await publicUserRepo.findPublicByUsername(username);
+      return row?.id ?? null;
+    },
+  ),
   repo: achievementRepo,
 });
 const runDueAchievementScanUseCase = new RunDueAchievementScanUseCase(
@@ -1138,6 +1672,12 @@ const runDueAchievementScanUseCase = new RunDueAchievementScanUseCase(
   scanAchievement,
   appSettingsRepo,
   auditRepo,
+);
+const runStreakReminderUseCase = new RunStreakReminderUseCase(
+  db,
+  appSettingsRepo,
+  recordInbox,
+  notifyUser,
 );
 
 // ---- Modul device (FCM token register/revoke, multi-device) ----
@@ -1147,7 +1687,10 @@ const deviceController = new DeviceController({
 });
 
 // ---- Modul word-suggestions (usul perubahan kata) ----
-const suggestionRepo = new WordSuggestionRepositoryImpl(publicImageStorage, imageStorage);
+const suggestionRepo = new WordSuggestionRepositoryImpl(
+  publicImageStorage,
+  imageStorage,
+);
 const suggestionController = new WordSuggestionController({
   repository: suggestionRepo,
   inbox: recordInbox,
@@ -1174,50 +1717,64 @@ app.notFound((c) =>
   c.json(
     {
       success: false as const,
-      error_code: 'NOT_FOUND',
-      message: 'Route-nya tidak ketemu, coba cek lagi ya.',
+      error_code: "NOT_FOUND",
+      message: "Route-nya tidak ketemu, coba cek lagi ya.",
       details: null,
     },
     404,
   ),
 );
 
-app.use('*', requestIdMiddleware);
+app.use("*", requestIdMiddleware);
 // Workers: pool DB per-request (WebSocket = I/O milik request, lihat client.ts)
-app.use('*', requestDb);
+app.use("*", requestDb);
 // Origin allowlist tetap dapat credentials (konsol / situs). Origin lain
 // boleh baca API publik (kamus) lewat Access-Control-Allow-Origin: *.
 app.use(
-  '/api/*',
+  "/api/*",
   cors({
     origin: (origin) => {
       if (origin && env.CORS_ALLOWED_ORIGINS.includes(origin)) return origin;
-      return '*';
+      return "*";
     },
     credentials: true,
   }),
 );
 
 // Info singkat di root - meta route (bukan endpoint fitur, jadi tidak ikut OpenAPI spec)
-app.get('/', (c) =>
+app.get("/", (c) =>
   c.json({
     success: true as const,
     data: {
-      name: 'Kamus Digital Sambas-Indonesia API',
-      version: '1.0.0',
-      docs: '/docs',
-      openapi: '/openapi.json',
+      name: "Kamus Digital Sambas-Indonesia API",
+      // Semver paket (package.json). Bukan identitas deploy - pakai gitSha.
+      version: "0.1.0",
+      gitSha: env.gitSha,
+      gitShaFull: env.gitShaFull,
+      docs: "/docs",
+      openapi: "/openapi.json",
     },
   }),
 );
 
 // Health check - dipakai orchestrator (Docker/K8s/Railway) untuk liveness
-app.get('/health', async (c) => {
+app.get("/health", async (c) => {
   try {
     await db.run(sql`SELECT 1`);
-    return c.json({ status: 'ok', database: 'up', timestamp: new Date().toISOString() });
+    return c.json({
+      status: "ok",
+      database: "up",
+      timestamp: new Date().toISOString(),
+    });
   } catch {
-    return c.json({ status: 'error', database: 'down', timestamp: new Date().toISOString() }, 503);
+    return c.json(
+      {
+        status: "error",
+        database: "down",
+        timestamp: new Date().toISOString(),
+      },
+      503,
+    );
   }
 });
 
@@ -1227,23 +1784,25 @@ app.get('/health', async (c) => {
 // Terdaftar via createRoute agar muncul di OpenAPI spec + Scalar (Section 9)
 // - beda dari / dan /health yang memang meta route di luar spec.
 const pingRoute = createRoute({
-  method: 'get',
-  path: '/api/v1/ping',
-  tags: ['Misc'],
-  summary: 'Canary CI/CD - verifikasi deploy (tanpa auth, tanpa DB)',
+  method: "get",
+  path: "/api/v1/ping",
+  tags: ["Misc"],
+  summary: "Canary CI/CD - verifikasi deploy (tanpa auth, tanpa DB)",
   responses: {
     200: {
-      description: 'Pong + info runtime yang melayani',
+      description: "Pong + info runtime + gitSha deploy",
       content: {
-        'application/json': {
+        "application/json": {
           schema: z.object({
             success: z.literal(true),
             data: z.object({
               pong: z.boolean(),
               time: z.string(),
               env: z.string(),
-              runtime: z.enum(['node', 'cloudflare-workers']),
+              runtime: z.enum(["node", "cloudflare-workers"]),
               host: z.string(),
+              gitSha: z.string(),
+              gitShaFull: z.string(),
             }),
           }),
         },
@@ -1260,13 +1819,17 @@ app.openapi(pingRoute, (c) =>
       time: new Date().toISOString(),
       env: env.NODE_ENV,
       runtime:
-        typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers'
-          ? 'cloudflare-workers'
-          : 'node',
+        typeof navigator !== "undefined" &&
+        navigator.userAgent === "Cloudflare-Workers"
+          ? "cloudflare-workers"
+          : "node",
       // `runtime` tidak cukup memilah tier: tier 2 dan 3 dua-duanya 'node'.
       // Host yang diminta memastikan tier mana yang benar-benar melayani -
       // dipakai memverifikasi failover mendarat di tempat yang diharapkan.
-      host: c.req.header('host') ?? 'unknown',
+      host: c.req.header("host") ?? "unknown",
+      // Cocokkan dengan tag GHCR `sha-…` / Commit di Actions.
+      gitSha: env.gitSha,
+      gitShaFull: env.gitShaFull,
     },
   }),
 );
@@ -1282,23 +1845,41 @@ const accountDeletion = new AccountDeletionUseCase(
   auditRepo,
   `${env.webAppUrl}/hapus-akun`,
 );
-app.route('/api/v1/auth', createAuthRoutes({ controller, authenticate, accountDeletion }));
+app.route(
+  "/api/v1/auth",
+  createAuthRoutes({ controller, authenticate, accountDeletion }),
+);
 
 const legalController = new LegalController({
   getCurrent: new GetCurrentLegalUseCase(appSettingsRepo, legalDocumentRepo),
   getDocument: new GetLegalDocumentUseCase(appSettingsRepo, legalDocumentRepo),
   acceptLegal: new AcceptLegalUseCase(appSettingsRepo, userConsentRepo),
   listAdmin: new ListAdminLegalDocumentsUseCase(legalDocumentRepo),
-  createDraft: new CreateLegalDocumentDraftUseCase(legalDocumentRepo, auditRepo),
-  updateDraft: new UpdateLegalDocumentDraftUseCase(legalDocumentRepo, auditRepo),
+  createDraft: new CreateLegalDocumentDraftUseCase(
+    legalDocumentRepo,
+    auditRepo,
+  ),
+  updateDraft: new UpdateLegalDocumentDraftUseCase(
+    legalDocumentRepo,
+    auditRepo,
+  ),
   publish: new PublishLegalDocumentUseCase(legalDocumentRepo, auditRepo),
   archive: new ArchiveLegalDocumentUseCase(legalDocumentRepo, auditRepo),
   getSettings: new GetAppSettingsUseCase(appSettingsRepo),
   updateSettings: new UpdateAppSettingsUseCase(appSettingsRepo, auditRepo),
 });
-app.route('/api/v1/legal', createLegalPublicRoutes({ controller: legalController }));
-app.route('/api/v1/auth', createLegalAuthRoutes({ controller: legalController, authenticate }));
-app.route('/api/v1/admin/legal', createAdminLegalRoutes({ controller: legalController, authenticate }));
+app.route(
+  "/api/v1/legal",
+  createLegalPublicRoutes({ controller: legalController }),
+);
+app.route(
+  "/api/v1/auth",
+  createLegalAuthRoutes({ controller: legalController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/legal",
+  createAdminLegalRoutes({ controller: legalController, authenticate }),
+);
 
 const adminApiClientController = new AdminApiClientController({
   list: new ListAdminApiClientsUseCase(apiClientRepo),
@@ -1307,19 +1888,29 @@ const adminApiClientController = new AdminApiClientController({
   update: new UpdateAdminApiClientUseCase(apiClientRepo, auditRepo),
 });
 app.route(
-  '/api/v1/admin/api-clients',
-  createAdminApiClientRoutes({ controller: adminApiClientController, authenticate }),
+  "/api/v1/admin/api-clients",
+  createAdminApiClientRoutes({
+    controller: adminApiClientController,
+    authenticate,
+  }),
 );
 
 const githubActionsDispatch = new GithubActionsDispatchService();
 const databaseBackupLogRepo = new DatabaseBackupLogRepositoryImpl(db);
 const systemDatabaseController = new SystemDatabaseController({
-  trigger: new TriggerSqliteBackupUseCase(githubActionsDispatch, userRepo, databaseBackupLogRepo),
+  trigger: new TriggerSqliteBackupUseCase(
+    githubActionsDispatch,
+    userRepo,
+    databaseBackupLogRepo,
+  ),
   list: new ListDatabaseBackupLogsUseCase(databaseBackupLogRepo),
 });
 app.route(
-  '/api/v1/admin/system/database',
-  createSystemDatabaseRoutes({ controller: systemDatabaseController, authenticate }),
+  "/api/v1/admin/system/database",
+  createSystemDatabaseRoutes({
+    controller: systemDatabaseController,
+    authenticate,
+  }),
 );
 
 const supabaseHealthCheckRepo = new SupabaseHealthCheckRepositoryImpl(db);
@@ -1328,17 +1919,42 @@ const systemSupabaseController = new SystemSupabaseController({
   ping: new TriggerSupabaseHealthCheckUseCase(supabaseHealthCheckRepo),
 });
 app.route(
-  '/api/v1/admin/system/supabase',
-  createSystemSupabaseRoutes({ controller: systemSupabaseController, authenticate }),
+  "/api/v1/admin/system/supabase",
+  createSystemSupabaseRoutes({
+    controller: systemSupabaseController,
+    authenticate,
+  }),
+);
+
+// Modul mobile-release (issue mobile#196): publik (cek versi) + admin (upsert)
+const mobileReleaseRepo = new MobileReleaseRepositoryImpl(db);
+const mobileReleaseController = new MobileReleaseController({
+  getLatest: new GetLatestMobileReleaseUseCase(mobileReleaseRepo),
+  list: new ListMobileReleasesUseCase(mobileReleaseRepo),
+  upsert: new UpsertMobileReleaseUseCase(mobileReleaseRepo, auditRepo),
+});
+app.route(
+  "/api/v1/mobile-release",
+  createMobileReleasePublicRoutes({ controller: mobileReleaseController }),
+);
+app.route(
+  "/api/v1/admin/mobile-release",
+  createMobileReleaseAdminRoutes({
+    controller: mobileReleaseController,
+    authenticate,
+  }),
 );
 
 // Modul word - admin (write) + publik (read)
-app.route('/api/v1/admin/words', createAdminWordRoutes({ controller: wordController, authenticate }));
+app.route(
+  "/api/v1/admin/words",
+  createAdminWordRoutes({ controller: wordController, authenticate }),
+);
 // Kontribusi media (pronounce/gambar/contoh) DI-MOUNT SEBELUM public routes -
 // public punya rate limit IP 100/menit global (use '*'), limit per-user 30/menit
 // tetap jadi batas efektif; urutan mount menentukan middleware yang berlaku
 app.route(
-  '/api/v1/words',
+  "/api/v1/words",
   createWordMediaRoutes({
     controller: wordController,
     authenticate,
@@ -1348,7 +1964,7 @@ app.route(
 // Komentar per kata (09) - SEBELUM public word routes (pola media routes),
 // supaya /:wordId/comments tidak tertelan routes.use('*') rate limit publik
 app.route(
-  '/api/v1/words',
+  "/api/v1/words",
   createWordCommentRoutes({
     controller: commentController,
     authenticate,
@@ -1356,7 +1972,10 @@ app.route(
     onUgcRateLimited,
   }),
 );
-const setWordImageContentWarnings = new SetWordImageContentWarningsUseCase(wordRepo, auditRepo);
+const setWordImageContentWarnings = new SetWordImageContentWarningsUseCase(
+  wordRepo,
+  auditRepo,
+);
 const wordReportController = new WordReportController({
   create: new CreateWordReportUseCase(wordReportRepo, wordRepo, auditRepo),
   list: new ListWordReportsUseCase(wordReportRepo),
@@ -1368,52 +1987,75 @@ const wordReportController = new WordReportController({
     auditRepo,
   ),
 });
-app.route('/api/v1/words', createWordReportRoutes({ controller: wordReportController, authenticate }));
 app.route(
-  '/api/v1/words',
-  createPublicWordRoutes({ controller: wordController, authenticate, softAuthenticate }),
+  "/api/v1/words",
+  createWordReportRoutes({
+    controller: wordReportController,
+    authenticate,
+    requireLegalConsent,
+  }),
 );
-app.route('/api/v1/words', createWordHistoryRoutes({ controller: suggestionController, authenticate }));
 app.route(
-  '/api/v1/words',
+  "/api/v1/words",
+  createPublicWordRoutes({
+    controller: wordController,
+    authenticate,
+    softAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/words",
+  createWordHistoryRoutes({ controller: suggestionController, authenticate }),
+);
+app.route(
+  "/api/v1/words",
   createWordSuggestionRoutes({
     controller: suggestionController,
     authenticate,
     requireApprovedClient: requireContributeWriteClient,
+    requireLegalConsent,
   }),
 );
 app.route(
-  '/api/v1/admin',
-  createAdminSuggestionRoutes({ controller: suggestionController, authenticate }),
+  "/api/v1/admin",
+  createAdminSuggestionRoutes({
+    controller: suggestionController,
+    authenticate,
+  }),
 );
 app.route(
-  '/api/v1/meanings',
+  "/api/v1/meanings",
   createMeaningExampleRoutes({
     controller: wordController,
     authenticate,
     requireApprovedClient: requireContributeWriteClient,
   }),
 );
-app.route('/api/v1/word-classes', createWordClassRoutes({ controller: wordController }));
+app.route(
+  "/api/v1/word-classes",
+  createWordClassRoutes({ controller: wordController }),
+);
 
 // Vote polymorphic (08-api-upvote-downvote.md) - toggle (login) + counts
 // (publik) + my (login). Tanpa prefix bentrok, urutan mount bebas.
 app.route(
-  '/api/v1/votes',
+  "/api/v1/votes",
   createVoteRoutes({
     controller: voteController,
     authenticate,
     requireApprovedClient: requireVoteWriteClient,
+    requireLegalConsent,
   }),
 );
 
 // Komentar (09-api-comment.md): my + delete by author; admin takedown
 app.route(
-  '/api/v1/comments',
+  "/api/v1/comments",
   createCommentRoutes({
     controller: commentController,
     authenticate,
     requireApprovedClient: requireCommentWriteClient,
+    requireLegalConsent,
     onUgcRateLimited,
   }),
 );
@@ -1421,7 +2063,7 @@ app.route(
 // Bookmark kata per user (16-api-bookmark.md) - toggle + my (login, semua
 // role). Tanpa prefix bentrok, urutan mount bebas.
 app.route(
-  '/api/v1/bookmarks',
+  "/api/v1/bookmarks",
   createBookmarkRoutes({
     controller: bookmarkController,
     authenticate,
@@ -1433,7 +2075,7 @@ app.route(
 // limit 100/menit/IP di routes factory. Tidak bentrok /admin/users.
 // Mount /me dulu supaya tidak tertangkap oleh /:username.
 app.route(
-  '/api/v1/users/me',
+  "/api/v1/users/me",
   createMeProfileRoutes({
     controller: userController,
     authenticate,
@@ -1441,20 +2083,23 @@ app.route(
   }),
 );
 app.route(
-  '/api/v1/users/me/avatar',
+  "/api/v1/users/me/avatar",
   createMeAvatarRoutes({
     controller: userController,
     authenticate,
     requireApprovedClient: requireProfileWriteClient,
   }),
 );
-app.route('/api/v1/users', createPublicUserRoutes({ controller: userController }));
+app.route(
+  "/api/v1/users",
+  createPublicUserRoutes({ controller: userController }),
+);
 
 const publicImageController = new PublicImageController({
   uploadPublicImage: new UploadPublicImageUseCase(publicImageStorage),
 });
 app.route(
-  '/api/v1/images',
+  "/api/v1/images",
   createPublicImageRoutes({
     controller: publicImageController,
     authenticate,
@@ -1462,7 +2107,7 @@ app.route(
   }),
 );
 app.route(
-  '/api/v1/device',
+  "/api/v1/device",
   createDeviceRoutes({
     controller: deviceController,
     authenticate,
@@ -1470,7 +2115,7 @@ app.route(
   }),
 );
 app.route(
-  '/api/v1/notifications',
+  "/api/v1/notifications",
   createNotificationRoutes({
     controller: new NotificationController({
       list: new ListMyNotificationsUseCase(notificationRepo),
@@ -1481,36 +2126,55 @@ app.route(
     authenticate,
   }),
 );
-app.route('/api/v1/admin/comments', createAdminCommentRoutes({ controller: commentController, authenticate }));
 app.route(
-  '/api/v1/admin/comment-blocklist',
-  createAdminCommentBlocklistRoutes({ controller: commentBlocklistController, authenticate }),
+  "/api/v1/admin/comments",
+  createAdminCommentRoutes({ controller: commentController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/comment-blocklist",
+  createAdminCommentBlocklistRoutes({
+    controller: commentBlocklistController,
+    authenticate,
+  }),
 );
 
 // Moderasi vote (hapus vote spam individual + reset massal per target),
 // gate role + rate limit ada di routes factory (root/admin/reviewer)
-app.route('/api/v1/admin/votes', createAdminVoteRoutes({ controller: adminVotesController, authenticate }));
+app.route(
+  "/api/v1/admin/votes",
+  createAdminVoteRoutes({ controller: adminVotesController, authenticate }),
+);
 
 // Antrean review kontribusi - hanya verifikator (Section 22)
-app.route('/api/v1/admin/contributions', createContributionRoutes({ controller: contributionController, authenticate }));
+app.route(
+  "/api/v1/admin/contributions",
+  createContributionRoutes({
+    controller: contributionController,
+    authenticate,
+  }),
+);
 
 // Submit kata publik - rate limit IP/device untuk tamu; mute per sumber
 // (bukan ANONIM_USER_ID). Login → assertCanContribute.
 app.route(
-  '/api/v1/contributions',
+  "/api/v1/contributions",
   createAnonContributionRoutes({
     controller: wordController,
     optionalAuthenticate,
     requireApprovedClient: requireContributeWriteIfAuthed,
+    requireLegalConsent,
     onAnonRateLimited,
   }),
 );
 app.route(
-  '/api/v1/contributions',
-  createMyContributionRoutes({ controller: myContributionController, authenticate }),
+  "/api/v1/contributions",
+  createMyContributionRoutes({
+    controller: myContributionController,
+    authenticate,
+  }),
 );
 app.route(
-  '/api/v1/contributions',
+  "/api/v1/contributions",
   createDuplicateConfirmRoutes({
     confirmDuplicate: confirmDuplicateMeaning,
     authenticate,
@@ -1519,62 +2183,311 @@ app.route(
 );
 
 // Search miss - beranda publik (peluang kontribusi) + panel admin
-app.route('/api/v1/search-misses', createSearchMissRoutes({ controller: searchMissController, authenticate }));
-app.route('/api/v1/admin/search-misses', createAdminSearchMissRoutes({ controller: searchMissController, authenticate }));
-app.route('/api/v1/admin/announcements', createAdminAnnouncementRoutes({ controller: announcementController, authenticate }));
+app.route(
+  "/api/v1/search-misses",
+  createSearchMissRoutes({ controller: searchMissController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/search-misses",
+  createAdminSearchMissRoutes({
+    controller: searchMissController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/announcements",
+  createAdminAnnouncementRoutes({
+    controller: announcementController,
+    authenticate,
+  }),
+);
 // Publik: detail pengumuman by id (deep link mobile #102).
-app.route('/api/v1/announcements', createPublicAnnouncementRoutes({ controller: announcementController }));
+app.route(
+  "/api/v1/announcements",
+  createPublicAnnouncementRoutes({ controller: announcementController }),
+);
 
 // Achievement (Pencapaian) - katalog reward, milik sendiri, border profil.
 // Publik katalog + badge profil; `/me/achievements` dan `/me/profile/border`
 // butuh auth. Border profil TIDAK lewat /api/v1/users/:username supaya
 // tidak bentrok dengan route profil.
-app.route('/api/v1/achievements', createPublicAchievementRoutes({ controller: achievementController }));
+app.route(
+  "/api/v1/achievements",
+  createPublicAchievementRoutes({ controller: achievementController }),
+);
 // Border profil: mount di `/api/v1/me/profile` + path `/border` =
 // PATCH /api/v1/me/profile/border (jangan mount dua-duanya "border").
-app.route('/api/v1/me/achievements', createMyAchievementRoutes({ controller: achievementController, authenticate }));
-app.route('/api/v1/me/profile', createMyProfileBorderRoutes({ controller: achievementController, authenticate }));
-app.route('/api/v1/admin/achievements', createAdminAchievementRoutes({ controller: achievementController, authenticate }));
+app.route(
+  "/api/v1/me/achievements",
+  createMyAchievementRoutes({
+    controller: achievementController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/me/profile",
+  createMyProfileBorderRoutes({
+    controller: achievementController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/achievements",
+  createAdminAchievementRoutes({
+    controller: achievementController,
+    authenticate,
+  }),
+);
 
 // Places CRUD - katalog wisata/kuliner/budaya (SoT Turso).
-app.route('/api/v1/admin/places', createAdminPlaceRoutes({ controller: placeController, authenticate }));
-app.route('/api/v1/places', createPublicPlaceRoutes({ controller: placeController, optionalAuthenticate }));
-app.route('/api/v1/admin/place-contributions', createAdminPlaceContributionRoutes({ controller: placeContributionController, authenticate }));
 app.route(
-  '/api/v1/place-contributions',
+  "/api/v1/admin/places",
+  createAdminPlaceRoutes({ controller: placeController, authenticate }),
+);
+app.route(
+  "/api/v1/places",
+  createPublicPlaceRoutes({
+    controller: placeController,
+    optionalAuthenticate,
+    softAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/place-contributions",
+  createAdminPlaceContributionRoutes({
+    controller: placeContributionController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/place-contributions",
   createPlaceContributionRoutes({
     controller: placeContributionController,
     authenticate,
     optionalAuthenticate,
-    uploadPlaceImage: (c) => publicImageController.upload(c, { purpose: 'place' }),
+    uploadPlaceImage: (c) =>
+      publicImageController.upload(c, { purpose: "place" }),
   }),
 );
-app.route('/api/v1/admin/place-categories', createAdminPlaceCategoryRoutes({ controller: placeCategoryController, authenticate }));
-app.route('/api/v1/place-categories', createPublicPlaceCategoryRoutes({ controller: placeCategoryController }));
+app.route(
+  "/api/v1/admin/place-categories",
+  createAdminPlaceCategoryRoutes({
+    controller: placeCategoryController,
+    authenticate,
+  }),
+);
+
+// Event/acara - katalog acara + usulan pengguna.
+app.route(
+  "/api/v1/admin/events",
+  createAdminEventRoutes({ controller: eventController, authenticate }),
+);
+app.route(
+  "/api/v1/events",
+  createPublicEventRoutes({
+    controller: eventController,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/event-contributions",
+  createAdminEventContributionRoutes({
+    controller: eventContributionController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/event-contributions",
+  createEventContributionRoutes({
+    controller: eventContributionController,
+    authenticate,
+    optionalAuthenticate,
+    uploadEventImage: (c) =>
+      publicImageController.upload(c, { purpose: "event" }),
+  }),
+);
+app.route(
+  "/api/v1/place-categories",
+  createPublicPlaceCategoryRoutes({ controller: placeCategoryController }),
+);
+
+// Fitur Usaha - direktori usaha & jasa lokal (PRD usaha).
+// Urutan penting: `/usaha/mine` + usulan/klaim/laporan didaftarkan SEBELUM
+// route publik `/usaha/:slug` supaya segmen statis tidak tertelan param.
+app.route(
+  "/api/v1/admin/usaha",
+  createAdminUsahaRoutes({ controller: usahaController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/usaha-categories",
+  createAdminUsahaCategoryRoutes({
+    controller: usahaCategoryController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/usaha-contributions",
+  createAdminUsahaContributionRoutes({
+    controller: usahaContributionController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/usaha-claims",
+  createAdminUsahaClaimRoutes({
+    controller: usahaClaimController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/usaha-reports",
+  createAdminUsahaReportRoutes({
+    controller: usahaReportController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/usaha",
+  createUsahaMineRoutes({ listMyUc: listMyUsahaUc, authenticate }),
+);
+app.route(
+  "/api/v1/usaha",
+  createUsahaClaimRoutes({ controller: usahaClaimController, authenticate }),
+);
+app.route(
+  "/api/v1/usaha",
+  createUsahaReportRoutes({ controller: usahaReportController, authenticate }),
+);
+app.route(
+  "/api/v1/usaha-contributions",
+  createUsahaContributionRoutes({
+    controller: usahaContributionController,
+    authenticate,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/usaha-categories",
+  createPublicUsahaCategoryRoutes({ controller: usahaCategoryController }),
+);
+app.route(
+  "/api/v1/usaha",
+  createPublicUsahaRoutes({ controller: usahaController, optionalAuthenticate }),
+);
 // PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
-app.route('/api/v1/word-groups', createWordGroupRoutes({ controller: wordGroupController, authenticate }));
-app.route('/api/v1/admin/regions', createAdminRegionRoutes({ controller: regionController, authenticate }));
-app.route('/api/v1/regions', createPublicRegionRoutes({ controller: regionController }));
+// Fitur Kuliner - jelajah kuliner & tempat makan (PRD kuliner).
+// Urutan penting: route usulan/klaim/laporan didaftarkan SEBELUM route
+// publik `/culinary/*/:slug` supaya segmen statis tidak tertelan param.
+app.route(
+  "/api/v1/admin/culinary",
+  createAdminCulinaryRoutes({ controller: culinaryController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/culinary-categories",
+  createAdminCulinaryCategoryRoutes({
+    controller: culinaryCategoryController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/culinary-contributions",
+  createAdminCulinaryContributionRoutes({
+    controller: culinaryContributionController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/culinary-claims",
+  createAdminCulinaryClaimRoutes({
+    controller: culinaryClaimController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/culinary-reports",
+  createAdminCulinaryReportRoutes({
+    controller: culinaryReportController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/culinary",
+  createCulinaryClaimRoutes({
+    controller: culinaryClaimController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/culinary",
+  createCulinaryReportRoutes({
+    controller: culinaryReportController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/culinary/contributions",
+  createCulinaryContributionRoutes({
+    controller: culinaryContributionController,
+    authenticate,
+    optionalAuthenticate,
+    uploadCulinaryImage: (c) =>
+      publicImageController.upload(c, { purpose: "culinary" }),
+  }),
+);
+app.route(
+  "/api/v1/culinary-categories",
+  createPublicCulinaryCategoryRoutes({ controller: culinaryCategoryController }),
+);
+app.route(
+  "/api/v1/culinary",
+  createPublicCulinaryRoutes({ controller: culinaryController, optionalAuthenticate }),
+);
+app.route(
+  "/api/v1/word-groups",
+  createWordGroupRoutes({ controller: wordGroupController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/regions",
+  createAdminRegionRoutes({ controller: regionController, authenticate }),
+);
+app.route(
+  "/api/v1/regions",
+  createPublicRegionRoutes({ controller: regionController }),
+);
 
 // Data referensi form admin
-app.route('/api/v1/languages', createLanguageRoutes({ controller: languageController }));
-app.route('/api/v1/dialects', createDialectRoutes({ controller: languageController }));
-app.route('/api/v1/categories', createCategoryRoutes({ controller: categoryController, authenticate }));
+app.route(
+  "/api/v1/languages",
+  createLanguageRoutes({ controller: languageController }),
+);
+app.route(
+  "/api/v1/dialects",
+  createDialectRoutes({ controller: languageController }),
+);
+app.route(
+  "/api/v1/categories",
+  createCategoryRoutes({ controller: categoryController, authenticate }),
+);
 
 // Audit log - hanya admin & root (Section 21)
-const auditController = new AuditController({ listAuditLogs: new ListAuditLogsUseCase(auditRepo) });
-app.route('/api/v1/admin/audit-logs', createAuditRoutes({ controller: auditController, authenticate }));
+const auditController = new AuditController({
+  listAuditLogs: new ListAuditLogsUseCase(auditRepo),
+});
+app.route(
+  "/api/v1/admin/audit-logs",
+  createAuditRoutes({ controller: auditController, authenticate }),
+);
 
 // Image provider - wrapper ImageKit via ImageStoragePort (Section 8);
 // imageStorage sudah di-instantiate di atas (dipakai wordController juga)
 const imageController = new ImageController({
   createUploadCredentials: new CreateUploadCredentialsUseCase({
     imageStorage,
-    defaultFolder: '/words',
+    defaultFolder: "/words",
   }),
 });
 app.route(
-  '/api/v1/admin/images/upload-token',
+  "/api/v1/admin/images/upload-token",
   createImageRoutes({
     controller: imageController,
     authenticate,
@@ -1590,19 +2503,26 @@ const bugReportController = new BugReportController({
   imageController,
 });
 app.route(
-  '/api/v1/bug-reports',
-  createBugReportRoutes({ controller: bugReportController, optionalAuthenticate, authenticate }),
+  "/api/v1/bug-reports",
+  createBugReportRoutes({
+    controller: bugReportController,
+    optionalAuthenticate,
+    authenticate,
+  }),
 );
-const categorySuggestionModule = createCategorySuggestionModule({ db, auditRepo });
+const categorySuggestionModule = createCategorySuggestionModule({
+  db,
+  auditRepo,
+});
 app.route(
-  '/api/v1/category-suggestions',
+  "/api/v1/category-suggestions",
   createCategorySuggestionRoutes({
     controller: categorySuggestionModule.controller,
     optionalAuthenticate,
   }),
 );
 app.route(
-  '/api/v1/admin/category-suggestions',
+  "/api/v1/admin/category-suggestions",
   createAdminCategorySuggestionRoutes({
     controller: categorySuggestionModule.controller,
     authenticate,
@@ -1610,7 +2530,7 @@ app.route(
 );
 
 app.route(
-  '/api/v1/admin/bug-reports',
+  "/api/v1/admin/bug-reports",
   createAdminBugReportRoutes({ controller: bugReportController, authenticate }),
 );
 
@@ -1681,81 +2601,222 @@ const discussionController = new DiscussionController({
     auditRepo,
     pronunciationStorage,
   ),
+  updateReply: new UpdateDiscussionReplyUseCase(
+    discussionRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  replyEditHistory: new GetDiscussionReplyEditHistoryUseCase(discussionRepo),
+  update: new UpdateDiscussionUseCase(
+    discussionRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    userRepo,
+    recordInbox,
+    notifyUser,
+  ),
+  delete: new DeleteDiscussionUseCase(
+    discussionRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
+  editHistory: new GetDiscussionEditHistoryUseCase(discussionRepo),
   pinReply: new PinDiscussionReplyUseCase(discussionRepo, auditRepo),
   takedownReply: new TakedownDiscussionReplyUseCase(discussionRepo, auditRepo),
   imageController,
 });
 app.route(
-  '/api/v1/discussions',
+  "/api/v1/discussions",
   createDiscussionRoutes({
     controller: discussionController,
     authenticate,
     optionalAuthenticate,
     requireApprovedClient: requireDiscussionWriteClient,
+    requireLegalConsent,
     onUgcRateLimited,
   }),
 );
 app.route(
-  '/api/v1/admin/discussions',
+  "/api/v1/admin/discussions",
   createAdminDiscussionRoutes({
     controller: discussionController,
     authenticate,
   }),
 );
 
+const pantunRepo = new PantunRepositoryImpl(db);
+const pantunController = new PantunController({
+  create: new CreatePantunUseCase(
+    pantunRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  createReply: new CreatePantunReplyUseCase(
+    pantunRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+    userRepo,
+    recordInbox,
+    notifyUser,
+    pantunReplyPushCooldown,
+  ),
+  listPublished: new ListPublishedPantunsUseCase(pantunRepo, voteRepo),
+  getDetail: new GetPantunDetailUseCase(pantunRepo, voteRepo),
+  takedown: new TakedownPantunUseCase(pantunRepo, auditRepo),
+  takedownReply: new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
+  deleteReply: new DeletePantunReplyUseCase(pantunRepo, auditRepo),
+  updateReply: new UpdatePantunReplyUseCase(
+    pantunRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  getReplyEditHistory: new GetPantunReplyEditHistoryUseCase(pantunRepo),
+  deletePantun: new DeletePantunUseCase(pantunRepo, auditRepo),
+  listAdmin: new ListAdminPantunsUseCase(pantunRepo),
+  search: new SearchPantunsUseCase(pantunRepo),
+});
+const pantunReportRepo = new PantunReportRepositoryImpl(db);
+const pantunReportController = new PantunReportController({
+  submit: new SubmitPantunReportUseCase(pantunReportRepo, pantunRepo, auditRepo),
+  list: new ListPantunReportsUseCase(pantunReportRepo),
+  resolve: new ResolvePantunReportUseCase(
+    pantunReportRepo,
+    new TakedownPantunUseCase(pantunRepo, auditRepo),
+    new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
+    auditRepo,
+  ),
+});
+// Didaftarkan SEBELUM route pantun: literal /reports harus menang dari /:id.
 app.route(
-  '/api/v1/admin/word-reports',
-  createAdminWordReportRoutes({ controller: wordReportController, authenticate }),
+  "/api/v1/pantuns",
+  createPantunReportRoutes({
+    controller: pantunReportController,
+    authenticate,
+    requireLegalConsent,
+  }),
+);
+app.route(
+  "/api/v1/pantuns",
+  createPantunRoutes({
+    controller: pantunController,
+    authenticate,
+    requireApprovedClient: requirePantunWriteClient,
+    requireLegalConsent,
+    onUgcRateLimited,
+  }),
+);
+app.route(
+  "/api/v1/admin/pantuns",
+  createAdminPantunRoutes({
+    controller: pantunController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/pantun-reports",
+  createAdminPantunReportRoutes({
+    controller: pantunReportController,
+    authenticate,
+  }),
+);
+
+app.route(
+  "/api/v1/admin/word-reports",
+  createAdminWordReportRoutes({
+    controller: wordReportController,
+    authenticate,
+  }),
 );
 
 // Statistik dashboard - hanya admin, root (analitik = admin/root saja)
-app.route('/api/v1/admin/dashboard', createDashboardRoutes({ controller: dashboardController, authenticate }));
+app.route(
+  "/api/v1/admin/dashboard",
+  createDashboardRoutes({ controller: dashboardController, authenticate }),
+);
 
 // Trafik Web (GA4 + Search Console) - hanya admin & root
 app.route(
-  '/api/v1/admin/web-analytics',
-  createWebAnalyticsRoutes({ controller: webAnalyticsController, authenticate }),
+  "/api/v1/admin/web-analytics",
+  createWebAnalyticsRoutes({
+    controller: webAnalyticsController,
+    authenticate,
+  }),
 );
 
 // Play Store (export CSV GCS) - hanya admin & root
 app.route(
-  '/api/v1/admin/play-analytics',
-  createPlayAnalyticsRoutes({ controller: playAnalyticsController, authenticate }),
+  "/api/v1/admin/play-analytics",
+  createPlayAnalyticsRoutes({
+    controller: playAnalyticsController,
+    authenticate,
+  }),
 );
 
 // Analitik notifikasi (FCM delivery + open rate) - hanya admin & root
 app.route(
-  '/api/v1/admin/fcm-analytics',
-  createFcmAnalyticsRoutes({ controller: fcmAnalyticsController, authenticate }),
+  "/api/v1/admin/fcm-analytics",
+  createFcmAnalyticsRoutes({
+    controller: fcmAnalyticsController,
+    authenticate,
+  }),
 );
 // Analitik mobile GA4 (event, layar, audiens) - hanya admin & root
 app.route(
-  '/api/v1/admin/mobile-analytics',
-  createMobileAnalyticsRoutes({ controller: mobileAnalyticsController, authenticate }),
+  "/api/v1/admin/mobile-analytics",
+  createMobileAnalyticsRoutes({
+    controller: mobileAnalyticsController,
+    authenticate,
+  }),
 );
 
 // ---- Admin users (Package A): list user + ubah role, hanya admin & root ----
 const adminUsersController = new AdminUsersController({
   list: new ListAdminUsersUseCase(userRepo),
   updateRole: new UpdateUserRoleUseCase(userRepo, refreshTokenRepo, auditRepo),
-  setCanContribute: new SetCanContributeUseCase(userRepo, auditRepo, recordInbox),
+  setCanContribute: new SetCanContributeUseCase(
+    userRepo,
+    auditRepo,
+    recordInbox,
+  ),
   createUser: new CreateAdminUserUseCase(userRepo, hasher, auditRepo),
-  setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
-  listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
+setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
+verifyEmail: new AdminVerifyEmailUseCase(userRepo, otpRepo, auditRepo, activityEvents),
+listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
 });
-app.route('/api/v1/admin/users', createAdminUserRoutes({ controller: adminUsersController, authenticate }));
 app.route(
-  '/api/v1/admin/contribution-access',
-  createContributionAccessRoutes({ controller: adminUsersController, authenticate }),
+  "/api/v1/admin/users",
+  createAdminUserRoutes({ controller: adminUsersController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/contribution-access",
+  createContributionAccessRoutes({
+    controller: adminUsersController,
+    authenticate,
+  }),
 );
 
 // Monitoring ledger abuse UGC (akun + anon) - hanya admin & root
 const abuseController = new AbuseController({
   abuseRepo: ugcAbuseEventRepo,
   anonRepo: ugcAnonAbuseRepo,
-  lift: new LiftAbuseMuteUseCase(ugcAbuseEventRepo, ugcAnonAbuseRepo, userRepo, auditRepo),
+  lift: new LiftAbuseMuteUseCase(
+    ugcAbuseEventRepo,
+    ugcAnonAbuseRepo,
+    userRepo,
+    auditRepo,
+  ),
 });
-app.route('/api/v1/admin/abuse', createAbuseRoutes({ controller: abuseController, authenticate }));
+app.route(
+  "/api/v1/admin/abuse",
+  createAbuseRoutes({ controller: abuseController, authenticate }),
+);
 
 const verifierApplicationRepo = new VerifierApplicationRepositoryImpl(db);
 
@@ -1776,9 +2837,15 @@ async function readWaSettings(): Promise<{ enabled: boolean; ctaUrl: string }> {
 }
 
 const verifierApplicationController = new VerifierApplicationController({
-  create: new CreateVerifierApplicationUseCase(verifierApplicationRepo, userRepo),
+  create: new CreateVerifierApplicationUseCase(
+    verifierApplicationRepo,
+    userRepo,
+  ),
   getMine: new GetMyVerifierApplicationUseCase(verifierApplicationRepo),
-  resubmit: new ResubmitVerifierApplicationUseCase(verifierApplicationRepo, userRepo),
+  resubmit: new ResubmitVerifierApplicationUseCase(
+    verifierApplicationRepo,
+    userRepo,
+  ),
   list: new ListVerifierApplicationsUseCase(verifierApplicationRepo),
   getDetail: new GetVerifierApplicationDetailUseCase(verifierApplicationRepo),
   approve: new ApproveVerifierApplicationUseCase(
@@ -1792,16 +2859,18 @@ const verifierApplicationController = new VerifierApplicationController({
     sendVerifierWa,
     readWaSettings,
   ),
-reject: new RejectVerifierApplicationUseCase(
-  verifierApplicationRepo,
-  auditRepo,
-  notifyUser,
-  recordInbox,
-  userRepo,
-  sendVerifierWa,
-  readWaSettings,
-),
-updateScreenshot: new UpdateVerifierApplicationScreenshotUseCase(verifierApplicationRepo),
+  reject: new RejectVerifierApplicationUseCase(
+    verifierApplicationRepo,
+    auditRepo,
+    notifyUser,
+    recordInbox,
+    userRepo,
+    sendVerifierWa,
+    readWaSettings,
+  ),
+  updateScreenshot: new UpdateVerifierApplicationScreenshotUseCase(
+    verifierApplicationRepo,
+  ),
 });
 const webImportRepo = new WebImportRepositoryImpl(db);
 const webImportController = new WebImportController(
@@ -1813,19 +2882,23 @@ const webImportController = new WebImportController(
   new RejectWebImportUseCase(webImportRepo, auditRepo),
 );
 app.route(
-  '/api/v1/web-imports',
+  "/api/v1/web-imports",
   createPublicWebImportRoutes({ controller: webImportController }),
 );
 app.route(
-  '/api/v1/admin/web-imports',
+  "/api/v1/admin/web-imports",
   createAdminWebImportRoutes({ controller: webImportController, authenticate }),
 );
 app.route(
-  '/api/v1/verifier-applications',
-  createVerifierApplicationRoutes({ controller: verifierApplicationController, authenticate }),
+  "/api/v1/verifier-applications",
+  createVerifierApplicationRoutes({
+    controller: verifierApplicationController,
+    authenticate,
+    requireLegalConsent,
+  }),
 );
 app.route(
-  '/api/v1/admin/wa',
+  "/api/v1/admin/wa",
   createWaAdminRoutes({
     templateRepo: waTemplateRepo,
     usageRepo: waUsageRepo,
@@ -1835,12 +2908,19 @@ app.route(
   }),
 );
 app.route(
-  '/api/v1/admin/email',
-  createEmailAdminRoutes({ quotaRepo: emailQuotaRepo, logRepo: emailLogRepo, authenticate }),
+  "/api/v1/admin/email",
+  createEmailAdminRoutes({
+    quotaRepo: emailQuotaRepo,
+    logRepo: emailLogRepo,
+    authenticate,
+  }),
 );
 app.route(
-  '/api/v1/admin/verifier-applications',
-  createAdminVerifierApplicationRoutes({ controller: verifierApplicationController, authenticate }),
+  "/api/v1/admin/verifier-applications",
+  createAdminVerifierApplicationRoutes({
+    controller: verifierApplicationController,
+    authenticate,
+  }),
 );
 
 // ---- Notification campaigns (admin/root): template + broadcast ----
@@ -1856,15 +2936,27 @@ const processDueCampaigns = new ProcessDueCampaignsUseCase(
   processCampaignDelivery,
 );
 const notificationCampaignController = new NotificationCampaignController({
-  createTemplate: new CreateNotificationTemplateUseCase(notificationCampaignRepo, auditRepo),
-  updateTemplate: new UpdateNotificationTemplateUseCase(notificationCampaignRepo, auditRepo),
-  deleteTemplate: new DeleteNotificationTemplateUseCase(notificationCampaignRepo, auditRepo),
+  createTemplate: new CreateNotificationTemplateUseCase(
+    notificationCampaignRepo,
+    auditRepo,
+  ),
+  updateTemplate: new UpdateNotificationTemplateUseCase(
+    notificationCampaignRepo,
+    auditRepo,
+  ),
+  deleteTemplate: new DeleteNotificationTemplateUseCase(
+    notificationCampaignRepo,
+    auditRepo,
+  ),
   listTemplates: new ListNotificationTemplatesUseCase(notificationCampaignRepo),
   getTemplate: new GetNotificationTemplateUseCase(notificationCampaignRepo),
   createCampaign: new CreateCampaignDraftUseCase(notificationCampaignRepo),
   listCampaigns: new ListCampaignsUseCase(notificationCampaignRepo),
   getCampaign: new GetCampaignDetailUseCase(notificationCampaignRepo),
-  cancelCampaign: new CancelCampaignUseCase(notificationCampaignRepo, auditRepo),
+  cancelCampaign: new CancelCampaignUseCase(
+    notificationCampaignRepo,
+    auditRepo,
+  ),
   sendCampaign: new SendCampaignUseCase(
     notificationCampaignRepo,
     auditRepo,
@@ -1874,17 +2966,19 @@ const notificationCampaignController = new NotificationCampaignController({
     notificationCampaignRepo,
     processCampaignDelivery,
   ),
-  estimateAudience: new EstimateCampaignAudienceUseCase(notificationCampaignRepo),
+  estimateAudience: new EstimateCampaignAudienceUseCase(
+    notificationCampaignRepo,
+  ),
 });
 app.route(
-  '/api/v1/admin/notification-templates',
+  "/api/v1/admin/notification-templates",
   createAdminNotificationTemplateRoutes({
     controller: notificationCampaignController,
     authenticate,
   }),
 );
 app.route(
-  '/api/v1/admin/notification-campaigns',
+  "/api/v1/admin/notification-campaigns",
   createAdminNotificationCampaignRoutes({
     controller: notificationCampaignController,
     authenticate,
@@ -1892,7 +2986,9 @@ app.route(
 );
 
 /** Dipanggil cron Workers untuk scheduled + lanjutkan chunk sending + reset kuota WA bulanan. */
-export async function runDueNotificationCampaigns(): Promise<{ processed: number }> {
+export async function runDueNotificationCampaigns(): Promise<{
+  processed: number;
+}> {
   await resetWaUsageIfNewPeriod();
   return processDueCampaigns.execute(5);
 }
@@ -1909,6 +3005,14 @@ export async function runDueAchievementScan(): Promise<{
   return runDueAchievementScanUseCase.execute();
 }
 
+export async function runDueStreakReminder(): Promise<{
+  ran: boolean;
+  sent: number;
+  reason?: string;
+}> {
+  return runStreakReminderUseCase.execute();
+}
+
 /**
  * Cron WA: reset used_count tiap awal bulan (tanggal 1, 00:00:01 WIB).
  * Idempoten - lazy reset di WaUsageRepository jadi jaring pengaman.
@@ -1921,8 +3025,8 @@ async function resetWaUsageIfNewPeriod(): Promise<void> {
   } catch (err) {
     console.error(
       JSON.stringify({
-        level: 'error',
-        msg: 'reset kuota wa bulanan gagal',
+        level: "error",
+        msg: "reset kuota wa bulanan gagal",
         error: err instanceof Error ? err.message : String(err),
       }),
     );
@@ -1939,7 +3043,7 @@ const lemmaDefinitionController = new LemmaDefinitionController({
   ),
 });
 app.route(
-  '/api/v1/lemma-definitions',
+  "/api/v1/lemma-definitions",
   createLemmaDefinitionRoutes({ controller: lemmaDefinitionController }),
 );
 
@@ -1951,10 +3055,13 @@ const activityController = new ActivityController({
   recordCardShare: new RecordCardShareUseCase(activityRepo, activityEventRepo),
 });
 app.route(
-  '/api/v1/activity',
+  "/api/v1/activity",
   createActivityRoutes({ controller: activityController, softAuthenticate }),
 );
-app.route('/api/v1/words', createCardShareRoutes({ controller: activityController, authenticate }));
+app.route(
+  "/api/v1/words",
+  createCardShareRoutes({ controller: activityController, authenticate }),
+);
 
 // Latar kartu share - multi-provider multi-provider. Publik.
 const shareBackgroundProviders = createShareBackgroundProviderRegistry();
@@ -1963,18 +3070,20 @@ const shareController = new ShareController({
     shareBackgroundProviders,
     env.SHARE_BACKGROUNDS_CACHE_TTL_SECONDS,
   ),
-  listProviders: () => listShareBackgroundProviderInfos(shareBackgroundProviders),
+  listProviders: () =>
+    listShareBackgroundProviderInfos(shareBackgroundProviders),
   trackUnsplashDownload: async (id) =>
-    (await shareBackgroundProviders.get('unsplash')?.trackDownload?.(id)) ?? false,
+    (await shareBackgroundProviders.get("unsplash")?.trackDownload?.(id)) ??
+    false,
 });
-app.route('/api/v1/share', createShareRoutes({ controller: shareController }));
+app.route("/api/v1/share", createShareRoutes({ controller: shareController }));
 
 // OpenAPI spec + Scalar docs (api-base-stack.md Section 9)
-app.doc('/openapi.json', {
-  openapi: '3.0.0',
+app.doc("/openapi.json", {
+  openapi: "3.0.0",
   info: {
-    title: 'Kamus Digital Sambas-Indonesia API',
-    version: '1.0.0',
+    title: "Kamus Digital Sambas-Indonesia API",
+    version: "1.0.0",
   },
 });
-app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }));
+app.get("/docs", apiReference({ spec: { url: "/openapi.json" } }));

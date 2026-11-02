@@ -14,11 +14,12 @@ function kindForStatus(status: number): 'permission_denied' | 'rate_limited' | '
   return 'upstream';
 }
 
-export async function getGoogleText(
+/** Ambil body mentah dari Google (untuk file biner/gzip, mis. export CSV Play). */
+async function getGoogleBytes(
   account: { clientEmail: string; privateKey: string },
   scope: string,
   url: string,
-): Promise<string> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const { getGoogleAccessToken, GoogleTokenError } = await import('@/shared/google/service-account-token');
   let token: string;
   try {
@@ -44,7 +45,15 @@ export async function getGoogleText(
     const text = await res.text().catch(() => '');
     throw new AnalyticsProviderError(kindForStatus(res.status), `status=${res.status} ${text.slice(0, 300)}`);
   }
-  return res.text();
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+async function getGoogleText(
+  account: { clientEmail: string; privateKey: string },
+  scope: string,
+  url: string,
+): Promise<string> {
+  return new TextDecoder().decode(await getGoogleBytes(account, scope, url));
 }
 
 export interface GcsListResult {
@@ -76,12 +85,30 @@ export async function listGcsObjects(
 
 export const GCS_SCOPE = 'https://www.googleapis.com/auth/devstorage.read_only';
 
-/** Unduh isi object CSV. */
-export function downloadGcsObject(
+/**
+ * Unduh isi object CSV Play. Export Play Console selalu gzip + UTF-16LE
+ * (contentType `text/csv; charset=utf-16le`, contentEncoding gzip), dan GCS
+ * JSON API `alt=media` tidak selalu mem-forward Content-Encoding - jadi
+ * dekompres + decode dikerjakan manual.
+ */
+/** Deteksi + dekompres gzip dan decode UTF-16/UTF-8 export Play. */
+export async function decodePlayCsvBytes(input: Uint8Array<ArrayBuffer>): Promise<string> {
+  let bytes: Uint8Array<ArrayBuffer> = input;
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  // BOM UTF-16LE (ff fe) / UTF-16BE (fe ff) -> decode sesuai; sisanya UTF-8.
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+export async function downloadGcsObject(
   account: { clientEmail: string; privateKey: string },
   bucket: string,
   objectName: string,
 ): Promise<string> {
   const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(objectName)}?alt=media`;
-  return getGoogleText(account, GCS_SCOPE, url);
+  return decodePlayCsvBytes(await getGoogleBytes(account, GCS_SCOPE, url));
 }

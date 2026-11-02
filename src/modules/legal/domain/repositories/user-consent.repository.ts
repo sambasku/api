@@ -10,5 +10,13 @@ export interface UserConsentRepository {
     userId: string,
     documentType: ConsentDocumentType,
   ): Promise<UserConsent | null>;
+  /**
+   * Versi consent terbaru per document_type dalam SATU query.
+   * Dipakai path read (compute requires_consent) - 2 pemanggilan
+   * findLatestByUser = 2 subrequest, ini cuma 1.
+   */
+  findLatestByUserAll(
+    userId: string,
+  ): Promise<Partial<Record<ConsentDocumentType, UserConsent>>>;
   deleteByUserId(userId: string, executor?: DbExecutor): Promise<void>;
 }

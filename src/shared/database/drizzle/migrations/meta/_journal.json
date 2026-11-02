@@ -610,6 +610,181 @@
       "when": 1801100000000,
       "tag": "0086_achievements",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1801110000000,
+      "tag": "0087_activity_kind_feed_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "6",
+      "when": 1801111000000,
+      "tag": "0088_oauth-consent-enforcement",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1801112000000,
+      "tag": "0089_place_views",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1801113000000,
+      "tag": "0090_place_views_viewer_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "6",
+      "when": 1801114000000,
+      "tag": "0091_username_handle_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "6",
+      "when": 1801115000000,
+      "tag": "0092_places_cleansing",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "6",
+      "when": 1801115100000,
+      "tag": "0093_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1801201500000,
+      "tag": "0094_place_image_hidden",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1801201600000,
+      "tag": "0095_examples_meaning_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1801211000000,
+      "tag": "0096_events_poster_urls",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1801300000000,
+      "tag": "0097_usaha",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1801400000000,
+      "tag": "0098_culinary",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "6",
+      "when": 1801500000000,
+      "tag": "0099_mobile_releases",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "6",
+      "when": 1801600000000,
+      "tag": "0100_pantun",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "6",
+      "when": 1801601000000,
+      "tag": "0101_meaning_vote_counts",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "6",
+      "when": 1801602000000,
+      "tag": "0102_usaha_whatsapp_from_phone",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "6",
+      "when": 1801603000000,
+      "tag": "0103_word_media_push_cooldown",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "6",
+      "when": 1801604000000,
+      "tag": "0104_pantun_search_fts",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "6",
+      "when": 1801605000000,
+      "tag": "0105_backfill_word_votes_to_meanings",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "6",
+      "when": 1801606000000,
+      "tag": "0106_pantun_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "6",
+      "when": 1801607000000,
+      "tag": "0107_leveling_notify_prefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "6",
+      "when": 1801608000000,
+      "tag": "0108_ugc_edit_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "6",
+      "when": 1801609000000,
+      "tag": "0109_comment_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "6",
+      "when": 1801610000000,
+      "tag": "0110_discussion_sort_denorm",
+      "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "6",
+      "when": 1801611000000,
+      "tag": "0111_discussion_op_edit",
+      "breakpoints": true
     }
   ]
 }

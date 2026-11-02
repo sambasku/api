@@ -37,6 +37,30 @@ describe('achievement criteria schema (Zod registry)', () => {
     expect(parsed.success).toBe(false);
   });
 
+  it('menolak threshold pada registration (supportsThreshold=false)', () => {
+    const parsed = achievementCriteriaSchema.safeParse({
+      source: 'registration',
+      threshold: 5,
+      window: {
+        from: '2026-01-01T00:00:00+07:00',
+        to: '2027-01-01T00:00:00+07:00',
+      },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('menolak filters pada registration (tidak ada filterFields)', () => {
+    const parsed = achievementCriteriaSchema.safeParse({
+      source: 'registration',
+      filters: { entity_type: 'word' },
+      window: {
+        from: '2026-01-01T00:00:00+07:00',
+        to: '2027-01-01T00:00:00+07:00',
+      },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it('menolak window.to <= window.from', () => {
     const parsed = achievementCriteriaSchema.safeParse({
       source: 'registration',
@@ -48,19 +72,28 @@ describe('achievement criteria schema (Zod registry)', () => {
     expect(parsed.success).toBe(false);
   });
 
-  it('menolak window tanpa offset timezone', () => {
+  it('menerima window dengan offset Z (UTC)', () => {
     const parsed = achievementCriteriaSchema.safeParse({
       source: 'registration',
       window: { from: '2026-01-01T00:00:00Z', to: '2027-01-01T00:00:00Z' },
     });
-    // Z memang offset valid (UTC) - harus lolos
     expect(parsed.success).toBe(true);
   });
 
-  it('menolak threshold < 1', () => {
+  it('menerima contributions_approved + threshold + filter entity_type', () => {
     const parsed = achievementCriteriaSchema.safeParse({
-      source: 'registration',
-      threshold: 0,
+      source: 'contributions_approved',
+      threshold: 10,
+      filters: { entity_type: 'word' },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('menolak filter entity_type asing pada contributions_approved', () => {
+    const parsed = achievementCriteriaSchema.safeParse({
+      source: 'contributions_approved',
+      threshold: 1,
+      filters: { entity_type: 'rocket' },
     });
     expect(parsed.success).toBe(false);
   });
@@ -104,11 +137,58 @@ describe('create achievement body', () => {
     expect(parsed.is_active).toBe(true);
   });
 
-  it('menolak reward_type tak dikenal', () => {
+it('menolak reward_type tak dikenal', () => {
+  expect(
+    createAchievementBodySchema.safeParse({ ...baseBody, reward_type: 'rocket' }).success,
+  ).toBe(false);
+});
+
+describe('badge_url guard (allowlist host)', () => {
+  it('menerima jsDelivr + ImageKit', () => {
     expect(
-      createAchievementBodySchema.safeParse({ ...baseBody, reward_type: 'rocket' }).success,
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/x.png',
+      }).success,
+    ).toBe(true);
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'https://ik.imagekit.io/apinull/achievements/x.png',
+      }).success,
+    ).toBe(true);
+  });
+  it('menolak javascript: scheme', () => {
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'javascript:alert(1)',
+      }).success,
     ).toBe(false);
   });
+  it('menolak http (tanpa TLS)', () => {
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'http://cdn.jsdelivr.net/x.png',
+      }).success,
+    ).toBe(false);
+  });
+  it('menolak host arbitrer + subdomain palsu', () => {
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'https://evil.example.com/x.png',
+      }).success,
+    ).toBe(false);
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        badge_url: 'https://cdn.jsdelivr.net.evil.com/x.png',
+      }).success,
+    ).toBe(false);
+  });
+});
 });
 
 describe('set border body', () => {

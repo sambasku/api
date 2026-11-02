@@ -36,19 +36,25 @@ export class RejectDiscussionUseCase {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');
     }
 
-    for (const img of existing.images) {
-      // deleteFile ImageKit sudah best-effort (log internal, tidak lempar)
-      await this.imageStorage.deleteFile(img.providerFileId);
-    }
+    // #202: suntingan ulang punya revisi / publicUrl GitHub - jangan hapus media publik.
+    const revisions = await this.repo.listDiscussionRevisions(existing.id);
+    const isRequeueEdit = revisions.length > 0;
 
-    if (existing.audio?.providerFileId && existing.audio.sha && this.audioStorage) {
-      try {
-        await this.audioStorage.delete(
-          existing.audio.providerFileId,
-          existing.audio.sha,
-        );
-      } catch {
-        // best-effort
+    if (!isRequeueEdit) {
+      for (const img of existing.images) {
+        // deleteFile ImageKit sudah best-effort (log internal, tidak lempar)
+        await this.imageStorage.deleteFile(img.providerFileId);
+      }
+
+      if (existing.audio?.providerFileId && existing.audio.sha && this.audioStorage) {
+        try {
+          await this.audioStorage.delete(
+            existing.audio.providerFileId,
+            existing.audio.sha,
+          );
+        } catch {
+          // best-effort
+        }
       }
     }
 
@@ -58,11 +64,13 @@ export class RejectDiscussionUseCase {
       toStatus: 'rejected',
       actorId: cmd.actorId,
       rejectionNote: note,
-      images: existing.images.map((img) => ({
-        ...img,
-        // Staging sudah dihapus; kosongkan URL privat agar tidak bocor di admin lama
-        url: '',
-      })),
+      images: isRequeueEdit
+        ? existing.images
+        : existing.images.map((img) => ({
+            ...img,
+            // Staging sudah dihapus; kosongkan URL privat agar tidak bocor di admin lama
+            url: '',
+          })),
     });
     if (!updated) {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');

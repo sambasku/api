@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray, isNull, like, or, lt, sql } from 'drizzle-orm';
 import { users, userRoles } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import { NotFoundError } from '@/shared/errors/app-error';
+import { NotFoundError, ConflictError } from '@/shared/errors/app-error';
+import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { UserRepository } from '../domain/repositories/user.repository';
 import type { NewUser, User, UserListFilter, UserRole } from '../domain/entities/user.entity';
@@ -45,7 +46,11 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     canContribute: row.canContribute,
     contributeMutedUntil: row.contributeMutedUntil ?? null,
     emailVerified: row.emailVerified,
+    emailVerifiedAt: row.emailVerifiedAt ?? null,
     readContributionGuideAt: row.readContributionGuideAt ?? null,
+    levelSeen: row.levelSeen ?? 1,
+    notifyStreakReminder: row.notifyStreakReminder ?? true,
+    notifyLevelUp: row.notifyLevelUp ?? true,
     avatarUrl: row.avatarUrl ?? null,
     avatarProvider: row.avatarProvider ?? null,
     avatarProviderFileId: row.avatarProviderFileId ?? null,
@@ -89,15 +94,38 @@ export class UserRepositoryImpl implements UserRepository {
   }
 
   async save(user: NewUser): Promise<User> {
-    const { roles: newRoles, ...rest } = user;
-    const [row] = await this.db
-      .insert(users)
-      .values({
-        ...rest,
-        displayName: user.displayName ?? user.username,
-        bio: user.bio ?? null,
-      })
-      .returning();
+    const { roles: newRoles, usernameCandidates, ...rest } = user;
+    // Insert-retry atas UNIQUE username (bukan probe-then-insert): DB jadi
+    // arbiter tunggal, race dua register bersamaan aman secara struktural.
+    // Caller boleh kirim kandidat alternatif via `usernameCandidates`
+    // (register/OAuth); tanpa itu, konflik = 409 USERNAME_ALREADY_EXISTS.
+    const candidates = [...new Set(usernameCandidates?.length ? usernameCandidates : [user.username])];
+    let row: UserRow | undefined;
+    for (const candidate of candidates) {
+      try {
+        [row] = await this.db
+          .insert(users)
+          .values({
+            ...rest,
+            username: candidate,
+            displayName: user.displayName ?? candidate,
+            bio: user.bio ?? null,
+          })
+          .returning();
+        break;
+      } catch (err) {
+        // Format pesan SQLite: kolom biasa "users.username", index ekspresi
+        // "index 'users_username_lower_unique'" - 'username' mencakup keduanya.
+        if (isUniqueViolationOn(err, 'users.email') || isUniqueViolationOn(err, 'users_email_unique')) {
+          throw new ConflictError('EMAIL_ALREADY_EXISTS', 'Email sudah terdaftar');
+        }
+        if (!isUniqueViolationOn(err, 'username')) throw err;
+        // username bentrok: coba kandidat berikutnya
+      }
+    }
+    if (!row) {
+      throw new ConflictError('USERNAME_ALREADY_EXISTS', 'Nama sudah dipakai');
+    }
     const roles = newRoles ?? ['contributor'];
     await insertRoles(this.db, row.id, roles);
     return toEntity(row, roles);
@@ -119,6 +147,17 @@ export class UserRepositoryImpl implements UserRepository {
 
   async list(filter: UserListFilter): Promise<{ items: User[]; nextCursor: string | null; hasMore: boolean }> {
     const q = filter.q?.trim();
+    // Query murni angka (08…/8…/+62…/62…) ikut cocokkan users.phone yang
+    // tersimpan sebagai 62…; q teks biasa (mis. "budi2026") tidak memicu ini.
+    const phoneDigits = q?.replace(/\D/g, '') ?? '';
+    const phoneLike =
+      q && /^\+?[\d\s-]{6,}$/.test(q)
+        ? phoneDigits.startsWith('0')
+          ? `62${phoneDigits.slice(1)}`
+          : phoneDigits.startsWith('8')
+            ? `62${phoneDigits}`
+            : phoneDigits
+        : null;
     const rows = await this.db
       .select({
         id: users.id,
@@ -135,6 +174,9 @@ export class UserRepositoryImpl implements UserRepository {
       emailVerified: users.emailVerified,
       emailVerifiedAt: users.emailVerifiedAt,
       readContributionGuideAt: users.readContributionGuideAt,
+      levelSeen: users.levelSeen,
+      notifyStreakReminder: users.notifyStreakReminder,
+      notifyLevelUp: users.notifyLevelUp,
       lastSeenAt: users.lastSeenAt,
       avatarUrl: users.avatarUrl,
       avatarProvider: users.avatarProvider,
@@ -149,10 +191,21 @@ export class UserRepositoryImpl implements UserRepository {
         // CATATAN: tulis `users.id` sebagai teks mentah, BUKAN ${users.id} - Drizzle
         // me-render interpolation jadi "id" unqualified yang ke-shadow ai.id di scope
         // subquery (auth_identities juga punya kolom id) sehingga subquery selalu null.
-        authProviders: sql<string | null>`(
-          SELECT group_concat(DISTINCT ai.provider) FROM auth_identities ai
-          WHERE ai.user_id = users.id AND ai.deleted_at IS NULL
-        )`,
+authProviders: sql<string | null>`(
+SELECT group_concat(DISTINCT ai.provider) FROM auth_identities ai
+WHERE ai.user_id = users.id AND ai.deleted_at IS NULL
+)`,
+// OTP verifikasi terakhir (email_verification_otps) - scalar subquery, tetap
+// 1 query. Kolom timestamps mode 'timestamp' Drizzle; max() di SQLite kembali
+// sebagai epoch integer, konversi manual di mapper bawah.
+otpCreatedAt: sql<number | null>`(
+SELECT max(o.created_at) FROM email_verification_otps o
+WHERE o.user_id = users.id
+)`,
+otpExpiresAt: sql<number | null>`(
+SELECT max(o.expires_at) FROM email_verification_otps o
+WHERE o.user_id = users.id
+)`,
         // Kolom baru migrasi 0086 - hadir supaya cast ke UserRow valid.
         activeBorderId: users.activeBorderId,
       })
@@ -164,14 +217,16 @@ export class UserRepositoryImpl implements UserRepository {
           filter.role
             ? sql`EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = ${users.id} AND ur.role = ${filter.role})`
             : undefined,
-          filter.canContribute === undefined ? undefined : eq(users.canContribute, filter.canContribute),
-          // User sistem anonim tidak masuk daftar akun yang dihentikan.
-          filter.canContribute === false ? sql`${users.id} != ${ANONIM_USER_ID}` : undefined,
+      filter.canContribute === undefined ? undefined : eq(users.canContribute, filter.canContribute),
+      // User sistem anonim tidak masuk daftar akun yang dihentikan.
+      filter.canContribute === false ? sql`${users.id} != ${ANONIM_USER_ID}` : undefined,
+      filter.emailVerified === undefined ? undefined : eq(users.emailVerified, filter.emailVerified),
           q
             ? or(
                 like(sql`lower(${users.username})`, `%${q.toLowerCase()}%`),
-                like(sql`lower(${users.email})`, `%${q.toLowerCase()}%`),
-              )
+              like(sql`lower(${users.email})`, `%${q.toLowerCase()}%`),
+              phoneLike ? like(users.phone, `%${phoneLike}%`) : undefined,
+            )
             : undefined,
           filter.cursor ? lt(sql`(${users.createdAt}, ${users.id})`, sql`(SELECT created_at, id FROM users WHERE id = ${filter.cursor})`) : undefined,
         ),
@@ -185,11 +240,14 @@ export class UserRepositoryImpl implements UserRepository {
 
 return {
 items: page.map((r) => {
-  const entity = toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? []);
-  return {
-    ...entity,
-    authProviders: r.authProviders ? r.authProviders.split(',') : [],
-  };
+const entity = toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? []);
+return {
+...entity,
+authProviders: r.authProviders ? r.authProviders.split(',') : [],
+// Enrichment OTP admin: epoch integer dari scalar subquery -> Date.
+otpCreatedAt: r.otpCreatedAt != null ? new Date(r.otpCreatedAt) : null,
+otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
+};
 }),
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
       hasMore,
@@ -353,6 +411,9 @@ items: page.map((r) => {
       readContributionGuideAt?: Date;
       regionId?: string | null;
       villageId?: string | null;
+      levelSeen?: number;
+      notifyStreakReminder?: boolean;
+      notifyLevelUp?: boolean;
     },
   ): Promise<User> {
     const [updated] = await this.db
@@ -364,6 +425,13 @@ items: page.map((r) => {
         ...(data.villageId !== undefined ? { villageId: data.villageId } : {}),
         ...(data.readContributionGuideAt !== undefined
           ? { readContributionGuideAt: data.readContributionGuideAt }
+          : {}),
+        ...(data.levelSeen !== undefined ? { levelSeen: data.levelSeen } : {}),
+        ...(data.notifyStreakReminder !== undefined
+          ? { notifyStreakReminder: data.notifyStreakReminder }
+          : {}),
+        ...(data.notifyLevelUp !== undefined
+          ? { notifyLevelUp: data.notifyLevelUp }
           : {}),
         updatedAt: new Date(),
       })

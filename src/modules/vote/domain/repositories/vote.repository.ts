@@ -1,6 +1,6 @@
 // Target vote yang dikenal (08-api-upvote-downvote.md): entitas kamus +
 // children-nya + komentar (09-api-comment.md) + balasan ruang diskusi
-// (32-api-discussions.md).
+// (32-api-discussions.md) + pantun & balasannya (50-api-pantun.md).
 export type VoteTargetType =
   | 'word'
   | 'meaning'
@@ -9,7 +9,9 @@ export type VoteTargetType =
   | 'word_image'
   | 'comment'
   | 'discussion_reply'
-  | 'discussion';
+  | 'discussion'
+  | 'pantun'
+  | 'pantun_reply';
 
 export interface VoteTarget {
   entityType: VoteTargetType;
@@ -143,9 +145,19 @@ export interface VoteHistoryListResult {
   hasMore: boolean;
 }
 
-/** Item antrean deck nilai kata (34-api-vote-deck.md). */
-export interface VoteDeckWord {
+/** Kelas kata ringkas untuk chip kartu deck (kelas milik MAKNA). */
+export interface VoteDeckWordClass {
   id: string;
+  code: string;
+  name: string;
+  alias: string | null;
+}
+
+/** Item antrean deck vote per makna (34-api-vote-deck.md, 0101: 1 kartu = 1 makna). */
+export interface VoteDeckMeaning {
+  /** ID makna - target vote + kunci cursor. */
+  id: string;
+  wordId: string;
   lemma: string;
   languageId: string;
   languageCode: string;
@@ -153,9 +165,16 @@ export interface VoteDeckWord {
   usageLabels: string[];
   status: string;
   isVerified: boolean;
-  /** COALESCE(verified_at, created_at) */
+  /** COALESCE(words.verified_at, words.created_at) */
   approvedAt: Date;
+  /** Definisi makna ini; fallback ke terjemahan pertama bila kosong. */
   sense: string | null;
+  /** Posisi 1-based antar makna published kata ini - konteks "makna ke-N". */
+  orderIndex: number;
+  /** Jumlah makna published kata ini - konteks "dari M". */
+  meaningCount: number;
+  /** Kelas kata makna ini (bukan kata). null = belum diisi. */
+  wordClass: VoteDeckWordClass | null;
   upvotes: number;
   downvotes: number;
   /** upvotes + downvotes - kunci cursor + sort */
@@ -171,10 +190,12 @@ export interface VoteDeckCursor {
 export interface VoteDeckListOptions {
   limit: number;
   cursor?: VoteDeckCursor;
+  /** true = acak isi halaman per user (deck mobile tidak seragam). */
+  randomize?: boolean;
 }
 
 export interface VoteDeckListResult {
-  items: VoteDeckWord[];
+  items: VoteDeckMeaning[];
   nextCursor: string | null;
   hasMore: boolean;
 }
@@ -239,11 +260,11 @@ export interface VoteRepository {
   listByUser(userId: string, opts: VoteHistoryListOptions): Promise<VoteHistoryListResult>;
 
   /**
-   * Antrean kata published yang user belum vote dan belum skip
-   * (34-api-vote-deck.md).
+   * Antrean MAKNA published yang user belum vote dan belum skip
+   * (34-api-vote-deck.md; 0101: deck per makna, bukan per kata).
    * Urut total vote Asc, lalu approved_at Asc, id Asc. LIMIT+1 has_more.
    */
-  listDeckWords(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;
+  listDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;
 
   /**
    * List vote admin cursor pagination compound (created_at, id) desc.
@@ -288,5 +309,15 @@ export interface VoteRepository {
     wordId: string;
     lemma: string;
     ownerUserId: string | null;
+  } | null>;
+
+  /**
+   * Compat mobile ≤ v0.4.0 (52-api-mobile-v040-vote-compat): id boleh meaning
+   * published ATAU word id. Word → makna published pertama (order_index, id).
+   * Null bila tidak resolve.
+   */
+  resolveLegacyWordVoteTarget(id: string): Promise<{
+    meaningId: string;
+    wordId: string;
   } | null>;
 }

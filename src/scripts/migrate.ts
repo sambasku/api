@@ -19,6 +19,7 @@ import {
   slugifyUsername,
   USERNAME_HANDLE_REGEX,
 } from '@/modules/auth/application/utils/username-slug';
+import { isReservedHandle } from '@/modules/auth/application/utils/reserved-handles';
 
 const url = process.env.DATABASE_URL?.trim() ?? '';
 const authToken = process.env.DATABASE_AUTH_TOKEN?.trim() || undefined;
@@ -101,7 +102,11 @@ async function repairLastSeenDrift(client: Client): Promise<void> {
 async function backfillUsernameHandles(client: Client): Promise<void> {
   let rows: Array<Record<string, unknown> | unknown[]>;
   try {
-    const result = await client.execute(`SELECT id, username FROM users WHERE username IS NOT NULL`);
+    // Soft-deleted dilewati: tombstone `dihapus-<ULID>` memang di luar
+    // charset handle, dan trigger 0091 juga mengecualikannya.
+    const result = await client.execute(
+      `SELECT id, username FROM users WHERE username IS NOT NULL AND deleted_at IS NULL`,
+    );
     rows = result.rows as Array<Record<string, unknown> | unknown[]>;
   } catch {
     return;
@@ -120,6 +125,9 @@ async function backfillUsernameHandles(client: Client): Promise<void> {
     if (!id || !username || USERNAME_HANDLE_REGEX.test(username)) continue;
 
     let base = slugifyUsername(username);
+    // Handle reserved (admin/me/anonim/dll) tidak boleh dipakai user -
+    // suffix agar tetap unik tapi tidak Naked pakai segment route.
+    if (isReservedHandle(base)) base = `${base}_user`;
     let candidate = base;
     let n = 2;
     while (taken.has(candidate) && candidate !== username) {
@@ -192,7 +200,13 @@ const db = drizzle(client);
 
 try {
   await repairLastSeenDrift(client);
+  // Backfill HARUS sebelum migrate: trigger 0091 menolak UPDATE username
+  // legacy (kapital/spasi), jadi normalisasi harus lebih dulu. Di DB fresh
+  // tabel `users` belum ada → query error → catch → skip (aman, idempotent).
+  await backfillUsernameHandles(client);
   await migrate(db, { migrationsFolder });
+  // Jalankan lagi setelah migrate: menangkap baris yang masih legacy
+  // (mis. dari seeder lama) - idempotent, skip bila tak ada yang diubah.
   await backfillUsernameHandles(client);
   console.log('[db:migrate] OK - migrations applied');
 } catch (err) {

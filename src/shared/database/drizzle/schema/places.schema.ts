@@ -60,6 +60,8 @@ export const placeImages = sqliteTable(
     sortOrder: integer('sort_order').notNull().default(0),
     attributionJson: text('attribution_json'),
     createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+    /** #187: takedown admin. Non-null = foto tak tampil di publik. */
+    hiddenAt: integer('hidden_at', { mode: 'timestamp' }),
   },
   (t) => [index('place_images_place_id_idx').on(t.placeId)],
 );

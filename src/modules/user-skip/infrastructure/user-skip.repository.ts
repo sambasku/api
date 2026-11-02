@@ -2,7 +2,9 @@ import { and, eq } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { userSkips } from '@/shared/database/drizzle/schema';
 
-export type UserSkipTargetType = 'word' | 'contribution' | 'search_miss';
+// 0101: deck vote skip target pindah dari 'word' ke 'meaning'. 'word'
+// dipertahankan (baris lama tetap valid; hanya diabaikan read-path deck).
+export type UserSkipTargetType = 'word' | 'meaning' | 'contribution' | 'search_miss';
 
 /** Catatan skip per user. POST ulang tidak menambah baris (unik). */
 export class UserSkipRepository {

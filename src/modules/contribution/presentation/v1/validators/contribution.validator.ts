@@ -1,4 +1,4 @@
-import { choiceId, opaqueId } from '@/shared/validation/id';
+import { choiceId, choiceIdCompat, opaqueId, opaqueIdCompat } from '@/shared/validation/id';
 import { z } from 'zod';
 import {
   createWordBodySchema,
@@ -28,6 +28,14 @@ export const listContributionsQuerySchema = z.object({
     .transform((v) => v === true || v === 'true' || v === '1'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().length(26).optional(),
+  /**
+   * true = acak isi halaman per user (mobile). Default false: console
+   * verifikator tetap kronologis.
+   */
+  randomize: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === true || v === 'true' || v === '1'),
   /** true = sembunyikan item yang user auth sudah skip (antrean mobile) */
   hide_skipped: z
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
@@ -124,12 +132,12 @@ export const correctContributionSchema = z.discriminatedUnion('entity_type', [
     entity_type: z.literal('meaning'),
     comment: commentField,
     publish: publishField,
-    word_class_id: choiceId('Kelas kata').nullable().optional(),
+    word_class_id: choiceIdCompat('Kelas kata'),
     definition: z.string().trim().min(1, 'Definisi tidak boleh kosong'),
     translations: z
       .array(
         z.object({
-          language_id: opaqueId,
+          language_id: opaqueIdCompat,
           translation_text: z.string().trim().min(1, 'Terjemahan tidak boleh kosong'),
           translation_type: z.enum(['direct', 'descriptive', 'idiomatic']).default('direct'),
         }),

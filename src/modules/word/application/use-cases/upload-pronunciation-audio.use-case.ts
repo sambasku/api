@@ -13,6 +13,7 @@ import {
   resolveChildPublication,
 } from '../utils/resolve-publication';
 import { assertCanContribute } from '../utils/assert-can-contribute';
+import type { NotifyWordOwnerMediaUseCase } from '@/modules/notification/application/use-cases/notify-word-owner-media.use-case';
 import type { Actor } from './create-word.use-case';
 
 export interface UploadPronunciationAudioDto {
@@ -36,6 +37,8 @@ export class UploadPronunciationAudioUseCase {
     private readonly wordRepo: WordRepository,
     private readonly storage: PronunciationStoragePort,
     private readonly auditRepo: AuditLogRepository,
+    /** #133: notif ke pemilik kata saat audio tayang (verifikator). */
+    private readonly notifyOwner?: NotifyWordOwnerMediaUseCase,
   ) {}
 
   async execute(
@@ -136,6 +139,16 @@ export class UploadPronunciationAudioUseCase {
       },
       requestId: actor.requestId ?? null,
     });
+
+    // #133: audio yang langsung tayang (verifikator) dinotif di sini;
+    // audio kontributor pending_review dinotif saat approve review.
+    if (media.status === 'published') {
+      await this.notifyOwner?.execute({
+        entityType: 'word_audio',
+        entityId: media.id,
+        actorId: actor.userId,
+      });
+    }
 
     return media;
   }

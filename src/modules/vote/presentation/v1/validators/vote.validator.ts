@@ -13,6 +13,8 @@ export const voteTargetTypeEnum = z.enum([
   'comment',
   'discussion_reply',
   'discussion',
+  'pantun',
+  'pantun_reply',
 ]);
 
 export const toggleVoteSchema = z.object({
@@ -124,28 +126,46 @@ export const myVotesResponseSchema = z.object({
   ),
 });
 
-/** GET /api/v1/votes/deck - antrean kata belum di-vote (34-api-vote-deck.md). */
+/** GET /api/v1/votes/deck - antrean makna belum di-vote (34-api-vote-deck.md, 0101). */
 export const voteDeckQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(10),
   cursor: z.string().min(1).optional(),
+  /** false = urutan kronologis (default: acak per user, lihat 34-api). */
+  randomize: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === undefined || v === true || v === 'true' || v === '1'),
 });
 
 export type VoteDeckQuery = z.infer<typeof voteDeckQuerySchema>;
 
-export const skipVoteDeckSchema = z.object({
-  word_id: opaqueId,
-});
+/** 52: meaning_id (client baru) atau word_id (mobile ≤ v0.4.0). */
+export const skipVoteDeckSchema = z
+  .object({
+    meaning_id: opaqueId.optional(),
+    word_id: opaqueId.optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (!body.meaning_id && !body.word_id) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['meaning_id'],
+        message: 'Wajib mengisi meaning_id atau word_id',
+      });
+    }
+  });
 
 export type SkipVoteDeckBody = z.infer<typeof skipVoteDeckSchema>;
 
+/** Path param: meaning id atau word id (compat 52). */
 export const skipVoteDeckParamsSchema = z.object({
-  wordId: opaqueId,
+  meaningId: opaqueId,
 });
 
 export const skipVoteDeckResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
-    word_id: z.string(),
+    meaning_id: z.string(),
     skipped: z.boolean(),
   }),
 });
@@ -154,7 +174,9 @@ export const voteDeckResponseSchema = z.object({
   success: z.literal(true),
   data: z.array(
     z.object({
+      // 0101: id = ID makna (target vote), bukan ID kata.
       id: z.string(),
+      word_id: z.string(),
       lemma: z.string(),
       language_id: z.string(),
       language_code: z.string(),
@@ -163,6 +185,17 @@ export const voteDeckResponseSchema = z.object({
       is_verified: z.boolean(),
       approved_at: z.string(),
       sense: z.string().nullable(),
+      order_index: z.number().int(),
+      meaning_count: z.number().int(),
+      // Kelas kata milik MAKNA ini (bukan kata induk); null = belum diisi.
+      word_class: z
+        .object({
+          id: z.string(),
+          code: z.string(),
+          name: z.string(),
+          alias: z.string().nullable(),
+        })
+        .nullable(),
       upvotes: z.number().int(),
       downvotes: z.number().int(),
     }),

@@ -119,7 +119,9 @@ export class WordGroupController {
     // PRD relasi-lemma: verifikator boleh tayang langsung; contributor
     // masuk antrean (pending_review) - pola resolvePublication Section 22.
     const canPublish = isVerifierRole(actor.role);
-    const status = body.status ?? (canPublish ? 'published' : 'pending_review');
+    // status dari body hanya dihormati untuk verifikator - contributor tidak
+    // boleh bypass moderasi lewat status: 'published'.
+    const status = canPublish ? (body.status ?? 'published') : 'pending_review';
     return this.deps.create
       .execute({
         name: body.name,
@@ -137,12 +139,17 @@ export class WordGroupController {
     body: z.infer<typeof updateWordGroupBodySchema>,
   ) {
     const actor = actorOf(c);
+    const canPublish = isVerifierRole(actor.role);
     return this.deps.update
       .execute({
         id,
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.status !== undefined ? { status: body.status } : {}),
+        // Contributor tidak boleh mengubah status; verifikator boleh, dan
+        // is_verified ikut mengikuti supaya tidak ada dua sumber kebenaran.
+        ...(canPublish && body.status !== undefined
+          ? { status: body.status, isVerified: body.status === 'published' }
+          : {}),
         updatedBy: actor.user_id,
       })
       .then((r) => c.json({ success: true as const, data: serialize(r) }));
@@ -162,7 +169,9 @@ export class WordGroupController {
   ) {
     const actor = actorOf(c);
     const canPublish = isVerifierRole(actor.role);
-    const status = body.status ?? (canPublish ? 'published' : 'pending_review');
+    // status dari body hanya dihormati untuk verifikator - contributor tidak
+    // boleh bypass moderasi lewat status: 'published'.
+    const status = canPublish ? (body.status ?? 'published') : 'pending_review';
     return this.deps.addMember
       .execute({
         groupId: id,

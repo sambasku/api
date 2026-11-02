@@ -78,4 +78,37 @@ describe('AddMeaningUseCase', () => {
     });
     expect(wordRepo.addMeaning).not.toHaveBeenCalled();
   });
+
+  // #174: definisi placeholder ("-") dulu bikin guard pulang cepat, jadi
+  // "asin, asin, asin" lolos. Sekarang padanan tetap dibandingkan.
+  it('definisi placeholder + padanan sama → tetap cek duplikat (409)', async () => {
+    const { useCase, wordRepo, media } = makeDeps();
+    vi.mocked(wordRepo.findLanguageIdByCode).mockResolvedValue('01JDSBSLANGIDN000000000000');
+    vi.mocked(wordRepo.findPublishedDuplicateMeaning).mockResolvedValue({
+      wordId: WORD_ID,
+      meaningId: '01MEANINGLAMA0000000000000',
+      lemma: 'asin',
+      definition: '-',
+      translationText: 'asin',
+    });
+
+    await expect(
+      useCase.execute(
+        WORD_ID,
+        {
+          definition: '-',
+          translations: [
+            { languageId: '01JDSBSLANGIDN000000000000', translationText: 'Asin', translationType: 'direct' },
+          ],
+        },
+        ACTOR,
+      ),
+    ).rejects.toMatchObject({ errorCode: 'DUPLICATE_MEANING', statusCode: 409 });
+
+    expect(wordRepo.findPublishedDuplicateMeaning).toHaveBeenCalledWith(
+      expect.objectContaining({ definition: '-', translationText: 'Asin' }),
+    );
+    expect(wordRepo.addMeaning).not.toHaveBeenCalled();
+    expect(media).toBeDefined();
+  });
 });

@@ -67,7 +67,8 @@ describe('CreateAdminUserUseCase', () => {
 
     expect(hasher.hash).toHaveBeenCalledWith('Password123');
     expect(userRepo.save).toHaveBeenCalledWith({
-      username: 'Siti',
+      // Username dinormalisasi ke handle mention (lowercase, tanpa spasi).
+      username: 'siti',
       email: 'siti@test.com',
       phone: null,
       passwordHash: 'argon2id$hash',
@@ -126,5 +127,16 @@ describe('CreateAdminUserUseCase', () => {
     await expect(useCase.execute({ ...base, phone: '6281234567890' })).rejects.toMatchObject({
       errorCode: 'PHONE_ALREADY_EXISTS',
     });
+  });
+
+  it('menolak handle reserved (segment route / peran / user sistem)', async () => {
+    const { useCase, userRepo } = makeDeps();
+    await expect(useCase.execute({ ...base, username: 'Admin' })).rejects.toMatchObject({
+      errorCode: 'VALIDATION_ERROR',
+    });
+    await expect(useCase.execute({ ...base, username: 'anonim' })).rejects.toMatchObject({
+      errorCode: 'VALIDATION_ERROR',
+    });
+    expect(userRepo.save).not.toHaveBeenCalled();
   });
 });

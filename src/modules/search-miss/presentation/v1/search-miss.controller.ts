@@ -132,23 +132,27 @@ export class SearchMissController {
 }
 
 function toApi(item: {
-  id: string;
-  term: string;
-  direction: string;
-  hitCount: number;
-  lastSearchedAt: Date;
-  isFulfilled: boolean;
-  isVisible: boolean;
-  createdAt: Date;
+id: string;
+term: string;
+direction: string;
+hitCount: number;
+lastSearchedAt: Date;
+isFulfilled: boolean;
+pendingContributionCount: number;
+pendingContributionId: string | null;
+isVisible: boolean;
+createdAt: Date;
 }) {
-  return {
-    id: item.id,
-    term: item.term,
-    direction: item.direction,
-    hit_count: item.hitCount,
-    last_searched_at: item.lastSearchedAt.toISOString(),
-    is_fulfilled: item.isFulfilled,
-    is_visible: item.isVisible,
-    created_at: item.createdAt.toISOString(),
-  };
+return {
+id: item.id,
+term: item.term,
+direction: item.direction,
+hit_count: item.hitCount,
+last_searched_at: item.lastSearchedAt.toISOString(),
+is_fulfilled: item.isFulfilled,
+pending_contribution_count: item.pendingContributionCount,
+pending_contribution_id: item.pendingContributionId,
+is_visible: item.isVisible,
+created_at: item.createdAt.toISOString(),
+};
 }

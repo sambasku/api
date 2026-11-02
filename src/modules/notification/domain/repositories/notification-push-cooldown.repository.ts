@@ -5,7 +5,10 @@ export type NotificationPushCooldownChannel =
   | ReviewPushCooldownChannel
   | 'word_comment'
   | 'word_vote'
-  | 'discussion_reply';
+  /** #133: notif media anak kata (contoh kalimat / audio pelafalan). */
+  | 'word_media'
+  | 'discussion_reply'
+  | 'pantun_reply';
 
 export interface NotificationPushCooldown {
   userId: string;

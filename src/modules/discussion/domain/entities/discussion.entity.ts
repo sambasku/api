@@ -2,7 +2,8 @@ export type DiscussionStatus =
   | 'pending_review'
   | 'published'
   | 'rejected'
-  | 'taken_down';
+  | 'taken_down'
+  | 'deleted_by_author';
 
 export type DiscussionReplyStatus = 'published' | 'taken_down' | 'deleted_by_author';
 
@@ -25,6 +26,8 @@ export interface Discussion {
   /** Role tertinggi penulis. Null jika akun hilang. Dipakai centang verifikator. */
   userRole: string | null;
   body: string | null;
+  /** Teks sebelum filter blocklist (null = tidak tersensor). */
+  bodyOriginal: string | null;
   /** Tautan https luar (opsional). */
   linkUrl: string | null;
   images: DiscussionImage[];
@@ -35,8 +38,22 @@ export interface Discussion {
   reviewedBy: string | null;
   reviewedAt: Date | null;
   pinnedReplyId: string | null;
+  /** Denorm: waktu balasan published terakhir; null jika belum ada. */
+  lastReplyAt: Date | null;
+  /** Denorm: jumlah balasan published. */
+  publishedReplyCount: number;
   createdAt: Date;
   updatedAt: Date | null;
+  /** true jika pernah disunting (EXISTS di discussion_revisions). */
+  isEdited?: boolean;
+}
+
+export interface DiscussionRevision {
+  id: string;
+  discussionId: string;
+  editorId: string;
+  body: string;
+  createdAt: Date;
 }
 
 export interface NewDiscussion {
@@ -76,6 +93,16 @@ export interface DiscussionReply {
   reviewedAt: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
+  /** true jika pernah disunting (EXISTS di discussion_reply_revisions). */
+  isEdited?: boolean;
+}
+
+export interface DiscussionReplyRevision {
+  id: string;
+  replyId: string;
+  editorId: string;
+  body: string;
+  createdAt: Date;
 }
 
 export interface NewDiscussionReply {
@@ -86,13 +113,43 @@ export interface NewDiscussionReply {
   audio?: DiscussionReplyAudio | null;
 }
 
+/** Kunci sort feed publik (#204). Alias: latest→created, popular→votes. */
+export type DiscussionListSort =
+  | 'created'
+  | 'activity'
+  | 'votes'
+  | 'replies'
+  | 'latest'
+  | 'popular';
+
+export type DiscussionListOrder = 'asc' | 'desc';
+
 export interface DiscussionListFilter {
   status?: DiscussionStatus;
   userId?: string;
   limit: number;
   cursor?: string;
-  /** latest = id desc; popular = upvotes desc lalu id desc (hanya published). */
-  sort?: 'latest' | 'popular';
+  /**
+   * created/latest = id; activity = last_reply COALESCE created;
+   * votes/popular = upvote; replies = published_reply_count.
+   */
+  sort?: DiscussionListSort;
+  /** Default desc. Diabaikan untuk alias latest/popular (selalu desc). */
+  order?: DiscussionListOrder;
+}
+
+/** Normalisasi sort wire → kunci kanonik + arah. */
+export function normalizeDiscussionListSort(
+  sort: DiscussionListSort | undefined,
+  order: DiscussionListOrder | undefined,
+): { sort: 'created' | 'activity' | 'votes' | 'replies'; order: DiscussionListOrder } {
+  if (sort === 'latest' || sort == null) {
+    return { sort: 'created', order: 'desc' };
+  }
+  if (sort === 'popular') {
+    return { sort: 'votes', order: 'desc' };
+  }
+  return { sort, order: order === 'asc' ? 'asc' : 'desc' };
 }
 
 export interface DiscussionReplyListFilter {

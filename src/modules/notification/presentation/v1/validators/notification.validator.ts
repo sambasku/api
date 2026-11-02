@@ -16,11 +16,18 @@ export const inboxNotificationTypeSchema = z.enum([
   'discussion_rejected',
   'discussion_taken_down',
   'discussion_reply',
+  'discussion_mention',
+  'pantun_reply',
+  'pantun_mention',
   'word_comment',
   'word_vote',
+  'word_example',
+  'word_audio',
   'campaign',
   'verifier_application_approved',
   'verifier_application_rejected',
+  'streak_reminder',
+  'level_up',
 ]);
 
 export const notificationTargetKindSchema = z.enum([
@@ -30,6 +37,9 @@ export const notificationTargetKindSchema = z.enum([
   'discussion',
   'campaign',
   'verifier_application',
+  'pantun',
+  'day',
+  'level',
 ]);
 
 export const notificationActionKindSchema = z.enum([
@@ -37,6 +47,7 @@ export const notificationActionKindSchema = z.enum([
   'contribution',
   'suggestion',
   'discussion',
+  'pantun',
   'url',
 ]);
 

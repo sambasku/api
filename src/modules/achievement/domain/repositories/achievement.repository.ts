@@ -46,6 +46,11 @@ export interface AchievementRepository {
     nextCursor: string | null;
     hasMore: boolean;
   }>;
+  /**
+   * Semua katalog aktif untuk cron scan (tanpa hard-cap page 50, tanpa
+   * hitung penerima). ACHIEVEMENT_ENHANCEMENT Q2.
+   */
+  listActiveForScan(): Promise<Achievement[]>;
 
   // ---- kepemilikan ----
   /** Katalog + status kepemilikan user (locked/owned) dalam SATU query. */
@@ -125,6 +130,14 @@ export interface AchievementRepository {
     achievementId: string,
     criteria: AchievementCriteria,
   ): Promise<number>;
+  /**
+   * Progress satu user untuk banyak criteria agregat (1 db.batch).
+   * Index hasil = index input. Source non-agregat → 0.
+   */
+  countUserAggregateProgressBatch(
+    userId: string,
+    criteriaList: AchievementCriteria[],
+  ): Promise<number[]>;
 
   // ---- border profil ----
   /** Set/lepas border aktif. null = tanpa border. */

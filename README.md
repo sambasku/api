@@ -10,6 +10,13 @@ Stack: Hono + Drizzle ORM + **Turso (libSQL / SQLite)**, clean architecture
 feature-based (`src/modules/<fitur>/`). Dokumentasi API interaktif di
 `GET /docs` (Scalar) saat server jalan.
 
+## Dikerjakan dengan AI
+
+Kode dan dokumentasi di repo ini ditulis bersama agen AI. Manusia tetap
+yang memutuskan arah produk, meninjau setiap perubahan, dan menjalankan
+verifikasi sebelum rilis. Tidak ada agen yang punya akses commit, merge,
+atau deploy otomatis. Semua keputusan akhir ada di tangan pengelola.
+
 ## Database (tanpa Docker)
 
 Lokal & CI memakai **file SQLite**. Staging/production memakai **Turso Cloud**.
@@ -48,6 +55,7 @@ pnpm seed
 # 5. Jalankan API (Hono + Node)
 pnpm dev                    # http://localhost:3000 - docs di /docs
 #    Health: GET /health  →  { "status": "ok", "database": "up" }
+#    Deploy ID: GET /  atau GET /api/v1/ping  →  data.gitSha (bake CI)
 ```
 
 ### Database test (integration & e2e)
@@ -107,14 +115,17 @@ tier). Semua OTP (verifikasi, reset password, hapus akun) tetap
 
 Push ke branch **`staging`** →
 [.github/workflows/deploy-staging.yml](.github/workflows/deploy-staging.yml):
-test (file SQLite) → migrate Turso → `wrangler deploy --env staging`.
+test (file SQLite) → migrate (`DB_STAGING_TURSO_*`) → image/deploy staging.
 
 | Secret                        | Nilai                                              |
 | ----------------------------- | -------------------------------------------------- |
 | `CLOUDFLARE_API_TOKEN`        | CF → API Tokens → Edit Cloudflare Workers          |
 | `CLOUDFLARE_ACCOUNT_ID`       | `547e27ab971bbd809dfd57626049a131`                 |
-| `TURSO_STAGING_DATABASE_URL`  | `libsql://…` staging                               |
-| `TURSO_STAGING_AUTH_TOKEN`    | token Turso staging                                |
+| `DB_STAGING_TURSO_URL`         | URL libSQL staging (org secret, prioritas)          |
+| `DB_STAGING_TURSO_AUTH_TOKEN`  | token staging                                       |
+| `DB_PRODUCTION_TURSO_URL`      | URL libSQL production (org)                         |
+| `DB_PRODUCTION_TURSO_AUTH_TOKEN` | token production                                  |
+| `TURSO_STAGING_*` / `TURSO_PRODUCTION_*` | fallback lama (opsional)                 |
 
 Secret Worker (JWT, dll.) tidak ikut CI - `wrangler deploy` mempertahankan
 secret yang sudah terpasang. Vars non-secret (termasuk

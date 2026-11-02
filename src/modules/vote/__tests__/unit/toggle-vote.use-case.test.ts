@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { ToggleVoteUseCase } from '../../application/use-cases/toggle-vote.use-case';
 import type { VoteRepository } from '../../domain/repositories/vote.repository';
 
+const USER = '01JDUSERKONTRIB0000000000A';
+const WORD_ID = '01JDWORDMAKATN0000000000A';
+const MEANING_ID = '01JDMEANINGMAKATN0000000A';
+// 0101: happy path memakai target makna; 52: word di-remap ke makna.
+const TARGET = { entityType: 'meaning' as const, entityId: MEANING_ID };
+
 function makeDeps(exists = true) {
   const voteRepo = {
     targetExists: vi.fn().mockResolvedValue(exists),
@@ -9,28 +15,65 @@ function makeDeps(exists = true) {
     countMany: vi.fn(),
     findUserVotes: vi.fn(),
     resolveWordOwnerForVoteTarget: vi.fn().mockResolvedValue(null),
+    resolveLegacyWordVoteTarget: vi.fn().mockResolvedValue({
+      meaningId: MEANING_ID,
+      wordId: WORD_ID,
+    }),
   } as unknown as VoteRepository;
   return { voteRepo, useCase: new ToggleVoteUseCase(voteRepo) };
 }
 
-const USER = '01JDUSERKONTRIB0000000000A';
-const WORD_ID = '01JDWORDMAKATN0000000000A';
-const TARGET = { entityType: 'word' as const, entityId: WORD_ID };
-
 describe('ToggleVoteUseCase', () => {
   it('target ada → toggle(userId, target, value) dipanggil, hasil diteruskan', async () => {
     const { useCase, voteRepo } = makeDeps();
-    const result = await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 });
+    const result = await useCase.execute({ userId: USER, targetType: 'meaning', targetId: MEANING_ID, value: 1 });
 
     expect(voteRepo.targetExists).toHaveBeenCalledWith(TARGET);
     expect(voteRepo.toggle).toHaveBeenCalledWith(USER, TARGET, 1, null);
-    expect(result).toEqual({ myVote: 1, upvotes: 1, downvotes: 0 });
+    expect(result).toEqual({
+      myVote: 1,
+      upvotes: 1,
+      downvotes: 0,
+      targetType: 'meaning',
+      targetId: MEANING_ID,
+    });
   });
 
   it('target tidak ada / sudah soft-deleted → 404 VOTE_TARGET_NOT_FOUND, toggle TIDAK dipanggil', async () => {
     const { useCase, voteRepo } = makeDeps(false);
     await expect(
-      useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: -1 }),
+      useCase.execute({ userId: USER, targetType: 'meaning', targetId: MEANING_ID, value: -1 }),
+    ).rejects.toMatchObject({ errorCode: 'VOTE_TARGET_NOT_FOUND', statusCode: 404 });
+    expect(voteRepo.toggle).not.toHaveBeenCalled();
+  });
+
+  // 52: word di-remap ke makna (compat mobile ≤ v0.4.0).
+  it('target_type word → remap ke meaning, toggle pada makna', async () => {
+    const { useCase, voteRepo } = makeDeps();
+    const result = await useCase.execute({
+      userId: USER,
+      targetType: 'word',
+      targetId: WORD_ID,
+      value: 1,
+    });
+
+    expect(voteRepo.resolveLegacyWordVoteTarget).toHaveBeenCalledWith(WORD_ID);
+    expect(voteRepo.targetExists).toHaveBeenCalledWith(TARGET);
+    expect(voteRepo.toggle).toHaveBeenCalledWith(USER, TARGET, 1, null);
+    expect(result).toEqual({
+      myVote: 1,
+      upvotes: 1,
+      downvotes: 0,
+      targetType: 'meaning',
+      targetId: MEANING_ID,
+    });
+  });
+
+  it('target_type word tanpa makna → 404, toggle TIDAK dipanggil', async () => {
+    const { useCase, voteRepo } = makeDeps();
+    (voteRepo.resolveLegacyWordVoteTarget as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    await expect(
+      useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 }),
     ).rejects.toMatchObject({ errorCode: 'VOTE_TARGET_NOT_FOUND', statusCode: 404 });
     expect(voteRepo.toggle).not.toHaveBeenCalled();
   });
@@ -81,7 +124,7 @@ describe('ToggleVoteUseCase', () => {
       pushCooldown as never,
     );
 
-    await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 });
+    await useCase.execute({ userId: USER, targetType: 'meaning', targetId: MEANING_ID, value: 1 });
     // fire-and-forget notify - beri tick microtask
     await Promise.resolve();
     await Promise.resolve();
@@ -109,14 +152,14 @@ describe('ToggleVoteUseCase', () => {
     } as unknown as VoteRepository;
     const inbox = { execute: vi.fn() };
     const useCase = new ToggleVoteUseCase(voteRepo, undefined, inbox as never);
-    await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 });
+    await useCase.execute({ userId: USER, targetType: 'meaning', targetId: MEANING_ID, value: 1 });
     await Promise.resolve();
     expect(voteRepo.resolveWordOwnerForVoteTarget).not.toHaveBeenCalled();
     expect(inbox.execute).not.toHaveBeenCalled();
   });
 
   // #94: copy feed dibekukan di event (payload), arah dari nilai vote final.
-  it('cast vote word → event vote_word tercatat dengan payload "lemma" sudah pas', async () => {
+  it('cast vote makna → event vote_meaning tercatat dengan payload "lemma" sudah pas', async () => {
     const voteRepo = {
       targetExists: vi.fn().mockResolvedValue(true),
       toggle: vi.fn().mockResolvedValue({ myVote: 1, upvotes: 1, downvotes: 0 }),
@@ -136,15 +179,15 @@ describe('ToggleVoteUseCase', () => {
       activityEvents as never,
     );
 
-    await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 });
+    await useCase.execute({ userId: USER, targetType: 'meaning', targetId: MEANING_ID, value: 1 });
 
     expect(activityEvents.safe).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'vote_word',
+        kind: 'vote_meaning',
         actorId: USER,
         targetWordId: WORD_ID,
-        targetId: WORD_ID,
-        dedupeKey: `vote:${USER}:word:${WORD_ID}`,
+        targetId: MEANING_ID,
+        dedupeKey: `vote:${USER}:meaning:${MEANING_ID}`,
         payload: '"apam" sudah pas',
       }),
     );
@@ -170,7 +213,7 @@ describe('ToggleVoteUseCase', () => {
       activityEvents as never,
     );
 
-    await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: -1 });
+    await useCase.execute({ userId: USER, targetType: 'meaning', targetId: MEANING_ID, value: -1 });
 
     expect(activityEvents.safe).toHaveBeenCalledWith(
       expect.objectContaining({ payload: '"apam" perlu dicek ulang' }),
@@ -193,9 +236,82 @@ describe('ToggleVoteUseCase', () => {
       activityEvents as never,
     );
 
-    await useCase.execute({ userId: USER, targetType: 'word', targetId: WORD_ID, value: 1 });
+    await useCase.execute({ userId: USER, targetType: 'meaning', targetId: MEANING_ID, value: 1 });
 
     expect(activityEvents.safe).not.toHaveBeenCalled();
-    expect(activityEvents.safeVoteVisibility).toHaveBeenCalledWith(USER, 'word', WORD_ID);
+    expect(activityEvents.safeVoteVisibility).toHaveBeenCalledWith(USER, 'meaning', MEANING_ID);
+  });
+
+  // Vote per makna: kind event vote_meaning, wire tetap `vote`.
+  it('cast vote meaning → event vote_meaning tercatat (payload beku)', async () => {
+    const MEANING_ID = '01JDMEANINGMAKATN0000000A';
+    const voteRepo = {
+      targetExists: vi.fn().mockResolvedValue(true),
+      toggle: vi.fn().mockResolvedValue({ myVote: 1, upvotes: 1, downvotes: 0 }),
+      resolveWordOwnerForVoteTarget: vi.fn().mockResolvedValue({
+        wordId: WORD_ID,
+        lemma: 'makatn',
+        ownerUserId: USER,
+      }),
+    } as unknown as VoteRepository;
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined), safeVoteVisibility: vi.fn() };
+    const useCase = new ToggleVoteUseCase(
+      voteRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      activityEvents as never,
+    );
+
+    await useCase.execute({
+      userId: USER,
+      targetType: 'meaning',
+      targetId: MEANING_ID,
+      value: 1,
+    });
+
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'vote_meaning',
+        actorId: USER,
+        targetWordId: WORD_ID,
+        targetId: MEANING_ID,
+        dedupeKey: `vote:${USER}:meaning:${MEANING_ID}`,
+        payload: '"makatn" sudah pas',
+      }),
+    );
+  });
+
+  it('unvote meaning → visibility sync untuk meaning', async () => {
+    const MEANING_ID = '01JDMEANINGMAKATN0000000A';
+    const voteRepo = {
+      targetExists: vi.fn().mockResolvedValue(true),
+      toggle: vi.fn().mockResolvedValue({ myVote: null, upvotes: 0, downvotes: 0 }),
+      resolveWordOwnerForVoteTarget: vi.fn(),
+    } as unknown as VoteRepository;
+    const activityEvents = { safe: vi.fn(), safeVoteVisibility: vi.fn() };
+    const useCase = new ToggleVoteUseCase(
+      voteRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      activityEvents as never,
+    );
+
+    await useCase.execute({
+      userId: USER,
+      targetType: 'meaning',
+      targetId: MEANING_ID,
+      value: 1,
+    });
+
+    expect(activityEvents.safe).not.toHaveBeenCalled();
+    expect(activityEvents.safeVoteVisibility).toHaveBeenCalledWith(
+      USER,
+      'meaning',
+      MEANING_ID,
+    );
   });
 });

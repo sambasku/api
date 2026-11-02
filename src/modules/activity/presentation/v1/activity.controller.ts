@@ -57,6 +57,8 @@ export class ActivityController {
       limit: query.limit,
       cursor: query.cursor,
       excludeUserId,
+      // #193: filter kategori chips feed (default 'all' = tanpa filter).
+      category: query.category,
     });
 
     // Response berbeda per identitas (Bearer sah = exclude self), jadi cache

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { choiceId, opaqueId } from '@/shared/validation/id';
+import { choiceId, choiceIdCompat, opaqueId, opaqueIdCompat } from '@/shared/validation/id';
+import { emptyAsUndefined } from '@/shared/validation/empty-string';
 import { queryBooleanSchema } from '@/shared/validation/query-boolean';
 import {
   USAGE_LABELS,
@@ -8,7 +9,10 @@ import {
 import { wordImageAttributionSchema, wordImageInputSchema } from './word-image-input';
 
 export const ulid = opaqueId;
-const wordClassId = choiceId('Kelas kata');
+/** Wajib 26 char bila diisi; `""` dari client lama → null (isi default di use case). */
+const wordClassId = choiceIdCompat('Kelas kata');
+/** Bahasa wajib bila diisi; `""` → undefined (default SBS/IDN di use case). */
+const languageIdCompat = opaqueIdCompat;
 
 // Section 22 - approval gate: pending_review/rejected hanya di-set sistem
 export const wordStatusSchema = z.enum([
@@ -78,7 +82,7 @@ const wordVariantItemSchema = z
   });
 
 const meaningTranslationItemSchema = z.object({
-  language_id: ulid,
+  language_id: languageIdCompat,
   translation_text: z.string().trim().min(1, 'Terjemahan tidak boleh kosong'),
   translation_type: z.enum(['direct', 'descriptive', 'idiomatic']).default('direct'),
   translation_allows_comma: z.boolean().optional().default(false),
@@ -122,9 +126,9 @@ const meaningInputObjectSchema = z.object({
   examples: z
     .array(
       z.object({
-        source_language_id: ulid,
+        source_language_id: languageIdCompat,
         source_sentence: z.string().trim().min(1, 'Contoh kalimat tidak boleh kosong'),
-        target_language_id: ulid.optional(),
+        target_language_id: emptyAsUndefined(ulid.optional()),
         target_sentence: z.string().optional(),
         source_type: z
           .enum(['native_speaker', 'book', 'corpus', 'interview', 'other'])
@@ -186,7 +190,7 @@ const meaningOverrideSchema = z.object({
   translations: z
     .array(
       z.object({
-        language_id: ulid,
+        language_id: languageIdCompat,
         translation_text: z.string().trim().min(1, 'Terjemahan tidak boleh kosong'),
         translation_type: z.enum(['direct', 'descriptive', 'idiomatic']).default('direct'),
       }),
@@ -195,9 +199,9 @@ const meaningOverrideSchema = z.object({
   examples: z
     .array(
       z.object({
-        source_language_id: ulid,
+        source_language_id: languageIdCompat,
         source_sentence: z.string().trim().min(1, 'Contoh kalimat tidak boleh kosong'),
-        target_language_id: ulid.optional(),
+        target_language_id: emptyAsUndefined(ulid.optional()),
         target_sentence: z.string().optional(),
         source_type: z
           .enum(['native_speaker', 'book', 'corpus', 'interview', 'other'])
@@ -273,8 +277,9 @@ const inlineWordSchema = z
 // Object schema murni (tanpa refinement) - dipakai juga modul contribution
 // untuk schema correct (`.omit()` tidak bisa dipakai pada schema ber-refine)
 export const createWordBodySchema = z.object({
-  language_id: ulid,
-  dialect_id: ulid.optional(),
+  // Client lama kirim language_id:"" bila referensi belum termuat - default SBS di use case.
+  language_id: languageIdCompat,
+  dialect_id: emptyAsUndefined(ulid.optional()),
   lemma: z.string().trim().min(1, 'Kata tidak boleh kosong').max(255),
   lemma_allows_comma: z.boolean().optional().default(false),
   notes: z.string().optional(),

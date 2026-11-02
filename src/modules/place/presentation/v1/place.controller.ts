@@ -1,35 +1,59 @@
-import type { Context } from 'hono';
-import { ANONIM_USER_ID } from '@/shared/constants/anonim';
-import type { AppVariables } from '@/shared/types';
-import type { Place, PlaceImage, PlaceRelatedCard } from '../../domain/entities/place.entity';
+import type { Context } from "hono";
+import { ANONIM_USER_ID } from "@/shared/constants/anonim";
+import type { AppVariables } from "@/shared/types";
+import { clientIpKey, normalizedDeviceId } from "@/shared/middlewares/rate-limit.middleware";
+import type {
+  Place,
+  PlaceImage,
+  PlaceRelatedCard,
+} from "../../domain/entities/place.entity";
 import type {
   AppendPlaceImagesUseCase,
   CreatePlaceUseCase,
   DeletePlaceUseCase,
   GetPlaceBySlugUseCase,
+  GetPlaceViewReportUseCase,
+  HidePlaceImageUseCase,
   ListPlaceImagesUseCase,
   ListPlacesUseCase,
+  ListPlaceViewsUseCase,
+  RecordPlaceViewUseCase,
   UpdatePlaceUseCase,
-} from '../../application/use-cases/place.use-cases';
-import type { z } from 'zod';
+} from "../../application/use-cases/place.use-cases";
+import type { z } from "zod";
 import type {
   createPlaceBodySchema,
   listPlacesQuerySchema,
   updatePlaceBodySchema,
-} from './validators/place.validator';
+} from "./validators/place.validator";
+
+/**
+ * Identitas pembaca untuk dedupe view harian: user login > device id > IP.
+ * Prefiks mencegah tabrakan antar ruang nama (user vs device vs ip).
+ */
+export function viewerKey(c: Context<{ Variables: AppVariables }>): string {
+  const userId = c.get("user")?.user_id;
+  if (userId) return `u:${userId}`;
+  const deviceId = normalizedDeviceId(c);
+  if (deviceId) return `d:${deviceId}`;
+  return `ip:${clientIpKey(c)}`;
+}
 
 function serialize(
   p: Place,
   extra?: { imageCount?: number; relatedCards?: PlaceRelatedCard[] },
 ) {
-  const related = (extra?.relatedCards ?? p.related.map((r) => ({
-    kind: r.kind,
-    slug: r.slug,
-    name: null,
-    category: null,
-    type: null,
-    coverUrl: null,
-  }))).map((r) => ({
+  const related = (
+    extra?.relatedCards ??
+    p.related.map((r) => ({
+      kind: r.kind,
+      slug: r.slug,
+      name: null,
+      category: null,
+      type: null,
+      coverUrl: null,
+    }))
+  ).map((r) => ({
     kind: r.kind,
     slug: r.slug,
     name: r.name,
@@ -104,9 +128,7 @@ function serializeImage(img: PlaceImage) {
   };
 }
 
-function mapImages(
-  images?: z.infer<typeof createPlaceBodySchema>['images'],
-) {
+function mapImages(images?: z.infer<typeof createPlaceBodySchema>["images"]) {
   return images?.map((img) => ({
     url: img.url,
     isMain: img.is_main,
@@ -126,7 +148,7 @@ function mapImages(
 }
 
 function mapSources(
-  sources?: z.infer<typeof createPlaceBodySchema>['sources'],
+  sources?: z.infer<typeof createPlaceBodySchema>["sources"],
 ) {
   return sources?.map((s) => ({
     name: s.name,
@@ -146,6 +168,10 @@ export class PlaceController {
     private readonly getBySlugUc: GetPlaceBySlugUseCase,
     private readonly listImagesUc: ListPlaceImagesUseCase,
     private readonly appendImagesUc: AppendPlaceImagesUseCase,
+    private readonly recordViewUc: RecordPlaceViewUseCase,
+    private readonly listViewsUc: ListPlaceViewsUseCase,
+    private readonly viewReportUc: GetPlaceViewReportUseCase,
+    private readonly hideImageUc: HidePlaceImageUseCase,
   ) {}
 
   listPublic(
@@ -160,27 +186,31 @@ export class PlaceController {
         type: query.type,
         regionId: query.region_id,
         villageId: query.village_id,
-        villageUnset: query.village_unset === '1',
+        villageUnset: query.village_unset === "1",
         q: query.q,
         publicOnly: true,
       })
       .then((r) =>
         c.json({
           success: true as const,
-          data: { items: r.items.map((item) => serialize(item)), next_cursor: r.nextCursor },
+          data: {
+            items: r.items.map((item) => serialize(item)),
+            next_cursor: r.nextCursor,
+          },
         }),
       );
   }
 
   getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
-    return this.getBySlugUc
-      .execute(slug, true)
-      .then((p) =>
-        c.json({
-          success: true as const,
-          data: serialize(p, { imageCount: p.imageCount, relatedCards: p.relatedCards }),
+    return this.getBySlugUc.execute(slug, true).then((p) =>
+      c.json({
+        success: true as const,
+        data: serialize(p, {
+          imageCount: p.imageCount,
+          relatedCards: p.relatedCards,
         }),
-      );
+      }),
+    );
   }
 
   listAdmin(
@@ -195,7 +225,7 @@ export class PlaceController {
         type: query.type,
         regionId: query.region_id,
         villageId: query.village_id,
-        villageUnset: query.village_unset === '1',
+        villageUnset: query.village_unset === "1",
         q: query.q,
         status: query.status,
         publicOnly: false,
@@ -203,7 +233,10 @@ export class PlaceController {
       .then((r) =>
         c.json({
           success: true as const,
-          data: { items: r.items.map((item) => serialize(item)), next_cursor: r.nextCursor },
+          data: {
+            items: r.items.map((item) => serialize(item)),
+            next_cursor: r.nextCursor,
+          },
         }),
       );
   }
@@ -222,7 +255,7 @@ export class PlaceController {
         lat: body.lat ?? null,
         lng: body.lng ?? null,
         mapsUrl: body.maps_url ?? null,
-        shortDescription: body.short_description,
+        shortDescription: body.short_description ?? "",
         regionId: body.region_id ?? null,
         villageId: body.village_id ?? null,
         hours: body.hours ?? null,
@@ -265,7 +298,11 @@ export class PlaceController {
       .then((p) => c.json({ success: true as const, data: serialize(p) }));
   }
 
-  listImages(c: Context<{ Variables: AppVariables }>, slug: string, offset: number) {
+  listImages(
+    c: Context<{ Variables: AppVariables }>,
+    slug: string,
+    offset: number,
+  ) {
     return this.listImagesUc.execute(slug, offset).then((page) =>
       c.json({
         success: true as const,
@@ -278,9 +315,24 @@ export class PlaceController {
     );
   }
 
-  appendImages(c: Context<{ Variables: AppVariables }>, slug: string, urls: string[]) {
+  appendImages(
+    c: Context<{ Variables: AppVariables }>,
+    slug: string,
+    urls: string[],
+  ) {
     return this.appendImagesUc
-      .execute(slug, c.get('user')?.user_id ?? ANONIM_USER_ID, urls)
+      .execute(slug, c.get("user")?.user_id ?? ANONIM_USER_ID, urls)
+      .then(() => c.json({ success: true as const, data: null }));
+  }
+
+  /** #187: takedown foto (admin). Foto disembunyikan + event feed ikut. */
+  hideImage(
+    c: Context<{ Variables: AppVariables }>,
+    placeId: string,
+    imageId: string,
+  ) {
+    return this.hideImageUc
+      .execute(placeId, imageId)
       .then(() => c.json({ success: true as const, data: null }));
   }
 
@@ -288,5 +340,34 @@ export class PlaceController {
     return this.deleteUc
       .execute(id)
       .then(() => c.json({ success: true as const, data: null }));
+  }
+
+  /**
+   * Publik: catat view detail. Slug tak dikenal / draft = silent no-op.
+   * 1 pembaca = 1 view per hari (dedupe server via viewerKey).
+   */
+  recordView(c: Context<{ Variables: AppVariables }>, slug: string) {
+    return this.recordViewUc
+      .execute(slug, viewerKey(c))
+      .then(() => c.json({ success: true as const, data: null }));
+  }
+
+  /** Admin: total view per place sejak `days` hari (null = semua waktu). */
+  listViews(c: Context<{ Variables: AppVariables }>, days: number | null) {
+    return this.listViewsUc.execute(days).then((map) =>
+      c.json({
+        success: true as const,
+        data: {
+          items: [...map].map(([place_id, views]) => ({ place_id, views })),
+        },
+      }),
+    );
+  }
+
+  /** Admin: laporan tren harian + ranking per place untuk halaman analitik. */
+  listViewsDaily(c: Context<{ Variables: AppVariables }>, days: number) {
+    return this.viewReportUc
+      .execute(days)
+      .then((report) => c.json({ success: true as const, data: report }));
   }
 }

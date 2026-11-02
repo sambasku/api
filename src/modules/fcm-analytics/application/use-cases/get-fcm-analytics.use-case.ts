@@ -39,7 +39,7 @@ function errorMessage(kind: AnalyticsProviderErrorKind): string {
     case 'rate_limited':
       return 'Kuota Google lagi penuh. Coba lagi beberapa menit lagi.';
     case 'upstream':
-      return 'Firebase lagi bermasalah. Coba lagi nanti.';
+      return 'Firebase lagi bermasalah. Coba lagi dalam beberapa saat.';
     case 'network':
       return 'Server gagal menghubungi Google. Coba lagi sebentar lagi.';
   }

@@ -11,6 +11,7 @@ import {
   lexicalRelations,
   meanings,
   meaningTranslations,
+  meaningVoteCounts,
   pronunciations,
   users,
   wordCategories,
@@ -36,6 +37,7 @@ import {
   isPlaceholderMeaningText,
   normalizeMeaningText,
 } from '../application/utils/normalize-meaning-text';
+import { mapDuplicateMeaningIndexes } from '../application/utils/meaning-deduplication';
 import { publishOrMergeMeaningsInTx } from './publish-or-merge-meanings';
 import { mergeDuplicateWordsInTx } from './merge-duplicate-words';
 import {
@@ -488,14 +490,15 @@ export class WordRepositoryImpl implements WordRepository {
     definition: string;
     translationText: string;
   }): Promise<PublishedDuplicateMeaning | null> {
-    if (
-      isPlaceholderMeaningText(params.definition) ||
-      isPlaceholderMeaningText(params.translationText)
-    ) {
-      return null;
-    }
-    const wantDef = normalizeMeaningText(params.definition);
-    const wantTr = normalizeMeaningText(params.translationText);
+    // Sisi pencari yang placeholder = field itu tidak dibandingkan (#174:
+    // definisi "-" tetap tertolak lewat padanan Indonesia-nya).
+    const wantDef = isPlaceholderMeaningText(params.definition)
+      ? null
+      : normalizeMeaningText(params.definition);
+    const wantTr = isPlaceholderMeaningText(params.translationText)
+      ? null
+      : normalizeMeaningText(params.translationText);
+    if (wantDef === null && wantTr === null) return null;
 
     const rows = await this.db
       .select({
@@ -523,27 +526,26 @@ export class WordRepositoryImpl implements WordRepository {
           isNull(words.deletedAt),
           eq(meanings.status, 'published'),
           isNull(meanings.deletedAt),
-          eq(meanings.isHaveDefinition, true),
-          eq(meanings.isHaveTranslation, true),
           eq(languages.code, 'id'),
-          ne(meanings.definition, '-'),
-          ne(meaningTranslations.translationText, '-'),
         ),
       );
 
     for (const row of rows) {
-      if (
-        normalizeMeaningText(row.definition) === wantDef &&
-        normalizeMeaningText(row.translationText) === wantTr
-      ) {
-        return {
-          wordId: row.wordId,
-          meaningId: row.meaningId,
-          lemma: row.lemma,
-          definition: row.definition,
-          translationText: row.translationText,
-        };
-      }
+      const rowDef = isPlaceholderMeaningText(row.definition)
+        ? null
+        : normalizeMeaningText(row.definition);
+      const rowTr = isPlaceholderMeaningText(row.translationText)
+        ? null
+        : normalizeMeaningText(row.translationText);
+      if (wantDef !== null && rowDef !== wantDef) continue;
+      if (wantTr !== null && rowTr !== wantTr) continue;
+      return {
+        wordId: row.wordId,
+        meaningId: row.meaningId,
+        lemma: row.lemma,
+        definition: row.definition,
+        translationText: row.translationText,
+      };
     }
     return null;
   }
@@ -669,31 +671,123 @@ export class WordRepositoryImpl implements WordRepository {
     return [...byMeaning.values()];
   }
 
-  async findPublishedIdByLemma(lemma: string): Promise<string | null> {
-    const [row] = await this.db
-      .select({ id: words.id })
-      .from(words)
+  async findLinkedMeanings(wordId: string): Promise<WordDetail['meanings']> {
+    const rows = await this.db
+      .select({
+        meaning: meanings,
+        sourceLemma: words.lemma,
+        translationLanguageId: meaningTranslations.languageId,
+        translationText: meaningTranslations.translationText,
+        translationType: meaningTranslations.translationType,
+        translationAllowsComma: meaningTranslations.translationAllowsComma,
+        wcId: wordClasses.id,
+        wcCode: wordClasses.code,
+        wcName: wordClasses.name,
+        wcAlias: wordClasses.alias,
+        wcDescription: wordClasses.description,
+        wcParentId: wordClasses.parentId,
+      })
+      .from(meanings)
+      .innerJoin(words, eq(words.id, meanings.wordId))
+      .leftJoin(
+        meaningTranslations,
+        and(eq(meaningTranslations.meaningId, meanings.id), isNull(meaningTranslations.deletedAt)),
+      )
+      .leftJoin(
+        wordClasses,
+        and(eq(wordClasses.id, meanings.wordClassId), isNull(wordClasses.deletedAt)),
+      )
       .where(
         and(
-          sql`lower(${words.lemma}) = lower(${lemma.trim()})`,
-          eq(words.status, 'published'),
+          isNull(meanings.deletedAt),
           isNull(words.deletedAt),
+          ne(words.id, wordId),
+          sql`${meanings.wordId} IN (
+            SELECT lr.target_word_id FROM lexical_relations lr
+            WHERE lr.source_word_id = ${wordId} AND lr.deleted_at IS NULL
+            UNION
+            SELECT lr.source_word_id FROM lexical_relations lr
+            WHERE lr.target_word_id = ${wordId} AND lr.deleted_at IS NULL
+            UNION
+            SELECT other.word_id FROM word_group_members self
+            INNER JOIN word_group_members other
+              ON other.group_id = self.group_id
+             AND other.word_id <> self.word_id
+             AND other.deleted_at IS NULL
+            WHERE self.word_id = ${wordId} AND self.deleted_at IS NULL
+          )`,
         ),
       )
-      // Homonim: entri terverifikasi duluan, lalu terlama (deterministik)
-      .orderBy(desc(words.isVerified), words.createdAt)
-      .limit(1);
-    return row?.id ?? null;
+      .orderBy(asc(words.lemma), asc(meanings.orderIndex));
+
+    const byId = new Map<string, WordDetail['meanings'][number]>();
+    for (const row of rows) {
+      const m = row.meaning;
+      let detail = byId.get(m.id);
+      if (!detail) {
+        detail = {
+          id: m.id,
+          wordId: m.wordId,
+          wordClass: row.wcId
+            ? {
+                id: row.wcId,
+                code: row.wcCode ?? '',
+                name: row.wcName ?? '',
+                alias: row.wcAlias,
+                description: row.wcDescription,
+                parentId: row.wcParentId,
+              }
+            : null,
+          inheritedFromMeaningId: m.inheritedFromMeaningId,
+          definition: m.definition,
+          isHaveDefinition: m.isHaveDefinition,
+          isHaveTranslation: m.isHaveTranslation,
+          meaningSource: (m.meaningSource as 'manual' | 'kbbi' | 'kbbi_edited') ?? 'manual',
+          orderIndex: m.orderIndex,
+          notes: m.notes,
+          creator: null,
+          translations: [],
+          examples: [],
+          sourceLemma: row.sourceLemma,
+        };
+        byId.set(m.id, detail);
+      }
+      if (row.translationText && row.translationLanguageId && row.translationType) {
+        detail.translations.push({
+          languageId: row.translationLanguageId,
+          translationText: row.translationText,
+          translationType: row.translationType,
+          translationAllowsComma: row.translationAllowsComma ?? false,
+        });
+      }
+    }
+    return [...byId.values()];
   }
 
   async findDetailById(
     id: string,
-    opts?: { includeAllStatuses?: boolean },
+    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+  ): Promise<WordDetail | null> {
+    return this.loadDetail({ kind: 'id', id }, opts);
+  }
+
+  /** URL publik /words/<lemma> - resolusi lemma + detail dalam SATU round-trip.
+   *  Sebelumnya use-case memanggil findPublishedIdByLemma lalu findDetailById
+   *  = 4 round-trip Turso; sekarang word+meanings di-batch (1) + children (1). */
+  async findPublishedDetailByLemma(lemma: string): Promise<WordDetail | null> {
+    return this.loadDetail({ kind: 'lemma', lemma });
+  }
+
+  private async loadDetail(
+    key: { kind: 'id'; id: string } | { kind: 'lemma'; lemma: string },
+    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
   ): Promise<WordDetail | null> {
     const includeAll = opts?.includeAllStatuses === true;
+    const includeDeleted = opts?.includeDeleted === true;
     const verifierUsers = alias(users, 'word_verifier');
     const creatorUsers = alias(users, 'word_creator');
-    const [joined] = await this.db
+    const isLemma = key.kind === 'lemma';
+    const wordQuery = this.db
       .select({
         word: words,
         verifierUsername: verifierUsers.username,
@@ -718,20 +812,33 @@ export class WordRepositoryImpl implements WordRepository {
         eq(words.importSessionId, wordImportSessions.id),
       )
       .where(
-        includeAll
-          ? and(eq(words.id, id), isNull(words.deletedAt))
-          : and(eq(words.id, id), eq(words.status, 'published'), isNull(words.deletedAt)),
+        isLemma
+          ? and(
+              sql`lower(${words.lemma}) = lower(${key.lemma.trim()})`,
+              eq(words.status, 'published'),
+              isNull(words.deletedAt),
+            )
+          : includeAll
+            ? and(eq(words.id, key.id), includeDeleted ? undefined : isNull(words.deletedAt))
+            : and(eq(words.id, key.id), eq(words.status, 'published'), isNull(words.deletedAt)),
       )
+      // Homonim (mode lemma): entri terverifikasi duluan, lalu terlama.
+      // id-mode selalu <=1 baris (PK), jadi order ini sisa sort 1 baris - murah.
+      .orderBy(desc(words.isVerified), words.createdAt)
       .limit(1);
-    if (!joined) return null;
-    const wordRow = joined.word;
 
-    const meaningRows = await this.db
+    const meaningQuery = this.db
       .select()
       .from(meanings)
       .where(
         and(
-          eq(meanings.wordId, id),
+          // Correlated subquery lemma-mode supaya TIDAK perlu id word dulu
+          // (hemat round-trip); id-mode langsung literal id.
+          sql`${meanings.wordId} = ${
+            isLemma
+              ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.lemma.trim()}) AND w2.status = 'published' AND w2.deleted_at IS NULL ORDER BY w2.is_verified DESC, w2.created_at LIMIT 1)`
+              : key.id
+          }`,
           isNull(meanings.deletedAt),
           // 17: makna kontribusi (pending_review) tidak tayang publik -
           // pola examples/pronunciations di bawah; admin memakai includeAll
@@ -739,6 +846,33 @@ export class WordRepositoryImpl implements WordRepository {
         ),
       )
       .orderBy(meanings.orderIndex);
+
+    // word + meanings = 1 HTTP request (db.batch = 1 subrequest Hrana).
+    const mainResults = (await this.db.batch([wordQuery, meaningQuery] as never)) as unknown as [
+      Record<string, unknown>[],
+      (typeof meanings.$inferSelect)[],
+    ];
+    const joined = mainResults[0][0] as
+      | {
+          word: typeof words.$inferSelect;
+          verifierUsername: string | null;
+          verifierDisplayName: string | null;
+          verifierRole: string | null;
+          verifierDeletedAt: Date | null;
+          creatorUsername: string | null;
+          creatorDisplayName: string | null;
+          creatorRole: string | null;
+          creatorDeletedAt: Date | null;
+          sessionSupportName: string | null;
+          sessionSupportType: string | null;
+          sessionSupportAddress: string | null;
+          sessionSupportTitle: string | null;
+          sessionSupportDesc: string | null;
+        }
+      | undefined;
+    if (!joined) return null;
+    const wordRow = joined.word as typeof words.$inferSelect;
+    const meaningRows = mainResults[1];
 
     const wordClassIds = [...new Set(meaningRows.map((m) => m.wordClassId).filter((x): x is string => !!x))];
     const meaningIds = meaningRows.map((m) => m.id);
@@ -801,7 +935,7 @@ export class WordRepositoryImpl implements WordRepository {
         .select({ id: categories.id, name: categories.name })
         .from(wordCategories)
         .innerJoin(categories, eq(wordCategories.categoryId, categories.id))
-        .where(eq(wordCategories.wordId, id)),
+        .where(eq(wordCategories.wordId, wordRow.id)),
     );
 
     batchKeys.push('pronunciations');
@@ -811,7 +945,7 @@ export class WordRepositoryImpl implements WordRepository {
         .from(pronunciations)
         .where(
           and(
-            eq(pronunciations.wordId, id),
+            eq(pronunciations.wordId, wordRow.id),
             isNull(pronunciations.deletedAt),
             includeAll ? undefined : eq(pronunciations.status, 'published'),
           ),
@@ -825,7 +959,7 @@ export class WordRepositoryImpl implements WordRepository {
         .from(wordImages)
         .where(
           and(
-            eq(wordImages.wordId, id),
+            eq(wordImages.wordId, wordRow.id),
             isNull(wordImages.deletedAt),
             includeAll ? undefined : eq(wordImages.status, 'published'),
           ),
@@ -839,7 +973,7 @@ export class WordRepositoryImpl implements WordRepository {
         .from(wordAudios)
         .where(
           and(
-            eq(wordAudios.wordId, id),
+            eq(wordAudios.wordId, wordRow.id),
             isNull(wordAudios.deletedAt),
             includeAll ? undefined : eq(wordAudios.status, 'published'),
           ),
@@ -858,7 +992,7 @@ export class WordRepositoryImpl implements WordRepository {
         .innerJoin(words, eq(words.id, lexicalRelations.targetWordId))
         .where(
           and(
-            eq(lexicalRelations.sourceWordId, id),
+            eq(lexicalRelations.sourceWordId, wordRow.id),
             isNull(lexicalRelations.deletedAt),
             // PRD relasi-lemma: baris pending/rejected tidak tampil publik
             includeAll
@@ -885,7 +1019,7 @@ export class WordRepositoryImpl implements WordRepository {
         .innerJoin(words, eq(words.id, lexicalRelations.sourceWordId))
         .where(
           and(
-            eq(lexicalRelations.targetWordId, id),
+            eq(lexicalRelations.targetWordId, wordRow.id),
             isNull(lexicalRelations.deletedAt),
             includeAll
               ? undefined
@@ -904,7 +1038,7 @@ batchQueries.push(
 this.db
 .select()
 .from(wordVariants)
-.where(and(eq(wordVariants.wordId, id), isNull(wordVariants.deletedAt))),
+.where(and(eq(wordVariants.wordId, wordRow.id), isNull(wordVariants.deletedAt))),
 );
 // PRD relasi-lemma: kelompok makna published milik kata ini (hanya saat
 // publik; layar review tidak butuh - anggota pending tidak tayang).
@@ -942,11 +1076,11 @@ isNull(wgmWord.deletedAt),
 )
 .where(
 and(
-eq(wgmSelf.wordId, id),
+eq(wgmSelf.wordId, wordRow.id),
 eq(wgmSelf.status, 'published'),
 isNull(wgmSelf.deletedAt),
 // kecuali kata ini sendiri di dalam kelompoknya
-ne(wgmWord.id, id),
+ne(wgmWord.id, wordRow.id),
 eq(wgmOther.status, 'published'),
 isNull(wgmOther.deletedAt),
 ),
@@ -2517,6 +2651,43 @@ memberLemma: string;
     return row ?? null;
   }
 
+  /** #133: owner kata induk media anak - satu JOIN, bukan dua query berurutan. */
+  async findWordOwnerByChild(
+    entityType: 'example' | 'word_audio',
+    entityId: string,
+  ): Promise<{ wordId: string; lemma: string; ownerUserId: string | null } | null> {
+    const columns = {
+      wordId: words.id,
+      lemma: words.lemma,
+      ownerUserId: words.createdBy,
+    };
+    const [row] =
+      entityType === 'example'
+        ? await this.db
+            .select(columns)
+            .from(examples)
+            .innerJoin(meanings, eq(meanings.id, examples.meaningId))
+            .innerJoin(words, eq(words.id, meanings.wordId))
+            .where(
+              and(
+                eq(examples.id, entityId),
+                isNull(examples.deletedAt),
+                isNull(meanings.deletedAt),
+                isNull(words.deletedAt),
+              ),
+            )
+            .limit(1)
+        : await this.db
+            .select(columns)
+            .from(wordAudios)
+            .innerJoin(words, eq(words.id, wordAudios.wordId))
+            .where(
+              and(eq(wordAudios.id, entityId), isNull(wordAudios.deletedAt), isNull(words.deletedAt)),
+            )
+            .limit(1);
+    return row ?? null;
+  }
+
   async findDialectCode(dialectId: string): Promise<string | null> {
     const [row] = await this.db
       .select({ code: dialects.code })
@@ -2944,6 +3115,12 @@ memberLemma: string;
         await tx.delete(meaningTranslations).where(
           inArray(meaningTranslations.meaningId, tx.select({ id: meanings.id }).from(meanings).where(eq(meanings.wordId, id)),
         ));
+        // Ringkasan vote makna (0101) memegang FK ke meanings - wajib dihapus
+        // sebelum makna, kalau tidak edit kata yang sudah punya vote makna
+        // gagal FK (400 "Referensi data tidak valid").
+        await tx.delete(meaningVoteCounts).where(
+          inArray(meaningVoteCounts.meaningId, tx.select({ id: meanings.id }).from(meanings).where(eq(meanings.wordId, id)),
+        ));
         await tx.delete(meanings).where(eq(meanings.wordId, id));
         await tx.delete(wordCategories).where(eq(wordCategories.wordId, id));
         await tx.delete(lexicalRelations).where(eq(lexicalRelations.sourceWordId, id));
@@ -3167,43 +3344,55 @@ memberLemma: string;
     // Pre-generate ULID makna di Node → satu INSERT multi-row + translations/
     // examples tanpa loop RETURNING (hemat N round-trip di dalam tx Workers).
     const meaningIdByIndex = word.meanings.map(() => generateId());
-    opts?.meaningIdsOut?.push(...meaningIdByIndex);
+    // Duplikat makna (beda kapital / sama persis) dijatuhkan supaya tidak
+    // tayang "asin, asin, asin" (#174). Indeks duplikat menumpang id makna
+    // pertama yang sama agar contoh & provenance tetap sejajar.
+    const { firstIndex, isDuplicate } = mapDuplicateMeaningIndexes(word.meanings);
+    const uniqueIndexes = word.meanings.map((_, i) => i).filter((i) => !isDuplicate[i]);
+    opts?.meaningIdsOut?.push(...firstIndex.map((first) => meaningIdByIndex[first]));
 
-    if (word.meanings.length > 0) {
+    if (uniqueIndexes.length > 0) {
       await tx.insert(meanings).values(
-        word.meanings.map((meaning, index) => ({
-          id: meaningIdByIndex[index],
-          wordId,
-          wordClassId: meaning.wordClassId,
-          inheritedFromMeaningId: opts?.inheritedFrom?.[index] ?? null,
-          definition: meaning.definition,
-          isHaveDefinition: meaning.isHaveDefinition ?? true,
-          isHaveTranslation: meaning.isHaveTranslation ?? meaning.translations.length > 0,
-          meaningSource: meaning.meaningSource ?? 'manual',
-          orderIndex: meaning.orderIndex,
-          status: childStatusOf(word.status),
-          isVerified: word.isVerified,
-          createdBy: actorId,
-        })),
+        uniqueIndexes.map((index) => {
+          const meaning = word.meanings[index];
+          return {
+            id: meaningIdByIndex[index],
+            wordId,
+            wordClassId: meaning.wordClassId,
+            inheritedFromMeaningId: opts?.inheritedFrom?.[index] ?? null,
+            definition: meaning.definition,
+            isHaveDefinition: meaning.isHaveDefinition ?? true,
+            isHaveTranslation: meaning.isHaveTranslation ?? meaning.translations.length > 0,
+            meaningSource: meaning.meaningSource ?? 'manual',
+            orderIndex: meaning.orderIndex,
+            status: childStatusOf(word.status),
+            isVerified: word.isVerified,
+            createdBy: actorId,
+          };
+        }),
       );
 
       const translationValues = word.meanings.flatMap((meaning, index) =>
-        meaning.translations.map((t) => ({
-          meaningId: meaningIdByIndex[index],
-          languageId: t.languageId,
-          translationText: t.translationText,
-          translationType: t.translationType,
-          translationAllowsComma: t.translationAllowsComma ?? false,
-          createdBy: actorId,
-        })),
+        isDuplicate[index]
+          ? []
+          : meaning.translations.map((t) => ({
+              meaningId: meaningIdByIndex[index],
+              languageId: t.languageId,
+              translationText: t.translationText,
+              translationType: t.translationType,
+              translationAllowsComma: t.translationAllowsComma ?? false,
+              createdBy: actorId,
+            })),
       );
       if (translationValues.length > 0) {
         await tx.insert(meaningTranslations).values(translationValues);
       }
 
+      // Contoh dari makna duplikat ditempel ke makna yang bertahan (bukan
+      // dibuang) - teks contoh tetap milik pengirimnya.
       const exampleValues = word.meanings.flatMap((meaning, index) =>
         (meaning.examples ?? []).map((e) => ({
-          meaningId: meaningIdByIndex[index],
+          meaningId: meaningIdByIndex[firstIndex[index]],
           sourceLanguageId: e.sourceLanguageId,
           sourceSentence: e.sourceSentence,
           targetLanguageId: e.targetLanguageId ?? null,

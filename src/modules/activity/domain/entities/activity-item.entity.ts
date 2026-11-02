@@ -16,7 +16,13 @@ export type ActivityKind =
   | 'verification'
   | 'vote_up'
   | 'vote_down'
-  | 'announcement';
+  | 'announcement'
+  | 'place_photo'
+  | 'place_listing'
+  | 'event'
+  | 'usaha'
+  | 'culinary'
+  | 'pantun';
 
 export interface ActivityActor {
   username: string | null;

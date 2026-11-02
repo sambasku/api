@@ -21,6 +21,12 @@ export function isUniqueViolation(err: unknown): boolean {
   return msgs.includes('unique constraint') || msgs.includes('unique constraint failed');
 }
 
+/** True bila unique violation berasal dari index/table bernama ini (haystack message + cause). */
+export function isUniqueViolationOn(err: unknown, needle: string): boolean {
+  if (!isUniqueViolation(err)) return false;
+  return collectMessages(err).join(' ').toLowerCase().includes(needle.toLowerCase());
+}
+
 export function isForeignKeyViolation(err: unknown): boolean {
   const codes = collectCodes(err);
   if (
