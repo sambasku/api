@@ -51,7 +51,7 @@ function makeRepo(over: Mock = {}) {
 
 function makeRegions() {
   return {
-    findById: vi.fn().mockResolvedValue(null),
+    findByIdOrSlug: vi.fn().mockResolvedValue(null),
   } as unknown as RegionRepository;
 }
 
@@ -143,7 +143,10 @@ describe("CreateEventUseCase", () => {
 
   it("buat event valid", async () => {
     const out = await uc.execute(baseInput);
-    expect(repo.create).toHaveBeenCalledWith(baseInput);
+    expect(repo.create).toHaveBeenCalledWith({
+      ...baseInput,
+      villageId: null,
+    });
     expect(out).toBeTruthy();
   });
 
@@ -169,7 +172,7 @@ describe("CreateEventUseCase", () => {
   });
 
   it("tolak desa yang bukan desa published", async () => {
-    (regions.findById as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (regions.findByIdOrSlug as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "01DESA00000000000000000001",
       type: "kecamatan",
       status: "published",
@@ -181,7 +184,7 @@ describe("CreateEventUseCase", () => {
   });
 
   it("tolak desa tanpa kecamatan parent", async () => {
-    (regions.findById as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (regions.findByIdOrSlug as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "01DESA00000000000000000001",
       type: "desa",
       status: "published",
