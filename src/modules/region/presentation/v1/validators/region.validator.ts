@@ -71,9 +71,13 @@ export const regionItemResponseSchema = z.object({
 });
 
 export const regionCatalogItemSchema = z.object({
+  /** ULID SoT - dipakai tulis-path (profil/usaha/acara). */
   id: z.string(),
+  /** Kunci geojson / route publik. */
+  slug: z.string(),
   name: z.string(),
   type: regionTypeSchema,
+  /** ULID induk (desa → kecamatan). */
   parent_id: z.string().nullable(),
   code: z.string().nullable(),
   lat: z.number().nullable(),

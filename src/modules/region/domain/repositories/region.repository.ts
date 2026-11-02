@@ -38,9 +38,13 @@ export interface ListRegionsResult {
   nextCursor: string | null;
 }
 
-/** Katalog publik untuk peta Wilayah. `id` dan `parentId` = slug (sama geojson / regions.json). */
+/**
+ * Katalog publik untuk peta + form (profil/usaha/acara).
+ * `id` / `parentId` = ULID (FK tulis-path); `slug` = kunci geojson / CDN.
+ */
 export interface RegionCatalogItem {
   id: string;
+  slug: string;
   name: string;
   type: RegionType;
   parentId: string | null;
@@ -56,8 +60,8 @@ export interface RegionRepository {
   findById(id: string, opts?: { includeDeleted?: boolean }): Promise<Region | null>;
   findBySlug(slug: string): Promise<Region | null>;
   /**
-   * Terima ULID (FK) atau slug katalog publik dalam satu query.
-   * Klien memakai katalog (`id` = slug), jadi tulis-path wajib toleran.
+   * Terima ULID (FK) atau slug publik dalam satu query.
+   * Tulis-path wajib resolve ke ULID sebelum simpan.
    */
   findByIdOrSlug(ref: string, opts?: { includeDeleted?: boolean }): Promise<Region | null>;
   list(input: ListRegionsInput): Promise<ListRegionsResult>;

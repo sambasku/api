@@ -41,7 +41,7 @@ export function createPublicRegionRoutes(deps: { controller: RegionController })
     method: 'get',
     path: '/catalog',
     tags: ['Regions'],
-    summary: 'Katalog wilayah published untuk peta Eksplorasi (slug, satu response)',
+    summary: 'Katalog wilayah published (id=ULID, slug publik, satu response)',
     responses: {
       200: { description: 'Seluruh kecamatan dan desa', content: json(regionCatalogResponseSchema) },
     },

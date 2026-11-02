@@ -1,4 +1,3 @@
-import { alias } from 'drizzle-orm/sqlite-core';
 import { and, asc, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { places } from '@/shared/database/drizzle/schema/places.schema';
@@ -155,26 +154,26 @@ export class RegionRepositoryImpl implements RegionRepository {
   }
 
   async listPublishedCatalog(): Promise<RegionCatalogItem[]> {
-    const parent = alias(regions, 'region_parent');
     const rows = await this.db
       .select({
+        id: regions.id,
         slug: regions.slug,
         name: regions.name,
         type: regions.type,
-        parentSlug: parent.slug,
+        parentId: regions.parentId,
         code: regions.code,
         lat: regions.lat,
         lng: regions.lng,
       })
       .from(regions)
-      .leftJoin(parent, eq(regions.parentId, parent.id))
       .where(and(isNull(regions.deletedAt), eq(regions.status, 'published')))
       .orderBy(desc(regions.type), asc(regions.name));
     return rows.map((row) => ({
-      id: row.slug,
+      id: row.id,
+      slug: row.slug,
       name: row.name,
       type: row.type,
-      parentId: row.parentSlug ?? null,
+      parentId: row.parentId ?? null,
       code: row.code ?? null,
       lat: row.lat ?? null,
       lng: row.lng ?? null,
