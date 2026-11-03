@@ -151,12 +151,16 @@ export class PlaceContributionUseCases {
       hours: row.payload.hours,
       contact: row.payload.contact,
     });
-const have = new Set(place.images.map((img) => img.url));
-const fresh = images.filter((img) => !have.has(img.url)).map((img) => ({ ...img, isMain: false }));
-await this.places.appendImages(place.id, fresh);
-await this.contrib.setStatus(id, 'approved');
-await this.notifyDecision(row, 'approved', undefined, actorId);
-}
+    // isMain diabaikan di mapping: appendImages set cover otomatis
+    // jika place belum punya isMain visible (foto pertama batch).
+    const have = new Set(place.images.map((img) => img.url));
+    const fresh = images
+      .filter((img) => !have.has(img.url))
+      .map((img) => ({ ...img, isMain: false }));
+    await this.places.appendImages(place.id, fresh);
+    await this.contrib.setStatus(id, 'approved');
+    await this.notifyDecision(row, 'approved', undefined, actorId);
+  }
 
 async reject(id: string, reasonCode: string, reasonText?: string | null, actorId?: string): Promise<void> {
   const row = await this.mustPending(id);

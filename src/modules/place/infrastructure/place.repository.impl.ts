@@ -414,6 +414,22 @@ export class PlaceRepositoryImpl implements PlaceRepository {
   ): Promise<void> {
     if (images.length === 0) return;
     await this.db.transaction(async (tx) => {
+      // Cover list publik = isMain saja. Kalau place belum punya cover
+      // visible, foto pertama batch otomatis jadi cover (unggah #187 /
+      // approve usulan foto ke wisata kosong).
+      const [existingMain] = await tx
+        .select({ id: placeImages.id })
+        .from(placeImages)
+        .where(
+          and(
+            eq(placeImages.placeId, placeId),
+            eq(placeImages.isMain, true),
+            isNull(placeImages.hiddenAt),
+          ),
+        )
+        .limit(1);
+      const needCover = existingMain == null;
+
       const [row] = await tx
         .select({ top: max(placeImages.sortOrder) })
         .from(placeImages)
@@ -424,7 +440,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
           id: generateId(),
           placeId,
           url: img.url,
-          isMain: false,
+          isMain: needCover && i === 0,
           sortOrder: start + i,
           attributionJson: img.attribution
             ? JSON.stringify(img.attribution)
@@ -432,6 +448,10 @@ export class PlaceRepositoryImpl implements PlaceRepository {
           createdAt: new Date(),
         })),
       );
+      await tx
+        .update(places)
+        .set({ updatedAt: new Date() })
+        .where(eq(places.id, placeId));
     });
   }
 

@@ -407,6 +407,66 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     expect(neighborBody.slug).toBe("tetangga-usulan-e2e");
   });
 
+  it("unggah foto pertama ke wisata tanpa cover → index 0 jadi is_main (list cover)", async () => {
+    const photo =
+      "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/auto-cover-e2e.webp";
+    const extra =
+      "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/auto-cover-e2e-2.webp";
+
+    const createRes = await post(
+      "/api/v1/admin/places",
+      {
+        slug: "wisata-tanpa-foto-e2e",
+        name: "Wisata Tanpa Foto",
+        category: "wisata",
+        short_description: "Belum ada foto; unggah pertama jadi cover.",
+        region_id: "01E2EREGIONKEC0000000001",
+        village_id: "01E2EREGIONDESA000000001",
+        images: [],
+      },
+      adminToken,
+    );
+    expect(createRes.status).toBe(200);
+    expect((await createRes.json()).data.images).toHaveLength(0);
+
+    const first = await post(
+      "/api/v1/places/wisata-tanpa-foto-e2e/images",
+      { urls: [photo] },
+      userToken,
+    );
+    expect(first.status).toBe(200);
+
+    const detail = (await (await get("/api/v1/places/wisata-tanpa-foto-e2e")).json())
+      .data;
+    expect(detail.image_count).toBe(1);
+    expect(detail.images[0].url).toBe(photo);
+    expect(detail.images[0].is_main).toBe(true);
+
+    // List publik coverOnly: cover harus ikut (bukan images kosong).
+    const listRes = await get("/api/v1/places?category=wisata&limit=50");
+    expect(listRes.status).toBe(200);
+    const hit = (await listRes.json()).data.items.find(
+      (p: { slug: string }) => p.slug === "wisata-tanpa-foto-e2e",
+    );
+    expect(hit).toBeTruthy();
+    expect(hit.images).toHaveLength(1);
+    expect(hit.images[0].is_main).toBe(true);
+
+    const second = await post(
+      "/api/v1/places/wisata-tanpa-foto-e2e/images",
+      { urls: [extra] },
+      userToken,
+    );
+    expect(second.status).toBe(200);
+    const after = (await (await get("/api/v1/places/wisata-tanpa-foto-e2e")).json())
+      .data;
+    expect(after.image_count).toBe(2);
+    expect(after.images.find((img: { url: string }) => img.url === photo).is_main)
+      .toBe(true);
+    expect(after.images.find((img: { url: string }) => img.url === extra).is_main)
+      .toBe(false);
+  });
+
   it("dua usulan nama sama: approve kedua dapat slug bersufiks, bukan SLUG_TAKEN", async () => {
     const body = {
       slug: "danau-kembar-e2e",
