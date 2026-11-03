@@ -2,6 +2,7 @@ import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { env } from '@/shared/config/env';
+import { enableForeignKeys } from './enable-foreign-keys';
 import * as schema from './schema';
 
 // Satu-satunya file koneksi DB (api-base-stack.md Section 8).
@@ -30,7 +31,19 @@ const { createClient: create }: { createClient: typeof createClient } = isCloudf
 export const client = buildClient(create);
 
 // SQLite default: FK mati. Turso remote biasanya ON; set selalu agar lokal/file sama.
-await client.execute('PRAGMA foreign_keys = ON');
+// Workers: soft-fail setelah retry supaya HTTP 5xx transient tidak meracuni module load.
+await enableForeignKeys(client, {
+  softFail: isCloudflareWorkers,
+  log: (msg, err) => {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  },
+});
 
 export const db: AppDatabase = drizzle(client, { schema });
 

@@ -49,6 +49,24 @@ describe('checkSuggestionCategoryShape', () => {
     expect(issues.map((i) => i.field)).toContain('word_type');
   });
 
+  it('change_word_type hanya terima word_type', () => {
+    expect(
+      checkSuggestionCategoryShape('change_word_type', { wordType: 'idiom' }),
+    ).toEqual([]);
+    expect(
+      checkSuggestionCategoryShape('change_word_type', {
+        wordType: 'idiom',
+        lemma: 'x',
+      }).map((i) => i.field),
+    ).toContain('lemma');
+    expect(
+      checkSuggestionCategoryShape('change_word_type', {
+        wordType: 'idiom',
+        meanings: [{ action: 'update', meaningId: MEANING, definition: 'x' }],
+      }).map((i) => i.field),
+    ).toContain('meanings');
+  });
+
   it('kode lama tidak dicek', () => {
     expect(
       checkSuggestionCategoryShape('typo', {

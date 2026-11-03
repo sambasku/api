@@ -21,6 +21,7 @@ export type RelationType =
 export const SUGGESTION_CATEGORY_CODES = [
   'change_meaning',
   'change_word_class',
+  'change_word_type',
   'add_meaning',
   'add_photo',
   'change_photo',
@@ -64,6 +65,7 @@ export function isSuggestionCategory(code: string): code is SuggestionCategoryCo
 export const REASON_CODE_LABELS: Record<SuggestionReasonCode, string> = {
   change_meaning: 'Ubah makna',
   change_word_class: 'Ubah kelas kata',
+  change_word_type: 'Ubah jenis entri',
   add_meaning: 'Tambah makna',
   add_photo: 'Tambah foto',
   change_photo: 'Ubah foto',

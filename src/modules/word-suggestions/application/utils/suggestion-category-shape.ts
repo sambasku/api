@@ -37,6 +37,7 @@ function presentParts(c: ProposedChanges): Set<Part> {
 const ALLOWED: Record<string, Part[]> = {
   change_meaning: ['meanings'],
   change_word_class: ['meanings'],
+  change_word_type: ['word_type'],
   add_meaning: ['meanings'],
   add_photo: ['images'],
   change_photo: ['images'],

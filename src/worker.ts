@@ -19,7 +19,14 @@ let appPromise: Promise<AppModule> | null = null;
 function loadApp(env: Env): Promise<AppModule> {
   if (!appPromise) {
     appPromise = bootstrap(env)
-      .then(() => import('./app'));
+      .then(() => import('./app'))
+      .catch((err) => {
+        // Jangan cache rejected promise - tick/request berikutnya boleh retry.
+        // Catatan: kalau evaluasi modul gagal (top-level throw), ES module
+        // registry tetap errored; soft-fail PRAGMA di client.ts yang mencegah itu.
+        appPromise = null;
+        throw err;
+      });
   }
   return appPromise;
 }
@@ -35,7 +42,22 @@ export default {
     env: Env,
     _ctx: { waitUntil: (p: Promise<unknown>) => void },
   ): Promise<void> {
-    const m = await loadApp(env);
+    let m: AppModule;
+    try {
+      m = await loadApp(env);
+    } catch (error) {
+      // Transient Turso/network saat cold-start module load tidak boleh jadi
+      // unhandled exception cron; tick berikutnya retry (appPromise sudah di-clear).
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'scheduled loadApp failed',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return;
+    }
+
     try {
       const result = await m.runDueNotificationCampaigns();
       console.log(
