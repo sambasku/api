@@ -28,6 +28,10 @@ const CAPACITY_SIGNATURES = [
   'sql read operations are forbidden',
   'sql write operations are forbidden',
   'do you need to upgrade your plan',
+  // Turso HTTP lewat Cloudflare edge: 5xx (502/503/504/520-525 SSL handshake,
+  // dll.) = infra upstream, bukan bug query. Bentuk nyata: LibsqlError
+  // "SERVER_ERROR: Server returned HTTP status 525" di cron cold-start.
+  'server returned http status 5',
 ] as const;
 
 export function isCapacityFailure(err: unknown): boolean {

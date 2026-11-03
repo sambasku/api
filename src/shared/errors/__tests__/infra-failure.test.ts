@@ -39,6 +39,19 @@ it('mengenali blokir kuota Turso - read/write dilarang, bukan bug query', () => 
   ).toBe(true);
 });
 
+  it('mengenali Turso HTTP 5xx - SSL handshake / edge Cloudflare, bukan bug query', () => {
+    expect(
+      isCapacityFailure(new Error('SERVER_ERROR: Server returned HTTP status 525')),
+    ).toBe(true);
+    expect(
+      isCapacityFailure(new Error('SERVER_ERROR: Server returned HTTP status 503')),
+    ).toBe(true);
+    const wrapped = new Error('Failed query: select 1', {
+      cause: new Error('SERVER_ERROR: Server returned HTTP status 525'),
+    });
+    expect(isCapacityFailure(wrapped)).toBe(true);
+  });
+
   it('TIDAK menandai bug aplikasi biasa - kalau tidak, breaker pindah tier sia-sia', () => {
     expect(isCapacityFailure(new Error('Cannot read properties of undefined'))).toBe(false);
     expect(isCapacityFailure(new Error('SQLITE_CONSTRAINT: UNIQUE constraint failed'))).toBe(false);

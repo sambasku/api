@@ -70,16 +70,26 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
     '/',
     deps.authenticate,
     authorizeRole('admin', 'editor', 'contributor', 'root', 'reviewer'),
-    rateLimit({
-      points: 30,
-      duration: 60,
-      // per user_id (Section 15) - authenticate sudah jalan lebih dulu
-      keyFn: (c) => {
-        const user = (c.get('user') as AuthUser | undefined) ?? null;
-        return `word-create:${user?.user_id ?? c.req.header('x-forwarded-for') ?? 'unknown'}`;
-      },
-    }),
   );
+
+  // Rate limit create saja (POST koleksi `/`). Jangan ikut GET list atau
+  // /import* - dulu middleware ini ikut makan kuota impor massal.
+  const createWordLimit = rateLimit({
+    points: 30,
+    duration: 60,
+    keyFn: (c) => {
+      const user = (c.get('user') as AuthUser | undefined) ?? null;
+      return `word-create:${user?.user_id ?? c.req.header('x-forwarded-for') ?? 'unknown'}`;
+    },
+  });
+  routes.use('/', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    const path = c.req.path;
+    if (path.includes('import')) return next();
+    const rel = path.replace(/^\/api\/v1\/admin\/words/, '') || '/';
+    if (rel !== '/' && rel !== '') return next();
+    return createWordLimit(c, next);
+  });
 
   const listAdminWordsRoute = createRoute({
     method: 'get',
@@ -116,7 +126,9 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
     deps.authenticate,
     authorizeRole('admin', 'editor', 'root', 'reviewer'),
     rateLimit({
-      points: 30,
+      // Console impor 1 kata/request + jeda ~2s ≈ 30/menit; 120 kasih headroom
+      // supaya batas window tidak membunuh batch panjang (CSV ribuan baris).
+      points: 120,
       duration: 60,
       keyFn: (c) => {
         const user = (c.get('user') as AuthUser | undefined) ?? null;
@@ -145,7 +157,8 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
     deps.authenticate,
     authorizeRole('admin', 'editor', 'root', 'reviewer'),
     rateLimit({
-      points: 60,
+      // Upsert progres per chunk selama impor panjang; 120 sejajar /import.
+      points: 120,
       duration: 60,
       keyFn: (c) => {
         const user = (c.get('user') as AuthUser | undefined) ?? null;

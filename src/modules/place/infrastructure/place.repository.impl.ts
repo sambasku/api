@@ -186,6 +186,30 @@ async function loadImagesForPlaces(
     list.push(mapImage(row));
     map.set(row.placeId, list);
   }
+
+  // List publik = isMain saja. Legacy / bug unggah lama bisa punya foto
+  // visible tanpa is_main → listing kosong padahal detail ada galeri.
+  // Fallback: foto visible pertama (sort_order) sebagai cover wire.
+  if (coverOnly) {
+    const missing = placeIds.filter((id) => (map.get(id)?.length ?? 0) === 0);
+    if (missing.length > 0) {
+      const fallbacks = await db
+        .select()
+        .from(placeImages)
+        .where(
+          and(
+            inArray(placeImages.placeId, missing),
+            isNull(placeImages.hiddenAt),
+          ),
+        )
+        .orderBy(placeImages.sortOrder);
+      for (const row of fallbacks) {
+        if (map.has(row.placeId)) continue;
+        const img = mapImage(row);
+        map.set(row.placeId, [{ ...img, isMain: true }]);
+      }
+    }
+  }
   return map;
 }
 
@@ -414,6 +438,43 @@ export class PlaceRepositoryImpl implements PlaceRepository {
   ): Promise<void> {
     if (images.length === 0) return;
     await this.db.transaction(async (tx) => {
+      // Cover list publik = isMain saja. Kalau place belum punya cover
+      // visible, heal dulu foto lama tanpa is_main; kalau kosong, foto
+      // pertama batch baru jadi cover (unggah #187 / approve usulan).
+      const [existingMain] = await tx
+        .select({ id: placeImages.id })
+        .from(placeImages)
+        .where(
+          and(
+            eq(placeImages.placeId, placeId),
+            eq(placeImages.isMain, true),
+            isNull(placeImages.hiddenAt),
+          ),
+        )
+        .limit(1);
+      let needCover = existingMain == null;
+
+      if (needCover) {
+        const [orphan] = await tx
+          .select({ id: placeImages.id })
+          .from(placeImages)
+          .where(
+            and(
+              eq(placeImages.placeId, placeId),
+              isNull(placeImages.hiddenAt),
+            ),
+          )
+          .orderBy(placeImages.sortOrder)
+          .limit(1);
+        if (orphan) {
+          await tx
+            .update(placeImages)
+            .set({ isMain: true })
+            .where(eq(placeImages.id, orphan.id));
+          needCover = false;
+        }
+      }
+
       const [row] = await tx
         .select({ top: max(placeImages.sortOrder) })
         .from(placeImages)
@@ -424,7 +485,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
           id: generateId(),
           placeId,
           url: img.url,
-          isMain: false,
+          isMain: needCover && i === 0,
           sortOrder: start + i,
           attributionJson: img.attribution
             ? JSON.stringify(img.attribution)
@@ -432,6 +493,10 @@ export class PlaceRepositoryImpl implements PlaceRepository {
           createdAt: new Date(),
         })),
       );
+      await tx
+        .update(places)
+        .set({ updatedAt: new Date() })
+        .where(eq(places.id, placeId));
     });
   }
 
