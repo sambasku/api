@@ -467,6 +467,63 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
       .toBe(false);
   });
 
+  it("legacy foto tanpa is_main tetap tampil sebagai cover di list publik", async () => {
+    const photo =
+      "https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/places/legacy-cover-e2e.webp";
+
+    const createRes = await post(
+      "/api/v1/admin/places",
+      {
+        slug: "wisata-legacy-cover-e2e",
+        name: "Wisata Legacy Cover",
+        category: "wisata",
+        short_description: "Simulasi foto lama tanpa is_main.",
+        region_id: "01E2EREGIONKEC0000000001",
+        village_id: "01E2EREGIONDESA000000001",
+        images: [],
+      },
+      adminToken,
+    );
+    expect(createRes.status).toBe(200);
+    const placeId = (await createRes.json()).data.id as string;
+
+    // Sisip foto seperti unggah pra-fix: visible tapi is_main=false.
+    const { placeImages } = await import(
+      "@/shared/database/drizzle/schema/places.schema"
+    );
+    const { getTestDb: getDb } = await import(
+      "@/shared/database/drizzle/test-client"
+    );
+    const { generateId } = await import("@/shared/utils/ulid");
+    await getDb()
+      .insert(placeImages)
+      .values({
+        id: generateId(),
+        placeId,
+        url: photo,
+        isMain: false,
+        sortOrder: 0,
+        attributionJson: null,
+        createdAt: new Date(),
+      });
+
+    const detail = (await (await get("/api/v1/places/wisata-legacy-cover-e2e")).json())
+      .data;
+    expect(detail.images).toHaveLength(1);
+    expect(detail.images[0].is_main).toBe(false);
+
+    const listRes = await get("/api/v1/places?category=wisata&limit=50");
+    expect(listRes.status).toBe(200);
+    const hit = (await listRes.json()).data.items.find(
+      (p: { slug: string }) => p.slug === "wisata-legacy-cover-e2e",
+    );
+    expect(hit).toBeTruthy();
+    expect(hit.images).toHaveLength(1);
+    expect(hit.images[0].url).toBe(photo);
+    // Wire list: fallback menandai cover supaya client cover/isMain konsisten.
+    expect(hit.images[0].is_main).toBe(true);
+  });
+
   it("dua usulan nama sama: approve kedua dapat slug bersufiks, bukan SLUG_TAKEN", async () => {
     const body = {
       slug: "danau-kembar-e2e",

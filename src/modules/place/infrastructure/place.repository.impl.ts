@@ -186,6 +186,30 @@ async function loadImagesForPlaces(
     list.push(mapImage(row));
     map.set(row.placeId, list);
   }
+
+  // List publik = isMain saja. Legacy / bug unggah lama bisa punya foto
+  // visible tanpa is_main → listing kosong padahal detail ada galeri.
+  // Fallback: foto visible pertama (sort_order) sebagai cover wire.
+  if (coverOnly) {
+    const missing = placeIds.filter((id) => (map.get(id)?.length ?? 0) === 0);
+    if (missing.length > 0) {
+      const fallbacks = await db
+        .select()
+        .from(placeImages)
+        .where(
+          and(
+            inArray(placeImages.placeId, missing),
+            isNull(placeImages.hiddenAt),
+          ),
+        )
+        .orderBy(placeImages.sortOrder);
+      for (const row of fallbacks) {
+        if (map.has(row.placeId)) continue;
+        const img = mapImage(row);
+        map.set(row.placeId, [{ ...img, isMain: true }]);
+      }
+    }
+  }
   return map;
 }
 
@@ -415,8 +439,8 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     if (images.length === 0) return;
     await this.db.transaction(async (tx) => {
       // Cover list publik = isMain saja. Kalau place belum punya cover
-      // visible, foto pertama batch otomatis jadi cover (unggah #187 /
-      // approve usulan foto ke wisata kosong).
+      // visible, heal dulu foto lama tanpa is_main; kalau kosong, foto
+      // pertama batch baru jadi cover (unggah #187 / approve usulan).
       const [existingMain] = await tx
         .select({ id: placeImages.id })
         .from(placeImages)
@@ -428,7 +452,28 @@ export class PlaceRepositoryImpl implements PlaceRepository {
           ),
         )
         .limit(1);
-      const needCover = existingMain == null;
+      let needCover = existingMain == null;
+
+      if (needCover) {
+        const [orphan] = await tx
+          .select({ id: placeImages.id })
+          .from(placeImages)
+          .where(
+            and(
+              eq(placeImages.placeId, placeId),
+              isNull(placeImages.hiddenAt),
+            ),
+          )
+          .orderBy(placeImages.sortOrder)
+          .limit(1);
+        if (orphan) {
+          await tx
+            .update(placeImages)
+            .set({ isMain: true })
+            .where(eq(placeImages.id, orphan.id));
+          needCover = false;
+        }
+      }
 
       const [row] = await tx
         .select({ top: max(placeImages.sortOrder) })
