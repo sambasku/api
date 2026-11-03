@@ -260,6 +260,7 @@ import {
   createMyAchievementRoutes,
   createMyProfileBorderRoutes,
   createPublicAchievementRoutes,
+  createPublicUserAchievementsRoutes,
 } from "@/modules/achievement/presentation/v1/achievement.routes";
 import { PlaceRepositoryImpl } from "@/modules/place/infrastructure/place.repository.impl";
 import {
@@ -2094,6 +2095,11 @@ app.route(
   "/api/v1/users",
   createPublicUserRoutes({ controller: userController }),
 );
+// Badge profil: GET /api/v1/users/:username/achievements (kontrak mobile/Bruno).
+app.route(
+  "/api/v1/users",
+  createPublicUserAchievementsRoutes({ controller: achievementController }),
+);
 
 const publicImageController = new PublicImageController({
   uploadPublicImage: new UploadPublicImageUseCase(publicImageStorage),
@@ -2208,9 +2214,9 @@ app.route(
 );
 
 // Achievement (Pencapaian) - katalog reward, milik sendiri, border profil.
-// Publik katalog + badge profil; `/me/achievements` dan `/me/profile/border`
-// butuh auth. Border profil TIDAK lewat /api/v1/users/:username supaya
-// tidak bentrok dengan route profil.
+// Badge publik: GET /api/v1/users/:username/achievements (mount di blok users).
+// Katalog: GET /api/v1/achievements. `/me/achievements` + `/me/profile/border`
+// butuh auth. Border TIDAK lewat /users/:username (hindari bentrok profil).
 app.route(
   "/api/v1/achievements",
   createPublicAchievementRoutes({ controller: achievementController }),

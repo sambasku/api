@@ -175,7 +175,7 @@ export function createAdminAchievementRoutes(deps: AchievementRoutesDeps) {
   return routes;
 }
 
-/** Publik: katalog aktif (tanpa auth) + badge profil per username. */
+/** Publik: katalog aktif (tanpa auth). */
 export function createPublicAchievementRoutes(deps: { controller: AchievementController }) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 60, duration: 60 }));
@@ -190,9 +190,42 @@ export function createPublicAchievementRoutes(deps: { controller: AchievementCon
       200: { description: 'Katalog', content: json(achievementListResponseSchema) },
     },
   });
-  const byUsernameRoute = createRoute({
+  // Alias lama: GET /api/v1/achievements/users/:username
+  // Kontrak kanonis: GET /api/v1/users/:username/achievements
+  // (createPublicUserAchievementsRoutes). Alias dipertahankan supaya
+  // klien yang sudah pakai path salah tidak putus.
+  const byUsernameAliasRoute = createRoute({
     method: 'get',
     path: '/users/:username',
+    tags: ['Achievements'],
+    summary: 'Reward milik user publik (alias; prefer /users/:username/achievements)',
+    request: { params: z.object({ username: z.string().min(2).max(40) }) },
+    responses: {
+      200: { description: 'Reward milik user', content: json(achievementListResponseSchema) },
+    },
+  });
+
+  routes.openapi(listRoute, (c) => deps.controller.listPublic(c, c.req.valid('query')) as never);
+  routes.openapi(byUsernameAliasRoute, (c) =>
+    deps.controller.listByUsername(c, c.req.param('username')) as never,
+  );
+  return routes;
+}
+
+/**
+ * Publik: badge profil per username.
+ * Mount di `/api/v1/users` → GET /api/v1/users/:username/achievements
+ * (kontrak docs + Bruno + mobile Retrofit).
+ */
+export function createPublicUserAchievementsRoutes(deps: {
+  controller: AchievementController;
+}) {
+  const routes = createOpenApiApp();
+  routes.use('*', rateLimit({ points: 60, duration: 60 }));
+
+  const byUsernameRoute = createRoute({
+    method: 'get',
+    path: '/:username/achievements',
     tags: ['Achievements'],
     summary: 'Reward milik user publik (badge profil)',
     request: { params: z.object({ username: z.string().min(2).max(40) }) },
@@ -201,7 +234,6 @@ export function createPublicAchievementRoutes(deps: { controller: AchievementCon
     },
   });
 
-  routes.openapi(listRoute, (c) => deps.controller.listPublic(c, c.req.valid('query')) as never);
   routes.openapi(byUsernameRoute, (c) =>
     deps.controller.listByUsername(c, c.req.param('username')) as never,
   );

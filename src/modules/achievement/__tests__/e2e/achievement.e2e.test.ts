@@ -194,6 +194,13 @@ describe.skipIf(!hasTestDb)('Achievement E2E - katalog reward, scan, grant, bord
     expect(data.missing).toHaveLength(0);
   });
 
+  it('GET /api/v1/users/:username/achievements = 200 (kontrak profil publik)', async () => {
+    const res = await get(`/api/v1/users/${userUsername}/achievements`);
+    expect(res.status).toBe(200);
+    const items = (await res.json()).data.items;
+    expect(Array.isArray(items)).toBe(true);
+  });
+
   it('border: set border milik sendiri = 200, border milik orang lain = 403, null = lepas', async () => {
     const mine = await get('/api/v1/me/achievements?reward_type=profile_border', userToken);
     expect(mine.status).toBe(200);
