@@ -55,3 +55,8 @@ export function buildUsahaImagePath(mimeType: string): string {
 export function buildCommentImagePath(mimeType: string): string {
   return `assets/comments/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path gambar isi artikel ensiklopedia: assets/encyclopedia/<ulid>.<ext> */
+export function buildEncyclopediaImagePath(mimeType: string): string {
+  return `assets/encyclopedia/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

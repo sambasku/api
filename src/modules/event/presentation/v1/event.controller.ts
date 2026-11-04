@@ -136,13 +136,15 @@ export class EventController {
       .execute({
         limit: query.limit,
         before: query.before,
-      categoryId: query.category_id,
-      villageId: query.village_id,
-      regionId: query.region_id,
-      placeId: query.place_id,
-      q: query.q,
-      notEnded: query.not_ended === "1",
+        categoryId: query.category_id,
+        villageId: query.village_id,
+        regionId: query.region_id,
+        placeId: query.place_id,
+        q: query.q,
+        notEnded: query.not_ended === "1",
         order: query.order,
+        overlapsFrom: query.overlaps_from,
+        overlapsTo: query.overlaps_to,
         publicOnly: true,
       })
       .then((res) =>
@@ -179,14 +181,16 @@ export class EventController {
       .execute({
         limit: query.limit,
         before: query.before,
-      categoryId: query.category_id,
-      villageId: query.village_id,
-      regionId: query.region_id,
-      placeId: query.place_id,
-      q: query.q,
-      status: query.status,
+        categoryId: query.category_id,
+        villageId: query.village_id,
+        regionId: query.region_id,
+        placeId: query.place_id,
+        q: query.q,
+        status: query.status,
         notEnded: query.not_ended === "1",
         order: query.order,
+        overlapsFrom: query.overlaps_from,
+        overlapsTo: query.overlaps_to,
       })
       .then((res) =>
         c.json({

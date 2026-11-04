@@ -72,6 +72,13 @@ export interface ListEventsInput {
   notEnded?: boolean;
   /** Urutan by created_at: asc = paling lama dulu; desc = terbaru dulu. */
   order?: "asc" | "desc";
+  /**
+   * Window overlap (wajib berpasangan): acara yang
+   * `starts_at < overlapsTo AND ends_at >= overlapsFrom`.
+   * Saat diisi, list diurutkan by `starts_at ASC` (bukan `created_at`).
+   */
+  overlapsFrom?: Date;
+  overlapsTo?: Date;
 }
 
 export interface ListEventsResult {
