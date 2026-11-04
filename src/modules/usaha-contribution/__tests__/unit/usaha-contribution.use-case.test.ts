@@ -71,7 +71,7 @@ const regions = {
 };
 
 /** eslint-disable-next-line @typescript-eslint/no-explicit-any */
-function build(contrib: any, usaha: any, claims: any = {}, createUc?: any) {
+function build(contrib: any, usaha: any, createUc?: any) {
   const create = createUc ?? {
     execute: vi.fn().mockResolvedValue({ id: "U_NEW", slug: "usaha-baru", name: "Usaha Baru" }),
   };
@@ -81,11 +81,6 @@ function build(contrib: any, usaha: any, claims: any = {}, createUc?: any) {
     regions as never,
     create as never,
     new UniqueUsahaSlugUseCase(usaha),
-    {
-      create: vi.fn().mockResolvedValue({ id: "CLAIM1" }),
-      findPendingByUser: vi.fn().mockResolvedValue(null),
-      ...claims,
-    } as never,
   );
   return Object.assign(uc, { __createUc: create }) as UsahaContributionUseCases & {
     __createUc: { execute: ReturnType<typeof vi.fn> };
@@ -367,11 +362,7 @@ describe("UsahaContributionUseCases - approve per kind", () => {
     });
   });
 
-  it("kind=new + wants_claim tidak membuat klaim otomatis (bukti gambar terpisah)", async () => {
-    const claims = {
-      create: vi.fn().mockResolvedValue({ id: "CLAIM1" }),
-      findPendingByUser: vi.fn().mockResolvedValue(null),
-    };
+  it("kind=new + wants_claim tetap approve tanpa klaim otomatis (bukti gambar terpisah)", async () => {
     const contrib = makeContrib({
       findById: vi.fn().mockResolvedValue(
         pendingRow({
@@ -383,13 +374,14 @@ describe("UsahaContributionUseCases - approve per kind", () => {
         }),
       ),
     });
-    const uc = build(contrib, makeUsaha(), claims);
+    const uc = build(contrib, makeUsaha());
     await uc.approve("C1", "ADMIN");
-    expect(claims.create).not.toHaveBeenCalled();
+    expect(contrib.setStatus).toHaveBeenCalledWith("C1", "approved", {
+      resultUsahaId: "U_NEW",
+    });
   });
 
-  it("kind=new anonim tidak membuat klaim", async () => {
-    const claims = { create: vi.fn(), findPendingByUser: vi.fn() };
+  it("kind=new anonim + wants_claim tetap approve tanpa klaim", async () => {
     const contrib = makeContrib({
       findById: vi.fn().mockResolvedValue(
         pendingRow({
@@ -402,9 +394,11 @@ describe("UsahaContributionUseCases - approve per kind", () => {
         }),
       ),
     });
-    const uc = build(contrib, makeUsaha(), claims);
+    const uc = build(contrib, makeUsaha());
     await uc.approve("C1", "ADMIN");
-    expect(claims.create).not.toHaveBeenCalled();
+    expect(contrib.setStatus).toHaveBeenCalledWith("C1", "approved", {
+      resultUsahaId: "U_NEW",
+    });
   });
 
   it("profile hanya menerapkan field terkunci (phone ikut isi whatsapp)", async () => {

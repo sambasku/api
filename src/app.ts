@@ -1400,7 +1400,6 @@ const usahaContributionUseCases = new UsahaContributionUseCases(
   regionRepo,
   createUsahaUc,
   new UniqueUsahaSlugUseCase(usahaRepo),
-  usahaClaimRepo,
   auditRepo,
   recordInbox,
   notifyUser,

@@ -4,7 +4,6 @@ import type { InboxNotificationType } from '@/modules/notification/domain/entiti
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { ActivityEventRepository } from '@/modules/activity/domain/repositories/activity-event.repository';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
-import type { UsahaClaimRepository } from '@/modules/usaha-claim/domain/usaha-claim.repository';
 import {
   CreateUsahaUseCase,
   UniqueUsahaSlugUseCase,
@@ -124,7 +123,6 @@ export class UsahaContributionUseCases {
     private readonly regions: RegionRepository,
     private readonly createUsaha: CreateUsahaUseCase,
     private readonly uniqueSlug: UniqueUsahaSlugUseCase,
-    private readonly claims: UsahaClaimRepository,
     private readonly audit?: AuditLogRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
