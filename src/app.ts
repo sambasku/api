@@ -542,6 +542,39 @@ import {
   createPantunReportRoutes,
   createAdminPantunReportRoutes,
 } from "@/modules/pantun-report/presentation/v1/pantun-report.routes";
+// Ensiklopedia (artikel + kontribusi + komentar + laporan)
+import { EncyclopediaRepositoryImpl } from "@/modules/encyclopedia/infrastructure/encyclopedia.repository.impl";
+import {
+  CreateArticleUseCase,
+  GetArticleBySlugUseCase,
+  ListArticleRevisionsUseCase,
+  ListArticlesUseCase,
+  ListEncyclopediaCategoriesUseCase,
+  MergeTagUseCase,
+  RestoreArticleRevisionUseCase,
+  SearchArticlesUseCase,
+  SetArticleStatusUseCase,
+  UpdateArticleUseCase,
+} from "@/modules/encyclopedia/application/use-cases/article.use-cases";
+import {
+  CreateArticleCommentUseCase,
+  DeleteArticleCommentUseCase,
+  ListArticleCommentsUseCase,
+  ListArticleContributionsUseCase,
+  ListMyArticleContributionsUseCase,
+  ResubmitArticleContributionUseCase,
+  ReviewArticleContributionUseCase,
+  SubmitArticleContributionUseCase,
+  TakedownArticleCommentUseCase,
+  ToggleArticleBookmarkUseCase,
+  UpdateArticleCommentUseCase,
+} from "@/modules/encyclopedia/application/use-cases/encyclopedia-contribution.use-cases";
+import { ArticleReportUseCases } from "@/modules/encyclopedia/application/use-cases/article-report.use-cases";
+import { EncyclopediaController } from "@/modules/encyclopedia/presentation/v1/encyclopedia.controller";
+import {
+  createAdminEncyclopediaRoutes,
+  createEncyclopediaRoutes,
+} from "@/modules/encyclopedia/presentation/v1/encyclopedia.routes";
 import { CreatePantunUseCase } from "@/modules/pantun/application/use-cases/create-pantun.use-case";
 import { CreatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply.use-case";
 import { ListPublishedPantunsUseCase } from "@/modules/pantun/application/use-cases/list-published-pantuns.use-case";
@@ -2729,6 +2762,89 @@ app.route(
   "/api/v1/admin/pantun-reports",
   createAdminPantunReportRoutes({
     controller: pantunReportController,
+    authenticate,
+  }),
+);
+
+// ------------------------------------------------------------------
+// Ensiklopedia: artikel (markdown), kontribusi user, komentar, laporan.
+const encyclopediaRepo = new EncyclopediaRepositoryImpl(db);
+const encyclopediaController = new EncyclopediaController({
+  repo: encyclopediaRepo,
+  listArticles: new ListArticlesUseCase(encyclopediaRepo),
+  getArticle: new GetArticleBySlugUseCase(encyclopediaRepo),
+  searchArticles: new SearchArticlesUseCase(encyclopediaRepo),
+  listCategories: new ListEncyclopediaCategoriesUseCase(encyclopediaRepo),
+  createArticle: new CreateArticleUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    activityEvents,
+  ),
+  updateArticle: new UpdateArticleUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    activityEvents,
+  ),
+  setStatus: new SetArticleStatusUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    activityEvents,
+  ),
+  listRevisions: new ListArticleRevisionsUseCase(encyclopediaRepo),
+  restoreRevision: new RestoreArticleRevisionUseCase(encyclopediaRepo, auditRepo),
+  mergeTag: new MergeTagUseCase(encyclopediaRepo),
+  listComments: new ListArticleCommentsUseCase(encyclopediaRepo),
+  createComment: new CreateArticleCommentUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  updateComment: new UpdateArticleCommentUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  deleteComment: new DeleteArticleCommentUseCase(encyclopediaRepo),
+  takedownComment: new TakedownArticleCommentUseCase(encyclopediaRepo, auditRepo),
+  toggleBookmark: new ToggleArticleBookmarkUseCase(encyclopediaRepo),
+  submitContribution: new SubmitArticleContributionUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  resubmitContribution: new ResubmitArticleContributionUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  listMyContributions: new ListMyArticleContributionsUseCase(encyclopediaRepo),
+  listContributions: new ListArticleContributionsUseCase(encyclopediaRepo),
+  reviewContribution: new ReviewArticleContributionUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    activityEvents,
+  ),
+  reports: new ArticleReportUseCases(db, encyclopediaRepo, auditRepo),
+});
+app.route(
+  "/api/v1/encyclopedia",
+  createEncyclopediaRoutes({
+    controller: encyclopediaController,
+    authenticate,
+    optionalAuthenticate,
+    requireApprovedClient: requireContributeWriteClient,
+    requireLegalConsent,
+  }),
+);
+app.route(
+  "/api/v1/admin/encyclopedia",
+  createAdminEncyclopediaRoutes({
+    controller: encyclopediaController,
     authenticate,
   }),
 );

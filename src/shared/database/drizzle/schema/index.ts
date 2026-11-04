@@ -85,3 +85,4 @@ export * from "./culinary-reports.schema";
 export * from "./mobile-releases.schema";
 export * from "./pantun.schema";
 export * from "./pantun-reports.schema";
+export * from "./encyclopedia.schema";
