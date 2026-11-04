@@ -91,6 +91,36 @@ export const submitManagerChangeBodySchema = z
   })
   .strict();
 
+/**
+ * Usulan perubahan publik (warga login). Prefill dari detail; kirim field
+ * yang diubah (atau seluruh form + `fields`).
+ */
+export const submitSuggestEditBodySchema = z
+  .object({
+    usaha_slug: z.string().trim().min(1).max(120),
+    name: z.string().trim().min(3).max(200).optional(),
+    description: z.string().max(8000).nullable().optional(),
+    category_id: z
+      .string()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .nullable()
+      .optional(),
+    kind: z.enum(['product', 'service', 'both']).optional(),
+    village_id: z.string().max(120).nullable().optional(),
+    region_id: z.string().max(120).nullable().optional(),
+    address_text: z.string().max(500).nullable().optional(),
+    lat: sambasLat,
+    lng: sambasLng,
+    phone: z.string().max(40).nullable().optional(),
+    whatsapp: z.string().max(40).nullable().optional(),
+    website: httpsUrl,
+    social_url: httpsUrl,
+    cover_url: httpsUrl,
+    /** Field yang berubah (camelCase seperti PROFILE_MANAGED_FIELDS). */
+    fields: z.array(profileFieldSchema).max(20).optional(),
+  })
+  .strict();
+
 export const rejectUsahaContributionBodySchema = z
   .object({
     reason_code: z.enum([
@@ -128,6 +158,8 @@ export const listUsahaContributionsQuerySchema = z.object({
       'restore',
     ])
     .optional(),
+  /** Riwayat per usaha (admin): `usaha_id` ATAU `result_usaha_id`. */
+  usaha_id: z.string().min(1).max(64).optional(),
 });
 
 export const usahaContributionResponseSchema = z.object({

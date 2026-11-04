@@ -167,6 +167,69 @@ describe("UsahaContributionUseCases - usulan baru", () => {
   });
 });
 
+describe("UsahaContributionUseCases - usulan perubahan publik", () => {
+  it("anonim ditolak", async () => {
+    const uc = build(makeContrib(), makeUsaha());
+    await expect(
+      uc.submitSuggestEdit(ANONIM_USER_ID, {
+        slug: "warung-kopi",
+        payload: { phone: "0812999" },
+        fields: ["phone"],
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("non-manager boleh suggest-edit (kind=profile)", async () => {
+    const contrib = makeContrib();
+    const usaha = makeUsaha({
+      findBySlug: vi.fn().mockResolvedValue({
+        id: "U1",
+        managerId: "USER1",
+        publishStatus: "published",
+        updatedAt: NOW,
+        createdAt: NOW,
+      }),
+    });
+    const uc = build(contrib, usaha);
+    await uc.submitSuggestEdit("USER2", {
+      slug: "warung-kopi",
+      payload: { phone: "0812999" },
+      fields: ["phone"],
+    });
+    expect(contrib.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "profile",
+        userId: "USER2",
+        usahaId: "U1",
+        lockedFields: "phone",
+      }),
+    );
+  });
+
+  it("field-lock berlaku juga untuk suggest-edit", async () => {
+    const contrib = makeContrib({
+      pendingLockedFields: vi.fn().mockResolvedValue(["phone"]),
+    });
+    const usaha = makeUsaha({
+      findBySlug: vi.fn().mockResolvedValue({
+        id: "U1",
+        managerId: null,
+        publishStatus: "published",
+        updatedAt: NOW,
+        createdAt: NOW,
+      }),
+    });
+    const uc = build(contrib, usaha);
+    await expect(
+      uc.submitSuggestEdit("USER2", {
+        slug: "warung-kopi",
+        payload: { phone: "0812999" },
+        fields: ["phone"],
+      }),
+    ).rejects.toMatchObject({ errorCode: "PENDING_FIELD_LOCK" });
+  });
+});
+
 describe("UsahaContributionUseCases - pengajuan pengelola", () => {
   const base = {
     kind: "profile" as const,
@@ -304,7 +367,7 @@ describe("UsahaContributionUseCases - approve per kind", () => {
     });
   });
 
-  it("kind=new + wants_claim membuat klaim pending", async () => {
+  it("kind=new + wants_claim tidak membuat klaim otomatis (bukti gambar terpisah)", async () => {
     const claims = {
       create: vi.fn().mockResolvedValue({ id: "CLAIM1" }),
       findPendingByUser: vi.fn().mockResolvedValue(null),
@@ -322,9 +385,7 @@ describe("UsahaContributionUseCases - approve per kind", () => {
     });
     const uc = build(contrib, makeUsaha(), claims);
     await uc.approve("C1", "ADMIN");
-    expect(claims.create).toHaveBeenCalledWith(
-      expect.objectContaining({ usahaId: "U_NEW", userId: "USER1" }),
-    );
+    expect(claims.create).not.toHaveBeenCalled();
   });
 
   it("kind=new anonim tidak membuat klaim", async () => {

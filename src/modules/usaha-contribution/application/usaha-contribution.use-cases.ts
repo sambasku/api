@@ -109,6 +109,14 @@ export interface SubmitManagerChangeInput {
   fields?: string[];
 }
 
+/** Usulan perubahan publik (bukan pengelola) - kind=profile + usahaId. */
+export interface SubmitSuggestEditInput {
+  slug: string;
+  payload: ProfilePayload;
+  /** Field yang berubah. Kosong = deteksi dari keys payload. */
+  fields?: string[];
+}
+
 export class UsahaContributionUseCases {
   constructor(
     private readonly contrib: UsahaContributionRepository,
@@ -279,9 +287,74 @@ export class UsahaContributionUseCases {
     });
   }
 
+  /**
+   * Usulan perubahan publik (warga login, bukan wajib pengelola).
+   * Reuse kind=profile + field-lock; approve admin menerapkan field terkunci.
+   */
+  async submitSuggestEdit(
+    userId: string,
+    input: SubmitSuggestEditInput,
+  ): Promise<UsahaContribution> {
+    if (!userId || userId === ANONIM_USER_ID) {
+      throw new ForbiddenError(
+        'LOGIN_REQUIRED',
+        'Masuk dulu ya untuk mengusulkan perubahan',
+      );
+    }
+    const usaha = await this.usahas.findBySlug(input.slug, { publicOnly: true });
+    if (!usaha) {
+      throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
+    }
+    if (usaha.publishStatus === 'restricted') {
+      throw new ForbiddenError(
+        'USAHA_RESTRICTED',
+        'Usaha ini sedang dibatasi admin',
+      );
+    }
+    if ((await this.contrib.countPending(userId)) >= PENDING_CAP) {
+      throw new ConflictError(
+        'PENDING_CAP',
+        'Maksimal 10 pengajuan yang masih menunggu',
+      );
+    }
+
+    const managerInput: SubmitManagerChangeInput = {
+      kind: 'profile',
+      usahaId: usaha.id,
+      payload: input.payload,
+      fields: input.fields,
+    };
+    const locked = this.lockedFieldsFor(managerInput);
+    const payload = await this.assertProfilePayload(input.payload, locked);
+
+    if (locked) {
+      const pending = await this.contrib.pendingLockedFields(usaha.id);
+      if (pending.some((other) => overlaps(locked, other))) {
+        throw new ConflictError(
+          'PENDING_FIELD_LOCK',
+          'Ada pengajuan lain yang sedang meninjau bagian yang sama. Tunggu keputusannya dulu ya.',
+        );
+      }
+    }
+
+    return this.contrib.create({
+      kind: 'profile',
+      userId,
+      usahaId: usaha.id,
+      itemId: null,
+      lockedFields: locked,
+      payload,
+      baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
+    });
+  }
+
   // ------------------------------------------------------------- admin --
 
-  list(filter: { status?: 'pending' | 'needs_revision' | 'approved' | 'rejected'; kind?: UsahaContributionKind }) {
+  list(filter: {
+    status?: 'pending' | 'needs_revision' | 'approved' | 'rejected';
+    kind?: UsahaContributionKind;
+    usahaId?: string;
+  }) {
     return this.contrib.list(filter);
   }
 
@@ -327,21 +400,9 @@ export class UsahaContributionUseCases {
       });
       await this.contrib.setStatus(id, 'approved', { resultUsahaId: usaha.id });
 
-      // "Ini usaha saya" -> klaim pending untuk admin tinjau (anon skip).
-      if (row.wantsClaim && row.userId !== ANONIM_USER_ID) {
-        const existing = await this.claims.findPendingByUser(
-          usaha.id,
-          row.userId,
-        );
-        if (!existing) {
-          await this.claims.create({
-            usahaId: usaha.id,
-            userId: row.userId,
-            contactEvidence: `Diajukan lewat usulan usaha "${p.name}"`,
-            note: 'Klaim otomatis dari usulan usaha baru (menandai "ini usaha saya")',
-          });
-        }
-      }
+      // "Ini usaha saya" tidak lagi membuat klaim otomatis (butuh bukti
+      // gambar ImageKit). Setelah usaha terbit, user klaim lewat tombol
+      // "Ini usaha saya" di detail + unggah bukti.
 
       await this.emitPublished(usaha.id, usaha.slug, usaha.name, row.userId);
       await this.audit?.record({

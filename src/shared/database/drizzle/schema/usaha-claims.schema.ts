@@ -21,8 +21,8 @@ export type UsahaClaimRejectReason = (typeof USAHA_CLAIM_REJECT_REASONS)[number]
 /**
  * Klaim pengelolaan usaha (PRD 8). Wajib login; semua klaim ditinjau admin.
  *
- * `contact_evidence` = bukti/kontak verifikasi PRIVAT - tidak pernah
- * diserialkan di endpoint publik (hanya antrean admin).
+ * Bukti verifikasi PRIVAT (`evidence_images` + legacy `contact_evidence`) -
+ * tidak pernah diserialkan di endpoint publik (hanya antrean admin).
  *
  * Konflik sederhana: satu klaim pending per (usaha, user). Saat satu klaim
  * disetujui, klaim pending lain untuk usaha yang sama auto-reject
@@ -36,8 +36,16 @@ export const usahaClaims = sqliteTable(
       .$defaultFn(() => generateId()),
     usahaId: text('usaha_id').notNull(),
     userId: text('user_id').notNull(),
-    /** Bukti verifikasi PRIVAT - jangan pernah bocor ke endpoint publik. */
-    contactEvidence: text('contact_evidence').notNull(),
+    /**
+     * Legacy teks bukti. Klaim baru boleh string kosong bila
+     * `evidence_images` terisi.
+     */
+    contactEvidence: text('contact_evidence').notNull().default(''),
+    /**
+     * Bukti gambar ImageKit (privat). JSON
+     * `{ url, provider_file_id, alt_text? }[]`.
+     */
+    evidenceImages: text('evidence_images').notNull().default('[]'),
     note: text('note'),
     status: text('status', { enum: USAHA_CLAIM_STATUSES })
       .notNull()

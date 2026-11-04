@@ -14,6 +14,7 @@ import {
 import {
   composeClaimRejectDisplay,
   type UsahaClaim,
+  type UsahaClaimEvidenceImage,
 } from '../domain/usaha-claim.entity';
 import type { UsahaClaimRepository } from '../domain/usaha-claim.repository';
 
@@ -27,11 +28,15 @@ export class UsahaClaimUseCases {
     private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
   ) {}
 
-  /** Ajukan klaim. Bukti kontak disimpan privat, tidak pernah ke publik. */
+  /** Ajukan klaim. Bukti gambar disimpan privat, tidak pernah ke publik. */
   async submit(
     userId: string,
     slug: string,
-    input: { contactEvidence: string; note?: string | null },
+    input: {
+      evidenceImages: UsahaClaimEvidenceImage[];
+      contactEvidence?: string | null;
+      note?: string | null;
+    },
   ): Promise<UsahaClaim> {
     if (!userId || userId === ANONIM_USER_ID) {
       throw new ForbiddenError(
@@ -39,11 +44,17 @@ export class UsahaClaimUseCases {
         'Masuk dulu ya untuk mengajukan klaim',
       );
     }
-    if (!input.contactEvidence?.trim()) {
+    const images = input.evidenceImages ?? [];
+    if (images.length < 1 || images.length > 5) {
       throw new BadRequestError(
         'EVIDENCE_REQUIRED',
-        'Bukti kontak wajib diisi',
-        [{ field: 'contact_evidence', message: 'Tulis cara admin menghubungimu' }],
+        'Unggah 1 sampai 5 bukti gambar (foto toko, SS WA, atau SS sosmed)',
+        [
+          {
+            field: 'evidence_images',
+            message: 'Minimal 1 dan maksimal 5 gambar',
+          },
+        ],
       );
     }
     const usaha = await this.usahas.findBySlug(slug, { publicOnly: true });
@@ -66,7 +77,8 @@ export class UsahaClaimUseCases {
     return this.claims.create({
       usahaId: usaha.id,
       userId,
-      contactEvidence: input.contactEvidence.trim(),
+      contactEvidence: input.contactEvidence?.trim() || '',
+      evidenceImages: images,
       note: input.note ?? null,
     });
   }

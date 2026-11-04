@@ -15,6 +15,7 @@ import {
   rejectUsahaContributionBodySchema,
   requestUsahaRevisionBodySchema,
   submitManagerChangeBodySchema,
+  submitSuggestEditBodySchema,
   submitUsahaContributionBodySchema,
   usahaContributionResponseSchema,
 } from './validators/usaha-contribution.validator';
@@ -97,6 +98,24 @@ export function createUsahaContributionRoutes(deps: {
     },
   });
 
+  const suggestEditRoute = createRoute({
+    method: 'post',
+    path: '/suggest-edit',
+    tags: ['Usaha contributions'],
+    summary: 'Usulan perubahan publik (wajib login, prefill dari detail)',
+    request: {
+      body: {
+        content: { 'application/json': { schema: submitSuggestEditBodySchema } },
+      },
+    },
+    responses: {
+      200: { description: 'Usulan tersimpan', content: json(okItem) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      403: { description: 'Wajib login', content: json(errorResponseSchema) },
+      409: { description: 'Field-lock / batas pengajuan', content: json(errorResponseSchema) },
+    },
+  });
+
   const cancelRoute = createRoute({
     method: 'delete',
     path: '/:id',
@@ -133,6 +152,9 @@ export function createUsahaContributionRoutes(deps: {
   routes.openapi(mineRoute, (c) => deps.controller.mine(c) as never);
   routes.openapi(managerRoute, (c) =>
     deps.controller.managerChange(c, c.req.valid('json')) as never,
+  );
+  routes.openapi(suggestEditRoute, (c) =>
+    deps.controller.suggestEdit(c, c.req.valid('json')) as never,
   );
   routes.openapi(cancelRoute, (c) =>
     deps.controller.cancel(c, c.req.param('id')) as never,

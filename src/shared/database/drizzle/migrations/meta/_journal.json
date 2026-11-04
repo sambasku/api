@@ -806,6 +806,13 @@
       "when": 1801613000000,
       "tag": "0114_about_team_sponsorships",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "6",
+      "when": 1801614000000,
+      "tag": "0115_usaha_claim_evidence_images",
+      "breakpoints": true
     }
   ]
 }

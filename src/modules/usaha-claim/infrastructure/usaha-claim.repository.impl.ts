@@ -8,8 +8,10 @@ import { usahas } from '@/shared/database/drizzle/schema/usahas.schema';
 import { generateId } from '@/shared/utils/ulid';
 import type {
   UsahaClaim,
+  UsahaClaimEvidenceImage,
   UsahaClaimWithUsaha,
 } from '../domain/usaha-claim.entity';
+import { parseEvidenceImages } from '../domain/usaha-claim.entity';
 import type { UsahaClaimRepository } from '../domain/usaha-claim.repository';
 
 type Row = typeof usahaClaims.$inferSelect;
@@ -19,7 +21,8 @@ function mapRow(row: Row): UsahaClaim {
     id: row.id,
     usahaId: row.usahaId,
     userId: row.userId,
-    contactEvidence: row.contactEvidence,
+    contactEvidence: row.contactEvidence ?? '',
+    evidenceImages: parseEvidenceImages(row.evidenceImages),
     note: row.note ?? null,
     status: row.status,
     rejectReasonCode: row.rejectReasonCode ?? null,
@@ -37,7 +40,8 @@ export class UsahaClaimRepositoryImpl implements UsahaClaimRepository {
   async create(input: {
     usahaId: string;
     userId: string;
-    contactEvidence: string;
+    contactEvidence?: string | null;
+    evidenceImages: UsahaClaimEvidenceImage[];
     note?: string | null;
   }): Promise<UsahaClaim> {
     const id = generateId();
@@ -45,7 +49,8 @@ export class UsahaClaimRepositoryImpl implements UsahaClaimRepository {
       id,
       usahaId: input.usahaId,
       userId: input.userId,
-      contactEvidence: input.contactEvidence,
+      contactEvidence: input.contactEvidence?.trim() || '',
+      evidenceImages: JSON.stringify(input.evidenceImages),
       note: input.note ?? null,
       status: 'pending',
     });
