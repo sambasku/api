@@ -33,6 +33,8 @@ export const ACTIVITY_EVENT_KINDS = [
  'event_published',
   'pantun_created',
   'pantun_reply_created',
+  'article_published',
+  'article_comment_created',
   'announcement',
 ] as const;
 
@@ -89,6 +91,9 @@ return 'event';
   case 'pantun_created':
   case 'pantun_reply_created':
     return 'pantun';
+case 'article_published':
+case 'article_comment_created':
+      return 'article';
 case 'announcement':
       return 'announcement';
   }
