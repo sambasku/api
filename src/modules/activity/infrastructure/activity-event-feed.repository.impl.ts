@@ -588,34 +588,45 @@ articleTitle: articles.title,
         eq(parentPantuns.status, 'published'),
       ),
     )
-.leftJoin(
-searchMisses,
-and(
-eq(activityEvents.kind, 'search_miss'),
-eq(searchMisses.id, activityEvents.targetId),
-),
-)
-// Artikel: kind article_published & induk dari article_comment_created.
-// Published-only join: arsip/takedown menyembunyikan event read-time.
-.leftJoin(
-articles,
-and(
-sql`${activityEvents.kind} in ('article_published', 'article_comment_created')`,
-eq(articles.id, sql`coalesce(${activityEvents.targetId}, ${articleComments.articleId})`),
-eq(articles.status, 'published'),
-sql`${articles.deletedAt} is null`,
-),
-)
-// Komentar artikel untuk article_comment_created (published-only;
-// takedown/hapus penulis menyembunyikan event).
-.leftJoin(
-articleComments,
-and(
-eq(activityEvents.kind, 'article_comment_created'),
-eq(articleComments.id, activityEvents.targetId),
-eq(articleComments.status, 'published'),
-),
-)
+    .leftJoin(
+      searchMisses,
+      and(
+        eq(activityEvents.kind, 'search_miss'),
+        eq(searchMisses.id, activityEvents.targetId),
+      ),
+    )
+    // Komentar artikel dulu (seperti pantun_replies → parent_pantuns):
+    // articles butuh article_comments.article_id untuk kind comment.
+    // Published-only: takedown/hapus penulis menyembunyikan event.
+    .leftJoin(
+      articleComments,
+      and(
+        eq(activityEvents.kind, 'article_comment_created'),
+        eq(articleComments.id, activityEvents.targetId),
+        eq(articleComments.status, 'published'),
+      ),
+    )
+    // Artikel: article_published pakai target_id; comment pakai article_id
+    // dari join di atas. Jangan coalesce(targetId, …) - target comment = id
+    // komentar, bukan artikel.
+    .leftJoin(
+      articles,
+      and(
+        sql`${activityEvents.kind} in ('article_published', 'article_comment_created')`,
+        or(
+          and(
+            eq(activityEvents.kind, 'article_published'),
+            eq(articles.id, activityEvents.targetId),
+          ),
+          and(
+            eq(activityEvents.kind, 'article_comment_created'),
+            eq(articles.id, articleComments.articleId),
+          ),
+        ),
+        eq(articles.status, 'published'),
+        sql`${articles.deletedAt} is null`,
+      ),
+    )
       .where(
         and(
           ...conds,
