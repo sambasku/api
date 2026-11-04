@@ -40,6 +40,7 @@ import type {
   PlaceViewReport,
   UpdatePlaceInput,
 } from "../domain/repositories/place.repository";
+import { resolvePublicAuthor } from "@/shared/utils/resolve-public-author";
 
 type PlaceRow = typeof places.$inferSelect;
 type ImageRow = typeof placeImages.$inferSelect;
@@ -125,6 +126,7 @@ function mapPlace(row: PlaceRow, images: PlaceImage[]): Place {
     hours: row.hours ?? null,
     contact: row.contact ?? null,
     authorId: row.authorId ?? null,
+    author: null,
     sources: parseSources(row.sourcesJson),
     related: parseRelated(row.relatedJson),
     images,
@@ -361,7 +363,9 @@ export class PlaceRepositoryImpl implements PlaceRepository {
       .limit(1);
     if (!row) return null;
     const imgs = await loadImagesForPlaces(this.db, [row.id]);
-    return mapPlace(row, imgs.get(row.id) ?? []);
+    const place = mapPlace(row, imgs.get(row.id) ?? []);
+    place.author = await resolvePublicAuthor(this.db, place.authorId);
+    return place;
   }
 
   async findBySlugAny(slug: string): Promise<Place | null> {
@@ -390,7 +394,26 @@ export class PlaceRepositoryImpl implements PlaceRepository {
       const q = `%${input.q.trim()}%`;
       conds.push(or(ilikeCompat(places.name, q), ilikeCompat(places.slug, q))!);
     }
-    if (input.before) conds.push(lt(places.id, input.before));
+    // Keyset harus cocok dengan ORDER BY (created_at, id) DESC. Filter
+    // `id < before` saja salah saat created_at dan ULID id tidak sejajar
+    // (import/backfill) - halaman berikutnya bisa overlap item sebelumnya.
+    // Cursor tidak ketemu → halaman kosong (jangan jatuh ke page 1).
+    if (input.before) {
+      const [cursor] = await this.db
+        .select({ id: places.id, createdAt: places.createdAt })
+        .from(places)
+        .where(eq(places.id, input.before))
+        .limit(1);
+      if (!cursor) {
+        return { items: [], nextCursor: null };
+      }
+      conds.push(
+        or(
+          lt(places.createdAt, cursor.createdAt),
+          and(eq(places.createdAt, cursor.createdAt), lt(places.id, cursor.id)),
+        )!,
+      );
+    }
 
     const rows = await this.db
       .select()

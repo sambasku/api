@@ -1,16 +1,20 @@
 import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type {
   UsahaDetail,
   UsahaListItem,
 } from '../../domain/entities/usaha.entity';
 import type {
+  AppendUsahaImagesUseCase,
   CreateUsahaUseCase,
   DeleteUsahaUseCase,
   FindUsahaDuplicatesUseCase,
   GetUsahaBySlugUseCase,
+  HideUsahaImageUseCase,
   ListUsahaCategoriesUseCase,
+  ListUsahaImagesUseCase,
   ListUsahasUseCase,
   RestoreUsahaUseCase,
   RestrictUsahaUseCase,
@@ -36,6 +40,9 @@ function serialize(u: UsahaListItem | UsahaDetail) {
     category: u.category,
     kind: u.kind,
     region_id: u.regionId,
+    region: u.region
+      ? { id: u.region.id, name: u.region.name, slug: u.region.slug }
+      : null,
     village_id: u.villageId,
     village: u.village,
     address_text: u.addressText,
@@ -53,6 +60,13 @@ function serialize(u: UsahaListItem | UsahaDetail) {
     restricted_at: u.restrictedAt ? u.restrictedAt.toISOString() : null,
     manager_id: u.managerId,
     author_id: u.authorId,
+    author: u.author
+      ? {
+          id: u.author.id,
+          username: u.author.username,
+          display_name: u.author.displayName,
+        }
+      : null,
     published_at: u.publishedAt ? u.publishedAt.toISOString() : null,
     created_at: u.createdAt.toISOString(),
     updated_at: u.updatedAt ? u.updatedAt.toISOString() : null,
@@ -64,6 +78,23 @@ function serialize(u: UsahaListItem | UsahaDetail) {
       image_url: it.imageUrl,
       sort_order: it.sortOrder,
     })),
+    images:
+      'images' in u && u.images
+        ? u.images.map((img) => ({
+            id: img.id,
+            url: img.url,
+            is_main: img.isMain,
+            sort_order: img.sortOrder,
+            attribution: img.attribution
+              ? {
+                  name: img.attribution.name,
+                  provider: img.attribution.provider,
+                  author_id: img.attribution.authorId ?? null,
+                  username: img.attribution.username ?? null,
+                }
+              : null,
+          }))
+        : undefined,
   };
 }
 
@@ -78,6 +109,9 @@ export class UsahaController {
     private readonly restoreUc: RestoreUsahaUseCase,
     private readonly listCategoriesUc: ListUsahaCategoriesUseCase,
     private readonly duplicatesUc: FindUsahaDuplicatesUseCase,
+    private readonly listImagesUc: ListUsahaImagesUseCase,
+    private readonly appendImagesUc: AppendUsahaImagesUseCase,
+    private readonly hideImageUc: HideUsahaImageUseCase,
   ) {}
 
   listCategories(c: Context<{ Variables: AppVariables }>, publicOnly: boolean) {
@@ -221,5 +255,55 @@ export class UsahaController {
     return this.duplicatesUc
       .execute(id)
       .then((items) => c.json({ success: true as const, data: { items } }));
+  }
+
+  listImages(
+    c: Context<{ Variables: AppVariables }>,
+    slug: string,
+    offset: number,
+  ) {
+    return this.listImagesUc.execute(slug, offset).then((page) =>
+      c.json({
+        success: true as const,
+        data: {
+          items: page.items.map((img) => ({
+            id: img.id,
+            url: img.url,
+            is_main: img.isMain,
+            sort_order: img.sortOrder,
+            attribution: img.attribution
+              ? {
+                  name: img.attribution.name,
+                  provider: img.attribution.provider,
+                  author_id: img.attribution.authorId ?? null,
+                  username: img.attribution.username ?? null,
+                }
+              : null,
+          })),
+          total: page.total,
+          next_offset: page.nextOffset,
+        },
+      }),
+    );
+  }
+
+  appendImages(
+    c: Context<{ Variables: AppVariables }>,
+    slug: string,
+    urls: string[],
+  ) {
+    return this.appendImagesUc
+      .execute(slug, c.get('user')?.user_id ?? ANONIM_USER_ID, urls)
+      .then(() => c.json({ success: true as const, data: null }));
+  }
+
+  hideImage(
+    c: Context<{ Variables: AppVariables }>,
+    usahaId: string,
+    imageId: string,
+  ) {
+    return this.hideImageUc
+      .execute(usahaId, imageId)
+      .then(() => c.json({ success: true as const, data: null }));
   }
 }

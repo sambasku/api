@@ -187,6 +187,45 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
     expect(hit).toMatchObject({ upvotes: 2, downvotes: 0, net: 2 });
   });
 
+  it('GET /admin/words/:wordId/voters: 200 + counts; editor 403; kata fiktif 404', async () => {
+    expect((await get(`/api/v1/admin/words/${wordId}/voters`, editorToken)).status).toBe(403);
+
+    const res = await get(`/api/v1/admin/words/${wordId}/voters?limit=10`, reviewerToken);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      success: boolean;
+      data: Record<string, unknown>[];
+      meta: {
+        limit: number;
+        has_more: boolean;
+        upvotes: number;
+        downvotes: number;
+      };
+    };
+    expect(body.success).toBe(true);
+    expect(body.meta).toMatchObject({ limit: 10, upvotes: 2, downvotes: 0, has_more: false });
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((v) => v.voter_username).sort()).toEqual([voter1Name, voter2Name].sort());
+    expect(body.data.every((v) => v.meaning_id === meaningId)).toBe(true);
+    expect(Object.keys(body.data[0]!).includes('password_hash')).toBe(false);
+
+    const filtered = await get(
+      `/api/v1/admin/words/${wordId}/voters?meaning_id=${meaningId}&value=1`,
+      reviewerToken,
+    );
+    const filteredBody = (await filtered.json()) as {
+      data: { value: number }[];
+      meta: { upvotes: number; downvotes: number };
+    };
+    expect(filtered.status).toBe(200);
+    expect(filteredBody.data).toHaveLength(2);
+    expect(filteredBody.meta).toMatchObject({ upvotes: 2, downvotes: 0 });
+
+    const miss = await get(`/api/v1/admin/words/${ulid26('01NOWORD')}/voters`, reviewerToken);
+    expect(miss.status).toBe(404);
+    expect((await miss.json()).error_code).toBe('WORD_NOT_FOUND');
+  });
+
   it('delete vote individual → 200 & vote hilang dari list', async () => {
     const list = await get(`/api/v1/admin/votes?q=${voter1Name}`, reviewerToken);
     const body = (await list.json()) as { data: { id: string; voter_username: string }[] };

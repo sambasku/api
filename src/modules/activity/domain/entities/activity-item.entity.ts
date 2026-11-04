@@ -18,6 +18,7 @@ export type ActivityKind =
   | 'vote_down'
   | 'announcement'
   | 'place_photo'
+  | 'usaha_photo'
   | 'place_listing'
   | 'event'
 | 'usaha'

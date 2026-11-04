@@ -43,6 +43,12 @@ function serialize(
     status: "draft" | "published" | "archived";
     cancelledAt: Date | null;
     publishedAt: Date | null;
+    authorId?: string | null;
+    author?: {
+      id: string;
+      username: string;
+      displayName: string;
+    } | null;
     createdAt: Date;
     updatedAt: Date | null;
     places: Array<{
@@ -88,6 +94,14 @@ function serialize(
     status: event.status,
     cancelled_at: event.cancelledAt ? event.cancelledAt.toISOString() : null,
     published_at: event.publishedAt ? event.publishedAt.toISOString() : null,
+    author_id: event.authorId ?? null,
+    author: event.author
+      ? {
+          id: event.author.id,
+          username: event.author.username,
+          display_name: event.author.displayName,
+        }
+      : null,
     created_at: event.createdAt.toISOString(),
     updated_at: event.updatedAt ? event.updatedAt.toISOString() : null,
   };

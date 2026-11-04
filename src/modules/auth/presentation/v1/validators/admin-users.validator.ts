@@ -47,6 +47,11 @@ const adminUserWireSchema = z.object({
   email_verified: z.boolean(),
   /** Waktu verifikasi email (ISO); null = belum terverifikasi. */
   email_verified_at: z.string().nullable(),
+  is_team: z.boolean(),
+  team_as: z.string().nullable(),
+  team_note: z.string().nullable(),
+  is_sponsor: z.boolean().optional(),
+  auth_providers: z.array(z.string()).optional(),
   /** OTP verifikasi terakhir; null = tidak ada OTP tertunda. */
   otp: z
     .object({

@@ -1,0 +1,48 @@
+# Production VPS - service app saja. sqld terpisah di host yang sama.
+# Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md (§8 TODO VPS)
+#
+# Default: pull ghcr.io/sambasku/api:production (pointer bergerak).
+# Pin: API_IMAGE=ghcr.io/sambasku/api:v0.1.0 ./scripts/production-up.sh
+#
+# Di .env.production: secret app prod saja (DATABASE_URL lokal, JWT, …).
+# Package GHCR: Public supaya pull tanpa login.
+#
+# Bind default 127.0.0.1:8181 (reverse proxy di host). Contoh:
+#   APP_BIND_HOST=127.0.0.1 ./scripts/production-up.sh
+#
+# Jangan jalankan berdampingan dengan compose staging di port yang sama.
+
+name: sambasku-api-production
+
+services:
+  app:
+    image: ${API_IMAGE:-ghcr.io/sambasku/api:production}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sambasku-api-production
+    restart: unless-stopped
+    pull_policy: ${PULL_POLICY:-always}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: "8181"
+    ports:
+      - "${APP_BIND_HOST:-127.0.0.1}:8181:8181"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8181/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s

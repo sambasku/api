@@ -1,25 +1,37 @@
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   getTableColumns,
+  gte,
   inArray,
   isNull,
   lt,
+  max,
   ne,
   or,
   sql,
 } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import { usahas, usahaItems } from '@/shared/database/drizzle/schema/usahas.schema';
+import {
+  usahas,
+  usahaItems,
+  usahaImages,
+} from '@/shared/database/drizzle/schema/usahas.schema';
 import { usahaCategories } from '@/shared/database/drizzle/schema/usaha-categories.schema';
 import { regions } from '@/shared/database/drizzle/schema/regions.schema';
+import { users } from '@/shared/database/drizzle/schema/users.schema';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { generateId } from '@/shared/utils/ulid';
 import { ConflictError } from '@/shared/errors/app-error';
 import type {
   UsahaDetail,
+  UsahaImage,
+  UsahaImageAttribution,
+  UsahaImageInput,
   UsahaListItem,
 } from '../domain/entities/usaha.entity';
 import type {
@@ -30,23 +42,69 @@ import type {
   UsahaRepository,
 } from '../domain/repositories/usaha.repository';
 
+function parseAttribution(raw: string | null): UsahaImageAttribution | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<UsahaImageAttribution>;
+    if (!parsed.name || !parsed.provider) return null;
+    return {
+      name: parsed.name,
+      provider: parsed.provider,
+      authorId: parsed.authorId ?? null,
+      username: parsed.username ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function mapUsahaImage(row: typeof usahaImages.$inferSelect): UsahaImage {
+  return {
+    id: row.id,
+    url: row.url,
+    isMain: row.isMain,
+    sortOrder: row.sortOrder,
+    attribution: parseAttribution(row.attributionJson ?? null),
+  };
+}
+
 type UsahaRow = typeof usahas.$inferSelect;
 
-/** Baris usaha + JOIN kategori & desa (LEFT JOIN, satu query). */
+/** Desa vs kecamatan butuh dua alias ke tabel `regions` yang sama. */
+const villageRegions = alias(regions, 'usaha_villages');
+const kecamatanRegions = alias(regions, 'usaha_kecamatan');
+const authorUsers = alias(users, 'usaha_authors');
+
+/** Baris usaha + JOIN kategori, wilayah, pengusul (LEFT JOIN, satu query). */
 type UsahaJoinedRow = UsahaRow & {
   categoryName: string | null;
   villageName: string | null;
   villageSlug: string | null;
+  regionName: string | null;
+  regionSlug: string | null;
+  authorUsername: string | null;
+  authorDisplayName: string | null;
+  authorDeletedAt: Date | null;
 };
 
 const usahaSelect = {
   ...getTableColumns(usahas),
   categoryName: usahaCategories.name,
-  villageName: regions.name,
-  villageSlug: regions.slug,
+  villageName: villageRegions.name,
+  villageSlug: villageRegions.slug,
+  regionName: kecamatanRegions.name,
+  regionSlug: kecamatanRegions.slug,
+  authorUsername: authorUsers.username,
+  authorDisplayName: authorUsers.displayName,
+  authorDeletedAt: authorUsers.deletedAt,
 };
 
 function mapUsaha(row: UsahaJoinedRow): UsahaListItem {
+  const authorAlive =
+    row.authorId &&
+    row.authorUsername &&
+    row.authorDeletedAt == null &&
+    row.authorUsername !== 'anonim';
   return {
     id: row.id,
     slug: row.slug,
@@ -77,6 +135,14 @@ function mapUsaha(row: UsahaJoinedRow): UsahaListItem {
     category: row.categoryName
       ? { id: row.categoryId ?? '', name: row.categoryName }
       : null,
+    region:
+      row.regionId && row.regionName
+        ? {
+            id: row.regionId,
+            name: row.regionName,
+            slug: row.regionSlug ?? null,
+          }
+        : null,
     village:
       row.villageId && row.villageName
         ? {
@@ -85,6 +151,15 @@ function mapUsaha(row: UsahaJoinedRow): UsahaListItem {
             slug: row.villageSlug ?? null,
           }
         : null,
+    author: authorAlive
+      ? {
+          id: row.authorId!,
+          username: row.authorUsername!,
+          displayName:
+            (row.authorDisplayName && row.authorDisplayName.trim()) ||
+            row.authorUsername!,
+        }
+      : null,
   };
 }
 
@@ -210,7 +285,9 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .select(usahaSelect)
       .from(usahas)
       .leftJoin(usahaCategories, eq(usahaCategories.id, usahas.categoryId))
-      .leftJoin(regions, eq(regions.id, usahas.villageId))
+      .leftJoin(villageRegions, eq(villageRegions.id, usahas.villageId))
+      .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
+      .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
       .where(and(eq(usahas.id, id), isNull(usahas.deletedAt)))
       .limit(1);
     if (!row) return null;
@@ -228,7 +305,9 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .select(usahaSelect)
       .from(usahas)
       .leftJoin(usahaCategories, eq(usahaCategories.id, usahas.categoryId))
-      .leftJoin(regions, eq(regions.id, usahas.villageId))
+      .leftJoin(villageRegions, eq(villageRegions.id, usahas.villageId))
+      .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
+      .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
       .where(and(...conds))
       .limit(1);
     if (!row) return null;
@@ -268,13 +347,32 @@ export class UsahaRepositoryImpl implements UsahaRepository {
         or(ilikeCompat(usahas.name, q), ilikeCompat(usahas.slug, q))!,
       );
     }
-    if (input.before) conds.push(lt(usahas.id, input.before));
+    // Keyset harus cocok dengan ORDER BY (created_at, id) DESC.
+    // Cursor tidak ketemu → halaman kosong (jangan jatuh ke page 1).
+    if (input.before) {
+      const [cursor] = await this.db
+        .select({ id: usahas.id, createdAt: usahas.createdAt })
+        .from(usahas)
+        .where(eq(usahas.id, input.before))
+        .limit(1);
+      if (!cursor) {
+        return { items: [], nextCursor: null };
+      }
+      conds.push(
+        or(
+          lt(usahas.createdAt, cursor.createdAt),
+          and(eq(usahas.createdAt, cursor.createdAt), lt(usahas.id, cursor.id)),
+        )!,
+      );
+    }
 
     const rows = await this.db
       .select(usahaSelect)
       .from(usahas)
       .leftJoin(usahaCategories, eq(usahaCategories.id, usahas.categoryId))
-      .leftJoin(regions, eq(regions.id, usahas.villageId))
+      .leftJoin(villageRegions, eq(villageRegions.id, usahas.villageId))
+      .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
+      .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
       .where(and(...conds))
       .orderBy(desc(usahas.createdAt), desc(usahas.id))
       .limit(input.limit + 1);
@@ -452,5 +550,97 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       phone: r.phone ?? null,
       managerId: r.managerId ?? null,
     }));
+  }
+
+  async listImages(
+    usahaId: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ items: UsahaImage[]; total: number }> {
+    const visible = and(
+      eq(usahaImages.usahaId, usahaId),
+      isNull(usahaImages.hiddenAt),
+    );
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(usahaImages)
+      .where(visible);
+    const rows = await this.db
+      .select()
+      .from(usahaImages)
+      .where(visible)
+      .orderBy(asc(usahaImages.sortOrder), asc(usahaImages.createdAt))
+      .limit(limit)
+      .offset(offset);
+    return { items: rows.map(mapUsahaImage), total: totalRow?.total ?? 0 };
+  }
+
+  async appendImages(
+    usahaId: string,
+    images: UsahaImageInput[],
+  ): Promise<void> {
+    if (images.length === 0) return;
+    await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ top: max(usahaImages.sortOrder) })
+        .from(usahaImages)
+        .where(eq(usahaImages.usahaId, usahaId));
+      const start = (row?.top ?? -1) + 1;
+      await tx.insert(usahaImages).values(
+        images.map((img, i) => ({
+          id: generateId(),
+          usahaId,
+          url: img.url,
+          isMain: img.isMain ?? false,
+          sortOrder: start + i,
+          attributionJson: img.attribution
+            ? JSON.stringify(img.attribution)
+            : null,
+          createdAt: new Date(),
+        })),
+      );
+      await tx
+        .update(usahas)
+        .set({ updatedAt: new Date() })
+        .where(eq(usahas.id, usahaId));
+    });
+  }
+
+  async countUploadsSince(
+    usahaId: string,
+    authorId: string,
+    since: Date,
+  ): Promise<number> {
+    const rows = await this.db
+      .select({
+        attributionJson: usahaImages.attributionJson,
+        createdAt: usahaImages.createdAt,
+      })
+      .from(usahaImages)
+      .where(
+        and(eq(usahaImages.usahaId, usahaId), gte(usahaImages.createdAt, since)),
+      );
+    return rows.filter(
+      (row) => parseAttribution(row.attributionJson ?? null)?.authorId === authorId,
+    ).length;
+  }
+
+  async hideImage(
+    usahaId: string,
+    imageId: string,
+  ): Promise<UsahaImage | null> {
+    const rows = await this.db
+      .update(usahaImages)
+      .set({ hiddenAt: new Date() })
+      .where(
+        and(
+          eq(usahaImages.id, imageId),
+          eq(usahaImages.usahaId, usahaId),
+          isNull(usahaImages.hiddenAt),
+        ),
+      )
+      .returning();
+    const row = rows[0];
+    return row ? mapUsahaImage(row) : null;
   }
 }

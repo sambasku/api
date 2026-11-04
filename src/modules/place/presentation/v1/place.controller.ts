@@ -76,6 +76,13 @@ function serialize(
     hours: p.hours,
     contact: p.contact,
     author_id: p.authorId,
+    author: p.author
+      ? {
+          id: p.author.id,
+          username: p.author.username,
+          display_name: p.author.displayName,
+        }
+      : null,
     related,
     image_count: extra?.imageCount ?? p.images.length,
     sources: p.sources.map((s) => ({

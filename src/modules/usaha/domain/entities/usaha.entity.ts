@@ -18,6 +18,20 @@ export interface UsahaVillageRef {
   slug: string | null;
 }
 
+/** Kecamatan (region_id) - bentuk sama desa. */
+export interface UsahaRegionRef {
+  id: string;
+  name: string;
+  slug: string | null;
+}
+
+/** Pengusul live (JOIN users) - untuk apresiasi di detail. */
+export interface UsahaAuthorRef {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
 export interface UsahaItem {
   id: string;
   name: string;
@@ -60,10 +74,35 @@ export interface Usaha {
 
 export interface UsahaListItem extends Usaha {
   category: UsahaCategoryRef | null;
+  region: UsahaRegionRef | null;
   village: UsahaVillageRef | null;
+  author: UsahaAuthorRef | null;
 }
 
 /** Detail + katalog versi publik. */
 export interface UsahaDetail extends UsahaListItem {
   items: UsahaItem[];
+  /** Foto singgah (halaman pertama / ringkas). Opsional di list. */
+  images?: UsahaImage[];
+}
+
+export interface UsahaImageAttribution {
+  name: string;
+  provider: string;
+  authorId?: string | null;
+  username?: string | null;
+}
+
+export interface UsahaImage {
+  id: string;
+  url: string;
+  isMain: boolean;
+  sortOrder: number;
+  attribution: UsahaImageAttribution | null;
+}
+
+export interface UsahaImageInput {
+  url: string;
+  isMain?: boolean;
+  attribution?: UsahaImageAttribution | null;
 }

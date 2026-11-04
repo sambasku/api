@@ -236,6 +236,24 @@ import {
   createAdminAnnouncementRoutes,
   createPublicAnnouncementRoutes,
 } from "@/modules/announcement/presentation/v1/announcement.routes";
+import { AboutRepositoryImpl } from "@/modules/about/infrastructure/about.repository.impl";
+import {
+  CreateSponsorshipUseCase,
+  DeleteSponsorshipUseCase,
+  ListAdminSponsorshipsUseCase,
+  ListContributorsUseCase,
+  ListPublicSponsorshipsUseCase,
+  ListTeamUseCase,
+  ListVerifiersUseCase,
+  SetUserSponsorUseCase,
+  UpdateSponsorshipUseCase,
+} from "@/modules/about/application/use-cases/about.use-cases";
+import { AboutController } from "@/modules/about/presentation/v1/about.controller";
+import {
+  createAdminSponsorshipRoutes,
+  createPublicAboutRoutes,
+  createPublicAboutUserListRoutes,
+} from "@/modules/about/presentation/v1/about.routes";
 import { AchievementRepositoryImpl } from "@/modules/achievement/infrastructure/achievement.repository.impl";
 import {
   CreateAchievementUseCase,
@@ -329,7 +347,10 @@ import {
   CreateUsahaUseCase,
   DeleteUsahaUseCase,
   FindUsahaDuplicatesUseCase,
+  AppendUsahaImagesUseCase,
   GetUsahaBySlugUseCase,
+  HideUsahaImageUseCase,
+  ListUsahaImagesUseCase,
   ListUsahaCategoriesUseCase,
   ListUsahasUseCase,
   RestoreUsahaUseCase,
@@ -621,7 +642,10 @@ import { VoteController } from "@/modules/vote/presentation/v1/vote.controller";
 import { createVoteRoutes } from "@/modules/vote/presentation/v1/vote.routes";
 import { AdminVotesController } from "@/modules/vote/presentation/v1/admin-vote.controller";
 import { createAdminVoteRoutes } from "@/modules/vote/presentation/v1/admin-vote.routes";
+import { WordVotersController } from "@/modules/vote/presentation/v1/word-voters.controller";
+import { createAdminWordVotersRoutes } from "@/modules/vote/presentation/v1/word-voters.routes";
 import { ListAdminVotesUseCase } from "@/modules/vote/application/use-cases/list-admin-votes.use-case";
+import { ListWordVotersUseCase } from "@/modules/vote/application/use-cases/list-word-voters.use-case";
 import { DeleteAdminVoteUseCase } from "@/modules/vote/application/use-cases/delete-admin-vote.use-case";
 import { ResetTargetVotesUseCase } from "@/modules/vote/application/use-cases/reset-target-votes.use-case";
 import { ResetVotesByClientUseCase } from "@/modules/vote/application/use-cases/reset-votes-by-client.use-case";
@@ -1244,6 +1268,21 @@ const languageController = new LanguageController({
   listDialects: new ListDialectsUseCase(languageRepo),
 });
 
+// ---- Modul about: Tim Kami + sponsorships (pengganti CDN). ----
+const aboutRepo = new AboutRepositoryImpl(db);
+const setUserSponsorUseCase = new SetUserSponsorUseCase(aboutRepo);
+const aboutController = new AboutController({
+  listTeam: new ListTeamUseCase(aboutRepo),
+  listPublicSponsorships: new ListPublicSponsorshipsUseCase(aboutRepo),
+  listAdminSponsorships: new ListAdminSponsorshipsUseCase(aboutRepo),
+  createSponsorship: new CreateSponsorshipUseCase(aboutRepo),
+  updateSponsorship: new UpdateSponsorshipUseCase(aboutRepo),
+  deleteSponsorship: new DeleteSponsorshipUseCase(aboutRepo),
+  setUserSponsor: setUserSponsorUseCase,
+  listContributors: new ListContributorsUseCase(aboutRepo),
+  listVerifiers: new ListVerifiersUseCase(aboutRepo),
+});
+
 // ---- Modul announcement (#102) - pengumuman admin tayang di feed publik.
 // Write-through activity_events (payload beku) + soft delete hide event. ----
 const announcementRepo = new AnnouncementRepositoryImpl(db);
@@ -1349,6 +1388,9 @@ const usahaController = new UsahaController(
   new RestoreUsahaUseCase(usahaRepo),
   new ListUsahaCategoriesUseCase(usahaRepo),
   new FindUsahaDuplicatesUseCase(usahaRepo),
+  new ListUsahaImagesUseCase(usahaRepo),
+  new AppendUsahaImagesUseCase(usahaRepo, userRepo, activityEvents),
+  new HideUsahaImageUseCase(usahaRepo),
 );
 const usahaContributionRepo = new UsahaContributionRepositoryImpl(db);
 const usahaClaimRepo = new UsahaClaimRepositoryImpl(db);
@@ -1497,6 +1539,10 @@ const adminVotesController = new AdminVotesController({
   resetTarget: new ResetTargetVotesUseCase(voteRepo, auditRepo),
   resetByClient: new ResetVotesByClientUseCase(voteRepo, auditRepo),
   topTargets: new GetTopTargetVotesUseCase(voteRepo),
+});
+
+const wordVotersController = new WordVotersController({
+  list: new ListWordVotersUseCase(voteRepo),
 });
 
 // ---- Modul dashboard - statistik agregat halaman admin (kata, kontribusi,
@@ -1984,6 +2030,15 @@ app.route(
   "/api/v1/admin/words",
   createAdminWordRoutes({ controller: wordController, authenticate }),
 );
+// Voter makna per kata (moderasi) - mount terpisah supaya modul vote tidak
+// digabung ke word.routes; path /:wordId/voters tidak bentrok dengan /:id.
+app.route(
+  "/api/v1/admin/words",
+  createAdminWordVotersRoutes({
+    controller: wordVotersController,
+    authenticate,
+  }),
+);
 // Kontribusi media (pronounce/gambar/contoh) DI-MOUNT SEBELUM public routes -
 // public punya rate limit IP 100/menit global (use '*'), limit per-user 30/menit
 // tetap jadi batas efektif; urutan mount menentukan middleware yang berlaku
@@ -2124,6 +2179,11 @@ app.route(
     requireApprovedClient: requireProfileWriteClient,
   }),
 );
+// Contributors/verifiers SEBELUM /:username (hindari bentrok path).
+app.route(
+  "/api/v1/users",
+  createPublicAboutUserListRoutes({ controller: aboutController }),
+);
 app.route(
   "/api/v1/users",
   createPublicUserRoutes({ controller: userController }),
@@ -2132,6 +2192,17 @@ app.route(
 app.route(
   "/api/v1/users",
   createPublicUserAchievementsRoutes({ controller: achievementController }),
+);
+app.route(
+  "/api/v1/about",
+  createPublicAboutRoutes({ controller: aboutController }),
+);
+app.route(
+  "/api/v1/admin/sponsorships",
+  createAdminSponsorshipRoutes({
+    controller: aboutController,
+    authenticate,
+  }),
 );
 
 const publicImageController = new PublicImageController({
@@ -2908,9 +2979,15 @@ const adminUsersController = new AdminUsersController({
     recordInbox,
   ),
   createUser: new CreateAdminUserUseCase(userRepo, hasher, auditRepo),
-setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
-verifyEmail: new AdminVerifyEmailUseCase(userRepo, otpRepo, auditRepo, activityEvents),
-listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
+  setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
+  verifyEmail: new AdminVerifyEmailUseCase(userRepo, otpRepo, auditRepo, activityEvents),
+  listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
+  updateTeam: (id, data) => userRepo.updateTeam(id, data),
+  setUserSponsor: async (userId, isSponsor) => {
+    const row = await setUserSponsorUseCase.execute(userId, isSponsor);
+    return { isSponsor: row != null, sponsorshipId: row?.id ?? null };
+  },
+  listActiveSponsorUserIds: (ids) => aboutRepo.listActiveSponsorUserIds(ids),
 });
 app.route(
   "/api/v1/admin/users",

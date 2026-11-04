@@ -72,6 +72,50 @@ export function createPublicUsahaRoutes(deps: {
     },
   });
 
+  const imagePageQuery = z.object({
+    offset: z.coerce.number().int().min(0).default(0),
+  });
+  const appendImagesBody = z.object({
+    urls: z.array(z.string().url()).min(1).max(5),
+  });
+
+  const imagesRoute = createRoute({
+    method: 'get',
+    path: '/:slug/images',
+    tags: ['Usaha'],
+    summary: 'Galeri foto usaha, 12 per halaman',
+    request: { params: slugParam, query: imagePageQuery },
+    responses: {
+      200: {
+        description: 'Halaman foto',
+        content: json(z.object({ success: z.literal(true) }).passthrough()),
+      },
+    },
+  });
+
+  const appendRoute = createRoute({
+    method: 'post',
+    path: '/:slug/images',
+    tags: ['Usaha'],
+    summary: 'Tambah foto ke usaha yang sudah terbit',
+    request: {
+      params: slugParam,
+      body: { content: { 'application/json': { schema: appendImagesBody } } },
+    },
+    responses: {
+      200: {
+        description: 'Foto ditambahkan',
+        content: json(okNullResponseSchema),
+      },
+      400: { description: 'Batas foto', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.use('/:slug/images', async (c, next) => {
+    if (c.req.method === 'POST') return deps.optionalAuthenticate(c, next);
+    return next();
+  });
+
   routes.openapi(listRoute, (c) =>
     deps.controller.listPublic(c, c.req.valid('query')) as never,
   );
@@ -79,6 +123,20 @@ export function createPublicUsahaRoutes(deps: {
   // registrasi, slug param akan menelan "categories" kalau belakangan.
   routes.openapi(categoriesRoute, (c) =>
     deps.controller.listCategories(c, true) as never,
+  );
+  routes.openapi(imagesRoute, (c) =>
+    deps.controller.listImages(
+      c,
+      c.req.param('slug'),
+      c.req.valid('query').offset,
+    ) as never,
+  );
+  routes.openapi(appendRoute, (c) =>
+    deps.controller.appendImages(
+      c,
+      c.req.param('slug'),
+      c.req.valid('json').urls,
+    ) as never,
   );
   routes.openapi(getRoute, (c) =>
     deps.controller.getBySlug(c, c.req.param('slug')) as never,

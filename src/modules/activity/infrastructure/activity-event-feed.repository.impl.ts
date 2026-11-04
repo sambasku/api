@@ -39,6 +39,7 @@ const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   contribution_pron: 'pronunciation',
   contribution_example: 'example',
   place_photo_added: 'place_photo',
+  usaha_photo_added: 'usaha_photo',
   comment_created: 'comment',
 vote_word: 'vote',
 vote_comment: 'vote',
@@ -71,6 +72,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   contribution_pron: 'Menambah cara baca',
   contribution_example: 'Menambah contoh kalimat',
   place_photo_added: 'Menambah foto wisata',
+  usaha_photo_added: 'Menambah foto usaha',
   comment_created: '',
   vote_word: '',
   vote_comment: '',
@@ -146,6 +148,7 @@ contribution: [
 'suggestion_created',
 'contribution_submitted',
 'place_photo_added',
+'usaha_photo_added',
 'usaha_published',
 'cuisine_published',
 'place_published',
@@ -362,6 +365,8 @@ export class ActivityEventFeedRepositoryImpl {
         return `Mengusulkan kata baru ${q}`.trim();
     case 'place_photo_added':
       return 'Menambahkan foto wisata';
+    case 'usaha_photo_added':
+      return 'Menambahkan foto usaha';
     case 'usaha_published':
       return 'Menambahkan usaha';
     case 'place_published':
@@ -516,7 +521,7 @@ articleTitle: articles.title,
     .leftJoin(
       usahas,
       and(
-        eq(activityEvents.kind, 'usaha_published'),
+        sql`${activityEvents.kind} in ('usaha_published', 'usaha_photo_added')`,
         eq(usahas.id, activityEvents.targetId),
         eq(usahas.publishStatus, 'published'),
         sql`${usahas.deletedAt} is null`,
@@ -632,6 +637,7 @@ eq(articleComments.status, 'published'),
       sql`(${activityEvents.kind} <> 'pantun_reply_created' or ${parentPantuns.id} is not null)`,
         // Usaha hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'usaha_published' or ${usahas.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'usaha_photo_added' or ${usahas.id} is not null)`,
 // Kuliner/tempat kuliner hanya tayang selama masih published.
 sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null or ${culinaryPlaces.id} is not null)`,
 // Artikel hanya tayang selama published (arsip = sembunyi).
@@ -741,7 +747,7 @@ kind === 'place_photo_added' || kind === 'place_published'
 ? row.placeName
 : kind === 'cuisine_published'
 ? (row.cuisineName ?? row.culinaryPlaceName)
-: kind === 'usaha_published'
+: kind === 'usaha_published' || kind === 'usaha_photo_added'
 ? row.usahaName
 : kind === 'event_published'
 ? row.eventName
@@ -966,6 +972,7 @@ articleSlug?: string | null;
       case 'place_photo_added':
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'usaha_published':
+      case 'usaha_photo_added':
         return row.usahaSlug ? { type: 'usaha', id: row.usahaSlug } : null;
       case 'place_published':
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;

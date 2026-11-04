@@ -3,12 +3,18 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  RateLimitedError,
+  UnauthorizedError,
 } from '@/shared/errors/app-error';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { Region } from '@/modules/region/domain/entities/region.entity';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type {
   UsahaCategoryRef,
   UsahaDetail,
+  UsahaImage,
   UsahaListItem,
 } from '../../domain/entities/usaha.entity';
 import type {
@@ -18,6 +24,19 @@ import type {
   UpdateUsahaInput,
   UsahaRepository,
 } from '../../domain/repositories/usaha.repository';
+
+const GALLERY_PAGE = 12;
+const PHOTO_CAP = 100;
+const PHOTO_DAILY = 5;
+
+export function assertOurUsahaImage(url: string): void {
+  if (
+    !url.startsWith('https://cdn.jsdelivr.net/') ||
+    !url.includes('/assets/usahas/')
+  ) {
+    throw new BadRequestError('IMAGE_URL', 'Foto harus hasil unggah SambasKu');
+  }
+}
 
 async function assertCategory(
   repo: UsahaRepository,
@@ -188,7 +207,99 @@ export class GetUsahaBySlugUseCase {
     if (!usaha) {
       throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
     }
-    return usaha;
+    const page = await this.repo.listImages(usaha.id, 0, GALLERY_PAGE);
+    return { ...usaha, images: page.items };
+  }
+}
+
+export class ListUsahaImagesUseCase {
+  constructor(private readonly repo: UsahaRepository) {}
+
+  async execute(
+    slug: string,
+    offset: number,
+  ): Promise<{ items: UsahaImage[]; total: number; nextOffset: number | null }> {
+    const usaha = await this.repo.findBySlug(slug, { publicOnly: true });
+    if (!usaha) {
+      throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
+    }
+    const page = await this.repo.listImages(usaha.id, offset, GALLERY_PAGE);
+    const next =
+      offset + page.items.length < page.total
+        ? offset + page.items.length
+        : null;
+    return { items: page.items, total: page.total, nextOffset: next };
+  }
+}
+
+export class AppendUsahaImagesUseCase {
+  constructor(
+    private readonly repo: UsahaRepository,
+    private readonly users: UserRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
+  ) {}
+
+  async execute(slug: string, userId: string, urls: string[]): Promise<void> {
+    if (userId === ANONIM_USER_ID) {
+      throw new UnauthorizedError(
+        'UNAUTHORIZED',
+        'Masuk dulu untuk menambah foto usaha',
+      );
+    }
+    const usaha = await this.repo.findBySlug(slug, { publicOnly: true });
+    if (!usaha || usaha.publishStatus !== 'published') {
+      throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
+    }
+    for (const url of urls) assertOurUsahaImage(url);
+    const user = await this.users.findById(userId);
+    if (!user) {
+      throw new NotFoundError('USER_NOT_FOUND', 'User tidak ditemukan');
+    }
+    const total = (await this.repo.listImages(usaha.id, 0, 1)).total;
+    if (total + urls.length > PHOTO_CAP) {
+      throw new BadRequestError('PHOTO_CAP', 'Foto usaha ini sudah penuh (100)');
+    }
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const today = await this.repo.countUploadsSince(usaha.id, userId, since);
+    if (today + urls.length > PHOTO_DAILY) {
+      throw new RateLimitedError('Maksimal 5 foto per usaha dalam 24 jam');
+    }
+    const existing = await this.repo.listImages(usaha.id, 0, PHOTO_CAP);
+    const have = new Set(existing.items.map((img) => img.url));
+    const fresh = urls.filter((url) => !have.has(url));
+    if (fresh.length === 0) return;
+    const name = user.displayName || user.username;
+    await this.repo.appendImages(
+      usaha.id,
+      fresh.map((url) => ({
+        url,
+        isMain: false,
+        attribution: {
+          name,
+          provider: 'sambasku',
+          authorId: userId,
+          username: user.username,
+        },
+      })),
+    );
+    await this.activityEvents?.safe({
+      kind: 'usaha_photo_added',
+      actorId: userId,
+      targetId: usaha.id,
+      dedupeKey: `usaha_photo:${usaha.id}:${fresh.join('|')}`,
+      payload: `Menambahkan foto usaha ${usaha.name}`,
+    });
+  }
+}
+
+export class HideUsahaImageUseCase {
+  constructor(private readonly repo: UsahaRepository) {}
+
+  async execute(usahaId: string, imageId: string): Promise<void> {
+    const hidden = await this.repo.hideImage(usahaId, imageId);
+    if (!hidden) {
+      throw new NotFoundError('IMAGE_NOT_FOUND', 'Foto tidak ditemukan');
+    }
   }
 }
 
@@ -311,3 +422,4 @@ export class UniqueUsahaSlugUseCase {
     return `${base}-${Date.now()}`;
   }
 }
+

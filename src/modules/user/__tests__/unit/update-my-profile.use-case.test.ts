@@ -40,6 +40,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     canContribute: true,
     contributeMutedUntil: null,
     ...overrides,
+    isTeam: overrides.isTeam ?? false,
+    teamAs: overrides.teamAs ?? null,
+    teamNote: overrides.teamNote ?? null,
   };
 }
 

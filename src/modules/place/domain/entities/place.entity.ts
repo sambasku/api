@@ -46,6 +46,13 @@ export interface PlaceImage {
   attribution: PlaceImageAttribution | null;
 }
 
+/** Pengusul live (JOIN users). Null = anonim / akun hilang. */
+export interface PlaceAuthorRef {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
 export interface Place {
   id: string;
   slug: string;
@@ -62,6 +69,8 @@ export interface Place {
   hours: string | null;
   contact: string | null;
   authorId: string | null;
+  /** Diisi di path detail publik; list boleh null. */
+  author: PlaceAuthorRef | null;
   sources: PlaceSource[];
   related: PlaceRelation[];
   images: PlaceImage[];

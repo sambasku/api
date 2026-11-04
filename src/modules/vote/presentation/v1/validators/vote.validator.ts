@@ -5,16 +5,18 @@ import { opaqueId } from '@/shared/validation/id';
 const ulid = opaqueId;
 
 export const voteTargetTypeEnum = z.enum([
-  'word',
-  'meaning',
-  'example',
-  'pronunciation',
-  'word_image',
-  'comment',
-  'discussion_reply',
-  'discussion',
-  'pantun',
-  'pantun_reply',
+'word',
+'meaning',
+'example',
+'pronunciation',
+'word_image',
+'comment',
+'discussion_reply',
+'discussion',
+'pantun',
+'pantun_reply',
+'article',
+'article_comment',
 ]);
 
 export const toggleVoteSchema = z.object({

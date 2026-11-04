@@ -178,6 +178,15 @@ export const eventResponseSchema = z.object({
   status: eventStatusSchema,
   cancelled_at: z.string().nullable(),
   published_at: z.string().nullable(),
+  author_id: z.string().nullable().optional(),
+  author: z
+    .object({
+      id: z.string(),
+      username: z.string(),
+      display_name: z.string(),
+    })
+    .nullable()
+    .optional(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });

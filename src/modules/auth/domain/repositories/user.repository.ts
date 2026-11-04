@@ -49,4 +49,13 @@ export interface UserRepository {
       notifyLevelUp?: boolean;
     },
   ): Promise<User>;
+  /** Kurasi Tim Kami (admin). */
+  updateTeam(
+    id: string,
+    data: {
+      isTeam?: boolean;
+      teamAs?: string | null;
+      teamNote?: string | null;
+    },
+  ): Promise<User | null>;
 }

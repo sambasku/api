@@ -55,6 +55,9 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     avatarProvider: row.avatarProvider ?? null,
     avatarProviderFileId: row.avatarProviderFileId ?? null,
     avatarSha: row.avatarSha ?? null,
+    isTeam: row.isTeam ?? false,
+    teamAs: row.teamAs ?? null,
+    teamNote: row.teamNote ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt,
@@ -182,6 +185,9 @@ export class UserRepositoryImpl implements UserRepository {
       avatarProvider: users.avatarProvider,
       avatarProviderFileId: users.avatarProviderFileId,
       avatarSha: users.avatarSha,
+      isTeam: users.isTeam,
+      teamAs: users.teamAs,
+      teamNote: users.teamNote,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
         // Di-select juga untuk cursor comparison walau tidak di-return ke user (deletedAt
@@ -441,6 +447,30 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
     if (!updated) {
       throw new NotFoundError('USER_NOT_FOUND', `User ${id} tidak ditemukan`);
     }
+    const roles = await loadRolesByUserIds(this.db, [updated.id]);
+    return toEntity(updated, roles.get(updated.id) ?? []);
+  }
+
+  async updateTeam(
+    id: string,
+    data: {
+      isTeam?: boolean;
+      teamAs?: string | null;
+      teamNote?: string | null;
+    },
+  ): Promise<User | null> {
+    if (id === ANONIM_USER_ID) return null;
+    const [updated] = await this.db
+      .update(users)
+      .set({
+        ...(data.isTeam !== undefined ? { isTeam: data.isTeam } : {}),
+        ...(data.teamAs !== undefined ? { teamAs: data.teamAs } : {}),
+        ...(data.teamNote !== undefined ? { teamNote: data.teamNote } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .returning();
+    if (!updated) return null;
     const roles = await loadRolesByUserIds(this.db, [updated.id]);
     return toEntity(updated, roles.get(updated.id) ?? []);
   }

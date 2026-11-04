@@ -5,6 +5,8 @@ import type {
 } from '@/shared/database/drizzle/schema/usahas.schema';
 import type {
   UsahaDetail,
+  UsahaImage,
+  UsahaImageInput,
   UsahaListItem,
 } from '../entities/usaha.entity';
 
@@ -146,4 +148,16 @@ export interface UsahaRepository {
       managerId: string | null;
     }>
   >;
+  listImages(
+    usahaId: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ items: UsahaImage[]; total: number }>;
+  appendImages(usahaId: string, images: UsahaImageInput[]): Promise<void>;
+  countUploadsSince(
+    usahaId: string,
+    authorId: string,
+    since: Date,
+  ): Promise<number>;
+  hideImage(usahaId: string, imageId: string): Promise<UsahaImage | null>;
 }

@@ -243,20 +243,22 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         )`,
       );
     }
+    // Cursor tidak ketemu → halaman kosong (jangan jatuh ke page 1).
     if (filter.cursor) {
       const [row] = await this.db
         .select({ id: articles.id, createdAt: articles.createdAt })
         .from(articles)
         .where(eq(articles.id, filter.cursor))
         .limit(1);
-      if (row) {
-        conditions.push(
-          or(
-            lt(articles.createdAt, row.createdAt),
-            and(eq(articles.createdAt, row.createdAt), lt(articles.id, row.id)),
-          )!,
-        );
+      if (!row) {
+        return { items: [], nextCursor: null, hasMore: false };
       }
+      conditions.push(
+        or(
+          lt(articles.createdAt, row.createdAt),
+          and(eq(articles.createdAt, row.createdAt), lt(articles.id, row.id)),
+        )!,
+      );
     }
 
     // FTS / LIKE: hasil pencarian jadi prefilter id, tetap satu query list.

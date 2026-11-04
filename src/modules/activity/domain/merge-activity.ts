@@ -35,8 +35,9 @@ export const FEED_CATEGORY_KINDS: Record<
     'suggestion_applied',
     'suggestion_selfapply',
     'place_photo_added',
+    'usaha_photo_added',
   ],
-  /** Eksplorasi: entitas baru tayang (wisata, usaha, acara) + foto wisata. */
+  /** Eksplorasi: entitas baru tayang (wisata, usaha, acara) + foto. */
 explore: [
 'place_published',
 'usaha_published',
@@ -46,6 +47,7 @@ explore: [
 'pantun_reply_created',
 'article_published',
 'place_photo_added',
+'usaha_photo_added',
 ],
   announcement: ['announcement'],
   joined: ['user_joined'],
