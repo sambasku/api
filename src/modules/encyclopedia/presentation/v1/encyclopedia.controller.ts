@@ -436,7 +436,7 @@ export class EncyclopediaController {
     return c.json({
       success: true as const,
       data: {
-        items: items.map(toArticleWire),
+        items: items.map((a) => toArticleWire(a)),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
       },
