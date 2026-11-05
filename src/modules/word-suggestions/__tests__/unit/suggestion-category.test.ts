@@ -24,7 +24,32 @@ describe('checkSuggestionCategoryShape', () => {
     });
     const fields = issues.map((i) => i.field);
     expect(fields).toContain('images');
-    expect(fields).toContain('meanings.word_class_id');
+    expect(fields).toContain('meanings.0.word_class_id');
+  });
+
+  it('#230 change_meaning menerima beberapa makna sekaligus', () => {
+    const issues = checkSuggestionCategoryShape('change_meaning', {
+      meanings: [
+        { action: 'update', meaningId: '01HAAAAAAAAAAAAAAAAAAAAAAAA', definition: 'x' },
+        { action: 'update', meaningId: '01HBBBBBBBBBBBBBBBBBBBBBBBB', translations: [{ languageId: 'idn', translationText: 'y' }] },
+      ],
+    });
+    expect(issues).toEqual([]);
+  });
+
+  it('#230 change_meaning menolak makna sama dua kali dan entri tanpa target', () => {
+    const issues = checkSuggestionCategoryShape('change_meaning', {
+      meanings: [
+        { action: 'update', meaningId: MEANING, definition: 'x' },
+        { action: 'update', meaningId: MEANING, definition: 'y' },
+        { action: 'update', meaningId: '01HCCCCCCCCCCCCCCCCCCCCCCCC' },
+        { action: 'add', definition: 'baru' },
+      ],
+    });
+    const fields = issues.map((i) => i.field);
+    expect(fields).toContain('meanings.1'); // duplikat makna
+    expect(fields).toContain('meanings.2'); // tanpa isi
+    expect(fields).toContain('meanings.3'); // bukan update
   });
 
   it('change_word_class menolak definisi', () => {

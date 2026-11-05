@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
-import { isForeignKeyViolation, isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
+import { isForeignKeyViolation, isUniqueViolation, isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import {
   categories,
   contributions,
@@ -33,11 +33,8 @@ import {
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { ConflictError, ValidationError } from '@/shared/errors/app-error';
 import { wordImageIsAutoVerified } from '../domain/word-image-provider';
-import {
-  isPlaceholderMeaningText,
-  normalizeMeaningText,
-} from '../application/utils/normalize-meaning-text';
-import { mapDuplicateMeaningIndexes } from '../application/utils/meaning-deduplication';
+import { mapDuplicateMeaningIndexes, meaningDeduplicationFingerprint, meaningDedupeKey } from '../application/utils/meaning-deduplication';
+import { throwDuplicateMeaningConflict } from '../application/utils/throw-duplicate-meaning-conflict';
 import { publishOrMergeMeaningsInTx } from './publish-or-merge-meanings';
 import { mergeDuplicateWordsInTx } from './merge-duplicate-words';
 import {
@@ -324,6 +321,12 @@ export class WordRepositoryImpl implements WordRepository {
           { field: '', message: 'Referensi data tidak valid (data terkait mungkin sudah dihapus)' },
         ]);
       }
+      if (isUniqueViolationOn(err, 'meanings_word_dedupe_key')) {
+        throw new ConflictError(
+          'DUPLICATE_MEANING',
+          'Kata dan makna ini sudah ada di kamus. Pilih dukunganmu agar tercatat di riwayat perubahan.',
+        );
+      }
       // Duplikat unik (kategori sama 2×, terjemahan identik, file gambar
       // sudah dipakai kata lain) → juga 400, bukan 500
       if (isUniqueViolation(err)) {
@@ -484,21 +487,60 @@ export class WordRepositoryImpl implements WordRepository {
     return !!row;
   }
 
+  async findMeaningByDedupeKey(
+    wordId: string,
+    dedupeKey: string,
+  ): Promise<PublishedDuplicateMeaning | null> {
+    const [row] = await this.db
+      .select({
+        wordId: words.id,
+        meaningId: meanings.id,
+        lemma: words.lemma,
+        definition: meanings.definition,
+        translationText: meaningTranslations.translationText,
+      })
+      .from(meanings)
+      .innerJoin(words, eq(words.id, meanings.wordId))
+      .leftJoin(
+        meaningTranslations,
+        and(eq(meaningTranslations.meaningId, meanings.id), isNull(meaningTranslations.deletedAt)),
+      )
+      .where(
+        and(
+          eq(meanings.wordId, wordId),
+          eq(meanings.dedupeKey, dedupeKey),
+          isNull(meanings.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    return {
+      wordId: row.wordId,
+      meaningId: row.meaningId,
+      lemma: row.lemma,
+      definition: row.definition,
+      translationText: row.translationText ?? '',
+    };
+  }
+
   async findPublishedDuplicateMeaning(params: {
     languageId: string;
     lemma: string;
     definition: string;
     translationText: string;
+    wordClassId?: string | null;
+    translations?: { languageId: string; translationText: string }[];
   }): Promise<PublishedDuplicateMeaning | null> {
-    // Sisi pencari yang placeholder = field itu tidak dibandingkan (#174:
-    // definisi "-" tetap tertolak lewat padanan Indonesia-nya).
-    const wantDef = isPlaceholderMeaningText(params.definition)
-      ? null
-      : normalizeMeaningText(params.definition);
-    const wantTr = isPlaceholderMeaningText(params.translationText)
-      ? null
-      : normalizeMeaningText(params.translationText);
-    if (wantDef === null && wantTr === null) return null;
+    const wantTranslations =
+      params.translations ??
+      (params.translationText
+        ? [{ languageId: '', translationText: params.translationText }]
+        : []);
+    const want = meaningDeduplicationFingerprint({
+      definition: params.definition,
+      translations: wantTranslations,
+      wordClassId: params.wordClassId ?? null,
+    });
 
     const rows = await this.db
       .select({
@@ -506,18 +548,10 @@ export class WordRepositoryImpl implements WordRepository {
         lemma: words.lemma,
         meaningId: meanings.id,
         definition: meanings.definition,
-        translationText: meaningTranslations.translationText,
+        wordClassId: meanings.wordClassId,
       })
       .from(words)
       .innerJoin(meanings, eq(meanings.wordId, words.id))
-      .innerJoin(
-        meaningTranslations,
-        and(
-          eq(meaningTranslations.meaningId, meanings.id),
-          isNull(meaningTranslations.deletedAt),
-        ),
-      )
-      .innerJoin(languages, eq(languages.id, meaningTranslations.languageId))
       .where(
         and(
           eq(words.languageId, params.languageId),
@@ -526,25 +560,45 @@ export class WordRepositoryImpl implements WordRepository {
           isNull(words.deletedAt),
           eq(meanings.status, 'published'),
           isNull(meanings.deletedAt),
-          eq(languages.code, 'id'),
         ),
       );
 
+    if (rows.length === 0) return null;
+
+    const ids = rows.map((row) => row.meaningId);
+    const translationRows = await this.db
+      .select({
+        meaningId: meaningTranslations.meaningId,
+        languageId: meaningTranslations.languageId,
+        translationText: meaningTranslations.translationText,
+      })
+      .from(meaningTranslations)
+      .where(
+        and(inArray(meaningTranslations.meaningId, ids), isNull(meaningTranslations.deletedAt)),
+      );
+    const trByMeaning = new Map<string, { languageId: string; translationText: string }[]>();
+    for (const t of translationRows) {
+      const list = trByMeaning.get(t.meaningId) ?? [];
+      list.push({ languageId: t.languageId, translationText: t.translationText });
+      trByMeaning.set(t.meaningId, list);
+    }
+
     for (const row of rows) {
-      const rowDef = isPlaceholderMeaningText(row.definition)
-        ? null
-        : normalizeMeaningText(row.definition);
-      const rowTr = isPlaceholderMeaningText(row.translationText)
-        ? null
-        : normalizeMeaningText(row.translationText);
-      if (wantDef !== null && rowDef !== wantDef) continue;
-      if (wantTr !== null && rowTr !== wantTr) continue;
+      const translations = trByMeaning.get(row.meaningId) ?? [];
+      const fp = meaningDeduplicationFingerprint({
+        definition: row.definition,
+        translations,
+        wordClassId: row.wordClassId,
+      });
+      if (fp !== want) continue;
+      const idGloss =
+        translations.find((t) => t.translationText)?.translationText ?? params.translationText;
       return {
         wordId: row.wordId,
         meaningId: row.meaningId,
         lemma: row.lemma,
         definition: row.definition,
-        translationText: row.translationText,
+        translationText: idGloss,
       };
     }
     return null;
@@ -634,7 +688,13 @@ export class WordRepositoryImpl implements WordRepository {
   }
 
   async listMeaningKeys(wordId: string): Promise<
-    { definition: string; translation: string; isHaveDefinition: boolean; isHaveTranslation: boolean }[]
+    {
+      definition: string;
+      translation: string;
+      isHaveDefinition: boolean;
+      isHaveTranslation: boolean;
+      wordClassId: string | null;
+    }[]
   > {
     const rows = await this.db
       .select({
@@ -642,6 +702,7 @@ export class WordRepositoryImpl implements WordRepository {
         definition: meanings.definition,
         isHaveDefinition: meanings.isHaveDefinition,
         isHaveTranslation: meanings.isHaveTranslation,
+        wordClassId: meanings.wordClassId,
         translation: meaningTranslations.translationText,
       })
       .from(meanings)
@@ -652,17 +713,24 @@ export class WordRepositoryImpl implements WordRepository {
       .where(and(eq(meanings.wordId, wordId), isNull(meanings.deletedAt)));
     const byMeaning = new Map<
       string,
-      { definition: string; translation: string; isHaveDefinition: boolean; isHaveTranslation: boolean }
+      {
+        definition: string;
+        translation: string;
+        isHaveDefinition: boolean;
+        isHaveTranslation: boolean;
+        wordClassId: string | null;
+      }
     >();
     for (const row of rows) {
       const prev = byMeaning.get(row.meaningId);
-      const translation = row.isHaveTranslation ? (row.translation ?? '').trim() : '';
+      const translation = (row.translation ?? '').trim();
       if (!prev) {
         byMeaning.set(row.meaningId, {
           definition: row.definition,
           translation,
           isHaveDefinition: row.isHaveDefinition,
           isHaveTranslation: row.isHaveTranslation,
+          wordClassId: row.wordClassId,
         });
       } else if (translation && !prev.translation) {
         prev.translation = translation;
@@ -897,6 +965,7 @@ export class WordRepositoryImpl implements WordRepository {
             id: users.id,
             username: users.username,
             displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
             deletedAt: users.deletedAt,
             role: highestUserRoleSql,
           })
@@ -1109,7 +1178,8 @@ isNull(wgmOther.deletedAt),
     const meaningCreatorRows = pick<{
       id: string;
       username: string;
-      displayName: string;
+      displayName: string | null;
+      avatarUrl: string | null;
       deletedAt: Date | null;
       role: string | null;
     }>('meaningCreators');
@@ -1210,7 +1280,13 @@ memberLemma: string;
             person.deletedAt,
           );
           if (!username || !displayName) return null;
-          return { username, displayName, role: person.role };
+          return {
+            username,
+            displayName,
+            // #231: avatar kecil per makna; akun terhapus = tidak tayang.
+            avatarUrl: person.deletedAt ? null : (person.avatarUrl ?? null),
+            role: person.role,
+          };
         })(),
         translations: translationRows
           .filter((t) => t.meaningId === m.id)
@@ -2779,6 +2855,11 @@ memberLemma: string;
             status: data.status,
             isVerified: data.isVerified,
             createdBy: actorId,
+            dedupeKey: meaningDedupeKey({
+              definition: data.definition,
+              translations: data.translations,
+              wordClassId: data.wordClassId ?? null,
+            }),
           })
           .returning();
 
@@ -2814,6 +2895,21 @@ memberLemma: string;
         };
       });
     } catch (err) {
+      if (isUniqueViolationOn(err, 'meanings_word_dedupe_key')) {
+        const key = meaningDedupeKey({
+          definition: data.definition,
+          translations: data.translations,
+          wordClassId: data.wordClassId ?? null,
+        });
+        if (key) {
+          const match = await this.findMeaningByDedupeKey(wordId, key);
+          if (match) throwDuplicateMeaningConflict(match);
+        }
+        throw new ConflictError(
+          'DUPLICATE_MEANING',
+          'Kata dan makna ini sudah ada di kamus. Pilih dukunganmu agar tercatat di riwayat perubahan.',
+        );
+      }
       mapMediaViolation(err, '');
       throw err;
     }
@@ -3368,6 +3464,11 @@ memberLemma: string;
             status: childStatusOf(word.status),
             isVerified: word.isVerified,
             createdBy: actorId,
+            dedupeKey: meaningDedupeKey({
+              definition: meaning.definition,
+              translations: meaning.translations,
+              wordClassId: meaning.wordClassId,
+            }),
           };
         }),
       );

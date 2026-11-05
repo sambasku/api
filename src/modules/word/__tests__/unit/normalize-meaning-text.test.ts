@@ -5,7 +5,8 @@ import {
 } from '../../application/utils/normalize-meaning-text';
 
 describe('normalizeMeaningText', () => {
-  it('trim + lowercase + collapse whitespace', () => {
+  it('menghapus karakter format sebelum trim', () => {
+    expect(normalizeMeaningText(`asin${String.fromCharCode(0x200b)}`)).toBe('asin');
     expect(normalizeMeaningText('  Makan  Siang ')).toBe('makan siang');
   });
 

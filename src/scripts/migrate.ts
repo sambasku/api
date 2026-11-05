@@ -15,6 +15,8 @@ import { resolve } from 'node:path';
 import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
+import * as schema from '@/shared/database/drizzle/schema';
+import { applySafeMeaningMerges } from '@/modules/word/application/merge-duplicate-meanings';
 import {
   slugifyUsername,
   USERNAME_HANDLE_REGEX,
@@ -196,7 +198,7 @@ try {
   fail('Gagal konek ke database (cek URL/token/jaringan)', err);
 }
 
-const db = drizzle(client);
+const db = drizzle(client, { schema });
 
 try {
   await repairLastSeenDrift(client);
@@ -208,6 +210,12 @@ try {
   // Jalankan lagi setelah migrate: menangkap baris yang masih legacy
   // (mis. dari seeder lama) - idempotent, skip bila tak ada yang diubah.
   await backfillUsernameHandles(client);
+  // Setelah kolom dedupe_key ada. Idempotent: jalan lagi saat deploy
+  // berikutnya tidak menulis ulang kelompok yang sudah digabung.
+  const merged = await applySafeMeaningMerges(db);
+  console.log(
+    `[db:migrate] makna duplikat: ${merged.groups} kelompok, ${merged.closedSuggestions} usulan ditutup`,
+  );
   console.log('[db:migrate] OK - migrations applied');
 } catch (err) {
   fail('Migrate gagal', err);

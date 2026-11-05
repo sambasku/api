@@ -497,6 +497,7 @@ export class WordController {
           ? {
               username: m.creator.username,
               display_name: m.creator.displayName,
+              avatar_url: m.creator.avatarUrl,
               role: m.creator.role,
             }
           : null,

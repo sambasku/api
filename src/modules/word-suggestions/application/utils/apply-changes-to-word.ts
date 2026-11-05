@@ -18,10 +18,19 @@ import {
 import { contributions } from '@/shared/database/drizzle/schema';
 import { generateId } from '@/shared/utils/ulid';
 import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import {
-  loadMeaningFingerprints,
+  loadActiveMeaningIdentities,
   meaningDeduplicationFingerprint,
+  meaningDedupeKey,
 } from '@/modules/word/application/utils/meaning-deduplication';
+import { throwDuplicateMeaningConflict } from '@/modules/word/application/utils/throw-duplicate-meaning-conflict';
+import {
+  planMeaningApplies,
+  suggestionHasOtherChanges,
+  type MeaningApplyPlan,
+  type SkippedDuplicateMeaning,
+} from './suggestion-meaning-dedupe';
 
 /** Foto utama terhapus tanpa pengganti: foto tersisa paling lama jadi utama. */
 async function ensurePrimaryImage(wordId: string): Promise<void> {
@@ -72,6 +81,8 @@ export interface ApplyResult {
   wordId: string;
   /** Kata baru yang dibuat saat approve (lemma target belum ada di kamus). */
   createdWords: { id: string; lemma: string }[];
+  /** Add yang tidak di-insert karena makna yang sama sudah ada. */
+  skippedDuplicates: SkippedDuplicateMeaning[];
 }
 
 /**
@@ -144,10 +155,31 @@ async function resolveOrCreateTarget(
           isNull(meaningTranslations.deletedAt),
         ),
       );
-    const newMeaningIds = sourceMeanings.map(() => generateId());
+    const trBySource = new Map<string, { languageId: string; translationText: string; translationType: string }[]>();
+    for (const t of srcTranslations) {
+      const list = trBySource.get(t.meaningId) ?? [];
+      list.push({
+        languageId: t.languageId,
+        translationText: t.translationText,
+        translationType: t.translationType,
+      });
+      trBySource.set(t.meaningId, list);
+    }
+    const seenFp = new Set<string>();
+    const kept = sourceMeanings.filter((m) => {
+      const fp = meaningDeduplicationFingerprint({
+        definition: m.definition,
+        translations: trBySource.get(m.id) ?? [],
+        wordClassId: m.wordClassId,
+      });
+      if (seenFp.has(fp)) return false;
+      seenFp.add(fp);
+      return true;
+    });
+    const newMeaningIds = new Map(kept.map((m) => [m.id, generateId()]));
     await db.insert(meanings).values(
-      sourceMeanings.map((m, i) => ({
-        id: newMeaningIds[i],
+      kept.map((m) => ({
+        id: newMeaningIds.get(m.id)!,
         wordId: newRow.id,
         wordClassId: m.wordClassId,
         inheritedFromMeaningId: m.id,
@@ -159,14 +191,19 @@ async function resolveOrCreateTarget(
         status: 'published',
         isVerified: true,
         createdBy: actorId,
+        dedupeKey: meaningDedupeKey({
+          definition: m.definition,
+          translations: trBySource.get(m.id) ?? [],
+          wordClassId: m.wordClassId,
+        }),
       })),
     );
     const translationValues = srcTranslations.flatMap((t) => {
-      const idx = srcIds.indexOf(t.meaningId);
-      if (idx < 0) return [];
+      const meaningId = newMeaningIds.get(t.meaningId);
+      if (!meaningId) return [];
       return [
         {
-          meaningId: newMeaningIds[idx],
+          meaningId,
           languageId: t.languageId,
           translationText: t.translationText,
           translationType: t.translationType,
@@ -214,6 +251,7 @@ export async function applyChangesToWord(
   const changes = customChanges ?? (suggestion.proposedChanges as ProposedChanges);
   let changesApplied = 0;
   const createdWords: { id: string; lemma: string }[] = [];
+  const skippedDuplicates: SkippedDuplicateMeaning[] = [];
 
   const word = await db.query.words.findFirst({
     where: and(eq(words.id, suggestion.wordId), isNull(words.deletedAt)),
@@ -221,6 +259,51 @@ export async function applyChangesToWord(
   });
 
   if (!word) throw new NotFoundError('WORD_NOT_FOUND', 'Kata tidak ditemukan');
+
+  const meaningChanges = changes.meanings ?? [];
+  let meaningPlan: MeaningApplyPlan = {
+    skipAddIndexes: new Set(),
+    skipped: [],
+    updateKeys: new Map(),
+  };
+  if (meaningChanges.length > 0) {
+    const identities = await loadActiveMeaningIdentities(db, word.id);
+    try {
+      meaningPlan = planMeaningApplies(identities, meaningChanges);
+    } catch (err) {
+      if (err instanceof ConflictError && err.errorCode === 'DUPLICATE_MEANING') {
+        const data = (err.data ?? {}) as {
+          meaning_id?: string;
+          definition?: string;
+          translation_text?: string;
+        };
+        throwDuplicateMeaningConflict({
+          wordId: word.id,
+          meaningId: data.meaning_id ?? '',
+          lemma: word.lemma,
+          definition: data.definition ?? '',
+          translationText: data.translation_text ?? '',
+        });
+      }
+      throw err;
+    }
+    const addCount = meaningChanges.filter((mc) => mc.action === 'add' && !mc.meaningId).length;
+    if (
+      meaningPlan.skipped.length > 0 &&
+      meaningPlan.skipAddIndexes.size === addCount &&
+      !suggestionHasOtherChanges(changes)
+    ) {
+      const first = meaningPlan.skipped[0]!;
+      throwDuplicateMeaningConflict({
+        wordId: word.id,
+        meaningId: first.meaningId,
+        lemma: word.lemma,
+        definition: first.definition,
+        translationText: first.translationText,
+      });
+    }
+    skippedDuplicates.push(...meaningPlan.skipped);
+  }
 
   await assertWordTypeAllowsComponents(word.id, changes.wordType);
 
@@ -265,20 +348,10 @@ export async function applyChangesToWord(
       orderBy: (m, { asc }) => [asc(m.orderIndex)],
     });
     const existingMap = new Map(existingMeanings.map((m) => [m.id, m]));
-    // #174: usulan "tambah makna" yang isinya sudah ada (beda kapital /
-    // sama persis) tidak ditambahkan lagi.
-    const seenFps = await loadMeaningFingerprints(db, word.id);
 
-    for (const mc of changes.meanings) {
+    for (const [index, mc] of changes.meanings.entries()) {
       if (mc.action === 'add' && !mc.meaningId) {
-        const fp = meaningDeduplicationFingerprint({
-          definition: mc.definition ?? '',
-          translations: mc.translations ?? [],
-          isHaveDefinition: true,
-          isHaveTranslation: (mc.translations ?? []).length > 0,
-        });
-        if (seenFps.has(fp)) continue;
-        seenFps.add(fp);
+        if (meaningPlan.skipAddIndexes.has(index)) continue;
         const newMeaning = await db
           .insert(meanings)
           .values({
@@ -287,6 +360,11 @@ export async function applyChangesToWord(
             definition: mc.definition ?? '',
             orderIndex: existingMeanings.length,
             createdBy: reviewerId,
+            dedupeKey: meaningDedupeKey({
+              definition: mc.definition ?? '',
+              translations: mc.translations ?? [],
+              wordClassId: mc.wordClassId ?? null,
+            }),
           })
           .returning({ id: meanings.id });
         const newMeaningId = newMeaning[0]?.id;
@@ -379,6 +457,35 @@ export async function applyChangesToWord(
                   .onConflictDoNothing();
               }
               changesApplied++;
+            }
+          }
+          const nextKey = meaningPlan.updateKeys.get(mc.meaningId);
+          if (nextKey !== undefined) {
+            try {
+              await db
+                .update(meanings)
+                .set({ dedupeKey: nextKey, updatedAt: new Date() })
+                .where(eq(meanings.id, mc.meaningId));
+            } catch (err) {
+              if (!nextKey || !isUniqueViolationOn(err, 'meanings_word_dedupe_key')) throw err;
+              const [clash] = await db
+                .select({ id: meanings.id, definition: meanings.definition })
+                .from(meanings)
+                .where(
+                  and(
+                    eq(meanings.wordId, word.id),
+                    eq(meanings.dedupeKey, nextKey),
+                    isNull(meanings.deletedAt),
+                  ),
+                )
+                .limit(1);
+              throwDuplicateMeaningConflict({
+                wordId: word.id,
+                meaningId: clash?.id ?? '',
+                lemma: word.lemma,
+                definition: clash?.definition ?? '',
+                translationText: '',
+              });
             }
           }
         }
@@ -804,5 +911,6 @@ const groupAudit: {
     wordLemma: (changes.lemma ?? word.lemma) as string,
     wordId: word.id,
     createdWords,
+    skippedDuplicates,
   };
 }

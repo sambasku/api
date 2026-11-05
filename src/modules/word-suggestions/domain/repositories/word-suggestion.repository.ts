@@ -68,7 +68,13 @@ export interface WordSuggestionRepository {
       decisions?: { key: string; decision: 'approve' | 'reject' }[];
       censoredFiles?: Record<string, { bytes: Uint8Array; mimeType: string | null }>;
     },
-  ): Promise<{ applied: boolean; changesApplied: number; wordLemma: string; wordId: string }>;
+  ): Promise<{
+    applied: boolean;
+    changesApplied: number;
+    wordLemma: string;
+    wordId: string;
+    skippedDuplicates: { meaningId: string; definition: string; translationText: string }[];
+  }>;
 
   /** Reject: update status + review comment. Return true kalau berhasil. */
   rejectSuggestion(id: string, reviewerId: string, comment: string): Promise<boolean>;

@@ -285,14 +285,22 @@ export class BatchContributeWordsUseCase {
     const existing = new Set(
       (await this.wordRepo.listMeaningKeys(parent.id)).map((m) =>
         meaningFingerprint({
-          definition: m.isHaveDefinition ? m.definition : '',
+          definition: m.definition,
           translation: m.translation,
-          isHaveDefinition: m.isHaveDefinition,
-          isHaveTranslation: m.isHaveTranslation,
+          wordClassId: m.wordClassId,
         }),
       ),
     );
-    if (existing.has(meaningFingerprint(meaning))) {
+    const classId = refs.wordClassId;
+    if (
+      existing.has(
+        meaningFingerprint({
+          definition: meaning.definition,
+          translation: meaning.translation,
+          wordClassId: classId,
+        }),
+      )
+    ) {
       return {
         lemma,
         outcome: 'skipped',

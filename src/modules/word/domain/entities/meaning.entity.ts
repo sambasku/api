@@ -53,7 +53,7 @@ export interface MeaningDetail extends Meaning {
     isCorrected?: boolean;
   }[];
   /** JOIN users pada meanings.created_by. Null kalau kolom kosong atau user hilang. */
-  creator: { username: string; displayName: string; role: string } | null;
+  creator: { username: string; displayName: string; avatarUrl: string | null; role: string } | null;
   /**
    * Layar review: makna ini bukan baris milik lemma yang sedang direview,
    * melainkan makna yang sudah tayang di lemma lain (relasi / kelompok).

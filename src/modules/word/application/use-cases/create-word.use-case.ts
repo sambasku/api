@@ -285,17 +285,14 @@ export class CreateWordUseCase {
       const idTranslation = meaning.translations.find(
         (t) => t.languageId === indonesianLanguageId,
       );
-      const definition = meaning.isHaveDefinition === false ? '' : meaning.definition;
-      const translationText =
-        meaning.isHaveTranslation === false ? '' : (idTranslation?.translationText ?? '');
-      if (isPlaceholderMeaningText(definition) && isPlaceholderMeaningText(translationText)) {
-        continue;
-      }
       const match = await this.wordRepo.findPublishedDuplicateMeaning({
         languageId: dto.languageId,
         lemma: dto.lemma,
-        definition,
-        translationText,
+        definition: meaning.definition,
+        translationText:
+          meaning.isHaveTranslation === false ? '' : (idTranslation?.translationText ?? ''),
+        wordClassId: meaning.wordClassId,
+        translations: meaning.translations,
       });
       if (match) throwDuplicateMeaningConflict(match);
     }

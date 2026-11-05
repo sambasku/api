@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 import { words } from './words.schema';
@@ -46,10 +47,17 @@ export const meanings = sqliteTable(
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
     deletedBy: text('deleted_by').references(() => users.id),
+    // Sidik kelas + definisi + padanan, dihitung di aplikasi (bukan lower()
+    // SQL). Null = tidak ada teks identitas. Index mengabaikan null dan
+    // baris yang sudah dihapus.
+    dedupeKey: text('dedupe_key'),
   },
   (t) => [
     index('meanings_word_order_idx').on(t.wordId, t.orderIndex),
     index('meanings_inherited_from_idx').on(t.inheritedFromMeaningId),
     index('meanings_word_status_idx').on(t.wordId, t.status),
+    uniqueIndex('meanings_word_dedupe_key_uidx')
+      .on(t.wordId, t.dedupeKey)
+      .where(sql`${t.deletedAt} is null and ${t.dedupeKey} is not null`),
   ],
 );

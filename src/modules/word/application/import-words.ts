@@ -52,14 +52,12 @@ export function meaningFingerprint(input: {
   translation?: string;
   isHaveDefinition?: boolean;
   isHaveTranslation?: boolean;
+  wordClassId?: string | null;
 }): string {
-  const hasDef = input.isHaveDefinition ?? !!input.definition?.trim();
-  const hasTr = input.isHaveTranslation ?? !!input.translation?.trim();
   return meaningDeduplicationFingerprint({
     definition: input.definition ?? '',
     translation: input.translation ?? '',
-    isHaveDefinition: hasDef,
-    isHaveTranslation: hasTr,
+    wordClassId: input.wordClassId ?? null,
   });
 }
 

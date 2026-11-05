@@ -1,4 +1,5 @@
 import type { ProposedChanges } from '../../domain/entities/word-suggestion.entity';
+import { duplicateAddIssue } from './suggestion-meaning-dedupe';
 
 export interface ValidationError {
   field: string;
@@ -86,6 +87,13 @@ export function verifyProposedChanges(changes: ProposedChanges): {
         });
       }
     });
+    const dup = duplicateAddIssue(changes.meanings);
+    if (dup) {
+      errors.push({
+        field: `meanings.${dup.index}`,
+        message: 'Makna ini sama dengan makna lain di usulan yang sama',
+      });
+    }
   }
 
   if (changes.relations && changes.relations.length > 10) {
