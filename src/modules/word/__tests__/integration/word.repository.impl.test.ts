@@ -674,6 +674,7 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     expect(detail?.meanings[0].creator).toEqual({
       username: 'actor',
       displayName: 'actor',
+      avatarUrl: null,
       role: 'contributor',
     });
     expect(detail?.meanings[0].wordClass).toMatchObject({ id: NOMINA, code: 'n', name: 'Nomina' });

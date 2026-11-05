@@ -46,6 +46,7 @@ import type {
   VoteTarget,
   VoteTargetType,
 } from '../domain/repositories/vote.repository';
+import { isPlaceholderMeaningText } from '@/modules/word/application/utils/normalize-meaning-text';
 import { encodeAdminCursor, encodeVoteDeckCursor } from '../domain/repositories/vote.repository';
 
 export const voteTargetKey = (t: VoteTarget): string => `${t.entityType}:${t.entityId}`;
@@ -56,6 +57,27 @@ function clipPreview(s: string): string {
   const t = s.trim().replace(/\s+/g, ' ');
   if (t.length <= PREVIEW_MAX) return t;
   return `${t.slice(0, PREVIEW_MAX - 1)}…`;
+}
+
+/**
+ * Label vote makna untuk panel admin. Definisi placeholder "-" bukan
+ * teks: lemma dulu, lalu definisi sungguhan atau padanan pertama.
+ */
+export function meaningVotePreview(
+  lemma: string | null,
+  definition: string | null,
+  translation: string | null,
+): string | null {
+  const head = lemma?.trim() ?? '';
+  const definitionText = definition?.trim() ?? '';
+  const translationText = translation?.trim() ?? '';
+  const gloss = !isPlaceholderMeaningText(definitionText)
+    ? definitionText
+    : !isPlaceholderMeaningText(translationText)
+      ? translationText
+      : '';
+  const label = gloss ? (head ? `${head} · ${gloss}` : gloss) : head;
+  return label ? clipPreview(label) : null;
 }
 
 /** Baris pertama pantun dari kolom JSON `lines` (string sudah di-parse Drizzle). */
@@ -959,8 +981,9 @@ case 'article_comment': {
 
   /**
    * Batch label target untuk panel admin (hindari N+1). Komentar → body;
-   * word → lemma; meaning → definition; example → source_sentence;
-   * pronunciation → value IPA; word_image → alt_text / url singkat.
+   * word → lemma; meaning → lemma + definisi/padanan (bukan placeholder "-");
+   * example → source_sentence; pronunciation → value IPA;
+   * word_image → alt_text / url singkat.
    */
   private async resolveTargetPreviews(
     targets: { entityType: VoteTargetType; entityId: string }[],
@@ -1007,12 +1030,50 @@ case 'article_comment': {
     if (meaningIds.length > 0) {
       jobs.push(
         this.db
-          .select({ id: meanings.id, definition: meanings.definition })
+          .select({
+            id: meanings.id,
+            definition: meanings.definition,
+            lemma: words.lemma,
+            translationText: meaningTranslations.translationText,
+          })
           .from(meanings)
+          .leftJoin(words, eq(words.id, meanings.wordId))
+          .leftJoin(
+            meaningTranslations,
+            and(
+              eq(meaningTranslations.meaningId, meanings.id),
+              isNull(meaningTranslations.deletedAt),
+            ),
+          )
           .where(inArray(meanings.id, meaningIds))
+          .orderBy(asc(meanings.id), asc(meaningTranslations.id))
           .then((rows) => {
-            for (const r of rows)
-              out.set(voteTargetKey({ entityType: 'meaning', entityId: r.id }), clipPreview(r.definition));
+            const byId = new Map<
+              string,
+              { lemma: string | null; definition: string; translation: string | null }
+            >();
+            for (const r of rows) {
+              const translation =
+                r.translationText && !isPlaceholderMeaningText(r.translationText)
+                  ? r.translationText
+                  : null;
+              const current = byId.get(r.id);
+              if (!current) {
+                byId.set(r.id, {
+                  lemma: r.lemma,
+                  definition: r.definition,
+                  translation,
+                });
+              } else if (!current.translation && translation) {
+                current.translation = translation;
+              }
+            }
+            for (const [id, row] of byId) {
+              const preview = meaningVotePreview(row.lemma, row.definition, row.translation);
+              if (preview) {
+                out.set(voteTargetKey({ entityType: 'meaning', entityId: id }), preview);
+              }
+            }
           }),
       );
     }

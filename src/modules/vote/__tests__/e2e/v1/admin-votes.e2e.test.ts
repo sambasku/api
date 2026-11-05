@@ -169,6 +169,8 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
       target_type: 'meaning',
       target_id: meaningId,
       value: 1,
+      // Definisi sungguhan menang atas padanan.
+      target_preview: 'kata dimoderasi · Kata untuk moderasi vote',
     });
     // NFR-5: response TIDAK pernah mengandung password_hash
     expect(Object.keys(body.data[0]).includes('password_hash')).toBe(false);
@@ -180,11 +182,63 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
 
     const body = (await res.json()) as {
       success: boolean;
-      data: { target_id: string; upvotes: number; downvotes: number; net: number }[];
+      data: {
+        target_id: string;
+        upvotes: number;
+        downvotes: number;
+        net: number;
+        target_preview: string | null;
+      }[];
     };
     expect(body.success).toBe(true);
     const hit = body.data.find((r) => r.target_id === meaningId);
-    expect(hit).toMatchObject({ upvotes: 2, downvotes: 0, net: 2 });
+    expect(hit).toMatchObject({
+      upvotes: 2,
+      downvotes: 0,
+      net: 2,
+      target_preview: 'kata dimoderasi · Kata untuk moderasi vote',
+    });
+  });
+
+  it('preview makna placeholder "-" = lemma · padanan, bukan tanda hubung', async () => {
+    const create = await post(
+      '/api/v1/admin/words',
+      {
+        ...validWordBody('kalintiak'),
+        meanings: [
+          {
+            word_class_id: NOMINA,
+            definition: '-',
+            is_have_definition: false,
+            order_index: 1,
+            translations: [
+              { language_id: IDN, translation_text: 'makan', translation_type: 'direct' },
+            ],
+          },
+        ],
+      },
+      adminToken,
+    );
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as { data: { word_id: string } };
+    const detail = await get(`/api/v1/words/${created.data.word_id}`, adminToken);
+    const detailBody = (await detail.json()) as { data: { meanings: { id: string }[] } };
+    const placeholderMeaningId = detailBody.data.meanings[0]!.id;
+
+    const voted = await post(
+      '/api/v1/votes',
+      { target_type: 'meaning', target_id: placeholderMeaningId, value: 1 },
+      voter2Token,
+    );
+    expect(voted.status).toBe(200);
+
+    const res = await get(
+      `/api/v1/admin/votes?target_id=${placeholderMeaningId}`,
+      reviewerToken,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { target_preview: string | null }[] };
+    expect(body.data[0]?.target_preview).toBe('kalintiak · makan');
   });
 
   it('GET /admin/words/:wordId/voters: 200 + counts; editor 403; kata fiktif 404', async () => {
