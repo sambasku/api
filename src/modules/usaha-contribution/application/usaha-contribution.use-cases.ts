@@ -26,6 +26,7 @@ import type {
   UsahaContributionPayload,
 } from '../domain/usaha-contribution.entity';
 import type { UsahaContributionRepository } from '../domain/usaha-contribution.repository';
+import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
 
 const PENDING_CAP = 10;
 const MAX_ITEMS = 20;
@@ -61,6 +62,14 @@ function overlaps(a: string, b: string): boolean {
   if (!a || !b) return false;
   const setB = new Set(b.split(','));
   return a.split(',').some((f) => setB.has(f));
+}
+
+function payloadName(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object' || !('name' in payload)) return undefined;
+  const name = payload.name;
+  if (typeof name !== 'string') return undefined;
+  const trimmed = name.trim();
+  return trimmed || undefined;
 }
 
 /** Copy notifikasi inbox + FCM untuk keputusan pengajuan usaha. */
@@ -127,7 +136,26 @@ export class UsahaContributionUseCases {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
+
+  private async notifyGroup(
+    userId: string,
+    jenis: string,
+    name: string | undefined,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis,
+        name: name?.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
+  }
 
   // ------------------------------------------------------------- publik --
 
@@ -144,7 +172,7 @@ export class UsahaContributionUseCases {
         'Maksimal 10 usulan yang masih menunggu',
       );
     }
-    return this.contrib.create({
+    const created = await this.contrib.create({
       kind: 'new',
       userId,
       lockedFields: '',
@@ -152,6 +180,8 @@ export class UsahaContributionUseCases {
       // Anonim tidak bisa mengklaim (tidak ada akun penerima).
       wantsClaim: input.wantsClaim && !anon,
     });
+    await this.notifyGroup(userId, 'Usaha', payload.name);
+    return created;
   }
 
   mine(userId: string) {
@@ -201,6 +231,7 @@ export class UsahaContributionUseCases {
     await this.contrib.replacePayload(id, payload, '');
     const updated = await this.contrib.findById(id);
     if (!updated) throw new Error('resubmit gagal - row hilang');
+    await this.notifyGroup(userId, 'Usaha', payload.name, true);
     return updated;
   }
 
@@ -274,7 +305,7 @@ export class UsahaContributionUseCases {
       }
     }
 
-    return this.contrib.create({
+    const created = await this.contrib.create({
       kind: input.kind,
       userId,
       usahaId: usaha.id,
@@ -283,6 +314,12 @@ export class UsahaContributionUseCases {
       payload,
       baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
     });
+    await this.notifyGroup(
+      userId,
+      'Usaha (perbaikan)',
+      payloadName(payload) ?? usaha.name,
+    );
+    return created;
   }
 
   /**
@@ -335,7 +372,7 @@ export class UsahaContributionUseCases {
       }
     }
 
-    return this.contrib.create({
+    const created = await this.contrib.create({
       kind: 'profile',
       userId,
       usahaId: usaha.id,
@@ -344,6 +381,12 @@ export class UsahaContributionUseCases {
       payload,
       baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
     });
+    await this.notifyGroup(
+      userId,
+      'Usaha (perbaikan)',
+      payloadName(payload) ?? usaha.name,
+    );
+    return created;
   }
 
   // ------------------------------------------------------------- admin --

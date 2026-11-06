@@ -834,6 +834,20 @@
       "when": 1801617000000,
       "tag": "0118_verifier_application_full_name",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "6",
+      "when": 1801618000000,
+      "tag": "0119_wa_provider_openwa",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "6",
+      "when": 1801619000000,
+      "tag": "0120_verifier_wa_welcome",
+      "breakpoints": true
     }
   ]
 }

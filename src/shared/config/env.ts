@@ -157,12 +157,12 @@ const envSchema = z.object({
   FACEBOOK_APP_ID: z.string().optional(),
   FACEBOOK_APP_SECRET: z.string().optional(),
 
-  // WhatsApp via Kapso (proxy Meta Cloud API). Kosong = fitur WA no-op
-  // (kirim dilewati, endpoint admin tetap bisa lihat template/usage).
-  KAPSO_API_KEY: z.string().optional(),
-  // Default https://api.kapso.ai/meta/whatsapp/v24.0 (lihat docs/env/kapso.md).
-  KAPSO_BASE_URL: z.url().optional(),
-  KAPSO_PHONE_NUMBER_ID: z.string().optional(),
+  // Gateway OpenWA (self-hosted). Kosong = kirim WA no-op.
+  // BASE_URL tanpa garis miring akhir. API key = role operator.
+  OPENWA_BASE_URL: z.url().optional(),
+  OPENWA_API_KEY: z.string().optional(),
+  OPENWA_SESSION_ID: z.string().optional(),
+  OPENWA_GROUP_JID: z.string().optional(),
 
   // Supabase keep-alive + ping manual dari console (System > Supabase).
   // Satu project aktif sekarang; baris log tetap bawa kolom env (default

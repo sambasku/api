@@ -36,7 +36,7 @@ export const waMessageLogs = sqliteTable(
   'wa_message_logs',
   {
     id: text('id').primaryKey().$defaultFn(() => generateId()),
-    /** kapso | provider lain nanti */
+    /** openwa */
     provider: text('provider').notNull(),
     /** verifier_application_approved | verifier_application_rejected | test */
     eventKey: text('event_key').notNull(),
@@ -55,7 +55,7 @@ export const waMessageLogs = sqliteTable(
 /**
  * Pemakaian kuota per provider. Reset used_count tiap awal bulan
  * (cron + lazy reset di repository). Admin bisa koreksi manual karena
- * kirim dari dashboard Kapso tidak lewat API ini.
+ * koreksi manual admin (kirim di luar API ini tidak tercatat sendiri).
  */
 export const waUsage = sqliteTable('wa_usage', {
   provider: text('provider').primaryKey(),

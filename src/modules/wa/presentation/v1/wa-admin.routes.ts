@@ -235,7 +235,7 @@ export function createWaAdminRoutes(deps: WaAdminRoutesDeps) {
     method: 'patch',
     path: '/usage',
     tags: ['WA', 'Admin'],
-    summary: 'Koreksi manual quota (sinkron pemakaian dari dashboard Kapso)',
+    summary: 'Koreksi manual quota pemakaian WhatsApp',
     request: { body: { content: json(updateWaUsageBodySchema) } },
     responses: {
       200: { description: 'Updated', content: json(waUsageResponseSchema) },
@@ -347,14 +347,14 @@ export function createWaAdminRoutes(deps: WaAdminRoutesDeps) {
   });
 
   routes.openapi(getUsageRoute, async (c) => {
-    const usage = await deps.usageRepo.getActive('kapso');
+    const usage = await deps.usageRepo.getActive('openwa');
     return c.json({ success: true as const, data: { usage: serializeUsage(usage) } }) as never;
   });
 
   routes.openapi(updateUsageRoute, async (c) => {
     const body = c.req.valid('json') as z.infer<typeof updateWaUsageBodySchema>;
     const usage = await deps.usageRepo.setUsage(
-      'kapso',
+      'openwa',
       {
         ...(body.used_count !== undefined ? { usedCount: body.used_count } : {}),
         ...(body.limit_count !== undefined ? { limitCount: body.limit_count } : {}),
@@ -399,7 +399,7 @@ export function createWaAdminRoutes(deps: WaAdminRoutesDeps) {
     const result = await deps.sendWa.sendTest(body.phone, tpl);
     let usage = null;
     try {
-      usage = serializeUsage(await deps.usageRepo.getActive('kapso'));
+      usage = serializeUsage(await deps.usageRepo.getActive('openwa'));
     } catch {
       usage = null;
     }

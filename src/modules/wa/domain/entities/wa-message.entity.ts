@@ -47,7 +47,7 @@ export interface WaSendResult {
 }
 
 /** Nama provider aktif - urutan = urutan fallback routing. */
-export const WA_PROVIDERS = ['kapso'] as const;
+export const WA_PROVIDERS = ['openwa'] as const;
 export type WaProvider = (typeof WA_PROVIDERS)[number];
 
 export const DEFAULT_WA_MONTHLY_LIMIT = 2000;

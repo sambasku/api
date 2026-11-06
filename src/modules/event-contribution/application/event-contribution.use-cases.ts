@@ -7,6 +7,7 @@ import {
 } from "@/modules/event/application/use-cases/event.use-cases";
 import type { EventRepository } from "@/modules/event/domain/repositories/event.repository";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
+import type { ExplorationGroupNotifier } from "@/modules/wa/application/ports/exploration-group-notifier.port";
 import {
   BadRequestError,
   ConflictError,
@@ -62,7 +63,25 @@ export class EventContributionUseCases {
     private readonly createEvent: CreateEventUseCase,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
+
+  private async notifyGroup(
+    userId: string,
+    name: string,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis: "Acara",
+        name,
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
+  }
 
   async submit(
     userId: string,
@@ -76,7 +95,9 @@ export class EventContributionUseCases {
         "Maksimal 10 usulan yang masih menunggu",
       );
     }
-    return this.contrib.create({ userId, payload: normalized });
+    const created = await this.contrib.create({ userId, payload: normalized });
+    await this.notifyGroup(userId, normalized.name);
+    return created;
   }
 
   async mine(userId: string): Promise<EventContribution[]> {
@@ -124,6 +145,7 @@ export class EventContributionUseCases {
     await this.contrib.replacePayload(id, normalized);
     const updated = await this.contrib.findById(id);
     if (!updated) throw new Error("resubmit gagal - row hilang");
+    await this.notifyGroup(userId, normalized.name, true);
     return updated;
   }
 

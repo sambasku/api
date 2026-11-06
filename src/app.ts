@@ -776,7 +776,8 @@ import {
   WaMessageLogRepositoryImpl,
   WaUsageRepositoryImpl,
 } from "@/modules/wa/infrastructure/wa-message.repository.impl";
-import { KapsoWaSender } from "@/modules/wa/infrastructure/kapso-wa.sender";
+import { OpenWaExplorationGroupNotifier } from "@/modules/wa/infrastructure/openwa-exploration-group.notifier";
+import { OpenWaSender } from "@/modules/wa/infrastructure/openwa-wa.sender";
 import { SendWaMessageUseCase } from "@/modules/wa/application/use-cases/send-wa-message.use-case";
 import { SendVerifierWaNotificationUseCase } from "@/modules/wa/application/use-cases/send-verifier-wa.use-case";
 import { createWaAdminRoutes } from "@/modules/wa/presentation/v1/wa-admin.routes";
@@ -1324,6 +1325,10 @@ const placeCategoryController = new PlaceCategoryController(
 );
 
 const regionRepo = new RegionRepositoryImpl(db);
+const explorationGroupNotifier = new OpenWaExplorationGroupNotifier(
+  userRepo,
+  new WaMessageLogRepositoryImpl(db),
+);
 const placeContributionController = new PlaceContributionController(
   new PlaceContributionUseCases(
     new PlaceContributionRepositoryImpl(db),
@@ -1335,6 +1340,7 @@ const placeContributionController = new PlaceContributionController(
     new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
     recordInbox,
     notifyUser,
+    explorationGroupNotifier,
   ),
 );
 const regionController = new RegionController(
@@ -1364,6 +1370,7 @@ const eventContributionController = new EventContributionController(
     new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
     recordInbox,
     notifyUser,
+    explorationGroupNotifier,
   ),
 );
 
@@ -1404,6 +1411,7 @@ const usahaContributionUseCases = new UsahaContributionUseCases(
   recordInbox,
   notifyUser,
   activityEventRepo,
+  explorationGroupNotifier,
 );
 const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
@@ -1463,6 +1471,7 @@ const culinaryContributionUseCases = new CulinaryContributionUseCases(
   recordInbox,
   notifyUser,
   activityEventRepo,
+  explorationGroupNotifier,
 );
 const culinaryContributionController = new CulinaryContributionController(
   culinaryContributionUseCases,
@@ -3018,12 +3027,12 @@ app.route(
 
 const verifierApplicationRepo = new VerifierApplicationRepositoryImpl(db);
 
-// WA (Kapso) - modul notifikasi WhatsApp + admin console (System > WhatsApp).
+// WA (OpenWA) - notifikasi verifikator + admin console (System > WhatsApp).
 const waTemplateRepo = new WaTemplateRepositoryImpl(db);
 const waLogRepo = new WaMessageLogRepositoryImpl(db);
 const waUsageRepo = new WaUsageRepositoryImpl(db);
 const sendWaMessage = new SendWaMessageUseCase(
-  [{ sender: new KapsoWaSender() }],
+  [{ sender: new OpenWaSender() }],
   waUsageRepo,
   waLogRepo,
   waTemplateRepo,

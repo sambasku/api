@@ -112,6 +112,31 @@ describe("UsahaContributionUseCases - usulan baru", () => {
     );
   });
 
+  it("usulan baru memberitahu grup setelah tersimpan", async () => {
+    const contrib = makeContrib();
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const usaha = makeUsaha();
+    const uc = new UsahaContributionUseCases(
+      contrib as never,
+      usaha as never,
+      regions as never,
+      { execute: vi.fn() } as never,
+      new UniqueUsahaSlugUseCase(usaha as never),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { notify },
+    );
+    await uc.submit("USER1", { payload: newPayload, wantsClaim: false });
+    expect(notify).toHaveBeenCalledWith({
+      jenis: "Usaha",
+      name: "Usaha Baru",
+      userId: "USER1",
+      resubmit: false,
+    });
+  });
+
   it("tolak nama < 3 karakter", async () => {
     const uc = build(makeContrib(), makeUsaha());
     await expect(
