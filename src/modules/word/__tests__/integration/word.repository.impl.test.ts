@@ -1059,9 +1059,17 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
   });
 
   it('listAtoZ: urut lower(lemma) case-insensitive (bukan collation C mentah)', async () => {
-    // Collation "C" pada lemma mentah: "Zebra" < "apam" (Z ASCII sebelum a).
+    // saveWithRelations melipat lemma. Baris ini disisipkan langsung supaya
+    // huruf kapital tetap di DB. Collation "C" pada lemma mentah: "Zebra" < "apam".
     // Sort A-Z kamus harus: apam → Zebra (via lower()).
-    await repo.saveWithRelations(baseWord({ lemma: 'Zebra' }), ACTOR);
+    await db.insert(words).values({
+      id: ulid26('01TESTZEBRA'),
+      languageId: SMB,
+      lemma: 'Zebra',
+      status: 'published',
+      usageLabels: [],
+      createdBy: ACTOR,
+    });
     await repo.saveWithRelations(baseWord({ lemma: 'apam' }), ACTOR);
 
     const page = await repo.listAtoZ({ q: '', limit: 10 });
