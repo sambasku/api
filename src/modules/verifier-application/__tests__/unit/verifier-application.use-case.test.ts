@@ -31,6 +31,11 @@ function makeApp(overrides: Partial<VerifierApplication> = {}): VerifierApplicat
     phone: '6281234567890',
     address: 'Jl. Merdeka No. 1, Sambas',
     socialLinks: links,
+    fullName: 'Budi Santoso',
+    dialect: 'kota',
+    dialectNote: null,
+    reason: 'Saya ingin meninjau kata.',
+    photo: null,
     status: 'pending',
     adminComment: null,
     reviewedBy: null,
@@ -54,6 +59,7 @@ function makeAppRepo(overrides: Partial<VerifierApplicationRepository> = {}) {
     approveAtomically: vi.fn().mockResolvedValue(makeApp({ status: 'approved' })),
     markApproved: vi.fn().mockResolvedValue(makeApp({ status: 'approved' })),
     markRejected: vi.fn().mockResolvedValue(makeApp({ status: 'rejected' })),
+    countApprovedContributions: vi.fn().mockResolvedValue(3),
     ...overrides,
   } as unknown as VerifierApplicationRepository;
 }
@@ -85,6 +91,11 @@ const submit = {
   phone: '6281234567890',
   address: 'Jl. Merdeka No. 1, Sambas',
   socialLinks: links,
+  fullName: 'Budi Santoso',
+  dialect: 'kota' as const,
+  dialectNote: null,
+  reason: 'Saya ingin meninjau kata.',
+  photo: null,
 };
 
 describe('CreateVerifierApplicationUseCase', () => {
@@ -129,6 +140,18 @@ describe('CreateVerifierApplicationUseCase', () => {
     });
   });
 
+  it('kontribusi disetujui kurang dari 3 → 403', async () => {
+    const appRepo = makeAppRepo({
+      countApprovedContributions: vi.fn().mockResolvedValue(2),
+    });
+    const useCase = new CreateVerifierApplicationUseCase(appRepo, makeUserRepo());
+    await expect(useCase.execute(submit)).rejects.toMatchObject({
+      errorCode: 'VERIFIER_CONTRIBUTIONS_TOO_FEW',
+      statusCode: 403,
+    });
+    expect(appRepo.createWithPhone).not.toHaveBeenCalled();
+  });
+
   it('contributor baru → createWithPhone', async () => {
     const appRepo = makeAppRepo();
     const useCase = new CreateVerifierApplicationUseCase(appRepo, makeUserRepo());
@@ -139,6 +162,11 @@ describe('CreateVerifierApplicationUseCase', () => {
       phone: '6281234567890',
       address: 'Jl. Merdeka No. 1, Sambas',
       socialLinks: links,
+      fullName: 'Budi Santoso',
+      dialect: 'kota',
+      dialectNote: null,
+      reason: 'Saya ingin meninjau kata.',
+      photo: null,
     });
   });
 });

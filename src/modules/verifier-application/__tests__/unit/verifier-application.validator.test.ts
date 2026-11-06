@@ -8,11 +8,14 @@ const screenshot = {
 
 function body(overrides: Record<string, unknown> = {}) {
   return {
+    full_name: 'Budi Santoso',
     phone: '81234567890',
     address: 'Jl. Merdeka No. 1, Sambas, Kalimantan Barat',
     social_links: [
       { platform: 'instagram', username: 'budi', screenshot },
     ],
+    dialect: 'kota',
+    reason: 'Saya ingin meninjau kata.',
     ...overrides,
   };
 }
@@ -80,5 +83,31 @@ describe('submitVerifierApplicationSchema - social_links', () => {
   it('menolak social_links kosong', () => {
     const result = submitVerifierApplicationSchema.safeParse(body({ social_links: [] }));
     expect(result.success).toBe(false);
+  });
+
+  it('nama lengkap kosong ditolak', () => {
+    const result = submitVerifierApplicationSchema.safeParse(body({ full_name: ' ' }));
+    expect(result.success).toBe(false);
+  });
+
+  it('alasan kurang dari 10 karakter ditolak', () => {
+    const result = submitVerifierApplicationSchema.safeParse(body({ reason: 'pendek' }));
+    expect(result.success).toBe(false);
+  });
+
+  it('dialek yang tidak dikirim menjadi umum', () => {
+    const { dialect: _dialect, ...withoutDialect } = body();
+    const result = submitVerifierApplicationSchema.safeParse(withoutDialect);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.dialect).toBe('umum');
+      expect(result.data.dialect_note).toBeNull();
+    }
+  });
+
+  it('foto diri boleh kosong', () => {
+    const result = submitVerifierApplicationSchema.safeParse(body());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.photo).toBeNull();
   });
 });

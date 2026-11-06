@@ -17,14 +17,41 @@ import type {
   UpdateVerifierScreenshotBody,
 } from './validators/verifier-application.validator';
 
+function profileWire(row: VerifierApplication) {
+  return {
+    full_name: row.fullName,
+    phone: row.phone,
+    address: row.address,
+    social_links: row.socialLinks,
+    dialect: row.dialect,
+    dialect_note: row.dialectNote,
+    reason: row.reason,
+    photo: row.photo,
+  };
+}
+
 function toMine(row: VerifierApplication) {
   return {
     id: row.id,
     status: row.status,
-    phone: row.phone,
-    address: row.address,
-    social_links: row.socialLinks,
+    ...profileWire(row),
     admin_comment: row.adminComment,
+    reviewed_at: row.reviewedAt?.toISOString() ?? null,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt?.toISOString() ?? null,
+  };
+}
+
+function toAdmin(row: VerifierApplication) {
+  return {
+    id: row.id,
+    user_id: row.userId,
+    username: row.username,
+    status: row.status,
+    ...profileWire(row),
+    admin_comment: row.adminComment,
+    reviewed_by: row.reviewedBy,
+    reviewed_by_username: row.reviewedByUsername,
     reviewed_at: row.reviewedAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt?.toISOString() ?? null,
@@ -54,6 +81,11 @@ export class VerifierApplicationController {
       phone: body.phone,
       address: body.address,
       socialLinks: body.social_links,
+      fullName: body.full_name,
+      dialect: body.dialect,
+      dialectNote: body.dialect_note,
+      reason: body.reason,
+      photo: body.photo,
     });
     return c.json({ success: true as const, data: toMine(row) }, 201);
   }
@@ -73,6 +105,11 @@ export class VerifierApplicationController {
       phone: body.phone,
       address: body.address,
       socialLinks: body.social_links,
+      fullName: body.full_name,
+      dialect: body.dialect,
+      dialectNote: body.dialect_note,
+      reason: body.reason,
+      photo: body.photo,
     });
     return c.json({ success: true as const, data: toMine(row) });
   }
@@ -99,24 +136,7 @@ export class VerifierApplicationController {
 
   async detail(c: Context, id: string) {
     const row = await this.deps.getDetail.execute(id);
-    return c.json({
-      success: true as const,
-      data: {
-        id: row.id,
-        user_id: row.userId,
-        username: row.username,
-        status: row.status,
-        phone: row.phone,
-        address: row.address,
-        social_links: row.socialLinks,
-        admin_comment: row.adminComment,
-        reviewed_by: row.reviewedBy,
-        reviewed_by_username: row.reviewedByUsername,
-        reviewed_at: row.reviewedAt?.toISOString() ?? null,
-        created_at: row.createdAt.toISOString(),
-        updated_at: row.updatedAt?.toISOString() ?? null,
-      },
-    });
+    return c.json({ success: true as const, data: toAdmin(row) });
   }
 
   async approve(c: Context, id: string) {
@@ -155,24 +175,7 @@ export class VerifierApplicationController {
       actorRoles: user.roles,
       screenshot: { url: body.url, provider_file_id: body.provider_file_id },
     });
-    return c.json({
-      success: true as const,
-      data: {
-        id: row.id,
-        user_id: row.userId,
-        username: row.username,
-        status: row.status,
-        phone: row.phone,
-        address: row.address,
-        social_links: row.socialLinks,
-        admin_comment: row.adminComment,
-        reviewed_by: row.reviewedBy,
-        reviewed_by_username: row.reviewedByUsername,
-        reviewed_at: row.reviewedAt?.toISOString() ?? null,
-        created_at: row.createdAt.toISOString(),
-        updated_at: row.updatedAt?.toISOString() ?? null,
-      },
-    });
+    return c.json({ success: true as const, data: toAdmin(row) });
   }
 
   private requireUser(c: Context): AuthUser {

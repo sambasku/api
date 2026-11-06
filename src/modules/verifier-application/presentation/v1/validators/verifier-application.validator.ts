@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizePhone } from '@/modules/auth/presentation/v1/validators/register.validator';
 import { opaqueId } from '@/shared/validation/id';
+import { VERIFIER_DIALECT_CODES } from '../../../domain/entities/verifier-application.entity';
 
 export const socialPlatformSchema = z.enum(
   ['instagram', 'facebook', 'tiktok', 'youtube', 'x', 'website'],
@@ -29,8 +30,17 @@ export const socialLinkSchema = z.object({
   screenshot: socialScreenshotSchema,
 });
 
+export const verifierDialectSchema = z.enum(VERIFIER_DIALECT_CODES, {
+  error: 'Dialek tidak valid. Pilih dari daftar.',
+});
+
 export const submitVerifierApplicationSchema = z
   .object({
+    full_name: z
+      .string({ error: 'Nama lengkap wajib diisi' })
+      .trim()
+      .min(2, 'Nama lengkap minimal 2 karakter')
+      .max(120, 'Nama lengkap maksimal 120 karakter'),
     phone: z
       .string({ error: 'Nomor HP wajib diisi' })
       .trim()
@@ -45,6 +55,13 @@ export const submitVerifierApplicationSchema = z
       .array(socialLinkSchema, { error: 'Minimal satu akun media sosial' })
       .min(1, 'Minimal satu akun media sosial')
       .max(5, 'Maksimal 5 akun media sosial'),
+    dialect: verifierDialectSchema.optional().default('umum'),
+    reason: z
+      .string({ error: 'Alasan wajib diisi' })
+      .trim()
+      .min(10, 'Alasan minimal 10 karakter')
+      .max(500, 'Alasan maksimal 500 karakter'),
+    photo: socialScreenshotSchema.nullable().optional(),
   })
   .superRefine((d, ctx) => {
     if (normalizePhone(d.phone) === '__INVALID__') {
@@ -56,9 +73,14 @@ export const submitVerifierApplicationSchema = z
     }
   })
   .transform((d) => ({
+    full_name: d.full_name,
     phone: normalizePhone(d.phone) as string,
     address: d.address,
     social_links: d.social_links,
+    dialect: d.dialect,
+    dialect_note: null,
+    reason: d.reason,
+    photo: d.photo ?? null,
   }));
 
 export type SubmitVerifierApplicationBody = z.infer<typeof submitVerifierApplicationSchema>;
@@ -105,6 +127,21 @@ const socialLinkWire = z.object({
   }),
 });
 
+const photoWire = z
+  .object({
+    url: z.string(),
+    provider_file_id: z.string(),
+  })
+  .nullable();
+
+const applicationProfileWire = {
+  full_name: z.string().nullable(),
+  dialect: verifierDialectSchema.nullable(),
+  dialect_note: z.string().nullable(),
+  reason: z.string().nullable(),
+  photo: photoWire,
+};
+
 export const myVerifierApplicationResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -113,6 +150,7 @@ export const myVerifierApplicationResponseSchema = z.object({
     phone: z.string(),
     address: z.string(),
     social_links: z.array(socialLinkWire),
+    ...applicationProfileWire,
     admin_comment: z.string().nullable(),
     reviewed_at: z.string().nullable(),
     created_at: z.string(),
@@ -149,6 +187,7 @@ export const adminVerifierApplicationDetailResponseSchema = z.object({
     phone: z.string(),
     address: z.string(),
     social_links: z.array(socialLinkWire),
+    ...applicationProfileWire,
     admin_comment: z.string().nullable(),
     reviewed_by: z.string().nullable(),
     reviewed_by_username: z.string().nullable(),

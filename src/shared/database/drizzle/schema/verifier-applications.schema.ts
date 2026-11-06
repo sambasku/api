@@ -8,6 +8,11 @@ export type VerifierApplicationSocialLink = {
   screenshot: { url: string; provider_file_id: string };
 };
 
+export type VerifierApplicationPhoto = {
+  url: string;
+  provider_file_id: string;
+};
+
 /** Pengajuan contributor menjadi reviewer (20-api-verifier-application.md). */
 export const verifierApplications = sqliteTable(
   'verifier_applications',
@@ -16,9 +21,16 @@ export const verifierApplications = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
+    /** Null pada baris sebelum kolom ini ada. Wajib diisi pengajuan baru. */
+    fullName: text('full_name'),
     phone: text('phone').notNull(),
     address: text('address').notNull(),
     socialLinks: text('social_links', { mode: 'json' }).$type<VerifierApplicationSocialLink[]>().notNull(),
+    /** umum | kota | pesisir | lainnya. Null pada baris sebelum kolom ini ada. */
+    dialect: text('dialect'),
+    dialectNote: text('dialect_note'),
+    reason: text('reason'),
+    photo: text('photo', { mode: 'json' }).$type<VerifierApplicationPhoto | null>(),
     status: text('status').notNull().default('pending'),
     adminComment: text('admin_comment'),
     reviewedBy: text('reviewed_by').references(() => users.id),

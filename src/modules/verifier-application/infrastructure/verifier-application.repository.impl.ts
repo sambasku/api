@@ -1,6 +1,6 @@
-import { and, desc, eq, isNull, lt } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { users, userRoles, verifierApplications } from '@/shared/database/drizzle/schema';
+import { contributions, users, userRoles, verifierApplications } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/app-error';
@@ -12,6 +12,7 @@ import type {
   VerifierApplication,
   VerifierApplicationListItem,
   VerifierApplicationStatus,
+  VerifierDialect,
 } from '../domain/entities/verifier-application.entity';
 import type {
   VerifierApplicationListFilter,
@@ -29,6 +30,20 @@ function asLinks(value: unknown): SocialLink[] {
   return Array.isArray(value) ? (value as SocialLink[]) : [];
 }
 
+function asDialect(value: string | null): VerifierDialect | null {
+  if (value === 'umum' || value === 'kota' || value === 'pesisir' || value === 'lainnya') {
+    return value;
+  }
+  return null;
+}
+
+function asPhoto(value: unknown): SocialScreenshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const photo = value as SocialScreenshot;
+  if (!photo.url || !photo.provider_file_id) return null;
+  return photo;
+}
+
 function toEntity(
   row: Row,
   username: string | null,
@@ -41,6 +56,11 @@ function toEntity(
     phone: row.phone,
     address: row.address,
     socialLinks: asLinks(row.socialLinks),
+    fullName: row.fullName,
+    dialect: asDialect(row.dialect),
+    dialectNote: row.dialectNote,
+    reason: row.reason,
+    photo: asPhoto(row.photo),
     status: asStatus(row.status),
     adminComment: row.adminComment,
     reviewedBy: row.reviewedBy,
@@ -178,6 +198,11 @@ export class VerifierApplicationRepositoryImpl implements VerifierApplicationRep
         phone: input.phone,
         address: input.address,
         socialLinks: input.socialLinks,
+        fullName: input.fullName,
+        dialect: input.dialect,
+        dialectNote: input.dialectNote,
+        reason: input.reason,
+        photo: input.photo,
         status: 'pending',
         adminComment: null,
         reviewedBy: null,
@@ -201,6 +226,11 @@ export class VerifierApplicationRepositoryImpl implements VerifierApplicationRep
             phone: input.phone,
             address: input.address,
             socialLinks: input.socialLinks,
+            fullName: input.fullName,
+            dialect: input.dialect,
+            dialectNote: input.dialectNote,
+            reason: input.reason,
+            photo: input.photo,
             status: 'pending',
             adminComment: null,
             reviewedBy: null,
@@ -349,5 +379,19 @@ export class VerifierApplicationRepositoryImpl implements VerifierApplicationRep
         .returning();
       return toEntity(row, null);
     });
+  }
+
+  async countApprovedContributions(userId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ total: count() })
+      .from(contributions)
+      .where(
+        and(
+          eq(contributions.userId, userId),
+          eq(contributions.status, 'approved'),
+          isNull(contributions.deletedAt),
+        ),
+      );
+    return Number(row?.total ?? 0);
   }
 }

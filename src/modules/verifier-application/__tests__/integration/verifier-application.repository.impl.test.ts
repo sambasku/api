@@ -8,6 +8,14 @@ import { VerifierApplicationRepositoryImpl } from '../../infrastructure/verifier
 const { parsed } = config({ path: '.env.test', quiet: true });
 const hasTestDb = !!parsed?.DATABASE_URL;
 
+const profile = {
+  fullName: 'Budi Santoso',
+  dialect: 'kota' as const,
+  dialectNote: null,
+  reason: 'Saya ingin meninjau kata.',
+  photo: null,
+};
+
 const links = [
   {
     platform: 'instagram' as const,
@@ -40,6 +48,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
       phone: '6281234567890',
       address: 'Jl. Merdeka No. 1, Sambas',
       socialLinks: links,
+      ...profile,
     });
     expect(created.status).toBe('pending');
     expect((await repo.findByUserId(user.id))?.id).toBe(created.id);
@@ -60,6 +69,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
           },
         },
       ],
+      ...profile,
     })).toBeNull();
 
     await repo.markRejected(created.id, user.id, 'perbaiki');
@@ -76,6 +86,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
           },
         },
       ],
+      ...profile,
     });
     expect(again?.status).toBe('pending');
     expect(again?.adminComment).toBeNull();
@@ -101,6 +112,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
         phone: owner.phone!,
         address: 'Jl. Merdeka No. 1, Sambas',
         socialLinks: links,
+      ...profile,
       }),
     ).rejects.toMatchObject({ errorCode: 'PHONE_ALREADY_EXISTS', statusCode: 409 });
 
@@ -109,6 +121,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
       phone: '6281999000002',
       address: 'Jl. Merdeka No. 1, Sambas',
       socialLinks: links,
+      ...profile,
     });
     expect(created.status).toBe('pending');
     expect((await users.findById(applicant.id))?.phone).toBe('6281999000002');
@@ -119,6 +132,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
         phone: '6281999000003',
         address: 'Jl. Lain yang cukup panjang',
         socialLinks: links,
+      ...profile,
       }),
     ).rejects.toMatchObject({ errorCode: 'APPLICATION_ALREADY_EXISTS', statusCode: 409 });
   });
@@ -149,6 +163,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
       phone: '6281888000002',
       address: 'Jl. Editor yang cukup panjang',
       socialLinks: links,
+      ...profile,
     });
     await expect(repo.approveAtomically(editorApp.id, admin.id)).rejects.toMatchObject({
       errorCode: 'ALREADY_VERIFIER',
@@ -162,6 +177,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
       phone: '6281888000001',
       address: 'Jl. Kontributor yang cukup panjang',
       socialLinks: links,
+      ...profile,
     });
     await repo.markRejected(pending.id, admin.id, 'ditolak');
     await expect(repo.approveAtomically(pending.id, admin.id)).rejects.toMatchObject({
@@ -174,6 +190,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
       phone: '6281888000001',
       address: 'Jl. Kontributor yang cukup panjang',
       socialLinks: links,
+      ...profile,
     });
     const approved = await repo.approveAtomically(pending.id, admin.id);
     expect(approved.status).toBe('approved');
@@ -196,6 +213,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
       phone: '6281777000001',
       address: 'Jl. Screenshot yang cukup panjang',
       socialLinks: links,
+      ...profile,
     });
 
     const updated = await repo.updateSocialScreenshot(created.id, 0, {

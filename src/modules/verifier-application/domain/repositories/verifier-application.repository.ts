@@ -5,6 +5,7 @@ import type {
   VerifierApplication,
   VerifierApplicationListItem,
   VerifierApplicationStatus,
+  VerifierDialect,
   SocialLink,
 } from '../entities/verifier-application.entity';
 
@@ -18,6 +19,11 @@ export interface VerifierApplicationWriteInput {
   phone: string;
   address: string;
   socialLinks: SocialLink[];
+  fullName: string;
+  dialect: VerifierDialect;
+  dialectNote: string | null;
+  reason: string;
+  photo: SocialScreenshot | null;
 }
 
 export interface VerifierApplicationRepository {
@@ -39,4 +45,5 @@ export interface VerifierApplicationRepository {
     index: number,
     screenshot: SocialScreenshot,
   ): Promise<VerifierApplication>;
+  countApprovedContributions(userId: string): Promise<number>;
 }

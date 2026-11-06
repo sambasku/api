@@ -40,7 +40,10 @@ export class AccountErasureRepositoryImpl implements AccountErasureRepository {
         .from(bugReports)
         .where(eq(bugReports.userId, userId));
       const applications = await tx
-        .select({ socialLinks: verifierApplications.socialLinks })
+        .select({
+          socialLinks: verifierApplications.socialLinks,
+          photo: verifierApplications.photo,
+        })
         .from(verifierApplications)
         .where(eq(verifierApplications.userId, userId));
 
@@ -51,6 +54,9 @@ export class AccountErasureRepositoryImpl implements AccountErasureRepository {
             .map((link) => link.screenshot?.provider_file_id)
             .filter((id): id is string => !!id),
         ),
+        ...applications
+          .map((row) => row.photo?.provider_file_id)
+          .filter((id): id is string => !!id),
       ];
 
       await tx.delete(bookmarks).where(eq(bookmarks.userId, userId));
