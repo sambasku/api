@@ -33,6 +33,7 @@ describe('achievement registry - dual mode (B2)', () => {
       'comments_published',
       'discussions_created',
       'discussion_replies_published',
+      'articles_published',
     ]) {
       const src = findAchievementSource(source);
       expect(src?.kind).toBe('aggregate');
