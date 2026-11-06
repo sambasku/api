@@ -92,7 +92,9 @@ function makeUseCase(
       mailer,
       inbox,
       wa ? ({ execute: wa.send } as never) : undefined,
-      wa?.readSettings,
+      wa?.readSettings as
+        | (() => Promise<{ enabled: boolean; ctaUrl: string }>)
+        | undefined,
     ),
   };
 }
