@@ -155,6 +155,7 @@ import { ListCommaSplitsUseCase } from "@/modules/word/application/use-cases/lis
 import { ApplyCommaSplitUseCase } from "@/modules/word/application/use-cases/apply-comma-split.use-case";
 import { MarkCommaLiteralUseCase } from "@/modules/word/application/use-cases/mark-comma-literal.use-case";
 import { VerifyWordUseCase } from "@/modules/word/application/use-cases/verify-word.use-case";
+import { SyncLiveWordContributionsUseCase } from "@/modules/contribution/application/use-cases/sync-live-word-contributions.use-case";
 import { PublishWordUseCase } from "@/modules/word/application/use-cases/publish-word.use-case";
 import { SoftDeleteWordUseCase } from "@/modules/word/application/use-cases/soft-delete-word.use-case";
 import { BulkWordsActionUseCase } from "@/modules/word/application/use-cases/bulk-words-action.use-case";
@@ -1135,7 +1136,12 @@ const onAnonRateLimited = async (ctx: {
     signal: "rate_lockout",
   });
 };
-const publishWord = new PublishWordUseCase(wordRepo, auditRepo);
+const contributionRepo = new ContributionRepositoryImpl(db);
+const syncLiveWordContributions = new SyncLiveWordContributionsUseCase(
+  contributionRepo,
+  recordInbox,
+);
+const publishWord = new PublishWordUseCase(wordRepo, auditRepo, syncLiveWordContributions);
 const softDeleteWord = new SoftDeleteWordUseCase(wordRepo, auditRepo);
 const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
 const wordController = new WordController({
@@ -1146,6 +1152,7 @@ const wordController = new WordController({
     recordAbuseSignal,
     recordAnonAbuseSignal,
     activityEventRepo,
+    syncLiveWordContributions,
   ),
   update: new UpdateWordUseCase(wordRepo, auditRepo),
   getById: new GetWordByIdUseCase(wordRepo),
@@ -1160,7 +1167,7 @@ const wordController = new WordController({
   listCommaSplits: new ListCommaSplitsUseCase(wordRepo),
   applyCommaSplit: new ApplyCommaSplitUseCase(wordRepo, auditRepo),
   markCommaLiteral: new MarkCommaLiteralUseCase(wordRepo, auditRepo),
-  verify: new VerifyWordUseCase(wordRepo, auditRepo),
+  verify: new VerifyWordUseCase(wordRepo, auditRepo, syncLiveWordContributions),
   publish: publishWord,
   deleteWord: softDeleteWord,
   bulkWords: new BulkWordsActionUseCase(softDeleteWord, publishWord),
@@ -1217,7 +1224,6 @@ const wordController = new WordController({
 // ---- Modul contribution - antrean review (Section 22 approval gate,
 // 03-api-kontribusi-verifikasi.md). Baca entity word lewat interface
 // WordRepository (batas modul Section 4). ----
-const contributionRepo = new ContributionRepositoryImpl(db);
 const userSkipRepo = new UserSkipRepository(db);
 const contributionController = new ContributionController({
   list: new ListContributionsUseCase(contributionRepo),

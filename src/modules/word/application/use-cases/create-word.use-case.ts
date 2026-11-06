@@ -4,6 +4,7 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { SearchMissRepository } from '@/modules/search-miss/domain/repositories/search-miss.repository';
 import { normalizeSearchMissTerm } from '@/modules/search-miss/domain/normalize-term';
 import type { ActivityEventRepository } from '@/modules/activity/domain/repositories/activity-event.repository';
+import type { SyncLiveWordContributionsUseCase } from '@/modules/contribution/application/use-cases/sync-live-word-contributions.use-case';
 import type { Word } from '../../domain/entities/word.entity';
 import type {
   MissingReferences,
@@ -67,6 +68,7 @@ export class CreateWordUseCase {
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly anonAbuse?: RecordAnonAbuseSignalUseCase,
     private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
+    private readonly syncContributions?: SyncLiveWordContributionsUseCase,
   ) {}
 
   async execute(dto: CreateWordDto, actor: Actor): Promise<CreateWordResult> {
@@ -259,6 +261,7 @@ export class CreateWordUseCase {
 
     const merge = await this.wordRepo.publishOrMergeMeanings(saved.id, actorId);
     if (merge?.mergedIntoWordId) {
+      await this.syncContributions?.closeMerged(merge.mergedIntoWordId, saved.id, actorId);
       const kept = await this.wordRepo.findById(merge.mergedIntoWordId);
       return {
         word: kept ?? saved,

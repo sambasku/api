@@ -16,6 +16,7 @@ import {
   categories,
   categorySuggestions,
   commentBlocklistWords,
+  commentRevisions,
   comments,
   contributionReviews,
   contributions,
@@ -40,6 +41,7 @@ import {
   usahaContributions,
   usahaClaims,
   usahaReports,
+  usahaImages,
   usahaItems,
   usahas,
   usahaCategories,
@@ -62,11 +64,26 @@ import {
   refreshTokens,
 searchMisses,
 searchMissSearchers,
+discussionReplyRevisions,
+discussionRevisions,
 discussionReplies,
 discussions,
+  pantunReplyRevisions,
   pantunReplies,
   pantuns,
   pantunReports,
+  articleCommentRevisions,
+  articleComments,
+  articleBookmarks,
+  articleReports,
+  articleRevisions,
+  articleContributions,
+  articleTags,
+  articles,
+  encyclopediaTags,
+  encyclopediaCategories,
+  webImportDetails,
+  webImports,
   userConsents,
   userRoles,
   users,
@@ -97,6 +114,16 @@ discussions,
 import { FIRST_PARTY_SCOPE_STRING } from "@/modules/developer-oauth/domain/entities/api-client.entity";
 
 /** Kategori acara awal (pola migrasi 0093). */
+const ENCYCLOPEDIA_CATEGORY_SEED = [
+  { id: "sejarah", name: "Sejarah", sortOrder: 10 },
+  { id: "tokoh", name: "Tokoh", sortOrder: 20 },
+  { id: "budaya-tradisi", name: "Budaya dan Tradisi", sortOrder: 30 },
+  { id: "karya", name: "Karya dan Sastra", sortOrder: 40 },
+  { id: "tempat", name: "Tempat dan Geografi", sortOrder: 50 },
+  { id: "bahasa", name: "Bahasa", sortOrder: 60 },
+  { id: "lainnya", name: "Lainnya", sortOrder: 99 },
+] as const;
+
 const EVENT_CATEGORY_SEED = [
   { id: "budaya-tradisi", name: "Budaya dan Tradisi" },
   { id: "festival-hiburan", name: "Festival dan Hiburan" },
@@ -297,6 +324,19 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
     .onConflictDoNothing();
 
   await db
+    .insert(encyclopediaCategories)
+    .values(
+      ENCYCLOPEDIA_CATEGORY_SEED.map((c) => ({
+        id: c.id,
+        name: c.name,
+        sortOrder: c.sortOrder,
+        status: "published" as const,
+        createdAt: now,
+      })),
+    )
+    .onConflictDoNothing();
+
+  await db
     .insert(eventCategories)
     .values(
       EVENT_CATEGORY_SEED.map((c, i) => ({
@@ -366,7 +406,9 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     wordReports,
     wordCardShares,
     bugReports,
+    discussionReplyRevisions,
     discussionReplies,
+    discussionRevisions,
     discussions,
     contributionReviews,
     contributions,
@@ -374,6 +416,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     votes,
     userSkips,
     commentBlocklistWords,
+    commentRevisions,
     comments,
     bookmarks,
     notificationCampaignRecipients,
@@ -408,6 +451,9 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     // meaning_vote_counts FK meanings - wajib sebelum meanings.
     meaningVoteCounts,
     meanings,
+    // Detail impor web FK words + web_imports - sebelum keduanya.
+    webImportDetails,
+    webImports,
     words,
     // Anak users (FK proposed_by/reviewed_by) - sebelum users.
     categorySuggestions,
@@ -437,6 +483,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
 	usahaContributions,
 	usahaClaims,
 	usahaReports,
+	usahaImages,
 	usahaItems,
 	usahas,
 	usahaCategories,
@@ -454,8 +501,20 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
       events,
       eventCategories,
       regions,
+      // Ensiklopedia (artikel FK users) + impor web - sebelum users
+      articleCommentRevisions,
+      articleComments,
+      articleBookmarks,
+      articleReports,
+      articleRevisions,
+      articleContributions,
+      articleTags,
+      articles,
+      encyclopediaTags,
+      encyclopediaCategories,
 // Pantun (FK user_id/category_id) - anak dulu
 pantunReports,
+pantunReplyRevisions,
 pantunReplies,
 pantuns,
       // Event feed publik (FK actor_id) - sebelum users
