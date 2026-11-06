@@ -5,6 +5,7 @@ import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
+import { ServiceUnavailableError } from '@/shared/errors/app-error';
 import type { AppVariables } from '@/shared/types';
 import type {
   EmailLogRepository,
@@ -51,17 +52,57 @@ const emailQuotaSchema = z.object({
  * GET /api/v1/admin/email/logs + /quotas - admin/root. Log kirim email
  * (status per attempt) + baris kuota provider terhitung.
  */
+const testSendBodySchema = z.object({
+  to: z.email('Email tujuan tidak valid'),
+  provider: z.string().trim().min(1).optional(),
+});
+
+const testSendDataSchema = z.object({
+  sent: z.boolean(),
+  provider: z.string().nullable(),
+  message_id: z.string().nullable(),
+  error_code: z.string().nullable(),
+  error_message: z.string().nullable(),
+});
+
+function testSendData(result: {
+  sent: boolean;
+  provider: string | null;
+  messageId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+}) {
+  return {
+    sent: result.sent,
+    provider: result.provider,
+    message_id: result.messageId,
+    error_code: result.errorCode,
+    error_message: result.errorMessage,
+  };
+}
+
 export function createEmailAdminRoutes(deps: {
   quotaRepo: EmailQuotaRepository;
   logRepo: EmailLogRepository;
+  mailer: {
+    sendTest(to: string, provider?: string): Promise<{
+      sent: boolean;
+      provider: string | null;
+      messageId: string | null;
+      errorCode: string | null;
+      errorMessage: string | null;
+    }>;
+  };
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
 }) {
   const routes = createOpenApiApp();
 
   const admin = [deps.authenticate, authorizeRole('admin', 'root'), rateLimit({ points: 500, duration: 60 })] as const;
+  const testLimit = [deps.authenticate, authorizeRole('admin', 'root'), rateLimit({ points: 5, duration: 60 })] as const;
   routes.use('/', ...admin);
   routes.use('/logs', ...admin);
   routes.use('/quotas', ...admin);
+  routes.use('/test', ...testLimit);
 
   const listLogsRoute = createRoute({
     method: 'get',
@@ -146,6 +187,50 @@ export function createEmailAdminRoutes(deps: {
         })),
       },
     }) as never;
+  });
+
+  const testSendRoute = createRoute({
+    method: 'post',
+    path: '/test',
+    tags: ['Email', 'Admin'],
+    summary: 'Kirim email test (quota + log, category test)',
+    request: {
+      body: { required: true, content: json(testSendBodySchema) },
+    },
+    responses: {
+      200: {
+        description: 'Hasil kirim. sent false tetap 200 supaya console menampilkan penyebabnya.',
+        content: json(z.object({
+          success: z.literal(true),
+          data: testSendDataSchema,
+        })),
+      },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan admin/root', content: json(errorResponseSchema) },
+      429: { description: 'Terlalu sering (5 per menit)', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(testSendRoute, async (c) => {
+    const body = c.req.valid('json');
+    try {
+      const result = await deps.mailer.sendTest(body.to, body.provider);
+      return c.json({ success: true as const, data: testSendData(result) }) as never;
+    } catch (err) {
+      if (err instanceof ServiceUnavailableError) {
+        return c.json({
+          success: true as const,
+          data: {
+            sent: false,
+            provider: err.errorCode === 'EMAIL_NOT_CONFIGURED' ? 'none' : null,
+            message_id: null,
+            error_code: err.errorCode,
+            error_message: err.message,
+          },
+        }) as never;
+      }
+      throw err;
+    }
   });
 
   return routes;

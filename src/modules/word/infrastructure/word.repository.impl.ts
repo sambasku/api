@@ -34,6 +34,7 @@ import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { ConflictError, ValidationError } from '@/shared/errors/app-error';
 import { wordImageIsAutoVerified } from '../domain/word-image-provider';
 import { mapDuplicateMeaningIndexes, meaningDeduplicationFingerprint, meaningDedupeKey } from '../application/utils/meaning-deduplication';
+import { normalizeLemma } from '../application/utils/normalize-lemma';
 import { throwDuplicateMeaningConflict } from '../application/utils/throw-duplicate-meaning-conflict';
 import { publishOrMergeMeaningsInTx } from './publish-or-merge-meanings';
 import { mergeDuplicateWordsInTx } from './merge-duplicate-words';
@@ -279,7 +280,7 @@ export class WordRepositoryImpl implements WordRepository {
           .insert(words)
           .values({
             languageId: word.languageId,
-            lemma: word.lemma.trim(),
+            lemma: normalizeLemma(word.lemma),
             lemmaAllowsComma: word.lemmaAllowsComma ?? false,
             notes: word.notes ?? null,
             wordType: word.wordType,
@@ -356,7 +357,7 @@ export class WordRepositoryImpl implements WordRepository {
           .insert(words)
           .values({
             languageId: word.languageId,
-            lemma: word.lemma.trim(),
+            lemma: normalizeLemma(word.lemma),
             lemmaAllowsComma: word.lemmaAllowsComma ?? false,
             notes: word.notes ?? null,
             wordType: word.wordType,
@@ -391,7 +392,7 @@ export class WordRepositoryImpl implements WordRepository {
             .insert(words)
             .values({
               languageId: word.languageId,
-              lemma: rel.inlineWord.lemma.trim(),
+              lemma: normalizeLemma(rel.inlineWord.lemma),
               notes: rel.inlineWord.notes ?? null,
               wordType: rel.inlineWord.wordType,
               usageLabels: rel.inlineWord.usageLabels ?? [],
@@ -2298,12 +2299,12 @@ memberLemma: string;
   async listDuplicateGroups(): Promise<DuplicateWordGroup[]> {
     const keyRows = await this.db
       .select({
-        lemmaKey: sql<string>`lower(${words.lemma})`,
+        lemmaKey: sql<string>`lower(trim(${words.lemma}))`,
         languageId: words.languageId,
       })
       .from(words)
       .where(isNull(words.deletedAt))
-      .groupBy(sql`lower(${words.lemma})`, words.languageId)
+      .groupBy(sql`lower(trim(${words.lemma}))`, words.languageId)
       .having(sql`count(*) > 1`);
 
     if (keyRows.length === 0) return [];
@@ -2962,7 +2963,10 @@ memberLemma: string;
       ]);
     }
 
-    const trimmed = lemma.trim();
+    const trimmed = normalizeLemma(lemma);
+    if (!trimmed) {
+      throw new ValidationError([{ field: 'lemma', message: 'Lemma wajib diisi' }]);
+    }
     if (await this.findDuplicate(detail.languageId, trimmed)) {
       throw new ConflictError(
         'WORD_LEMMA_CONFLICT',
@@ -3149,7 +3153,7 @@ memberLemma: string;
           .update(words)
           .set({
             languageId: word.languageId,
-            lemma: word.lemma.trim(),
+            lemma: normalizeLemma(word.lemma),
             lemmaAllowsComma: word.lemmaAllowsComma ?? false,
             notes: word.notes ?? null,
             wordType: word.wordType,

@@ -7,6 +7,7 @@ import {
   meanings,
   words,
 } from '@/shared/database/drizzle/schema';
+import { normalizeLemma } from '../application/utils/normalize-lemma';
 import {
   normalizeSplitParts,
   splitCommaParts,
@@ -77,7 +78,7 @@ export async function applyCommaSplitLemmaInTx(
   await tx
     .update(words)
     .set({
-      lemma: cleaned[0],
+      lemma: normalizeLemma(cleaned[0]!),
       lemmaAllowsComma: false,
       updatedBy: actorId,
       updatedAt: now,
@@ -142,7 +143,7 @@ export async function applyCommaSplitLemmaInTx(
   const firstMeaning = sourceMeanings[0];
 
   for (let i = 0; i < aligned.length; i++) {
-    const lemma = cleaned[i + 1]!;
+    const lemma = normalizeLemma(cleaned[i + 1]!);
     const override = aligned[i]!;
     const replacing = override.mode === 'replace';
     const newWordId = generateId();
@@ -289,7 +290,7 @@ export async function applyCommaSplitLemmaInTx(
 
   return {
     wordId,
-    keptLemma: cleaned[0]!,
+    keptLemma: normalizeLemma(cleaned[0]!),
     oldLemma: source.lemma,
     meanings: meaningSnapshots,
     created,

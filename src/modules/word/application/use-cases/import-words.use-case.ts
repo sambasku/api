@@ -104,7 +104,7 @@ export class ImportWordsUseCase {
     mode: 'validate' | 'commit',
     importSessionId?: string,
   ): Promise<ImportWordResult> {
-    const lemma = item.lemma.trim();
+    const lemma = normalizeLemma(item.lemma);
     const meanings = item.meanings
       .map(preparedMeaning)
       .filter((m): m is NonNullable<typeof m> => m !== null);

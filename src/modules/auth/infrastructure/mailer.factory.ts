@@ -19,6 +19,8 @@ export interface CreateMailerEmailDeps {
  *
  * Tanpa deps email (test lama): fallback SmtpMailerService perilaku lama.
  */
+export function createMailer(emailDeps: CreateMailerEmailDeps): QuotaAwareMailer;
+export function createMailer(): MailerPort;
 export function createMailer(emailDeps?: CreateMailerEmailDeps): MailerPort {
   if (emailDeps) {
     return new QuotaAwareMailer(

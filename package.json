@@ -32,7 +32,8 @@
     "test:watch": "vitest",
     "db:backfill-activity": "tsx src/scripts/backfill-activity-events.ts",
     "db:backfill-consents": "tsx src/scripts/backfill-user-consents.ts",
-    "db:dedupe-meanings": "tsx src/scripts/dedupe-meanings.ts"
+    "db:dedupe-meanings": "tsx src/scripts/dedupe-meanings.ts",
+    "db:fold-lemma-case": "tsx src/scripts/fold-lemma-case.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

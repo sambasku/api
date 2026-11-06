@@ -1,5 +1,8 @@
 import type { WordStatus } from '../domain/entities/word.entity';
 import { meaningDeduplicationFingerprint } from './utils/meaning-deduplication';
+import { normalizeLemma } from './utils/normalize-lemma';
+
+export { normalizeLemma };
 
 export interface ImportMeaningInput {
   translation?: string;
@@ -59,10 +62,6 @@ export function meaningFingerprint(input: {
     translation: input.translation ?? '',
     wordClassId: input.wordClassId ?? null,
   });
-}
-
-export function normalizeLemma(lemma: string): string {
-  return lemma.trim().toLowerCase();
 }
 
 /**

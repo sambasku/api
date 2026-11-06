@@ -47,6 +47,9 @@ export interface EmailSendOutcome {
 }
 
 const SKIP_ERROR = 'EMAIL_QUOTA_EXCEEDED';
+const NOT_CONFIGURED = 'EMAIL_NOT_CONFIGURED';
+const NOT_CONFIGURED_MESSAGE =
+  'Tidak ada provider email terkonfigurasi. Set RESEND_API_KEY di environment proses API, lalu restart.';
 
 /** Logo brand inline (CID) - dipakai semua kategori email. */
 const EMAIL_LOGO = {
@@ -131,6 +134,8 @@ export class QuotaAwareMailer implements MailerPort {
     const candidates = await this.resolveCandidates(providerFilter);
     // Staging: skip kirim nyata kecuali STAGING_SEND_EMAIL=1 (mode test
     // deliverability; kode OTP staging tetap fixed 111-111).
+    const isTest = category === 'test';
+
     if (process.env.NODE_ENV === 'staging' && process.env.STAGING_SEND_EMAIL !== '1') {
       await this.safeLog({
         provider: candidates[0]?.sender.provider ?? 'none',
@@ -139,20 +144,36 @@ export class QuotaAwareMailer implements MailerPort {
         status: 'skipped_env',
         errorMessage: 'STAGING: email tidak dikirim',
       });
+      if (isTest) {
+        return {
+          sent: false,
+          provider: null,
+          messageId: null,
+          errorCode: 'EMAIL_SKIPPED_ENV',
+          errorMessage: 'STAGING: email tidak dikirim. Set STAGING_SEND_EMAIL=1 kalau mau kirim beneran.',
+        };
+      }
       return { sent: true, provider: null, messageId: null, errorCode: null, errorMessage: 'skipped_env' };
     }
 
     if (candidates.length === 0) {
+      const detail = providerFilter
+        ? `Provider ${providerFilter} tidak terkonfigurasi. Cek API key-nya di environment proses API, lalu restart.`
+        : NOT_CONFIGURED_MESSAGE;
       // Dev/test tanpa key: skip + log (perilaku SmtpMailerService lama),
       // jangan gagalkan register. Produksi tetap gagal keras (503).
+      // Kirim test dari console harus jujur: sent false, bukan sukses palsu.
       if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'staging') {
         await this.safeLog({
           provider: providerFilter ?? 'none',
           category,
           toEmail: payload.to,
           status: 'skipped_env',
-          errorMessage: 'DEV/TEST: email tidak dikirim (tanpa provider terkonfigurasi)',
+          errorMessage: isTest ? detail : 'DEV/TEST: email tidak dikirim (tanpa provider terkonfigurasi)',
         });
+        if (isTest) {
+          return { sent: false, provider: 'none', messageId: null, errorCode: NOT_CONFIGURED, errorMessage: detail };
+        }
         return { sent: true, provider: null, messageId: null, errorCode: null, errorMessage: 'skipped_env' };
       }
       await this.safeLog({
@@ -160,12 +181,12 @@ export class QuotaAwareMailer implements MailerPort {
         category,
         toEmail: payload.to,
         status: 'failed',
-        errorCode: SKIP_ERROR,
-        errorMessage: 'Tidak ada provider email terkonfigurasi',
+        errorCode: isTest ? NOT_CONFIGURED : SKIP_ERROR,
+        errorMessage: isTest ? detail : 'Tidak ada provider email terkonfigurasi',
       });
       throw new ServiceUnavailableError(
-        SKIP_ERROR,
-        'Layanan email sedang tidak tersedia. Coba lagi sebentar.',
+        isTest ? NOT_CONFIGURED : SKIP_ERROR,
+        isTest ? detail : 'Layanan email sedang tidak tersedia. Coba lagi sebentar.',
       );
     }
 

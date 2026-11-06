@@ -3125,6 +3125,7 @@ app.route(
   createEmailAdminRoutes({
     quotaRepo: emailQuotaRepo,
     logRepo: emailLogRepo,
+    mailer,
     authenticate,
   }),
 );

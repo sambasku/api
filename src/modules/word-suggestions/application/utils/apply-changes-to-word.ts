@@ -16,6 +16,7 @@ import {
   wordGroupMembers,
 } from '@/shared/database/drizzle/schema';
 import { contributions } from '@/shared/database/drizzle/schema';
+import { normalizeLemma } from '@/modules/word/application/utils/normalize-lemma';
 import { generateId } from '@/shared/utils/ulid';
 import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
 import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
@@ -98,20 +99,20 @@ async function resolveOrCreateTarget(
   actorId: string,
   reviewerId: string,
 ): Promise<{ id: string; lemma: string; created: boolean }> {
-  const trimmed = lemma.trim();
+  const trimmed = normalizeLemma(lemma);
   const [existing] = await db
     .select({ id: words.id, lemma: words.lemma })
     .from(words)
     .where(
       and(
         eq(words.languageId, source.languageId),
-        sql`lower(${words.lemma}) = lower(${trimmed})`,
+        sql`lower(trim(${words.lemma})) = ${trimmed}`,
         isNull(words.deletedAt),
       ),
     )
     .limit(1);
   if (existing) return { id: existing.id, lemma: existing.lemma, created: false };
-  if (trimmed.toLowerCase() === source.lemma.trim().toLowerCase()) {
+  if (trimmed === normalizeLemma(source.lemma)) {
     return { id: source.id, lemma: source.lemma, created: false };
   }
 
@@ -307,21 +308,22 @@ export async function applyChangesToWord(
 
   await assertWordTypeAllowsComponents(word.id, changes.wordType);
 
+  const nextLemma = changes.lemma === undefined ? undefined : normalizeLemma(changes.lemma);
   const oldAudit: Record<string, unknown> = {
     lemma: word.lemma,
     notes: word.notes,
     word_type: word.wordType,
   };
   const newAudit: Record<string, unknown> = {
-    lemma: changes.lemma ?? word.lemma,
+    lemma: nextLemma || word.lemma,
     notes: changes.notes ?? word.notes,
     word_type: changes.wordType ?? word.wordType,
   };
 
-  if (changes.lemma !== undefined && changes.lemma !== word.lemma) {
+  if (nextLemma && nextLemma !== word.lemma) {
     await db
       .update(words)
-      .set({ lemma: changes.lemma, updatedAt: new Date() })
+      .set({ lemma: nextLemma, updatedAt: new Date() })
       .where(eq(words.id, word.id));
     changesApplied++;
   }

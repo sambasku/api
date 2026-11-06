@@ -9,6 +9,7 @@ import type { WordImportSessionRepository } from '../../domain/repositories/word
 import type { WordImportSessionItem } from '../../domain/entities/word-import-session.entity';
 import {
   meaningFingerprint,
+  normalizeLemma,
   preparedMeaning,
   type ImportWordResult,
 } from '../import-words';
@@ -216,7 +217,7 @@ export class BatchContributeWordsUseCase {
     },
     sessionId: string,
   ): Promise<ImportWordResult> {
-    const lemma = row.sambas.trim();
+    const lemma = normalizeLemma(row.sambas);
     const meaning = preparedMeaning({
       translation: row.indonesia,
       definition: '',
