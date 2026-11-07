@@ -151,7 +151,7 @@ describe.skipIf(!hasTestDb)('VerifierApplicationRepositoryImpl', () => {
       passwordHash: 'hash',
     });
     const editor = await users.save({
-      username: 'ed_va',
+      username: 'ed_va1',
       email: 'ed-va@test.com',
       phone: '6281888000002',
       passwordHash: 'hash',
