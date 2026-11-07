@@ -150,11 +150,198 @@ function suggestionOnlyAddsDuplicates(changes: ProposedChanges): boolean {
  * Bukan jalur request. Panggil sekali setelah migrasi 0116.
  * Event aktivitas tidak ditulis ulang. Usulan pending yang hanya
  * menambah duplikat ditutup dan event usulannya disembunyikan.
+ *
+ * Transaksi per kelompok (bukan satu raksasa): transaksi interaktif
+ * remote (hrana) punya batas durasi/statement - di DB besar rollback
+ * gagal "no transaction is active" dan menelan error asli (prod
+ * data.sambasku.com). Tiap kelompok independen dan idempoten, jadi
+ * rerun deploy berikutnya melanjutkan sisa kelompok.
  */
 export async function applySafeMeaningMerges(
   db: AppDatabase,
 ): Promise<{ groups: number; closedSuggestions: number }> {
-  return db.transaction((tx) => applySafeMeaningMergesTx(tx));
+  const meaningRows = await loadMergeMeaningRows(db);
+  if (meaningRows.length === 0) return { groups: 0, closedSuggestions: 0 };
+  const trBy = new Map(meaningRows.map((row) => [row.id, row.translations]));
+  const planned = planSafeMeaningMerges(meaningRows);
+  const loserToWinner = new Map<string, string>();
+  for (const group of planned) {
+    for (const loserId of group.loserIds) loserToWinner.set(loserId, group.winnerId);
+    if (group.loserIds.length === 0) continue;
+    await db.transaction((tx) => mergeGroup(tx, group));
+  }
+  await db.transaction((tx) => backfillDedupeKeys(tx, trBy));
+  const closedSuggestions = await closeDuplicateSuggestions(db, loserToWinner, trBy, meaningRows);
+  return { groups: planned.length, closedSuggestions };
+}
+
+/** Satu kelompok gabung dalam satu transaksi kecil. */
+async function mergeGroup(
+  db: AppTransaction,
+  group: SafeMergeGroup,
+): Promise<void> {
+  await db
+    .update(examples)
+    .set({ meaningId: group.winnerId })
+    .where(inArray(examples.meaningId, group.loserIds));
+  await db
+    .update(meanings)
+    .set({ inheritedFromMeaningId: group.winnerId })
+    .where(inArray(meanings.inheritedFromMeaningId, group.loserIds));
+
+  const voteRows = await db
+    .select({ userId: votes.userId, meaningId: votes.entityId, value: votes.value })
+    .from(votes)
+    .where(
+      and(
+        eq(votes.entityType, 'meaning'),
+        inArray(votes.entityId, [group.winnerId, ...group.loserIds]),
+      ),
+    );
+  const resolution = resolveMeaningVotes({
+    winnerId: group.winnerId,
+    loserIds: group.loserIds,
+    votes: voteRows,
+  });
+  for (const del of resolution.deletes) {
+    await db
+      .delete(votes)
+      .where(
+        and(eq(votes.userId, del.userId), eq(votes.entityType, 'meaning'), eq(votes.entityId, del.meaningId)),
+      );
+  }
+  for (const move of resolution.moves) {
+    await db
+      .update(votes)
+      .set({ entityId: move.toMeaningId })
+      .where(
+        and(
+          eq(votes.userId, move.userId),
+          eq(votes.entityType, 'meaning'),
+          eq(votes.entityId, move.fromMeaningId),
+        ),
+      );
+  }
+  const [counted] = await db
+    .select({ total: sql<number>`count(*)` })
+    .from(votes)
+    .where(and(eq(votes.entityType, 'meaning'), eq(votes.entityId, group.winnerId)));
+  await db.delete(meaningVoteCounts).where(inArray(meaningVoteCounts.meaningId, group.loserIds));
+  await db
+    .insert(meaningVoteCounts)
+    .values({ meaningId: group.winnerId, total: Number(counted?.total ?? 0) })
+    .onConflictDoUpdate({
+      target: meaningVoteCounts.meaningId,
+      set: { total: Number(counted?.total ?? 0), updatedAt: new Date() },
+    });
+  await db
+    .update(meanings)
+    .set({ deletedAt: new Date(), dedupeKey: null })
+    .where(inArray(meanings.id, group.loserIds));
+  await db
+    .update(meanings)
+    .set({ dedupeKey: group.dedupeKey })
+    .where(eq(meanings.id, group.winnerId));
+}
+
+/** Isi dedupe_key baris aktif yang masih null. */
+async function backfillDedupeKeys(
+  db: AppTransaction,
+  trBy: Map<string, MergeMeaningRow['translations']>,
+): Promise<void> {
+  const survivors = await db
+    .select({
+      id: meanings.id,
+      wordClassId: meanings.wordClassId,
+      definition: meanings.definition,
+    })
+    .from(meanings)
+    .where(and(isNull(meanings.deletedAt), isNull(meanings.dedupeKey)));
+  for (const row of survivors) {
+    const key = meaningDedupeKey({
+      definition: row.definition,
+      translations: trBy.get(row.id) ?? [],
+      wordClassId: row.wordClassId,
+    });
+    if (!key) continue;
+    await db.update(meanings).set({ dedupeKey: key }).where(eq(meanings.id, row.id));
+  }
+}
+
+/** Tutup usulan pending yang hanya menambah duplikat + hide event-nya. */
+async function closeDuplicateSuggestions(
+  db: AppDatabase,
+  loserToWinner: Map<string, string>,
+  trBy: Map<string, MergeMeaningRow['translations']>,
+  meaningRows: Array<MergeMeaningRow & { lemma: string }>,
+): Promise<number> {
+  const liveByWord = new Map<string, Set<string>>();
+  for (const row of meaningRows) {
+    if (loserToWinner.has(row.id)) continue;
+    const fp = meaningDeduplicationFingerprint({
+      definition: row.definition,
+      translations: trBy.get(row.id) ?? [],
+      wordClassId: row.wordClassId,
+    });
+    const set = liveByWord.get(row.wordId) ?? new Set<string>();
+    set.add(fp);
+    liveByWord.set(row.wordId, set);
+  }
+  let closedSuggestions = 0;
+  const pending = await db
+    .select({
+      id: wordEditSuggestions.id,
+      wordId: wordEditSuggestions.wordId,
+      proposedChanges: wordEditSuggestions.proposedChanges,
+    })
+    .from(wordEditSuggestions)
+    .where(and(eq(wordEditSuggestions.status, 'pending'), isNull(wordEditSuggestions.deletedAt)));
+  for (const suggestion of pending) {
+    const changes = structuredClone(suggestion.proposedChanges) as ProposedChanges;
+    let touched = false;
+    for (const mc of changes.meanings ?? []) {
+      if (mc.meaningId && loserToWinner.has(mc.meaningId)) {
+        mc.meaningId = loserToWinner.get(mc.meaningId)!;
+        touched = true;
+      }
+    }
+    if (touched) {
+      await db
+        .update(wordEditSuggestions)
+        .set({ proposedChanges: changes, updatedAt: new Date() })
+        .where(eq(wordEditSuggestions.id, suggestion.id));
+    }
+    if (!suggestionOnlyAddsDuplicates(changes)) continue;
+    const live = liveByWord.get(suggestion.wordId) ?? new Set<string>();
+    const allDup = (changes.meanings ?? []).every((mc) =>
+      live.has(
+        meaningDeduplicationFingerprint({
+          definition: mc.definition ?? '',
+          translations: (mc.translations ?? []).map((t) => ({
+            languageId: t.languageId,
+            translationText: t.translationText,
+          })),
+          wordClassId: mc.wordClassId ?? null,
+        }),
+      ),
+    );
+    if (!allDup) continue;
+    await db
+      .update(wordEditSuggestions)
+      .set({
+        status: 'rejected',
+        reviewComment: 'Makna yang sama sudah ada.',
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(wordEditSuggestions.id, suggestion.id));
+    await db
+      .update(activityEvents)
+      .set({ hiddenAt: new Date() })
+      .where(eq(activityEvents.dedupeKey, `suggestion:${suggestion.id}`));
+    closedSuggestions++;
+  }
+  return closedSuggestions;
 }
 
 async function loadRowsByIds<T>(
@@ -224,173 +411,3 @@ export async function loadMergeMeaningRows(
     translations: trBy.get(row.id) ?? [],
   }));
 }
-
-async function applySafeMeaningMergesTx(
-  db: AppTransaction,
-): Promise<{ groups: number; closedSuggestions: number }> {
-  const meaningRows = await loadMergeMeaningRows(db);
-  if (meaningRows.length === 0) return { groups: 0, closedSuggestions: 0 };
-
-  const trBy = new Map(meaningRows.map((row) => [row.id, row.translations]));
-  const planned = planSafeMeaningMerges(meaningRows);
-
-  const loserToWinner = new Map<string, string>();
-  for (const group of planned) {
-    for (const loserId of group.loserIds) loserToWinner.set(loserId, group.winnerId);
-    if (group.loserIds.length === 0) continue;
-
-    await db
-      .update(examples)
-      .set({ meaningId: group.winnerId })
-      .where(inArray(examples.meaningId, group.loserIds));
-    await db
-      .update(meanings)
-      .set({ inheritedFromMeaningId: group.winnerId })
-      .where(inArray(meanings.inheritedFromMeaningId, group.loserIds));
-
-    const voteRows = await db
-      .select({ userId: votes.userId, meaningId: votes.entityId, value: votes.value })
-      .from(votes)
-      .where(
-        and(
-          eq(votes.entityType, 'meaning'),
-          inArray(votes.entityId, [group.winnerId, ...group.loserIds]),
-        ),
-      );
-    const resolution = resolveMeaningVotes({
-      winnerId: group.winnerId,
-      loserIds: group.loserIds,
-      votes: voteRows,
-    });
-    for (const del of resolution.deletes) {
-      await db
-        .delete(votes)
-        .where(
-          and(eq(votes.userId, del.userId), eq(votes.entityType, 'meaning'), eq(votes.entityId, del.meaningId)),
-        );
-    }
-    for (const move of resolution.moves) {
-      await db
-        .update(votes)
-        .set({ entityId: move.toMeaningId })
-        .where(
-          and(
-            eq(votes.userId, move.userId),
-            eq(votes.entityType, 'meaning'),
-            eq(votes.entityId, move.fromMeaningId),
-          ),
-        );
-    }
-
-    const [counted] = await db
-      .select({ total: sql<number>`count(*)` })
-      .from(votes)
-      .where(and(eq(votes.entityType, 'meaning'), eq(votes.entityId, group.winnerId)));
-    await db.delete(meaningVoteCounts).where(inArray(meaningVoteCounts.meaningId, group.loserIds));
-    await db
-      .insert(meaningVoteCounts)
-      .values({ meaningId: group.winnerId, total: Number(counted?.total ?? 0) })
-      .onConflictDoUpdate({
-        target: meaningVoteCounts.meaningId,
-        set: { total: Number(counted?.total ?? 0), updatedAt: new Date() },
-      });
-
-    await db
-      .update(meanings)
-      .set({ deletedAt: new Date(), dedupeKey: null })
-      .where(inArray(meanings.id, group.loserIds));
-    await db
-      .update(meanings)
-      .set({ dedupeKey: group.dedupeKey })
-      .where(eq(meanings.id, group.winnerId));
-  }
-
-  const survivors = await db
-    .select({
-      id: meanings.id,
-      wordClassId: meanings.wordClassId,
-      definition: meanings.definition,
-    })
-    .from(meanings)
-    .where(and(isNull(meanings.deletedAt), isNull(meanings.dedupeKey)));
-  for (const row of survivors) {
-    const key = meaningDedupeKey({
-      definition: row.definition,
-      translations: trBy.get(row.id) ?? [],
-      wordClassId: row.wordClassId,
-    });
-    if (!key) continue;
-    await db.update(meanings).set({ dedupeKey: key }).where(eq(meanings.id, row.id));
-  }
-
-  const liveByWord = new Map<string, Set<string>>();
-  for (const row of meaningRows) {
-    if (loserToWinner.has(row.id)) continue;
-    const fp = meaningDeduplicationFingerprint({
-      definition: row.definition,
-      translations: trBy.get(row.id) ?? [],
-      wordClassId: row.wordClassId,
-    });
-    const set = liveByWord.get(row.wordId) ?? new Set<string>();
-    set.add(fp);
-    liveByWord.set(row.wordId, set);
-  }
-
-  let closedSuggestions = 0;
-  const pending = await db
-    .select({
-      id: wordEditSuggestions.id,
-      wordId: wordEditSuggestions.wordId,
-      proposedChanges: wordEditSuggestions.proposedChanges,
-    })
-    .from(wordEditSuggestions)
-    .where(and(eq(wordEditSuggestions.status, 'pending'), isNull(wordEditSuggestions.deletedAt)));
-  for (const suggestion of pending) {
-    const changes = structuredClone(suggestion.proposedChanges) as ProposedChanges;
-    let touched = false;
-    for (const mc of changes.meanings ?? []) {
-      if (mc.meaningId && loserToWinner.has(mc.meaningId)) {
-        mc.meaningId = loserToWinner.get(mc.meaningId);
-        touched = true;
-      }
-    }
-    if (touched) {
-      await db
-        .update(wordEditSuggestions)
-        .set({ proposedChanges: changes, updatedAt: new Date() })
-        .where(eq(wordEditSuggestions.id, suggestion.id));
-    }
-    if (!suggestionOnlyAddsDuplicates(changes)) continue;
-    const live = liveByWord.get(suggestion.wordId) ?? new Set<string>();
-    const allDup = (changes.meanings ?? []).every((mc) =>
-      live.has(
-        meaningDeduplicationFingerprint({
-          definition: mc.definition ?? '',
-          translations: (mc.translations ?? []).map((t) => ({
-            languageId: t.languageId,
-            translationText: t.translationText,
-          })),
-          wordClassId: mc.wordClassId ?? null,
-        }),
-      ),
-    );
-    if (!allDup) continue;
-    await db
-      .update(wordEditSuggestions)
-      .set({
-        status: 'rejected',
-        reviewComment: 'Makna yang sama sudah ada.',
-        reviewedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(wordEditSuggestions.id, suggestion.id));
-    await db
-      .update(activityEvents)
-      .set({ hiddenAt: new Date() })
-      .where(eq(activityEvents.dedupeKey, `suggestion:${suggestion.id}`));
-    closedSuggestions++;
-  }
-
-  return { groups: planned.length, closedSuggestions };
-}
-
