@@ -23,6 +23,8 @@ export const STREAK_ACTIVITY_KINDS = [
   'pantun_created',
   'pantun_reply_created',
   'discussion_created',
+  'article_published',
+  'article_comment_created',
 ] as const;
 
 export const STREAK_WINDOW_DAYS = 90;

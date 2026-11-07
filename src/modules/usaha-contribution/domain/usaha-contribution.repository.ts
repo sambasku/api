@@ -22,6 +22,8 @@ export interface CreateUsahaContributionInput {
 export interface ListUsahaContributionsInput {
   status?: UsahaContributionStatus;
   kind?: UsahaContributionKind;
+  /** Filter riwayat: usaha_id ATAU result_usaha_id cocok. */
+  usahaId?: string;
 }
 
 export interface UsahaContributionRepository {

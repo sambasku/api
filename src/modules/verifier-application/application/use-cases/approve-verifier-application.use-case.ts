@@ -93,13 +93,17 @@ export class ApproveVerifierApplicationUseCase {
     });
 
     await this.sendWelcomeEmail(updated.userId);
-    await this.sendWaIfEnabled(updated.userId, updated.id);
+    await this.sendWaIfEnabled(updated.userId, updated.id, updated.phone);
 
     return { id: updated.id, status: 'approved', role: 'reviewer' };
   }
 
   /** WA opsional: gagal kirim tidak membatalkan persetujuan. */
-  private async sendWaIfEnabled(userId: string, applicationId: string): Promise<void> {
+  private async sendWaIfEnabled(
+    userId: string,
+    applicationId: string,
+    applicationPhone: string | null,
+  ): Promise<void> {
     if (!this.sendVerifierWa || !this.readWaSettings) return;
     try {
       const settings = await this.readWaSettings();
@@ -108,7 +112,7 @@ export class ApproveVerifierApplicationUseCase {
       if (!user) return;
       await this.sendVerifierWa.execute({
         userId,
-        phone: user.phone,
+        phone: applicationPhone || user.phone,
         eventKey: 'verifier_application_approved',
         displayName: user.displayName.trim() || user.username,
         detail: APPROVE_BENEFITS,

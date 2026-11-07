@@ -743,4 +743,103 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     expect(res.status).toBe(404);
     expect((await res.json()).error_code).toBe("IMAGE_NOT_FOUND");
   });
+
+  it("list cursor: created_at vs id diverge → halaman tidak overlap", async () => {
+    // Urutan id lex: A < B < C. Urutan created_at: A (baru) > B > C (lama).
+    // Sort (created_at, id) DESC → A, B, C. Cursor id-only (`id < B`)
+    // akan mengembalikan A lagi di halaman 2; tuple keyset tidak.
+    const { getTestDb } = await import("@/shared/database/drizzle/test-client");
+    const { places } = await import("@/shared/database/drizzle/schema");
+    const t0 = Date.now();
+    const marker = `pagkeyset${t0}`;
+    await getTestDb()
+      .insert(places)
+      .values([
+        {
+          id: "01PLACEPAGA0000000000001",
+          slug: `${marker}-a`,
+          name: `${marker} A`,
+          category: "wisata",
+          type: "alam",
+          shortDescription: "Seed keyset A.",
+          status: "published",
+          createdAt: new Date(t0 + 3000),
+        },
+        {
+          id: "01PLACEPAGB0000000000001",
+          slug: `${marker}-b`,
+          name: `${marker} B`,
+          category: "wisata",
+          type: "alam",
+          shortDescription: "Seed keyset B.",
+          status: "published",
+          createdAt: new Date(t0 + 2000),
+        },
+        {
+          id: "01PLACEPAGC0000000000001",
+          slug: `${marker}-c`,
+          name: `${marker} C`,
+          category: "wisata",
+          type: "alam",
+          shortDescription: "Seed keyset C.",
+          status: "published",
+          createdAt: new Date(t0 + 1000),
+        },
+      ]);
+
+    const page1Res = await get(
+      `/api/v1/places?category=wisata&q=${marker}&limit=1`,
+    );
+    expect(page1Res.status).toBe(200);
+    const page1 = (await page1Res.json()).data as {
+      items: Array<{ id: string; slug: string }>;
+      next_cursor: string | null;
+    };
+    expect(page1.items).toHaveLength(1);
+    expect(page1.items[0].slug).toBe(`${marker}-a`);
+    expect(page1.next_cursor).toBe("01PLACEPAGA0000000000001");
+
+    const page2Res = await get(
+      `/api/v1/places?category=wisata&q=${marker}&limit=1&before=${page1.next_cursor}`,
+    );
+    expect(page2Res.status).toBe(200);
+    const page2 = (await page2Res.json()).data as {
+      items: Array<{ id: string; slug: string }>;
+      next_cursor: string | null;
+    };
+    expect(page2.items).toHaveLength(1);
+    expect(page2.items[0].slug).toBe(`${marker}-b`);
+    expect(page2.items[0].id).not.toBe(page1.items[0].id);
+
+    const page3Res = await get(
+      `/api/v1/places?category=wisata&q=${marker}&limit=1&before=${page2.next_cursor}`,
+    );
+    expect(page3Res.status).toBe(200);
+    const page3 = (await page3Res.json()).data as {
+      items: Array<{ id: string; slug: string }>;
+      next_cursor: string | null;
+    };
+    expect(page3.items).toHaveLength(1);
+    expect(page3.items[0].slug).toBe(`${marker}-c`);
+
+    const ids = [
+      page1.items[0].id,
+      page2.items[0].id,
+      page3.items[0].id,
+    ];
+    expect(new Set(ids).size).toBe(3);
+    expect(page3.next_cursor).toBeNull();
+
+    // Cursor tidak ketemu → halaman kosong, bukan page 1 ulang.
+    const missRes = await get(
+      `/api/v1/places?category=wisata&q=${marker}&limit=1&before=01NOTAREALPLACE00000000000`,
+    );
+    expect(missRes.status).toBe(200);
+    const miss = (await missRes.json()).data as {
+      items: unknown[];
+      next_cursor: string | null;
+    };
+    expect(miss.items).toHaveLength(0);
+    expect(miss.next_cursor).toBeNull();
+  });
 });

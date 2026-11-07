@@ -15,7 +15,10 @@ import { resolve } from 'node:path';
 import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
+import * as schema from '@/shared/database/drizzle/schema';
+import { applySafeMeaningMerges } from '@/modules/word/application/merge-duplicate-meanings';
 import {
+  normalizeUsernameSlug,
   slugifyUsername,
   USERNAME_HANDLE_REGEX,
 } from '@/modules/auth/application/utils/username-slug';
@@ -98,14 +101,31 @@ async function repairLastSeenDrift(client: Client): Promise<void> {
   );
 }
 
-/** Idempotent: slugify username yang tidak cocok charset handle @mention (tanpa `-`). */
+/** Live check: username sudah dipakai user lain (bukan baris yang di-backfill). */
+async function usernameTakenByOther(
+  client: Client,
+  candidate: string,
+  selfId: string,
+): Promise<boolean> {
+  const result = await client.execute({
+    sql: `SELECT 1 AS ok FROM users WHERE username = ? AND id != ? LIMIT 1`,
+    args: [candidate, selfId],
+  });
+  return result.rows.length > 0;
+}
+
+/**
+ * Idempotent: perbaiki username yang gagal handle @mention
+ * (charset, panjang < 6, reserved yang kependekan, dll.).
+ * Prefer local-part email bila valid; else slugify(+pad) dari username lama.
+ */
 async function backfillUsernameHandles(client: Client): Promise<void> {
   let rows: Array<Record<string, unknown> | unknown[]>;
   try {
     // Soft-deleted dilewati: tombstone `dihapus-<ULID>` memang di luar
-    // charset handle, dan trigger 0091 juga mengecualikannya.
+    // charset handle, dan trigger guard juga mengecualikannya.
     const result = await client.execute(
-      `SELECT id, username FROM users WHERE username IS NOT NULL AND deleted_at IS NULL`,
+      `SELECT id, username, email FROM users WHERE username IS NOT NULL AND deleted_at IS NULL`,
     );
     rows = result.rows as Array<Record<string, unknown> | unknown[]>;
   } catch {
@@ -122,15 +142,30 @@ async function backfillUsernameHandles(client: Client): Promise<void> {
   for (const row of rows) {
     const id = String(rowField(row, 'id', 0) ?? '');
     const username = String(rowField(row, 'username', 1) ?? '');
+    const email = String(rowField(row, 'email', 2) ?? '');
     if (!id || !username || USERNAME_HANDLE_REGEX.test(username)) continue;
 
-    let base = slugifyUsername(username);
+    const emailSlug = normalizeUsernameSlug(email.split('@')[0] ?? '');
+    let base =
+      emailSlug.length >= 6 && USERNAME_HANDLE_REGEX.test(emailSlug)
+        ? emailSlug
+        : slugifyUsername(username);
     // Handle reserved (admin/me/anonim/dll) tidak boleh dipakai user -
     // suffix agar tetap unik tapi tidak Naked pakai segment route.
-    if (isReservedHandle(base)) base = `${base}_user`;
+    const preferredSlug = normalizeUsernameSlug(username);
+    if (isReservedHandle(preferredSlug) || isReservedHandle(base)) {
+      const source = isReservedHandle(preferredSlug) ? preferredSlug : base;
+      base = `${source}_user`.slice(0, 30);
+    }
     let candidate = base;
     let n = 2;
-    while (taken.has(candidate) && candidate !== username) {
+    // In-memory + live SELECT: pastikan kandidat belum dipakai user lain
+    // sebelum UPDATE (hardening, UNIQUE tetap jaring pengaman).
+    while (true) {
+      const occupied =
+        (taken.has(candidate) && candidate !== username) ||
+        (await usernameTakenByOther(client, candidate, id));
+      if (!occupied) break;
       const suffix = `_${n}`;
       candidate = `${base.slice(0, Math.max(1, 30 - suffix.length))}${suffix}`;
       n += 1;
@@ -196,7 +231,7 @@ try {
   fail('Gagal konek ke database (cek URL/token/jaringan)', err);
 }
 
-const db = drizzle(client);
+const db = drizzle(client, { schema });
 
 try {
   await repairLastSeenDrift(client);
@@ -208,6 +243,12 @@ try {
   // Jalankan lagi setelah migrate: menangkap baris yang masih legacy
   // (mis. dari seeder lama) - idempotent, skip bila tak ada yang diubah.
   await backfillUsernameHandles(client);
+  // Setelah kolom dedupe_key ada. Idempotent: jalan lagi saat deploy
+  // berikutnya tidak menulis ulang kelompok yang sudah digabung.
+  const merged = await applySafeMeaningMerges(db);
+  console.log(
+    `[db:migrate] makna duplikat: ${merged.groups} kelompok, ${merged.closedSuggestions} usulan ditutup`,
+  );
   console.log('[db:migrate] OK - migrations applied');
 } catch (err) {
   fail('Migrate gagal', err);

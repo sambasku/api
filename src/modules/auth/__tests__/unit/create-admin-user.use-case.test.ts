@@ -50,7 +50,7 @@ function makeDeps(overrides: {
 }
 
 const base = {
-  username: 'Siti',
+  username: 'Sitiok',
   email: 'Siti@Test.com',
   phone: null as string | null,
   password: 'Password123',
@@ -68,7 +68,7 @@ describe('CreateAdminUserUseCase', () => {
     expect(hasher.hash).toHaveBeenCalledWith('Password123');
     expect(userRepo.save).toHaveBeenCalledWith({
       // Username dinormalisasi ke handle mention (lowercase, tanpa spasi).
-      username: 'siti',
+      username: 'sitiok',
       email: 'siti@test.com',
       phone: null,
       passwordHash: 'argon2id$hash',

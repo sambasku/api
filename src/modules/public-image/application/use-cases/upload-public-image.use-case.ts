@@ -2,6 +2,7 @@ import type { PublicImageStoragePort } from '../ports/public-image-storage.port'
 import {
   buildCampaignImagePath,
   buildCulinaryImagePath,
+  buildEncyclopediaImagePath,
   buildEventImagePath,
   buildPlaceImagePath,
   buildUsahaImagePath,
@@ -15,13 +16,34 @@ export type PublicImagePurpose =
   | 'place'
   | 'event'
   | 'usaha'
-  | 'culinary';
+  | 'culinary'
+  | 'encyclopedia';
 
 export interface UploadPublicImageResult {
   url: string;
   provider: string;
   providerFileId: string;
   sha: string;
+}
+
+function pathForPurpose(purpose: PublicImagePurpose, mimeType: string): string {
+  switch (purpose) {
+    case 'campaign':
+      return buildCampaignImagePath(mimeType);
+    case 'place':
+      return buildPlaceImagePath(mimeType);
+    case 'event':
+      return buildEventImagePath(mimeType);
+    case 'usaha':
+      return buildUsahaImagePath(mimeType);
+    case 'culinary':
+      return buildCulinaryImagePath(mimeType);
+    case 'encyclopedia':
+      return buildEncyclopediaImagePath(mimeType);
+    case 'word':
+    default:
+      return buildWordImagePath(mimeType);
+  }
 }
 
 /** Upload gambar publik (GitHub). Avatar punya use-case sendiri. */
@@ -36,18 +58,7 @@ export class UploadPublicImageUseCase {
   }): Promise<UploadPublicImageResult> {
     const file = validateImageFile(input);
     const purpose = input.purpose ?? 'word';
-    const path =
-      purpose === 'campaign'
-        ? buildCampaignImagePath(file.mimeType)
-        : purpose === 'place'
-          ? buildPlaceImagePath(file.mimeType)
-          : purpose === 'event'
-            ? buildEventImagePath(file.mimeType)
-            : purpose === 'usaha'
-              ? buildUsahaImagePath(file.mimeType)
-              : purpose === 'culinary'
-                ? buildCulinaryImagePath(file.mimeType)
-                : buildWordImagePath(file.mimeType);
+    const path = pathForPurpose(purpose, file.mimeType);
     const uploaded = await this.storage.upload({
       path,
       content: file.bytes,

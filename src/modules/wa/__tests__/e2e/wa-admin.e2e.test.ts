@@ -57,7 +57,7 @@ describe.skipIf(!hasTestDb)('WA Admin E2E - envelope + CRUD template (#31)', () 
         .data
     ).access_token;
 
-    // Seed minimal: 1 template + usage kapso (pola 0057)
+    // Seed minimal: 1 template + usage openwa (pola 0057, diganti 0119).
     await db.insert(waMessageTemplates).values({
       eventKey: 'verifier_application_approved',
       enabled: false,
@@ -66,7 +66,7 @@ describe.skipIf(!hasTestDb)('WA Admin E2E - envelope + CRUD template (#31)', () 
       body: 'Selamat {{displayName}}, lulus!',
       params: [{ name: 'displayName', description: 'Nama' }],
     });
-    await db.insert(waUsage).values({ provider: 'kapso' });
+    await db.insert(waUsage).values({ provider: 'openwa' }).onConflictDoNothing();
   });
 
   it('GET /admin/wa/templates balas envelope { success, data: { templates } }', async () => {
@@ -117,7 +117,7 @@ describe.skipIf(!hasTestDb)('WA Admin E2E - envelope + CRUD template (#31)', () 
     const b0 = await res0.json();
     expect(res0.status).toBe(200);
     expect(b0.success).toBe(true);
-    expect(b0.data?.usage?.provider).toBe('kapso');
+    expect(b0.data?.usage?.provider).toBe('openwa');
 
     const res = await patch('/api/v1/admin/wa/usage', { limit_count: 500, warn_threshold_percent: 90 }, adminToken);
     expect(res.status).toBe(200);

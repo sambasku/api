@@ -87,6 +87,13 @@ export function serializeCuisine(c: Cuisine | CuisineDetail) {
     restricted_reason: c.restrictedReason,
     restricted_at: c.restrictedAt ? c.restrictedAt.toISOString() : null,
     author_id: c.authorId,
+    author: c.author
+      ? {
+          id: c.author.id,
+          username: c.author.username,
+          display_name: c.author.displayName,
+        }
+      : null,
     published_at: c.publishedAt ? c.publishedAt.toISOString() : null,
     created_at: c.createdAt.toISOString(),
     updated_at: c.updatedAt ? c.updatedAt.toISOString() : null,
@@ -118,6 +125,13 @@ export function serializePlace(p: CulinaryPlace | CulinaryPlaceDetail) {
     restricted_at: p.restrictedAt ? p.restrictedAt.toISOString() : null,
     manager_id: p.managerId,
     author_id: p.authorId,
+    author: p.author
+      ? {
+          id: p.author.id,
+          username: p.author.username,
+          display_name: p.author.displayName,
+        }
+      : null,
     published_at: p.publishedAt ? p.publishedAt.toISOString() : null,
     created_at: p.createdAt.toISOString(),
     updated_at: p.updatedAt ? p.updatedAt.toISOString() : null,

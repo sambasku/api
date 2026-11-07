@@ -71,7 +71,7 @@ const regions = {
 };
 
 /** eslint-disable-next-line @typescript-eslint/no-explicit-any */
-function build(contrib: any, usaha: any, claims: any = {}, createUc?: any) {
+function build(contrib: any, usaha: any, createUc?: any) {
   const create = createUc ?? {
     execute: vi.fn().mockResolvedValue({ id: "U_NEW", slug: "usaha-baru", name: "Usaha Baru" }),
   };
@@ -81,11 +81,6 @@ function build(contrib: any, usaha: any, claims: any = {}, createUc?: any) {
     regions as never,
     create as never,
     new UniqueUsahaSlugUseCase(usaha),
-    {
-      create: vi.fn().mockResolvedValue({ id: "CLAIM1" }),
-      findPendingByUser: vi.fn().mockResolvedValue(null),
-      ...claims,
-    } as never,
   );
   return Object.assign(uc, { __createUc: create }) as UsahaContributionUseCases & {
     __createUc: { execute: ReturnType<typeof vi.fn> };
@@ -115,6 +110,31 @@ describe("UsahaContributionUseCases - usulan baru", () => {
     expect(contrib.create).toHaveBeenCalledWith(
       expect.objectContaining({ wantsClaim: true }),
     );
+  });
+
+  it("usulan baru memberitahu grup setelah tersimpan", async () => {
+    const contrib = makeContrib();
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const usaha = makeUsaha();
+    const uc = new UsahaContributionUseCases(
+      contrib as never,
+      usaha as never,
+      regions as never,
+      { execute: vi.fn() } as never,
+      new UniqueUsahaSlugUseCase(usaha as never),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { notify },
+    );
+    await uc.submit("USER1", { payload: newPayload, wantsClaim: false });
+    expect(notify).toHaveBeenCalledWith({
+      jenis: "Usaha",
+      name: "Usaha Baru",
+      userId: "USER1",
+      resubmit: false,
+    });
   });
 
   it("tolak nama < 3 karakter", async () => {
@@ -164,6 +184,69 @@ describe("UsahaContributionUseCases - usulan baru", () => {
     await expect(
       uc.submit("USER1", { payload: newPayload, wantsClaim: false }),
     ).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("UsahaContributionUseCases - usulan perubahan publik", () => {
+  it("anonim ditolak", async () => {
+    const uc = build(makeContrib(), makeUsaha());
+    await expect(
+      uc.submitSuggestEdit(ANONIM_USER_ID, {
+        slug: "warung-kopi",
+        payload: { phone: "0812999" },
+        fields: ["phone"],
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("non-manager boleh suggest-edit (kind=profile)", async () => {
+    const contrib = makeContrib();
+    const usaha = makeUsaha({
+      findBySlug: vi.fn().mockResolvedValue({
+        id: "U1",
+        managerId: "USER1",
+        publishStatus: "published",
+        updatedAt: NOW,
+        createdAt: NOW,
+      }),
+    });
+    const uc = build(contrib, usaha);
+    await uc.submitSuggestEdit("USER2", {
+      slug: "warung-kopi",
+      payload: { phone: "0812999" },
+      fields: ["phone"],
+    });
+    expect(contrib.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "profile",
+        userId: "USER2",
+        usahaId: "U1",
+        lockedFields: "phone",
+      }),
+    );
+  });
+
+  it("field-lock berlaku juga untuk suggest-edit", async () => {
+    const contrib = makeContrib({
+      pendingLockedFields: vi.fn().mockResolvedValue(["phone"]),
+    });
+    const usaha = makeUsaha({
+      findBySlug: vi.fn().mockResolvedValue({
+        id: "U1",
+        managerId: null,
+        publishStatus: "published",
+        updatedAt: NOW,
+        createdAt: NOW,
+      }),
+    });
+    const uc = build(contrib, usaha);
+    await expect(
+      uc.submitSuggestEdit("USER2", {
+        slug: "warung-kopi",
+        payload: { phone: "0812999" },
+        fields: ["phone"],
+      }),
+    ).rejects.toMatchObject({ errorCode: "PENDING_FIELD_LOCK" });
   });
 });
 
@@ -304,11 +387,7 @@ describe("UsahaContributionUseCases - approve per kind", () => {
     });
   });
 
-  it("kind=new + wants_claim membuat klaim pending", async () => {
-    const claims = {
-      create: vi.fn().mockResolvedValue({ id: "CLAIM1" }),
-      findPendingByUser: vi.fn().mockResolvedValue(null),
-    };
+  it("kind=new + wants_claim tetap approve tanpa klaim otomatis (bukti gambar terpisah)", async () => {
     const contrib = makeContrib({
       findById: vi.fn().mockResolvedValue(
         pendingRow({
@@ -320,15 +399,14 @@ describe("UsahaContributionUseCases - approve per kind", () => {
         }),
       ),
     });
-    const uc = build(contrib, makeUsaha(), claims);
+    const uc = build(contrib, makeUsaha());
     await uc.approve("C1", "ADMIN");
-    expect(claims.create).toHaveBeenCalledWith(
-      expect.objectContaining({ usahaId: "U_NEW", userId: "USER1" }),
-    );
+    expect(contrib.setStatus).toHaveBeenCalledWith("C1", "approved", {
+      resultUsahaId: "U_NEW",
+    });
   });
 
-  it("kind=new anonim tidak membuat klaim", async () => {
-    const claims = { create: vi.fn(), findPendingByUser: vi.fn() };
+  it("kind=new anonim + wants_claim tetap approve tanpa klaim", async () => {
     const contrib = makeContrib({
       findById: vi.fn().mockResolvedValue(
         pendingRow({
@@ -341,9 +419,11 @@ describe("UsahaContributionUseCases - approve per kind", () => {
         }),
       ),
     });
-    const uc = build(contrib, makeUsaha(), claims);
+    const uc = build(contrib, makeUsaha());
     await uc.approve("C1", "ADMIN");
-    expect(claims.create).not.toHaveBeenCalled();
+    expect(contrib.setStatus).toHaveBeenCalledWith("C1", "approved", {
+      resultUsahaId: "U_NEW",
+    });
   });
 
   it("profile hanya menerapkan field terkunci (phone ikut isi whatsapp)", async () => {

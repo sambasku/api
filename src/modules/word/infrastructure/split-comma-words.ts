@@ -7,10 +7,17 @@ import {
   meanings,
   words,
 } from '@/shared/database/drizzle/schema';
+import { normalizeLemma } from '../application/utils/normalize-lemma';
 import {
   normalizeSplitParts,
   splitCommaParts,
 } from '../application/utils/split-comma-parts';
+import {
+  loadActiveMeaningIdentities,
+  meaningDeduplicationFingerprint,
+  meaningDedupeKey,
+} from '../application/utils/meaning-deduplication';
+import { throwDuplicateMeaningConflict } from '../application/utils/throw-duplicate-meaning-conflict';
 import type {
   CommaSplitCandidates,
   CommaSplitLemmaCandidate,
@@ -71,7 +78,7 @@ export async function applyCommaSplitLemmaInTx(
   await tx
     .update(words)
     .set({
-      lemma: cleaned[0],
+      lemma: normalizeLemma(cleaned[0]!),
       lemmaAllowsComma: false,
       updatedBy: actorId,
       updatedAt: now,
@@ -136,7 +143,7 @@ export async function applyCommaSplitLemmaInTx(
   const firstMeaning = sourceMeanings[0];
 
   for (let i = 0; i < aligned.length; i++) {
-    const lemma = cleaned[i + 1]!;
+    const lemma = normalizeLemma(cleaned[i + 1]!);
     const override = aligned[i]!;
     const replacing = override.mode === 'replace';
     const newWordId = generateId();
@@ -177,6 +184,13 @@ export async function applyCommaSplitLemmaInTx(
         isVerified: firstMeaning?.isVerified ?? source.isVerified,
         isCorrected: false,
         createdBy: actorId,
+        dedupeKey: meaningDedupeKey({
+          definition: definitionText,
+          translations: targetLanguageId
+            ? [{ languageId: targetLanguageId, translationText: override.translationText.trim() }]
+            : [],
+          wordClassId: override.wordClassId,
+        }),
       });
       await tx.insert(meaningTranslations).values({
         meaningId: newMeaningId,
@@ -196,37 +210,52 @@ export async function applyCommaSplitLemmaInTx(
       continue;
     }
 
+    const keptByFp = new Map<string, string>();
     for (const m of sourceMeanings) {
-      const newMeaningId = generateId();
-      await tx.insert(meanings).values({
-        id: newMeaningId,
-        wordId: newWordId,
-        wordClassId: m.wordClassId,
-        inheritedFromMeaningId: null,
-        definition: m.definition,
-        isHaveDefinition: m.isHaveDefinition,
-        isHaveTranslation: m.isHaveTranslation,
-        orderIndex: m.orderIndex,
-        notes: m.notes,
-        status: m.status,
-        isVerified: m.isVerified,
-        isCorrected: false,
-        createdBy: actorId,
-      });
-
       const translations = translationsByMeaning.get(m.id) ?? [];
-      if (translations.length > 0) {
-        await tx.insert(meaningTranslations).values(
-          translations.map((t) => ({
-            meaningId: newMeaningId,
-            languageId: t.languageId,
-            translationText: t.translationText,
-            translationType: t.translationType,
-            translationAllowsComma: t.translationAllowsComma ?? false,
-            notes: t.notes,
-            createdBy: actorId,
-          })),
-        );
+      const fp = meaningDeduplicationFingerprint({
+        definition: m.definition,
+        translations,
+        wordClassId: m.wordClassId,
+      });
+      const keptId = keptByFp.get(fp);
+      const newMeaningId = keptId ?? generateId();
+      if (!keptId) {
+        keptByFp.set(fp, newMeaningId);
+        await tx.insert(meanings).values({
+          id: newMeaningId,
+          wordId: newWordId,
+          wordClassId: m.wordClassId,
+          inheritedFromMeaningId: null,
+          definition: m.definition,
+          isHaveDefinition: m.isHaveDefinition,
+          isHaveTranslation: m.isHaveTranslation,
+          orderIndex: m.orderIndex,
+          notes: m.notes,
+          status: m.status,
+          isVerified: m.isVerified,
+          isCorrected: false,
+          createdBy: actorId,
+          dedupeKey: meaningDedupeKey({
+            definition: m.definition,
+            translations,
+            wordClassId: m.wordClassId,
+          }),
+        });
+
+        if (translations.length > 0) {
+          await tx.insert(meaningTranslations).values(
+            translations.map((t) => ({
+              meaningId: newMeaningId,
+              languageId: t.languageId,
+              translationText: t.translationText,
+              translationType: t.translationType,
+              translationAllowsComma: t.translationAllowsComma ?? false,
+              notes: t.notes,
+              createdBy: actorId,
+            })),
+          );
+        }
       }
 
       const exRows = examplesByMeaning.get(m.id) ?? [];
@@ -261,7 +290,7 @@ export async function applyCommaSplitLemmaInTx(
 
   return {
     wordId,
-    keptLemma: cleaned[0]!,
+    keptLemma: normalizeLemma(cleaned[0]!),
     oldLemma: source.lemma,
     meanings: meaningSnapshots,
     created,
@@ -305,12 +334,42 @@ export async function applyCommaSplitTranslationInTx(
   }
 
   const [word] = await tx
-    .select({ id: words.id })
+    .select({ id: words.id, lemma: words.lemma })
     .from(words)
     .where(and(eq(words.id, meaning.wordId), isNull(words.deletedAt)))
     .limit(1);
   if (!word) {
     throw new Error('WORD_NOT_FOUND');
+  }
+
+  const identities = await loadActiveMeaningIdentities(tx, meaning.wordId);
+  const current = identities.find((row) => row.id === meaning.id);
+  const keptTranslations = (current?.translations ?? []).map((row) =>
+    row.languageId === tr.languageId
+      ? { languageId: row.languageId, translationText: cleaned[0]! }
+      : row,
+  );
+  if (!keptTranslations.some((row) => row.languageId === tr.languageId)) {
+    keptTranslations.push({ languageId: tr.languageId, translationText: cleaned[0]! });
+  }
+  const keptIdentity = {
+    definition: meaning.definition,
+    translations: keptTranslations,
+    wordClassId: meaning.wordClassId,
+  };
+  const keptFp = meaningDeduplicationFingerprint(keptIdentity);
+  const taken = new Set(
+    identities.filter((row) => row.id !== meaning.id).map((row) => row.fingerprint),
+  );
+  const keptClash = identities.find((row) => row.id !== meaning.id && row.fingerprint === keptFp);
+  if (keptClash) {
+    throwDuplicateMeaningConflict({
+      wordId: word.id,
+      meaningId: keptClash.id,
+      lemma: word.lemma,
+      definition: keptClash.definition,
+      translationText: keptClash.translations[0]?.translationText ?? cleaned[0]!,
+    });
   }
 
   const now = new Date();
@@ -324,6 +383,16 @@ export async function applyCommaSplitTranslationInTx(
     })
     .where(eq(meaningTranslations.id, meaningTranslationId));
 
+  await tx
+    .update(meanings)
+    .set({
+      dedupeKey: meaningDedupeKey(keptIdentity),
+      updatedAt: now,
+      updatedBy: actorId,
+    })
+    .where(eq(meanings.id, meaning.id));
+  taken.add(keptFp);
+
   const meaningIds = [meaning.id];
 
   const [maxRow] = await tx
@@ -333,6 +402,15 @@ export async function applyCommaSplitTranslationInTx(
   let nextOrder = Number(maxRow?.max ?? -1) + 1;
 
   for (const translation of cleaned.slice(1)) {
+    const partIdentity = {
+      definition: meaning.definition,
+      translations: [{ languageId: tr.languageId, translationText: translation }],
+      wordClassId: meaning.wordClassId,
+    };
+    const partFp = meaningDeduplicationFingerprint(partIdentity);
+    if (taken.has(partFp)) continue;
+    taken.add(partFp);
+
     const newMeaningId = generateId();
     await tx.insert(meanings).values({
       id: newMeaningId,
@@ -348,6 +426,7 @@ export async function applyCommaSplitTranslationInTx(
       isVerified: meaning.isVerified,
       isCorrected: false,
       createdBy: actorId,
+      dedupeKey: meaningDedupeKey(partIdentity),
     });
 
     await tx.insert(meaningTranslations).values({

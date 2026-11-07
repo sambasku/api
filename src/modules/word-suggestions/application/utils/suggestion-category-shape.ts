@@ -85,17 +85,24 @@ export function checkSuggestionCategoryShape(
 
   switch (code) {
     case 'change_meaning': {
-      const m = oneMeaning();
-      if (!m) break;
-      if (m.action !== 'update' || !m.meaningId) {
-        issues.push({ field: 'meanings', message: 'Pilih makna yang ingin diubah' });
-      }
-      if (m.wordClassId !== undefined) {
-        issues.push({ field: 'meanings.word_class_id', message: 'Kelas kata diubah lewat kategori Ubah kelas kata' });
-      }
-      if (m.definition === undefined && !m.translations?.length) {
-        issues.push({ field: 'meanings', message: 'Isi definisi atau padanan yang baru' });
-      }
+      // #230: satu usulan boleh mengubah beberapa makna sekaligus.
+      const seen = new Set<string>();
+      meanings.forEach((m, i) => {
+        const at = `meanings.${i}`;
+        if (m.action !== 'update' || !m.meaningId) {
+          issues.push({ field: at, message: 'Pilih makna yang ingin diubah' });
+        } else if (seen.has(m.meaningId)) {
+          issues.push({ field: at, message: 'Makna yang sama tidak boleh diusulkan dua kali' });
+        } else {
+          seen.add(m.meaningId);
+        }
+        if (m.wordClassId !== undefined) {
+          issues.push({ field: `${at}.word_class_id`, message: 'Kelas kata diubah lewat kategori Ubah kelas kata' });
+        }
+        if (m.definition === undefined && !m.translations?.length) {
+          issues.push({ field: at, message: 'Isi definisi atau padanan yang baru' });
+        }
+      });
       break;
     }
     case 'change_word_class': {

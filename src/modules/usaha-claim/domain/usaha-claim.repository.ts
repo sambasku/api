@@ -1,6 +1,7 @@
 import type { UsahaClaimStatus } from '@/shared/database/drizzle/schema/usaha-claims.schema';
 import type {
   UsahaClaim,
+  UsahaClaimEvidenceImage,
   UsahaClaimWithUsaha,
 } from './usaha-claim.entity';
 
@@ -8,7 +9,8 @@ export interface UsahaClaimRepository {
   create(input: {
     usahaId: string;
     userId: string;
-    contactEvidence: string;
+    contactEvidence?: string | null;
+    evidenceImages: UsahaClaimEvidenceImage[];
     note?: string | null;
   }): Promise<UsahaClaim>;
   findById(id: string): Promise<UsahaClaim | null>;

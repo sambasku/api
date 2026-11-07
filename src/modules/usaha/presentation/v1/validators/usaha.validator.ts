@@ -102,6 +102,14 @@ export const usahaVillageRefSchema = z.object({
   slug: z.string().nullable(),
 });
 
+export const usahaRegionRefSchema = usahaVillageRefSchema;
+
+export const usahaAuthorRefSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  display_name: z.string(),
+});
+
 export const usahaItemResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -120,6 +128,7 @@ export const usahaResponseSchema = z.object({
   category: usahaCategoryRefSchema.nullable(),
   kind: usahaKindSchema,
   region_id: z.string().nullable(),
+  region: usahaRegionRefSchema.nullable(),
   village_id: z.string().nullable(),
   village: usahaVillageRefSchema.nullable(),
   address_text: z.string().nullable(),
@@ -137,6 +146,8 @@ export const usahaResponseSchema = z.object({
   restricted_at: z.string().nullable(),
   manager_id: z.string().nullable(),
   author_id: z.string().nullable(),
+  author: usahaAuthorRefSchema.nullable(),
+  manager: usahaAuthorRefSchema.nullable().optional(),
   published_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().nullable(),

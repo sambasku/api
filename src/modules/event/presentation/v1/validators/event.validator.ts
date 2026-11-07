@@ -105,21 +105,63 @@ export const updateEventBodySchema = z
     }
   });
 
-export const listEventsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(500).default(50),
-  before: z.string().min(1).max(64).optional(),
-  category_id: eventCategorySchema.optional(),
-  village_id: z.string().max(64).optional(),
-  /** Filter kecamatan: ULID atau slug katalog publik. */
-  region_id: z.string().max(64).optional(),
-  place_id: z.string().max(64).optional(),
-  q: z.string().max(120).optional(),
-  status: eventStatusSchema.optional(),
-  /** "1" = hanya acara yang belum selesai. */
-  not_ended: z.literal("1").optional(),
-  /** Urutan: "asc" = paling dekat dulu, "desc" = terbaru dulu. */
-  order: z.enum(["asc", "desc"]).optional(),
-});
+/** Max rentang overlap (hari) - satu bulan + buffer, hindari dump katalog. */
+const OVERLAPS_MAX_DAYS = 45;
+
+export const listEventsQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(500).default(50),
+    before: z.string().min(1).max(64).optional(),
+    category_id: eventCategorySchema.optional(),
+    village_id: z.string().max(64).optional(),
+    /** Filter kecamatan: ULID atau slug katalog publik. */
+    region_id: z.string().max(64).optional(),
+    place_id: z.string().max(64).optional(),
+    q: z.string().max(120).optional(),
+    status: eventStatusSchema.optional(),
+    /** "1" = hanya acara yang belum selesai. */
+    not_ended: z.literal("1").optional(),
+    /** Urutan by created_at (diabaikan bila overlaps_from/to aktif). */
+    order: z.enum(["asc", "desc"]).optional(),
+    /**
+     * Awal window overlap (ISO). Wajib berpasangan dengan overlaps_to.
+     * Acara cocok bila starts_at < overlaps_to AND ends_at >= overlaps_from.
+     */
+    overlaps_from: z.coerce.date().optional(),
+    overlaps_to: z.coerce.date().optional(),
+  })
+  .superRefine((v, ctx) => {
+    const hasFrom = v.overlaps_from != null;
+    const hasTo = v.overlaps_to != null;
+    if (hasFrom !== hasTo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "overlaps_from dan overlaps_to harus dikirim berpasangan",
+        path: [hasFrom ? "overlaps_to" : "overlaps_from"],
+      });
+      return;
+    }
+    if (!hasFrom || !hasTo) return;
+    if (v.overlaps_to!.getTime() <= v.overlaps_from!.getTime()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "overlaps_to harus setelah overlaps_from",
+        path: ["overlaps_to"],
+      });
+      return;
+    }
+    const days =
+      (v.overlaps_to!.getTime() - v.overlaps_from!.getTime()) /
+      (24 * 60 * 60 * 1000);
+    if (days > OVERLAPS_MAX_DAYS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Rentang overlaps maksimal ${OVERLAPS_MAX_DAYS} hari`,
+        path: ["overlaps_to"],
+      });
+    }
+  });
 
 export const eventPlaceRefSchema = z.object({
   id: z.string(),
@@ -178,6 +220,15 @@ export const eventResponseSchema = z.object({
   status: eventStatusSchema,
   cancelled_at: z.string().nullable(),
   published_at: z.string().nullable(),
+  author_id: z.string().nullable().optional(),
+  author: z
+    .object({
+      id: z.string(),
+      username: z.string(),
+      display_name: z.string(),
+    })
+    .nullable()
+    .optional(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });

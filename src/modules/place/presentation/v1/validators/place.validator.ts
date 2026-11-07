@@ -144,6 +144,14 @@ export const placeItemResponseSchema = z.object({
     hours: z.string().nullable(),
     contact: z.string().nullable(),
     author_id: z.string().nullable(),
+    author: z
+      .object({
+        id: z.string(),
+        username: z.string(),
+        display_name: z.string(),
+      })
+      .nullable()
+      .optional(),
     sources: z.array(
       z.object({
         name: z.string(),

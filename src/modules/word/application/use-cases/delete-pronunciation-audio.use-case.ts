@@ -4,7 +4,7 @@ import type { PronunciationStoragePort } from '../ports/pronunciation-storage.po
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { Actor } from './create-word.use-case';
 
-const DELETE_ROLES = new Set(['admin', 'editor', 'root']);
+const DELETE_ROLES = new Set(['admin', 'editor', 'root', 'reviewer']);
 
 /**
  * Soft-delete baris word_audios + best-effort hapus file di storage.
@@ -18,7 +18,10 @@ export class DeletePronunciationAudioUseCase {
 
   async execute(wordId: string, audioId: string, actor: Actor): Promise<void> {
     if (!DELETE_ROLES.has(actor.role)) {
-      throw new ForbiddenError('FORBIDDEN', 'Hanya admin/editor yang boleh menghapus audio');
+      throw new ForbiddenError(
+        'FORBIDDEN',
+        'Hanya verifikator (admin/editor/reviewer) yang boleh menghapus audio',
+      );
     }
 
     const word = await this.wordRepo.findById(wordId);

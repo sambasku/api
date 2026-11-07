@@ -120,7 +120,7 @@ export function createWordMediaRoutes(deps: WordMediaRoutesDeps) {
     method: 'delete',
     path: '/:wordId/pronunciations/audio/{audioId}',
     tags: ['Words'],
-    summary: 'Soft-delete audio pelafalan (admin/editor/root)',
+    summary: 'Soft-delete audio pelafalan (admin/editor/root/reviewer)',
     request: {
       params: z.object({
         wordId: z.string().length(26),

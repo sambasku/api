@@ -155,6 +155,7 @@ import { ListCommaSplitsUseCase } from "@/modules/word/application/use-cases/lis
 import { ApplyCommaSplitUseCase } from "@/modules/word/application/use-cases/apply-comma-split.use-case";
 import { MarkCommaLiteralUseCase } from "@/modules/word/application/use-cases/mark-comma-literal.use-case";
 import { VerifyWordUseCase } from "@/modules/word/application/use-cases/verify-word.use-case";
+import { SyncLiveWordContributionsUseCase } from "@/modules/contribution/application/use-cases/sync-live-word-contributions.use-case";
 import { PublishWordUseCase } from "@/modules/word/application/use-cases/publish-word.use-case";
 import { SoftDeleteWordUseCase } from "@/modules/word/application/use-cases/soft-delete-word.use-case";
 import { BulkWordsActionUseCase } from "@/modules/word/application/use-cases/bulk-words-action.use-case";
@@ -236,6 +237,24 @@ import {
   createAdminAnnouncementRoutes,
   createPublicAnnouncementRoutes,
 } from "@/modules/announcement/presentation/v1/announcement.routes";
+import { AboutRepositoryImpl } from "@/modules/about/infrastructure/about.repository.impl";
+import {
+  CreateSponsorshipUseCase,
+  DeleteSponsorshipUseCase,
+  ListAdminSponsorshipsUseCase,
+  ListContributorsUseCase,
+  ListPublicSponsorshipsUseCase,
+  ListTeamUseCase,
+  ListVerifiersUseCase,
+  SetUserSponsorUseCase,
+  UpdateSponsorshipUseCase,
+} from "@/modules/about/application/use-cases/about.use-cases";
+import { AboutController } from "@/modules/about/presentation/v1/about.controller";
+import {
+  createAdminSponsorshipRoutes,
+  createPublicAboutRoutes,
+  createPublicAboutUserListRoutes,
+} from "@/modules/about/presentation/v1/about.routes";
 import { AchievementRepositoryImpl } from "@/modules/achievement/infrastructure/achievement.repository.impl";
 import {
   CreateAchievementUseCase,
@@ -329,7 +348,10 @@ import {
   CreateUsahaUseCase,
   DeleteUsahaUseCase,
   FindUsahaDuplicatesUseCase,
+  AppendUsahaImagesUseCase,
   GetUsahaBySlugUseCase,
+  HideUsahaImageUseCase,
+  ListUsahaImagesUseCase,
   ListUsahaCategoriesUseCase,
   ListUsahasUseCase,
   RestoreUsahaUseCase,
@@ -542,6 +564,39 @@ import {
   createPantunReportRoutes,
   createAdminPantunReportRoutes,
 } from "@/modules/pantun-report/presentation/v1/pantun-report.routes";
+// Ensiklopedia (artikel + kontribusi + komentar + laporan)
+import { EncyclopediaRepositoryImpl } from "@/modules/encyclopedia/infrastructure/encyclopedia.repository.impl";
+import {
+  CreateArticleUseCase,
+  GetArticleBySlugUseCase,
+  ListArticleRevisionsUseCase,
+  ListArticlesUseCase,
+  ListEncyclopediaCategoriesUseCase,
+  MergeTagUseCase,
+  RestoreArticleRevisionUseCase,
+  SearchArticlesUseCase,
+  SetArticleStatusUseCase,
+  UpdateArticleUseCase,
+} from "@/modules/encyclopedia/application/use-cases/article.use-cases";
+import {
+  CreateArticleCommentUseCase,
+  DeleteArticleCommentUseCase,
+  ListArticleCommentsUseCase,
+  ListArticleContributionsUseCase,
+  ListMyArticleContributionsUseCase,
+  ResubmitArticleContributionUseCase,
+  ReviewArticleContributionUseCase,
+  SubmitArticleContributionUseCase,
+  TakedownArticleCommentUseCase,
+  ToggleArticleBookmarkUseCase,
+  UpdateArticleCommentUseCase,
+} from "@/modules/encyclopedia/application/use-cases/encyclopedia-contribution.use-cases";
+import { ArticleReportUseCases } from "@/modules/encyclopedia/application/use-cases/article-report.use-cases";
+import { EncyclopediaController } from "@/modules/encyclopedia/presentation/v1/encyclopedia.controller";
+import {
+  createAdminEncyclopediaRoutes,
+  createEncyclopediaRoutes,
+} from "@/modules/encyclopedia/presentation/v1/encyclopedia.routes";
 import { CreatePantunUseCase } from "@/modules/pantun/application/use-cases/create-pantun.use-case";
 import { CreatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply.use-case";
 import { ListPublishedPantunsUseCase } from "@/modules/pantun/application/use-cases/list-published-pantuns.use-case";
@@ -588,7 +643,10 @@ import { VoteController } from "@/modules/vote/presentation/v1/vote.controller";
 import { createVoteRoutes } from "@/modules/vote/presentation/v1/vote.routes";
 import { AdminVotesController } from "@/modules/vote/presentation/v1/admin-vote.controller";
 import { createAdminVoteRoutes } from "@/modules/vote/presentation/v1/admin-vote.routes";
+import { WordVotersController } from "@/modules/vote/presentation/v1/word-voters.controller";
+import { createAdminWordVotersRoutes } from "@/modules/vote/presentation/v1/word-voters.routes";
 import { ListAdminVotesUseCase } from "@/modules/vote/application/use-cases/list-admin-votes.use-case";
+import { ListWordVotersUseCase } from "@/modules/vote/application/use-cases/list-word-voters.use-case";
 import { DeleteAdminVoteUseCase } from "@/modules/vote/application/use-cases/delete-admin-vote.use-case";
 import { ResetTargetVotesUseCase } from "@/modules/vote/application/use-cases/reset-target-votes.use-case";
 import { ResetVotesByClientUseCase } from "@/modules/vote/application/use-cases/reset-votes-by-client.use-case";
@@ -719,7 +777,8 @@ import {
   WaMessageLogRepositoryImpl,
   WaUsageRepositoryImpl,
 } from "@/modules/wa/infrastructure/wa-message.repository.impl";
-import { KapsoWaSender } from "@/modules/wa/infrastructure/kapso-wa.sender";
+import { OpenWaExplorationGroupNotifier } from "@/modules/wa/infrastructure/openwa-exploration-group.notifier";
+import { OpenWaSender } from "@/modules/wa/infrastructure/openwa-wa.sender";
 import { SendWaMessageUseCase } from "@/modules/wa/application/use-cases/send-wa-message.use-case";
 import { SendVerifierWaNotificationUseCase } from "@/modules/wa/application/use-cases/send-verifier-wa.use-case";
 import { createWaAdminRoutes } from "@/modules/wa/presentation/v1/wa-admin.routes";
@@ -1077,7 +1136,12 @@ const onAnonRateLimited = async (ctx: {
     signal: "rate_lockout",
   });
 };
-const publishWord = new PublishWordUseCase(wordRepo, auditRepo);
+const contributionRepo = new ContributionRepositoryImpl(db);
+const syncLiveWordContributions = new SyncLiveWordContributionsUseCase(
+  contributionRepo,
+  recordInbox,
+);
+const publishWord = new PublishWordUseCase(wordRepo, auditRepo, syncLiveWordContributions);
 const softDeleteWord = new SoftDeleteWordUseCase(wordRepo, auditRepo);
 const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
 const wordController = new WordController({
@@ -1088,6 +1152,7 @@ const wordController = new WordController({
     recordAbuseSignal,
     recordAnonAbuseSignal,
     activityEventRepo,
+    syncLiveWordContributions,
   ),
   update: new UpdateWordUseCase(wordRepo, auditRepo),
   getById: new GetWordByIdUseCase(wordRepo),
@@ -1102,7 +1167,7 @@ const wordController = new WordController({
   listCommaSplits: new ListCommaSplitsUseCase(wordRepo),
   applyCommaSplit: new ApplyCommaSplitUseCase(wordRepo, auditRepo),
   markCommaLiteral: new MarkCommaLiteralUseCase(wordRepo, auditRepo),
-  verify: new VerifyWordUseCase(wordRepo, auditRepo),
+  verify: new VerifyWordUseCase(wordRepo, auditRepo, syncLiveWordContributions),
   publish: publishWord,
   deleteWord: softDeleteWord,
   bulkWords: new BulkWordsActionUseCase(softDeleteWord, publishWord),
@@ -1159,7 +1224,6 @@ const wordController = new WordController({
 // ---- Modul contribution - antrean review (Section 22 approval gate,
 // 03-api-kontribusi-verifikasi.md). Baca entity word lewat interface
 // WordRepository (batas modul Section 4). ----
-const contributionRepo = new ContributionRepositoryImpl(db);
 const userSkipRepo = new UserSkipRepository(db);
 const contributionController = new ContributionController({
   list: new ListContributionsUseCase(contributionRepo),
@@ -1211,6 +1275,21 @@ const languageController = new LanguageController({
   listDialects: new ListDialectsUseCase(languageRepo),
 });
 
+// ---- Modul about: Tim Kami + sponsorships (pengganti CDN). ----
+const aboutRepo = new AboutRepositoryImpl(db);
+const setUserSponsorUseCase = new SetUserSponsorUseCase(aboutRepo);
+const aboutController = new AboutController({
+  listTeam: new ListTeamUseCase(aboutRepo),
+  listPublicSponsorships: new ListPublicSponsorshipsUseCase(aboutRepo),
+  listAdminSponsorships: new ListAdminSponsorshipsUseCase(aboutRepo),
+  createSponsorship: new CreateSponsorshipUseCase(aboutRepo),
+  updateSponsorship: new UpdateSponsorshipUseCase(aboutRepo),
+  deleteSponsorship: new DeleteSponsorshipUseCase(aboutRepo),
+  setUserSponsor: setUserSponsorUseCase,
+  listContributors: new ListContributorsUseCase(aboutRepo),
+  listVerifiers: new ListVerifiersUseCase(aboutRepo),
+});
+
 // ---- Modul announcement (#102) - pengumuman admin tayang di feed publik.
 // Write-through activity_events (payload beku) + soft delete hide event. ----
 const announcementRepo = new AnnouncementRepositoryImpl(db);
@@ -1252,6 +1331,10 @@ const placeCategoryController = new PlaceCategoryController(
 );
 
 const regionRepo = new RegionRepositoryImpl(db);
+const explorationGroupNotifier = new OpenWaExplorationGroupNotifier(
+  userRepo,
+  new WaMessageLogRepositoryImpl(db),
+);
 const placeContributionController = new PlaceContributionController(
   new PlaceContributionUseCases(
     new PlaceContributionRepositoryImpl(db),
@@ -1263,6 +1346,7 @@ const placeContributionController = new PlaceContributionController(
     new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
     recordInbox,
     notifyUser,
+    explorationGroupNotifier,
   ),
 );
 const regionController = new RegionController(
@@ -1292,6 +1376,7 @@ const eventContributionController = new EventContributionController(
     new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
     recordInbox,
     notifyUser,
+    explorationGroupNotifier,
   ),
 );
 
@@ -1316,6 +1401,9 @@ const usahaController = new UsahaController(
   new RestoreUsahaUseCase(usahaRepo),
   new ListUsahaCategoriesUseCase(usahaRepo),
   new FindUsahaDuplicatesUseCase(usahaRepo),
+  new ListUsahaImagesUseCase(usahaRepo),
+  new AppendUsahaImagesUseCase(usahaRepo, userRepo, activityEvents),
+  new HideUsahaImageUseCase(usahaRepo),
 );
 const usahaContributionRepo = new UsahaContributionRepositoryImpl(db);
 const usahaClaimRepo = new UsahaClaimRepositoryImpl(db);
@@ -1325,11 +1413,11 @@ const usahaContributionUseCases = new UsahaContributionUseCases(
   regionRepo,
   createUsahaUc,
   new UniqueUsahaSlugUseCase(usahaRepo),
-  usahaClaimRepo,
   auditRepo,
   recordInbox,
   notifyUser,
   activityEventRepo,
+  explorationGroupNotifier,
 );
 const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
@@ -1389,6 +1477,7 @@ const culinaryContributionUseCases = new CulinaryContributionUseCases(
   recordInbox,
   notifyUser,
   activityEventRepo,
+  explorationGroupNotifier,
 );
 const culinaryContributionController = new CulinaryContributionController(
   culinaryContributionUseCases,
@@ -1464,6 +1553,10 @@ const adminVotesController = new AdminVotesController({
   resetTarget: new ResetTargetVotesUseCase(voteRepo, auditRepo),
   resetByClient: new ResetVotesByClientUseCase(voteRepo, auditRepo),
   topTargets: new GetTopTargetVotesUseCase(voteRepo),
+});
+
+const wordVotersController = new WordVotersController({
+  list: new ListWordVotersUseCase(voteRepo),
 });
 
 // ---- Modul dashboard - statistik agregat halaman admin (kata, kontribusi,
@@ -1951,6 +2044,15 @@ app.route(
   "/api/v1/admin/words",
   createAdminWordRoutes({ controller: wordController, authenticate }),
 );
+// Voter makna per kata (moderasi) - mount terpisah supaya modul vote tidak
+// digabung ke word.routes; path /:wordId/voters tidak bentrok dengan /:id.
+app.route(
+  "/api/v1/admin/words",
+  createAdminWordVotersRoutes({
+    controller: wordVotersController,
+    authenticate,
+  }),
+);
 // Kontribusi media (pronounce/gambar/contoh) DI-MOUNT SEBELUM public routes -
 // public punya rate limit IP 100/menit global (use '*'), limit per-user 30/menit
 // tetap jadi batas efektif; urutan mount menentukan middleware yang berlaku
@@ -2091,6 +2193,11 @@ app.route(
     requireApprovedClient: requireProfileWriteClient,
   }),
 );
+// Contributors/verifiers SEBELUM /:username (hindari bentrok path).
+app.route(
+  "/api/v1/users",
+  createPublicAboutUserListRoutes({ controller: aboutController }),
+);
 app.route(
   "/api/v1/users",
   createPublicUserRoutes({ controller: userController }),
@@ -2099,6 +2206,17 @@ app.route(
 app.route(
   "/api/v1/users",
   createPublicUserAchievementsRoutes({ controller: achievementController }),
+);
+app.route(
+  "/api/v1/about",
+  createPublicAboutRoutes({ controller: aboutController }),
+);
+app.route(
+  "/api/v1/admin/sponsorships",
+  createAdminSponsorshipRoutes({
+    controller: aboutController,
+    authenticate,
+  }),
 );
 
 const publicImageController = new PublicImageController({
@@ -2733,6 +2851,89 @@ app.route(
   }),
 );
 
+// ------------------------------------------------------------------
+// Ensiklopedia: artikel (markdown), kontribusi user, komentar, laporan.
+const encyclopediaRepo = new EncyclopediaRepositoryImpl(db);
+const encyclopediaController = new EncyclopediaController({
+  repo: encyclopediaRepo,
+  listArticles: new ListArticlesUseCase(encyclopediaRepo),
+  getArticle: new GetArticleBySlugUseCase(encyclopediaRepo),
+  searchArticles: new SearchArticlesUseCase(encyclopediaRepo),
+  listCategories: new ListEncyclopediaCategoriesUseCase(encyclopediaRepo),
+  createArticle: new CreateArticleUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    activityEvents,
+  ),
+  updateArticle: new UpdateArticleUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    activityEvents,
+  ),
+  setStatus: new SetArticleStatusUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    activityEvents,
+  ),
+  listRevisions: new ListArticleRevisionsUseCase(encyclopediaRepo),
+  restoreRevision: new RestoreArticleRevisionUseCase(encyclopediaRepo, auditRepo),
+  mergeTag: new MergeTagUseCase(encyclopediaRepo),
+  listComments: new ListArticleCommentsUseCase(encyclopediaRepo),
+  createComment: new CreateArticleCommentUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  updateComment: new UpdateArticleCommentUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  deleteComment: new DeleteArticleCommentUseCase(encyclopediaRepo),
+  takedownComment: new TakedownArticleCommentUseCase(encyclopediaRepo, auditRepo),
+  toggleBookmark: new ToggleArticleBookmarkUseCase(encyclopediaRepo),
+  submitContribution: new SubmitArticleContributionUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  resubmitContribution: new ResubmitArticleContributionUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  listMyContributions: new ListMyArticleContributionsUseCase(encyclopediaRepo),
+  listContributions: new ListArticleContributionsUseCase(encyclopediaRepo),
+  reviewContribution: new ReviewArticleContributionUseCase(
+    encyclopediaRepo,
+    auditRepo,
+    activityEvents,
+  ),
+  reports: new ArticleReportUseCases(db, encyclopediaRepo, auditRepo),
+});
+app.route(
+  "/api/v1/encyclopedia",
+  createEncyclopediaRoutes({
+    controller: encyclopediaController,
+    authenticate,
+    optionalAuthenticate,
+    requireApprovedClient: requireContributeWriteClient,
+    requireLegalConsent,
+  }),
+);
+app.route(
+  "/api/v1/admin/encyclopedia",
+  createAdminEncyclopediaRoutes({
+    controller: encyclopediaController,
+    authenticate,
+  }),
+);
+
 app.route(
   "/api/v1/admin/word-reports",
   createAdminWordReportRoutes({
@@ -2792,9 +2993,15 @@ const adminUsersController = new AdminUsersController({
     recordInbox,
   ),
   createUser: new CreateAdminUserUseCase(userRepo, hasher, auditRepo),
-setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
-verifyEmail: new AdminVerifyEmailUseCase(userRepo, otpRepo, auditRepo, activityEvents),
-listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
+  setActive: new SetUserActiveUseCase(userRepo, refreshTokenRepo, auditRepo),
+  verifyEmail: new AdminVerifyEmailUseCase(userRepo, otpRepo, auditRepo, activityEvents),
+  listAbuseEvents: new ListUserAbuseEventsUseCase(ugcAbuseEventRepo),
+  updateTeam: (id, data) => userRepo.updateTeam(id, data),
+  setUserSponsor: async (userId, isSponsor) => {
+    const row = await setUserSponsorUseCase.execute(userId, isSponsor);
+    return { isSponsor: row != null, sponsorshipId: row?.id ?? null };
+  },
+  listActiveSponsorUserIds: (ids) => aboutRepo.listActiveSponsorUserIds(ids),
 });
 app.route(
   "/api/v1/admin/users",
@@ -2826,12 +3033,12 @@ app.route(
 
 const verifierApplicationRepo = new VerifierApplicationRepositoryImpl(db);
 
-// WA (Kapso) - modul notifikasi WhatsApp + admin console (System > WhatsApp).
+// WA (OpenWA) - notifikasi verifikator + admin console (System > WhatsApp).
 const waTemplateRepo = new WaTemplateRepositoryImpl(db);
 const waLogRepo = new WaMessageLogRepositoryImpl(db);
 const waUsageRepo = new WaUsageRepositoryImpl(db);
 const sendWaMessage = new SendWaMessageUseCase(
-  [{ sender: new KapsoWaSender() }],
+  [{ sender: new OpenWaSender() }],
   waUsageRepo,
   waLogRepo,
   waTemplateRepo,
@@ -2918,6 +3125,7 @@ app.route(
   createEmailAdminRoutes({
     quotaRepo: emailQuotaRepo,
     logRepo: emailLogRepo,
+    mailer,
     authenticate,
   }),
 );

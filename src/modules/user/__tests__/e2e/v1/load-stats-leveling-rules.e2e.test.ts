@@ -124,6 +124,40 @@ describe.skipIf(!hasTestDb)('loadStats leveling rules e2e', () => {
       entityId: WORD_IMPORT,
       value: 1,
     });
+    const CAT = ulid26('01E2ECATLSR');
+    const ARTICLE_PUB = ulid26('01E2EARTPUB');
+    await db.insert(schema.encyclopediaCategories).values({
+      id: CAT,
+      name: 'Budaya',
+    });
+    await db.insert(schema.articles).values([
+      {
+        id: ARTICLE_PUB,
+        slug: 'artikel-tayang',
+        title: 'Artikel tayang',
+        bodyMd: 'Isi artikel.',
+        categoryId: CAT,
+        authorUserId: OWNER,
+        status: 'published',
+        publishedAt: new Date(),
+      },
+      {
+        id: ulid26('01E2EARTDRF'),
+        slug: 'artikel-draf',
+        title: 'Artikel draf',
+        bodyMd: 'Belum terbit.',
+        categoryId: CAT,
+        authorUserId: OWNER,
+        status: 'draft',
+      },
+    ]);
+    await db.insert(schema.votes).values({
+      id: ulid26('01LSRVOTA'),
+      userId: OTHER,
+      entityType: 'article',
+      entityId: ARTICLE_PUB,
+      value: 1,
+    });
   });
 
   it('impor 50% + self-verify 0 + vote_received 1', async () => {
@@ -142,10 +176,14 @@ describe.skipIf(!hasTestDb)('loadStats leveling rules e2e', () => {
     const expectedWord =
       POINT_WEIGHTS.word * IMPORT_POINT_FACTOR * scarcityMultiplier(2);
     const expectedVerify = POINT_WEIGHTS.verification; // hanya non-self
-    const expectedVote = POINT_WEIGHTS.vote_received;
-    const expected = Math.floor(expectedWord + expectedVerify + expectedVote);
+    const expectedVote = POINT_WEIGHTS.vote_received * 2; // kata + artikel
+    const expectedArticle = POINT_WEIGHTS.article; // draf tidak dihitung
+    const expected = Math.floor(
+      expectedWord + expectedVerify + expectedVote + expectedArticle,
+    );
 
     expect(stats.leveling.points).toBe(expected);
+    expect(stats.leveling.exploration).toBe(2); // 1 kata + 1 artikel terbit
     expect(stats.leveling.accuracy).toBe(1); // non-self verify saja (0 koreksi)
     expect(stats.verificationsDone).toBe(2); // self + other di stats klasik
   });

@@ -33,6 +33,7 @@ import type {
   PlaceEditPayload,
 } from '../domain/culinary-contribution.entity';
 import type { CulinaryContributionRepository } from '../domain/culinary-contribution.repository';
+import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
 
 const PENDING_CAP = 10;
 const MAX_IMAGES = 20;
@@ -80,6 +81,21 @@ function overlaps(a: string, b: string): boolean {
   if (!a || !b) return false;
   const setB = new Set(b.split(','));
   return a.split(',').some((f) => setB.has(f));
+}
+
+function culinaryJenis(kind: CulinaryContributionKind): string {
+  switch (kind) {
+    case 'new_cuisine':
+      return 'Kuliner';
+    case 'new_place':
+      return 'Tempat kuliner';
+    case 'cuisine_edit':
+      return 'Kuliner (perbaikan)';
+    case 'place_edit':
+      return 'Tempat kuliner (perbaikan)';
+    default:
+      return 'Kuliner (perbaikan)';
+  }
 }
 
 function decisionCopy(
@@ -137,7 +153,26 @@ export class CulinaryContributionUseCases {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
+
+  private async notifyGroup(
+    userId: string,
+    jenis: string,
+    name: string | undefined,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis,
+        name: name?.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
+  }
 
   // ------------------------------------------------------------- publik --
 
@@ -158,12 +193,18 @@ export class CulinaryContributionUseCases {
         'Maksimal 10 usulan yang masih menunggu',
       );
     }
-    return this.contrib.create({
+    const created = await this.contrib.create({
       kind: input.kind,
       userId,
       lockedFields: '',
       payload: this.withDefaultLicense(input.payload),
     });
+    await this.notifyGroup(
+      userId,
+      culinaryJenis(input.kind),
+      (input.payload as { name?: string }).name,
+    );
+    return created;
   }
 
   mine(userId: string) {
@@ -208,6 +249,12 @@ export class CulinaryContributionUseCases {
     await this.contrib.replacePayload(id, this.withDefaultLicense(input.payload), '');
     const updated = await this.contrib.findById(id);
     if (!updated) throw new Error('resubmit gagal - row hilang');
+    await this.notifyGroup(
+      userId,
+      culinaryJenis(input.kind),
+      (input.payload as { name?: string }).name,
+      true,
+    );
     return updated;
   }
 
@@ -678,7 +725,7 @@ export class CulinaryContributionUseCases {
     _createdAt: Date,
     target: { cuisineId?: string; placeId?: string; updatedAt: Date | null },
   ): Promise<CulinaryContribution> {
-    return this.contrib.create({
+    const created = await this.contrib.create({
       kind: input.kind,
       userId,
       cuisineId: target.cuisineId ?? null,
@@ -687,6 +734,12 @@ export class CulinaryContributionUseCases {
       payload: this.withDefaultLicense(input.payload),
       baseUpdatedAt: target.updatedAt ?? _createdAt,
     });
+    await this.notifyGroup(
+      userId,
+      culinaryJenis(input.kind),
+      (input.payload as { name?: string }).name,
+    );
+    return created;
   }
 
   private lockedFieldsFor(input: SubmitCulinaryChangeInput): string {

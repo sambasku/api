@@ -63,6 +63,7 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
   let app: any;
   let adminToken: string;
   let contributorToken: string;
+  let contributorEmail: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let db: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,9 +122,10 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
       email: `adm${stamp}@test.com`,
       code: capturedOtpDisplayCode(),
     });
+    contributorEmail = `kon${stamp}@test.com`;
     await post('/api/v1/auth/register', e2eRegisterBody({
         name: `kon${stamp}`,
-        email: `kon${stamp}@test.com`,
+        email: contributorEmail,
     }));
     await post('/api/v1/auth/verify-email', {
       email: `kon${stamp}@test.com`,
@@ -133,7 +135,7 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     if (__uid_121) await db.insert(userRoles).values({ userId: __uid_121.id, role: 'admin' }).onConflictDoNothing();
 
     adminToken = await login(`adm${stamp}@test.com`);
-    contributorToken = await login(`kon${stamp}@test.com`);
+    contributorToken = await login(contributorEmail);
   });
 
   it('POST /api/v1/admin/words (admin, published) → 201 langsung published', async () => {
@@ -444,6 +446,112 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     const detail = await request(`/api/v1/words/${data.word_id}`);
     expect(detail.status).toBe(200);
     expect((await detail.json()).data.is_verified).toBe(true);
+
+    const { and, eq } = await import('drizzle-orm');
+    const { contributionReviews, contributions, notifications } = await import(
+      '@/shared/database/drizzle/schema'
+    );
+    const [row] = await db
+      .select()
+      .from(contributions)
+      .where(and(eq(contributions.entityType, 'word'), eq(contributions.entityId, data.word_id)));
+    expect(row?.status).toBe('approved');
+    const reviews = await db
+      .select()
+      .from(contributionReviews)
+      .where(eq(contributionReviews.contributionId, row.id));
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]?.status).toBe('approved');
+    const [inbox] = await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, row.userId),
+          eq(notifications.type, 'contribution_approved'),
+          eq(notifications.targetId, row.id),
+        ),
+      );
+    expect(inbox?.targetKind).toBe('contribution');
+  });
+
+  it('MERGE: usulan kata kedua yang tergabung tidak tinggal pending', async () => {
+    const adminCreate = await post(
+      '/api/v1/admin/words',
+      validBody({
+        lemma: 'kembar e2e',
+        images: [
+          {
+            url: 'https://ik.imagekit.io/test/words/kembar-a.jpg',
+            provider: 'imagekit',
+            provider_file_id: 'img_kembar_admin',
+            alt_text: 'kembar',
+            is_primary: true,
+          },
+        ],
+      }),
+      adminToken,
+    );
+    expect(adminCreate.status).toBe(201);
+
+    const contribCreate = await post(
+      '/api/v1/admin/words',
+      validBody({
+        lemma: 'kembar e2e',
+        meanings: [
+          {
+            word_class_id: NOMINA,
+            definition: 'Makna kedua yang tidak sama',
+            order_index: 1,
+            translations: [
+              { language_id: IDN, translation_text: 'padanan beda', translation_type: 'direct' },
+            ],
+            examples: [
+              {
+                source_language_id: SMB,
+                source_sentence: 'Contoh kedua kembar.',
+                target_language_id: IDN,
+                target_sentence: 'Contoh kedua.',
+                source_type: 'native_speaker',
+              },
+            ],
+          },
+        ],
+        images: [
+          {
+            url: 'https://ik.imagekit.io/test/words/kembar-b.jpg',
+            provider: 'imagekit',
+            provider_file_id: 'img_kembar_contrib',
+            alt_text: 'kembar',
+            is_primary: true,
+          },
+        ],
+      }),
+      contributorToken,
+    );
+    expect(contribCreate.status).toBe(201);
+
+    const { and, eq } = await import('drizzle-orm');
+    const { contributions } = await import('@/shared/database/drizzle/schema');
+    const [contributor] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, contributorEmail))
+      .limit(1);
+    const rows = await db
+      .select({ status: contributions.status, deletedAt: words.deletedAt })
+      .from(contributions)
+      .innerJoin(words, eq(words.id, contributions.entityId))
+      .where(
+        and(
+          eq(contributions.userId, contributor.id),
+          eq(contributions.entityType, 'word'),
+          eq(words.lemma, 'kembar e2e'),
+        ),
+      );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe('approved');
+    expect(rows[0]?.deletedAt).not.toBeNull();
   });
 
   it('VERIFY: unverify mengembalikan false', async () => {
@@ -458,6 +566,14 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     expect(res.status).toBe(200);
     const detail = await request(`/api/v1/words/${data.word_id}`);
     expect((await detail.json()).data.is_verified).toBe(false);
+
+    const { and, eq } = await import('drizzle-orm');
+    const { contributions } = await import('@/shared/database/drizzle/schema');
+    const [row] = await db
+      .select()
+      .from(contributions)
+      .where(and(eq(contributions.entityType, 'word'), eq(contributions.entityId, data.word_id)));
+    expect(row?.status).toBe('pending');
   });
 
   it('VERIFY: contributor → 403 FORBIDDEN (bukan verifikator)', async () => {

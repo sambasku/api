@@ -10,6 +10,8 @@ import {
   discussions,
   pantuns,
   pantunReplies,
+  articles,
+  articleComments,
   users,
   userSkips,
   votes,
@@ -29,6 +31,8 @@ import type {
   AdminVoteListResult,
   AdminVoteListItem,
   AdminTopVoteTarget,
+  WordVotersListFilter,
+  WordVotersListResult,
   ToggleVoteResult,
   VoteCounts,
   VoteDeckListOptions,
@@ -42,6 +46,7 @@ import type {
   VoteTarget,
   VoteTargetType,
 } from '../domain/repositories/vote.repository';
+import { isPlaceholderMeaningText } from '@/modules/word/application/utils/normalize-meaning-text';
 import { encodeAdminCursor, encodeVoteDeckCursor } from '../domain/repositories/vote.repository';
 
 export const voteTargetKey = (t: VoteTarget): string => `${t.entityType}:${t.entityId}`;
@@ -52,6 +57,27 @@ function clipPreview(s: string): string {
   const t = s.trim().replace(/\s+/g, ' ');
   if (t.length <= PREVIEW_MAX) return t;
   return `${t.slice(0, PREVIEW_MAX - 1)}…`;
+}
+
+/**
+ * Label vote makna untuk panel admin. Definisi placeholder "-" bukan
+ * teks: lemma dulu, lalu definisi sungguhan atau padanan pertama.
+ */
+export function meaningVotePreview(
+  lemma: string | null,
+  definition: string | null,
+  translation: string | null,
+): string | null {
+  const head = lemma?.trim() ?? '';
+  const definitionText = definition?.trim() ?? '';
+  const translationText = translation?.trim() ?? '';
+  const gloss = !isPlaceholderMeaningText(definitionText)
+    ? definitionText
+    : !isPlaceholderMeaningText(translationText)
+      ? translationText
+      : '';
+  const label = gloss ? (head ? `${head} · ${gloss}` : gloss) : head;
+  return label ? clipPreview(label) : null;
 }
 
 /** Baris pertama pantun dari kolom JSON `lines` (string sudah di-parse Drizzle). */
@@ -153,18 +179,45 @@ export class VoteRepositoryImpl implements VoteRepository {
           .limit(1);
         return rows.length > 0;
       }
-      case 'pantun':
-      case 'pantun_reply': {
-        // Hanya pantun/balasan tayang yang boleh di-vote (taken_down /
-        // deleted_by_author → 404 VOTE_TARGET_NOT_FOUND).
-        const table = target.entityType === 'pantun' ? pantuns : pantunReplies;
-        const rows = await this.db
-          .select({ id: table.id })
-          .from(table)
-          .where(and(eq(table.id, target.entityId), eq(table.status, 'published')))
-          .limit(1);
-        return rows.length > 0;
-      }
+case 'pantun':
+case 'pantun_reply': {
+  // Hanya pantun/balasan tayang yang boleh di-vote (taken_down /
+  // deleted_by_author → 404 VOTE_TARGET_NOT_FOUND).
+  const table = target.entityType === 'pantun' ? pantuns : pantunReplies;
+  const rows = await this.db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, target.entityId), eq(table.status, 'published')))
+    .limit(1);
+  return rows.length > 0;
+}
+case 'article': {
+  const rows = await this.db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(
+      and(
+        eq(articles.id, target.entityId),
+        eq(articles.status, 'published'),
+        sql`${articles.deletedAt} is null`,
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+case 'article_comment': {
+  const rows = await this.db
+    .select({ id: articleComments.id })
+    .from(articleComments)
+    .where(
+      and(
+        eq(articleComments.id, target.entityId),
+        eq(articleComments.status, 'published'),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
     }
   }
 
@@ -508,6 +561,98 @@ export class VoteRepositoryImpl implements VoteRepository {
     };
   }
 
+  async listVotersByWordId(
+    wordId: string,
+    filter: WordVotersListFilter,
+    limit: number,
+    cursor: AdminVoteCursor | null,
+  ): Promise<WordVotersListResult | null> {
+    const [word] = await this.db
+      .select({ id: words.id })
+      .from(words)
+      .where(and(eq(words.id, wordId), isNull(words.deletedAt)))
+      .limit(1);
+    if (!word) return null;
+
+    const scopeConds = and(
+      eq(votes.entityType, 'meaning'),
+      eq(meanings.wordId, wordId),
+      isNull(meanings.deletedAt),
+      isNull(users.deletedAt),
+      filter.meaningId ? eq(meanings.id, filter.meaningId) : undefined,
+    );
+
+    const [countsRow] = await this.db
+      .select({
+        upvotes: sql<number>`coalesce(sum(case when ${votes.value} = 1 then 1 else 0 end), 0)`.mapWith(
+          Number,
+        ),
+        downvotes: sql<number>`coalesce(sum(case when ${votes.value} = -1 then 1 else 0 end), 0)`.mapWith(
+          Number,
+        ),
+      })
+      .from(votes)
+      .innerJoin(meanings, eq(meanings.id, votes.entityId))
+      .innerJoin(users, eq(users.id, votes.userId))
+      .where(scopeConds);
+
+    const rows = await this.db
+      .select({
+        id: votes.id,
+        userId: votes.userId,
+        voterUsername: users.username,
+        voterDisplayName: users.displayName,
+        voterAvatarUrl: users.avatarUrl,
+        voterEmail: users.email,
+        meaningId: meanings.id,
+        meaningDefinition: meanings.definition,
+        value: votes.value,
+        createdAt: votes.createdAt,
+      })
+      .from(votes)
+      .innerJoin(meanings, eq(meanings.id, votes.entityId))
+      .innerJoin(users, eq(users.id, votes.userId))
+      .where(
+        and(
+          scopeConds,
+          filter.value !== undefined ? eq(votes.value, filter.value) : undefined,
+          cursor
+            ? lt(sql`(${votes.createdAt}, ${votes.id})`, sql`(${cursor.createdAt}, ${cursor.id})`)
+            : undefined,
+        ),
+      )
+      .orderBy(desc(votes.createdAt), desc(votes.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    const nextCursor: string | null =
+      last && hasMore ? encodeAdminCursor({ createdAt: last.createdAt, id: last.id }) : null;
+
+    return {
+      items: page.map((row) => ({
+        id: row.id,
+        userId: row.userId,
+        voterUsername: row.voterUsername,
+        voterDisplayName: row.voterDisplayName,
+        voterAvatarUrl: row.voterAvatarUrl,
+        voterEmail: row.voterEmail,
+        meaningId: row.meaningId,
+        meaningPreview: clipPreview(row.meaningDefinition),
+        value: row.value === 1 ? 1 : -1,
+        createdAt: row.createdAt,
+      })),
+      meta: {
+        limit,
+        nextCursor,
+        hasMore,
+        upvotes: countsRow?.upvotes ?? 0,
+        downvotes: countsRow?.downvotes ?? 0,
+      },
+    };
+  }
+
   async deleteById(id: string): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [row] = await tx
@@ -595,10 +740,12 @@ export class VoteRepositoryImpl implements VoteRepository {
     target: VoteTarget,
   ): Promise<{ wordId: string; lemma: string; ownerUserId: string | null } | null> {
     if (
-      target.entityType === 'discussion' ||
-      target.entityType === 'discussion_reply' ||
-      target.entityType === 'pantun' ||
-      target.entityType === 'pantun_reply'
+    target.entityType === 'discussion' ||
+    target.entityType === 'discussion_reply' ||
+    target.entityType === 'pantun' ||
+    target.entityType === 'pantun_reply' ||
+    target.entityType === 'article' ||
+    target.entityType === 'article_comment'
     ) {
       return null;
     }
@@ -834,8 +981,9 @@ export class VoteRepositoryImpl implements VoteRepository {
 
   /**
    * Batch label target untuk panel admin (hindari N+1). Komentar → body;
-   * word → lemma; meaning → definition; example → source_sentence;
-   * pronunciation → value IPA; word_image → alt_text / url singkat.
+   * word → lemma; meaning → lemma + definisi/padanan (bukan placeholder "-");
+   * example → source_sentence; pronunciation → value IPA;
+   * word_image → alt_text / url singkat.
    */
   private async resolveTargetPreviews(
     targets: { entityType: VoteTargetType; entityId: string }[],
@@ -882,12 +1030,50 @@ export class VoteRepositoryImpl implements VoteRepository {
     if (meaningIds.length > 0) {
       jobs.push(
         this.db
-          .select({ id: meanings.id, definition: meanings.definition })
+          .select({
+            id: meanings.id,
+            definition: meanings.definition,
+            lemma: words.lemma,
+            translationText: meaningTranslations.translationText,
+          })
           .from(meanings)
+          .leftJoin(words, eq(words.id, meanings.wordId))
+          .leftJoin(
+            meaningTranslations,
+            and(
+              eq(meaningTranslations.meaningId, meanings.id),
+              isNull(meaningTranslations.deletedAt),
+            ),
+          )
           .where(inArray(meanings.id, meaningIds))
+          .orderBy(asc(meanings.id), asc(meaningTranslations.id))
           .then((rows) => {
-            for (const r of rows)
-              out.set(voteTargetKey({ entityType: 'meaning', entityId: r.id }), clipPreview(r.definition));
+            const byId = new Map<
+              string,
+              { lemma: string | null; definition: string; translation: string | null }
+            >();
+            for (const r of rows) {
+              const translation =
+                r.translationText && !isPlaceholderMeaningText(r.translationText)
+                  ? r.translationText
+                  : null;
+              const current = byId.get(r.id);
+              if (!current) {
+                byId.set(r.id, {
+                  lemma: r.lemma,
+                  definition: r.definition,
+                  translation,
+                });
+              } else if (!current.translation && translation) {
+                current.translation = translation;
+              }
+            }
+            for (const [id, row] of byId) {
+              const preview = meaningVotePreview(row.lemma, row.definition, row.translation);
+              if (preview) {
+                out.set(voteTargetKey({ entityType: 'meaning', entityId: id }), preview);
+              }
+            }
           }),
       );
     }
@@ -1005,12 +1191,50 @@ export class VoteRepositoryImpl implements VoteRepository {
             for (const r of rows) {
               out.set(
                 voteTargetKey({ entityType: 'pantun_reply', entityId: r.id }),
-                clipPreview(firstPantunLine(r.lines) ?? 'Balasan pantun'),
-              );
-            }
-          }),
-      );
-    }
+          clipPreview(firstPantunLine(r.lines) ?? 'Balasan pantun'),
+        );
+      }
+    }),
+  );
+}
+
+// Artikel: preview = judul (clip 120 char).
+const articleIds = [...new Set(idsByType.get('article') ?? [])];
+if (articleIds.length > 0) {
+  jobs.push(
+    this.db
+      .select({ id: articles.id, title: articles.title })
+      .from(articles)
+      .where(inArray(articles.id, articleIds))
+      .then((rows) => {
+        for (const r of rows) {
+          out.set(
+            voteTargetKey({ entityType: 'article', entityId: r.id }),
+            clipPreview(r.title?.trim() || 'Artikel'),
+          );
+        }
+      }),
+  );
+}
+
+// Komentar artikel: preview = body.
+const articleCommentIds = [...new Set(idsByType.get('article_comment') ?? [])];
+if (articleCommentIds.length > 0) {
+  jobs.push(
+    this.db
+      .select({ id: articleComments.id, body: articleComments.body })
+      .from(articleComments)
+      .where(inArray(articleComments.id, articleCommentIds))
+      .then((rows) => {
+        for (const r of rows) {
+          out.set(
+            voteTargetKey({ entityType: 'article_comment', entityId: r.id }),
+            clipPreview(r.body?.trim() || 'Komentar artikel'),
+          );
+        }
+      }),
+  );
+}
 
     await Promise.all(jobs);
     return out;

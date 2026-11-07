@@ -16,6 +16,8 @@ export const POINT_WEIGHTS = {
   cuisine: 20,
   event: 15,
   pantun: 3,
+  /** Artikel ensiklopedia published (kontribusi besar). */
+  article: 10,
   data_edit: 3,
   /** Upvote diterima atas karya milik user (bukan vote yang diberikan). */
   vote_received: 1,

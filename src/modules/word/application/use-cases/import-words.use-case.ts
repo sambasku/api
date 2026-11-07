@@ -104,14 +104,18 @@ export class ImportWordsUseCase {
     mode: 'validate' | 'commit',
     importSessionId?: string,
   ): Promise<ImportWordResult> {
-    const lemma = item.lemma.trim();
+    const lemma = normalizeLemma(item.lemma);
     const meanings = item.meanings
       .map(preparedMeaning)
       .filter((m): m is NonNullable<typeof m> => m !== null);
     const unique: typeof meanings = [];
     const seen = new Set<string>();
     for (const meaning of meanings) {
-      const key = meaningFingerprint(meaning);
+      const key = meaningFingerprint({
+        definition: meaning.definition,
+        translation: meaning.translation,
+        wordClassId: meaning.wordClassCode ?? null,
+      });
       if (seen.has(key)) continue;
       seen.add(key);
       unique.push(meaning);
@@ -199,14 +203,24 @@ export class ImportWordsUseCase {
     const existing = new Set(
       (await this.wordRepo.listMeaningKeys(parent.id)).map((m) =>
         meaningFingerprint({
-          definition: m.isHaveDefinition ? m.definition : '',
+          definition: m.definition,
           translation: m.translation,
-          isHaveDefinition: m.isHaveDefinition,
-          isHaveTranslation: m.isHaveTranslation,
+          wordClassId: m.wordClassId,
         }),
       ),
     );
-    const fresh = unique.filter((m) => !existing.has(meaningFingerprint(m)));
+    const fresh = unique.filter((m) => {
+      const classId = m.wordClassCode
+        ? (refs.codeMap.get(m.wordClassCode) ?? refs.wordClassId)
+        : refs.wordClassId;
+      return !existing.has(
+        meaningFingerprint({
+          definition: m.definition,
+          translation: m.translation,
+          wordClassId: classId,
+        }),
+      );
+    });
     const skipped = unique.length - fresh.length + (item.meanings.length - unique.length);
     if (fresh.length === 0) {
       return {

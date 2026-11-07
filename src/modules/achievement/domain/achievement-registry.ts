@@ -6,6 +6,7 @@ import {
   discussionReplies,
   discussions,
 } from '@/shared/database/drizzle/schema/discussions.schema';
+import { articles } from '@/shared/database/drizzle/schema/encyclopedia.schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
 import type { AchievementCriteria } from './entities/achievement.entity';
 
@@ -28,7 +29,8 @@ export type AchievementAggregateFact =
   | 'contribution_reviews'
   | 'comments'
   | 'discussions'
-  | 'discussion_replies';
+  | 'discussion_replies'
+  | 'articles';
 
 export interface AchievementFilterField {
   key: string;
@@ -180,6 +182,21 @@ const discussionsCreatedSource: AchievementSourceDefinition = {
   },
 };
 
+const articlesPublishedSource: AchievementSourceDefinition = {
+  source: 'articles_published',
+  label: 'Artikel terbit',
+  description:
+    'Jumlah artikel ensiklopedia berstatus published milik penulis (draft, arsip, dan yang dihapus tidak dihitung).',
+  kind: 'aggregate',
+  aggregateFact: 'articles',
+  supportsThreshold: true,
+  supportsWindow: true,
+  filterFields: [],
+  buildAggregateFilters(criteria: AchievementCriteria): SQL[] {
+    return windowOn(criteria, articles.publishedAt);
+  },
+};
+
 const discussionRepliesPublishedSource: AchievementSourceDefinition = {
   source: 'discussion_replies_published',
   label: 'Balasan diskusi tayang',
@@ -202,6 +219,7 @@ export const ACHIEVEMENT_SOURCE_REGISTRY: Record<string, AchievementSourceDefini
   comments_published: commentsPublishedSource,
   discussions_created: discussionsCreatedSource,
   discussion_replies_published: discussionRepliesPublishedSource,
+  articles_published: articlesPublishedSource,
 };
 
 export const ACHIEVEMENT_SELECTABLE_SOURCES: AchievementSourceDefinition[] =
@@ -244,6 +262,8 @@ export function aggregateFactBaseWhere(fact: AchievementAggregateFact): SQL[] {
       return [eq(discussions.status, 'published')];
     case 'discussion_replies':
       return [eq(discussionReplies.status, 'published')];
+    case 'articles':
+      return [eq(articles.status, 'published'), isNull(articles.deletedAt)];
   }
 }
 

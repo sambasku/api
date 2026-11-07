@@ -2,12 +2,14 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
 import { capturedOtpDisplayCode, e2eRegisterBody} from '@/shared/testing/e2e-auth';
 import { eq } from 'drizzle-orm';
+import { generateId } from '@/shared/utils/ulid';
 
 const { parsed } = config({ path: '.env.test', quiet: true });
 const hasTestDb = !!parsed?.DATABASE_URL;
 if (parsed?.DATABASE_URL) process.env.DATABASE_URL = parsed.DATABASE_URL;
 
 const body = {
+  full_name: 'Budi Santoso',
   phone: '81234567890',
   address: 'Jl. Merdeka No. 1, Sambas, Kalimantan Barat',
   social_links: [
@@ -20,6 +22,7 @@ const body = {
       },
     },
   ],
+  reason: 'Saya ingin meninjau kata.',
 };
 
 describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
@@ -55,7 +58,7 @@ describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
+    const { users, userRoles, contributions } = await import('@/shared/database/drizzle/schema');
     const db = getTestDb();
     const { truncateAll } = await import('@/shared/database/drizzle/test-utils');
     await truncateAll(db);
@@ -85,6 +88,21 @@ describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
     };
     adminToken = await login(adminEmail);
     contributorToken = await login(contributorEmail);
+
+    const [contributor] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, contributorEmail))
+      .limit(1);
+    await db.insert(contributions).values(
+      [0, 1, 2].map(() => ({
+        userId: contributor!.id,
+        entityType: 'word',
+        entityId: generateId(),
+        action: 'create',
+        status: 'approved',
+      })),
+    );
   });
 
   it('GET me sebelum apply → 404; admin apply → 403; contributor apply → 201', async () => {
@@ -101,6 +119,7 @@ describe.skipIf(!hasTestDb)('Verifier application E2E v1 (20 doc)', () => {
     const createdBody = await created.json();
     expect(createdBody.data.status).toBe('pending');
     expect(createdBody.data.phone).toBe('6281234567890');
+    expect(createdBody.data.dialect).toBe('umum');
     applicationId = createdBody.data.id as string;
 
     const dup = await post('/api/v1/verifier-applications', body, contributorToken);

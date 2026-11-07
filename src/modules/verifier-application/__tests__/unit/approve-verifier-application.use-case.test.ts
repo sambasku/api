@@ -43,15 +43,23 @@ function makeUser(overrides: Partial<User> = {}): User {
     updatedAt: null,
     deletedAt: null,
     ...overrides,
+    isTeam: overrides.isTeam ?? false,
+    teamAs: overrides.teamAs ?? null,
+    teamNote: overrides.teamNote ?? null,
   };
 }
 
-function makeUseCase(user: User | null, mailerRejects = false) {
+function makeUseCase(
+  user: User | null,
+  mailerRejects = false,
+  wa?: { send: ReturnType<typeof vi.fn>; readSettings: ReturnType<typeof vi.fn> },
+) {
   const appRepo = {
     approveAtomically: vi.fn().mockResolvedValue({
       id: APP_ID,
       userId: USER_ID,
       status: 'approved',
+      phone: '628111111111',
     } as VerifierApplication),
   } as unknown as VerifierApplicationRepository;
   const refreshTokenRepo = {
@@ -83,6 +91,10 @@ function makeUseCase(user: User | null, mailerRejects = false) {
       userRepo,
       mailer,
       inbox,
+      wa ? ({ execute: wa.send } as never) : undefined,
+      wa?.readSettings as
+        | (() => Promise<{ enabled: boolean; ctaUrl: string }>)
+        | undefined,
     ),
   };
 }
@@ -131,6 +143,48 @@ describe('ApproveVerifierApplicationUseCase', () => {
     const result = await useCase.execute(cmd);
     expect(result.status).toBe('approved');
     expect(mailer.sendVerifierApprovedEmail).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it('kirim WA selamat bila pengaturan aktif, pakai nomor pengajuan dan tautan grup', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const readSettings = vi.fn().mockResolvedValue({
+      enabled: true,
+      ctaUrl: 'https://chat.whatsapp.com/Kw64lxFEGXfK5gw6T6GEoN?mode=gi_t&utm_source=sambasku.com&utm_medium=referral',
+    });
+    const { useCase } = makeUseCase(makeUser(), false, { send, readSettings });
+    const result = await useCase.execute(cmd);
+    expect(result.status).toBe('approved');
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventKey: 'verifier_application_approved',
+        phone: '628111111111',
+        displayName: 'Siti',
+        ctaUrl: 'https://chat.whatsapp.com/Kw64lxFEGXfK5gw6T6GEoN?mode=gi_t&utm_source=sambasku.com&utm_medium=referral',
+      }),
+    );
+  });
+
+  it('tidak kirim WA bila pengaturan mati', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const readSettings = vi.fn().mockResolvedValue({ enabled: false, ctaUrl: '' });
+    const { useCase } = makeUseCase(makeUser(), false, { send, readSettings });
+    const result = await useCase.execute(cmd);
+    expect(result.status).toBe('approved');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('tetap menyetujui bila kirim WA melempar error', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('openwa down'));
+    const readSettings = vi.fn().mockResolvedValue({
+      enabled: true,
+      ctaUrl: 'https://chat.whatsapp.com/abc',
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { useCase } = makeUseCase(makeUser(), false, { send, readSettings });
+    const result = await useCase.execute(cmd);
+    expect(result.status).toBe('approved');
+    expect(send).toHaveBeenCalled();
     error.mockRestore();
   });
 

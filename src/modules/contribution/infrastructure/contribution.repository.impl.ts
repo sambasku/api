@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNull, lt, ne, notExists, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, lt, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
 import {
   contributionReviews,
   contributions,
@@ -32,6 +32,7 @@ import type {
   ContributionListFilter,
   ContributionRepository,
   MeaningPatch,
+  ClosedLiveContribution,
   MyContributionListFilter,
   ReviewCommand,
 } from '../domain/repositories/contribution.repository';
@@ -1554,5 +1555,163 @@ export class ContributionRepositoryImpl implements ContributionRepository {
         })
         .where(where);
     }
+  }
+
+  async closePendingForLiveWord(cmd: {
+    wordId: string;
+    actorId: string;
+    forceCloseWord?: boolean;
+  }): Promise<ClosedLiveContribution[]> {
+    const [word] = await this.db
+      .select({
+        id: words.id,
+        isVerified: words.isVerified,
+        deletedAt: words.deletedAt,
+      })
+      .from(words)
+      .where(eq(words.id, cmd.wordId))
+      .limit(1);
+    if (!word) return [];
+
+    const closeWord =
+      cmd.forceCloseWord === true || (word.isVerified === true && word.deletedAt == null);
+
+    return this.db.transaction(async (tx) => {
+      const verifiedMeaningIds = tx
+        .select({ id: meanings.id })
+        .from(meanings)
+        .where(
+          and(
+            eq(meanings.wordId, cmd.wordId),
+            eq(meanings.status, 'published'),
+            eq(meanings.isVerified, true),
+            isNull(meanings.deletedAt),
+          ),
+        );
+      const verifiedPronIds = tx
+        .select({ id: pronunciations.id })
+        .from(pronunciations)
+        .where(
+          and(
+            eq(pronunciations.wordId, cmd.wordId),
+            eq(pronunciations.status, 'published'),
+            eq(pronunciations.isVerified, true),
+            isNull(pronunciations.deletedAt),
+          ),
+        );
+      const verifiedImageIds = tx
+        .select({ id: wordImages.id })
+        .from(wordImages)
+        .where(
+          and(
+            eq(wordImages.wordId, cmd.wordId),
+            eq(wordImages.status, 'published'),
+            eq(wordImages.isVerified, true),
+            isNull(wordImages.deletedAt),
+          ),
+        );
+      const verifiedAudioIds = tx
+        .select({ id: wordAudios.id })
+        .from(wordAudios)
+        .where(
+          and(
+            eq(wordAudios.wordId, cmd.wordId),
+            eq(wordAudios.status, 'published'),
+            eq(wordAudios.isVerified, true),
+            isNull(wordAudios.deletedAt),
+          ),
+        );
+      const verifiedExampleIds = tx
+        .select({ id: examples.id })
+        .from(examples)
+        .innerJoin(meanings, eq(meanings.id, examples.meaningId))
+        .where(
+          and(
+            eq(meanings.wordId, cmd.wordId),
+            eq(examples.status, 'published'),
+            eq(examples.isVerified, true),
+            isNull(examples.deletedAt),
+          ),
+        );
+
+      const parts: SQL[] = [];
+      if (closeWord) {
+        const wordMatch = and(eq(contributions.entityType, 'word'), eq(contributions.entityId, cmd.wordId));
+        if (wordMatch) parts.push(wordMatch);
+      }
+      const childParts = [
+        and(eq(contributions.entityType, 'meaning'), inArray(contributions.entityId, verifiedMeaningIds)),
+        and(eq(contributions.entityType, 'pronunciation'), inArray(contributions.entityId, verifiedPronIds)),
+        and(eq(contributions.entityType, 'word_image'), inArray(contributions.entityId, verifiedImageIds)),
+        and(eq(contributions.entityType, 'word_audio'), inArray(contributions.entityId, verifiedAudioIds)),
+        and(eq(contributions.entityType, 'example'), inArray(contributions.entityId, verifiedExampleIds)),
+      ];
+      for (const part of childParts) {
+        if (part) parts.push(part);
+      }
+      const entityMatch = parts.length === 1 ? parts[0] : or(...parts);
+      if (!entityMatch) return [];
+
+      const pending = await tx
+        .select({
+          id: contributions.id,
+          userId: contributions.userId,
+          entityType: contributions.entityType,
+          entityId: contributions.entityId,
+        })
+        .from(contributions)
+        .where(and(isNull(contributions.deletedAt), eq(contributions.status, 'pending'), entityMatch));
+      if (pending.length === 0) return [];
+
+      const closed = await tx
+        .update(contributions)
+        .set({ status: 'approved', reopenedBy: null })
+        .where(
+          and(
+            inArray(contributions.id, pending.map((row) => row.id)),
+            eq(contributions.status, 'pending'),
+            isNull(contributions.deletedAt),
+          ),
+        )
+        .returning({
+          id: contributions.id,
+          userId: contributions.userId,
+          entityType: contributions.entityType,
+          entityId: contributions.entityId,
+        });
+      if (closed.length === 0) return [];
+
+      await tx.insert(contributionReviews).values(
+        closed.map((row) => ({
+          contributionId: row.id,
+          reviewerId: cmd.actorId,
+          status: 'approved' as const,
+          comment: null,
+        })),
+      );
+
+      return closed.map((row) => ({
+        id: row.id,
+        userId: row.userId,
+        entityType: row.entityType as ClosedLiveContribution['entityType'],
+        entityId: row.entityId,
+      }));
+    });
+  }
+
+  async reopenApprovedWordContributions(wordId: string): Promise<number> {
+    const updated = await this.db
+      .update(contributions)
+      .set({ status: 'pending', reopenedBy: null })
+      .where(
+        and(
+          eq(contributions.entityType, 'word'),
+          eq(contributions.entityId, wordId),
+          eq(contributions.status, 'approved'),
+          isNull(contributions.deletedAt),
+        ),
+      )
+      .returning({ id: contributions.id });
+    return updated.length;
   }
 }

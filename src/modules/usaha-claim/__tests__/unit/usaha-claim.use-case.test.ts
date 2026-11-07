@@ -49,18 +49,25 @@ function build(claims: any, usaha: any, activity?: any) {
   );
 }
 
+const evidenceOk = [
+  {
+    url: "https://ik.imagekit.io/test/usaha-claims/a.jpg",
+    provider_file_id: "file_a",
+  },
+];
+
 describe("UsahaClaimUseCases - pengajuan klaim", () => {
   it("wajib login (anonim ditolak)", async () => {
     const uc = build(makeClaims(), makeUsaha());
     await expect(
-      uc.submit(ANONIM_USER_ID, "warung-kopi", { contactEvidence: "0812" }),
+      uc.submit(ANONIM_USER_ID, "warung-kopi", { evidenceImages: evidenceOk }),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it("bukti kontak wajib diisi", async () => {
+  it("bukti gambar wajib diisi", async () => {
     const uc = build(makeClaims(), makeUsaha());
     await expect(
-      uc.submit("USER1", "warung-kopi", { contactEvidence: "   " }),
+      uc.submit("USER1", "warung-kopi", { evidenceImages: [] }),
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
@@ -68,7 +75,7 @@ describe("UsahaClaimUseCases - pengajuan klaim", () => {
     const usaha = makeUsaha({ findBySlug: vi.fn().mockResolvedValue(null) });
     const uc = build(makeClaims(), usaha);
     await expect(
-      uc.submit("USER1", "tidak-ada", { contactEvidence: "0812" }),
+      uc.submit("USER1", "tidak-ada", { evidenceImages: evidenceOk }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -78,7 +85,7 @@ describe("UsahaClaimUseCases - pengajuan klaim", () => {
     });
     const uc = build(makeClaims(), usaha);
     await expect(
-      uc.submit("USER1", "warung-kopi", { contactEvidence: "0812" }),
+      uc.submit("USER1", "warung-kopi", { evidenceImages: evidenceOk }),
     ).rejects.toMatchObject({ errorCode: "ALREADY_MANAGER" });
   });
 
@@ -88,8 +95,21 @@ describe("UsahaClaimUseCases - pengajuan klaim", () => {
     });
     const uc = build(claims, makeUsaha());
     await expect(
-      uc.submit("USER1", "warung-kopi", { contactEvidence: "0812" }),
+      uc.submit("USER1", "warung-kopi", { evidenceImages: evidenceOk }),
     ).rejects.toMatchObject({ errorCode: "CLAIM_PENDING" });
+  });
+
+  it("submit menyimpan evidence_images", async () => {
+    const claims = makeClaims();
+    const uc = build(claims, makeUsaha());
+    await uc.submit("USER1", "warung-kopi", { evidenceImages: evidenceOk });
+    expect(claims.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "USER1",
+        usahaId: "U1",
+        evidenceImages: evidenceOk,
+      }),
+    );
   });
 });
 

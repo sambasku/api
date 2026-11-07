@@ -11,7 +11,7 @@ export interface WaSendCommand {
 }
 
 /**
- * Port pengiriman WhatsApp. Satu impl per provider (Kapso, dll).
+ * Port pengiriman WhatsApp. Satu impl per provider (OpenWA).
  * Routing antar provider (fallback saat quota habis) ditangani WaProviderRouter.
  */
 export interface WaSenderPort {

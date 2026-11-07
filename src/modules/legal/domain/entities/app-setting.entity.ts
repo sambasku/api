@@ -31,7 +31,7 @@ export const DEFAULT_OAUTH_CONSENT_ENFORCEMENT: OauthConsentEnforcement = 'lenie
 
 /** Default link grup WA (diskusi + silaturahmi) untuk CTA pesan WA verifikator. */
 export const DEFAULT_WA_GROUP_CTA_URL =
-  'https://chat.whatsapp.com/Kw64lxFEGXfK5gw6T6GEoN?mode=gi_t';
+  'https://chat.whatsapp.com/Kw64lxFEGXfK5gw6T6GEoN?mode=gi_t&utm_source=sambasku.com&utm_medium=referral';
 export const WA_VERIFIER_ENABLED_KEY = 'wa.verifier_enabled' as const;
 export const WA_GROUP_CTA_URL_KEY = 'wa.group_cta_url' as const;
 

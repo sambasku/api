@@ -151,4 +151,78 @@ describe.skipIf(!hasTestDb)("Event query budget - list & detail", () => {
     expect(bySlug.items.length).toBe(20);
     expect(queryCount).toBeLessThanOrEqual(3);
   });
+
+  it("overlaps_from/to: multi-hari masuk, di luar window keluar, sort starts_at, budget <=3", async () => {
+    const schema = await import("@/shared/database/drizzle/schema");
+    const { events } = schema;
+    const { getTestDb } = await import("@/shared/database/drizzle/test-client");
+    const seedDb = getTestDb();
+    // Window: 10-20 Des 2026 UTC. Multi-hari 12-15 harus masuk; 1 Des & 25 Des keluar.
+    await seedDb.insert(events).values([
+      {
+        id: "01EVOVERLAPMULTI0000001",
+        slug: "overlap-multi-hari",
+        name: "Overlap Multi Hari",
+        description: "Acara lintas hari untuk uji overlap.",
+        categoryId: "festival-hiburan",
+        startsAt: new Date("2026-12-12T02:00:00.000Z"),
+        endsAt: new Date("2026-12-15T10:00:00.000Z"),
+        locationText: "Somewhere",
+        villageId: "01EVDESQBUDGET00000000001",
+        status: "published" as const,
+        publishedAt: new Date(),
+      },
+      {
+        id: "01EVOVERLAPBEFORE000001",
+        slug: "overlap-sebelum-window",
+        name: "Sebelum Window",
+        description: "Di luar window.",
+        categoryId: "festival-hiburan",
+        startsAt: new Date("2026-12-01T02:00:00.000Z"),
+        endsAt: new Date("2026-12-01T10:00:00.000Z"),
+        locationText: "Somewhere",
+        villageId: "01EVDESQBUDGET00000000001",
+        status: "published" as const,
+        publishedAt: new Date(),
+      },
+      {
+        id: "01EVOVERLAPAFTER0000001",
+        slug: "overlap-sesudah-window",
+        name: "Sesudah Window",
+        description: "Di luar window.",
+        categoryId: "festival-hiburan",
+        startsAt: new Date("2026-12-25T02:00:00.000Z"),
+        endsAt: new Date("2026-12-25T10:00:00.000Z"),
+        locationText: "Somewhere",
+        villageId: "01EVDESQBUDGET00000000001",
+        status: "published" as const,
+        publishedAt: new Date(),
+      },
+    ]);
+
+    const { EventRepositoryImpl } = await import(
+      "@/modules/event/infrastructure/event.repository.impl"
+    );
+    const repo = new EventRepositoryImpl(db);
+    queryCount = 0;
+    const res = await repo.list({
+      limit: 50,
+      publicOnly: true,
+      overlapsFrom: new Date("2026-12-10T00:00:00.000Z"),
+      overlapsTo: new Date("2026-12-20T00:00:00.000Z"),
+    });
+    expect(queryCount).toBeLessThanOrEqual(3);
+    const slugs = res.items.map((e) => e.slug);
+    expect(slugs).toContain("overlap-multi-hari");
+    expect(slugs).not.toContain("overlap-sebelum-window");
+    expect(slugs).not.toContain("overlap-sesudah-window");
+    // Sort starts_at ASC: multi-hari pertama di antara hasil overlap seed ini.
+    const multiIdx = slugs.indexOf("overlap-multi-hari");
+    expect(multiIdx).toBeGreaterThanOrEqual(0);
+    for (let i = 1; i < res.items.length; i++) {
+      expect(
+        res.items[i].startsAt.getTime(),
+      ).toBeGreaterThanOrEqual(res.items[i - 1].startsAt.getTime());
+    }
+  });
 });

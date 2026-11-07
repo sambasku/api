@@ -39,6 +39,9 @@ function user(partial: Partial<User> = {}): User {
     levelSeen: partial.levelSeen ?? 1,
     notifyStreakReminder: partial.notifyStreakReminder ?? true,
     notifyLevelUp: partial.notifyLevelUp ?? true,
+    isTeam: partial.isTeam ?? false,
+    teamAs: partial.teamAs ?? null,
+    teamNote: partial.teamNote ?? null,
   };
 }
 

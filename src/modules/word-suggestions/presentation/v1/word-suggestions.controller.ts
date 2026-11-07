@@ -351,6 +351,11 @@ export class WordSuggestionController {
           word_lemma: result.wordLemma,
           status: 'approved',
           changes_applied: result.changesApplied,
+          skipped_duplicates: result.skippedDuplicates.map((row) => ({
+            meaning_id: row.meaningId,
+            definition: row.definition,
+            translation_text: row.translationText,
+          })),
           message: 'Usulan telah disetujui dan diterapkan.',
         },
       }),

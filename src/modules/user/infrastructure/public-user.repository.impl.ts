@@ -237,6 +237,7 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         cuisineNewCount: sql<number>`cul.cuisine_new_count`.mapWith(Number),
         eventCount: sql<number>`evt.event_count`.mapWith(Number),
         pantunCount: sql<number>`ptn.pantun_count`.mapWith(Number),
+        articleCount: sql<number>`art.article_count`.mapWith(Number),
         voteReceivedPoints: sql<number>`vot.vote_received_points`.mapWith(
           Number,
         ),
@@ -373,6 +374,13 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         where user_id = ${userId} and status = 'published'
       ) as ptn
       cross join (
+        select coalesce(count(*), 0) as article_count
+        from articles
+        where author_user_id = ${userId}
+          and status = 'published'
+          and deleted_at is null
+      ) as art
+      cross join (
         select coalesce(count(*), 0) * ${W.vote_received} as vote_received_points
         from votes v
         where v.value = 1
@@ -451,6 +459,16 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
                   and pn.status = 'published'
               )
             )
+            or (
+              v.entity_type = 'article'
+              and exists (
+                select 1 from articles ar
+                where ar.id = v.entity_id
+                  and ar.author_user_id = ${userId}
+                  and ar.status = 'published'
+                  and ar.deleted_at is null
+              )
+            )
           )
       ) as vot
       cross join (
@@ -475,6 +493,7 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
     const placeCount = row?.placeCount ?? 0;
     const eventCount = row?.eventCount ?? 0;
     const pantunCount = row?.pantunCount ?? 0;
+    const articleCount = row?.articleCount ?? 0;
     const points =
       (row?.contributionPoints ?? 0) +
       (row?.verificationPoints ?? 0) +
@@ -483,14 +502,16 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       (row?.usahaPoints ?? 0) +
       (row?.cuisinePoints ?? 0) +
       eventCount * W.event +
-      pantunCount * W.pantun;
+      pantunCount * W.pantun +
+      articleCount * W.article;
     const exploration =
       wordsCount +
       placeCount +
       (row?.usahaNewCount ?? 0) +
       (row?.cuisineNewCount ?? 0) +
       eventCount +
-      pantunCount;
+      pantunCount +
+      articleCount;
     const streakDays = computeStreakDays(
       parseStreakDayKeys(row?.streakDayKeysJson),
       wibDateKey(Date.now()),

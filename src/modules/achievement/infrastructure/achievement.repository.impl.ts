@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   achievements,
+  articles,
   comments,
   contributionReviews,
   contributions,
@@ -715,6 +716,23 @@ export class AchievementRepositoryImpl implements AchievementRepository {
           .having(sql`count(*) >= ${threshold}`)
           .orderBy(asc(users.id))
           .limit(limit);
+      case 'articles':
+        return this.db
+          .select({
+            userId: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            matchedAt: sql<Date>`max(coalesce(${articles.publishedAt}, ${articles.createdAt}))`.mapWith(
+              mapMatchedAt,
+            ),
+          })
+          .from(articles)
+          .innerJoin(users, eq(users.id, articles.authorUserId))
+          .where(and(...base, eligible, ...extra, anti))
+          .groupBy(users.id, users.username, users.displayName)
+          .having(sql`count(*) >= ${threshold}`)
+          .orderBy(asc(users.id))
+          .limit(limit);
       default:
         return this.emptyCandidateSelect();
     }
@@ -759,6 +777,11 @@ export class AchievementRepositoryImpl implements AchievementRepository {
           .select({ count: sql<number>`count(*)`.mapWith(Number) })
           .from(discussionReplies)
           .where(and(eq(discussionReplies.userId, userId), ...base, ...extra));
+      case 'articles':
+        return this.db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(articles)
+          .where(and(eq(articles.authorUserId, userId), ...base, ...extra));
     }
   }
 

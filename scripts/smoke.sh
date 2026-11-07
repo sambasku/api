@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
 # Smoke fase 1: /health + /api/v1/ping + container healthy.
+# Staging default. Production:
+#   COMPOSE_FILE=compose.production.yaml CONTAINER_NAME=sambasku-api-production ./scripts/smoke.sh
 # Acuan: docs/api/DOCKERIZE_STAGING_HOMELAB.md
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml}"
+CONTAINER_NAME="${CONTAINER_NAME:-sambasku-api-staging}"
 BIND_HOST="${APP_BIND_HOST:-127.0.0.1}"
 BASE_URL="${SMOKE_BASE_URL:-http://${BIND_HOST}:8181}"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 ok() { echo "OK: $*"; }
 
-echo "==> compose ps"
-docker compose -f compose.yaml ps
+echo "==> compose ps ($COMPOSE_FILE)"
+docker compose -f "$COMPOSE_FILE" ps
 
-echo "==> tunggu health (max ~90s)"
+echo "==> tunggu health (max ~90s) - $CONTAINER_NAME"
 healthy=0
 for _ in $(seq 1 30); do
-  status="$(docker inspect -f '{{.State.Health.Status}}' sambasku-api-staging 2>/dev/null || echo missing)"
+  status="$(docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo missing)"
   if [[ "$status" == "healthy" ]]; then
     healthy=1
     break
   fi
   if [[ "$status" == "missing" ]]; then
-    fail "container sambasku-api-staging tidak ada - jalankan ./scripts/staging-up.sh dulu"
+    fail "container $CONTAINER_NAME tidak ada - jalankan staging-up / production-up dulu"
   fi
   sleep 3
 done
@@ -43,7 +47,7 @@ echo "$ping_body" | grep -q '"pong":true' || fail "ping tanpa pong: $ping_body"
 echo "$ping_body" | grep -q '"runtime":"node"' || fail "runtime bukan node: $ping_body"
 ok "/api/v1/ping runtime=node"
 
-restart_policy="$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' sambasku-api-staging)"
+restart_policy="$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$CONTAINER_NAME")"
 [[ "$restart_policy" == "unless-stopped" ]] || fail "restart policy=$restart_policy (harus unless-stopped)"
 ok "restart policy unless-stopped"
 

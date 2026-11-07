@@ -39,14 +39,14 @@ function makeDeps(overrides: {
   configured?: boolean;
 } = {}) {
   const sender = {
-    provider: 'kapso',
+    provider: 'openwa',
     isConfigured: () => overrides.configured ?? true,
     send: vi.fn().mockResolvedValue(undefined),
     ...overrides.sender,
   } as unknown as WaSenderPort & { isConfigured: () => boolean };
   const usageRepo = {
     getActive: vi.fn().mockResolvedValue({
-      provider: 'kapso',
+      provider: 'openwa',
       usedCount: overrides.usage?.usedCount ?? 0,
       limitCount: overrides.usage?.limitCount ?? 2000,
       warnThresholdPercent: 80,
@@ -137,12 +137,12 @@ describe('SendWaMessageUseCase', () => {
     expect(result.sent).toBe(true);
     expect(sender.send).toHaveBeenCalledWith(
       expect.objectContaining({
-        channel: 'template',
-        templateName: 'verifier_rejected',
-        positionalParams: ['Siti', 'kurang bukti', 'https://wa.link/x'],
+        channel: 'text',
+        to: '6281234567890',
+        bodyText: 'Hai Siti, kurang bukti. Gabung: https://wa.link/x',
       }),
     );
-    expect(usageRepo.increment).toHaveBeenCalledWith('kapso', 1);
+    expect(usageRepo.increment).toHaveBeenCalledWith('openwa', 1);
     expect(logRepo.record).toHaveBeenCalledWith(expect.objectContaining({ status: 'sent' }));
   });
 
@@ -207,17 +207,15 @@ describe('SendWaMessageUseCase', () => {
     await expect(useCase.sendTest('08123', TPL_ROW)).rejects.toThrow();
   });
 
-  // Di luar window 24 jam Meta menolak teks polos (422) - test wajib template.
-  it('test send: kirim sbg template (lolos window 24 jam), param diisi placeholder', async () => {
+  it('test send: render body dengan placeholder Test', async () => {
     const { useCase, sender } = makeDeps();
     const result = await useCase.sendTest('628111111111', TPL_ROW);
     expect(result.sent).toBe(true);
     expect(sender.send).toHaveBeenCalledWith(
       expect.objectContaining({
-        channel: 'template',
+        channel: 'text',
         to: '628111111111',
-        templateName: 'verifier_rejected',
-        positionalParams: ['Test', 'Test', 'Test'],
+        bodyText: 'Hai Test, Test. Gabung: Test',
       }),
     );
   });

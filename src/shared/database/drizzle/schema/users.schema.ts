@@ -71,11 +71,19 @@ export const users = sqliteTable(
     notifyLevelUp: integer('notify_level_up', { mode: 'boolean' })
       .notNull()
       .default(true),
+    /**
+     * Anggota Tim Kami (kurasi admin). true = tampil di GET /about/team.
+     * `team_as` = peran (mis. developer); `team_note` = keterangan apresiasi.
+     */
+    isTeam: integer('is_team', { mode: 'boolean' }).notNull().default(false),
+    teamAs: text('team_as'),
+    teamNote: text('team_note'),
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   },
   (t) => [
     uniqueIndex('users_phone_unique').on(t.phone).where(sql`phone is not null`),
     index('users_last_seen_at_idx').on(t.lastSeenAt),
+    index('users_is_team_idx').on(t.isTeam),
   ],
 );
 

@@ -108,3 +108,26 @@ describe('SearchWordsUseCase - perluasan kelompok makna (PRD relasi-lemma)', () 
     expect(wordRepo.findRelatedGroupMembers).not.toHaveBeenCalled();
   });
 });
+
+describe('SearchWordsUseCase - counter pencarian harian', () => {
+  it('q non-empty → recordSearchDay dipanggil (hit + miss)', async () => {
+    const { useCase, searchMissRepo } = makeDeps({
+      items: [summary('01WORDDIRECT000000000000', 'barakat')],
+    });
+    await useCase.execute(QUERY);
+    expect(searchMissRepo.recordSearchDay).toHaveBeenCalledOnce();
+  });
+
+  it('q kosong / whitespace → recordSearchDay tidak dipanggil', async () => {
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    await useCase.execute({ q: '   ', limit: 10 });
+    expect(searchMissRepo.recordSearchDay).not.toHaveBeenCalled();
+  });
+
+  it('miss (0 hasil, q >= 2) → recordSearchDay + record miss', async () => {
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    await useCase.execute({ q: 'xyzzy', limit: 10 });
+    expect(searchMissRepo.recordSearchDay).toHaveBeenCalledOnce();
+    expect(searchMissRepo.record).toHaveBeenCalledOnce();
+  });
+});

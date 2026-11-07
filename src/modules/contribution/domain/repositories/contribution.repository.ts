@@ -177,4 +177,28 @@ export interface ContributionRepository {
   withPendingLock<T>(id: string, work: (tx: unknown) => Promise<T>): Promise<T>;
   /** koreksi entity anak tanpa publish (lihat ApplyChildCorrectionCommand) */
   applyChildCorrection(cmd: ApplyChildCorrectionCommand): Promise<void>;
+  /**
+   * Tutup usulan `pending` yang entitasnya sudah tayang dan terverifikasi.
+   * `forceCloseWord` menutup baris kata walau words sudah di-soft-delete
+   * (sumber merge). Anak hanya ikut bila published + is_verified.
+   * Menulis contribution_reviews. Tidak mengirim inbox.
+   */
+  closePendingForLiveWord(cmd: {
+    wordId: string;
+    actorId: string;
+    forceCloseWord?: boolean;
+  }): Promise<ClosedLiveContribution[]>;
+  /**
+   * Unverify kata yang masih published: kontribusi kata `approved` kembali
+   * `pending`. `rejected` dan `corrected` tidak disentuh.
+   */
+  reopenApprovedWordContributions(wordId: string): Promise<number>;
+}
+
+/** Baris kontribusi yang baru ditutup karena kata/anaknya sudah terverifikasi. */
+export interface ClosedLiveContribution {
+  id: string;
+  userId: string;
+  entityType: ContributionEntityType;
+  entityId: string;
 }

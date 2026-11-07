@@ -43,6 +43,12 @@ function serialize(
     status: "draft" | "published" | "archived";
     cancelledAt: Date | null;
     publishedAt: Date | null;
+    authorId?: string | null;
+    author?: {
+      id: string;
+      username: string;
+      displayName: string;
+    } | null;
     createdAt: Date;
     updatedAt: Date | null;
     places: Array<{
@@ -88,6 +94,14 @@ function serialize(
     status: event.status,
     cancelled_at: event.cancelledAt ? event.cancelledAt.toISOString() : null,
     published_at: event.publishedAt ? event.publishedAt.toISOString() : null,
+    author_id: event.authorId ?? null,
+    author: event.author
+      ? {
+          id: event.author.id,
+          username: event.author.username,
+          display_name: event.author.displayName,
+        }
+      : null,
     created_at: event.createdAt.toISOString(),
     updated_at: event.updatedAt ? event.updatedAt.toISOString() : null,
   };
@@ -122,13 +136,15 @@ export class EventController {
       .execute({
         limit: query.limit,
         before: query.before,
-      categoryId: query.category_id,
-      villageId: query.village_id,
-      regionId: query.region_id,
-      placeId: query.place_id,
-      q: query.q,
-      notEnded: query.not_ended === "1",
+        categoryId: query.category_id,
+        villageId: query.village_id,
+        regionId: query.region_id,
+        placeId: query.place_id,
+        q: query.q,
+        notEnded: query.not_ended === "1",
         order: query.order,
+        overlapsFrom: query.overlaps_from,
+        overlapsTo: query.overlaps_to,
         publicOnly: true,
       })
       .then((res) =>
@@ -165,14 +181,16 @@ export class EventController {
       .execute({
         limit: query.limit,
         before: query.before,
-      categoryId: query.category_id,
-      villageId: query.village_id,
-      regionId: query.region_id,
-      placeId: query.place_id,
-      q: query.q,
-      status: query.status,
+        categoryId: query.category_id,
+        villageId: query.village_id,
+        regionId: query.region_id,
+        placeId: query.place_id,
+        q: query.q,
+        status: query.status,
         notEnded: query.not_ended === "1",
         order: query.order,
+        overlapsFrom: query.overlaps_from,
+        overlapsTo: query.overlaps_to,
       })
       .then((res) =>
         c.json({

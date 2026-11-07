@@ -191,17 +191,66 @@ export function createAdminUserRoutes(deps: AdminUserRoutesDeps) {
   },
 });
 
-routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
+  const updateTeamRoute = createRoute({
+    method: 'patch',
+    path: '/:id/team',
+    tags: ['Admin Users'],
+    summary: 'Kurasi Tim Kami (is_team, team_as, team_note)',
+    request: {
+      params: z.object({ id: z.string().length(26) }),
+      body: {
+        content: json(
+          z.object({
+            is_team: z.boolean().optional(),
+            team_as: z.string().trim().max(200).nullable().optional(),
+            team_note: z.string().trim().max(2000).nullable().optional(),
+          }),
+        ),
+      },
+    },
+    responses: {
+      200: { description: 'Tim diperbarui', content: json(adminUserMutationResponseSchema) },
+      404: { description: 'User tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const setSponsorRoute = createRoute({
+    method: 'patch',
+    path: '/:id/sponsor',
+    tags: ['Admin Users'],
+    summary: 'Checkbox sponsor: upsert/soft-delete baris sponsorships',
+    request: {
+      params: z.object({ id: z.string().length(26) }),
+      body: { content: json(z.object({ is_sponsor: z.boolean() })) },
+    },
+    responses: {
+      200: {
+        description: 'Status sponsor diperbarui',
+        content: json(
+          z.object({
+            success: z.literal(true),
+            data: z.object({
+              id: z.string(),
+              is_sponsor: z.boolean(),
+              sponsorship_id: z.string().nullable(),
+            }),
+          }),
+        ),
+      },
+    },
+  });
+
+  routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
   routes.openapi(createRouteDef, (c) => deps.controller.create(c, c.req.valid('json')) as never);
   routes.openapi(listAbuseEventsRoute, (c) =>
     deps.controller.listAbuseEvents(c, c.req.valid('param').id, c.req.valid('query')) as never,
   );
-routes.openapi(setActiveRoute, (c) =>
-  deps.controller.setActive(c, c.req.valid('param').id, c.req.valid('json').is_active) as never,
-);
-routes.openapi(verifyEmailRoute, (c) =>
-  deps.controller.verifyEmail(c, c.req.valid('param').id) as never,
-);
+  routes.openapi(setActiveRoute, (c) =>
+    deps.controller.setActive(c, c.req.valid('param').id, c.req.valid('json').is_active) as never,
+  );
+  routes.openapi(verifyEmailRoute, (c) =>
+    deps.controller.verifyEmail(c, c.req.valid('param').id) as never,
+  );
   routes.openapi(setContributeRoute, (c) =>
     deps.controller.setCanContribute(c, c.req.valid('param').id, c.req.valid('json').can_contribute) as never,
   );
@@ -210,6 +259,16 @@ routes.openapi(verifyEmailRoute, (c) =>
       c,
       c.req.valid('param').id,
       c.req.valid('json'),
+    ) as never,
+  );
+  routes.openapi(updateTeamRoute, (c) =>
+    deps.controller.updateTeam(c, c.req.valid('param').id, c.req.valid('json')) as never,
+  );
+  routes.openapi(setSponsorRoute, (c) =>
+    deps.controller.setSponsor(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json').is_sponsor,
     ) as never,
   );
 

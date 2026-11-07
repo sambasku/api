@@ -34,6 +34,13 @@ export interface CuisineSource {
   licenseUrl?: string | null;
 }
 
+/** Pengusul live (JOIN users). Null = anonim / akun hilang. */
+export interface CulinaryAuthorRef {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
 export interface Cuisine {
   id: string;
   slug: string;
@@ -52,6 +59,8 @@ export interface Cuisine {
   restrictedReason: string | null;
   restrictedAt: Date | null;
   authorId: string | null;
+  /** Diisi di path detail; list boleh null. */
+  author: CulinaryAuthorRef | null;
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
@@ -79,6 +88,8 @@ export interface CulinaryPlace {
   restrictedAt: Date | null;
   managerId: string | null;
   authorId: string | null;
+  /** Diisi di path detail; list boleh null. */
+  author: CulinaryAuthorRef | null;
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date | null;

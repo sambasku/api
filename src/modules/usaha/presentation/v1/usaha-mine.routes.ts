@@ -61,6 +61,9 @@ export function createUsahaMineRoutes(deps: {
             category: u.category,
             kind: u.kind,
             region_id: u.regionId,
+            region: u.region
+              ? { id: u.region.id, name: u.region.name, slug: u.region.slug }
+              : null,
             village_id: u.villageId,
             village: u.village,
             address_text: u.addressText,
@@ -78,6 +81,20 @@ export function createUsahaMineRoutes(deps: {
             restricted_at: u.restrictedAt ? u.restrictedAt.toISOString() : null,
             manager_id: u.managerId,
             author_id: u.authorId,
+            author: u.author
+              ? {
+                  id: u.author.id,
+                  username: u.author.username,
+                  display_name: u.author.displayName,
+                }
+              : null,
+            manager: u.manager
+              ? {
+                  id: u.manager.id,
+                  username: u.manager.username,
+                  display_name: u.manager.displayName,
+                }
+              : null,
             published_at: u.publishedAt ? u.publishedAt.toISOString() : null,
             created_at: u.createdAt.toISOString(),
             updated_at: u.updatedAt ? u.updatedAt.toISOString() : null,

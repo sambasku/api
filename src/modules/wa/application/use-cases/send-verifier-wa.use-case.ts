@@ -1,3 +1,4 @@
+import { logger } from '@/shared/logging/logger';
 import type { SendWaMessageCommand, SendWaMessageResult } from './send-wa-message.use-case';
 
 /**
@@ -21,7 +22,7 @@ export class SendVerifierWaNotificationUseCase {
   async execute(cmd: SendVerifierWaCommand): Promise<void> {
     if (!cmd.phone) return;
     try {
-      await this.sendWa.execute({
+      const result = await this.sendWa.execute({
         eventKey: cmd.eventKey,
         toPhone: cmd.phone,
         channel: 'template',
@@ -36,8 +37,20 @@ export class SendVerifierWaNotificationUseCase {
           },
         },
       });
-    } catch {
-      // Quota habis / provider mati: keputusan sudah tersimpan, jangan gagalkan.
+      if (!result.sent) {
+        logger.warn(
+          { eventKey: cmd.eventKey, reason: result.reason ?? 'tidak terkirim' },
+          'wa verifikator tidak terkirim',
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        {
+          eventKey: cmd.eventKey,
+          error: err instanceof Error ? err.message : String(err),
+        },
+        'wa verifikator gagal dikirim',
+      );
     }
   }
 }

@@ -53,6 +53,35 @@ describe('meaningDeduplicationFingerprint', () => {
     expect(fp1).not.toBe(fp2);
   });
 
+  it('teks nyata tetap dihitung walau flag definisi mati', () => {
+    const fp1 = meaningDeduplicationFingerprint({
+      definition: 'Rasa asin',
+      translation: 'asin',
+      isHaveDefinition: false,
+      isHaveTranslation: true,
+    });
+    const fp2 = meaningDeduplicationFingerprint({
+      definition: 'rasa asin',
+      translation: 'asin',
+      isHaveDefinition: true,
+      isHaveTranslation: true,
+    });
+    expect(fp1).toBe(fp2);
+  });
+
+  it('beda kelas kata bukan duplikat', () => {
+    const base = { definition: 'makan', translation: 'makan' };
+    expect(
+      meaningDeduplicationFingerprint({ ...base, wordClassId: 'nomina' }),
+    ).not.toBe(meaningDeduplicationFingerprint({ ...base, wordClassId: 'verba' }));
+  });
+
+  it('karakter format tidak membedakan sidik', () => {
+    expect(
+      meaningDeduplicationFingerprint({ definition: `asin${String.fromCharCode(0x200b)}`, translation: 'asin' }),
+    ).toBe(meaningDeduplicationFingerprint({ definition: 'asin', translation: 'asin' }));
+  });
+
   it('padanan multi-bahasa dibandingkan sebagai himpunan utuh', () => {
     const base = {
       definition: 'rasa asin',

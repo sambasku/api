@@ -23,9 +23,19 @@ export class AdminUsersController {
       updateRole: UpdateUserRoleUseCase;
       setCanContribute: SetCanContributeUseCase;
       createUser: CreateAdminUserUseCase;
-    setActive: SetUserActiveUseCase;
-    verifyEmail: AdminVerifyEmailUseCase;
-    listAbuseEvents: ListUserAbuseEventsUseCase;
+      setActive: SetUserActiveUseCase;
+      verifyEmail: AdminVerifyEmailUseCase;
+      listAbuseEvents: ListUserAbuseEventsUseCase;
+      updateTeam: (id: string, data: {
+        isTeam?: boolean;
+        teamAs?: string | null;
+        teamNote?: string | null;
+      }) => Promise<User | null>;
+      setUserSponsor: (userId: string, isSponsor: boolean) => Promise<{
+        isSponsor: boolean;
+        sponsorshipId: string | null;
+      }>;
+      listActiveSponsorUserIds: (userIds: string[]) => Promise<Set<string>>;
     },
   ) {}
 
@@ -40,19 +50,23 @@ export class AdminUsersController {
       role: u.role,
       avatar_url: u.avatarUrl,
       auth_providers: u.authProviders ?? [],
-    is_active: u.isActive,
-    can_contribute: u.canContribute,
-    contribute_muted_until: u.contributeMutedUntil
-      ? u.contributeMutedUntil.toISOString()
-      : null,
-    email_verified: u.emailVerified,
-    email_verified_at: u.emailVerifiedAt ? u.emailVerifiedAt.toISOString() : null,
-    // Enrichment admin: OTP terakhir (list admin saja; default null).
-    otp:
-      u.otpCreatedAt && u.otpExpiresAt
-        ? { created_at: u.otpCreatedAt.toISOString(), expires_at: u.otpExpiresAt.toISOString() }
+      is_active: u.isActive,
+      can_contribute: u.canContribute,
+      contribute_muted_until: u.contributeMutedUntil
+        ? u.contributeMutedUntil.toISOString()
         : null,
-    created_at: u.createdAt.toISOString(),
+      email_verified: u.emailVerified,
+      email_verified_at: u.emailVerifiedAt ? u.emailVerifiedAt.toISOString() : null,
+      is_team: u.isTeam,
+      team_as: u.teamAs,
+      team_note: u.teamNote,
+      is_sponsor: u.isSponsor ?? false,
+      // Enrichment admin: OTP terakhir (list admin saja; default null).
+      otp:
+        u.otpCreatedAt && u.otpExpiresAt
+          ? { created_at: u.otpCreatedAt.toISOString(), expires_at: u.otpExpiresAt.toISOString() }
+          : null,
+      created_at: u.createdAt.toISOString(),
       updated_at: u.updatedAt ? u.updatedAt.toISOString() : null,
     };
   }
@@ -67,9 +81,12 @@ export class AdminUsersController {
       cursor: query.cursor,
     });
 
+    const sponsorIds = await this.deps.listActiveSponsorUserIds(items.map((u) => u.id));
     return c.json({
       success: true as const,
-      data: items.map((u) => this.toWire(u)),
+      data: items.map((u) =>
+        this.toWire({ ...u, isSponsor: sponsorIds.has(u.id) }),
+      ),
       meta,
     });
   }
@@ -179,6 +196,37 @@ export class AdminUsersController {
         id: result.id,
         email_verified: true as const,
         email_verified_at: result.emailVerifiedAt.toISOString(),
+      },
+    });
+  }
+
+  async updateTeam(
+    c: AdminCtx,
+    targetId: string,
+    body: { is_team?: boolean; team_as?: string | null; team_note?: string | null },
+  ) {
+    const updated = await this.deps.updateTeam(targetId, {
+      isTeam: body.is_team,
+      teamAs: body.team_as,
+      teamNote: body.team_note,
+    });
+    if (!updated) {
+      return c.json(
+        { success: false as const, error: { code: 'NOT_FOUND', message: 'User tidak ditemukan' } },
+        404,
+      );
+    }
+    return c.json({ success: true as const, data: this.toWire(updated) });
+  }
+
+  async setSponsor(c: AdminCtx, targetId: string, isSponsor: boolean) {
+    const result = await this.deps.setUserSponsor(targetId, isSponsor);
+    return c.json({
+      success: true as const,
+      data: {
+        id: targetId,
+        is_sponsor: result.isSponsor,
+        sponsorship_id: result.sponsorshipId,
       },
     });
   }

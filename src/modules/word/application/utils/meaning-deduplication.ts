@@ -2,55 +2,69 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { meanings, meaningTranslations } from '@/shared/database/drizzle/schema';
 import { isPlaceholderMeaningText, normalizeMeaningText } from './normalize-meaning-text';
 
-/**
- * Fingerprint makna untuk deduplikasi (case-insensitive, placeholder-aware).
- *
- * Dipakai create/edit dan impor CSV (`meaningFingerprint` di
- * `import-words.ts` mendelegasi ke sini) supaya "makna sama" konsisten.
- *
- * Placeholder "-" dan kosong tidak jadi kunci isi; flag hasDef/hasTr
- * memisahkan "tanpa definisi" dari "ada definisi" supaya tidak bentrok.
- *
- * Format: `<hasDef>\0<normalizedDef>\0<hasTr>\0<normalizedTr>`
- * - hasDef/hasTr = '1' atau '0'
- * - `translations` (opsional): kalau diisi, semua padanan ikut jadi kunci
- *   (urut, dinormalisasi) - dua makna dianggap sama hanya kalau set
- *   padanannya sama, bukan salah satu saja.
- */
-export function meaningDeduplicationFingerprint(input: {
+export interface MeaningIdentityInput {
   definition: string;
   translation?: string;
   translations?: { languageId: string; translationText: string }[];
-  isHaveDefinition: boolean;
-  isHaveTranslation: boolean;
-}): string {
-  const hasDef = input.isHaveDefinition && !isPlaceholderMeaningText(input.definition);
-  const def = hasDef ? normalizeMeaningText(input.definition) : '';
+  /** Diabaikan untuk identitas. Teks nyata tetap dihitung. */
+  isHaveDefinition?: boolean;
+  /** Diabaikan untuk identitas. Teks nyata tetap dihitung. */
+  isHaveTranslation?: boolean;
+  /** Null dan kosong satu ember. Beda kelas = bukan duplikat. */
+  wordClassId?: string | null;
+}
 
+/**
+ * Fingerprint makna untuk deduplikasi.
+ *
+ * Kelas kata + definisi + himpunan padanan. Huruf, spasi, dan karakter
+ * format diseragamkan. Placeholder "-" dan kosong tidak masuk teks.
+ * Flag is_have_definition / is_have_translation tidak menyembunyikan teks.
+ *
+ * Format: `<classId>\0<def>\0<lang\0text\u0001...>`
+ */
+export function meaningDeduplicationFingerprint(input: MeaningIdentityInput): string {
+  const classId = input.wordClassId ?? '';
+  const def = identityDefinition(input.definition);
+  const tr = identityTranslations(input);
+  return `${classId}\0${def}\0${tr}`;
+}
+
+/**
+ * Kunci kolom `meanings.dedupe_key`. Null bila tidak ada teks identitas
+ * (definisi dan padanan kosong / "-"). Dua makna kosong di kelas yang sama
+ * tetap satu sidik, ditolak di aplikasi. Index unik hanya mengunci kunci
+ * non-null.
+ */
+export function meaningDedupeKey(input: MeaningIdentityInput): string | null {
+  if (!identityDefinition(input.definition) && !identityTranslations(input)) return null;
+  return meaningDeduplicationFingerprint(input);
+}
+
+function identityDefinition(definition: string): string {
+  return isPlaceholderMeaningText(definition) ? '' : normalizeMeaningText(definition);
+}
+
+function identityTranslations(input: MeaningIdentityInput): string {
   if (input.translations) {
-    const tr = input.isHaveTranslation
-      ? input.translations
-          .filter((t) => !isPlaceholderMeaningText(t.translationText))
-          .map((t) => `${t.languageId}\0${normalizeMeaningText(t.translationText)}`)
-          .sort()
-          .join('\u0001')
-      : '';
-    return `${hasDef ? '1' : '0'}\0${def}\0${input.isHaveTranslation ? '1' : '0'}\0${tr}`;
+    return input.translations
+      .filter((t) => !isPlaceholderMeaningText(t.translationText))
+      .map((t) => `${t.languageId}\0${normalizeMeaningText(t.translationText)}`)
+      .sort()
+      .join('\u0001');
   }
-
-  const hasTr = input.isHaveTranslation && !isPlaceholderMeaningText(input.translation ?? '');
-  const tr = hasTr ? normalizeMeaningText(input.translation ?? '') : '';
-  return `${hasDef ? '1' : '0'}\0${def}\0${hasTr ? '1' : '0'}\0${tr}`;
+  const raw = input.translation ?? '';
+  return isPlaceholderMeaningText(raw) ? '' : normalizeMeaningText(raw);
 }
 
 /**
  * Peta indeks makna duplikat dalam satu payload (create/edit/inline).
- * Duplikat "menumpang" pada indeks pertama yang sama (firstIndex) supaya
- * provenance `inherited_from_meaning_id` tetap sejajar dengan urutan kiriman.
+ * Duplikat menumpang pada indeks pertama yang sama.
  */
 export function mapDuplicateMeaningIndexes(
   items: {
     definition: string;
+    wordClassId?: string | null;
     isHaveDefinition?: boolean;
     isHaveTranslation?: boolean;
     translations?: { languageId: string; translationText: string }[];
@@ -63,8 +77,7 @@ export function mapDuplicateMeaningIndexes(
     const fp = meaningDeduplicationFingerprint({
       definition: item.definition,
       translations: item.translations ?? [],
-      isHaveDefinition: item.isHaveDefinition ?? true,
-      isHaveTranslation: item.isHaveTranslation ?? (item.translations?.length ?? 0) > 0,
+      wordClassId: item.wordClassId ?? null,
     });
     const first = seen.get(fp);
     if (first === undefined) {
@@ -79,39 +92,45 @@ export function mapDuplicateMeaningIndexes(
   return { firstIndex, isDuplicate };
 }
 
+export interface ActiveMeaningIdentity {
+  id: string;
+  wordClassId: string | null;
+  definition: string;
+  translations: { languageId: string; translationText: string }[];
+  fingerprint: string;
+}
+
 /** Fingerprint satu makna dari baris DB + padanannya. */
 export function rowMeaningFingerprint(
-  row: { definition: string; isHaveDefinition: boolean; isHaveTranslation: boolean },
+  row: { definition: string; wordClassId?: string | null },
   translations: { languageId: string; translationText: string }[],
 ): string {
   return meaningDeduplicationFingerprint({
     definition: row.definition,
     translations,
-    isHaveDefinition: row.isHaveDefinition,
-    isHaveTranslation: row.isHaveTranslation,
+    wordClassId: row.wordClassId ?? null,
   });
 }
 
 /**
- * Muat sidik makna aktif (tanpa soft-delete) satu kata, dipetakan per id.
- * Satu query ke meanings + satu query ke meaningTranslations (tanpa N+1).
+ * Muat identitas makna aktif (tanpa soft-delete) satu kata.
+ * Satu query meanings + satu query translations.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function loadMeaningFingerprintById(
+export async function loadActiveMeaningIdentities(
   tx: any,
   wordId: string,
-): Promise<Map<string, string>> {
+): Promise<ActiveMeaningIdentity[]> {
   const rows = await tx
     .select({
       id: meanings.id,
       definition: meanings.definition,
-      isHaveDefinition: meanings.isHaveDefinition,
-      isHaveTranslation: meanings.isHaveTranslation,
+      wordClassId: meanings.wordClassId,
     })
     .from(meanings)
     .where(and(eq(meanings.wordId, wordId), isNull(meanings.deletedAt)));
 
-  if (rows.length === 0) return new Map();
+  if (rows.length === 0) return [];
 
   const ids = rows.map((r: { id: string }) => r.id);
   const translations = await tx
@@ -132,14 +151,29 @@ export async function loadMeaningFingerprintById(
     trByMeaning.set(t.meaningId, list);
   }
 
-  const byId = new Map<string, string>();
-  for (const r of rows) {
-    byId.set(r.id, rowMeaningFingerprint(r, trByMeaning.get(r.id) ?? []));
-  }
-  return byId;
+  return rows.map((r: { id: string; definition: string; wordClassId: string | null }) => {
+    const tr = trByMeaning.get(r.id) ?? [];
+    return {
+      id: r.id,
+      wordClassId: r.wordClassId,
+      definition: r.definition,
+      translations: tr,
+      fingerprint: rowMeaningFingerprint(r, tr),
+    };
+  });
 }
 
-/** Himpunan sidik makna aktif satu kata (untuk cek "sudah ada"). */
+/** Sidik makna aktif satu kata, dipetakan per id. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function loadMeaningFingerprintById(
+  tx: any,
+  wordId: string,
+): Promise<Map<string, string>> {
+  const rows = await loadActiveMeaningIdentities(tx, wordId);
+  return new Map(rows.map((r) => [r.id, r.fingerprint]));
+}
+
+/** Himpunan sidik makna aktif satu kata. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadMeaningFingerprints(tx: any, wordId: string): Promise<Set<string>> {
   return new Set((await loadMeaningFingerprintById(tx, wordId)).values());

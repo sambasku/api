@@ -51,7 +51,7 @@ export function rateLimit(opts: RateLimitOpts) {
         {
           success: false as const,
           error_code: 'RATE_LIMITED',
-          message: 'Kebanyakan permintaan, coba lagi nanti ya.',
+          message: 'Server sedang sibuk. Coba lagi beberapa saat lagi ya.',
           details: null,
         },
         429,

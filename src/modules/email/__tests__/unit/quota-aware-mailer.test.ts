@@ -94,3 +94,24 @@ describe('QuotaAwareMailer provider 4xx', () => {
     expect(result.provider).toBe('resend');
   });
 });
+
+describe('QuotaAwareMailer tanpa provider', () => {
+  it('produksi: sendTest melempar EMAIL_NOT_CONFIGURED, bukan sukses palsu', async () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const { mailer } = makeMailer([
+        {
+          provider: 'resend',
+          isConfigured: () => false,
+          send: async () => ({ messageId: null }),
+        },
+      ]);
+      await expect(mailer.sendTest('budi@test.com')).rejects.toMatchObject({
+        errorCode: 'EMAIL_NOT_CONFIGURED',
+      });
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
+  });
+});

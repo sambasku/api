@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   usahaContributions,
@@ -105,6 +105,14 @@ export class UsahaContributionRepositoryImpl
     const conds = [];
     if (input.status) conds.push(eq(usahaContributions.status, input.status));
     if (input.kind) conds.push(eq(usahaContributions.kind, input.kind));
+    if (input.usahaId) {
+      conds.push(
+        or(
+          eq(usahaContributions.usahaId, input.usahaId),
+          eq(usahaContributions.resultUsahaId, input.usahaId),
+        )!,
+      );
+    }
     const rows = await this.db
       .select({
         row: usahaContributions,

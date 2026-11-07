@@ -461,19 +461,38 @@ describe.skipIf(!hasTestDb)("Usaha E2E - CRUD admin + usulan + klaim", () => {
   });
 
   it("klaim pengelola -> approve -> manager_id terisi + klaim pesaing ditolak", async () => {
+    const evidenceA = [
+      {
+        url: "https://ik.imagekit.io/test/usaha-claims/e2e-a.jpg",
+        provider_file_id: "file_e2e_claim_a",
+      },
+    ];
     const claimA = await post(
       "/api/v1/usaha/warung-kopi-e2e/claims",
-      { contact_evidence: "WA 081200000001 milik saya" },
+      {
+        evidence_images: evidenceA,
+        note: "WA 081200000001 milik saya",
+      },
       userToken,
     );
     expect(claimA.status).toBe(200);
     const claimABody = (await claimA.json()).data;
     const claimAId = claimABody.id;
+    // Bukti privat: tidak ada di response publik submit.
     expect(claimABody.contact_evidence).toBeUndefined();
+    expect(claimABody.evidence_images).toBeUndefined();
 
     const claimB = await post(
       "/api/v1/usaha/warung-kopi-e2e/claims",
-      { contact_evidence: "Saya pemilik sebenarnya" },
+      {
+        evidence_images: [
+          {
+            url: "https://ik.imagekit.io/test/usaha-claims/e2e-b.jpg",
+            provider_file_id: "file_e2e_claim_b",
+          },
+        ],
+        note: "Saya pemilik sebenarnya",
+      },
       otherToken,
     );
     expect(claimB.status).toBe(200);
@@ -483,8 +502,14 @@ describe.skipIf(!hasTestDb)("Usaha E2E - CRUD admin + usulan + klaim", () => {
     const queueItems = (await queue.json()).data.items;
     expect(
       queueItems.some(
-        (c: { id: string; contact_evidence?: string }) =>
-          c.id === claimAId && c.contact_evidence === "WA 081200000001 milik saya",
+        (c: {
+          id: string;
+          evidence_images?: Array<{ provider_file_id: string }>;
+        }) =>
+          c.id === claimAId &&
+          c.evidence_images?.some(
+            (img) => img.provider_file_id === "file_e2e_claim_a",
+          ),
       ),
     ).toBe(true);
 
@@ -685,7 +710,12 @@ describe.skipIf(!hasTestDb)("Usaha E2E - CRUD admin + usulan + klaim", () => {
     expect(
       (
         await post("/api/v1/usaha/warung-kopi-e2e/claims", {
-          contact_evidence: "abcde",
+          evidence_images: [
+            {
+              url: "https://ik.imagekit.io/test/usaha-claims/anon.jpg",
+              provider_file_id: "file_anon",
+            },
+          ],
         })
       ).status,
     ).toBe(401);

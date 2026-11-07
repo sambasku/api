@@ -169,6 +169,8 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
       target_type: 'meaning',
       target_id: meaningId,
       value: 1,
+      // Definisi sungguhan menang atas padanan.
+      target_preview: 'kata dimoderasi · Kata untuk moderasi vote',
     });
     // NFR-5: response TIDAK pernah mengandung password_hash
     expect(Object.keys(body.data[0]).includes('password_hash')).toBe(false);
@@ -180,11 +182,102 @@ describe.skipIf(!hasTestDb)('Admin Votes E2E v1 - moderasi vote (root/admin/revi
 
     const body = (await res.json()) as {
       success: boolean;
-      data: { target_id: string; upvotes: number; downvotes: number; net: number }[];
+      data: {
+        target_id: string;
+        upvotes: number;
+        downvotes: number;
+        net: number;
+        target_preview: string | null;
+      }[];
     };
     expect(body.success).toBe(true);
     const hit = body.data.find((r) => r.target_id === meaningId);
-    expect(hit).toMatchObject({ upvotes: 2, downvotes: 0, net: 2 });
+    expect(hit).toMatchObject({
+      upvotes: 2,
+      downvotes: 0,
+      net: 2,
+      target_preview: 'kata dimoderasi · Kata untuk moderasi vote',
+    });
+  });
+
+  it('preview makna placeholder "-" = lemma · padanan, bukan tanda hubung', async () => {
+    const create = await post(
+      '/api/v1/admin/words',
+      {
+        ...validWordBody('kalintiak'),
+        meanings: [
+          {
+            word_class_id: NOMINA,
+            definition: '-',
+            is_have_definition: false,
+            order_index: 1,
+            translations: [
+              { language_id: IDN, translation_text: 'makan', translation_type: 'direct' },
+            ],
+          },
+        ],
+      },
+      adminToken,
+    );
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as { data: { word_id: string } };
+    const detail = await get(`/api/v1/words/${created.data.word_id}`, adminToken);
+    const detailBody = (await detail.json()) as { data: { meanings: { id: string }[] } };
+    const placeholderMeaningId = detailBody.data.meanings[0]!.id;
+
+    const voted = await post(
+      '/api/v1/votes',
+      { target_type: 'meaning', target_id: placeholderMeaningId, value: 1 },
+      voter2Token,
+    );
+    expect(voted.status).toBe(200);
+
+    const res = await get(
+      `/api/v1/admin/votes?target_id=${placeholderMeaningId}`,
+      reviewerToken,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { target_preview: string | null }[] };
+    expect(body.data[0]?.target_preview).toBe('kalintiak · makan');
+  });
+
+  it('GET /admin/words/:wordId/voters: 200 + counts; editor 403; kata fiktif 404', async () => {
+    expect((await get(`/api/v1/admin/words/${wordId}/voters`, editorToken)).status).toBe(403);
+
+    const res = await get(`/api/v1/admin/words/${wordId}/voters?limit=10`, reviewerToken);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      success: boolean;
+      data: Record<string, unknown>[];
+      meta: {
+        limit: number;
+        has_more: boolean;
+        upvotes: number;
+        downvotes: number;
+      };
+    };
+    expect(body.success).toBe(true);
+    expect(body.meta).toMatchObject({ limit: 10, upvotes: 2, downvotes: 0, has_more: false });
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((v) => v.voter_username).sort()).toEqual([voter1Name, voter2Name].sort());
+    expect(body.data.every((v) => v.meaning_id === meaningId)).toBe(true);
+    expect(Object.keys(body.data[0]!).includes('password_hash')).toBe(false);
+
+    const filtered = await get(
+      `/api/v1/admin/words/${wordId}/voters?meaning_id=${meaningId}&value=1`,
+      reviewerToken,
+    );
+    const filteredBody = (await filtered.json()) as {
+      data: { value: number }[];
+      meta: { upvotes: number; downvotes: number };
+    };
+    expect(filtered.status).toBe(200);
+    expect(filteredBody.data).toHaveLength(2);
+    expect(filteredBody.meta).toMatchObject({ upvotes: 2, downvotes: 0 });
+
+    const miss = await get(`/api/v1/admin/words/${ulid26('01NOWORD')}/voters`, reviewerToken);
+    expect(miss.status).toBe(404);
+    expect((await miss.json()).error_code).toBe('WORD_NOT_FOUND');
   });
 
   it('delete vote individual → 200 & vote hilang dari list', async () => {

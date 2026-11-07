@@ -785,6 +785,83 @@
       "when": 1801611000000,
       "tag": "0111_discussion_op_edit",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "6",
+      "when": 1801611010000,
+      "tag": "0112_encyclopedia",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "6",
+      "when": 1801612000000,
+      "tag": "0113_usaha_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "6",
+      "when": 1801613000000,
+      "tag": "0114_about_team_sponsorships",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "6",
+      "when": 1801614000000,
+      "tag": "0115_usaha_claim_evidence_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "6",
+      "when": 1801615000000,
+      "tag": "0116_meaning_dedupe_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "6",
+      "when": 1801616000000,
+      "tag": "0117_verifier_application_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "6",
+      "when": 1801617000000,
+      "tag": "0118_verifier_application_full_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "6",
+      "when": 1801618000000,
+      "tag": "0119_wa_provider_openwa",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "6",
+      "when": 1801619000000,
+      "tag": "0120_verifier_wa_welcome",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "6",
+      "when": 1801620000000,
+      "tag": "0121_close_verified_contribution_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "6",
+      "when": 1801621000000,
+      "tag": "0122_username_handle_min6",
+      "breakpoints": true
     }
   ]
 }

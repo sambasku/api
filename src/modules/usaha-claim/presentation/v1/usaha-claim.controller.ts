@@ -35,6 +35,7 @@ function serializeAdmin(r: UsahaClaim | UsahaClaimWithUsaha) {
     usaha_slug: withUsaha.usahaSlug,
     usaha_name: withUsaha.usahaName,
     contact_evidence: r.contactEvidence,
+    evidence_images: r.evidenceImages,
     user_id: r.userId,
     reviewed_by: r.reviewedBy,
   };
@@ -46,10 +47,19 @@ export class UsahaClaimController {
   submit(
     c: Context<{ Variables: AppVariables }>,
     slug: string,
-    body: { contact_evidence: string; note?: string | null },
+    body: {
+      evidence_images: Array<{
+        url: string;
+        provider_file_id: string;
+        alt_text?: string | null;
+      }>;
+      contact_evidence?: string;
+      note?: string | null;
+    },
   ) {
     return this.uc
       .submit(c.get('user')?.user_id ?? '', slug, {
+        evidenceImages: body.evidence_images,
         contactEvidence: body.contact_evidence,
         note: body.note,
       })

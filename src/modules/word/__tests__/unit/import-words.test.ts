@@ -330,6 +330,7 @@ describe('ImportWordsUseCase - word_class_code & example_translation', () => {
             translation: 'makan',
             isHaveDefinition: true,
             isHaveTranslation: true,
+            wordClassId: UMUM_ID,
           },
         ]),
       },

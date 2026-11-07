@@ -493,6 +493,15 @@ export const approveResponseSchema = z.object({
     word_lemma: z.string(),
     status: z.literal('approved'),
     changes_applied: z.number(),
+    skipped_duplicates: z
+      .array(
+        z.object({
+          meaning_id: z.string(),
+          definition: z.string(),
+          translation_text: z.string(),
+        }),
+      )
+      .optional(),
     message: z.string(),
   }),
 });

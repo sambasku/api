@@ -304,18 +304,16 @@ export interface WordRepository {
    *  kata itu sendiri - tanpa ini setiap edit selalu "duplikat" dirinya. */
   findDuplicate(languageId: string, lemma: string, excludeWordId?: string): Promise<boolean>;
   /**
-   * Makna published yang cocok dengan lemma + definisi + terjemahan Indonesia
-   * (normalisasi trim/lowercase/collapse whitespace).
-   *
-   * Placeholder pada sisi PENCARI = field itu diabaikan ("-" pada definisi
-   * tetap dibandingkan lewat terjemahannya, #174). Minimal satu field nyata
-   * harus dibandingkan; kalau dua-duanya placeholder → null.
+   * Makna published yang cocok dengan lemma + sidik (kelas, definisi, padanan).
+   * Placeholder tidak masuk teks. Beda kelas kata bukan duplikat.
    */
   findPublishedDuplicateMeaning(params: {
     languageId: string;
     lemma: string;
     definition: string;
     translationText: string;
+    wordClassId?: string | null;
+    translations?: { languageId: string; translationText: string }[];
   }): Promise<PublishedDuplicateMeaning | null>;
   /** Resolve language id by code (mis. `id` untuk Indonesia). */
   findLanguageIdByCode(code: string): Promise<string | null>;
@@ -340,7 +338,13 @@ export interface WordRepository {
   ): Promise<{ id: string; status: WordStatus } | null>;
   /** Sidik makna yang sudah ada, untuk menolak impor ulang yang sama. */
   listMeaningKeys(wordId: string): Promise<
-    { definition: string; translation: string; isHaveDefinition: boolean; isHaveTranslation: boolean }[]
+    {
+      definition: string;
+      translation: string;
+      isHaveDefinition: boolean;
+      isHaveTranslation: boolean;
+      wordClassId: string | null;
+    }[]
   >;
   /**
    * Hanya published + belum soft-deleted.

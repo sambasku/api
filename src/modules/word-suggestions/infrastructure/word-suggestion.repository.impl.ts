@@ -37,6 +37,7 @@ import {
   isSuggestionCategory,
 } from '../domain/entities/word-suggestion.entity';
 import { applyChangesToWord, assertWordTypeAllowsComponents } from '../application/utils/apply-changes-to-word';
+import { assertProposedMeaningsUnique } from '../application/utils/suggestion-meaning-dedupe';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import {
   deleteProposedStagingImages,
@@ -836,6 +837,9 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     }
 
     await assertProposedTargetsCurrent(wordId, proposedChanges);
+    // Sebelum insert dan sebelum event: duplikat tidak boleh mengisi slot
+    // "satu usulan pending" dan tidak boleh masuk feed.
+    await assertProposedMeaningsUnique(db, { id: word.id, lemma: word.lemma }, proposedChanges);
 
     const selfApply = Boolean(actorRole && isVerifierRole(actorRole));
     // Kontributor pada kata belum verified: tayang dulu, antrean tetap pending,
@@ -929,10 +933,38 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
             updatedAt: new Date(),
           })
           .where(eq(wordEditSuggestions.id, suggestion.id));
+        await this.emitEvent({
+          kind: 'suggestion_created',
+          actorId: userId,
+          targetWordId: wordId,
+          targetId: suggestion.id,
+          hidden: true,
+          dedupeKey: `suggestion:${suggestion.id}`,
+        });
         throw err;
       }
     } else if (applyPendingNow) {
-      await applyChangesToWord(suggestion.id, userId, 'apply_pending');
+      try {
+        await applyChangesToWord(suggestion.id, userId, 'apply_pending');
+      } catch (err) {
+        await db
+          .update(wordEditSuggestions)
+          .set({
+            deletedAt: new Date(),
+            deletedBy: userId,
+            updatedAt: new Date(),
+          })
+          .where(eq(wordEditSuggestions.id, suggestion.id));
+        await this.emitEvent({
+          kind: 'suggestion_created',
+          actorId: userId,
+          targetWordId: wordId,
+          targetId: suggestion.id,
+          hidden: true,
+          dedupeKey: `suggestion:${suggestion.id}`,
+        });
+        throw err;
+      }
     }
 
     await db.insert(auditLogs).values({
@@ -1186,7 +1218,13 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       decisions?: { key: string; decision: 'approve' | 'reject' }[];
       censoredFiles?: Record<string, { bytes: Uint8Array; mimeType: string | null }>;
     },
-  ): Promise<{ applied: boolean; changesApplied: number; wordLemma: string; wordId: string }> {
+  ): Promise<{
+    applied: boolean;
+    changesApplied: number;
+    wordLemma: string;
+    wordId: string;
+    skippedDuplicates: { meaningId: string; definition: string; translationText: string }[];
+  }> {
     const [row] = await db
       .select({
         wordId: wordEditSuggestions.wordId,
@@ -1262,6 +1300,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         changesApplied: 0,
         wordLemma: word?.lemma ?? '',
         wordId: row.wordId,
+        skippedDuplicates: [],
       };
     }
 

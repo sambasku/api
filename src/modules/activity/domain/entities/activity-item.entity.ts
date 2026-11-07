@@ -18,11 +18,13 @@ export type ActivityKind =
   | 'vote_down'
   | 'announcement'
   | 'place_photo'
+  | 'usaha_photo'
   | 'place_listing'
   | 'event'
-  | 'usaha'
-  | 'culinary'
-  | 'pantun';
+| 'usaha'
+| 'culinary'
+| 'pantun'
+| 'article';
 
 export interface ActivityActor {
   username: string | null;

@@ -400,6 +400,41 @@ describe.skipIf(!hasTestDb)("Event E2E - CRUD admin + usulan moderasi", () => {
     expect(matches.length).toBe(1);
   });
 
+  it("list publik overlaps_from/to filter overlap & tolak param sendirian", async () => {
+    const start = new Date("2027-03-10T02:00:00.000Z");
+    const end = new Date("2027-03-12T10:00:00.000Z");
+    const created = await post(
+      "/api/v1/admin/events",
+      eventBody({
+        slug: "overlap-kalender-e2e",
+        name: "Overlap Kalender E2E",
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+      }),
+      adminToken,
+    );
+    expect(created.status).toBe(200);
+
+    const hit = await get(
+      "/api/v1/events?overlaps_from=2027-03-01T00:00:00.000Z&overlaps_to=2027-03-31T00:00:00.000Z&limit=100",
+    );
+    expect(hit.status).toBe(200);
+    const hitItems = (await hit.json()).data.items as { slug: string }[];
+    expect(hitItems.some((e) => e.slug === "overlap-kalender-e2e")).toBe(true);
+
+    const miss = await get(
+      "/api/v1/events?overlaps_from=2027-04-01T00:00:00.000Z&overlaps_to=2027-04-15T00:00:00.000Z&limit=100",
+    );
+    expect(miss.status).toBe(200);
+    const missItems = (await miss.json()).data.items as { slug: string }[];
+    expect(missItems.some((e) => e.slug === "overlap-kalender-e2e")).toBe(false);
+
+    const bad = await get(
+      "/api/v1/events?overlaps_from=2027-03-01T00:00:00.000Z&limit=10",
+    );
+    expect(bad.status).toBe(400);
+  });
+
   it("batalkan acara -> occurrence_status cancelled", async () => {
     const list = await get("/api/v1/admin/events?limit=100", adminToken);
     const target = (await list.json()).data.items.find(

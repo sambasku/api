@@ -1,16 +1,25 @@
 import type { UsahaClaimStatus } from '@/shared/database/drizzle/schema/usaha-claims.schema';
 
+/** Satu gambar bukti klaim (ImageKit, privat - hanya antrean admin). */
+export interface UsahaClaimEvidenceImage {
+  url: string;
+  provider_file_id: string;
+  alt_text?: string | null;
+}
+
 /**
  * Klaim pengelolaan usaha (PRD 8).
  *
- * `contactEvidence` = bukti verifikasi PRIVAT: hanya boleh dikirim ke
- * antrean admin, TIDAK PERNAH ke endpoint publik (PRD 6.4 & 18).
+ * `evidenceImages` / `contactEvidence` = bukti verifikasi PRIVAT: hanya
+ * boleh dikirim ke antrean admin, TIDAK PERNAH ke endpoint publik
+ * (PRD 6.4 & 18).
  */
 export interface UsahaClaim {
   id: string;
   usahaId: string;
   userId: string;
   contactEvidence: string;
+  evidenceImages: UsahaClaimEvidenceImage[];
   note: string | null;
   status: UsahaClaimStatus;
   rejectReasonCode: string | null;
@@ -40,4 +49,28 @@ export function composeClaimRejectDisplay(
 ): string {
   const base = USAHA_CLAIM_REJECT_DISPLAY[code] ?? code;
   return text?.trim() ? `${base} - ${text.trim()}` : base;
+}
+
+/** Parse kolom JSON `evidence_images` (defensif terhadap data rusak). */
+export function parseEvidenceImages(raw: string | null | undefined): UsahaClaimEvidenceImage[] {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (item): item is UsahaClaimEvidenceImage =>
+          !!item &&
+          typeof item === 'object' &&
+          typeof (item as UsahaClaimEvidenceImage).url === 'string' &&
+          typeof (item as UsahaClaimEvidenceImage).provider_file_id === 'string',
+      )
+      .map((item) => ({
+        url: item.url,
+        provider_file_id: item.provider_file_id,
+        alt_text: item.alt_text ?? null,
+      }));
+  } catch {
+    return [];
+  }
 }

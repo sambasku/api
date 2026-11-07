@@ -66,6 +66,8 @@ export class AddMeaningUseCase {
       lemma: word.lemma,
       definition: dto.definition,
       translationText: idTranslation?.translationText ?? '',
+      wordClassId: dto.wordClassId ?? null,
+      translations: dto.translations,
     });
     if (match) throwDuplicateMeaningConflict(match);
   }

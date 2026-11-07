@@ -7,6 +7,7 @@ import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { UserRepository } from '../domain/repositories/user.repository';
 import type { NewUser, User, UserListFilter, UserRole } from '../domain/entities/user.entity';
 import { derivePrimaryRole } from '../domain/entities/user.entity';
+import { filterAvailableUsernames } from './filter-available-usernames';
 
 type UserRow = typeof users.$inferSelect;
 
@@ -55,6 +56,9 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     avatarProvider: row.avatarProvider ?? null,
     avatarProviderFileId: row.avatarProviderFileId ?? null,
     avatarSha: row.avatarSha ?? null,
+    isTeam: row.isTeam ?? false,
+    teamAs: row.teamAs ?? null,
+    teamNote: row.teamNote ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt,
@@ -95,13 +99,14 @@ export class UserRepositoryImpl implements UserRepository {
 
   async save(user: NewUser): Promise<User> {
     const { roles: newRoles, usernameCandidates, ...rest } = user;
-    // Insert-retry atas UNIQUE username (bukan probe-then-insert): DB jadi
-    // arbiter tunggal, race dua register bersamaan aman secara struktural.
-    // Caller boleh kirim kandidat alternatif via `usernameCandidates`
-    // (register/OAuth); tanpa itu, konflik = 409 USERNAME_ALREADY_EXISTS.
+    // Pre-check batch (1 SELECT) buang kandidat yang sudah dipakai, lalu
+    // insert-retry UNIQUE sebagai arbiter race. Caller boleh kirim
+    // `usernameCandidates` (register/OAuth); tanpa itu, konflik = 409.
     const candidates = [...new Set(usernameCandidates?.length ? usernameCandidates : [user.username])];
+    const available = await filterAvailableUsernames(this.db, candidates);
+    const tryList = available.length > 0 ? available : candidates;
     let row: UserRow | undefined;
-    for (const candidate of candidates) {
+    for (const candidate of tryList) {
       try {
         [row] = await this.db
           .insert(users)
@@ -120,7 +125,7 @@ export class UserRepositoryImpl implements UserRepository {
           throw new ConflictError('EMAIL_ALREADY_EXISTS', 'Email sudah terdaftar');
         }
         if (!isUniqueViolationOn(err, 'username')) throw err;
-        // username bentrok: coba kandidat berikutnya
+        // username bentrok (race): coba kandidat berikutnya
       }
     }
     if (!row) {
@@ -182,6 +187,9 @@ export class UserRepositoryImpl implements UserRepository {
       avatarProvider: users.avatarProvider,
       avatarProviderFileId: users.avatarProviderFileId,
       avatarSha: users.avatarSha,
+      isTeam: users.isTeam,
+      teamAs: users.teamAs,
+      teamNote: users.teamNote,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
         // Di-select juga untuk cursor comparison walau tidak di-return ke user (deletedAt
@@ -441,6 +449,30 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
     if (!updated) {
       throw new NotFoundError('USER_NOT_FOUND', `User ${id} tidak ditemukan`);
     }
+    const roles = await loadRolesByUserIds(this.db, [updated.id]);
+    return toEntity(updated, roles.get(updated.id) ?? []);
+  }
+
+  async updateTeam(
+    id: string,
+    data: {
+      isTeam?: boolean;
+      teamAs?: string | null;
+      teamNote?: string | null;
+    },
+  ): Promise<User | null> {
+    if (id === ANONIM_USER_ID) return null;
+    const [updated] = await this.db
+      .update(users)
+      .set({
+        ...(data.isTeam !== undefined ? { isTeam: data.isTeam } : {}),
+        ...(data.teamAs !== undefined ? { teamAs: data.teamAs } : {}),
+        ...(data.teamNote !== undefined ? { teamNote: data.teamNote } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .returning();
+    if (!updated) return null;
     const roles = await loadRolesByUserIds(this.db, [updated.id]);
     return toEntity(updated, roles.get(updated.id) ?? []);
   }

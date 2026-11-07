@@ -66,11 +66,17 @@ export interface User {
   avatarProvider: string | null;
   avatarProviderFileId: string | null;
   avatarSha: string | null;
+  /** Anggota Tim Kami (kurasi). */
+  isTeam: boolean;
+  teamAs: string | null;
+  teamNote: string | null;
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null; // soft delete - tidak boleh bisa login lagi
   /** Provider OAuth yang menaut (auth_identities), mis. ['google']. Kosong = onboard email/password. Hanya diisi list admin (bukan kolom users). */
   authProviders?: string[];
+  /** Enrichment admin: punya sponsorship aktif. */
+  isSponsor?: boolean;
 }
 
 export type NewUser = Pick<User, 'username' | 'email' | 'passwordHash' | 'phone'> & {

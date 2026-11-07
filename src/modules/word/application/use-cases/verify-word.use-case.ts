@@ -3,6 +3,7 @@ import { db } from '@/shared/database/drizzle/client';
 import { wordEditSuggestions } from '@/shared/database/drizzle/schema';
 import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { SyncLiveWordContributionsUseCase } from '@/modules/contribution/application/use-cases/sync-live-word-contributions.use-case';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 
 export interface VerifyWordCommand {
@@ -18,6 +19,7 @@ export class VerifyWordUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly syncContributions?: SyncLiveWordContributionsUseCase,
   ) {}
 
   async execute(cmd: VerifyWordCommand): Promise<void> {
@@ -80,5 +82,11 @@ export class VerifyWordUseCase {
       newData: { is_verified: cmd.verified },
       requestId: cmd.requestId ?? null,
     });
+
+    if (cmd.verified) {
+      await this.syncContributions?.closeLive(cmd.wordId, cmd.actorId);
+    } else {
+      await this.syncContributions?.reopenUnverified(cmd.wordId);
+    }
   }
 }

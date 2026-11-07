@@ -127,3 +127,29 @@ export const usahaItems = sqliteTable(
     index('usaha_items_usaha_status_idx').on(t.usahaId, t.status, t.sortOrder),
   ],
 );
+
+/**
+ * Galeri foto singgah usaha (UGC setelah terbit) - mirror place_images.
+ * Cover utama tetap `usahas.cover_url`; baris di sini = foto tambahan.
+ */
+export const usahaImages = sqliteTable(
+  'usaha_images',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    usahaId: text('usaha_id')
+      .notNull()
+      .references(() => usahas.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    isMain: integer('is_main', { mode: 'boolean' }).notNull().default(false),
+    sortOrder: integer('sort_order').notNull().default(0),
+    attributionJson: text('attribution_json'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(
+      () => new Date(),
+    ),
+    /** Takedown admin - non-null = tidak tampil publik. */
+    hiddenAt: integer('hidden_at', { mode: 'timestamp' }),
+  },
+  (t) => [index('usaha_images_usaha_id_idx').on(t.usahaId)],
+);

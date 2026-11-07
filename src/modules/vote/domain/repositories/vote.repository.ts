@@ -10,8 +10,10 @@ export type VoteTargetType =
   | 'comment'
   | 'discussion_reply'
   | 'discussion'
-  | 'pantun'
-  | 'pantun_reply';
+| 'pantun'
+| 'pantun_reply'
+| 'article'
+| 'article_comment';
 
 export interface VoteTarget {
   entityType: VoteTargetType;
@@ -71,6 +73,37 @@ export interface AdminVoteListResult {
     limit: number;
     nextCursor: string | null;
     hasMore: boolean;
+  };
+}
+
+/** Voter pada makna milik satu kata (GET /admin/words/:wordId/voters). */
+export interface WordVoterListItem {
+  id: string;
+  userId: string;
+  voterUsername: string;
+  voterDisplayName: string | null;
+  voterAvatarUrl: string | null;
+  voterEmail: string;
+  meaningId: string;
+  meaningPreview: string | null;
+  value: 1 | -1;
+  createdAt: Date;
+}
+
+export interface WordVotersListFilter {
+  meaningId?: string;
+  value?: 1 | -1;
+}
+
+export interface WordVotersListResult {
+  items: WordVoterListItem[];
+  meta: {
+    limit: number;
+    nextCursor: string | null;
+    hasMore: boolean;
+    /** Total up/down untuk scope kata (+ meaning_id bila difilter); tidak ikut filter value. */
+    upvotes: number;
+    downvotes: number;
   };
 }
 
@@ -276,6 +309,18 @@ export interface VoteRepository {
     limit: number,
     cursor: AdminVoteCursor | null,
   ): Promise<AdminVoteListResult>;
+
+  /**
+   * Daftar voter makna milik satu kata (JOIN votes↔meanings↔users).
+   * Null bila kata tidak ada / soft-deleted. Cursor compound (created_at, id).
+   * Query list + agregat count - target ≤2 query/request.
+   */
+  listVotersByWordId(
+    wordId: string,
+    filter: WordVotersListFilter,
+    limit: number,
+    cursor: AdminVoteCursor | null,
+  ): Promise<WordVotersListResult | null>;
 
   /**
    * Hard delete satu vote by PK. NotFoundError jika 0 rows.

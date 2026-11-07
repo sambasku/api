@@ -4,7 +4,6 @@ import type { InboxNotificationType } from '@/modules/notification/domain/entiti
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { ActivityEventRepository } from '@/modules/activity/domain/repositories/activity-event.repository';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
-import type { UsahaClaimRepository } from '@/modules/usaha-claim/domain/usaha-claim.repository';
 import {
   CreateUsahaUseCase,
   UniqueUsahaSlugUseCase,
@@ -27,6 +26,7 @@ import type {
   UsahaContributionPayload,
 } from '../domain/usaha-contribution.entity';
 import type { UsahaContributionRepository } from '../domain/usaha-contribution.repository';
+import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
 
 const PENDING_CAP = 10;
 const MAX_ITEMS = 20;
@@ -62,6 +62,14 @@ function overlaps(a: string, b: string): boolean {
   if (!a || !b) return false;
   const setB = new Set(b.split(','));
   return a.split(',').some((f) => setB.has(f));
+}
+
+function payloadName(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object' || !('name' in payload)) return undefined;
+  const name = payload.name;
+  if (typeof name !== 'string') return undefined;
+  const trimmed = name.trim();
+  return trimmed || undefined;
 }
 
 /** Copy notifikasi inbox + FCM untuk keputusan pengajuan usaha. */
@@ -109,6 +117,14 @@ export interface SubmitManagerChangeInput {
   fields?: string[];
 }
 
+/** Usulan perubahan publik (bukan pengelola) - kind=profile + usahaId. */
+export interface SubmitSuggestEditInput {
+  slug: string;
+  payload: ProfilePayload;
+  /** Field yang berubah. Kosong = deteksi dari keys payload. */
+  fields?: string[];
+}
+
 export class UsahaContributionUseCases {
   constructor(
     private readonly contrib: UsahaContributionRepository,
@@ -116,12 +132,30 @@ export class UsahaContributionUseCases {
     private readonly regions: RegionRepository,
     private readonly createUsaha: CreateUsahaUseCase,
     private readonly uniqueSlug: UniqueUsahaSlugUseCase,
-    private readonly claims: UsahaClaimRepository,
     private readonly audit?: AuditLogRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
+
+  private async notifyGroup(
+    userId: string,
+    jenis: string,
+    name: string | undefined,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis,
+        name: name?.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
+  }
 
   // ------------------------------------------------------------- publik --
 
@@ -138,7 +172,7 @@ export class UsahaContributionUseCases {
         'Maksimal 10 usulan yang masih menunggu',
       );
     }
-    return this.contrib.create({
+    const created = await this.contrib.create({
       kind: 'new',
       userId,
       lockedFields: '',
@@ -146,6 +180,8 @@ export class UsahaContributionUseCases {
       // Anonim tidak bisa mengklaim (tidak ada akun penerima).
       wantsClaim: input.wantsClaim && !anon,
     });
+    await this.notifyGroup(userId, 'Usaha', payload.name);
+    return created;
   }
 
   mine(userId: string) {
@@ -195,6 +231,7 @@ export class UsahaContributionUseCases {
     await this.contrib.replacePayload(id, payload, '');
     const updated = await this.contrib.findById(id);
     if (!updated) throw new Error('resubmit gagal - row hilang');
+    await this.notifyGroup(userId, 'Usaha', payload.name, true);
     return updated;
   }
 
@@ -268,7 +305,7 @@ export class UsahaContributionUseCases {
       }
     }
 
-    return this.contrib.create({
+    const created = await this.contrib.create({
       kind: input.kind,
       userId,
       usahaId: usaha.id,
@@ -277,11 +314,88 @@ export class UsahaContributionUseCases {
       payload,
       baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
     });
+    await this.notifyGroup(
+      userId,
+      'Usaha (perbaikan)',
+      payloadName(payload) ?? usaha.name,
+    );
+    return created;
+  }
+
+  /**
+   * Usulan perubahan publik (warga login, bukan wajib pengelola).
+   * Reuse kind=profile + field-lock; approve admin menerapkan field terkunci.
+   */
+  async submitSuggestEdit(
+    userId: string,
+    input: SubmitSuggestEditInput,
+  ): Promise<UsahaContribution> {
+    if (!userId || userId === ANONIM_USER_ID) {
+      throw new ForbiddenError(
+        'LOGIN_REQUIRED',
+        'Masuk dulu ya untuk mengusulkan perubahan',
+      );
+    }
+    const usaha = await this.usahas.findBySlug(input.slug, { publicOnly: true });
+    if (!usaha) {
+      throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
+    }
+    if (usaha.publishStatus === 'restricted') {
+      throw new ForbiddenError(
+        'USAHA_RESTRICTED',
+        'Usaha ini sedang dibatasi admin',
+      );
+    }
+    if ((await this.contrib.countPending(userId)) >= PENDING_CAP) {
+      throw new ConflictError(
+        'PENDING_CAP',
+        'Maksimal 10 pengajuan yang masih menunggu',
+      );
+    }
+
+    const managerInput: SubmitManagerChangeInput = {
+      kind: 'profile',
+      usahaId: usaha.id,
+      payload: input.payload,
+      fields: input.fields,
+    };
+    const locked = this.lockedFieldsFor(managerInput);
+    const payload = await this.assertProfilePayload(input.payload, locked);
+
+    if (locked) {
+      const pending = await this.contrib.pendingLockedFields(usaha.id);
+      if (pending.some((other) => overlaps(locked, other))) {
+        throw new ConflictError(
+          'PENDING_FIELD_LOCK',
+          'Ada pengajuan lain yang sedang meninjau bagian yang sama. Tunggu keputusannya dulu ya.',
+        );
+      }
+    }
+
+    const created = await this.contrib.create({
+      kind: 'profile',
+      userId,
+      usahaId: usaha.id,
+      itemId: null,
+      lockedFields: locked,
+      payload,
+      baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
+    });
+    await this.notifyGroup(
+      userId,
+      'Usaha (perbaikan)',
+      payloadName(payload) ?? usaha.name,
+    );
+    return created;
   }
 
   // ------------------------------------------------------------- admin --
 
-  list(filter: { status?: 'pending' | 'needs_revision' | 'approved' | 'rejected'; kind?: UsahaContributionKind }) {
+  list(filter: {
+    status?: 'pending' | 'needs_revision' | 'approved' | 'rejected';
+    kind?: UsahaContributionKind;
+    usahaId?: string;
+  }) {
     return this.contrib.list(filter);
   }
 
@@ -327,21 +441,9 @@ export class UsahaContributionUseCases {
       });
       await this.contrib.setStatus(id, 'approved', { resultUsahaId: usaha.id });
 
-      // "Ini usaha saya" -> klaim pending untuk admin tinjau (anon skip).
-      if (row.wantsClaim && row.userId !== ANONIM_USER_ID) {
-        const existing = await this.claims.findPendingByUser(
-          usaha.id,
-          row.userId,
-        );
-        if (!existing) {
-          await this.claims.create({
-            usahaId: usaha.id,
-            userId: row.userId,
-            contactEvidence: `Diajukan lewat usulan usaha "${p.name}"`,
-            note: 'Klaim otomatis dari usulan usaha baru (menandai "ini usaha saya")',
-          });
-        }
-      }
+      // "Ini usaha saya" tidak lagi membuat klaim otomatis (butuh bukti
+      // gambar ImageKit). Setelah usaha terbit, user klaim lewat tombol
+      // "Ini usaha saya" di detail + unggah bukti.
 
       await this.emitPublished(usaha.id, usaha.slug, usaha.name, row.userId);
       await this.audit?.record({

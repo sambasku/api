@@ -238,6 +238,14 @@ export const cuisineResponseSchema = z.object({
   restricted_reason: z.string().nullable(),
   restricted_at: z.string().nullable(),
   author_id: z.string().nullable(),
+  author: z
+    .object({
+      id: z.string(),
+      username: z.string(),
+      display_name: z.string(),
+    })
+    .nullable()
+    .optional(),
   published_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
@@ -266,6 +274,14 @@ export const culinaryPlaceResponseSchema = z.object({
   restricted_at: z.string().nullable(),
   manager_id: z.string().nullable(),
   author_id: z.string().nullable(),
+  author: z
+    .object({
+      id: z.string(),
+      username: z.string(),
+      display_name: z.string(),
+    })
+    .nullable()
+    .optional(),
   published_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().nullable(),

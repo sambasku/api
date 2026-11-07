@@ -93,7 +93,7 @@ export class RateLimitedError extends AppError {
   statusCode = 429;
   errorCode = 'RATE_LIMITED';
   constructor(
-    message = 'Kebanyakan permintaan, coba lagi nanti ya.',
+    message = 'Server sedang sibuk. Coba lagi beberapa saat lagi ya.',
     public retryAfterSeconds = 120,
   ) {
     super(message);

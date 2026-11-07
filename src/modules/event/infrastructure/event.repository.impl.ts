@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, getTableColumns, inArray, isNull, lt, or, asc } from "drizzle-orm";
+import { and, desc, eq, gt, gte, getTableColumns, inArray, isNull, lt, or, asc } from "drizzle-orm";
 import type { AppDatabase } from "@/shared/database/drizzle/client";
 import { events, eventPlaces } from "@/shared/database/drizzle/schema/events.schema";
 import { eventCategories } from "@/shared/database/drizzle/schema/event-categories.schema";
@@ -21,6 +21,7 @@ import type {
   ListEventsResult,
   UpdateEventInput,
 } from "../domain/repositories/event.repository";
+import { resolvePublicAuthor } from "@/shared/utils/resolve-public-author";
 
 type EventRow = typeof events.$inferSelect;
 
@@ -68,6 +69,7 @@ function mapEvent(
     cancelledAt: row.cancelledAt ?? null,
     publishedAt: row.publishedAt ?? null,
     authorId: row.authorId ?? null,
+    author: null,
     places: placeRefs,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? null,
@@ -264,7 +266,9 @@ export class EventRepositoryImpl implements EventRepository {
       .limit(1);
     if (!row) return null;
     const byEvent = await loadPlaces(this.db, [row.id]);
-    return mapEvent(row, byEvent.get(row.id) ?? []);
+    const item = mapEvent(row, byEvent.get(row.id) ?? []);
+    item.author = await resolvePublicAuthor(this.db, item.authorId);
+    return item;
   }
 
   async list(input: ListEventsInput): Promise<ListEventsResult> {
@@ -318,19 +322,76 @@ export class EventRepositoryImpl implements EventRepository {
         .where(eq(eventPlaces.placeId, input.placeId));
       conds.push(inArray(events.id, sub));
     }
-    if (input.before) conds.push(lt(events.id, input.before));
-
-    // Urutkan by created_at (bukan starts_at): entri baru di atas, edit
-    // jadwal tidak menggeser posisi di daftar. Tie-break id untuk cursor.
-    const order =
-      input.order === "asc" ? asc(events.createdAt) : desc(events.createdAt);
+    // Overlap window (kalender bulan): starts < to AND ends >= from.
+    const useStartsOrder =
+      input.overlapsFrom != null && input.overlapsTo != null;
+    if (useStartsOrder) {
+      conds.push(lt(events.startsAt, input.overlapsTo!));
+      conds.push(gte(events.endsAt, input.overlapsFrom!));
+    }
+    // Tanpa overlap: urut created_at (entri baru di atas). Dengan overlap:
+    // urut starts_at ASC (agenda). Keyset harus cocok dengan kolom sort.
+    // Cursor tidak ketemu → halaman kosong (jangan jatuh ke page 1).
+    const ascending = input.order === "asc";
+    if (input.before) {
+      if (useStartsOrder) {
+        const [cursor] = await this.db
+          .select({ id: events.id, startsAt: events.startsAt })
+          .from(events)
+          .where(eq(events.id, input.before))
+          .limit(1);
+        if (!cursor) {
+          return { items: [], nextCursor: null };
+        }
+        conds.push(
+          or(
+            gt(events.startsAt, cursor.startsAt),
+            and(
+              eq(events.startsAt, cursor.startsAt),
+              lt(events.id, cursor.id),
+            ),
+          )!,
+        );
+      } else {
+        const [cursor] = await this.db
+          .select({ id: events.id, createdAt: events.createdAt })
+          .from(events)
+          .where(eq(events.id, input.before))
+          .limit(1);
+        if (!cursor) {
+          return { items: [], nextCursor: null };
+        }
+        conds.push(
+          ascending
+            ? or(
+                gt(events.createdAt, cursor.createdAt),
+                and(
+                  eq(events.createdAt, cursor.createdAt),
+                  lt(events.id, cursor.id),
+                ),
+              )!
+            : or(
+                lt(events.createdAt, cursor.createdAt),
+                and(
+                  eq(events.createdAt, cursor.createdAt),
+                  lt(events.id, cursor.id),
+                ),
+              )!,
+        );
+      }
+    }
+    const primaryOrder = useStartsOrder
+      ? asc(events.startsAt)
+      : ascending
+        ? asc(events.createdAt)
+        : desc(events.createdAt);
     const rows = await this.db
       .select(eventSelect)
       .from(events)
       .leftJoin(eventCategories, eq(eventCategories.id, events.categoryId))
       .leftJoin(regions, eq(regions.id, events.villageId))
       .where(and(...conds))
-      .orderBy(order, desc(events.id))
+      .orderBy(primaryOrder, desc(events.id))
       .limit(input.limit + 1);
 
     const hasMore = rows.length > input.limit;

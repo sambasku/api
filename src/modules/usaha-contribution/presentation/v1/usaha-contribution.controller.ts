@@ -5,6 +5,7 @@ import type { UsahaContributionUseCases } from '../../application/usaha-contribu
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type {
   NewUsahaPayload,
+  ProfilePayload,
   UsahaContribution,
   UsahaContributionPayload,
   UsahaContributionWithUsaha,
@@ -12,6 +13,7 @@ import type {
 import type {
   listUsahaContributionsQuerySchema,
   submitManagerChangeBodySchema,
+  submitSuggestEditBodySchema,
   submitUsahaContributionBodySchema,
 } from './validators/usaha-contribution.validator';
 
@@ -136,12 +138,45 @@ export class UsahaContributionController {
       .then((r) => c.json({ success: true as const, data: serialize(r) }));
   }
 
+  suggestEdit(
+    c: Context<{ Variables: AppVariables }>,
+    body: z.infer<typeof submitSuggestEditBodySchema>,
+  ) {
+    const payload: ProfilePayload = {};
+    if (body.name !== undefined) payload.name = body.name;
+    if (body.description !== undefined) payload.description = body.description;
+    if (body.category_id !== undefined) payload.categoryId = body.category_id;
+    if (body.kind !== undefined) payload.kind = body.kind;
+    if (body.village_id !== undefined) payload.villageId = body.village_id;
+    if (body.region_id !== undefined) payload.regionId = body.region_id;
+    if (body.address_text !== undefined) payload.addressText = body.address_text;
+    if (body.lat !== undefined) payload.lat = body.lat ?? null;
+    if (body.lng !== undefined) payload.lng = body.lng ?? null;
+    if (body.phone !== undefined) payload.phone = body.phone;
+    if (body.whatsapp !== undefined) payload.whatsapp = body.whatsapp;
+    if (body.website !== undefined) payload.website = body.website;
+    if (body.social_url !== undefined) payload.socialUrl = body.social_url;
+    if (body.cover_url !== undefined) payload.coverUrl = body.cover_url;
+
+    return this.uc
+      .submitSuggestEdit(this.actorId(c), {
+        slug: body.usaha_slug,
+        payload,
+        fields: body.fields,
+      })
+      .then((r) => c.json({ success: true as const, data: serialize(r) }));
+  }
+
   listAdmin(
     c: Context<{ Variables: AppVariables }>,
     query: z.infer<typeof listUsahaContributionsQuerySchema>,
   ) {
     return this.uc
-      .list({ status: query.status, kind: query.kind })
+      .list({
+        status: query.status,
+        kind: query.kind,
+        usahaId: query.usaha_id,
+      })
       .then((items) =>
         c.json({
           success: true as const,

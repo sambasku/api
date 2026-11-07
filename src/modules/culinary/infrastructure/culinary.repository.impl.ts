@@ -7,6 +7,7 @@ import { culinaryPlaceCuisines } from '@/shared/database/drizzle/schema/culinary
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { generateId } from '@/shared/utils/ulid';
 import { ConflictError } from '@/shared/errors/app-error';
+import { resolvePublicAuthor } from '@/shared/utils/resolve-public-author';
 import {
   mapImages,
   mapSources,
@@ -62,6 +63,7 @@ function mapCuisine(row: CuisineRow & { categoryName: string | null }): Cuisine 
     restrictedReason: row.restrictedReason ?? null,
     restrictedAt: row.restrictedAt ?? null,
     authorId: row.authorId ?? null,
+    author: null,
     publishedAt: row.publishedAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? null,
@@ -91,6 +93,7 @@ function mapPlace(row: PlaceRow): CulinaryPlace {
     restrictedAt: row.restrictedAt ?? null,
     managerId: row.managerId ?? null,
     authorId: row.authorId ?? null,
+    author: null,
     publishedAt: row.publishedAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? null,
@@ -240,7 +243,12 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .where(and(...conds))
       .limit(1);
     if (!row) return null;
-    return { ...mapCuisine(row), places: await this.linksForCuisine(row.id) };
+    const detail: CuisineDetail = {
+      ...mapCuisine(row),
+      places: await this.linksForCuisine(row.id),
+    };
+    detail.author = await resolvePublicAuthor(this.db, detail.authorId);
+    return detail;
   }
 
   async listCuisines(input: ListCuisinesInput): Promise<ListResult<Cuisine>> {
@@ -252,7 +260,24 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       const q = `%${input.q.trim()}%`;
       conds.push(or(ilikeCompat(cuisines.name, q), ilikeCompat(cuisines.slug, q))!);
     }
-    if (input.before) conds.push(lt(cuisines.id, input.before));
+    // Keyset harus cocok dengan ORDER BY (created_at, id) DESC.
+    // Cursor tidak ketemu → halaman kosong (jangan jatuh ke page 1).
+    if (input.before) {
+      const [cursor] = await this.db
+        .select({ id: cuisines.id, createdAt: cuisines.createdAt })
+        .from(cuisines)
+        .where(eq(cuisines.id, input.before))
+        .limit(1);
+      if (!cursor) {
+        return { items: [], nextCursor: null };
+      }
+      conds.push(
+        or(
+          lt(cuisines.createdAt, cursor.createdAt),
+          and(eq(cuisines.createdAt, cursor.createdAt), lt(cuisines.id, cursor.id)),
+        )!,
+      );
+    }
     const rows = await this.db
       .select(cuisineSelect)
       .from(cuisines)
@@ -418,7 +443,12 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .where(and(...conds))
       .limit(1);
     if (!row) return null;
-    return { ...mapPlace(row), cuisines: await this.linksForPlace(row.id) };
+    const detail: CulinaryPlaceDetail = {
+      ...mapPlace(row),
+      cuisines: await this.linksForPlace(row.id),
+    };
+    detail.author = await resolvePublicAuthor(this.db, detail.authorId);
+    return detail;
   }
 
   async listPlaces(input: ListPlacesInput): Promise<ListResult<CulinaryPlace>> {
@@ -437,7 +467,27 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
         or(ilikeCompat(culinaryPlaces.name, q), ilikeCompat(culinaryPlaces.slug, q))!,
       );
     }
-    if (input.before) conds.push(lt(culinaryPlaces.id, input.before));
+    // Keyset harus cocok dengan ORDER BY (created_at, id) DESC.
+    // Cursor tidak ketemu → halaman kosong (jangan jatuh ke page 1).
+    if (input.before) {
+      const [cursor] = await this.db
+        .select({ id: culinaryPlaces.id, createdAt: culinaryPlaces.createdAt })
+        .from(culinaryPlaces)
+        .where(eq(culinaryPlaces.id, input.before))
+        .limit(1);
+      if (!cursor) {
+        return { items: [], nextCursor: null };
+      }
+      conds.push(
+        or(
+          lt(culinaryPlaces.createdAt, cursor.createdAt),
+          and(
+            eq(culinaryPlaces.createdAt, cursor.createdAt),
+            lt(culinaryPlaces.id, cursor.id),
+          ),
+        )!,
+      );
+    }
     const rows = await this.db
       .select(placeSelect)
       .from(culinaryPlaces)

@@ -68,8 +68,10 @@ SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 PLAY_STATS_GCS_PREFIX = ""
 SUPABASE_URL="https://qqlksojwaqrydxhqpyqd.supabase.co"
 MOBILE_GA4_PROPERTY_ID="555160494"
-KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp/v24.0"
-KAPSO_PHONE_NUMBER_ID="1314628755072991"
+# OpenWA: kirim WA. API key lewat secret, bukan di sini.
+OPENWA_BASE_URL="https://wa.iamutaki.com"
+OPENWA_SESSION_ID="38d3dfa7-08c9-47f1-9490-f6ffe0124620"
+OPENWA_GROUP_JID="120363429405087787@g.us"
 GITHUB_CLIENT_ID="Ov23liuhFjUQj3bh5uWE"
 
 # #103: blok [limits] pernah dipasang di sini lalu DIHAPUS - akun Free plan
@@ -140,8 +142,9 @@ SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 PLAY_STATS_GCS_PREFIX = ""
 SUPABASE_URL="https://wkhlcrxlncflcztptrmg.supabase.co"
 MOBILE_GA4_PROPERTY_ID="555160494"
-KAPSO_BASE_URL="https://api.kapso.ai/meta/whatsapp/v24.0"
-KAPSO_PHONE_NUMBER_ID="1314628755072991"
+OPENWA_BASE_URL="https://wa.iamutaki.com"
+OPENWA_SESSION_ID="38d3dfa7-08c9-47f1-9490-f6ffe0124620"
+OPENWA_GROUP_JID="120363429405087787@g.us"
 GITHUB_CLIENT_ID="Ov23liEGNkEDuPNAhiTj"
 
 # [env.staging.limits] DIHAPUS - lihat catatan [limits] di atas (Free plan).
@@ -165,5 +168,7 @@ crons = ["* * * * *"]
 #   npx wrangler secret put UNSPLASH_ACCESS_KEY --env staging
 #   npx wrangler secret put SUPABASE_ANON_KEY --env staging
 #   npx wrangler secret put GITHUB_CLIENT_SECRET --env staging
+#   npx wrangler secret put OPENWA_API_KEY --env staging
+#   npx wrangler secret put OPENWA_API_KEY
 #   npx wrangler secret put PLAY_STATS_GCS_BUCKET --env staging
 #   … (Resend, ImageKit, OAuth, FCM - sama seperti sebelumnya)

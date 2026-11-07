@@ -50,10 +50,18 @@ export interface Event {
   cancelledAt: Date | null;
   publishedAt: Date | null;
   authorId: string | null;
+  /** Pengusul live; diisi di path detail. List boleh null. */
+  author: EventAuthorRef | null;
   /** Id-nama tempat wisata terkait (dipaket dari JOIN). */
   places: EventPlaceRef[];
   createdAt: Date;
   updatedAt: Date | null;
+}
+
+export interface EventAuthorRef {
+  id: string;
+  username: string;
+  displayName: string;
 }
 
 export interface EventPlaceRef {

@@ -36,7 +36,7 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl.createSuggestion', () 
   beforeEach(async () => {
     await truncateAll(db);
     await db.insert(users).values([
-      { id: OWNER, username: 'owner', email: 'owner@test.com', passwordHash: 'x' },
+      { id: OWNER, username: 'owner1', email: 'owner@test.com', passwordHash: 'x' },
       {
         id: KONTRIBUTOR,
         username: 'kontributor',
@@ -175,7 +175,7 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
   beforeEach(async () => {
     await truncateAll(db);
     await db.insert(users).values([
-      { id: OWNER, username: 'owner', email: 'owner@test.com', passwordHash: 'x' },
+      { id: OWNER, username: 'owner1', email: 'owner@test.com', passwordHash: 'x' },
       { id: KONTRIBUTOR, username: 'kontributor', email: 'kon@test.com', passwordHash: 'x' },
       { id: REVIEWER, username: 'reviewer', email: 'rev@test.com', passwordHash: 'x' },
     ]);

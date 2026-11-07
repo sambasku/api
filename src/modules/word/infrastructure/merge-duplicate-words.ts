@@ -13,6 +13,7 @@ import {
 } from '@/shared/database/drizzle/schema';
 
 import { loadMeaningFingerprintById } from '@/modules/word/application/utils/meaning-deduplication';
+import { normalizeLemma } from '@/modules/word/application/utils/normalize-lemma';
 
 /**
  * Gabung manual beberapa entri lemma sama ke satu penunggu (tab Duplikasi).
@@ -256,6 +257,14 @@ export async function mergeDuplicateWordsInTx(
         updatedAt: now,
       })
       .where(eq(words.id, sourceId));
+  }
+
+  const folded = normalizeLemma(keep.lemma);
+  if (folded && keep.lemma !== folded) {
+    await tx
+      .update(words)
+      .set({ lemma: folded, updatedBy: actorId, updatedAt: now })
+      .where(eq(words.id, keepWordId));
   }
 
   return { keepWordId, mergedWordIds: sourceIds };

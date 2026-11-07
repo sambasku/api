@@ -35,6 +35,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     levelSeen: overrides.levelSeen ?? 1,
     notifyStreakReminder: overrides.notifyStreakReminder ?? true,
     notifyLevelUp: overrides.notifyLevelUp ?? true,
+    isTeam: overrides.isTeam ?? false,
+    teamAs: overrides.teamAs ?? null,
+    teamNote: overrides.teamNote ?? null,
   };
 }
 

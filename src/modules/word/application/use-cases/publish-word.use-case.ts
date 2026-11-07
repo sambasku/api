@@ -1,5 +1,6 @@
 import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { SyncLiveWordContributionsUseCase } from '@/modules/contribution/application/use-cases/sync-live-word-contributions.use-case';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 
 export interface PublishWordCommand {
@@ -24,6 +25,7 @@ export class PublishWordUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly syncContributions?: SyncLiveWordContributionsUseCase,
   ) {}
 
   async execute(cmd: PublishWordCommand): Promise<PublishWordResult> {
@@ -76,6 +78,12 @@ export class PublishWordUseCase {
       },
       requestId: cmd.requestId ?? null,
     });
+
+    if (result.mergedIntoWordId && result.mergedIntoWordId !== cmd.wordId) {
+      await this.syncContributions?.closeMerged(result.wordId, cmd.wordId, cmd.actorId);
+    } else {
+      await this.syncContributions?.closeLive(result.wordId, cmd.actorId);
+    }
 
     return result;
   }

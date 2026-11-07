@@ -63,17 +63,15 @@ export class SendWaMessageUseCase {
   async execute(cmd: SendWaMessageCommand): Promise<SendWaMessageResult> {
     const configured = this.senders.filter((s) => s.sender.isConfigured?.() ?? true);
     if (configured.length === 0) {
-      return { sent: false, reason: 'WA sender belum dikonfigurasi (KAPSO_* env kosong)' };
+      return { sent: false, reason: 'WA sender belum dikonfigurasi (OPENWA_* env kosong)' };
     }
-    // Semua jalur kirim (approve/reject/test) wajib nomor valid - Meta
-    // menolak nomor malformed, jangan buang percobaan quota.
+    // Semua jalur kirim (approve/reject/test) wajib nomor valid.
     if (!isValidWaPhone(cmd.toPhone)) {
       return { sent: false, reason: 'Nomor HP tidak valid (harus internasional tanpa +)' };
     }
 
     let templateName: string | null = null;
-    let language = 'id';
-    let positional: string[] = [];
+    let bodyText = cmd.bodyText ?? '';
 
     if (cmd.channel === 'template') {
       const tpl = await this.templateRepo.getByKey(cmd.template!.eventKey);
@@ -82,9 +80,7 @@ export class SendWaMessageUseCase {
       }
       if (!tpl.enabled) return { sent: false, reason: `Template ${tpl.eventKey} nonaktif` };
       templateName = tpl.metaTemplateName;
-      language = tpl.metaTemplateLanguage;
-      positional = toPositionalParams(tpl.params, cmd.template!.params);
-      // Param wajib kosong = Meta menolak template → skip, jangan buang quota.
+      const positional = toPositionalParams(tpl.params, cmd.template!.params);
       const missing = tpl.params
         .map((p, i) => ({ name: p.name, value: positional[i] ?? '' }))
         .filter((p) => !p.value.trim())
@@ -92,24 +88,15 @@ export class SendWaMessageUseCase {
       if (missing.length > 0) {
         return { sent: false, reason: `Parameter template kosong: ${missing.join(', ')}` };
       }
-      // Meta batasi body template 1024 char.
       if (positional.join('').length > 1024) {
-        return { sent: false, reason: 'Total isi parameter melebihi 1024 karakter (batas Meta)' };
+        return { sent: false, reason: 'Total isi parameter melebihi 1024 karakter' };
       }
+      const values = Object.fromEntries(tpl.params.map((p, i) => [p.name, positional[i] ?? '']));
+      bodyText = renderWaBody(tpl.body, values);
     }
 
-    const message: WaSendCommand =
-      cmd.channel === 'template'
-        ? {
-            channel: 'template',
-            to: cmd.toPhone,
-            templateName: templateName!,
-            language,
-            positionalParams: positional,
-          }
-        : { channel: 'text', to: cmd.toPhone, bodyText: cmd.bodyText! };
-
-    return this.dispatch(message, cmd, templateName);
+    const message: WaSendCommand = { channel: 'text', to: cmd.toPhone, bodyText };
+    return this.dispatch(message, { ...cmd, channel: 'text' }, templateName);
   }
 
   /** Loop quota + send + log. Dipakai execute (template/text) dan sendTest. */
@@ -164,7 +151,7 @@ export class SendWaMessageUseCase {
     }
 
     await this.logRepo.record({
-      provider: configured[0]?.sender.provider ?? 'kapso',
+      provider: configured[0]?.sender.provider ?? 'openwa',
       eventKey: cmd.eventKey,
       toPhone: cmd.toPhone,
       templateName,
@@ -185,26 +172,17 @@ export class SendWaMessageUseCase {
     };
   }
 
-  /**
-   * Admin test send. WAJIB channel template: di luar window 24 jam Meta
-   * menolak teks polos (422 "non-template messages outside the 24-hour
-   * window"), template selalu boleh. Param diisi placeholder 'Test'.
-   */
+  /** Admin test send. Isi `{{param}}` diganti "Test", lalu dikirim sebagai teks. */
   async sendTest(phone: string, tpl: WaMessageTemplate): Promise<SendWaMessageResult> {
     if (!isValidWaPhone(phone)) {
       throw new BadRequestError('VALIDATION_ERROR', 'Nomor HP harus format internasional tanpa +', [
         { field: 'phone', message: 'Contoh: 6281234567890' },
       ]);
     }
+    const values = Object.fromEntries(tpl.params.map((p) => [p.name, 'Test']));
     return this.dispatch(
-      {
-        channel: 'template',
-        to: phone,
-        templateName: tpl.metaTemplateName,
-        language: tpl.metaTemplateLanguage,
-        positionalParams: tpl.params.map(() => 'Test'),
-      },
-      { eventKey: tpl.eventKey, toPhone: phone, channel: 'template' },
+      { channel: 'text', to: phone, bodyText: renderWaBody(tpl.body, values) },
+      { eventKey: tpl.eventKey, toPhone: phone, channel: 'text' },
       tpl.metaTemplateName,
     );
   }

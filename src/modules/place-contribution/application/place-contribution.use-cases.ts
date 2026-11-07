@@ -11,6 +11,7 @@ import type { PlaceRepository } from '@/modules/place/domain/repositories/place.
 import type { PlaceCategoryRepository } from '@/modules/place-category/domain/repositories/place-category.repository';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import { BadRequestError, ConflictError, NotFoundError } from '@/shared/errors/app-error';
 import { composePlaceRejectDisplay } from '../domain/place-reject-reason';
 import type {
@@ -53,7 +54,20 @@ export class PlaceContributionUseCases {
     private readonly updatePlace: UpdatePlaceUseCase,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
+
+  private async notifyGroup(
+    userId: string,
+    jenis: string,
+    name: string,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({ jenis, name, userId });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
+  }
 
   async submit(userId: string, placeId: string | null, payload: ContributionPayload): Promise<PlaceContribution> {
     const normalized = await this.assertPayload(payload);
@@ -72,12 +86,18 @@ export class PlaceContributionUseCases {
       }
       base = place.updatedAt;
     }
-    return this.contrib.create({
+    const created = await this.contrib.create({
       userId,
       placeId: place?.id ?? null,
       baseUpdatedAt: base,
       payload: normalized,
     });
+    await this.notifyGroup(
+      userId,
+      place ? 'Wisata (perbaikan)' : 'Wisata',
+      normalized.name,
+    );
+    return created;
   }
 
   async mine(userId: string): Promise<PlaceContribution[]> {
