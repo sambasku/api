@@ -56,8 +56,8 @@ describe.skipIf(!hasTestDb)('0105 backfill vote kata -> makna', () => {
     await truncateAll(db);
     await db.insert(languages).values({ id: LANG, code: 'smb', name: 'Sambas' });
     await db.insert(users).values([
-      { id: USER_A, email: 'bfa@test.com', username: 'bfa' },
-      { id: USER_B, email: 'bfb@test.com', username: 'bfb' },
+      { id: USER_A, email: 'bfa@test.com', username: 'bfa001' },
+      { id: USER_B, email: 'bfb@test.com', username: 'bfb002' },
     ]);
     await db.insert(words).values([
       { id: WORD_ONE, languageId: LANG, lemma: 'satu', status: 'published' },

@@ -109,7 +109,7 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     // urutan hapus: anak dulu (FK) - satu util untuk semua test
     await truncateAll(db);
 
-    await db.insert(users).values({ id: ACTOR, username: 'actor', email: 'actor@test.com', passwordHash: 'x' });
+    await db.insert(users).values({ id: ACTOR, username: 'actor1', email: 'actor@test.com', passwordHash: 'x' });
     await db.insert(languages).values([
       { id: SMB, code: 'smb', name: 'Sambas' },
       { id: IDN, code: 'id', name: 'Indonesia' },
@@ -672,8 +672,8 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     const detail = await repo.findDetailById(published.id);
     expect(detail?.lemma).toBe('terbit');
     expect(detail?.meanings[0].creator).toEqual({
-      username: 'actor',
-      displayName: 'actor',
+      username: 'actor1',
+      displayName: 'actor1',
       avatarUrl: null,
       role: 'contributor',
     });
