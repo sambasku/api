@@ -50,8 +50,8 @@ describe.skipIf(!hasTestDb)('applySafeMeaningMerges (integration)', () => {
     });
     // Dua makna identik = satu kelompok.
     await db.insert(meanings).values([
-      { id: 'm1', wordId: 'w1', wordClassId: 'n', definition: 'rasa garam', orderIndex: 1, status: 'published', isVerified: true, isCorrected: false, createdBy: 'u1', createdAt: new Date(1) },
-      { id: 'm2', wordId: 'w1', wordClassId: 'n', definition: 'rasa garam', orderIndex: 2, status: 'published', isVerified: true, isCorrected: false, createdBy: 'u1', createdAt: new Date(2) },
+{ id: 'm1', wordId: 'w1', wordClassId: 'n', definition: 'rasa garam', orderIndex: 1, status: 'published', isVerified: true, isCorrected: false, createdBy: 'u1', createdAt: new Date(1000) },
+{ id: 'm2', wordId: 'w1', wordClassId: 'n', definition: 'rasa garam', orderIndex: 2, status: 'published', isVerified: true, isCorrected: false, createdBy: 'u1', createdAt: new Date(2000) },
     ]);
     await db.insert(examples).values({ id: 'e1', meaningId: 'm2', sourceLanguageId: 'smb', sourceSentence: 'airnya asin', createdBy: 'u1' });
     await db.insert(votes).values({ id: 'v1', userId: 'u1', entityType: 'meaning', entityId: 'm2', value: 1 });
@@ -67,9 +67,6 @@ describe.skipIf(!hasTestDb)('applySafeMeaningMerges (integration)', () => {
     await seed();
 
     const first = await applySafeMeaningMerges(db);
-    console.log('DBG first=', JSON.stringify(first));
-    const allM = await db.select({ id: meanings.id, d: meanings.deletedAt, k: meanings.dedupeKey }).from(meanings);
-    console.log('DBG meanings=', JSON.stringify(allM));
     expect(first.groups).toBe(1);
 
     // Pecundang soft-delete, contoh & vote pindah ke pemenang.
