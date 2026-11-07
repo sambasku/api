@@ -88,6 +88,13 @@ export function createUsahaMineRoutes(deps: {
                   display_name: u.author.displayName,
                 }
               : null,
+            manager: u.manager
+              ? {
+                  id: u.manager.id,
+                  username: u.manager.username,
+                  display_name: u.manager.displayName,
+                }
+              : null,
             published_at: u.publishedAt ? u.publishedAt.toISOString() : null,
             created_at: u.createdAt.toISOString(),
             updated_at: u.updatedAt ? u.updatedAt.toISOString() : null,

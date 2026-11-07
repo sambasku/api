@@ -74,6 +74,7 @@ type UsahaRow = typeof usahas.$inferSelect;
 const villageRegions = alias(regions, 'usaha_villages');
 const kecamatanRegions = alias(regions, 'usaha_kecamatan');
 const authorUsers = alias(users, 'usaha_authors');
+const managerUsers = alias(users, 'usaha_managers');
 
 /** Baris usaha + JOIN kategori, wilayah, pengusul (LEFT JOIN, satu query). */
 type UsahaJoinedRow = UsahaRow & {
@@ -85,6 +86,9 @@ type UsahaJoinedRow = UsahaRow & {
   authorUsername: string | null;
   authorDisplayName: string | null;
   authorDeletedAt: Date | null;
+  managerUsername: string | null;
+  managerDisplayName: string | null;
+  managerDeletedAt: Date | null;
 };
 
 const usahaSelect = {
@@ -97,6 +101,9 @@ const usahaSelect = {
   authorUsername: authorUsers.username,
   authorDisplayName: authorUsers.displayName,
   authorDeletedAt: authorUsers.deletedAt,
+  managerUsername: managerUsers.username,
+  managerDisplayName: managerUsers.displayName,
+  managerDeletedAt: managerUsers.deletedAt,
 };
 
 function mapUsaha(row: UsahaJoinedRow): UsahaListItem {
@@ -105,6 +112,11 @@ function mapUsaha(row: UsahaJoinedRow): UsahaListItem {
     row.authorUsername &&
     row.authorDeletedAt == null &&
     row.authorUsername !== 'anonim';
+  const managerAlive =
+    row.managerId &&
+    row.managerUsername &&
+    row.managerDeletedAt == null &&
+    row.managerUsername !== 'anonim';
   return {
     id: row.id,
     slug: row.slug,
@@ -158,6 +170,15 @@ function mapUsaha(row: UsahaJoinedRow): UsahaListItem {
           displayName:
             (row.authorDisplayName && row.authorDisplayName.trim()) ||
             row.authorUsername!,
+        }
+      : null,
+    manager: managerAlive
+      ? {
+          id: row.managerId!,
+          username: row.managerUsername!,
+          displayName:
+            (row.managerDisplayName && row.managerDisplayName.trim()) ||
+            row.managerUsername!,
         }
       : null,
   };
@@ -288,6 +309,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .leftJoin(villageRegions, eq(villageRegions.id, usahas.villageId))
       .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
       .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
+      .leftJoin(managerUsers, eq(managerUsers.id, usahas.managerId))
       .where(and(eq(usahas.id, id), isNull(usahas.deletedAt)))
       .limit(1);
     if (!row) return null;
@@ -308,6 +330,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .leftJoin(villageRegions, eq(villageRegions.id, usahas.villageId))
       .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
       .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
+      .leftJoin(managerUsers, eq(managerUsers.id, usahas.managerId))
       .where(and(...conds))
       .limit(1);
     if (!row) return null;
@@ -373,6 +396,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .leftJoin(villageRegions, eq(villageRegions.id, usahas.villageId))
       .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
       .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
+      .leftJoin(managerUsers, eq(managerUsers.id, usahas.managerId))
       .where(and(...conds))
       .orderBy(desc(usahas.createdAt), desc(usahas.id))
       .limit(input.limit + 1);

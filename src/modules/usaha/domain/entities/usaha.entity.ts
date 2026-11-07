@@ -77,6 +77,8 @@ export interface UsahaListItem extends Usaha {
   region: UsahaRegionRef | null;
   village: UsahaVillageRef | null;
   author: UsahaAuthorRef | null;
+  /** Pengelola terverifikasi (klaim disetujui admin), JOIN users. */
+  manager: UsahaAuthorRef | null;
 }
 
 /** Detail + katalog versi publik. */

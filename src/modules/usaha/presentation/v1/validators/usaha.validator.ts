@@ -147,6 +147,7 @@ export const usahaResponseSchema = z.object({
   manager_id: z.string().nullable(),
   author_id: z.string().nullable(),
   author: usahaAuthorRefSchema.nullable(),
+  manager: usahaAuthorRefSchema.nullable().optional(),
   published_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
