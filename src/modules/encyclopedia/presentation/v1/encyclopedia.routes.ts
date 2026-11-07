@@ -7,17 +7,33 @@ import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { EncyclopediaController } from './encyclopedia.controller';
 import {
+  adminCreateArticleBodySchema,
+  adminUpdateArticleBodySchema,
   articleCommentsQuerySchema,
   articleIdParamSchema,
   articleSlugParamSchema,
+  categoryIdParamSchema,
   commentIdParamSchema,
+  contributionIdParamSchema,
+  createCategoryBodySchema,
   createCommentBodySchema,
+  listAdminArticlesQuerySchema,
+  listAdminContributionsQuerySchema,
   listArticlesQuerySchema,
+  listReportsQuerySchema,
   listTagsQuerySchema,
+  mergeTagBodySchema,
+  renameTagBodySchema,
+  reportIdParamSchema,
   resubmitContributionBodySchema,
+  resolveReportBodySchema,
+  reviewContributionBodySchema,
+  revisionIdParamSchema,
   searchArticlesQuerySchema,
   submitContributionBodySchema,
   submitReportBodySchema,
+  tagIdParamSchema,
+  updateCategoryBodySchema,
   updateCommentBodySchema,
 } from './validators/encyclopedia.validator';
 
@@ -324,7 +340,7 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/articles',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Daftar semua artikel (semua status)',
-      request: { query: listArticlesQuerySchema },
+      request: { query: listAdminArticlesQuerySchema },
       responses: { 200: okResponse('Daftar artikel admin') },
     }),
     createRoute({
@@ -332,6 +348,7 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/articles',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Buat artikel baru (langsung tayang atau draft)',
+      request: { body: { content: json(adminCreateArticleBodySchema) } },
       responses: {
         201: okResponse('Artikel dibuat'),
         400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
@@ -342,7 +359,10 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/articles/:id',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Ubah artikel (menulis snapshot revisi)',
-      request: { params: articleIdParamSchema },
+      request: {
+        params: articleIdParamSchema,
+        body: { content: json(adminUpdateArticleBodySchema) },
+      },
       responses: {
         200: okResponse('Artikel diperbarui'),
         404: { description: 'Artikel tidak ditemukan', content: json(errorResponseSchema) },
@@ -369,6 +389,7 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/articles/:id/revisions/:revisionId/restore',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Pulihkan artikel dari versi lama (menulis revisi baru)',
+      request: { params: revisionIdParamSchema },
       responses: { 200: okResponse('Artikel dipulihkan') },
     }),
     createRoute({
@@ -376,7 +397,7 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/categories',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Tambah kategori',
-      request: { body: { content: json(z.object({ id: z.string(), name: z.string() })) } },
+      request: { body: { content: json(createCategoryBodySchema) } },
       responses: { 201: okResponse('Kategori dibuat') },
     }),
     createRoute({
@@ -384,6 +405,10 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/categories/:id',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Ubah kategori',
+      request: {
+        params: categoryIdParamSchema,
+        body: { content: json(updateCategoryBodySchema) },
+      },
       responses: { 200: okResponse('Kategori diperbarui') },
     }),
     createRoute({
@@ -391,6 +416,10 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/tags/:id',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Ganti nama tag',
+      request: {
+        params: tagIdParamSchema,
+        body: { content: json(renameTagBodySchema) },
+      },
       responses: { 200: okResponse('Tag diperbarui') },
     }),
     createRoute({
@@ -398,6 +427,7 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/tags/merge',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Gabungkan dua tag',
+      request: { body: { content: json(mergeTagBodySchema) } },
       responses: { 200: okResponse('Tag digabung') },
     }),
     createRoute({
@@ -405,6 +435,7 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/contributions',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Antrean usulan artikel',
+      request: { query: listAdminContributionsQuerySchema },
       responses: { 200: okResponse('Daftar usulan') },
     }),
     createRoute({
@@ -412,6 +443,10 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/contributions/:id/review',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Setujui / minta revisi / tolak usulan',
+      request: {
+        params: contributionIdParamSchema,
+        body: { content: json(reviewContributionBodySchema) },
+      },
       responses: { 200: okResponse('Usulan diproses') },
     }),
     createRoute({
@@ -419,6 +454,7 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/reports',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Antrean laporan artikel/komentar',
+      request: { query: listReportsQuerySchema },
       responses: { 200: okResponse('Daftar laporan') },
     }),
     createRoute({
@@ -426,6 +462,10 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/reports/:id/resolve',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Abaikan atau takedown konten lalu tutup laporan',
+      request: {
+        params: reportIdParamSchema,
+        body: { content: json(resolveReportBodySchema) },
+      },
       responses: { 200: okResponse('Laporan ditutup') },
     }),
     createRoute({
@@ -433,6 +473,7 @@ export function createAdminEncyclopediaRoutes(deps: AdminEncyclopediaRoutesDeps)
       path: '/comments/:id/takedown',
       tags: ['Encyclopedia', 'Admin'],
       summary: 'Tarik komentar artikel',
+      request: { params: commentIdParamSchema },
       responses: { 200: okResponse('Komentar ditakedown') },
     }),
   ];

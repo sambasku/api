@@ -24,9 +24,9 @@
     "semantic_hash": ""
   },
   "src/app.ts": {
-    "mtime": 1793983120.1629238,
-    "seen": 1793992206.9886699,
-    "ast_hash": "fd8681eb31702e594b17a0a947be7352",
+    "mtime": 1793992744.8744683,
+    "seen": 1794016094.008959,
+    "ast_hash": "23bce2e0e5791e2f61525f07abab3e55",
     "semantic_hash": ""
   },
   "src/main.ts": {
@@ -960,9 +960,9 @@
     "semantic_hash": ""
   },
   "src/modules/auth/infrastructure/mailer.factory.ts": {
-    "mtime": 1791452857.9457395,
-    "seen": 1792524063.7317781,
-    "ast_hash": "e272a0fe0e642662d5a8cbd9bfe6e167",
+    "mtime": 1793992719.4642963,
+    "seen": 1794016094.016075,
+    "ast_hash": "72a06b086737d632ca7426c58903f325",
     "semantic_hash": ""
   },
   "src/modules/auth/infrastructure/otp-capture.ts": {
@@ -2166,9 +2166,9 @@
     "semantic_hash": ""
   },
   "src/modules/email/infrastructure/quota-aware-mailer.ts": {
-    "mtime": 1793135805.1441596,
-    "seen": 1793164807.915234,
-    "ast_hash": "eb2f813626531a73350bf9f2721a9d72",
+    "mtime": 1793992727.7875688,
+    "seen": 1794016094.026363,
+    "ast_hash": "16836f98e2cb3021332d1d81c5e31bd1",
     "semantic_hash": ""
   },
   "src/modules/email/infrastructure/resend-email.sender.ts": {
@@ -2178,9 +2178,9 @@
     "semantic_hash": ""
   },
   "src/modules/email/presentation/v1/email-admin.routes.ts": {
-    "mtime": 1793135467.0933483,
-    "seen": 1793164807.915259,
-    "ast_hash": "ee0dcc2e5d0cdf6999fab4cef6965dc3",
+    "mtime": 1793992834.9874501,
+    "seen": 1794016094.026398,
+    "ast_hash": "15b909dc6b8e44cbf1fc41cefe3a81fa",
     "semantic_hash": ""
   },
   "src/modules/fcm-analytics/__tests__/unit/fcm-totals.test.ts": {
@@ -4332,9 +4332,9 @@
     "semantic_hash": ""
   },
   "src/modules/word/__tests__/integration/word.repository.impl.test.ts": {
-    "mtime": 1793910502.140043,
-    "seen": 1793992207.020512,
-    "ast_hash": "5e4d124a70404fa24f14cbc58eb6ffab",
+    "mtime": 1793996868.2856028,
+    "seen": 1794016094.046428,
+    "ast_hash": "1d87032710f76f129d02e3dc6bcab0cc",
     "semantic_hash": ""
   },
   "src/modules/word/__tests__/unit/add-meaning.use-case.test.ts": {
@@ -6096,9 +6096,9 @@
     "semantic_hash": ""
   },
   "src/modules/email/__tests__/unit/quota-aware-mailer.test.ts": {
-    "mtime": 1793135467.0419288,
-    "seen": 1793164807.9151208,
-    "ast_hash": "ae73bfbd6f5a7bfae93b39517fcce5a5",
+    "mtime": 1793992802.9809513,
+    "seen": 1794016094.0262132,
+    "ast_hash": "473114f4008297a723f9ac7a2ae6d812",
     "semantic_hash": ""
   },
   "src/modules/legal/__tests__/unit/app-settings-oauth-consent.test.ts": {
@@ -7632,15 +7632,15 @@
     "semantic_hash": ""
   },
   "src/modules/encyclopedia/presentation/v1/encyclopedia.routes.ts": {
-    "mtime": 1793796189.3260057,
-    "seen": 1793992207.004489,
-    "ast_hash": "c1fde4f1a39dd28aa62197a6172fae3a",
+    "mtime": 1794016046.9085135,
+    "seen": 1794016094.0267031,
+    "ast_hash": "e6d5caacbbd59c33f306b749cf82b42c",
     "semantic_hash": ""
   },
   "src/modules/encyclopedia/presentation/v1/validators/encyclopedia.validator.ts": {
-    "mtime": 1793796189.3333838,
-    "seen": 1793992207.004489,
-    "ast_hash": "84568b715e8cac3e5773a463d18f8ede",
+    "mtime": 1794016032.333046,
+    "seen": 1794016094.0267038,
+    "ast_hash": "634d3b5fed8d756990dcdf173715c875",
     "semantic_hash": ""
   },
   "src/modules/verifier-application/application/assert-contribution-threshold.ts": {

@@ -124,6 +124,10 @@ export const articleSlugParamSchema = z.object({
 });
 
 export const articleIdParamSchema = z.object({ id: opaqueId });
+export const categoryIdParamSchema = z.object({ id: categoryIdSchema });
+export const tagIdParamSchema = z.object({ id: opaqueId });
+export const contributionIdParamSchema = z.object({ id: opaqueId });
+export const reportIdParamSchema = z.object({ id: opaqueId });
 export const revisionIdParamSchema = z.object({
   id: opaqueId,
   revisionId: opaqueId,
