@@ -16,14 +16,16 @@ describe('slugifyUsername', () => {
     expect(slugifyUsername('budi-santoso')).toBe('budi_santoso');
   });
 
-  it('fallback user jika kosong', () => {
-    expect(slugifyUsername('')).toBe('user');
-    expect(slugifyUsername('!!!')).toBe('user');
+  it('fallback user00 jika kosong (min 6)', () => {
+    expect(slugifyUsername('')).toBe('user00');
+    expect(slugifyUsername('!!!')).toBe('user00');
   });
 
-  it('nama pendek dipad ke panjang minimal handle', () => {
-    expect(slugifyUsername('ab')).toBe('ab0');
-    expect(slugifyUsername('a')).toBe('a00');
+  it('nama pendek dipad ke panjang minimal handle (6)', () => {
+    expect(slugifyUsername('ab')).toBe('ab0000');
+    expect(slugifyUsername('a')).toBe('a00000');
+    expect(slugifyUsername('alif')).toBe('alif00');
+    expect(slugifyUsername('budi')).toBe('budi00');
   });
 });
 
@@ -33,14 +35,24 @@ describe('buildUsernameCandidates', () => {
     expect(candidates[0]).toBe('budi_santoso');
   });
 
-  it('kandidat kedua = base_provider (tanpa probe SELECT)', () => {
+  it('nama pendek + email panjang → prefer local-part email (Google/OAuth)', () => {
+    const candidates = buildUsernameCandidates(
+      'Alif',
+      'alif0831417878@gmail.com',
+      'google',
+    );
+    expect(candidates[0]).toBe('alif0831417878');
+  });
+
+  it('nama pendek tanpa email → pad zero', () => {
     const candidates = buildUsernameCandidates('Budi', null, 'google');
-    expect(candidates[1]).toBe('budi_google');
+    expect(candidates[0]).toBe('budi00');
+    expect(candidates[1]).toBe('budi00_google');
   });
 
   it('kandidat ketiga = base_xxxxx_provider', () => {
-    const candidates = buildUsernameCandidates('Budi', null, 'google');
-    expect(candidates[2]).toMatch(/^budi_[a-z0-9]{5}_google$/);
+    const candidates = buildUsernameCandidates('Budi Santoso', null, 'google');
+    expect(candidates[2]).toMatch(/^budi_santoso_[a-z0-9]{5}_google$/);
   });
 
   it('semua kandidat valid sebagai handle mention', () => {
@@ -73,6 +85,11 @@ describe('buildUsernameCandidates', () => {
     expect(candidates[0]).toBe('admin_user');
     const anonim = buildUsernameCandidates('anonim', null, 'email');
     expect(anonim[0]).toBe('anonim_user');
+  });
+
+  it('provider x siap dipakai (OAuth X nanti)', () => {
+    const candidates = buildUsernameCandidates('Budi Santoso', null, 'x');
+    expect(candidates[1]).toBe('budi_santoso_x');
   });
 });
 

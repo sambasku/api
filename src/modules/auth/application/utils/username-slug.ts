@@ -1,21 +1,20 @@
 import { randomInt } from 'node:crypto';
 import { isReservedHandle } from './reserved-handles';
 
-/** Handle mention: a-z, 0-9, titik, underscore. Tanpa hyphen. */
-export const USERNAME_HANDLE_REGEX = /^[a-z0-9._]{3,30}$/;
+/** Handle mention: a-z, 0-9, titik, underscore. Tanpa hyphen. Min 6 (profesional). */
+export const USERNAME_HANDLE_REGEX = /^[a-z0-9._]{6,30}$/;
 
 const MAX_LEN = 30;
-const MIN_LEN = 3;
+const MIN_LEN = 6;
 
-export type UsernameConflictProvider = 'google' | 'github' | 'facebook' | 'email';
+export type UsernameConflictProvider = 'google' | 'github' | 'facebook' | 'email' | 'x';
 
 /**
- * Normalisasi ke handle username (lowercase, charset aman untuk @mention).
- * Spasi / karakter asing / hyphen → underscore.
- * Kosong / terlalu pendek → fallback `user` (+ padding bila perlu).
+ * Normalisasi charset saja (tanpa pad / fallback `user`).
+ * Dipakai untuk memutus preferensi nama vs email sebelum padding.
  */
-export function slugifyUsername(raw: string | null | undefined): string {
-  const base = (raw ?? '')
+export function normalizeUsernameSlug(raw: string | null | undefined): string {
+  return (raw ?? '')
     .trim()
     .toLowerCase()
     .replace(/-/g, '_')
@@ -24,13 +23,23 @@ export function slugifyUsername(raw: string | null | undefined): string {
     .replace(/[._]+$/g, '')
     .replace(/^[._]+/g, '')
     .slice(0, MAX_LEN);
+}
+
+/**
+ * Normalisasi ke handle username (lowercase, charset aman untuk @mention).
+ * Spasi / karakter asing / hyphen → underscore.
+ * Kosong / terlalu pendek → fallback `user` (+ padding bila perlu).
+ */
+export function slugifyUsername(raw: string | null | undefined): string {
+  const base = normalizeUsernameSlug(raw);
 
   if (base.length >= MIN_LEN && USERNAME_HANDLE_REGEX.test(base)) return base;
   if (base.length > 0 && base.length < MIN_LEN) {
     const padded = `${base}${'0'.repeat(MIN_LEN - base.length)}`;
     return padded.slice(0, MAX_LEN);
   }
-  return 'user';
+  // Fallback tetap memenuhi min 6 (bukan `user` yang 4 huruf).
+  return 'user00';
 }
 
 /** 5 karakter acak [a-z0-9] untuk sufiks konflik. */
@@ -51,6 +60,30 @@ function fitCandidate(base: string, suffix: string): string {
   return merged.replace(/-/g, '_').slice(0, MAX_LEN);
 }
 
+function pickBaseHandle(
+  preferredRaw: string | null | undefined,
+  emailFallback?: string | null,
+): string {
+  const fromEmail = emailFallback?.split('@')[0] ?? '';
+  const nameSlug = normalizeUsernameSlug(preferredRaw);
+  const emailSlug = normalizeUsernameSlug(fromEmail);
+
+  // Nama sudah memenuhi min → pakai nama.
+  if (nameSlug.length >= MIN_LEN && USERNAME_HANDLE_REGEX.test(nameSlug)) {
+    return nameSlug;
+  }
+  // Nama pendek / kosong → prefer local-part email bila valid & cukup panjang.
+  if (emailSlug.length >= MIN_LEN && USERNAME_HANDLE_REGEX.test(emailSlug)) {
+    return emailSlug;
+  }
+  // Pad nama pendek, atau email pendek, atau fallback `user00`.
+  let base = slugifyUsername(preferredRaw || fromEmail || 'user00');
+  if ((base === 'user00' || base === 'user') && fromEmail) {
+    base = slugifyUsername(fromEmail);
+  }
+  return base;
+}
+
 /** Batas kandidat per alokasi - konflik realistis selesai di 1-2 kandidat. */
 export const USERNAME_CANDIDATE_LADDER = [1, 24, 12, 4] as const;
 
@@ -63,22 +96,44 @@ export const USERNAME_CANDIDATE_LADDER = [1, 24, 12, 4] as const;
  * retry kandidat berikutnya) - bukan probe-then-insert yang race-prone
  * (TOCTOU) dan boros subrequest Turso. Urutan = preferensi tampilan:
  * kandidat pertama yang lolos insert jadi handle final.
+ *
+ * Dipakai Google / GitHub / Facebook / email register (dan X nanti via
+ * conflictProvider `'x'`).
  */
+function ensureNotReservedHandle(
+  base: string,
+  preferredRaw: string | null | undefined,
+  emailFallback?: string | null,
+): string {
+  const preferredSlug = normalizeUsernameSlug(preferredRaw);
+  const emailSlug = normalizeUsernameSlug(emailFallback?.split('@')[0] ?? '');
+  // Nama/email reserved yang kependekan bisa ter-pad (admin → admin0).
+  // Bandingkan ke sumber asli supaya tidak lolos shadowing.
+  for (const source of [preferredSlug, emailSlug]) {
+    if (!source || !isReservedHandle(source)) continue;
+    if (base === source || base === slugifyUsername(source)) {
+      return `${source}_user`.slice(0, MAX_LEN);
+    }
+  }
+  if (isReservedHandle(base)) return `${base}_user`.slice(0, MAX_LEN);
+  return base;
+}
+
 export function buildUsernameCandidates(
   preferredRaw: string | null | undefined,
   emailFallback?: string | null,
   conflictProvider?: UsernameConflictProvider,
 ): string[] {
-  const fromEmail = emailFallback?.split('@')[0] ?? '';
-  let base = slugifyUsername(preferredRaw || fromEmail || 'user');
-  if (base === 'user' && fromEmail) {
-    base = slugifyUsername(fromEmail);
+  let base2 = ensureNotReservedHandle(
+    pickBaseHandle(preferredRaw, emailFallback),
+    preferredRaw,
+    emailFallback,
+  );
+  // Jamin kandidat pertama selalu lolos regex (reserved_user pendek, dll.).
+  if (!USERNAME_HANDLE_REGEX.test(base2)) {
+    base2 = slugifyUsername(base2);
   }
-
   const provider = conflictProvider ?? 'email';
-  // Handle reserved (admin/me/anonim/dll) tidak boleh dipakai user baru -
-  // kalau dibiarkan, user baru bisa "men.shadow" akun sistem di @mention.
-  const base2 = isReservedHandle(base) ? `${base}_user` : base;
   const out: string[] = [base2];
   const push = (candidate: string) => {
     if (!out.includes(candidate)) out.push(candidate);

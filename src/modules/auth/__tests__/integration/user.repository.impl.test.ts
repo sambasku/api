@@ -20,15 +20,15 @@ describe.skipIf(!hasTestDb)('UserRepositoryImpl', () => {
   });
 
   it('menyimpan dan mengambil user by email', async () => {
-    await repo.save({ username: 'budi', email: 'budi@test.com', phone: null, passwordHash: 'hash' });
+    await repo.save({ username: 'budi00', email: 'budi@test.com', phone: null, passwordHash: 'hash' });
     const found = await repo.findByEmail('budi@test.com');
-    expect(found?.username).toBe('budi');
+    expect(found?.username).toBe('budi00');
     expect(found?.role).toBe('contributor'); // default dari skema DB
     expect(found?.emailVerified).toBe(false);
   });
 
   it('markEmailVerified mengubah email_verified jadi true', async () => {
-    const saved = await repo.save({ username: 'siti', email: 'siti@test.com', phone: null, passwordHash: 'hash' });
+    const saved = await repo.save({ username: 'siti00', email: 'siti@test.com', phone: null, passwordHash: 'hash' });
     await repo.markEmailVerified(saved.id);
     expect((await repo.findById(saved.id))?.emailVerified).toBe(true);
     const [row] = await db.select().from(users).where(eq(users.id, saved.id)).limit(1);
@@ -36,8 +36,8 @@ describe.skipIf(!hasTestDb)('UserRepositoryImpl', () => {
   });
 
   it('findByUsername dan findById mengembalikan user yang sama', async () => {
-    const saved = await repo.save({ username: 'siti', email: 'siti@test.com', phone: null, passwordHash: 'hash' });
-    expect((await repo.findByUsername('siti'))?.id).toBe(saved.id);
+    const saved = await repo.save({ username: 'siti00', email: 'siti@test.com', phone: null, passwordHash: 'hash' });
+    expect((await repo.findByUsername('siti00'))?.id).toBe(saved.id);
     expect((await repo.findById(saved.id))?.email).toBe('siti@test.com');
   });
 
@@ -56,7 +56,7 @@ describe.skipIf(!hasTestDb)('UserRepositoryImpl', () => {
   });
 
   it('updatePassword mengubah password_hash', async () => {
-    const saved = await repo.save({ username: 'rudi', email: 'rudi@test.com', phone: null, passwordHash: 'lama' });
+    const saved = await repo.save({ username: 'rudi00', email: 'rudi@test.com', phone: null, passwordHash: 'lama' });
     await repo.updatePassword(saved.id, 'baru');
     expect((await repo.findById(saved.id))?.passwordHash).toBe('baru');
   });

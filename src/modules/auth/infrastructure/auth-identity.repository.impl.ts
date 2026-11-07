@@ -11,6 +11,7 @@ import type {
   CreateUserWithGoogleIdentityResult,
   NewGoogleIdentity,
 } from '../domain/repositories/auth-identity.repository';
+import { filterAvailableUsernames } from './filter-available-usernames';
 
 type IdentityRow = typeof authIdentities.$inferSelect;
 type UserRow = typeof users.$inferSelect;
@@ -201,10 +202,12 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
     const candidates = [...new Set(usernameCandidates?.length ? usernameCandidates : [newUser.username])];
     try {
       return await this.db.transaction(async (tx) => {
-        // Insert-retry atas UNIQUE username: DB jadi arbiter tunggal (race
-        // dua login OAuth bersamaan aman, bukan probe-then-insert TOCTOU).
+        // Pre-check batch di dalam tx, lalu insert-retry UNIQUE sebagai
+        // arbiter race (Google/GitHub/Facebook/email pakai path ini).
+        const available = await filterAvailableUsernames(tx, candidates);
+        const tryList = available.length > 0 ? available : candidates;
         let userRow: UserRow | undefined;
-        for (const candidate of candidates) {
+        for (const candidate of tryList) {
           try {
             [userRow] = await tx
               .insert(users)
@@ -221,7 +224,7 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
               throw err;
             }
             if (!isUniqueViolationOn(err, 'username')) throw err;
-            // username bentrok: coba kandidat berikutnya
+            // username bentrok (race): coba kandidat berikutnya
           }
         }
         if (!userRow) {

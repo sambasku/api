@@ -19,7 +19,7 @@ describe.skipIf(!hasTestDb)('RefreshTokenRepositoryImpl', () => {
     await truncateAll(db);
     const [user] = await db
       .insert(users)
-      .values({ username: 'budi', email: 'budi@test.com', passwordHash: 'hash' })
+      .values({ username: 'budi00', email: 'budi@test.com', passwordHash: 'hash' })
       .returning();
     userId = user.id;
   });
