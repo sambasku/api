@@ -251,24 +251,7 @@ try {
   );
   console.log('[db:migrate] OK - migrations applied');
 } catch (err) {
-  // Cek apakah error adalah transaksi yang rusak - kasus umum di Turso/remote SQLite
-  // saat ada trigger + DDL bersamaan. Gunakan pesan yang lebih membantu.
-  let userMessage = 'Migrate gagal';
-  if (err && typeof err === 'object' && 'cause' in err && err.cause) {
-    const causeMsg = String(err.cause);
-    if (causeMsg.includes('cannot rollback - no transaction is active')) {
-      userMessage = 'Migrate gagal: transaksi database rusak (biasanya sudah selesai tapi state ter-corrupt). Coba jalankan ulang `pnpm db:migrate`.';
-    } else if (causeMsg.includes('SQLITE_DUPCOL')) {
-      userMessage = 'Migrate gagal: kolom duplikat - kemungkinan migrate sebelumnya sudah jalan sebagian. Coba `pnpm db:reset` lalu `pnpm db:migrate`.';
-    } else {
-      userMessage = `Migrate gagal: ${err.message || err}`;
-    }
-  }
-  console.error(`[db:migrate] ${userMessage}`);
-  if (err && typeof err === 'object') {
-    console.error('[db:migrate] cause:', err.cause);
-  }
-  process.exit(1);
+  fail('Migrate gagal', err);
 } finally {
   client.close();
 }
