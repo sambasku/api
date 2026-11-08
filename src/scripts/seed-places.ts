@@ -75,7 +75,7 @@ function formatContact(contact: SeedPlace['contact']): string | null {
   return parts.length > 0 ? parts.join('\n') : null;
 }
 
-const allowedType = new Set(['sejarah', 'alam', 'budaya', 'pantai', 'belanja']);
+const allowedType = new Set(['sejarah', 'alam', 'religi', 'tirta', 'agro', 'bahari', 'budaya']);
 const allowedCat = new Set(['wisata', 'kuliner', 'budaya']);
 
 let ok = 0;
@@ -88,7 +88,9 @@ for (const p of list) {
     continue;
   }
   const type =
-    p.type && allowedType.has(p.type) ? (p.type as 'sejarah' | 'alam' | 'budaya' | 'pantai' | 'belanja') : null;
+    p.type && allowedType.has(p.type)
+      ? (p.type as 'sejarah' | 'alam' | 'religi' | 'tirta' | 'agro' | 'bahari' | 'budaya')
+      : null;
   const sourcesJson = JSON.stringify(
     (p.sources ?? []).map((s) => ({
       name: s.name,
