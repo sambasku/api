@@ -13,6 +13,9 @@ import { collectMessages } from '@/shared/errors/error-chain';
 const TRANSIENT_SIGNATURES = [
   'server_error',
   'server returned http status 5',
+  // Rate-limit Turso (429): transient untuk script backfill yang di-batch
+  // dan di-retry, bukan error data.
+  'server returned http status 429',
   'network connection lost',
   'fetch failed',
   'econnreset',

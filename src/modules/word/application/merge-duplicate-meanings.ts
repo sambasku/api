@@ -1,5 +1,7 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import type { Client } from '@libsql/client';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
+import { execBatched } from '@/shared/database/drizzle/libsql-retry';
 import {
   activityEvents,
   examples,
@@ -260,15 +262,28 @@ async function backfillDedupeKeys(
     })
     .from(meanings)
     .where(and(isNull(meanings.deletedAt), isNull(meanings.dedupeKey)));
-  for (const row of survivors) {
-    const key = meaningDedupeKey({
-      definition: row.definition,
-      translations: trBy.get(row.id) ?? [],
-      wordClassId: row.wordClassId,
-    });
-    if (!key) continue;
-    await db.update(meanings).set({ dedupeKey: key }).where(eq(meanings.id, row.id));
-  }
+  // Batch 50 UPDATE per request HTTP + retry 429: loop per-baris pernah
+  // kena rate-limit Turso di CI (ratusan roundtrip berurutan).
+  const statements = survivors
+    .map((row) => ({
+      sql: 'update "meanings" set "dedupe_key" = ? where "meanings"."id" = ? and "dedupe_key" is null',
+      args: [
+        meaningDedupeKey({
+          definition: row.definition,
+          translations: trBy.get(row.id) ?? [],
+          wordClassId: row.wordClassId,
+        }),
+        row.id,
+      ] satisfies [string | null, string],
+    }))
+    .filter((stmt): stmt is { sql: string; args: [string, string] } => stmt.args[0] !== null);
+  // $client ada di instance drizzle() (driver-core.js) tapi bukan di tipe
+  // AppDatabase - cast lokal, tidak menyebar.
+  const client = (db as AppDatabase & { $client: Client }).$client;
+  await execBatched(
+    client,
+    statements.map((stmt) => ({ sql: stmt.sql, args: stmt.args })),
+  );
 }
 
 /** Tutup usulan pending yang hanya menambah duplikat + hide event-nya. */
