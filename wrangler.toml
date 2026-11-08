@@ -92,8 +92,11 @@ mode = "smart"
 crons = ["* * * * *"]
 
 # Custom domain API produksi (pola sama staging: host penuh, bukan path).
+# api.sambasku.com punya DNS records eksternal (error 100117) - Worker pakai
+# cloudflare.sambasku.com; api.sambasku.com tetap tier 1 via DNS itu sendiri.
+# Rantai failover: api -> cloudflare -> render (docs/backlogs/done/FAILOVER.md).
 [[routes]]
-pattern = "api.sambasku.com"
+pattern = "cloudflare.sambasku.com"
 custom_domain = true
 
 # ============================================================
