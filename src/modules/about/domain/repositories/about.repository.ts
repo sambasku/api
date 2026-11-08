@@ -11,6 +11,8 @@ export interface ListContributorsPage {
   items: ContributorListItem[];
   nextCursor: string | null;
   hasMore: boolean;
+  /** Semua user role contributor, bukan cuma halaman ini. */
+  total: number;
 }
 
 export interface AboutRepository {

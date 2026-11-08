@@ -125,6 +125,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     expect(body.data.items.some((i: { username: string }) => i.username === name)).toBe(
       true,
     );
+    expect(body.data.total).toBeGreaterThanOrEqual(body.data.items.length);
   });
 
   it('sponsorship checkbox: check masuk publik, uncheck hilang', async () => {

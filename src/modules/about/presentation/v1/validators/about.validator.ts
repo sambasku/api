@@ -94,6 +94,7 @@ export const contributorsListResponseSchema = z.object({
     ),
     next_cursor: z.string().nullable(),
     has_more: z.boolean(),
+    total: z.number().int().nonnegative(),
   }),
 });
 

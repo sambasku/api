@@ -407,6 +407,15 @@ import {
   createAdminUsahaReportRoutes,
   createUsahaReportRoutes,
 } from "@/modules/usaha-report/presentation/v1/usaha-report.routes";
+import { LayananRepositoryImpl } from "@/modules/layanan/infrastructure/layanan.repository.impl";
+import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases";
+import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
+import {
+  createAdminLayananContributionRoutes,
+  createAdminLayananRoutes,
+  createLayananContributionRoutes,
+  createPublicLayananRoutes,
+} from "@/modules/layanan/presentation/v1/layanan.routes";
 // Fitur Kuliner (PRD kuliner): jelajah kuliner + tempat + usulan + klaim + laporan.
 import { CulinaryCategoryRepositoryImpl } from "@/modules/culinary-category/infrastructure/culinary-category.repository.impl";
 import {
@@ -1469,6 +1478,13 @@ const usahaContributionUseCases = new UsahaContributionUseCases(
 );
 const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
+);
+const layananController = new LayananController(
+  new LayananUseCases(
+    new LayananRepositoryImpl(db),
+    regionRepo,
+    activityEvents,
+  ),
 );
 const usahaClaimUseCases = new UsahaClaimUseCases(
   usahaClaimRepo,
@@ -2571,6 +2587,28 @@ app.route(
 app.route(
   "/api/v1/usaha",
   createPublicUsahaRoutes({ controller: usahaController, optionalAuthenticate }),
+);
+app.route(
+  "/api/v1/admin/layanan",
+  createAdminLayananRoutes({ controller: layananController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/layanan-contributions",
+  createAdminLayananContributionRoutes({
+    controller: layananController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/layanan-contributions",
+  createLayananContributionRoutes({
+    controller: layananController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/layanan",
+  createPublicLayananRoutes({ controller: layananController }),
 );
 // PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
 // Fitur Kuliner - jelajah kuliner & tempat makan (PRD kuliner).

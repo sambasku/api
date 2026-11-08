@@ -89,3 +89,5 @@ export * from "./pantun.schema";
 export * from "./pantun-reports.schema";
 export * from "./encyclopedia.schema";
 export * from "./sponsorships.schema";
+export * from "./layanans.schema";
+export * from "./layanan-contributions.schema";

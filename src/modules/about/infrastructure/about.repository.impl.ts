@@ -39,6 +39,14 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+async function contributorTotal(
+  query: PromiseLike<Array<{ total: unknown }>>,
+): Promise<number> {
+  const [row] = await query;
+  const n = Number(row?.total ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export class AboutRepositoryImpl implements AboutRepository {
   constructor(private readonly db: Db) {}
 
@@ -253,6 +261,12 @@ export class AboutRepositoryImpl implements AboutRepository {
       )`,
     ];
 
+    // Salin dulu: conds nanti ditambah filter cursor, total harus tetap penuh.
+    const totalPromise = this.db
+      .select({ total: sql<number>`count(*)` })
+      .from(users)
+      .where(and(...conds));
+
     if (cursor) {
       const [cur] = await this.db
         .select({ id: users.id, displayName: users.displayName })
@@ -260,7 +274,8 @@ export class AboutRepositoryImpl implements AboutRepository {
         .where(eq(users.id, cursor))
         .limit(1);
       if (!cur) {
-        return { items: [], nextCursor: null, hasMore: false };
+        const total = await contributorTotal(totalPromise);
+        return { items: [], nextCursor: null, hasMore: false, total };
       }
       const curName = cur.displayName || '';
       conds.push(
@@ -271,7 +286,7 @@ export class AboutRepositoryImpl implements AboutRepository {
       );
     }
 
-    const rows = await this.db
+    const rowsPromise = this.db
       .select({
         id: users.id,
         username: users.username,
@@ -281,6 +296,11 @@ export class AboutRepositoryImpl implements AboutRepository {
       .where(and(...conds))
       .orderBy(asc(users.displayName), asc(users.id))
       .limit(limit + 1);
+
+    const [rows, total] = await Promise.all([
+      rowsPromise,
+      contributorTotal(totalPromise),
+    ]);
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
@@ -293,6 +313,7 @@ export class AboutRepositoryImpl implements AboutRepository {
       items,
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
       hasMore,
+      total,
     };
   }
 

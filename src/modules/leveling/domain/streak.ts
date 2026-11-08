@@ -17,6 +17,7 @@ export const STREAK_ACTIVITY_KINDS = [
   'contribution_example',
   'place_photo_added',
   'usaha_published',
+  'layanan_published',
   'cuisine_published',
   'place_published',
   'event_published',

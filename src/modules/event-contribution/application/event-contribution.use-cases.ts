@@ -5,6 +5,7 @@ import type { RecordInboxNotificationUseCase } from "@/modules/notification/appl
 import {
   CreateEventUseCase,
 } from "@/modules/event/application/use-cases/event.use-cases";
+import { pickEventSlug } from "@/modules/event/domain/event-slug";
 import type { EventRepository } from "@/modules/event/domain/repositories/event.repository";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import type { ExplorationGroupNotifier } from "@/modules/wa/application/ports/exploration-group-notifier.port";
@@ -233,10 +234,7 @@ export class EventContributionUseCases {
     const candidates = [base];
     for (let i = 2; i <= 20; i++) candidates.push(`${base}-${i}`);
     const taken = await this.events.existingSlugs(candidates);
-    for (const slug of candidates) {
-      if (!taken.has(slug)) return slug;
-    }
-    return `${base}-${Date.now()}`;
+    return pickEventSlug(candidates, taken);
   }
 
   /**

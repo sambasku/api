@@ -69,7 +69,7 @@ export function createPublicAboutUserListRoutes(deps: {
     method: 'get',
     path: '/contributors',
     tags: ['Users'],
-    summary: 'Daftar kontributor (role contributor), nama flat + cursor',
+    summary: 'Daftar kontributor (role contributor), nama flat + cursor + total',
     request: { query: contributorsListQuerySchema },
     responses: {
       200: {

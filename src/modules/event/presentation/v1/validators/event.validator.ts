@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isReservedEventSlug } from "@/modules/event/domain/event-slug";
 import { opaqueId } from "@/shared/validation/id";
 
 export const eventCategorySchema = z
@@ -44,6 +45,10 @@ const eventBodyFields = {
     .regex(
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
       "Slug hanya huruf kecil, angka, hyphen",
+    )
+    .refine(
+      (slug) => !isReservedEventSlug(slug),
+      "Slug ini sudah dipakai halaman lain. Pilih slug lain.",
     ),
   name: z.string().min(1).max(200),
   description: z.string().min(1).max(8000),
