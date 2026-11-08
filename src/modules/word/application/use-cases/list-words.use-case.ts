@@ -40,12 +40,13 @@ export class ListWordsUseCase {
       }
     }
 
+    // Publik A-Z: selalu published + verified (query is_verified diabaikan).
     const { items, nextCursor, hasMore } = await this.wordRepo.listAtoZ({
       q: query.q.trim(),
       letter: query.letter,
       limit: query.limit,
       wordType: query.wordType,
-      isVerified: query.isVerified,
+      isVerified: true,
       category: query.category?.trim() || undefined,
       cursor,
     });

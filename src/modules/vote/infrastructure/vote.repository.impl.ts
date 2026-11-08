@@ -1352,8 +1352,10 @@ if (articleCommentIds.length > 0) {
         and(
           isNull(meanings.deletedAt),
           eq(meanings.status, 'published'),
+          eq(meanings.isVerified, true),
           isNull(words.deletedAt),
           eq(words.status, 'published'),
+          eq(words.isVerified, true),
           feedSafe,
           userNotVoted,
           userNotSkipped,

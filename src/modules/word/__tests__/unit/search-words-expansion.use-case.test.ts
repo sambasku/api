@@ -109,6 +109,16 @@ describe('SearchWordsUseCase - perluasan kelompok makna (PRD relasi-lemma)', () 
   });
 });
 
+describe('SearchWordsUseCase - gate publik published+verified', () => {
+  it('selalu kirim published+isVerified true (abaikan query klien)', async () => {
+    const { useCase, wordRepo } = makeDeps({ items: [] });
+    await useCase.execute({ ...QUERY, isVerified: false });
+    expect(wordRepo.search).toHaveBeenCalledWith(
+      expect.objectContaining({ published: true, isVerified: true }),
+    );
+  });
+});
+
 describe('SearchWordsUseCase - counter pencarian harian', () => {
   it('q non-empty → recordSearchDay dipanggil (hit + miss)', async () => {
     const { useCase, searchMissRepo } = makeDeps({
