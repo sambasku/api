@@ -373,6 +373,15 @@ import {
   createAdminUsahaContributionRoutes,
   createUsahaContributionRoutes,
 } from "@/modules/usaha-contribution/presentation/v1/usaha-contribution.routes";
+import { LayananRepositoryImpl } from "@/modules/layanan/infrastructure/layanan.repository.impl";
+import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases";
+import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
+import {
+  createAdminLayananContributionRoutes,
+  createAdminLayananRoutes,
+  createLayananContributionRoutes,
+  createPublicLayananRoutes,
+} from "@/modules/layanan/presentation/v1/layanan.routes";
 import { UsahaClaimRepositoryImpl } from "@/modules/usaha-claim/infrastructure/usaha-claim.repository.impl";
 import { UsahaClaimUseCases } from "@/modules/usaha-claim/application/usaha-claim.use-cases";
 import { UsahaClaimController } from "@/modules/usaha-claim/presentation/v1/usaha-claim.controller";
@@ -1421,6 +1430,9 @@ const usahaContributionUseCases = new UsahaContributionUseCases(
 );
 const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
+);
+const layananController = new LayananController(
+  new LayananUseCases(new LayananRepositoryImpl(db), regionRepo, activityEvents),
 );
 const usahaClaimUseCases = new UsahaClaimUseCases(
   usahaClaimRepo,
@@ -2497,6 +2509,28 @@ app.route(
 app.route(
   "/api/v1/usaha",
   createPublicUsahaRoutes({ controller: usahaController, optionalAuthenticate }),
+);
+app.route(
+  "/api/v1/admin/layanan",
+  createAdminLayananRoutes({ controller: layananController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/layanan-contributions",
+  createAdminLayananContributionRoutes({
+    controller: layananController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/layanan-contributions",
+  createLayananContributionRoutes({
+    controller: layananController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/layanan",
+  createPublicLayananRoutes({ controller: layananController }),
 );
 // PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
 // Fitur Kuliner - jelajah kuliner & tempat makan (PRD kuliner).

@@ -45,6 +45,8 @@ import {
   usahaItems,
   usahas,
   usahaCategories,
+  layananContributions,
+  layanans,
   culinaryCategories,
   cuisines,
   culinaryPlaces,
@@ -487,6 +489,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
 	usahaItems,
 	usahas,
 	usahaCategories,
+	layananContributions,
+	layanans,
 	// Kuliner (anak dulu: contributions/claims/reports -> relasi -> entitas -> kategori)
 	culinaryContributions,
 	culinaryClaims,

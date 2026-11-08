@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, articles, culinaryPlaces, cuisines, discussions, events, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, articles, culinaryPlaces, cuisines, discussions, events, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -53,6 +53,7 @@ vote_meaning: 'vote',
   user_joined: 'welcome',
   card_shared: 'card_share',
   usaha_published: 'usaha',
+  layanan_published: 'layanan',
   cuisine_published: 'culinary',
   place_published: 'place_listing',
   event_published: 'event',
@@ -86,6 +87,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   user_joined: 'Bergabung di SambasKu',
   card_shared: 'Membagikan kartu',
   usaha_published: 'Menambahkan usaha',
+  layanan_published: 'Menambahkan layanan publik',
   cuisine_published: 'Menambahkan kuliner',
   place_published: 'Menambahkan wisata',
   event_published: 'Menambahkan acara',
@@ -150,6 +152,7 @@ contribution: [
 'place_photo_added',
 'usaha_photo_added',
 'usaha_published',
+'layanan_published',
 'cuisine_published',
 'place_published',
 'event_published',
@@ -205,6 +208,8 @@ interface FeedRow {
   placeName: string | null;
   /** Usaha untuk usaha_published (LEFT JOIN usahas, published saja). */
   usahaSlug: string | null;
+  layananSlug: string | null;
+  layananName: string | null;
   /** Pantun pembuka untuk pantun_reply_created (LEFT JOIN, published saja). */
   replyParentId: string | null;
   usahaName: string | null;
@@ -369,6 +374,8 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menambahkan foto usaha';
     case 'usaha_published':
       return 'Menambahkan usaha';
+    case 'layanan_published':
+      return 'Menambahkan layanan publik';
     case 'place_published':
       return 'Menambahkan wisata';
     case 'event_published':
@@ -484,6 +491,8 @@ export class ActivityEventFeedRepositoryImpl {
       placeName: places.name,
       usahaSlug: usahas.slug,
       usahaName: usahas.name,
+      layananSlug: layanans.slug,
+      layananName: layanans.name,
       // pantun_reply_created: link ke pantun pembuka (balasan takedown →
       // baris feed ikut sembunyi; induk takedown → sembunyi juga).
       replyParentId: parentPantuns.id,
@@ -525,6 +534,14 @@ articleTitle: articles.title,
         eq(usahas.id, activityEvents.targetId),
         eq(usahas.publishStatus, 'published'),
         sql`${usahas.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      layanans,
+      and(
+        eq(activityEvents.kind, 'layanan_published'),
+        eq(layanans.id, activityEvents.targetId),
+        eq(layanans.publishStatus, 'published'),
       ),
     )
     .leftJoin(
@@ -648,6 +665,7 @@ articleTitle: articles.title,
       sql`(${activityEvents.kind} <> 'pantun_reply_created' or ${parentPantuns.id} is not null)`,
         // Usaha hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'usaha_published' or ${usahas.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'layanan_published' or ${layanans.id} is not null)`,
         sql`(${activityEvents.kind} <> 'usaha_photo_added' or ${usahas.id} is not null)`,
 // Kuliner/tempat kuliner hanya tayang selama masih published.
 sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null or ${culinaryPlaces.id} is not null)`,
@@ -760,6 +778,8 @@ kind === 'place_photo_added' || kind === 'place_published'
 ? (row.cuisineName ?? row.culinaryPlaceName)
 : kind === 'usaha_published' || kind === 'usaha_photo_added'
 ? row.usahaName
+: kind === 'layanan_published'
+? row.layananName
 : kind === 'event_published'
 ? row.eventName
 : kind === 'article_published' || kind === 'article_comment_created'
@@ -878,6 +898,7 @@ kind === 'place_photo_added' || kind === 'place_published'
     case 'card_shared':
       return lemma ? `Membagikan kartu · ${quoted(lemma)}` : 'Membagikan kartu';
 case 'usaha_published':
+case 'layanan_published':
 case 'cuisine_published':
 case 'place_published':
 case 'event_published':
@@ -935,6 +956,7 @@ return KIND_BODY[kind];
       missDirection: string | null;
       placeSlug?: string | null;
       usahaSlug?: string | null;
+      layananSlug?: string | null;
       eventSlug?: string | null;
 cuisineSlug?: string | null;
 culinaryPlaceSlug?: string | null;
@@ -985,6 +1007,8 @@ articleSlug?: string | null;
       case 'usaha_published':
       case 'usaha_photo_added':
         return row.usahaSlug ? { type: 'usaha', id: row.usahaSlug } : null;
+      case 'layanan_published':
+        return row.layananSlug ? { type: 'layanan', id: row.layananSlug } : null;
       case 'place_published':
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'event_published':

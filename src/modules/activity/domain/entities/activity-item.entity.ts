@@ -22,6 +22,7 @@ export type ActivityKind =
   | 'place_listing'
   | 'event'
 | 'usaha'
+| 'layanan'
 | 'culinary'
 | 'pantun'
 | 'article';

@@ -41,6 +41,7 @@ export const FEED_CATEGORY_KINDS: Record<
 explore: [
 'place_published',
 'usaha_published',
+'layanan_published',
 'cuisine_published',
 'event_published',
 'pantun_created',
