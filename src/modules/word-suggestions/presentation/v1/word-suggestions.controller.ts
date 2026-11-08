@@ -177,6 +177,7 @@ export class WordSuggestionController {
             notes: item.summaryChanges.notes,
             word_type: item.summaryChanges.wordType,
             meanings_count: item.summaryChanges.meaningsCount,
+            examples_count: item.summaryChanges.examplesCount,
             categories_added: item.summaryChanges.categoriesAdded,
             categories_removed: item.summaryChanges.categoriesRemoved,
             relations_count: item.summaryChanges.relationsCount,
@@ -236,6 +237,12 @@ export class WordSuggestionController {
                 translation_text: t.translationText,
               })),
             })),
+            examples: detail.currentWord.examples.map((ex) => ({
+              id: ex.id,
+              meaning_id: ex.meaningId,
+              source_sentence: ex.sourceSentence,
+              target_sentence: ex.targetSentence,
+            })),
             category_ids: detail.currentWord.categoryIds,
             relations: detail.currentWord.relations.map((r) => ({
               relation_type: r.relationType,
@@ -267,6 +274,10 @@ export class WordSuggestionController {
             meanings: detail.diff.meanings.map((m) => ({
               meaning_id: m.meaningId,
               changes: m.changes,
+            })),
+            examples: detail.diff.examples.map((ex) => ({
+              example_id: ex.exampleId,
+              changes: ex.changes,
             })),
             categories: detail.diff.categories,
             relations: {

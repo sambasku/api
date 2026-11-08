@@ -7,6 +7,7 @@ import {
   words,
   meanings,
   meaningTranslations,
+  examples,
   wordCategories,
   auditLogs,
   lexicalRelations,
@@ -498,6 +499,52 @@ export async function applyChangesToWord(
           .where(eq(meanings.id, mc.meaningId));
         changesApplied++;
       }
+    }
+  }
+
+  // #244: ubah contoh kalimat published.
+  if (changes.examples && changes.examples.length > 0) {
+    for (const ec of changes.examples) {
+      if (ec.action !== 'update' || !ec.exampleId) continue;
+      const [row] = await db
+        .select({
+          id: examples.id,
+          sourceSentence: examples.sourceSentence,
+          targetSentence: examples.targetSentence,
+        })
+        .from(examples)
+        .innerJoin(meanings, eq(examples.meaningId, meanings.id))
+        .where(
+          and(
+            eq(examples.id, ec.exampleId),
+            eq(meanings.wordId, word.id),
+            isNull(examples.deletedAt),
+            isNull(meanings.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!row) continue;
+      const patch: {
+        sourceSentence?: string;
+        targetSentence?: string | null;
+        updatedBy: string;
+        updatedAt: Date;
+      } = { updatedBy: reviewerId, updatedAt: new Date() };
+      let touched = false;
+      if (ec.sourceSentence !== undefined && ec.sourceSentence !== row.sourceSentence) {
+        patch.sourceSentence = ec.sourceSentence;
+        touched = true;
+      }
+      if (
+        ec.targetSentence !== undefined &&
+        (ec.targetSentence ?? null) !== (row.targetSentence ?? null)
+      ) {
+        patch.targetSentence = ec.targetSentence;
+        touched = true;
+      }
+      if (!touched) continue;
+      await db.update(examples).set(patch).where(eq(examples.id, row.id));
+      changesApplied++;
     }
   }
 

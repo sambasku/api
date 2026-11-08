@@ -112,6 +112,43 @@ describe('checkSuggestionCategoryShape', () => {
     ).toEqual([]);
   });
 
+  it('#244 change_example menerima update kalimat/arti', () => {
+    expect(
+      checkSuggestionCategoryShape('change_example', {
+        examples: [
+          {
+            exampleId: '01EXAMPLE00000000000000001',
+            action: 'update',
+            sourceSentence: 'Kami makan kalintiak.',
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  it('#244 change_example menolak contoh ganda dan tanpa isi', () => {
+    const dup = checkSuggestionCategoryShape('change_example', {
+      examples: [
+        {
+          exampleId: '01EXAMPLE00000000000000001',
+          action: 'update',
+          sourceSentence: 'a',
+        },
+        {
+          exampleId: '01EXAMPLE00000000000000001',
+          action: 'update',
+          sourceSentence: 'b',
+        },
+      ],
+    });
+    expect(dup.some((i) => i.message.includes('dua kali'))).toBe(true);
+
+    const empty = checkSuggestionCategoryShape('change_example', {
+      examples: [{ exampleId: '01EXAMPLE00000000000000001', action: 'update' }],
+    });
+    expect(empty.some((i) => i.message.includes('kalimat contoh'))).toBe(true);
+  });
+
   it('relasi baru: tipe lain ditolak, tipe sendiri lolos', () => {
     expect(
       checkSuggestionCategoryShape('variant_of', {
@@ -201,7 +238,7 @@ describe('censorSuggestionText', () => {
 });
 
 describe('createSuggestionSchema examples', () => {
-  it('usulan berisi contoh ditolak', () => {
+  it('contoh nested di meanings tetap ditolak (tambah lewat POST examples)', () => {
     const parsed = createSuggestionSchema.safeParse({
       reason_code: 'change_meaning',
       proposed_changes: {
@@ -216,6 +253,23 @@ describe('createSuggestionSchema examples', () => {
       },
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it('#244 change_example top-level lolos', () => {
+    const parsed = createSuggestionSchema.safeParse({
+      reason_code: 'change_example',
+      proposed_changes: {
+        examples: [
+          {
+            example_id: '01EXAMPLE00000000000000001',
+            action: 'update',
+            source_sentence: 'Kami makan kalintiak.',
+            target_sentence: 'Kami makan kue.',
+          },
+        ],
+      },
+    });
+    expect(parsed.success).toBe(true);
   });
 
   it('PRD relasi-lemma: meaning_group dengan kelompok baru lolos', () => {

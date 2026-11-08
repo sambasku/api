@@ -14,6 +14,7 @@ type Part =
   | 'lemma'
   | 'notes'
   | 'meanings'
+  | 'examples'
   | 'categories'
   | 'relations'
   | 'variants'
@@ -26,6 +27,7 @@ function presentParts(c: ProposedChanges): Set<Part> {
   if (c.lemma !== undefined) parts.add('lemma');
   if (c.notes !== undefined) parts.add('notes');
   if (c.meanings?.length) parts.add('meanings');
+  if (c.examples?.length) parts.add('examples');
   if (c.categoryIdsToAdd?.length || c.categoryIdsToRemove?.length) parts.add('categories');
   if (c.relations?.length) parts.add('relations');
   if (c.variants?.length) parts.add('variants');
@@ -41,6 +43,7 @@ const ALLOWED: Record<string, Part[]> = {
   add_meaning: ['meanings'],
   add_photo: ['images'],
   change_photo: ['images'],
+  change_example: ['examples'],
   synonym: ['relations'],
   antonym: ['relations'],
   variant_of: ['relations'],
@@ -136,6 +139,23 @@ export function checkSuggestionCategoryShape(
         issues.push({ field: 'images', message: 'Pilih foto yang ingin diubah' });
       }
       break;
+    case 'change_example': {
+      const seen = new Set<string>();
+      (c.examples ?? []).forEach((ex, i) => {
+        const at = `examples.${i}`;
+        if (ex.action !== 'update' || !ex.exampleId) {
+          issues.push({ field: at, message: 'Pilih contoh yang ingin diubah' });
+        } else if (seen.has(ex.exampleId)) {
+          issues.push({ field: at, message: 'Contoh yang sama tidak boleh diusulkan dua kali' });
+        } else {
+          seen.add(ex.exampleId);
+        }
+        if (ex.sourceSentence === undefined && ex.targetSentence === undefined) {
+          issues.push({ field: at, message: 'Isi kalimat contoh atau artinya yang baru' });
+        }
+      });
+      break;
+    }
     case 'synonym':
     case 'antonym':
     // PRD relasi-lemma: kategori relasi baru - satu kategori satu tipe.
@@ -160,6 +180,7 @@ export function isRevertibleForApplyPending(c: ProposedChanges): boolean {
   if (c.categoryIdsToAdd?.length || c.categoryIdsToRemove?.length) return false;
   if (c.relations?.length || c.variants?.length || c.groups?.length) return false;
   if ((c.meanings ?? []).some((m) => m.action !== 'update')) return false;
+  if ((c.examples ?? []).some((e) => e.action !== 'update')) return false;
   if ((c.images ?? []).some((i) => i.action !== 'add')) return false;
   return true;
 }

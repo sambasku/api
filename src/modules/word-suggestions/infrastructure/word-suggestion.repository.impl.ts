@@ -6,6 +6,7 @@ import {
   users,
   meanings,
   meaningTranslations,
+  examples,
   wordCategories,
   wordClasses,
   auditLogs,
@@ -101,6 +102,16 @@ async function captureBaseline(
         .from(meaningTranslations)
         .where(and(inArray(meaningTranslations.meaningId, meaningIds), isNull(meaningTranslations.deletedAt)))
     : [];
+  const exampleRows = meaningIds.length
+    ? await db
+        .select({
+          id: examples.id,
+          sourceSentence: examples.sourceSentence,
+          targetSentence: examples.targetSentence,
+        })
+        .from(examples)
+        .where(and(inArray(examples.meaningId, meaningIds), isNull(examples.deletedAt)))
+    : [];
   return {
     lemma,
     notes,
@@ -113,6 +124,11 @@ async function captureBaseline(
       translations: translationRows
         .filter((t) => t.meaningId === m.id)
         .map((t) => ({ id: t.id, translationText: t.translationText })),
+    })),
+    examples: exampleRows.map((ex) => ({
+      id: ex.id,
+      sourceSentence: ex.sourceSentence,
+      targetSentence: ex.targetSentence,
     })),
   };
 }
@@ -167,6 +183,47 @@ async function assertProposedTargetsCurrent(wordId: string, c: ProposedChanges):
       if (!changed) {
         throw new BadRequestError('SUGGESTION_NO_CHANGES', 'Tidak ada yang berubah dari data sekarang', [
           { field: 'meanings', message: 'Isi masih sama dengan data sekarang' },
+        ]);
+      }
+    }
+  }
+
+  const exampleIds = [
+    ...new Set((c.examples ?? []).filter((ex) => ex.exampleId).map((ex) => ex.exampleId)),
+  ];
+  if (exampleIds.length > 0) {
+    const rows = await db
+      .select({
+        id: examples.id,
+        sourceSentence: examples.sourceSentence,
+        targetSentence: examples.targetSentence,
+        status: examples.status,
+      })
+      .from(examples)
+      .innerJoin(meanings, eq(examples.meaningId, meanings.id))
+      .where(
+        and(
+          inArray(examples.id, exampleIds),
+          eq(meanings.wordId, wordId),
+          isNull(examples.deletedAt),
+          isNull(meanings.deletedAt),
+        ),
+      );
+    if (rows.length !== exampleIds.length) throw stale();
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const ec of c.examples ?? []) {
+      const cur = byId.get(ec.exampleId);
+      if (!cur) throw stale();
+      // Hanya contoh yang sudah tayang bisa diusulkan ubah (pending = jalur review kontribusi).
+      if (cur.status !== 'published') throw stale();
+      const changed =
+        (ec.sourceSentence !== undefined &&
+          ec.sourceSentence.trim() !== (cur.sourceSentence ?? '').trim()) ||
+        (ec.targetSentence !== undefined &&
+          (ec.targetSentence ?? '').trim() !== (cur.targetSentence ?? '').trim());
+      if (!changed) {
+        throw new BadRequestError('SUGGESTION_NO_CHANGES', 'Tidak ada yang berubah dari data sekarang', [
+          { field: 'examples', message: 'Isi masih sama dengan data sekarang' },
         ]);
       }
     }
@@ -306,6 +363,21 @@ export async function restoreBaseline(
         ),
       );
   }
+
+  const snapExById = new Map((snap.examples ?? []).map((ex) => [ex.id, ex]));
+  for (const ec of proposed.examples ?? []) {
+    if (ec.action !== 'update' || !ec.exampleId) continue;
+    const ex = snapExById.get(ec.exampleId);
+    if (!ex) continue;
+    const patch: { sourceSentence?: string; targetSentence?: string | null } = {};
+    if (ec.sourceSentence !== undefined) patch.sourceSentence = ex.sourceSentence;
+    if (ec.targetSentence !== undefined) patch.targetSentence = ex.targetSentence;
+    if (Object.keys(patch).length === 0) continue;
+    await db
+      .update(examples)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(examples.id, ex.id));
+  }
 }
 
 async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapshot | null> {
@@ -358,6 +430,25 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
     list.push({ translationText: t.translationText });
     byMeaning.set(t.meaningId, list);
   }
+
+  const exampleRows =
+    meaningIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: examples.id,
+            meaningId: examples.meaningId,
+            sourceSentence: examples.sourceSentence,
+            targetSentence: examples.targetSentence,
+          })
+          .from(examples)
+          .where(
+            and(
+              inArray(examples.meaningId, meaningIds),
+              eq(examples.status, 'published'),
+              isNull(examples.deletedAt),
+            ),
+          );
 
   const catRows = await db
     .select({ categoryId: wordCategories.categoryId })
@@ -447,6 +538,12 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
           : { code: '', name: '' },
       definition: m.definition,
       translations: byMeaning.get(m.id) ?? [],
+    })),
+    examples: exampleRows.map((ex) => ({
+      id: ex.id,
+      meaningId: ex.meaningId,
+      sourceSentence: ex.sourceSentence,
+      targetSentence: ex.targetSentence,
     })),
     categoryIds: catRows.map((c) => c.categoryId),
     relations: relRows.map((r) => ({
@@ -563,6 +660,32 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
     meaningsDiff.push({ meaningId: mc.meaningId, changes });
   }
 
+  const examplesDiff: DiffResult['examples'] = [];
+  for (const ec of proposed.examples ?? []) {
+    if (ec.action !== 'update' || !ec.exampleId) continue;
+    const cur = current.examples.find((ex) => ex.id === ec.exampleId);
+    const changes: DiffResult['examples'][0]['changes'] = [];
+    if (ec.sourceSentence !== undefined) {
+      const d = cur?.sourceSentence ?? null;
+      changes.push({
+        label: 'Kalimat contoh',
+        current: d,
+        proposed: ec.sourceSentence,
+        changed: ec.sourceSentence !== d,
+      });
+    }
+    if (ec.targetSentence !== undefined) {
+      const d = cur?.targetSentence ?? null;
+      changes.push({
+        label: 'Arti contoh',
+        current: d,
+        proposed: ec.targetSentence,
+        changed: (ec.targetSentence ?? '') !== (d ?? ''),
+      });
+    }
+    examplesDiff.push({ exampleId: ec.exampleId, changes });
+  }
+
   const curCats = new Set(current.categoryIds);
   const lemmaOf = await relationLemmas(proposed, current);
   // Form B (lemma): kata yang sudah ada → word_id + lemma; belum ada →
@@ -664,6 +787,7 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
     notes,
     wordType,
     meanings: meaningsDiff,
+    examples: examplesDiff,
     categories: {
       added: (proposed.categoryIdsToAdd ?? []).filter((c) => !curCats.has(c)),
       removed: (proposed.categoryIdsToRemove ?? []).filter((c) => curCats.has(c)),
@@ -1056,6 +1180,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           notes: pc.notes ?? null,
           wordType: pc.wordType ?? null,
           meaningsCount: pc.meanings?.length ?? 0,
+          examplesCount: pc.examples?.length ?? 0,
           categoriesAdded: pc.categoryIdsToAdd?.length ?? 0,
           categoriesRemoved: pc.categoryIdsToRemove?.length ?? 0,
           relationsCount: pc.relations?.length ?? 0,
