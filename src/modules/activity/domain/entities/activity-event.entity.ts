@@ -32,10 +32,12 @@ export const ACTIVITY_EVENT_KINDS = [
  'cuisine_published',
  'place_published',
  'event_published',
+  'event_going',
   'pantun_created',
   'pantun_reply_created',
   'article_published',
   'article_comment_created',
+  'event_comment_created',
   'announcement',
 ] as const;
 
@@ -90,6 +92,8 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'place_published':
       return 'place_listing';
 case 'event_published':
+case 'event_going':
+case 'event_comment_created':
 return 'event';
   case 'pantun_created':
   case 'pantun_reply_created':

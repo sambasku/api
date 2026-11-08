@@ -1,11 +1,26 @@
 import type {
   EventCategoryRef,
+  EventComment,
   EventListItem,
   EventPlaceRef,
   EventSourceType,
   EventStatus,
   EventVillageRef,
 } from "../entities/event.entity";
+import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
+
+export interface NewEventCommentInput {
+  eventId: string;
+  userId: string;
+  body: string;
+  bodyOriginal: string | null;
+}
+
+export interface EventCommentListFilter {
+  status?: 'published';
+  cursor?: string;
+  limit: number;
+}
 
 export interface CreateEventInput {
   id?: string;
@@ -115,4 +130,18 @@ export interface EventRepository {
    * Dipakai untuk generate slug unik tanpa loop query.
    */
   existingSlugs(slugs: string[]): Promise<Set<string>>;
+
+  // --- komentar ---
+  createComment(input: NewEventCommentInput): Promise<EventComment>;
+  findCommentById(id: string): Promise<EventComment | null>;
+  listComments(eventId: string, filter: EventCommentListFilter): Promise<CursorPage<EventComment>>;
+  updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<EventComment | null>;
+  markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  takedownComment(id: string, actorId: string): Promise<boolean>;
+  /** Cek event masih published (dipakai use case sebelum create comment). */
+  eventTargetExists(id: string): Promise<boolean>;
 }

@@ -25,6 +25,7 @@ export const STREAK_ACTIVITY_KINDS = [
   'discussion_created',
   'article_published',
   'article_comment_created',
+  'event_comment_created',
 ] as const;
 
 export const STREAK_WINDOW_DAYS = 90;

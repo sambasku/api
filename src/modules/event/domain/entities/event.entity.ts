@@ -1,3 +1,5 @@
+import type { EventCommentStatus } from '@/shared/database/drizzle/schema/event-comments.schema';
+
 /** Id slug di tabel `event_categories`. */
 export type EventCategory = string;
 
@@ -86,6 +88,22 @@ export interface EventVillageRef {
 export interface EventListItem extends Event {
   category: EventCategoryRef | null;
   village: EventVillageRef | null;
+}
+
+export interface EventComment {
+  id: string;
+  eventId: string;
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  userRole: string | null;
+  authorDeletedAt: Date | null;
+  body: string;
+  status: EventCommentStatus;
+  isEdited: boolean;
+  createdAt: Date;
+  updatedAt: Date | null;
 }
 
 /**

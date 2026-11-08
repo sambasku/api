@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNull, like, or, lt, sql } from 'drizzle-orm';
 import { users, userRoles } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { NotFoundError, ConflictError } from '@/shared/errors/app-error';
-import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
+import { isUniqueViolationOn, isUsernameHandleConstraint } from '@/shared/database/drizzle/sqlite-errors';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { UserRepository } from '../domain/repositories/user.repository';
 import type { NewUser, User, UserListFilter, UserRole } from '../domain/entities/user.entity';
@@ -124,7 +124,9 @@ export class UserRepositoryImpl implements UserRepository {
         if (isUniqueViolationOn(err, 'users.email') || isUniqueViolationOn(err, 'users_email_unique')) {
           throw new ConflictError('EMAIL_ALREADY_EXISTS', 'Email sudah terdaftar');
         }
-        if (!isUniqueViolationOn(err, 'username')) throw err;
+        // Trigger guard handle (app versi lama vs skema baru): coba kandidat
+        // berikutnya, sama seperti konflik UNIQUE - jangan 500 unhandled.
+        if (!isUniqueViolationOn(err, 'username') && !isUsernameHandleConstraint(err)) throw err;
         // username bentrok (race): coba kandidat berikutnya
       }
     }

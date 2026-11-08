@@ -13,11 +13,15 @@ import type { EventController } from "./event.controller";
 import {
   cancelEventBodySchema,
   createEventBodySchema,
+  createEventCommentBodySchema,
   eventCategoryListResponseSchema,
+  eventCommentResponseSchema,
+  eventCommentsQuerySchema,
   eventResponseSchema,
   listEventsQuerySchema,
   listEventsResponseSchema,
   updateEventBodySchema,
+  updateEventCommentBodySchema,
 } from "./validators/event.validator";
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -255,5 +259,122 @@ export function createAdminEventRoutes(deps: {
     deleteRoute,
     (c) => deps.controller.remove(c, c.req.param("id")) as never,
   );
+  return routes;
+}
+
+// ---------------------------------------------------------------- komentar publik + user
+
+const commentIdParam = z.object({ id: z.string().min(1).max(64) });
+const commentListSchema = z.object({ success: z.literal(true), data: z.object({
+  items: z.array(eventCommentResponseSchema),
+  next_cursor: z.string().nullable(),
+  has_more: z.boolean(),
+}) });
+const commentItemSchema = z.object({ success: z.literal(true), data: eventCommentResponseSchema });
+
+export function createPublicEventCommentRoutes(deps: {
+  controller: EventController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}) {
+  const routes = createOpenApiApp();
+  routes.use("*", rateLimit({ points: 120, duration: 60 }));
+
+  const listRoute = createRoute({
+    method: "get",
+    path: "/:id/comments",
+    tags: ["Event Comments"],
+    summary: "List komentar acara (publik)",
+    request: { params: idParam, query: eventCommentsQuerySchema },
+    responses: {
+      200: { description: "Daftar komentar", content: json(commentListSchema) },
+    },
+  });
+
+  const createRoute_ = createRoute({
+    method: "post",
+    path: "/:id/comments",
+    tags: ["Event Comments"],
+    summary: "Tambah komentar acara (login)",
+    request: {
+      params: idParam,
+      body: { content: json(createEventCommentBodySchema) },
+    },
+    responses: {
+      201: { description: "Komentar dibuat", content: json(commentItemSchema) },
+      401: { description: "Tidak terautentikasi", content: json(errorResponseSchema) },
+      404: { description: "Acara tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
+  const updateRoute_ = createRoute({
+    method: "patch",
+    path: "/comments/:id",
+    tags: ["Event Comments"],
+    summary: "Edit komentar (penulis sendiri)",
+    request: {
+      params: commentIdParam,
+      body: { content: json(updateEventCommentBodySchema) },
+    },
+    responses: {
+      200: { description: "Komentar diperbarui", content: json(commentItemSchema) },
+      401: { description: "Tidak terautentikasi", content: json(errorResponseSchema) },
+      404: { description: "Komentar tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
+  const deleteRoute_ = createRoute({
+    method: "delete",
+    path: "/comments/:id",
+    tags: ["Event Comments"],
+    summary: "Hapus komentar (penulis sendiri)",
+    request: { params: commentIdParam },
+    responses: {
+      200: { description: "Terhapus", content: json(okNullResponseSchema) },
+      401: { description: "Tidak terautentikasi", content: json(errorResponseSchema) },
+      404: { description: "Komentar tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.use("/:id/comments", deps.optionalAuthenticate);
+  routes.use("/comments/:id", deps.authenticate);
+
+  routes.openapi(listRoute, (c) => deps.controller.listComments(c) as never);
+  routes.openapi(
+    createRoute_,
+    (c) => deps.controller.createComment(c) as never,
+  );
+  routes.openapi(
+    updateRoute_,
+    (c) => deps.controller.updateComment(c) as never,
+  );
+  routes.openapi(
+    deleteRoute_,
+    (c) => deps.controller.deleteComment(c) as never,
+  );
+  return routes;
+}
+
+export function createAdminEventCommentRoutes(deps: {
+  controller: EventController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}) {
+  const routes = createOpenApiApp();
+  routes.use("*", rateLimit({ points: 60, duration: 60 }));
+  routes.use("*", deps.authenticate, authorizeRole("root", "admin", "reviewer"));
+
+  const takedownRoute = createRoute({
+    method: "post",
+    path: "/comments/:id/takedown",
+    tags: ["Admin Event Comments"],
+    summary: "Takedown komentar acara (admin)",
+    request: { params: commentIdParam },
+    responses: {
+      200: { description: "Takedown berhasil", content: json(okNullResponseSchema) },
+      404: { description: "Komentar tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(takedownRoute, (c) => deps.controller.takedownComment(c) as never);
   return routes;
 }

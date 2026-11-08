@@ -320,8 +320,17 @@ import {
 import { EventController } from "@/modules/event/presentation/v1/event.controller";
 import {
   createAdminEventRoutes,
+  createAdminEventCommentRoutes,
   createPublicEventRoutes,
+  createPublicEventCommentRoutes,
 } from "@/modules/event/presentation/v1/event.routes";
+import {
+  CreateEventCommentUseCase,
+  DeleteEventCommentUseCase,
+  ListEventCommentsUseCase,
+  TakedownEventCommentUseCase,
+  UpdateEventCommentUseCase,
+} from "@/modules/event/application/use-cases/event-comment.use-cases";
 import { EventContributionRepositoryImpl } from "@/modules/event-contribution/infrastructure/event-contribution.repository.impl";
 import { EventContributionUseCases } from "@/modules/event-contribution/application/event-contribution.use-cases";
 import { EventContributionController } from "@/modules/event-contribution/presentation/v1/event-contribution.controller";
@@ -329,6 +338,17 @@ import {
   createAdminEventContributionRoutes,
   createEventContributionRoutes,
 } from "@/modules/event-contribution/presentation/v1/event-contribution.routes";
+import { EventGoingRepositoryImpl } from "@/modules/event-going/infrastructure/event-going.repository.impl";
+import {
+  ListEventGoingsUseCase,
+  MarkEventGoingUseCase,
+  UnmarkEventGoingUseCase,
+} from "@/modules/event-going/application/use-cases/event-going.use-cases";
+import { EventGoingController } from "@/modules/event-going/presentation/v1/event-going.controller";
+import {
+  createAdminEventGoingRoutes,
+  createEventGoingRoutes,
+} from "@/modules/event-going/presentation/v1/event-going.routes";
 // Fitur Usaha (PRD usaha): direktori usaha + usulan + klaim + laporan.
 import { UsahaCategoryRepositoryImpl } from "@/modules/usaha-category/infrastructure/usaha-category.repository.impl";
 import {
@@ -525,6 +545,9 @@ import { ListBugReportsUseCase } from "@/modules/bug-report/application/use-case
 import { ResolveBugReportUseCase } from "@/modules/bug-report/application/use-cases/resolve-bug-report.use-case";
 import { BugReportController } from "@/modules/bug-report/presentation/v1/bug-report.controller";
 import { createBugReportRoutes } from "@/modules/bug-report/presentation/v1/bug-report.routes";
+import { ResolveMapsUrlUseCase } from "@/modules/geo/application/resolve-maps-url.use-case";
+import { GeoController } from "@/modules/geo/presentation/v1/geo.controller";
+import { createGeoRoutes } from "@/modules/geo/presentation/v1/geo.routes";
 import { createCategorySuggestionModule } from "@/modules/category-suggestion/factories/category-suggestion.factory";
 import {
   createAdminCategorySuggestionRoutes,
@@ -1359,6 +1382,12 @@ const regionController = new RegionController(
 
 // ---- Modul event/acara (PRD event) ----
 const eventRepo = new EventRepositoryImpl(db);
+const eventGoingRepo = new EventGoingRepositoryImpl(db);
+const eventGoingController = new EventGoingController({
+  mark: new MarkEventGoingUseCase(eventGoingRepo, activityEvents),
+  unmark: new UnmarkEventGoingUseCase(eventGoingRepo, activityEvents),
+  list: new ListEventGoingsUseCase(eventGoingRepo),
+});
 const eventController = new EventController(
   new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
   new UpdateEventUseCase(eventRepo, regionRepo, activityEvents),
@@ -1367,6 +1396,25 @@ const eventController = new EventController(
   new GetEventBySlugUseCase(eventRepo),
   new SetEventCancelledUseCase(eventRepo),
   new ListEventCategoriesUseCase(eventRepo),
+  {
+    listComments: new ListEventCommentsUseCase(eventRepo),
+    createComment: new CreateEventCommentUseCase(
+      eventRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
+    ),
+    updateComment: new UpdateEventCommentUseCase(
+      eventRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+    ),
+    deleteComment: new DeleteEventCommentUseCase(eventRepo),
+    takedownComment: new TakedownEventCommentUseCase(eventRepo, auditRepo),
+  },
+  eventGoingRepo,
 );
 const eventContributionController = new EventContributionController(
   new EventContributionUseCases(
@@ -2407,9 +2455,35 @@ app.route(
   createAdminEventRoutes({ controller: eventController, authenticate }),
 );
 app.route(
+  "/api/v1/admin/events",
+  createAdminEventCommentRoutes({ controller: eventController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/events",
+  createAdminEventGoingRoutes({
+    controller: eventGoingController,
+    authenticate,
+  }),
+);
+app.route(
   "/api/v1/events",
   createPublicEventRoutes({
     controller: eventController,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/events",
+  createEventGoingRoutes({
+    controller: eventGoingController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/events",
+  createPublicEventCommentRoutes({
+    controller: eventController,
+    authenticate,
     optionalAuthenticate,
   }),
 );
@@ -3291,6 +3365,12 @@ const shareController = new ShareController({
     false,
 });
 app.route("/api/v1/share", createShareRoutes({ controller: shareController }));
+
+// Resolve tautan Google Maps → lat/lng (pin picker; tanpa Places API)
+const geoController = new GeoController({
+  resolveMapsUrl: new ResolveMapsUrlUseCase({ fetch }),
+});
+app.route("/api/v1/geo", createGeoRoutes({ controller: geoController }));
 
 // OpenAPI spec + Scalar docs (api-base-stack.md Section 9)
 app.doc("/openapi.json", {

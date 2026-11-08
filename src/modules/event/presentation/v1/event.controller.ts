@@ -1,5 +1,6 @@
 import type { Context } from "hono";
-import type { AppVariables } from "@/shared/types";
+import type { AppVariables, AuthUser } from "@/shared/types";
+import { UnauthorizedError } from "@/shared/errors/app-error";
 import type { z } from "zod";
 import type {
   CreateEventUseCase,
@@ -10,12 +11,48 @@ import type {
   SetEventCancelledUseCase,
   UpdateEventUseCase,
 } from "../../application/use-cases/event.use-cases";
+import type {
+  CreateEventCommentUseCase,
+  DeleteEventCommentUseCase,
+  ListEventCommentsUseCase,
+  TakedownEventCommentUseCase,
+  UpdateEventCommentUseCase,
+} from "../../application/use-cases/event-comment.use-cases";
 import { occurrenceStatus } from "../../domain/entities/event.entity";
+import type { EventComment } from "../../domain/entities/event.entity";
+import type { EventGoingRepository } from "@/modules/event-going/domain/repositories/event-going.repository";
+import { isVerifierRole } from "@/modules/word/application/utils/resolve-publication";
 import type {
   createEventBodySchema,
   listEventsQuerySchema,
   updateEventBodySchema,
 } from "./validators/event.validator";
+
+function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
+  const user = c.get('user');
+  if (!user) throw new UnauthorizedError();
+  return user;
+}
+
+function toCommentWire(c: EventComment) {
+  const deleted = c.authorDeletedAt !== null;
+  return {
+    id: c.id,
+    event_id: c.eventId,
+    user: {
+      user_id: c.userId,
+      username: deleted ? null : c.username,
+      display_name: deleted ? null : c.displayName,
+      avatar_url: deleted ? null : c.avatarUrl,
+      is_verifier: !deleted && isVerifierRole(c.userRole ?? ''),
+    },
+    body: c.body,
+    status: c.status,
+    is_edited: c.isEdited,
+    created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt?.toISOString() ?? null,
+  };
+}
 
 type CreateBody = z.infer<typeof createEventBodySchema>;
 type UpdateBody = z.infer<typeof updateEventBodySchema>;
@@ -61,6 +98,8 @@ function serialize(
   extra?: {
     category?: { id: string; name: string } | null;
     village?: { id: string; name: string; slug: string | null } | null;
+    goingCount?: number;
+    viewerGoing?: boolean;
   },
 ) {
   return {
@@ -102,9 +141,19 @@ function serialize(
           display_name: event.author.displayName,
         }
       : null,
+    going_count: extra?.goingCount ?? 0,
+    viewer_going: extra?.viewerGoing ?? false,
     created_at: event.createdAt.toISOString(),
     updated_at: event.updatedAt ? event.updatedAt.toISOString() : null,
   };
+}
+
+export interface EventCommentControllerDeps {
+  listComments: ListEventCommentsUseCase;
+  createComment: CreateEventCommentUseCase;
+  updateComment: UpdateEventCommentUseCase;
+  deleteComment: DeleteEventCommentUseCase;
+  takedownComment: TakedownEventCommentUseCase;
 }
 
 export class EventController {
@@ -116,6 +165,8 @@ export class EventController {
     private readonly getBySlugUc: GetEventBySlugUseCase,
     private readonly setCancelledUc: SetEventCancelledUseCase,
     private readonly listCategoriesUc: ListEventCategoriesUseCase,
+    private readonly commentDeps?: EventCommentControllerDeps,
+    private readonly goingRepo?: EventGoingRepository,
   ) {}
 
   /**
@@ -128,81 +179,94 @@ export class EventController {
     );
   }
 
-  listPublic(
+  async listPublic(
     c: Context<{ Variables: AppVariables }>,
     query: z.infer<typeof listEventsQuerySchema>,
   ) {
-    return this.listUc
-      .execute({
-        limit: query.limit,
-        before: query.before,
-        categoryId: query.category_id,
-        villageId: query.village_id,
-        regionId: query.region_id,
-        placeId: query.place_id,
-        q: query.q,
-        notEnded: query.not_ended === "1",
-        order: query.order,
-        overlapsFrom: query.overlaps_from,
-        overlapsTo: query.overlaps_to,
-        publicOnly: true,
-      })
-      .then((res) =>
-        c.json({
-          success: true as const,
-          data: {
-            items: res.items.map((e) => serialize(e, {
-              category: e.category,
-              village: e.village,
-            })),
-            next_cursor: res.nextCursor,
-          },
-        }),
-      );
-  }
-
-  getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
-    return this.getBySlugUc.execute(slug, true).then((event) =>
-      c.json({
-        success: true as const,
-        data: serialize(event, {
-          category: event.category,
-          village: event.village,
-        }),
-      }),
+    const res = await this.listUc.execute({
+      limit: query.limit,
+      before: query.before,
+      categoryId: query.category_id,
+      villageId: query.village_id,
+      regionId: query.region_id,
+      placeId: query.place_id,
+      q: query.q,
+      notEnded: query.not_ended === "1",
+      order: query.order,
+      overlapsFrom: query.overlaps_from,
+      overlapsTo: query.overlaps_to,
+      publicOnly: true,
+    });
+    const going = await this.goingExtras(
+      res.items.map((e) => e.id),
+      c.get("user")?.user_id,
     );
+    return c.json({
+      success: true as const,
+      data: {
+        items: res.items.map((e) =>
+          serialize(e, {
+            category: e.category,
+            village: e.village,
+            goingCount: going.counts.get(e.id) ?? 0,
+            viewerGoing: going.viewer.has(e.id),
+          }),
+        ),
+        next_cursor: res.nextCursor,
+      },
+    });
   }
 
-  listAdmin(
+  async getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
+    const event = await this.getBySlugUc.execute(slug, true);
+    const going = await this.goingExtras([event.id], c.get("user")?.user_id);
+    return c.json({
+      success: true as const,
+      data: serialize(event, {
+        category: event.category,
+        village: event.village,
+        goingCount: going.counts.get(event.id) ?? 0,
+        viewerGoing: going.viewer.has(event.id),
+      }),
+    });
+  }
+
+  async listAdmin(
     c: Context<{ Variables: AppVariables }>,
     query: z.infer<typeof listEventsQuerySchema>,
   ) {
-    return this.listUc
-      .execute({
-        limit: query.limit,
-        before: query.before,
-        categoryId: query.category_id,
-        villageId: query.village_id,
-        regionId: query.region_id,
-        placeId: query.place_id,
-        q: query.q,
-        status: query.status,
-        notEnded: query.not_ended === "1",
-        order: query.order,
-        overlapsFrom: query.overlaps_from,
-        overlapsTo: query.overlaps_to,
-      })
-      .then((res) =>
-        c.json({
-          success: true as const,
-          data: {
-            items: res.items.map((e) =>
-              serialize(e, { category: e.category, village: e.village }),
-            ),
-            next_cursor: res.nextCursor,
-          },
-        }),
-      );
+    const res = await this.listUc.execute({
+      limit: query.limit,
+      before: query.before,
+      categoryId: query.category_id,
+      villageId: query.village_id,
+      regionId: query.region_id,
+      placeId: query.place_id,
+      q: query.q,
+      status: query.status,
+      notEnded: query.not_ended === "1",
+      order: query.order,
+      overlapsFrom: query.overlaps_from,
+      overlapsTo: query.overlaps_to,
+    });
+    const going = await this.goingExtras(
+      res.items.map((e) => e.id),
+      c.get("user")?.user_id,
+    );
+    return c.json({
+      success: true as const,
+      data: {
+        items: res.items.map((e) =>
+          serialize(e, {
+            category: e.category,
+            village: e.village,
+            goingCount: going.counts.get(e.id) ?? 0,
+            viewerGoing: going.viewer.has(e.id),
+          }),
+        ),
+        next_cursor: res.nextCursor,
+      },
+    });
   }
 
   create(
@@ -299,5 +363,81 @@ export class EventController {
           }),
         }),
     );
+  }
+
+  /** Batch count + viewer going - 0–2 query, tanpa N+1. */
+  private async goingExtras(
+    eventIds: string[],
+    userId: string | undefined,
+  ): Promise<{ counts: Map<string, number>; viewer: Set<string> }> {
+    if (!this.goingRepo || eventIds.length === 0) {
+      return { counts: new Map(), viewer: new Set() };
+    }
+    const counts = await this.goingRepo.countByEventIds(eventIds);
+    const viewer = userId
+      ? await this.goingRepo.viewerGoingByEventIds(userId, eventIds)
+      : new Set<string>();
+    return { counts, viewer };
+  }
+
+  // ---------------------------------------------------------------- komentar
+
+  private get comments(): EventCommentControllerDeps {
+    if (!this.commentDeps) throw new Error('comment deps not wired');
+    return this.commentDeps;
+  }
+
+  async listComments(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const q = c.req.valid('query' as never) as { cursor?: string; limit: number };
+    const page = await this.comments.listComments.execute(id, q.cursor, q.limit);
+    return c.json({
+      success: true as const,
+      data: {
+        items: page.items.map(toCommentWire),
+        next_cursor: page.nextCursor,
+        has_more: page.hasMore,
+      },
+    });
+  }
+
+  async createComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as { body: string };
+    const comment = await this.comments.createComment.execute({
+      eventId: id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async updateComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as { body: string };
+    const updated = await this.comments.updateComment.execute({
+      commentId: id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(updated) });
+  }
+
+  async deleteComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    await this.comments.deleteComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
+  }
+
+  async takedownComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    await this.comments.takedownComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
   }
 }

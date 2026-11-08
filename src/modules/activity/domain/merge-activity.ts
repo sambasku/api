@@ -43,6 +43,7 @@ explore: [
 'usaha_published',
 'cuisine_published',
 'event_published',
+'event_going',
 'pantun_created',
 'pantun_reply_created',
 'article_published',

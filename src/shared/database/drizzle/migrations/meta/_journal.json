@@ -869,6 +869,20 @@
       "when": 1801621010000,
       "tag": "0123_place_type_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "6",
+      "when": 1801621020000,
+      "tag": "0124_event_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "6",
+      "when": 1801621030000,
+      "tag": "0125_event_goings",
+      "breakpoints": true
     }
   ]
 }
