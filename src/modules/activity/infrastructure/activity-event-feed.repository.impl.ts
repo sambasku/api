@@ -406,6 +406,7 @@ export class ActivityEventFeedRepositoryImpl {
     return sql`(
       ${words.deletedAt} is null
       and ${words.status} = 'published'
+      and ${words.isVerified} = 1
       and ${sql.join(
         FEED_EXCLUDED_USAGE_LABELS.map(
           (label) => sql`${words.usageLabels} NOT LIKE ${`%\"${label}\"%`}`,

@@ -40,10 +40,12 @@ export class SearchWordsUseCase {
     // dilepas sebelum diteruskan ke repo (query di sini juga jadi argumen REST).
     const { viewerId, ...wordQuery } = query;
 
-    // Publik / dropdown: selalu published saja
+    // Publik: published + sudah lolos review. Query is_verified dari klien
+    // diabaikan supaya tidak bisa membuka kata belum diverifikasi.
     const { items, nextCursor, hasMore } = await this.wordRepo.search({
       ...wordQuery,
       published: true,
+      isVerified: true,
     });
 
     // Counter pencarian harian (hit + miss) untuk chart dashboard.

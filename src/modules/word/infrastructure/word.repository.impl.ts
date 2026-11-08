@@ -885,13 +885,19 @@ export class WordRepositoryImpl implements WordRepository {
           ? and(
               sql`lower(${words.lemma}) = lower(${key.lemma.trim()})`,
               eq(words.status, 'published'),
+              eq(words.isVerified, true),
               isNull(words.deletedAt),
             )
           : includeAll
             ? and(eq(words.id, key.id), includeDeleted ? undefined : isNull(words.deletedAt))
-            : and(eq(words.id, key.id), eq(words.status, 'published'), isNull(words.deletedAt)),
+            : and(
+                eq(words.id, key.id),
+                eq(words.status, 'published'),
+                eq(words.isVerified, true),
+                isNull(words.deletedAt),
+              ),
       )
-      // Homonim (mode lemma): entri terverifikasi duluan, lalu terlama.
+      // Homonim (mode lemma): publik sudah filter verified; order tetap stabil.
       // id-mode selalu <=1 baris (PK), jadi order ini sisa sort 1 baris - murah.
       .orderBy(desc(words.isVerified), words.createdAt)
       .limit(1);
@@ -905,13 +911,14 @@ export class WordRepositoryImpl implements WordRepository {
           // (hemat round-trip); id-mode langsung literal id.
           sql`${meanings.wordId} = ${
             isLemma
-              ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.lemma.trim()}) AND w2.status = 'published' AND w2.deleted_at IS NULL ORDER BY w2.is_verified DESC, w2.created_at LIMIT 1)`
+              ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.lemma.trim()}) AND w2.status = 'published' AND w2.is_verified = 1 AND w2.deleted_at IS NULL ORDER BY w2.created_at LIMIT 1)`
               : key.id
           }`,
           isNull(meanings.deletedAt),
-          // 17: makna kontribusi (pending_review) tidak tayang publik -
-          // pola examples/pronunciations di bawah; admin memakai includeAll
-          includeAll ? undefined : eq(meanings.status, 'published'),
+          // Publik: makna published + verified. Admin memakai includeAll.
+          includeAll
+            ? undefined
+            : and(eq(meanings.status, 'published'), eq(meanings.isVerified, true)),
         ),
       )
       .orderBy(meanings.orderIndex);
@@ -993,7 +1000,9 @@ export class WordRepositoryImpl implements WordRepository {
             and(
               inArray(examples.meaningId, meaningIds),
               isNull(examples.deletedAt),
-              includeAll ? undefined : eq(examples.status, 'published'),
+              includeAll
+                ? undefined
+                : and(eq(examples.status, 'published'), eq(examples.isVerified, true)),
             ),
           ),
       );
@@ -1017,7 +1026,9 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(pronunciations.wordId, wordRow.id),
             isNull(pronunciations.deletedAt),
-            includeAll ? undefined : eq(pronunciations.status, 'published'),
+            includeAll
+              ? undefined
+              : and(eq(pronunciations.status, 'published'), eq(pronunciations.isVerified, true)),
           ),
         ),
     );
@@ -1031,7 +1042,9 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(wordImages.wordId, wordRow.id),
             isNull(wordImages.deletedAt),
-            includeAll ? undefined : eq(wordImages.status, 'published'),
+            includeAll
+              ? undefined
+              : and(eq(wordImages.status, 'published'), eq(wordImages.isVerified, true)),
           ),
         ),
     );
@@ -1045,7 +1058,9 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(wordAudios.wordId, wordRow.id),
             isNull(wordAudios.deletedAt),
-            includeAll ? undefined : eq(wordAudios.status, 'published'),
+            includeAll
+              ? undefined
+              : and(eq(wordAudios.status, 'published'), eq(wordAudios.isVerified, true)),
           ),
         ),
     );
@@ -1070,6 +1085,7 @@ export class WordRepositoryImpl implements WordRepository {
               : and(
                   eq(lexicalRelations.status, 'published'),
                   eq(words.status, 'published'),
+                  eq(words.isVerified, true),
                   isNull(words.deletedAt),
                 ),
           ),
@@ -1096,6 +1112,7 @@ export class WordRepositoryImpl implements WordRepository {
               : and(
                   eq(lexicalRelations.status, 'published'),
                   eq(words.status, 'published'),
+                  eq(words.isVerified, true),
                   isNull(words.deletedAt),
                 ),
           ),
@@ -1648,6 +1665,7 @@ memberLemma: string;
         and(
           eq(wgmWord.id, wgmOther.wordId),
           eq(wgmWord.status, 'published'),
+          eq(wgmWord.isVerified, true),
           isNull(wgmWord.deletedAt),
         ),
       )
@@ -1745,11 +1763,10 @@ memberLemma: string;
     const q = params.q?.trim() ?? '';
     const letter = params.letter?.trim().toLowerCase();
     // Browse tanpa q: jangan ekspos kasar/diskriminatif di listing publik.
-    // Filter q / search endpoint tetap boleh menemukan + menampilkan badge.
     // `letter` = prefix A-Z (panel beranda); `q` = contains (kotak filter).
+    // Gate publik: published + verified (ListWordsUseCase memaksa isVerified=true).
     const where = and(
       isNull(words.deletedAt),
-      // Endpoint publik - selalu published (bukan opsional seperti search())
       eq(words.status, 'published'),
       q ? ilikeCompat(words.lemma, `%${escapeLike(q)}%`) : browseSafeUsageLabelsSql(),
       letter ? sql`${lemmaAz} LIKE ${`${escapeLike(letter)}%`}` : undefined,
@@ -1914,6 +1931,7 @@ memberLemma: string;
     const where = and(
       isNull(words.deletedAt),
       eq(words.status, 'published'),
+      eq(words.isVerified, true),
       feedSafeUsageLabelsSql(),
       params.cursor
         ? sql`(${approvedAtExpr}, ${words.id}) < (${cursorEpoch}, ${params.cursor.id})`
