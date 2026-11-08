@@ -170,7 +170,10 @@ export async function applySafeMeaningMerges(
     if (group.loserIds.length === 0) continue;
     await db.transaction((tx) => mergeGroup(tx, group));
   }
-  await db.transaction((tx) => backfillDedupeKeys(tx, trBy));
+  // Tanpa transaksi: satu tx besar utk semua survivor membuat transaksi
+  // interaktif hrana putus/timeout, lalu rollback gagal "no transaction
+  // is active" dan menelan error asli. Tiap baris independen + idempoten.
+  await backfillDedupeKeys(db, trBy);
   const closedSuggestions = await closeDuplicateSuggestions(db, loserToWinner, trBy, meaningRows);
   return { groups: planned.length, closedSuggestions };
 }
@@ -246,7 +249,7 @@ async function mergeGroup(
 
 /** Isi dedupe_key baris aktif yang masih null. */
 async function backfillDedupeKeys(
-  db: AppTransaction,
+  db: AppDatabase,
   trBy: Map<string, MergeMeaningRow['translations']>,
 ): Promise<void> {
   const survivors = await db
