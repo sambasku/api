@@ -13,6 +13,7 @@ import {
   createJinyeCommentResponseSchema,
   createJinyeResponseSchema,
   createJinyeLemmaLinkBodySchema,
+  createJinyeTranslationBodySchema,
   deleteJinyeCommentResponseSchema,
   deleteJinyeResponseSchema,
   jinyeCommentIdParamSchema,
@@ -20,13 +21,19 @@ import {
   jinyeIdParamSchema,
   jinyeLemmaLinkIdParamSchema,
   jinyeLemmaLinkResponseSchema,
+  jinyeTranslationIdParamSchema,
+  jinyeTranslationResponseSchema,
   jinyeUploadTokenQuerySchema,
   listJinyeCommentsResponseSchema,
   listJinyeLemmaLinksResponseSchema,
   listJinyeQuerySchema,
   listJinyeResponseSchema,
+  listJinyeTranslationsResponseSchema,
+  promoteJinyeExampleBodySchema,
+  promoteJinyeExampleResponseSchema,
   proposeJinyeLemmaCorrectionBodySchema,
   resolveJinyeLemmaCorrectionBodySchema,
+  resolveJinyeTranslationBodySchema,
   uploadCredentialsResponseSchema,
 } from './validators/jinye.validator';
 
@@ -348,6 +355,84 @@ const deleteLemmaLinkRoute = createRoute({
   },
 });
 
+const promoteExampleRoute = createRoute({
+  method: 'post',
+  path: '/{id}/promote-example',
+  tags: ['Jinye'],
+  summary: 'Usul Jinye jadi contoh lemma (± audio)',
+  request: {
+    params: jinyeIdParamSchema,
+    body: { content: json(promoteJinyeExampleBodySchema), required: true },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: json(promoteJinyeExampleResponseSchema),
+    },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Forbidden', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const listTranslationsRoute = createRoute({
+  method: 'get',
+  path: '/{id}/translations',
+  tags: ['Jinye'],
+  summary: 'List usulan terjemahan Jinye',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: {
+      description: 'OK',
+      content: json(listJinyeTranslationsResponseSchema),
+    },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const createTranslationRoute = createRoute({
+  method: 'post',
+  path: '/{id}/translations',
+  tags: ['Jinye'],
+  summary: 'Usul terjemahan Indonesia untuk Jinye',
+  request: {
+    params: jinyeIdParamSchema,
+    body: { content: json(createJinyeTranslationBodySchema), required: true },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: json(jinyeTranslationResponseSchema),
+    },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    409: { description: 'Conflict', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const resolveTranslationRoute = createRoute({
+  method: 'post',
+  path: '/{id}/translations/{translationId}/resolve',
+  tags: ['Jinye'],
+  summary: 'Approve/reject terjemahan Jinye (verifikator)',
+  request: {
+    params: jinyeTranslationIdParamSchema,
+    body: {
+      content: json(resolveJinyeTranslationBodySchema),
+      required: true,
+    },
+  },
+  responses: {
+    200: { description: 'OK', content: json(jinyeTranslationResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Forbidden', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
 export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   const routes = createOpenApiApp();
   const writeLimit = rateLimit({
@@ -545,6 +630,48 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     return writeLimit(c, next);
   });
 
+  for (const sub of ['/:id/promote-example', '/:id/translations'] as const) {
+    routes.use(sub, async (c, next) => {
+      if (c.req.method === 'GET' && deps.optionalAuth) {
+        return deps.optionalAuth(c, next);
+      }
+      if (c.req.method !== 'POST') return next();
+      return deps.authenticate(c, next);
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST') return next();
+      if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+      return next();
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST') return next();
+      if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+      return next();
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST') return next();
+      return writeLimit(c, next);
+    });
+  }
+  routes.use('/:id/translations/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/translations/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/translations/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/translations/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeLimit(c, next);
+  });
+
   routes.use('/archived', deps.authenticate);
   routes.openapi(uploadTokenRoute, (c) =>
     deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
@@ -607,6 +734,37 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   routes.openapi(deleteLemmaLinkRoute, (c) => {
     const p = c.req.valid('param');
     return deps.controller.deleteLemmaLink(c, p.id, p.linkId) as never;
+  });
+  routes.openapi(promoteExampleRoute, (c) =>
+    deps.controller.promoteExample(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
+  routes.openapi(listTranslationsRoute, (c) =>
+    deps.controller.listTranslations(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(createTranslationRoute, (c) =>
+    deps.controller.createTranslation(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
+  routes.use(
+    '/:id/translations/:translationId/resolve',
+    deps.authenticate,
+    authorizeRole('root', 'admin', 'reviewer', 'editor', 'verifier'),
+  );
+  routes.openapi(resolveTranslationRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.resolveTranslation(
+      c,
+      p.id,
+      p.translationId,
+      c.req.valid('json'),
+    ) as never;
   });
   routes.openapi(attachAudioRoute, (c) =>
     deps.controller.attachAudio(c, c.req.valid('param').id) as never,

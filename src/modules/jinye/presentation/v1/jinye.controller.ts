@@ -26,14 +26,24 @@ import type { ProposeJinyeLemmaCorrectionUseCase } from '../../application/use-c
 import type { ResolveJinyeLemmaCorrectionUseCase } from '../../application/use-cases/resolve-jinye-lemma-correction.use-case';
 import type { DeleteJinyeLemmaLinkUseCase } from '../../application/use-cases/delete-jinye-lemma-link.use-case';
 import type { ListJinyeLemmaLinksUseCase } from '../../application/use-cases/list-jinye-lemma-links.use-case';
-import type { JinyeLemmaLink } from '../../domain/entities/jinye.entity';
+import type { PromoteJinyeExampleUseCase } from '../../application/use-cases/promote-jinye-example.use-case';
+import type { CreateJinyeTranslationUseCase } from '../../application/use-cases/create-jinye-translation.use-case';
+import type { ListJinyeTranslationsUseCase } from '../../application/use-cases/list-jinye-translations.use-case';
+import type { ResolveJinyeTranslationUseCase } from '../../application/use-cases/resolve-jinye-translation.use-case';
+import type {
+  JinyeLemmaLink,
+  JinyeTranslation,
+} from '../../domain/entities/jinye.entity';
 import type {
   CreateJinyeBody,
   CreateJinyeCommentBody,
   CreateJinyeLemmaLinkBody,
+  CreateJinyeTranslationBody,
   ListJinyeQuery,
+  PromoteJinyeExampleBody,
   ProposeJinyeLemmaCorrectionBody,
   ResolveJinyeLemmaCorrectionBody,
+  ResolveJinyeTranslationBody,
 } from './validators/jinye.validator';
 
 function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
@@ -157,6 +167,10 @@ export class JinyeController {
       proposeLemmaCorrection: ProposeJinyeLemmaCorrectionUseCase;
       resolveLemmaCorrection: ResolveJinyeLemmaCorrectionUseCase;
       deleteLemmaLink: DeleteJinyeLemmaLinkUseCase;
+      promoteExample: PromoteJinyeExampleUseCase;
+      createTranslation: CreateJinyeTranslationUseCase;
+      listTranslations: ListJinyeTranslationsUseCase;
+      resolveTranslation: ResolveJinyeTranslationUseCase;
       imageController: ImageController;
     },
   ) {}
@@ -455,6 +469,75 @@ export class JinyeController {
     });
     return c.json({ data: { ok: true as const } });
   }
+
+  async promoteExample(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    body: PromoteJinyeExampleBody,
+  ) {
+    const user = requireUser(c);
+    const out = await this.deps.promoteExample.execute({
+      jinyeId,
+      userId: user.user_id,
+      role: user.roles?.[0] ?? 'contributor',
+      wordId: body.word_id,
+      meaningId: body.meaning_id,
+      includeAudio: body.include_audio === true,
+      targetSentence: body.target_sentence,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json(
+      {
+        data: {
+          example_id: out.exampleId,
+          word_audio_id: out.wordAudioId,
+          status: out.status,
+          is_verified: out.isVerified,
+        },
+      },
+      201,
+    );
+  }
+
+  async listTranslations(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+  ) {
+    const items = await this.deps.listTranslations.execute(jinyeId);
+    return c.json({ data: items.map(toTranslationWire) });
+  }
+
+  async createTranslation(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    body: CreateJinyeTranslationBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.createTranslation.execute({
+      jinyeId,
+      userId: user.user_id,
+      bodyId: body.body_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toTranslationWire(row) }, 201);
+  }
+
+  async resolveTranslation(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    translationId: string,
+    body: ResolveJinyeTranslationBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.resolveTranslation.execute({
+      jinyeId,
+      translationId,
+      reviewerId: user.user_id,
+      action: body.action,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toTranslationWire(row) });
+  }
 }
 
 function toLemmaLinkWire(link: JinyeLemmaLink) {
@@ -472,5 +555,18 @@ function toLemmaLinkWire(link: JinyeLemmaLink) {
     proposed_lemma: link.proposedLemma,
     proposed_by: link.proposedBy,
     created_at: link.createdAt.toISOString(),
+  };
+}
+
+function toTranslationWire(row: JinyeTranslation) {
+  return {
+    id: row.id,
+    jinye_id: row.jinyeId,
+    body_id: row.bodyId,
+    status: row.status,
+    translator_id: row.translatorId,
+    reviewed_by: row.reviewedBy,
+    reviewed_at: row.reviewedAt?.toISOString() ?? null,
+    created_at: row.createdAt.toISOString(),
   };
 }

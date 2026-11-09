@@ -668,12 +668,19 @@ export interface WordRepository {
       targetLanguageId?: string | null;
       targetSentence?: string | null;
       sourceType?: string | null;
+      sourceReference?: string | null;
       notes?: string | null;
       status: ChildStatus;
       isVerified: boolean;
     },
     actorId: string,
   ): Promise<ExampleMedia>;
+
+  /** Soft-delete contoh pending yang bersumber dari Jinye (archive/delete). */
+  cancelPendingExamplesFromJinye(jinyeId: string): Promise<number>;
+
+  /** Makna pertama (order_index) untuk kata - promote tanpa meaning_id. */
+  findFirstMeaningId(wordId: string): Promise<string | null>;
 
   /**
    * Resolve search-miss sebagai variasi penulisan pada kata existing.

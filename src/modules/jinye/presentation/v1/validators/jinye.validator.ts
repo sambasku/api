@@ -212,3 +212,60 @@ export const jinyeLemmaLinkResponseSchema = z.object({
 export const listJinyeLemmaLinksResponseSchema = z.object({
   data: z.array(jinyeLemmaLinkWireSchema),
 });
+
+export const promoteJinyeExampleBodySchema = z.object({
+  word_id: opaqueId,
+  meaning_id: opaqueId.optional(),
+  include_audio: z.boolean().optional(),
+  target_sentence: z.string().trim().max(1000).optional(),
+});
+export type PromoteJinyeExampleBody = z.infer<
+  typeof promoteJinyeExampleBodySchema
+>;
+
+export const promoteJinyeExampleResponseSchema = z.object({
+  data: z.object({
+    example_id: z.string(),
+    word_audio_id: z.string().nullable(),
+    status: z.string(),
+    is_verified: z.boolean(),
+  }),
+});
+
+export const createJinyeTranslationBodySchema = z.object({
+  body_id: z.string().trim().min(1).max(1000),
+});
+export type CreateJinyeTranslationBody = z.infer<
+  typeof createJinyeTranslationBodySchema
+>;
+
+export const resolveJinyeTranslationBodySchema = z.object({
+  action: z.enum(['approve', 'reject']),
+});
+export type ResolveJinyeTranslationBody = z.infer<
+  typeof resolveJinyeTranslationBodySchema
+>;
+
+export const jinyeTranslationIdParamSchema = z.object({
+  id: opaqueId,
+  translationId: opaqueId,
+});
+
+export const jinyeTranslationWireSchema = z.object({
+  id: z.string(),
+  jinye_id: z.string(),
+  body_id: z.string(),
+  status: z.string(),
+  translator_id: z.string(),
+  reviewed_by: z.string().nullable(),
+  reviewed_at: z.string().nullable(),
+  created_at: z.string(),
+});
+
+export const jinyeTranslationResponseSchema = z.object({
+  data: jinyeTranslationWireSchema,
+});
+
+export const listJinyeTranslationsResponseSchema = z.object({
+  data: z.array(jinyeTranslationWireSchema),
+});

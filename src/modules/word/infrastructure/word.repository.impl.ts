@@ -2858,6 +2858,7 @@ memberLemma: string;
       targetLanguageId?: string | null;
       targetSentence?: string | null;
       sourceType?: string | null;
+      sourceReference?: string | null;
       notes?: string | null;
       status: ChildStatus;
       isVerified: boolean;
@@ -2875,6 +2876,7 @@ memberLemma: string;
             targetLanguageId: data.targetLanguageId ?? null,
             targetSentence: data.targetSentence ?? null,
             sourceType: data.sourceType ?? null,
+            sourceReference: data.sourceReference ?? null,
             notes: data.notes ?? null,
             status: data.status,
             isVerified: data.isVerified,
@@ -2894,6 +2896,37 @@ memberLemma: string;
       mapMediaViolation(err, '');
       throw err;
     }
+  }
+
+  async cancelPendingExamplesFromJinye(jinyeId: string): Promise<number> {
+    const now = new Date();
+    const rows = await this.db
+      .update(examples)
+      .set({
+        status: 'rejected',
+        deletedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(examples.sourceType, 'jinye'),
+          eq(examples.sourceReference, jinyeId),
+          eq(examples.status, 'pending_review'),
+          isNull(examples.deletedAt),
+        ),
+      )
+      .returning({ id: examples.id });
+    return rows.length;
+  }
+
+  async findFirstMeaningId(wordId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: meanings.id })
+      .from(meanings)
+      .where(and(eq(meanings.wordId, wordId), isNull(meanings.deletedAt)))
+      .orderBy(asc(meanings.orderIndex), asc(meanings.id))
+      .limit(1);
+    return row?.id ?? null;
   }
 
   async addMeaning(

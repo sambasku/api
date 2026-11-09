@@ -911,6 +911,13 @@
       "when": 1801627000000,
       "tag": "0129_jinye_lemma_links",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "6",
+      "when": 1801628000000,
+      "tag": "0130_jinye_translations",
+      "breakpoints": true
     }
   ]
 }

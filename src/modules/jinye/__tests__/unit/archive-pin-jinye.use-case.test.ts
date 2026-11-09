@@ -56,6 +56,13 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     listActiveLemmaLinksForTarget: vi.fn(),
     updateLemmaLink: vi.fn(),
     deleteLemmaLink: vi.fn(),
+    createTranslation: vi.fn(),
+    findTranslationById: vi.fn(),
+    listTranslationsByJinyeId: vi.fn(),
+    findPendingTranslationByTranslator: vi.fn(),
+    findAcceptedTranslation: vi.fn(),
+    updateTranslation: vi.fn(),
+    rejectPendingTranslations: vi.fn(async () => 0),
     ...overrides,
   };
 }
@@ -71,6 +78,7 @@ describe('Archive / pin Jinye', () => {
     });
     expect(out.status).toBe('archived');
     expect(r.clearPinnedIf).toHaveBeenCalledWith(JINYE_ID);
+    expect(r.rejectPendingTranslations).toHaveBeenCalledWith(JINYE_ID);
   });
 
   it('unarchive archived → published', async () => {

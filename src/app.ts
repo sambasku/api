@@ -645,6 +645,10 @@ import { ListJinyeLemmaLinksUseCase } from "@/modules/jinye/application/use-case
 import { ProposeJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/propose-jinye-lemma-correction.use-case";
 import { ResolveJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-lemma-correction.use-case";
 import { DeleteJinyeLemmaLinkUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-lemma-link.use-case";
+import { PromoteJinyeExampleUseCase } from "@/modules/jinye/application/use-cases/promote-jinye-example.use-case";
+import { CreateJinyeTranslationUseCase } from "@/modules/jinye/application/use-cases/create-jinye-translation.use-case";
+import { ListJinyeTranslationsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-translations.use-case";
+import { ResolveJinyeTranslationUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-translation.use-case";
 import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
 import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
 import { JinyeReportRepositoryImpl } from "@/modules/jinye-report/infrastructure/jinye-report.repository.impl";
@@ -2974,7 +2978,7 @@ const jinyeController = new JinyeController({
   ),
   listPublished: new ListPublishedJinyeUseCase(jinyeRepo, userRepo),
   getDetail: new GetJinyeDetailUseCase(jinyeRepo),
-  deleteJinye: new DeleteJinyeUseCase(jinyeRepo, auditRepo),
+  deleteJinye: new DeleteJinyeUseCase(jinyeRepo, auditRepo, wordRepo),
   attachAudio: new AttachJinyeAudioUseCase(
     jinyeRepo,
     pronunciationStorage,
@@ -2992,7 +2996,7 @@ const jinyeController = new JinyeController({
   ),
   listComments: new ListJinyeCommentsUseCase(jinyeRepo),
   deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, auditRepo),
-  archive: new ArchiveJinyeUseCase(jinyeRepo, auditRepo),
+  archive: new ArchiveJinyeUseCase(jinyeRepo, auditRepo, wordRepo),
   unarchive: new UnarchiveJinyeUseCase(jinyeRepo, auditRepo),
   pin: new PinJinyeUseCase(jinyeRepo, auditRepo),
   unpin: new UnpinJinyeUseCase(jinyeRepo, auditRepo),
@@ -3013,6 +3017,14 @@ const jinyeController = new JinyeController({
     auditRepo,
   ),
   deleteLemmaLink: new DeleteJinyeLemmaLinkUseCase(jinyeRepo, auditRepo),
+  promoteExample: new PromoteJinyeExampleUseCase(
+    jinyeRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  createTranslation: new CreateJinyeTranslationUseCase(jinyeRepo, auditRepo),
+  listTranslations: new ListJinyeTranslationsUseCase(jinyeRepo),
+  resolveTranslation: new ResolveJinyeTranslationUseCase(jinyeRepo, auditRepo),
   imageController,
 });
 app.route(

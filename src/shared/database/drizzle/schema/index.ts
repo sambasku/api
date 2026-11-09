@@ -92,3 +92,4 @@ export * from "./layanan-contributions.schema";
 export * from "./jinye.schema";
 export * from "./jinye-reports.schema";
 export * from "./jinye-lemma-links.schema";
+export * from "./jinye-translations.schema";
