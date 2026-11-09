@@ -77,6 +77,10 @@ function emptyRepo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     listCommentsByJinyeId: vi.fn(),
     markCommentDeletedByAuthor: vi.fn(),
     incrementPublishedCommentCount: vi.fn(),
+    setStatus: vi.fn(),
+    getPinnedJinyeId: vi.fn(),
+    setPinnedJinyeId: vi.fn(),
+    clearPinnedIf: vi.fn(),
     ...overrides,
   };
 }

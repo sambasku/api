@@ -195,6 +195,9 @@ export class JinyeRepositoryImpl implements JinyeRepository {
     if (filter.userId) {
       conds.push(eq(jinye.userId, filter.userId));
     }
+    if (filter.excludeId) {
+      conds.push(sql`${jinye.id} <> ${filter.excludeId}`);
+    }
     if (cur) {
       conds.push(
         sql`(${jinye.createdAt} < ${cur.createdAt} or (${jinye.createdAt} = ${cur.createdAt} and ${jinye.id} < ${cur.id}))`,
@@ -253,7 +256,66 @@ export class JinyeRepositoryImpl implements JinyeRepository {
         ),
       )
       .returning({ id: jinye.id });
+    if (updated.length > 0) {
+      await this.clearPinnedIf(id);
+    }
     return updated.length > 0;
+  }
+
+  async setStatus(input: {
+    id: string;
+    userId: string;
+    from: 'published' | 'archived';
+    to: 'published' | 'archived';
+  }): Promise<Jinye | null> {
+    const updated = await this.db
+      .update(jinye)
+      .set({
+        status: input.to,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(jinye.id, input.id),
+          eq(jinye.userId, input.userId),
+          eq(jinye.status, input.from),
+        ),
+      )
+      .returning({ id: jinye.id });
+    if (updated.length === 0) return null;
+    return this.findById(input.id);
+  }
+
+  async getPinnedJinyeId(userId: string): Promise<string | null> {
+    const rows = await this.db
+      .select({ pinnedJinyeId: users.pinnedJinyeId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return rows[0]?.pinnedJinyeId ?? null;
+  }
+
+  async setPinnedJinyeId(
+    userId: string,
+    jinyeId: string | null,
+  ): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        pinnedJinyeId: jinyeId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async clearPinnedIf(jinyeId: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        pinnedJinyeId: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.pinnedJinyeId, jinyeId));
   }
 
   async setAudio(input: { id: string; audio: JinyeAudio }): Promise<Jinye | null> {

@@ -190,6 +190,71 @@ const deleteCommentRoute = createRoute({
   },
 });
 
+const listArchivedRoute = createRoute({
+  method: 'get',
+  path: '/archived',
+  tags: ['Jinye'],
+  summary: 'List Jinye arsip milik sendiri',
+  request: { query: listJinyeQuerySchema },
+  responses: {
+    200: { description: 'OK', content: json(listJinyeResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+  },
+});
+
+const archiveRoute = createRoute({
+  method: 'post',
+  path: '/{id}/archive',
+  tags: ['Jinye'],
+  summary: 'Arsipkan Jinye (owner)',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(jinyeDetailResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const unarchiveRoute = createRoute({
+  method: 'post',
+  path: '/{id}/unarchive',
+  tags: ['Jinye'],
+  summary: 'Pulihkan Jinye dari arsip (owner)',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(jinyeDetailResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const pinRoute = createRoute({
+  method: 'post',
+  path: '/{id}/pin',
+  tags: ['Jinye'],
+  summary: 'Pin Jinye ke profil (max 1; lepas pin lama)',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(jinyeDetailResponseSchema) },
+    400: { description: 'Bukan published', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const unpinRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/pin',
+  tags: ['Jinye'],
+  summary: 'Unpin Jinye dari profil',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(deleteJinyeResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
 export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   const routes = createOpenApiApp();
   const writeLimit = rateLimit({
@@ -326,6 +391,28 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     return writeLimit(c, next);
   });
 
+  for (const sub of ['/:id/archive', '/:id/unarchive', '/:id/pin'] as const) {
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+      return deps.authenticate(c, next);
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+      if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+      return next();
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+      if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+      return next();
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+      return writeLimit(c, next);
+    });
+  }
+
+  routes.use('/archived', deps.authenticate);
   routes.openapi(uploadTokenRoute, (c) =>
     deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
   );
@@ -335,7 +422,22 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   routes.openapi(listRouteDef, (c) =>
     deps.controller.list(c, c.req.valid('query')) as never,
   );
+  routes.openapi(listArchivedRoute, (c) =>
+    deps.controller.listArchived(c, c.req.valid('query')) as never,
+  );
   // Path spesifik sebelum /:id generik.
+  routes.openapi(archiveRoute, (c) =>
+    deps.controller.archive(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(unarchiveRoute, (c) =>
+    deps.controller.unarchive(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(pinRoute, (c) =>
+    deps.controller.pin(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(unpinRoute, (c) =>
+    deps.controller.unpin(c, c.req.valid('param').id) as never,
+  );
   routes.openapi(attachAudioRoute, (c) =>
     deps.controller.attachAudio(c, c.req.valid('param').id) as never,
   );

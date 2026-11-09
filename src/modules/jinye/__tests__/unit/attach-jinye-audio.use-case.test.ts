@@ -59,6 +59,10 @@ describe('AttachJinyeAudioUseCase', () => {
       listCommentsByJinyeId: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
+    setStatus: vi.fn(),
+    getPinnedJinyeId: vi.fn(),
+    setPinnedJinyeId: vi.fn(),
+    clearPinnedIf: vi.fn(),
     };
     const uc = new AttachJinyeAudioUseCase(
       repo,
@@ -92,6 +96,10 @@ describe('AttachJinyeAudioUseCase', () => {
       listCommentsByJinyeId: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
+    setStatus: vi.fn(),
+    getPinnedJinyeId: vi.fn(),
+    setPinnedJinyeId: vi.fn(),
+    clearPinnedIf: vi.fn(),
     };
     const uc = new AttachJinyeAudioUseCase(
       repo,

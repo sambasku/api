@@ -635,6 +635,11 @@ import { AttachJinyeAudioUseCase } from "@/modules/jinye/application/use-cases/a
 import { CreateJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/create-jinye-comment.use-case";
 import { ListJinyeCommentsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-comments.use-case";
 import { DeleteJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-comment.use-case";
+import { ArchiveJinyeUseCase } from "@/modules/jinye/application/use-cases/archive-jinye.use-case";
+import { UnarchiveJinyeUseCase } from "@/modules/jinye/application/use-cases/unarchive-jinye.use-case";
+import { PinJinyeUseCase } from "@/modules/jinye/application/use-cases/pin-jinye.use-case";
+import { UnpinJinyeUseCase } from "@/modules/jinye/application/use-cases/unpin-jinye.use-case";
+import { ListArchivedJinyeUseCase } from "@/modules/jinye/application/use-cases/list-archived-jinye.use-case";
 import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
 import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
 import { JinyeReportRepositoryImpl } from "@/modules/jinye-report/infrastructure/jinye-report.repository.impl";
@@ -2982,6 +2987,11 @@ const jinyeController = new JinyeController({
   ),
   listComments: new ListJinyeCommentsUseCase(jinyeRepo),
   deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, auditRepo),
+  archive: new ArchiveJinyeUseCase(jinyeRepo, auditRepo),
+  unarchive: new UnarchiveJinyeUseCase(jinyeRepo, auditRepo),
+  pin: new PinJinyeUseCase(jinyeRepo, auditRepo),
+  unpin: new UnpinJinyeUseCase(jinyeRepo, auditRepo),
+  listArchived: new ListArchivedJinyeUseCase(jinyeRepo),
   imageController,
 });
 app.route(

@@ -16,6 +16,11 @@ import type { AttachJinyeAudioUseCase } from '../../application/use-cases/attach
 import type { CreateJinyeCommentUseCase } from '../../application/use-cases/create-jinye-comment.use-case';
 import type { ListJinyeCommentsUseCase } from '../../application/use-cases/list-jinye-comments.use-case';
 import type { DeleteJinyeCommentUseCase } from '../../application/use-cases/delete-jinye-comment.use-case';
+import type { ArchiveJinyeUseCase } from '../../application/use-cases/archive-jinye.use-case';
+import type { UnarchiveJinyeUseCase } from '../../application/use-cases/unarchive-jinye.use-case';
+import type { PinJinyeUseCase } from '../../application/use-cases/pin-jinye.use-case';
+import type { UnpinJinyeUseCase } from '../../application/use-cases/unpin-jinye.use-case';
+import type { ListArchivedJinyeUseCase } from '../../application/use-cases/list-archived-jinye.use-case';
 import type {
   CreateJinyeBody,
   CreateJinyeCommentBody,
@@ -28,7 +33,10 @@ function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
   return user;
 }
 
-function toWire(j: Jinye, opts?: { exposeStaging?: boolean }) {
+function toWire(
+  j: Jinye,
+  opts?: { exposeStaging?: boolean; isPinned?: boolean },
+) {
   const published = j.status === 'published';
   const images = j.images.map((img) => {
     const hasPublic = typeof img.publicUrl === 'string' && img.publicUrl.length > 0;
@@ -44,8 +52,9 @@ function toWire(j: Jinye, opts?: { exposeStaging?: boolean }) {
     };
   });
 
+  const visible = published || !!opts?.exposeStaging;
   const audio =
-    published && j.audio
+    visible && j.audio
       ? {
           audio_url: j.audio.url,
           audio_mime_type: j.audio.mimeType,
@@ -60,7 +69,7 @@ function toWire(j: Jinye, opts?: { exposeStaging?: boolean }) {
     display_name: j.displayName,
     avatar_url: j.avatarUrl,
     is_verifier: isVerifierRole(j.userRole ?? ''),
-    body: published || opts?.exposeStaging ? j.body : null,
+    body: visible ? j.body : null,
     images,
     audio,
     status: j.status,
@@ -71,6 +80,7 @@ function toWire(j: Jinye, opts?: { exposeStaging?: boolean }) {
     created_at: j.createdAt.toISOString(),
     updated_at: j.updatedAt?.toISOString() ?? null,
     is_edited: !!j.isEdited,
+    is_pinned: opts?.isPinned === true,
   };
 }
 
@@ -128,6 +138,11 @@ export class JinyeController {
       createComment: CreateJinyeCommentUseCase;
       listComments: ListJinyeCommentsUseCase;
       deleteComment: DeleteJinyeCommentUseCase;
+      archive: ArchiveJinyeUseCase;
+      unarchive: UnarchiveJinyeUseCase;
+      pin: PinJinyeUseCase;
+      unpin: UnpinJinyeUseCase;
+      listArchived: ListArchivedJinyeUseCase;
       imageController: ImageController;
     },
   ) {}
@@ -161,9 +176,64 @@ export class JinyeController {
       username: q.username,
     });
     return c.json({
-      data: page.items.map((j) => toWire(j)),
+      data: page.items.map((j) =>
+        toWire(j, { isPinned: page.pinnedId === j.id }),
+      ),
       meta: { next_cursor: page.nextCursor },
     });
+  }
+
+  async listArchived(c: Context<{ Variables: AppVariables }>, q: ListJinyeQuery) {
+    const user = requireUser(c);
+    const page = await this.deps.listArchived.execute({
+      userId: user.user_id,
+      limit: q.limit,
+      cursor: q.cursor,
+    });
+    return c.json({
+      data: page.items.map((j) => toWire(j, { exposeStaging: true })),
+      meta: { next_cursor: page.nextCursor },
+    });
+  }
+
+  async archive(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = requireUser(c);
+    const row = await this.deps.archive.execute({
+      id,
+      userId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toWire(row, { exposeStaging: true }) });
+  }
+
+  async unarchive(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = requireUser(c);
+    const row = await this.deps.unarchive.execute({
+      id,
+      userId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toWire(row, { exposeStaging: true }) });
+  }
+
+  async pin(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = requireUser(c);
+    const row = await this.deps.pin.execute({
+      id,
+      userId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toWire(row, { exposeStaging: true, isPinned: true }) });
+  }
+
+  async unpin(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = requireUser(c);
+    await this.deps.unpin.execute({
+      id,
+      userId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: { ok: true as const } });
   }
 
   async detail(c: Context<{ Variables: AppVariables }>, id: string) {
@@ -179,7 +249,12 @@ export class JinyeController {
     });
     const exposeStaging =
       !!user && (user.user_id === row.userId || viewerIsAdmin);
-    return c.json({ data: toWire(row, { exposeStaging }) });
+    return c.json({
+      data: toWire(row, {
+        exposeStaging,
+        isPinned: row.isPinned,
+      }),
+    });
   }
 
   async remove(c: Context<{ Variables: AppVariables }>, id: string) {

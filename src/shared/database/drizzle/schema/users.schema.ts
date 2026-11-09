@@ -52,6 +52,12 @@ export const users = sqliteTable(
      * "yang sedang dipakai" (sinkron lintas perangkat).
      */
     activeBorderId: text('active_border_id'),
+    /**
+     * Jinye yang dipin di profil (max 1). Null = tidak ada pin.
+     * FK ke `jinye` tanpa `.references()` Drizzle agar tidak siklus import
+     * dengan schema jinye - FK dibuat di migration `0128_jinye_pin.sql`.
+     */
+    pinnedJinyeId: text('pinned_jinye_id'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
     /** Piggyback presence: di-touch dari request authenticated (throttle 5 mnt). */

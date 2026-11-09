@@ -87,6 +87,7 @@ export const jinyeItemSchema = z.object({
   created_at: z.string(),
   updated_at: z.string().nullable(),
   is_edited: z.boolean(),
+  is_pinned: z.boolean().optional(),
 });
 
 export const createJinyeResponseSchema = z.object({

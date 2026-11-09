@@ -15,7 +15,7 @@ export class ListPublishedJinyeUseCase {
     cursor?: string;
     userId?: string;
     username?: string;
-  }): Promise<CursorPage<Jinye>> {
+  }): Promise<CursorPage<Jinye> & { pinnedId: string | null }> {
     let userId = input.userId;
     if (!userId && input.username) {
       const user = await this.userRepo?.findByUsername(input.username.trim());
@@ -24,11 +24,51 @@ export class ListPublishedJinyeUseCase {
       }
       userId = user.id;
     }
-    return this.repo.list({
-      limit: input.limit,
-      cursor: input.cursor,
-      userId,
-      status: 'published',
-    });
+
+    let pinnedId: string | null = null;
+    let pinned: Jinye | null = null;
+
+    if (userId) {
+      pinnedId = await this.repo.getPinnedJinyeId(userId);
+      if (pinnedId) {
+        const row = await this.repo.findById(pinnedId);
+        if (row && row.status === 'published' && row.userId === userId) {
+          pinned = row;
+        } else {
+          await this.repo.setPinnedJinyeId(userId, null);
+          pinnedId = null;
+        }
+      }
+    }
+
+    const firstPage = !input.cursor;
+    const pageLimit =
+      pinned && firstPage ? Math.max(input.limit - 1, 0) : input.limit;
+
+    const page =
+      pageLimit === 0 && pinned && firstPage
+        ? {
+            items: [] as Jinye[],
+            nextCursor: null as string | null,
+            hasMore: false,
+          }
+        : await this.repo.list({
+            limit: Math.max(pageLimit, 1),
+            cursor: input.cursor,
+            userId,
+            status: 'published',
+            excludeId: pinned?.id,
+          });
+
+    if (pinned && firstPage) {
+      return {
+        items: [pinned, ...page.items].slice(0, input.limit),
+        nextCursor: page.nextCursor,
+        hasMore: page.hasMore || page.items.length + 1 > input.limit,
+        pinnedId: pinned.id,
+      };
+    }
+
+    return { ...page, pinnedId };
   }
 }

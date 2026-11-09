@@ -16,6 +16,17 @@ export interface JinyeRepository {
   findLatestCreatedAtByUser(userId: string): Promise<Date | null>;
   markDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   setAudio(input: { id: string; audio: JinyeAudio }): Promise<Jinye | null>;
+  /** published ↔ archived. Owner check di use case. */
+  setStatus(input: {
+    id: string;
+    userId: string;
+    from: 'published' | 'archived';
+    to: 'published' | 'archived';
+  }): Promise<Jinye | null>;
+  getPinnedJinyeId(userId: string): Promise<string | null>;
+  setPinnedJinyeId(userId: string, jinyeId: string | null): Promise<void>;
+  /** Lepas pin bila users.pinned_jinye_id = jinyeId. */
+  clearPinnedIf(jinyeId: string): Promise<void>;
 
   createComment(input: NewJinyeComment): Promise<JinyeComment>;
   findCommentById(id: string): Promise<JinyeComment | null>;

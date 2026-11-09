@@ -59,6 +59,10 @@ describe('CreateJinyeUseCase', () => {
       listCommentsByJinyeId: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
+    setStatus: vi.fn(),
+    getPinnedJinyeId: vi.fn(),
+    setPinnedJinyeId: vi.fn(),
+    clearPinnedIf: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -83,6 +87,10 @@ describe('CreateJinyeUseCase', () => {
       listCommentsByJinyeId: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
+    setStatus: vi.fn(),
+    getPinnedJinyeId: vi.fn(),
+    setPinnedJinyeId: vi.fn(),
+    clearPinnedIf: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -109,6 +117,10 @@ describe('CreateJinyeUseCase', () => {
       listCommentsByJinyeId: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
+    setStatus: vi.fn(),
+    getPinnedJinyeId: vi.fn(),
+    setPinnedJinyeId: vi.fn(),
+    clearPinnedIf: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -138,6 +150,10 @@ describe('CreateJinyeUseCase', () => {
       listCommentsByJinyeId: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
+    setStatus: vi.fn(),
+    getPinnedJinyeId: vi.fn(),
+    setPinnedJinyeId: vi.fn(),
+    clearPinnedIf: vi.fn(),
     };
     const activity = { safe: vi.fn(async () => undefined) };
     const audit = { record: vi.fn(async () => undefined) };

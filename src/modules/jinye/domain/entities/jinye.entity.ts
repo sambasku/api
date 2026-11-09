@@ -57,6 +57,8 @@ export interface JinyeListFilter {
   userId?: string;
   /** Default published-only for public feed. */
   status?: JinyeStatus | 'all';
+  /** Exclude id (mis. pin sudah diambil terpisah). */
+  excludeId?: string;
 }
 
 export interface JinyeComment {
