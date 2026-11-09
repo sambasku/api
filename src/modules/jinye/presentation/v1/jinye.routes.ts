@@ -12,8 +12,10 @@ import {
   deleteJinyeResponseSchema,
   jinyeDetailResponseSchema,
   jinyeIdParamSchema,
+  jinyeUploadTokenQuerySchema,
   listJinyeQuerySchema,
   listJinyeResponseSchema,
+  uploadCredentialsResponseSchema,
 } from './validators/jinye.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -65,6 +67,27 @@ const listRouteDef = createRoute({
   },
 });
 
+const uploadTokenRoute = createRoute({
+  method: 'get',
+  path: '/upload-token',
+  tags: ['Jinye'],
+  summary: 'Kredensial direct-upload ImageKit, folder hanya /jinye (login)',
+  request: { query: jinyeUploadTokenQuerySchema },
+  responses: {
+    200: {
+      description: 'Token + signature upload',
+      content: json(uploadCredentialsResponseSchema),
+    },
+    400: { description: 'Folder bukan /jinye', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    503: {
+      description: 'Provider gambar belum dikonfigurasi',
+      content: json(errorResponseSchema),
+    },
+  },
+});
+
 const detailRouteDef = createRoute({
   method: 'get',
   path: '/{id}',
@@ -89,6 +112,36 @@ const deleteRouteDef = createRoute({
   },
 });
 
+const attachAudioRoute = createRoute({
+  method: 'post',
+  path: '/{id}/audio',
+  tags: ['Jinye'],
+  summary: 'Lampirkan / ganti voice note OP (owner)',
+  request: {
+    params: jinyeIdParamSchema,
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: z.object({
+            audio: z.any().openapi({ type: 'string', format: 'binary' }),
+            duration_ms: z.coerce.number().int().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: 'Audio dilampirkan', content: json(jinyeDetailResponseSchema) },
+    400: { description: 'File/MIME tidak valid', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Bukan pemilik', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    409: { description: 'Status tidak editable', content: json(errorResponseSchema) },
+    429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    503: { description: 'Storage audio belum dikonfigurasi', content: json(errorResponseSchema) },
+  },
+});
+
 export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   const routes = createOpenApiApp();
   const writeLimit = rateLimit({
@@ -102,6 +155,25 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     },
     onLimited: ugcRateLimitedHook(deps.onUgcRateLimited),
   });
+  const tokenUserLimit = rateLimit({
+    points: 60,
+    duration: 3600,
+    keyFn: (c) => {
+      const uid = (
+        c as { get: (k: 'user') => { user_id: string } | undefined }
+      ).get('user')?.user_id;
+      return uid ? `jinye-upload-token:${uid}` : '';
+    },
+  });
+
+  const writeClient = deps.requireApprovedClient
+    ? [deps.requireApprovedClient]
+    : [];
+  const legalConsent = deps.requireLegalConsent
+    ? [deps.requireLegalConsent]
+    : [];
+
+  routes.use('/upload-token', deps.authenticate, ...writeClient, ...legalConsent, tokenUserLimit);
 
   routes.use('/', async (c, next) => {
     if (c.req.method === 'POST') return deps.authenticate(c, next);
@@ -122,33 +194,43 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     return writeLimit(c, next);
   });
 
+  const isWriteOnId = (method: string) =>
+    method === 'DELETE' || method === 'POST';
+
   routes.use('/:id', async (c, next) => {
     if (c.req.method === 'GET' && deps.optionalAuth) {
       return deps.optionalAuth(c, next);
     }
-    if (c.req.method !== 'DELETE') return next();
+    if (!isWriteOnId(c.req.method)) return next();
     return deps.authenticate(c, next);
   });
   routes.use('/:id', async (c, next) => {
-    if (c.req.method !== 'DELETE') return next();
+    if (!isWriteOnId(c.req.method)) return next();
     if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
     return next();
   });
   routes.use('/:id', async (c, next) => {
-    if (c.req.method !== 'DELETE') return next();
+    if (!isWriteOnId(c.req.method)) return next();
     if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
     return next();
   });
   routes.use('/:id', async (c, next) => {
-    if (c.req.method !== 'DELETE') return next();
+    if (!isWriteOnId(c.req.method)) return next();
     return writeLimit(c, next);
   });
 
+  routes.openapi(uploadTokenRoute, (c) =>
+    deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
+  );
   routes.openapi(createRouteDef, (c) =>
     deps.controller.create(c, c.req.valid('json')) as never,
   );
   routes.openapi(listRouteDef, (c) =>
     deps.controller.list(c, c.req.valid('query')) as never,
+  );
+  // Audio sebelum detail generik supaya path spesifik menang.
+  routes.openapi(attachAudioRoute, (c) =>
+    deps.controller.attachAudio(c, c.req.valid('param').id) as never,
   );
   routes.openapi(detailRouteDef, (c) =>
     deps.controller.detail(c, c.req.valid('param').id) as never,

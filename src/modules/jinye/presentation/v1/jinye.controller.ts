@@ -1,12 +1,18 @@
 import type { Context } from 'hono';
-import { UnauthorizedError } from '@/shared/errors/app-error';
+import {
+  BadRequestError,
+  UnauthorizedError,
+} from '@/shared/errors/app-error';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
+import type { ImageController } from '@/modules/image/presentation/v1/image.controller';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { Jinye } from '../../domain/entities/jinye.entity';
 import type { CreateJinyeUseCase } from '../../application/use-cases/create-jinye.use-case';
 import type { ListPublishedJinyeUseCase } from '../../application/use-cases/list-published-jinye.use-case';
 import type { GetJinyeDetailUseCase } from '../../application/use-cases/get-jinye-detail.use-case';
 import type { DeleteJinyeUseCase } from '../../application/use-cases/delete-jinye.use-case';
+import type { AttachJinyeAudioUseCase } from '../../application/use-cases/attach-jinye-audio.use-case';
 import type { CreateJinyeBody, ListJinyeQuery } from './validators/jinye.validator';
 
 function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
@@ -68,8 +74,14 @@ export class JinyeController {
       listPublished: ListPublishedJinyeUseCase;
       getDetail: GetJinyeDetailUseCase;
       deleteJinye: DeleteJinyeUseCase;
+      attachAudio: AttachJinyeAudioUseCase;
+      imageController: ImageController;
     },
   ) {}
+
+  uploadCredentials(c: Context<{ Variables: AppVariables }>, folder: string) {
+    return this.deps.imageController.uploadCredentials(c, folder);
+  }
 
   async create(c: Context<{ Variables: AppVariables }>, body: CreateJinyeBody) {
     const user = requireUser(c);
@@ -82,6 +94,7 @@ export class JinyeController {
         publicUrl: null,
         contentWarnings: [],
       })),
+      hasPendingAudio: body.has_pending_audio === true,
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ data: toWire(row, { exposeStaging: true }) }, 201);
@@ -92,6 +105,7 @@ export class JinyeController {
       limit: q.limit,
       cursor: q.cursor,
       userId: q.user_id,
+      username: q.username,
     });
     return c.json({
       data: page.items.map((j) => toWire(j)),
@@ -123,5 +137,38 @@ export class JinyeController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ data: { ok: true as const } });
+  }
+
+  async attachAudio(c: Context<{ Variables: AppVariables }>, jinyeId: string) {
+    const user = requireUser(c);
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+
+    const row = await this.deps.attachAudio.execute({
+      jinyeId,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      durationMs: body['duration_ms'],
+      requestId: c.get('requestId') ?? null,
+    });
+
+    return c.json({ data: toWire(row, { exposeStaging: true }) }, 200);
   }
 }

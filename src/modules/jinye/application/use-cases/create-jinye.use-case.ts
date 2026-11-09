@@ -16,6 +16,8 @@ export interface CreateJinyeCommand {
   userId: string;
   body?: string | null;
   images?: JinyeImage[];
+  /** Voice-only: create dulu, client segera POST /:id/audio. */
+  hasPendingAudio?: boolean;
   requestId?: string | null;
 }
 
@@ -81,7 +83,7 @@ export class CreateJinyeUseCase {
       }
     }
 
-    if (!body && images.length === 0) {
+    if (!body && images.length === 0 && !cmd.hasPendingAudio) {
       throw new ValidationError([
         {
           field: 'body',
@@ -128,6 +130,7 @@ export class CreateJinyeUseCase {
       newData: {
         status: created.status,
         has_images: created.images.length > 0,
+        has_pending_audio: !!cmd.hasPendingAudio,
         body_len: created.body.length,
       },
       requestId: cmd.requestId ?? null,

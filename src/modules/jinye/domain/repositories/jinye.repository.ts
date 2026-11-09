@@ -1,5 +1,10 @@
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
-import type { Jinye, JinyeListFilter, NewJinye } from '../entities/jinye.entity';
+import type {
+  Jinye,
+  JinyeAudio,
+  JinyeListFilter,
+  NewJinye,
+} from '../entities/jinye.entity';
 
 export interface JinyeRepository {
   create(input: NewJinye): Promise<Jinye>;
@@ -8,4 +13,5 @@ export interface JinyeRepository {
   /** Create terbaru user mana pun statusnya (untuk kuota 24 jam). */
   findLatestCreatedAtByUser(userId: string): Promise<Date | null>;
   markDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  setAudio(input: { id: string; audio: JinyeAudio }): Promise<Jinye | null>;
 }

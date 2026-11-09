@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { opaqueId } from '@/shared/validation/id';
+import { uploadCredentialsResponseSchema } from '@/modules/image/presentation/v1/validators/image.validator';
 
 const imageInputSchema = z.object({
   url: z
@@ -12,6 +13,13 @@ const imageInputSchema = z.object({
     .min(1, 'Alamat gambar tidak valid'),
 });
 
+export const jinyeUploadTokenQuerySchema = z.object({
+  folder: z
+    .string({ error: 'Folder upload tidak valid' })
+    .trim()
+    .refine((v) => v === '/jinye', { error: 'Folder upload tidak valid' }),
+});
+
 export const createJinyeBodySchema = z.object({
   body: z
     .string({ error: 'Teks tidak valid' })
@@ -19,9 +27,13 @@ export const createJinyeBodySchema = z.object({
     .optional()
     .nullable(),
   images: z.array(imageInputSchema).max(4, 'Lampiran tidak boleh lebih dari 4 foto').optional(),
+  /** Create voice-only: body/images boleh kosong; wajib segera POST /:id/audio. */
+  has_pending_audio: z.boolean().optional(),
 });
 
 export type CreateJinyeBody = z.infer<typeof createJinyeBodySchema>;
+
+export { uploadCredentialsResponseSchema };
 
 export const jinyeIdParamSchema = z.object({
   id: opaqueId,
@@ -31,6 +43,13 @@ export const listJinyeQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().trim().min(1).max(512).optional(),
   user_id: opaqueId.optional(),
+  /** Alternatif user_id: resolve ke id via username publik. */
+  username: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .optional(),
 });
 
 export type ListJinyeQuery = z.infer<typeof listJinyeQuerySchema>;
@@ -39,6 +58,9 @@ const jinyeImageWireSchema = z.object({
   status: z.enum(['pending_review', 'published']),
   public_url: z.string().nullable(),
   content_warnings: z.array(z.string()),
+  /** Hanya owner/admin saat staging. */
+  url: z.string().optional(),
+  provider_file_id: z.string().optional(),
 });
 
 const jinyeAudioWireSchema = z.object({

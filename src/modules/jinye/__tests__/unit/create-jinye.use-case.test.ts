@@ -53,6 +53,7 @@ describe('CreateJinyeUseCase', () => {
       list: vi.fn(),
       findLatestCreatedAtByUser: vi.fn(async () => null),
       markDeletedByAuthor: vi.fn(),
+      setAudio: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -71,6 +72,7 @@ describe('CreateJinyeUseCase', () => {
       list: vi.fn(),
       findLatestCreatedAtByUser: vi.fn(async () => new Date()),
       markDeletedByAuthor: vi.fn(),
+      setAudio: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -83,6 +85,30 @@ describe('CreateJinyeUseCase', () => {
     expect(repo.create).not.toHaveBeenCalled();
   });
 
+  it('mengizinkan voice-only via hasPendingAudio', async () => {
+    const created = makeJinye({ body: '' });
+    const repo: JinyeRepository = {
+      create: vi.fn(async () => created),
+      findById: vi.fn(),
+      list: vi.fn(),
+      findLatestCreatedAtByUser: vi.fn(async () => null),
+      markDeletedByAuthor: vi.fn(),
+      setAudio: vi.fn(),
+    };
+    const uc = new CreateJinyeUseCase(
+      repo,
+      { record: vi.fn(async () => undefined) } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+    );
+    const out = await uc.execute({
+      userId: ACTOR,
+      body: '',
+      hasPendingAudio: true,
+    });
+    expect(out.body).toBe('');
+    expect(repo.create).toHaveBeenCalled();
+  });
+
   it('menyimpan teks dan menulis activity', async () => {
     const created = makeJinye({ body: 'Halo Sambas' });
     const repo: JinyeRepository = {
@@ -91,6 +117,7 @@ describe('CreateJinyeUseCase', () => {
       list: vi.fn(),
       findLatestCreatedAtByUser: vi.fn(async () => null),
       markDeletedByAuthor: vi.fn(),
+      setAudio: vi.fn(),
     };
     const activity = { safe: vi.fn(async () => undefined) };
     const audit = { record: vi.fn(async () => undefined) };

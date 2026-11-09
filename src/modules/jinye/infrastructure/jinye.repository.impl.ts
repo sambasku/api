@@ -244,4 +244,17 @@ export class JinyeRepositoryImpl implements JinyeRepository {
       .returning({ id: jinye.id });
     return updated.length > 0;
   }
+
+  async setAudio(input: { id: string; audio: JinyeAudio }): Promise<Jinye | null> {
+    const updated = await this.db
+      .update(jinye)
+      .set({
+        ...audioInsertValues(input.audio),
+        updatedAt: new Date(),
+      })
+      .where(eq(jinye.id, input.id))
+      .returning({ id: jinye.id });
+    if (updated.length === 0) return null;
+    return this.findById(input.id);
+  }
 }
