@@ -9,6 +9,13 @@ function redirect(to: string, status = 302): Response {
   });
 }
 
+/** Response follow dengan `url` final (pola browser / undici). */
+function followed(to: string): Response {
+  const res = new Response('', { status: 200 });
+  Object.defineProperty(res, 'url', { value: to });
+  return res;
+}
+
 describe('ResolveMapsUrlUseCase', () => {
   it('parse langsung tanpa fetch bila URL sudah punya koordinat', async () => {
     const fetchMock = vi.fn();
@@ -21,10 +28,10 @@ describe('ResolveMapsUrlUseCase', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('ikuti short link lalu ambil koordinat', async () => {
+  it('ikuti short link lalu ambil koordinat (response.url + !3d/@)', async () => {
     const long =
       'https://www.google.com/maps/place/Foo/@1.36,109.30,17z?utm_source=share';
-    const fetchMock = vi.fn().mockResolvedValue(redirect(long));
+    const fetchMock = vi.fn().mockResolvedValue(followed(long));
     const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
     const result = await uc.execute('https://maps.app.goo.gl/abc123');
     expect(result).toEqual({
@@ -34,6 +41,7 @@ describe('ResolveMapsUrlUseCase', () => {
         'https://www.google.com/maps/place/Foo/@1.36,109.30,17z',
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: 'follow' });
   });
 
   it('MAPS_URL_INVALID untuk host asing', async () => {
@@ -48,7 +56,7 @@ describe('ResolveMapsUrlUseCase', () => {
   it('MAPS_URL_NO_COORDS bila redirect tanpa angka dan tanpa nama place', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(redirect('https://www.google.com/maps?q=Pasar+Sambas'));
+      .mockResolvedValue(followed('https://www.google.com/maps?q=Pasar+Sambas'));
     const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
     await expect(
       uc.execute('https://maps.app.goo.gl/nocoords'),
@@ -61,7 +69,7 @@ describe('ResolveMapsUrlUseCase', () => {
     // ponytail: Workers fetch input = string | Request | URL (bukan DOM RequestInfo).
     const fetchMock = vi.fn(async (input: string | Request | URL) => {
       const href = String(input);
-      if (href.includes('maps.app.goo.gl')) return redirect(placeUrl);
+      if (href.includes('maps.app.goo.gl')) return followed(placeUrl);
       if (href.includes('nominatim.openstreetmap.org')) {
         const q = new URL(href).searchParams.get('q') ?? '';
         // Nama Google penuh sering 0 hit; kandidat pendek yang kena.
@@ -97,7 +105,7 @@ describe('ResolveMapsUrlUseCase', () => {
   it('MAPS_URL_INVALID bila redirect ke host non-allowlist', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(redirect('https://accounts.google.com/ServiceLogin'));
+      .mockResolvedValue(followed('https://accounts.google.com/ServiceLogin'));
     const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
     await expect(
       uc.execute('https://maps.app.goo.gl/logintrap'),
@@ -110,5 +118,21 @@ describe('ResolveMapsUrlUseCase', () => {
     await expect(
       uc.execute('https://maps.app.goo.gl/down'),
     ).rejects.toMatchObject({ errorCode: 'MAPS_URL_RESOLVE_FAILED' });
+  });
+
+  it('fallback hop manual bila follow tidak mengisi response.url', async () => {
+    const long =
+      'https://www.google.com/maps/place/Foo/data=!3d1.36!4d109.30';
+    const fetchMock = vi
+      .fn()
+      // 1) follow tanpa url → expandShortUrl jatuh ke manual
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      // 2) hop manual
+      .mockResolvedValueOnce(redirect(long));
+    const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
+    const result = await uc.execute('https://maps.app.goo.gl/manual');
+    expect(result.lat).toBe(1.36);
+    expect(result.lng).toBe(109.3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -43,8 +43,10 @@ export class ResolveMapsUrlUseCase {
     let working = extracted;
     let coords = extractCoordsFromMapsUrl(working);
 
+    // Short link: sama acuan produk - follow redirect lalu baca URL
+    // final (response.url) dan ambil !3d!4d / @ / q.
     if (!coords && isShortMapsUrl(working)) {
-      working = await this.followRedirects(working);
+      working = await this.expandShortUrl(working);
       coords = extractCoordsFromMapsUrl(working);
     }
 
@@ -136,7 +138,52 @@ export class ResolveMapsUrlUseCase {
     return { lat, lng };
   }
 
-  private async followRedirects(startUrl: string): Promise<string> {
+  /**
+   * Expand short link. Prefer `redirect: 'follow'` + `response.url`
+   * (pola acuan extractCoordinatesShortUrl). Fallback hop manual bila
+   * follow gagal / landas di host non-allowlist.
+   */
+  private async expandShortUrl(startUrl: string): Promise<string> {
+    const timeoutMs = this.deps.timeoutMs ?? 5000;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const res = await this.deps.fetch(startUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: ac.signal,
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'User-Agent': UA,
+        },
+      });
+      // `response.url` terisi setelah follow (acuan extractCoordinatesShortUrl).
+      // Mock/fetch tanpa url → jatuh ke hop manual.
+      const finalUrl =
+        typeof res.url === 'string' && res.url.trim().length > 0
+          ? res.url.trim()
+          : '';
+      if (finalUrl) {
+        if (!isAllowedMapsUrl(finalUrl)) {
+          throw new BadRequestError(
+            'MAPS_URL_INVALID',
+            'Tautan Maps dialihkan ke host yang tidak diizinkan.',
+          );
+        }
+        if (!isShortMapsUrl(finalUrl) || extractCoordsFromMapsUrl(finalUrl)) {
+          return finalUrl;
+        }
+      }
+    } catch (err) {
+      if (err instanceof BadRequestError) throw err;
+      // network / abort → hop manual
+    } finally {
+      clearTimeout(timer);
+    }
+    return this.followRedirectsManual(startUrl);
+  }
+
+  private async followRedirectsManual(startUrl: string): Promise<string> {
     const max = this.deps.maxRedirects ?? 5;
     const timeoutMs = this.deps.timeoutMs ?? 5000;
     let current = startUrl;
