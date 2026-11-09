@@ -62,6 +62,7 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
         isHaveDefinition: j === 0,
         orderIndex: j,
         status: 'published',
+        isVerified: true,
         // Kelas kata menempel di MAKNA; separuh null supaya LEFT JOIN teruji.
         wordClassId: j === 0 ? '01DQCCLASS00000000000001' : null,
       })),

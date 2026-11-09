@@ -22,8 +22,11 @@ describe('ListWordsUseCase', () => {
 
     expect(listAtoZ).toHaveBeenCalledWith({
       q: 'mak',
+      letter: undefined,
       limit: 20,
       wordType: undefined,
+      isVerified: true,
+      category: undefined,
       cursor: { lemma: 'kete', id: 'B'.repeat(26) },
     });
     expect(result.meta).toEqual({
@@ -51,8 +54,11 @@ describe('ListWordsUseCase', () => {
     await uc.execute({ q: '', limit: 10, wordType: 'peribahasa' });
     expect(listAtoZ).toHaveBeenCalledWith({
       q: '',
+      letter: undefined,
       limit: 10,
       wordType: 'peribahasa',
+      isVerified: true,
+      category: undefined,
       cursor: undefined,
     });
   });

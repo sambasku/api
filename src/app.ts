@@ -534,6 +534,9 @@ import { ListBugReportsUseCase } from "@/modules/bug-report/application/use-case
 import { ResolveBugReportUseCase } from "@/modules/bug-report/application/use-cases/resolve-bug-report.use-case";
 import { BugReportController } from "@/modules/bug-report/presentation/v1/bug-report.controller";
 import { createBugReportRoutes } from "@/modules/bug-report/presentation/v1/bug-report.routes";
+import { ResolveMapsUrlUseCase } from "@/modules/geo/application/resolve-maps-url.use-case";
+import { GeoController } from "@/modules/geo/presentation/v1/geo.controller";
+import { createGeoRoutes } from "@/modules/geo/presentation/v1/geo.routes";
 import { createCategorySuggestionModule } from "@/modules/category-suggestion/factories/category-suggestion.factory";
 import {
   createAdminCategorySuggestionRoutes,
@@ -3325,6 +3328,12 @@ const shareController = new ShareController({
     false,
 });
 app.route("/api/v1/share", createShareRoutes({ controller: shareController }));
+
+// Resolve tautan Google Maps → lat/lng (pin picker; tanpa Places API)
+const geoController = new GeoController({
+  resolveMapsUrl: new ResolveMapsUrlUseCase({ fetch }),
+});
+app.route("/api/v1/geo", createGeoRoutes({ controller: geoController }));
 
 // OpenAPI spec + Scalar docs (api-base-stack.md Section 9)
 app.doc("/openapi.json", {

@@ -35,7 +35,7 @@ describe.skipIf(!hasTestDb)('Detail kata by lemma E2E - URL publik /words/<lemma
       { id: MAKAN_TERVERIFIKASI, languageId: SMB, lemma: 'makan', status: 'published', isVerified: true, createdAt: lama },
       { id: MAKAN_BELUM_VERIF, languageId: SMB, lemma: 'Makan', status: 'published', isVerified: false, createdAt: baru },
       { id: MAKAN_DRAFT, languageId: SMB, lemma: 'makan angin', status: 'draft', createdAt: baru },
-      { id: BEDA_KATA, languageId: SMB, lemma: 'minum', status: 'published', createdAt: baru },
+      { id: BEDA_KATA, languageId: SMB, lemma: 'minum', status: 'published', isVerified: true, createdAt: baru },
     ]);
 
     const appModule = await import('@/app');

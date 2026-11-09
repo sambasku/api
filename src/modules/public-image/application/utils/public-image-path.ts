@@ -51,6 +51,11 @@ export function buildUsahaImagePath(mimeType: string): string {
   return `assets/usahas/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
 
+/** Path logo layanan publik: assets/layanans/<ulid>.<ext> */
+export function buildLayananImagePath(mimeType: string): string {
+  return `assets/layanans/${generateId()}.${extensionForImageMime(mimeType)}`;
+}
+
 /** Path foto komentar lemma: assets/comments/<ulid>.<ext> */
 export function buildCommentImagePath(mimeType: string): string {
   return `assets/comments/${generateId()}.${extensionForImageMime(mimeType)}`;
