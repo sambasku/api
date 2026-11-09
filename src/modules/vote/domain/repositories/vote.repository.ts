@@ -13,7 +13,9 @@ export type VoteTargetType =
 | 'pantun'
 | 'pantun_reply'
 | 'article'
-| 'article_comment';
+| 'article_comment'
+| 'jinye'
+| 'jinye_comment';
 
 export interface VoteTarget {
   entityType: VoteTargetType;

@@ -107,3 +107,53 @@ export const jinyeDetailResponseSchema = z.object({
 export const deleteJinyeResponseSchema = z.object({
   data: z.object({ ok: z.literal(true) }),
 });
+
+export const createJinyeCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Teks tidak valid' })
+    .max(500, 'Teks maksimal 500 karakter')
+    .optional()
+    .nullable(),
+  parent_id: opaqueId.optional().nullable(),
+  images: z.array(imageInputSchema).max(4, 'Lampiran tidak boleh lebih dari 4 foto').optional(),
+});
+
+export type CreateJinyeCommentBody = z.infer<typeof createJinyeCommentBodySchema>;
+
+export const jinyeCommentIdParamSchema = z.object({
+  id: opaqueId,
+  commentId: opaqueId,
+});
+
+const jinyeCommentWireBase = z.object({
+  id: z.string(),
+  jinye_id: z.string(),
+  parent_id: z.string().nullable(),
+  user_id: z.string(),
+  username: z.string().nullable(),
+  display_name: z.string().nullable(),
+  avatar_url: z.string().nullable(),
+  is_verifier: z.boolean(),
+  body: z.string(),
+  images: z.array(jinyeImageWireSchema),
+  status: z.string(),
+  created_at: z.string(),
+  upvotes: z.number().int(),
+  downvotes: z.number().int(),
+});
+
+export const jinyeCommentWireSchema: z.ZodTypeAny = jinyeCommentWireBase.extend({
+  replies: z.array(z.lazy(() => jinyeCommentWireSchema)).optional(),
+});
+
+export const createJinyeCommentResponseSchema = z.object({
+  data: jinyeCommentWireSchema,
+});
+
+export const listJinyeCommentsResponseSchema = z.object({
+  data: z.array(jinyeCommentWireSchema),
+});
+
+export const deleteJinyeCommentResponseSchema = z.object({
+  data: z.object({ ok: z.literal(true) }),
+});

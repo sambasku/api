@@ -54,6 +54,11 @@ describe('CreateJinyeUseCase', () => {
       findLatestCreatedAtByUser: vi.fn(async () => null),
       markDeletedByAuthor: vi.fn(),
       setAudio: vi.fn(),
+      createComment: vi.fn(),
+      findCommentById: vi.fn(),
+      listCommentsByJinyeId: vi.fn(),
+      markCommentDeletedByAuthor: vi.fn(),
+      incrementPublishedCommentCount: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -73,6 +78,11 @@ describe('CreateJinyeUseCase', () => {
       findLatestCreatedAtByUser: vi.fn(async () => new Date()),
       markDeletedByAuthor: vi.fn(),
       setAudio: vi.fn(),
+      createComment: vi.fn(),
+      findCommentById: vi.fn(),
+      listCommentsByJinyeId: vi.fn(),
+      markCommentDeletedByAuthor: vi.fn(),
+      incrementPublishedCommentCount: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -94,6 +104,11 @@ describe('CreateJinyeUseCase', () => {
       findLatestCreatedAtByUser: vi.fn(async () => null),
       markDeletedByAuthor: vi.fn(),
       setAudio: vi.fn(),
+      createComment: vi.fn(),
+      findCommentById: vi.fn(),
+      listCommentsByJinyeId: vi.fn(),
+      markCommentDeletedByAuthor: vi.fn(),
+      incrementPublishedCommentCount: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -118,6 +133,11 @@ describe('CreateJinyeUseCase', () => {
       findLatestCreatedAtByUser: vi.fn(async () => null),
       markDeletedByAuthor: vi.fn(),
       setAudio: vi.fn(),
+      createComment: vi.fn(),
+      findCommentById: vi.fn(),
+      listCommentsByJinyeId: vi.fn(),
+      markCommentDeletedByAuthor: vi.fn(),
+      incrementPublishedCommentCount: vi.fn(),
     };
     const activity = { safe: vi.fn(async () => undefined) };
     const audit = { record: vi.fn(async () => undefined) };

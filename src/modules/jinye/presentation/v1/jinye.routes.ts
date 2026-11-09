@@ -8,11 +8,16 @@ import type { AppVariables } from '@/shared/types';
 import type { JinyeController } from './jinye.controller';
 import {
   createJinyeBodySchema,
+  createJinyeCommentBodySchema,
+  createJinyeCommentResponseSchema,
   createJinyeResponseSchema,
+  deleteJinyeCommentResponseSchema,
   deleteJinyeResponseSchema,
+  jinyeCommentIdParamSchema,
   jinyeDetailResponseSchema,
   jinyeIdParamSchema,
   jinyeUploadTokenQuerySchema,
+  listJinyeCommentsResponseSchema,
   listJinyeQuerySchema,
   listJinyeResponseSchema,
   uploadCredentialsResponseSchema,
@@ -142,6 +147,49 @@ const attachAudioRoute = createRoute({
   },
 });
 
+const listCommentsRoute = createRoute({
+  method: 'get',
+  path: '/{id}/comments',
+  tags: ['Jinye'],
+  summary: 'List komen + reply 1 level',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(listJinyeCommentsResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const createCommentRoute = createRoute({
+  method: 'post',
+  path: '/{id}/comments',
+  tags: ['Jinye'],
+  summary: 'Buat komen atau reply (parent_id opsional)',
+  request: {
+    params: jinyeIdParamSchema,
+    body: { content: json(createJinyeCommentBodySchema), required: true },
+  },
+  responses: {
+    201: { description: 'Created', content: json(createJinyeCommentResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    429: { description: 'Rate limit', content: json(errorResponseSchema) },
+  },
+});
+
+const deleteCommentRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/comments/{commentId}',
+  tags: ['Jinye'],
+  summary: 'Hapus komen sendiri',
+  request: { params: jinyeCommentIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(deleteJinyeCommentResponseSchema) },
+    403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
 export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   const routes = createOpenApiApp();
   const writeLimit = rateLimit({
@@ -219,6 +267,65 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     return writeLimit(c, next);
   });
 
+  // Nested /:id/comments* - Hono tidak selalu warisi middleware /:id.
+  routes.use('/:id/comments', async (c, next) => {
+    if (c.req.method === 'GET' && deps.optionalAuth) {
+      return deps.optionalAuth(c, next);
+    }
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/comments', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/comments', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/comments', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeLimit(c, next);
+  });
+  routes.use('/:id/comments/*', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/comments/*', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/comments/*', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/comments/*', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    return writeLimit(c, next);
+  });
+  routes.use('/:id/audio', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/audio', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/audio', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/audio', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeLimit(c, next);
+  });
+
   routes.openapi(uploadTokenRoute, (c) =>
     deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
   );
@@ -228,10 +335,24 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   routes.openapi(listRouteDef, (c) =>
     deps.controller.list(c, c.req.valid('query')) as never,
   );
-  // Audio sebelum detail generik supaya path spesifik menang.
+  // Path spesifik sebelum /:id generik.
   routes.openapi(attachAudioRoute, (c) =>
     deps.controller.attachAudio(c, c.req.valid('param').id) as never,
   );
+  routes.openapi(listCommentsRoute, (c) =>
+    deps.controller.listComments(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(createCommentRoute, (c) =>
+    deps.controller.createComment(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
+  routes.openapi(deleteCommentRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.deleteComment(c, p.id, p.commentId) as never;
+  });
   routes.openapi(detailRouteDef, (c) =>
     deps.controller.detail(c, c.req.valid('param').id) as never,
   );

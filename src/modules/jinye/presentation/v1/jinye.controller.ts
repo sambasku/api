@@ -7,13 +7,20 @@ import { isVerifierRole } from '@/modules/word/application/utils/resolve-publica
 import type { ImageController } from '@/modules/image/presentation/v1/image.controller';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { AppVariables, AuthUser } from '@/shared/types';
-import type { Jinye } from '../../domain/entities/jinye.entity';
+import type { Jinye, JinyeComment } from '../../domain/entities/jinye.entity';
 import type { CreateJinyeUseCase } from '../../application/use-cases/create-jinye.use-case';
 import type { ListPublishedJinyeUseCase } from '../../application/use-cases/list-published-jinye.use-case';
 import type { GetJinyeDetailUseCase } from '../../application/use-cases/get-jinye-detail.use-case';
 import type { DeleteJinyeUseCase } from '../../application/use-cases/delete-jinye.use-case';
 import type { AttachJinyeAudioUseCase } from '../../application/use-cases/attach-jinye-audio.use-case';
-import type { CreateJinyeBody, ListJinyeQuery } from './validators/jinye.validator';
+import type { CreateJinyeCommentUseCase } from '../../application/use-cases/create-jinye-comment.use-case';
+import type { ListJinyeCommentsUseCase } from '../../application/use-cases/list-jinye-comments.use-case';
+import type { DeleteJinyeCommentUseCase } from '../../application/use-cases/delete-jinye-comment.use-case';
+import type {
+  CreateJinyeBody,
+  CreateJinyeCommentBody,
+  ListJinyeQuery,
+} from './validators/jinye.validator';
 
 function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
   const user = c.get('user');
@@ -67,6 +74,49 @@ function toWire(j: Jinye, opts?: { exposeStaging?: boolean }) {
   };
 }
 
+function toCommentWire(
+  c: JinyeComment,
+  opts?: { exposeStaging?: boolean; includeReplies?: boolean },
+) {
+  const images = c.images.map((img) => {
+    const hasPublic = typeof img.publicUrl === 'string' && img.publicUrl.length > 0;
+    return {
+      status: (hasPublic ? 'published' : 'pending_review') as
+        | 'published'
+        | 'pending_review',
+      public_url: hasPublic ? img.publicUrl : null,
+      content_warnings: hasPublic ? img.contentWarnings : [],
+      ...(opts?.exposeStaging && !hasPublic
+        ? { url: img.url, provider_file_id: img.providerFileId }
+        : {}),
+    };
+  });
+
+  return {
+    id: c.id,
+    jinye_id: c.jinyeId,
+    parent_id: c.parentId,
+    user_id: c.userId,
+    username: c.username,
+    display_name: c.displayName,
+    avatar_url: c.avatarUrl,
+    is_verifier: isVerifierRole(c.userRole ?? ''),
+    body: c.body,
+    images,
+    status: c.status,
+    created_at: c.createdAt.toISOString(),
+    upvotes: 0,
+    downvotes: 0,
+    ...(opts?.includeReplies
+      ? {
+          replies: (c.replies ?? []).map((r) =>
+            toCommentWire(r, { exposeStaging: opts.exposeStaging }),
+          ),
+        }
+      : {}),
+  };
+}
+
 export class JinyeController {
   constructor(
     private readonly deps: {
@@ -75,6 +125,9 @@ export class JinyeController {
       getDetail: GetJinyeDetailUseCase;
       deleteJinye: DeleteJinyeUseCase;
       attachAudio: AttachJinyeAudioUseCase;
+      createComment: CreateJinyeCommentUseCase;
+      listComments: ListJinyeCommentsUseCase;
+      deleteComment: DeleteJinyeCommentUseCase;
       imageController: ImageController;
     },
   ) {}
@@ -170,5 +223,67 @@ export class JinyeController {
     });
 
     return c.json({ data: toWire(row, { exposeStaging: true }) }, 200);
+  }
+
+  async createComment(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    body: CreateJinyeCommentBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.createComment.execute({
+      jinyeId,
+      userId: user.user_id,
+      body: body.body,
+      parentId: body.parent_id,
+      images: (body.images ?? []).map((i) => ({
+        url: i.url,
+        providerFileId: i.provider_file_id,
+        publicUrl: null,
+        contentWarnings: [],
+      })),
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json(
+      { data: toCommentWire(row, { exposeStaging: true }) },
+      201,
+    );
+  }
+
+  async listComments(c: Context<{ Variables: AppVariables }>, jinyeId: string) {
+    const user = c.get('user');
+    const roles = user?.roles ?? [];
+    const viewerIsAdmin = roles.some((r) =>
+      ['admin', 'root', 'reviewer', 'editor'].includes(r),
+    );
+    const items = await this.deps.listComments.execute(jinyeId);
+    // Staging URL hanya untuk author komen / admin (sama detail Jinye).
+    const wireOne = (item: JinyeComment): ReturnType<typeof toCommentWire> =>
+      toCommentWire(item, {
+        exposeStaging:
+          !!user && (user.user_id === item.userId || viewerIsAdmin),
+        includeReplies: false,
+      });
+
+    return c.json({
+      data: items.map((item) => ({
+        ...wireOne(item),
+        replies: (item.replies ?? []).map(wireOne),
+      })),
+    });
+  }
+
+  async deleteComment(
+    c: Context<{ Variables: AppVariables }>,
+    _jinyeId: string,
+    commentId: string,
+  ) {
+    const user = requireUser(c);
+    await this.deps.deleteComment.execute({
+      id: commentId,
+      userId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: { ok: true as const } });
   }
 }

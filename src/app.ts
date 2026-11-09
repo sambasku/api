@@ -632,6 +632,9 @@ import { ListPublishedJinyeUseCase } from "@/modules/jinye/application/use-cases
 import { GetJinyeDetailUseCase } from "@/modules/jinye/application/use-cases/get-jinye-detail.use-case";
 import { DeleteJinyeUseCase } from "@/modules/jinye/application/use-cases/delete-jinye.use-case";
 import { AttachJinyeAudioUseCase } from "@/modules/jinye/application/use-cases/attach-jinye-audio.use-case";
+import { CreateJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/create-jinye-comment.use-case";
+import { ListJinyeCommentsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-comments.use-case";
+import { DeleteJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-comment.use-case";
 import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
 import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
 import { DashboardController } from "@/modules/dashboard/presentation/v1/dashboard.controller";
@@ -2950,6 +2953,15 @@ const jinyeController = new JinyeController({
     pronunciationStorage,
     auditRepo,
   ),
+  createComment: new CreateJinyeCommentUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  listComments: new ListJinyeCommentsUseCase(jinyeRepo),
+  deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, auditRepo),
   imageController,
 });
 app.route(

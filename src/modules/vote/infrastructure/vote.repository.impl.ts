@@ -12,6 +12,8 @@ import {
   pantunReplies,
   articles,
   articleComments,
+  jinye,
+  jinyeComments,
   users,
   userSkips,
   votes,
@@ -218,6 +220,27 @@ case 'article_comment': {
     .limit(1);
   return rows.length > 0;
 }
+      case 'jinye': {
+        const rows = await this.db
+          .select({ id: jinye.id })
+          .from(jinye)
+          .where(and(eq(jinye.id, target.entityId), eq(jinye.status, 'published')))
+          .limit(1);
+        return rows.length > 0;
+      }
+      case 'jinye_comment': {
+        const rows = await this.db
+          .select({ id: jinyeComments.id })
+          .from(jinyeComments)
+          .where(
+            and(
+              eq(jinyeComments.id, target.entityId),
+              eq(jinyeComments.status, 'published'),
+            ),
+          )
+          .limit(1);
+        return rows.length > 0;
+      }
     }
   }
 

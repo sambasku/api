@@ -1,23 +1,34 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
   publicAccountDisplayName,
   publicAccountName,
 } from '@/shared/constants/deleted-account';
-import { jinye, jinyeRevisions, users } from '@/shared/database/drizzle/schema';
+import {
+  jinye,
+  jinyeComments,
+  jinyeRevisions,
+  users,
+} from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
-import type { JinyeStatus } from '@/shared/database/drizzle/schema/jinye.schema';
+import type {
+  JinyeCommentStatus,
+  JinyeStatus,
+} from '@/shared/database/drizzle/schema/jinye.schema';
 import type {
   Jinye,
   JinyeAudio,
+  JinyeComment,
   JinyeListFilter,
   NewJinye,
+  NewJinyeComment,
 } from '../domain/entities/jinye.entity';
 import { toImageRows, toJinyeImages } from '../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../domain/repositories/jinye.repository';
 
 type JinyeRow = typeof jinye.$inferSelect;
+type JinyeCommentRow = typeof jinyeComments.$inferSelect;
 
 function toAudio(
   row: Pick<
@@ -257,4 +268,122 @@ export class JinyeRepositoryImpl implements JinyeRepository {
     if (updated.length === 0) return null;
     return this.findById(input.id);
   }
+
+  async createComment(input: NewJinyeComment): Promise<JinyeComment> {
+    const [row] = await this.db
+      .insert(jinyeComments)
+      .values({
+        jinyeId: input.jinyeId,
+        parentId: input.parentId ?? null,
+        userId: input.userId,
+        body: input.body,
+        bodyOriginal: input.bodyOriginal ?? null,
+        images: toImageRows(input.images ?? []),
+        status: 'published',
+      })
+      .returning();
+    const created = await this.findCommentById(row.id);
+    if (!created) throw new Error('jinye comment create: row missing after insert');
+    return created;
+  }
+
+  async findCommentById(id: string): Promise<JinyeComment | null> {
+    const rows = await this.db
+      .select({
+        comment: jinyeComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+      })
+      .from(jinyeComments)
+      .leftJoin(users, eq(users.id, jinyeComments.userId))
+      .where(eq(jinyeComments.id, id))
+      .limit(1);
+    const row = rows[0];
+    return row ? mapCommentJoined(row) : null;
+  }
+
+  async listCommentsByJinyeId(jinyeId: string): Promise<JinyeComment[]> {
+    const rows = await this.db
+      .select({
+        comment: jinyeComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+      })
+      .from(jinyeComments)
+      .leftJoin(users, eq(users.id, jinyeComments.userId))
+      .where(
+        and(
+          eq(jinyeComments.jinyeId, jinyeId),
+          eq(jinyeComments.status, 'published'),
+        ),
+      )
+      .orderBy(asc(jinyeComments.createdAt), asc(jinyeComments.id));
+
+    return rows.map(mapCommentJoined);
+  }
+
+  async markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
+    const updated = await this.db
+      .update(jinyeComments)
+      .set({
+        status: 'deleted_by_author',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(jinyeComments.id, id),
+          eq(jinyeComments.userId, actorId),
+          eq(jinyeComments.status, 'published'),
+        ),
+      )
+      .returning({ id: jinyeComments.id });
+    return updated.length > 0;
+  }
+
+  async incrementPublishedCommentCount(jinyeId: string, delta: number): Promise<void> {
+    await this.db
+      .update(jinye)
+      .set({
+        publishedCommentCount: sql`max(0, ${jinye.publishedCommentCount} + ${delta})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(jinye.id, jinyeId));
+  }
+}
+
+function mapCommentJoined(row: {
+  comment: JinyeCommentRow;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  authorDeletedAt: Date | null;
+  userRole: string | null;
+}): JinyeComment {
+  const deleted = row.authorDeletedAt != null;
+  return {
+    id: row.comment.id,
+    jinyeId: row.comment.jinyeId,
+    parentId: row.comment.parentId ?? null,
+    userId: row.comment.userId,
+    username: publicAccountName(row.username, deleted ? new Date() : null),
+    displayName: publicAccountDisplayName(
+      row.displayName,
+      row.username,
+      deleted ? new Date() : null,
+    ),
+    avatarUrl: deleted ? null : (row.avatarUrl ?? null),
+    userRole: deleted ? null : (row.userRole ?? null),
+    body: row.comment.body ?? '',
+    bodyOriginal: row.comment.bodyOriginal ?? null,
+    images: toJinyeImages(row.comment.images),
+    status: row.comment.status as JinyeCommentStatus,
+    createdAt: row.comment.createdAt,
+    updatedAt: row.comment.updatedAt ?? null,
+  };
 }

@@ -13,6 +13,8 @@ const VoteTargetTypeZodEnum = z.enum([
 'pantun_reply',
 'article',
 'article_comment',
+  'jinye',
+  'jinye_comment',
 ]);
 export type AdminVoteTargetType = z.infer<typeof VoteTargetTypeZodEnum>;
 

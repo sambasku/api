@@ -1,4 +1,8 @@
-import type { JinyeImageRow, JinyeStatus } from '@/shared/database/drizzle/schema/jinye.schema';
+import type {
+  JinyeCommentStatus,
+  JinyeImageRow,
+  JinyeStatus,
+} from '@/shared/database/drizzle/schema/jinye.schema';
 
 export type JinyeImage = {
   url: string;
@@ -53,6 +57,33 @@ export interface JinyeListFilter {
   userId?: string;
   /** Default published-only for public feed. */
   status?: JinyeStatus | 'all';
+}
+
+export interface JinyeComment {
+  id: string;
+  jinyeId: string;
+  parentId: string | null;
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  userRole: string | null;
+  body: string;
+  bodyOriginal: string | null;
+  images: JinyeImage[];
+  status: JinyeCommentStatus;
+  createdAt: Date;
+  updatedAt: Date | null;
+  replies?: JinyeComment[];
+}
+
+export interface NewJinyeComment {
+  jinyeId: string;
+  parentId?: string | null;
+  userId: string;
+  body: string;
+  bodyOriginal?: string | null;
+  images?: JinyeImage[];
 }
 
 export function toJinyeImages(rows: JinyeImageRow[] | null | undefined): JinyeImage[] {
