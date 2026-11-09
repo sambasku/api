@@ -3,6 +3,10 @@ import type {
   JinyeImageRow,
   JinyeStatus,
 } from '@/shared/database/drizzle/schema/jinye.schema';
+import type {
+  JinyeLemmaLinkSource,
+  JinyeLemmaLinkStatus,
+} from '@/shared/database/drizzle/schema/jinye-lemma-links.schema';
 
 export type JinyeImage = {
   url: string;
@@ -86,6 +90,25 @@ export interface NewJinyeComment {
   body: string;
   bodyOriginal?: string | null;
   images?: JinyeImage[];
+}
+
+export interface JinyeLemmaLink {
+  id: string;
+  jinyeId: string | null;
+  commentId: string | null;
+  start: number;
+  end: number;
+  wordId: string;
+  lemma: string | null;
+  status: JinyeLemmaLinkStatus;
+  source: JinyeLemmaLinkSource;
+  proposedWordId: string | null;
+  proposedLemma: string | null;
+  proposedBy: string | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date | null;
 }
 
 export function toJinyeImages(rows: JinyeImageRow[] | null | undefined): JinyeImage[] {

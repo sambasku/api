@@ -21,10 +21,19 @@ import type { UnarchiveJinyeUseCase } from '../../application/use-cases/unarchiv
 import type { PinJinyeUseCase } from '../../application/use-cases/pin-jinye.use-case';
 import type { UnpinJinyeUseCase } from '../../application/use-cases/unpin-jinye.use-case';
 import type { ListArchivedJinyeUseCase } from '../../application/use-cases/list-archived-jinye.use-case';
+import type { CreateJinyeLemmaLinkUseCase } from '../../application/use-cases/create-jinye-lemma-link.use-case';
+import type { ProposeJinyeLemmaCorrectionUseCase } from '../../application/use-cases/propose-jinye-lemma-correction.use-case';
+import type { ResolveJinyeLemmaCorrectionUseCase } from '../../application/use-cases/resolve-jinye-lemma-correction.use-case';
+import type { DeleteJinyeLemmaLinkUseCase } from '../../application/use-cases/delete-jinye-lemma-link.use-case';
+import type { ListJinyeLemmaLinksUseCase } from '../../application/use-cases/list-jinye-lemma-links.use-case';
+import type { JinyeLemmaLink } from '../../domain/entities/jinye.entity';
 import type {
   CreateJinyeBody,
   CreateJinyeCommentBody,
+  CreateJinyeLemmaLinkBody,
   ListJinyeQuery,
+  ProposeJinyeLemmaCorrectionBody,
+  ResolveJinyeLemmaCorrectionBody,
 } from './validators/jinye.validator';
 
 function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
@@ -143,6 +152,11 @@ export class JinyeController {
       pin: PinJinyeUseCase;
       unpin: UnpinJinyeUseCase;
       listArchived: ListArchivedJinyeUseCase;
+      createLemmaLink: CreateJinyeLemmaLinkUseCase;
+      listLemmaLinks: ListJinyeLemmaLinksUseCase;
+      proposeLemmaCorrection: ProposeJinyeLemmaCorrectionUseCase;
+      resolveLemmaCorrection: ResolveJinyeLemmaCorrectionUseCase;
+      deleteLemmaLink: DeleteJinyeLemmaLinkUseCase;
       imageController: ImageController;
     },
   ) {}
@@ -249,11 +263,15 @@ export class JinyeController {
     });
     const exposeStaging =
       !!user && (user.user_id === row.userId || viewerIsAdmin);
+    const links = await this.deps.listLemmaLinks.execute(row.id);
     return c.json({
-      data: toWire(row, {
-        exposeStaging,
-        isPinned: row.isPinned,
-      }),
+      data: {
+        ...toWire(row, {
+          exposeStaging,
+          isPinned: row.isPinned,
+        }),
+        lemma_links: links.map(toLemmaLinkWire),
+      },
     });
   }
 
@@ -361,4 +379,98 @@ export class JinyeController {
     });
     return c.json({ data: { ok: true as const } });
   }
+
+  async listLemmaLinks(c: Context<{ Variables: AppVariables }>, jinyeId: string) {
+    const items = await this.deps.listLemmaLinks.execute(jinyeId);
+    return c.json({ data: items.map(toLemmaLinkWire) });
+  }
+
+  async createLemmaLink(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    body: CreateJinyeLemmaLinkBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.createLemmaLink.execute({
+      jinyeId,
+      userId: user.user_id,
+      start: body.start,
+      end: body.end,
+      wordId: body.word_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toLemmaLinkWire(row) }, 201);
+  }
+
+  async proposeLemmaCorrection(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    linkId: string,
+    body: ProposeJinyeLemmaCorrectionBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.proposeLemmaCorrection.execute({
+      jinyeId,
+      linkId,
+      userId: user.user_id,
+      wordId: body.word_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toLemmaLinkWire(row) });
+  }
+
+  async resolveLemmaCorrection(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    linkId: string,
+    body: ResolveJinyeLemmaCorrectionBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.resolveLemmaCorrection.execute({
+      jinyeId,
+      linkId,
+      reviewerId: user.user_id,
+      action: body.action,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toLemmaLinkWire(row) });
+  }
+
+  async deleteLemmaLink(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    linkId: string,
+  ) {
+    const user = requireUser(c);
+    const roles = user.roles ?? [];
+    const isStaff = roles.some((r) =>
+      ['admin', 'root', 'reviewer', 'editor', 'verifier'].includes(r),
+    );
+    await this.deps.deleteLemmaLink.execute({
+      jinyeId,
+      linkId,
+      userId: user.user_id,
+      isStaff,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: { ok: true as const } });
+  }
+}
+
+function toLemmaLinkWire(link: JinyeLemmaLink) {
+  return {
+    id: link.id,
+    jinye_id: link.jinyeId,
+    comment_id: link.commentId,
+    start: link.start,
+    end: link.end,
+    word_id: link.wordId,
+    lemma: link.lemma,
+    status: link.status,
+    source: link.source,
+    proposed_word_id: link.proposedWordId,
+    proposed_lemma: link.proposedLemma,
+    proposed_by: link.proposedBy,
+    created_at: link.createdAt.toISOString(),
+  };
 }

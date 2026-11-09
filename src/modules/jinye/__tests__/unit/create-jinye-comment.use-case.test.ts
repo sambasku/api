@@ -81,6 +81,12 @@ function emptyRepo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     getPinnedJinyeId: vi.fn(),
     setPinnedJinyeId: vi.fn(),
     clearPinnedIf: vi.fn(),
+    createLemmaLink: vi.fn(),
+    findLemmaLinkById: vi.fn(),
+    listLemmaLinksByJinyeId: vi.fn(),
+    listActiveLemmaLinksForTarget: vi.fn(),
+    updateLemmaLink: vi.fn(),
+    deleteLemmaLink: vi.fn(),
     ...overrides,
   };
 }

@@ -640,6 +640,11 @@ import { UnarchiveJinyeUseCase } from "@/modules/jinye/application/use-cases/una
 import { PinJinyeUseCase } from "@/modules/jinye/application/use-cases/pin-jinye.use-case";
 import { UnpinJinyeUseCase } from "@/modules/jinye/application/use-cases/unpin-jinye.use-case";
 import { ListArchivedJinyeUseCase } from "@/modules/jinye/application/use-cases/list-archived-jinye.use-case";
+import { CreateJinyeLemmaLinkUseCase } from "@/modules/jinye/application/use-cases/create-jinye-lemma-link.use-case";
+import { ListJinyeLemmaLinksUseCase } from "@/modules/jinye/application/use-cases/list-jinye-lemma-links.use-case";
+import { ProposeJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/propose-jinye-lemma-correction.use-case";
+import { ResolveJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-lemma-correction.use-case";
+import { DeleteJinyeLemmaLinkUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-lemma-link.use-case";
 import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
 import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
 import { JinyeReportRepositoryImpl } from "@/modules/jinye-report/infrastructure/jinye-report.repository.impl";
@@ -2992,6 +2997,22 @@ const jinyeController = new JinyeController({
   pin: new PinJinyeUseCase(jinyeRepo, auditRepo),
   unpin: new UnpinJinyeUseCase(jinyeRepo, auditRepo),
   listArchived: new ListArchivedJinyeUseCase(jinyeRepo),
+  createLemmaLink: new CreateJinyeLemmaLinkUseCase(
+    jinyeRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  listLemmaLinks: new ListJinyeLemmaLinksUseCase(jinyeRepo),
+  proposeLemmaCorrection: new ProposeJinyeLemmaCorrectionUseCase(
+    jinyeRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  resolveLemmaCorrection: new ResolveJinyeLemmaCorrectionUseCase(
+    jinyeRepo,
+    auditRepo,
+  ),
+  deleteLemmaLink: new DeleteJinyeLemmaLinkUseCase(jinyeRepo, auditRepo),
   imageController,
 });
 app.route(

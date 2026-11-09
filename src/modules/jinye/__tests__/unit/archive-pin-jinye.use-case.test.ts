@@ -50,6 +50,12 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     listCommentsByJinyeId: vi.fn(),
     markCommentDeletedByAuthor: vi.fn(),
     incrementPublishedCommentCount: vi.fn(),
+    createLemmaLink: vi.fn(),
+    findLemmaLinkById: vi.fn(),
+    listLemmaLinksByJinyeId: vi.fn(),
+    listActiveLemmaLinksForTarget: vi.fn(),
+    updateLemmaLink: vi.fn(),
+    deleteLemmaLink: vi.fn(),
     ...overrides,
   };
 }

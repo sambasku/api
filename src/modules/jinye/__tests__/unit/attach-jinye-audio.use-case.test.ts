@@ -63,6 +63,12 @@ describe('AttachJinyeAudioUseCase', () => {
     getPinnedJinyeId: vi.fn(),
     setPinnedJinyeId: vi.fn(),
     clearPinnedIf: vi.fn(),
+    createLemmaLink: vi.fn(),
+    findLemmaLinkById: vi.fn(),
+    listLemmaLinksByJinyeId: vi.fn(),
+    listActiveLemmaLinksForTarget: vi.fn(),
+    updateLemmaLink: vi.fn(),
+    deleteLemmaLink: vi.fn(),
     };
     const uc = new AttachJinyeAudioUseCase(
       repo,
@@ -100,6 +106,12 @@ describe('AttachJinyeAudioUseCase', () => {
     getPinnedJinyeId: vi.fn(),
     setPinnedJinyeId: vi.fn(),
     clearPinnedIf: vi.fn(),
+    createLemmaLink: vi.fn(),
+    findLemmaLinkById: vi.fn(),
+    listLemmaLinksByJinyeId: vi.fn(),
+    listActiveLemmaLinksForTarget: vi.fn(),
+    updateLemmaLink: vi.fn(),
+    deleteLemmaLink: vi.fn(),
     };
     const uc = new AttachJinyeAudioUseCase(
       repo,

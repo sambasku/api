@@ -102,7 +102,9 @@ export const listJinyeResponseSchema = z.object({
 });
 
 export const jinyeDetailResponseSchema = z.object({
-  data: jinyeItemSchema,
+  data: jinyeItemSchema.extend({
+    lemma_links: z.array(z.any()).optional(),
+  }),
 });
 
 export const deleteJinyeResponseSchema = z.object({
@@ -157,4 +159,56 @@ export const listJinyeCommentsResponseSchema = z.object({
 
 export const deleteJinyeCommentResponseSchema = z.object({
   data: z.object({ ok: z.literal(true) }),
+});
+
+export const createJinyeLemmaLinkBodySchema = z.object({
+  start: z.coerce.number().int().min(0),
+  end: z.coerce.number().int().min(1),
+  word_id: opaqueId,
+});
+export type CreateJinyeLemmaLinkBody = z.infer<
+  typeof createJinyeLemmaLinkBodySchema
+>;
+
+export const proposeJinyeLemmaCorrectionBodySchema = z.object({
+  word_id: opaqueId,
+});
+export type ProposeJinyeLemmaCorrectionBody = z.infer<
+  typeof proposeJinyeLemmaCorrectionBodySchema
+>;
+
+export const resolveJinyeLemmaCorrectionBodySchema = z.object({
+  action: z.enum(['approve', 'reject']),
+});
+export type ResolveJinyeLemmaCorrectionBody = z.infer<
+  typeof resolveJinyeLemmaCorrectionBodySchema
+>;
+
+export const jinyeLemmaLinkIdParamSchema = z.object({
+  id: opaqueId,
+  linkId: opaqueId,
+});
+
+export const jinyeLemmaLinkWireSchema = z.object({
+  id: z.string(),
+  jinye_id: z.string().nullable(),
+  comment_id: z.string().nullable(),
+  start: z.number().int(),
+  end: z.number().int(),
+  word_id: z.string(),
+  lemma: z.string().nullable(),
+  status: z.string(),
+  source: z.string(),
+  proposed_word_id: z.string().nullable(),
+  proposed_lemma: z.string().nullable(),
+  proposed_by: z.string().nullable(),
+  created_at: z.string(),
+});
+
+export const jinyeLemmaLinkResponseSchema = z.object({
+  data: jinyeLemmaLinkWireSchema,
+});
+
+export const listJinyeLemmaLinksResponseSchema = z.object({
+  data: z.array(jinyeLemmaLinkWireSchema),
 });

@@ -3,10 +3,15 @@ import type {
   Jinye,
   JinyeAudio,
   JinyeComment,
+  JinyeLemmaLink,
   JinyeListFilter,
   NewJinye,
   NewJinyeComment,
 } from '../entities/jinye.entity';
+import type {
+  JinyeLemmaLinkSource,
+  JinyeLemmaLinkStatus,
+} from '@/shared/database/drizzle/schema/jinye-lemma-links.schema';
 
 export interface JinyeRepository {
   create(input: NewJinye): Promise<Jinye>;
@@ -34,4 +39,33 @@ export interface JinyeRepository {
   listCommentsByJinyeId(jinyeId: string): Promise<JinyeComment[]>;
   markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   incrementPublishedCommentCount(jinyeId: string, delta: number): Promise<void>;
+
+  createLemmaLink(input: {
+    jinyeId?: string | null;
+    commentId?: string | null;
+    start: number;
+    end: number;
+    wordId: string;
+    source: JinyeLemmaLinkSource;
+    status?: JinyeLemmaLinkStatus;
+  }): Promise<JinyeLemmaLink>;
+  findLemmaLinkById(id: string): Promise<JinyeLemmaLink | null>;
+  listLemmaLinksByJinyeId(jinyeId: string): Promise<JinyeLemmaLink[]>;
+  listActiveLemmaLinksForTarget(input: {
+    jinyeId?: string | null;
+    commentId?: string | null;
+  }): Promise<JinyeLemmaLink[]>;
+  updateLemmaLink(
+    id: string,
+    patch: {
+      wordId?: string;
+      status?: JinyeLemmaLinkStatus;
+      source?: JinyeLemmaLinkSource;
+      proposedWordId?: string | null;
+      proposedBy?: string | null;
+      reviewedBy?: string | null;
+      reviewedAt?: Date | null;
+    },
+  ): Promise<JinyeLemmaLink | null>;
+  deleteLemmaLink(id: string): Promise<boolean>;
 }

@@ -4,11 +4,14 @@ import {
   publicAccountDisplayName,
   publicAccountName,
 } from '@/shared/constants/deleted-account';
+import { alias } from 'drizzle-orm/sqlite-core';
 import {
   jinye,
   jinyeComments,
+  jinyeLemmaLinks,
   jinyeRevisions,
   users,
+  words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
@@ -17,15 +20,22 @@ import type {
   JinyeStatus,
 } from '@/shared/database/drizzle/schema/jinye.schema';
 import type {
+  JinyeLemmaLinkSource,
+  JinyeLemmaLinkStatus,
+} from '@/shared/database/drizzle/schema/jinye-lemma-links.schema';
+import type {
   Jinye,
   JinyeAudio,
   JinyeComment,
+  JinyeLemmaLink,
   JinyeListFilter,
   NewJinye,
   NewJinyeComment,
 } from '../domain/entities/jinye.entity';
 import { toImageRows, toJinyeImages } from '../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../domain/repositories/jinye.repository';
+
+const proposedWords = alias(words, 'jinye_lemma_proposed_words');
 
 type JinyeRow = typeof jinye.$inferSelect;
 type JinyeCommentRow = typeof jinyeComments.$inferSelect;
@@ -417,6 +427,173 @@ export class JinyeRepositoryImpl implements JinyeRepository {
       })
       .where(eq(jinye.id, jinyeId));
   }
+
+  async createLemmaLink(input: {
+    jinyeId?: string | null;
+    commentId?: string | null;
+    start: number;
+    end: number;
+    wordId: string;
+    source: JinyeLemmaLinkSource;
+    status?: JinyeLemmaLinkStatus;
+  }): Promise<JinyeLemmaLink> {
+    const [row] = await this.db
+      .insert(jinyeLemmaLinks)
+      .values({
+        jinyeId: input.jinyeId ?? null,
+        commentId: input.commentId ?? null,
+        start: input.start,
+        end: input.end,
+        wordId: input.wordId,
+        source: input.source,
+        status: input.status ?? 'active',
+      })
+      .returning({ id: jinyeLemmaLinks.id });
+    const created = await this.findLemmaLinkById(row.id);
+    if (!created) throw new Error('jinye lemma link missing after insert');
+    return created;
+  }
+
+  async findLemmaLinkById(id: string): Promise<JinyeLemmaLink | null> {
+    const rows = await this.db
+      .select({
+        link: jinyeLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(jinyeLemmaLinks)
+      .leftJoin(words, eq(words.id, jinyeLemmaLinks.wordId))
+      .leftJoin(
+        proposedWords,
+        eq(proposedWords.id, jinyeLemmaLinks.proposedWordId),
+      )
+      .where(eq(jinyeLemmaLinks.id, id))
+      .limit(1);
+    const row = rows[0];
+    return row ? mapLemmaLink(row) : null;
+  }
+
+  async listLemmaLinksByJinyeId(jinyeId: string): Promise<JinyeLemmaLink[]> {
+    const rows = await this.db
+      .select({
+        link: jinyeLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(jinyeLemmaLinks)
+      .leftJoin(words, eq(words.id, jinyeLemmaLinks.wordId))
+      .leftJoin(
+        proposedWords,
+        eq(proposedWords.id, jinyeLemmaLinks.proposedWordId),
+      )
+      .where(
+        and(
+          eq(jinyeLemmaLinks.jinyeId, jinyeId),
+          sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
+        ),
+      )
+      .orderBy(asc(jinyeLemmaLinks.start), asc(jinyeLemmaLinks.id));
+    return rows.map(mapLemmaLink);
+  }
+
+  async listActiveLemmaLinksForTarget(input: {
+    jinyeId?: string | null;
+    commentId?: string | null;
+  }): Promise<JinyeLemmaLink[]> {
+    const conds = [
+      sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
+    ];
+    if (input.jinyeId) conds.push(eq(jinyeLemmaLinks.jinyeId, input.jinyeId));
+    if (input.commentId) {
+      conds.push(eq(jinyeLemmaLinks.commentId, input.commentId));
+    }
+    const rows = await this.db
+      .select({
+        link: jinyeLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(jinyeLemmaLinks)
+      .leftJoin(words, eq(words.id, jinyeLemmaLinks.wordId))
+      .leftJoin(
+        proposedWords,
+        eq(proposedWords.id, jinyeLemmaLinks.proposedWordId),
+      )
+      .where(and(...conds))
+      .orderBy(asc(jinyeLemmaLinks.start), asc(jinyeLemmaLinks.id));
+    return rows.map(mapLemmaLink);
+  }
+
+  async updateLemmaLink(
+    id: string,
+    patch: {
+      wordId?: string;
+      status?: JinyeLemmaLinkStatus;
+      source?: JinyeLemmaLinkSource;
+      proposedWordId?: string | null;
+      proposedBy?: string | null;
+      reviewedBy?: string | null;
+      reviewedAt?: Date | null;
+    },
+  ): Promise<JinyeLemmaLink | null> {
+    const updated = await this.db
+      .update(jinyeLemmaLinks)
+      .set({
+        ...(patch.wordId !== undefined ? { wordId: patch.wordId } : {}),
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(patch.source !== undefined ? { source: patch.source } : {}),
+        ...(patch.proposedWordId !== undefined
+          ? { proposedWordId: patch.proposedWordId }
+          : {}),
+        ...(patch.proposedBy !== undefined
+          ? { proposedBy: patch.proposedBy }
+          : {}),
+        ...(patch.reviewedBy !== undefined
+          ? { reviewedBy: patch.reviewedBy }
+          : {}),
+        ...(patch.reviewedAt !== undefined
+          ? { reviewedAt: patch.reviewedAt }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(jinyeLemmaLinks.id, id))
+      .returning({ id: jinyeLemmaLinks.id });
+    if (updated.length === 0) return null;
+    return this.findLemmaLinkById(id);
+  }
+
+  async deleteLemmaLink(id: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(jinyeLemmaLinks)
+      .where(eq(jinyeLemmaLinks.id, id))
+      .returning({ id: jinyeLemmaLinks.id });
+    return deleted.length > 0;
+  }
+}
+
+function mapLemmaLink(row: {
+  link: typeof jinyeLemmaLinks.$inferSelect;
+  lemma: string | null;
+  proposedLemma: string | null;
+}): JinyeLemmaLink {
+  return {
+    id: row.link.id,
+    jinyeId: row.link.jinyeId ?? null,
+    commentId: row.link.commentId ?? null,
+    start: row.link.start,
+    end: row.link.end,
+    wordId: row.link.wordId,
+    lemma: row.lemma ?? null,
+    status: row.link.status as JinyeLemmaLinkStatus,
+    source: row.link.source as JinyeLemmaLinkSource,
+    proposedWordId: row.link.proposedWordId ?? null,
+    proposedLemma: row.proposedLemma ?? null,
+    proposedBy: row.link.proposedBy ?? null,
+    reviewedBy: row.link.reviewedBy ?? null,
+    reviewedAt: row.link.reviewedAt ?? null,
+    createdAt: row.link.createdAt,
+    updatedAt: row.link.updatedAt ?? null,
+  };
 }
 
 function mapCommentJoined(row: {

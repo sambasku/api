@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
+import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
@@ -11,15 +12,21 @@ import {
   createJinyeCommentBodySchema,
   createJinyeCommentResponseSchema,
   createJinyeResponseSchema,
+  createJinyeLemmaLinkBodySchema,
   deleteJinyeCommentResponseSchema,
   deleteJinyeResponseSchema,
   jinyeCommentIdParamSchema,
   jinyeDetailResponseSchema,
   jinyeIdParamSchema,
+  jinyeLemmaLinkIdParamSchema,
+  jinyeLemmaLinkResponseSchema,
   jinyeUploadTokenQuerySchema,
   listJinyeCommentsResponseSchema,
+  listJinyeLemmaLinksResponseSchema,
   listJinyeQuerySchema,
   listJinyeResponseSchema,
+  proposeJinyeLemmaCorrectionBodySchema,
+  resolveJinyeLemmaCorrectionBodySchema,
   uploadCredentialsResponseSchema,
 } from './validators/jinye.validator';
 
@@ -255,6 +262,92 @@ const unpinRoute = createRoute({
   },
 });
 
+const listLemmaLinksRoute = createRoute({
+  method: 'get',
+  path: '/{id}/lemma-links',
+  tags: ['Jinye'],
+  summary: 'List tautan lemma pada Jinye',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(listJinyeLemmaLinksResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const createLemmaLinkRoute = createRoute({
+  method: 'post',
+  path: '/{id}/lemma-links',
+  tags: ['Jinye'],
+  summary: 'Tambah span lemma (penulis Jinye)',
+  request: {
+    params: jinyeIdParamSchema,
+    body: { content: json(createJinyeLemmaLinkBodySchema), required: true },
+  },
+  responses: {
+    201: { description: 'Created', content: json(jinyeLemmaLinkResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Bukan pemilik', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const proposeLemmaCorrectionRoute = createRoute({
+  method: 'post',
+  path: '/{id}/lemma-links/{linkId}/corrections',
+  tags: ['Jinye'],
+  summary: 'Usul koreksi lemma pada span',
+  request: {
+    params: jinyeLemmaLinkIdParamSchema,
+    body: {
+      content: json(proposeJinyeLemmaCorrectionBodySchema),
+      required: true,
+    },
+  },
+  responses: {
+    200: { description: 'OK', content: json(jinyeLemmaLinkResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    409: { description: 'Koreksi masih pending', content: json(errorResponseSchema) },
+  },
+});
+
+const resolveLemmaCorrectionRoute = createRoute({
+  method: 'post',
+  path: '/{id}/lemma-links/{linkId}/resolve',
+  tags: ['Jinye'],
+  summary: 'Approve/reject koreksi lemma (verifikator)',
+  request: {
+    params: jinyeLemmaLinkIdParamSchema,
+    body: {
+      content: json(resolveJinyeLemmaCorrectionBodySchema),
+      required: true,
+    },
+  },
+  responses: {
+    200: { description: 'OK', content: json(jinyeLemmaLinkResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Forbidden', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const deleteLemmaLinkRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/lemma-links/{linkId}',
+  tags: ['Jinye'],
+  summary: 'Hapus tautan lemma (penulis / staf)',
+  request: { params: jinyeLemmaLinkIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(deleteJinyeResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Forbidden', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
 export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   const routes = createOpenApiApp();
   const writeLimit = rateLimit({
@@ -412,6 +505,46 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     });
   }
 
+  routes.use('/:id/lemma-links', async (c, next) => {
+    if (c.req.method === 'GET' && deps.optionalAuth) {
+      return deps.optionalAuth(c, next);
+    }
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/lemma-links', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/lemma-links', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/lemma-links', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeLimit(c, next);
+  });
+  routes.use('/:id/lemma-links/*', async (c, next) => {
+    if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/lemma-links/*', async (c, next) => {
+    if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/lemma-links/*', async (c, next) => {
+    if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/lemma-links/*', async (c, next) => {
+    if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+    return writeLimit(c, next);
+  });
+
   routes.use('/archived', deps.authenticate);
   routes.openapi(uploadTokenRoute, (c) =>
     deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
@@ -438,6 +571,43 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   routes.openapi(unpinRoute, (c) =>
     deps.controller.unpin(c, c.req.valid('param').id) as never,
   );
+  routes.openapi(listLemmaLinksRoute, (c) =>
+    deps.controller.listLemmaLinks(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(createLemmaLinkRoute, (c) =>
+    deps.controller.createLemmaLink(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
+  routes.openapi(proposeLemmaCorrectionRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.proposeLemmaCorrection(
+      c,
+      p.id,
+      p.linkId,
+      c.req.valid('json'),
+    ) as never;
+  });
+  routes.use(
+    '/:id/lemma-links/:linkId/resolve',
+    deps.authenticate,
+    authorizeRole('root', 'admin', 'reviewer', 'editor', 'verifier'),
+  );
+  routes.openapi(resolveLemmaCorrectionRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.resolveLemmaCorrection(
+      c,
+      p.id,
+      p.linkId,
+      c.req.valid('json'),
+    ) as never;
+  });
+  routes.openapi(deleteLemmaLinkRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.deleteLemmaLink(c, p.id, p.linkId) as never;
+  });
   routes.openapi(attachAudioRoute, (c) =>
     deps.controller.attachAudio(c, c.req.valid('param').id) as never,
   );

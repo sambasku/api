@@ -63,6 +63,12 @@ describe('CreateJinyeUseCase', () => {
     getPinnedJinyeId: vi.fn(),
     setPinnedJinyeId: vi.fn(),
     clearPinnedIf: vi.fn(),
+    createLemmaLink: vi.fn(),
+    findLemmaLinkById: vi.fn(),
+    listLemmaLinksByJinyeId: vi.fn(),
+    listActiveLemmaLinksForTarget: vi.fn(),
+    updateLemmaLink: vi.fn(),
+    deleteLemmaLink: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -91,6 +97,12 @@ describe('CreateJinyeUseCase', () => {
     getPinnedJinyeId: vi.fn(),
     setPinnedJinyeId: vi.fn(),
     clearPinnedIf: vi.fn(),
+    createLemmaLink: vi.fn(),
+    findLemmaLinkById: vi.fn(),
+    listLemmaLinksByJinyeId: vi.fn(),
+    listActiveLemmaLinksForTarget: vi.fn(),
+    updateLemmaLink: vi.fn(),
+    deleteLemmaLink: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -121,6 +133,12 @@ describe('CreateJinyeUseCase', () => {
     getPinnedJinyeId: vi.fn(),
     setPinnedJinyeId: vi.fn(),
     clearPinnedIf: vi.fn(),
+    createLemmaLink: vi.fn(),
+    findLemmaLinkById: vi.fn(),
+    listLemmaLinksByJinyeId: vi.fn(),
+    listActiveLemmaLinksForTarget: vi.fn(),
+    updateLemmaLink: vi.fn(),
+    deleteLemmaLink: vi.fn(),
     };
     const uc = new CreateJinyeUseCase(
       repo,
@@ -154,6 +172,12 @@ describe('CreateJinyeUseCase', () => {
     getPinnedJinyeId: vi.fn(),
     setPinnedJinyeId: vi.fn(),
     clearPinnedIf: vi.fn(),
+    createLemmaLink: vi.fn(),
+    findLemmaLinkById: vi.fn(),
+    listLemmaLinksByJinyeId: vi.fn(),
+    listActiveLemmaLinksForTarget: vi.fn(),
+    updateLemmaLink: vi.fn(),
+    deleteLemmaLink: vi.fn(),
     };
     const activity = { safe: vi.fn(async () => undefined) };
     const audit = { record: vi.fn(async () => undefined) };
