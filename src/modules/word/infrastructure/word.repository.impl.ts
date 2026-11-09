@@ -835,7 +835,11 @@ export class WordRepositoryImpl implements WordRepository {
 
   async findDetailById(
     id: string,
-    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+    opts?: {
+      includeAllStatuses?: boolean;
+      includeDeleted?: boolean;
+      statuses?: WordStatus[];
+    },
   ): Promise<WordDetail | null> {
     return this.loadDetail({ kind: 'id', id }, opts);
   }
@@ -843,16 +847,49 @@ export class WordRepositoryImpl implements WordRepository {
   /** URL publik /words/<lemma> - resolusi lemma + detail dalam SATU round-trip.
    *  Sebelumnya use-case memanggil findPublishedIdByLemma lalu findDetailById
    *  = 4 round-trip Turso; sekarang word+meanings di-batch (1) + children (1). */
-  async findPublishedDetailByLemma(lemma: string): Promise<WordDetail | null> {
-    return this.loadDetail({ kind: 'lemma', lemma });
+  async findPublishedDetailByLemma(
+    lemma: string,
+    opts?: { statuses?: WordStatus[] },
+  ): Promise<WordDetail | null> {
+    return this.loadDetail({ kind: 'lemma', lemma }, opts);
   }
 
   private async loadDetail(
     key: { kind: 'id'; id: string } | { kind: 'lemma'; lemma: string },
-    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+    opts?: {
+      includeAllStatuses?: boolean;
+      includeDeleted?: boolean;
+      statuses?: WordStatus[];
+    },
   ): Promise<WordDetail | null> {
     const includeAll = opts?.includeAllStatuses === true;
     const includeDeleted = opts?.includeDeleted === true;
+    const statuses = opts?.statuses?.length ? opts.statuses : undefined;
+    // Verifikator: anak ikut status yang sama (published | pending_review).
+    // Publik: published + verified. Admin includeAll: tanpa filter status anak.
+    const childStatusFilter = includeAll
+      ? undefined
+      : statuses
+        ? inArray(meanings.status, statuses as ChildStatus[])
+        : and(eq(meanings.status, 'published'), eq(meanings.isVerified, true));
+    const childRowStatusFilter = (table: {
+      status: typeof meanings.status;
+      isVerified: typeof meanings.isVerified;
+    }) =>
+      includeAll
+        ? undefined
+        : statuses
+          ? inArray(table.status, statuses as ChildStatus[])
+          : and(eq(table.status, 'published'), eq(table.isVerified, true));
+    const lemmaWordPickSql = statuses
+      ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.kind === 'lemma' ? key.lemma.trim() : ''}) AND w2.status IN (${sql.join(
+          statuses.map((s) => sql`${s}`),
+          sql`, `,
+        )}) AND w2.deleted_at IS NULL ORDER BY w2.is_verified DESC, w2.created_at LIMIT 1)`
+      : sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.kind === 'lemma' ? key.lemma.trim() : ''}) AND w2.status = 'published' AND w2.is_verified = 1 AND w2.deleted_at IS NULL ORDER BY w2.created_at LIMIT 1)`;
+    const wordStatusWhere = statuses
+      ? inArray(words.status, statuses)
+      : and(eq(words.status, 'published'), eq(words.isVerified, true));
     const verifierUsers = alias(users, 'word_verifier');
     const creatorUsers = alias(users, 'word_creator');
     const isLemma = key.kind === 'lemma';
@@ -884,20 +921,14 @@ export class WordRepositoryImpl implements WordRepository {
         isLemma
           ? and(
               sql`lower(${words.lemma}) = lower(${key.lemma.trim()})`,
-              eq(words.status, 'published'),
-              eq(words.isVerified, true),
+              wordStatusWhere,
               isNull(words.deletedAt),
             )
           : includeAll
             ? and(eq(words.id, key.id), includeDeleted ? undefined : isNull(words.deletedAt))
-            : and(
-                eq(words.id, key.id),
-                eq(words.status, 'published'),
-                eq(words.isVerified, true),
-                isNull(words.deletedAt),
-              ),
+            : and(eq(words.id, key.id), wordStatusWhere, isNull(words.deletedAt)),
       )
-      // Homonim (mode lemma): publik sudah filter verified; order tetap stabil.
+      // Homonim (mode lemma): verified dulu, lalu terlama.
       // id-mode selalu <=1 baris (PK), jadi order ini sisa sort 1 baris - murah.
       .orderBy(desc(words.isVerified), words.createdAt)
       .limit(1);
@@ -909,16 +940,9 @@ export class WordRepositoryImpl implements WordRepository {
         and(
           // Correlated subquery lemma-mode supaya TIDAK perlu id word dulu
           // (hemat round-trip); id-mode langsung literal id.
-          sql`${meanings.wordId} = ${
-            isLemma
-              ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.lemma.trim()}) AND w2.status = 'published' AND w2.is_verified = 1 AND w2.deleted_at IS NULL ORDER BY w2.created_at LIMIT 1)`
-              : key.id
-          }`,
+          sql`${meanings.wordId} = ${isLemma ? lemmaWordPickSql : key.id}`,
           isNull(meanings.deletedAt),
-          // Publik: makna published + verified. Admin memakai includeAll.
-          includeAll
-            ? undefined
-            : and(eq(meanings.status, 'published'), eq(meanings.isVerified, true)),
+          childStatusFilter,
         ),
       )
       .orderBy(meanings.orderIndex);
@@ -1000,9 +1024,7 @@ export class WordRepositoryImpl implements WordRepository {
             and(
               inArray(examples.meaningId, meaningIds),
               isNull(examples.deletedAt),
-              includeAll
-                ? undefined
-                : and(eq(examples.status, 'published'), eq(examples.isVerified, true)),
+              childRowStatusFilter(examples),
             ),
           ),
       );
@@ -1026,9 +1048,7 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(pronunciations.wordId, wordRow.id),
             isNull(pronunciations.deletedAt),
-            includeAll
-              ? undefined
-              : and(eq(pronunciations.status, 'published'), eq(pronunciations.isVerified, true)),
+            childRowStatusFilter(pronunciations),
           ),
         ),
     );
@@ -1042,9 +1062,7 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(wordImages.wordId, wordRow.id),
             isNull(wordImages.deletedAt),
-            includeAll
-              ? undefined
-              : and(eq(wordImages.status, 'published'), eq(wordImages.isVerified, true)),
+            childRowStatusFilter(wordImages),
           ),
         ),
     );
@@ -1058,9 +1076,7 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(wordAudios.wordId, wordRow.id),
             isNull(wordAudios.deletedAt),
-            includeAll
-              ? undefined
-              : and(eq(wordAudios.status, 'published'), eq(wordAudios.isVerified, true)),
+            childRowStatusFilter(wordAudios),
           ),
         ),
     );
@@ -1082,12 +1098,18 @@ export class WordRepositoryImpl implements WordRepository {
             // PRD relasi-lemma: baris pending/rejected tidak tampil publik
             includeAll
               ? undefined
-              : and(
-                  eq(lexicalRelations.status, 'published'),
-                  eq(words.status, 'published'),
-                  eq(words.isVerified, true),
-                  isNull(words.deletedAt),
-                ),
+              : statuses
+                ? and(
+                    inArray(lexicalRelations.status, statuses as ChildStatus[]),
+                    inArray(words.status, statuses),
+                    isNull(words.deletedAt),
+                  )
+                : and(
+                    eq(lexicalRelations.status, 'published'),
+                    eq(words.status, 'published'),
+                    eq(words.isVerified, true),
+                    isNull(words.deletedAt),
+                  ),
           ),
         )
         .orderBy(asc(words.lemma)),
@@ -1109,12 +1131,18 @@ export class WordRepositoryImpl implements WordRepository {
             isNull(lexicalRelations.deletedAt),
             includeAll
               ? undefined
-              : and(
-                  eq(lexicalRelations.status, 'published'),
-                  eq(words.status, 'published'),
-                  eq(words.isVerified, true),
-                  isNull(words.deletedAt),
-                ),
+              : statuses
+                ? and(
+                    inArray(lexicalRelations.status, statuses as ChildStatus[]),
+                    inArray(words.status, statuses),
+                    isNull(words.deletedAt),
+                  )
+                : and(
+                    eq(lexicalRelations.status, 'published'),
+                    eq(words.status, 'published'),
+                    eq(words.isVerified, true),
+                    isNull(words.deletedAt),
+                  ),
           ),
         )
         .orderBy(asc(words.lemma)),
@@ -1494,8 +1522,16 @@ memberLemma: string;
     // di tengah sesi pencarian, drift offset kecil dan bisa diterima.
     // ponytail: index error/empty -> fallback LIKE penuh di bawah, jadi
     // kerusakan index tidak pernah bikin search mati total.
+    // FTS hanya untuk korpus published publik. Mode verifikator (ada
+    // pending_review di statuses) pakai LIKE supaya pending ketemu.
+    const verifierBrowse = Boolean(params.statuses?.includes('pending_review'));
     let ftsOffset = -1;
-    if (this.searchIndex && terms.length > 0 && params.published === true) {
+    if (
+      this.searchIndex &&
+      terms.length > 0 &&
+      params.published === true &&
+      !verifierBrowse
+    ) {
       if (params.cursor === undefined) ftsOffset = 0;
       else if (/^o:\d+$/.test(params.cursor)) ftsOffset = Number(params.cursor.slice(2));
     }
@@ -1512,12 +1548,14 @@ memberLemma: string;
 
     const where = and(
       isNull(words.deletedAt),
-      // Publik: published only. Admin: published? true|false|all (omit)
-      params.published === true
-        ? eq(words.status, 'published')
-        : params.published === false
-          ? ne(words.status, 'published')
-          : undefined,
+      // statuses (verifikator) mengalahkan published true/false/omit
+      params.statuses?.length
+        ? inArray(words.status, params.statuses)
+        : params.published === true
+          ? eq(words.status, 'published')
+          : params.published === false
+            ? ne(words.status, 'published')
+            : undefined,
       // 11-api-variasi-penulisan.md: q cocok lemma ATAU bentuk variasi
       // (mis. cari "ketex" menemukan entri "ketek"). EXISTS - bukan JOIN -
       // supaya hasil tetap satu baris per kata (cursor words.id aman).
@@ -1764,10 +1802,12 @@ memberLemma: string;
     const letter = params.letter?.trim().toLowerCase();
     // Browse tanpa q: jangan ekspos kasar/diskriminatif di listing publik.
     // `letter` = prefix A-Z (panel beranda); `q` = contains (kotak filter).
-    // Gate publik: published + verified (ListWordsUseCase memaksa isVerified=true).
+    // Gate publik: published + verified. Verifikator: statuses (pending+published).
     const where = and(
       isNull(words.deletedAt),
-      eq(words.status, 'published'),
+      params.statuses?.length
+        ? inArray(words.status, params.statuses)
+        : eq(words.status, 'published'),
       q ? ilikeCompat(words.lemma, `%${escapeLike(q)}%`) : browseSafeUsageLabelsSql(),
       letter ? sql`${lemmaAz} LIKE ${`${escapeLike(letter)}%`}` : undefined,
       params.wordType ? eq(words.wordType, params.wordType) : undefined,
@@ -2060,16 +2100,19 @@ memberLemma: string;
     const terms = searchTerms(params.q ?? '');
     const where = and(
       isNull(words.deletedAt),
-      params.published === true
-        ? eq(words.status, 'published')
-        : params.published === false
-          ? ne(words.status, 'published')
-          : undefined,
+      params.statuses?.length
+        ? inArray(words.status, params.statuses)
+        : params.published === true
+          ? eq(words.status, 'published')
+          : params.published === false
+            ? ne(words.status, 'published')
+            : undefined,
       isNull(meanings.deletedAt),
-      // 17: makna kontribusi pending tidak boleh bocor ke pencarian;
-      // sentinel "-" (placeholder tanpa definisi) juga bukan hasil yang
-      // bermakna untuk pencarian terjemahan.
-      eq(meanings.status, 'published'),
+      // Verifikator: makna published|pending_review. Publik: published saja.
+      // Sentinel "-" bukan hasil bermakna untuk pencarian terjemahan.
+      params.statuses?.length
+        ? inArray(meanings.status, params.statuses as ChildStatus[])
+        : eq(meanings.status, 'published'),
       ne(meaningTranslations.translationText, '-'),
       isNull(meaningTranslations.deletedAt),
       terms.length > 0

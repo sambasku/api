@@ -656,12 +656,10 @@ export function createPublicWordRoutes(deps: WordRoutesDeps) {
 
   routes.use('*', rateLimit({ points: 100, duration: 60 }));
 
-  // Hanya /search: mengaktifkan atribusi "siapa yang memicu search miss".
-  // Setelah rateLimit supaya kuota tamu tetap terukur untuk semua. Token
-  // rusak/kedaluarsa tidak 401 (soft auth) - response tetap sama, hanya
-  // `viewerId` yang kosong.
+  // Soft auth pada baca publik: search miss (viewerId) + gate verifikator
+  // (pending_review + published). Token rusak/kedaluarsa tidak 401.
   if (deps.softAuthenticate) {
-    routes.use('/search', deps.softAuthenticate);
+    routes.use('*', deps.softAuthenticate);
   }
 
   // 18-api-list-words.md: daftar semua kata A-Z (browsing, bukan pencarian).

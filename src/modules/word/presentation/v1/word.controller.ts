@@ -359,14 +359,16 @@ export class WordController {
   }
 
   async detail(c: Context, id: string) {
-    const word = await this.deps.getById.execute(id);
+    const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
+    const word = await this.deps.getById.execute(id, { viewerRoles });
     setPublicWordReadCache(c);
     return c.json({ success: true as const, data: this.toDetailData(word, { redactStagingImages: true }) });
   }
 
   /** URL publik /words/<lemma> - resolusi homonim di repository. */
   async detailByLemma(c: Context, lemma: string) {
-    const word = await this.deps.getByLemma.execute(lemma);
+    const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
+    const word = await this.deps.getByLemma.execute(lemma, { viewerRoles });
     setPublicWordReadCache(c);
     return c.json({ success: true as const, data: this.toDetailData(word, { redactStagingImages: true }) });
   }
@@ -623,8 +625,8 @@ export class WordController {
 
   async search(c: Context, query: SearchWordsQueryBody) {
     // Soft auth (sudah dipasang di route): tanpa token tetap tamu, tidak 401.
-    // Id-nya hanya dipakai untuk mencatat siapa yang memicu search miss.
-    const viewerId = (c.get('user') as AuthUser | undefined)?.user_id;
+    // Id untuk search miss; roles untuk gate verifikator (pending + published).
+    const user = c.get('user') as AuthUser | undefined;
     const { items, meta } = await this.deps.search.execute({
       q: query.q,
       limit: query.limit,
@@ -633,7 +635,8 @@ export class WordController {
       translationLanguageId: query.translation_language_id,
       wordType: query.word_type,
       isVerified: query.is_verified,
-      viewerId,
+      viewerId: user?.user_id,
+      viewerRoles: user?.roles,
     });
     setPublicWordReadCache(c);
     return c.json({
@@ -663,6 +666,7 @@ export class WordController {
 
   /** 18-api-list-words.md - browsing A-Z publik (tanpa search-miss) */
   async list(c: Context, query: ListWordsQueryBody) {
+    const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
     const { items, meta } = await this.deps.list.execute({
       q: query.q,
       letter: query.letter,
@@ -671,6 +675,7 @@ export class WordController {
       wordType: query.word_type,
       isVerified: query.is_verified,
       category: query.category,
+      viewerRoles,
     });
     setPublicWordReadCache(c);
     return c.json({

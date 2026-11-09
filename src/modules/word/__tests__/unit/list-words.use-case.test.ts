@@ -62,4 +62,24 @@ describe('ListWordsUseCase', () => {
       cursor: undefined,
     });
   });
+
+  it('verifikator → statuses pending_review+published, tanpa isVerified', async () => {
+    const listAtoZ = vi.fn().mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+    const uc = new ListWordsUseCase({ listAtoZ } as unknown as WordRepository);
+    await uc.execute({ q: '', limit: 10, viewerRoles: ['reviewer'], isVerified: false });
+    expect(listAtoZ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statuses: ['published', 'pending_review'],
+      }),
+    );
+    expect(listAtoZ.mock.calls[0]![0]).not.toHaveProperty('isVerified');
+  });
+
+  it('kontributor non-verifikator → tetap force isVerified true', async () => {
+    const listAtoZ = vi.fn().mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+    const uc = new ListWordsUseCase({ listAtoZ } as unknown as WordRepository);
+    await uc.execute({ q: '', limit: 10, viewerRoles: ['contributor'] });
+    expect(listAtoZ).toHaveBeenCalledWith(expect.objectContaining({ isVerified: true }));
+    expect(listAtoZ.mock.calls[0]![0]).not.toHaveProperty('statuses');
+  });
 });

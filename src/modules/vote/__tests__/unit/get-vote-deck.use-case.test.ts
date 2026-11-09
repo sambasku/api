@@ -1,9 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi } from 'vitest';
 import { GetVoteDeckUseCase } from '../../application/use-cases/get-vote-deck.use-case';
 import {
   encodeVoteDeckCursor,
   type VoteRepository,
 } from '../../domain/repositories/vote.repository';
+
+// Regresi: search/list verifikator boleh pending_review; deck tetap verified-only.
+const DECK_REPO_SRC = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../../infrastructure/vote.repository.impl.ts'),
+  'utf8',
+);
 
 const USER = '01JDUSERKONTRIB0000000000A';
 
@@ -68,5 +77,10 @@ describe('GetVoteDeckUseCase', () => {
       { errorCode: 'VALIDATION_ERROR', statusCode: 400 },
     );
     expect(voteRepo.listDeckMeanings).not.toHaveBeenCalled();
+  });
+
+  it('regresi: listDeckMeanings tetap filter isVerified pada words + meanings', () => {
+    expect(DECK_REPO_SRC).toMatch(/eq\(meanings\.isVerified,\s*true\)/);
+    expect(DECK_REPO_SRC).toMatch(/eq\(words\.isVerified,\s*true\)/);
   });
 });
