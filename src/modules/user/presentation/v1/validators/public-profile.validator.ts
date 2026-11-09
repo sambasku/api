@@ -56,7 +56,16 @@ export const publicProfileResponseSchema = z.object({
 });
 
 export const publicActivityQuerySchema = z.object({
-  kind: z.enum(['contribution', 'correction', 'comment', 'verification', 'vote']).optional(),
+  kind: z
+    .enum([
+      'contribution',
+      'correction',
+      'comment',
+      'verification',
+      'vote',
+      'jinye',
+    ])
+    .optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: opaqueId.optional(),
 });
@@ -69,8 +78,16 @@ export const publicActivityResponseSchema = z.object({
     items: z.array(
       z.object({
         id: z.string().length(26),
-        kind: z.enum(['contribution', 'correction', 'comment', 'verification', 'vote']),
+        kind: z.enum([
+          'contribution',
+          'correction',
+          'comment',
+          'verification',
+          'vote',
+          'jinye',
+        ]),
         occurred_at: z.string(),
+        // kind=jinye: id Jinye (navigasi detail). Lainnya: id kata bila ada.
         word_id: z.string().nullable(),
         lemma: z.string().nullable(),
         summary: z.string(),

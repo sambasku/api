@@ -18,6 +18,11 @@ export const POINT_WEIGHTS = {
   pantun: 3,
   /** Artikel ensiklopedia published (kontribusi besar). */
   article: 10,
+  /**
+   * Jinye published (create / quote). Repost polos & komen = 0 poin
+   * (sama pola pantun vs balasan pantun).
+   */
+  jinye: 3,
   data_edit: 3,
   /** Upvote diterima atas karya milik user (bukan vote yang diberikan). */
   vote_received: 1,

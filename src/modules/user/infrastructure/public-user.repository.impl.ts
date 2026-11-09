@@ -238,6 +238,7 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         eventCount: sql<number>`evt.event_count`.mapWith(Number),
         pantunCount: sql<number>`ptn.pantun_count`.mapWith(Number),
         articleCount: sql<number>`art.article_count`.mapWith(Number),
+        jinyeCount: sql<number>`jny.jinye_count`.mapWith(Number),
         voteReceivedPoints: sql<number>`vot.vote_received_points`.mapWith(
           Number,
         ),
@@ -381,6 +382,15 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           and deleted_at is null
       ) as art
       cross join (
+        -- Create + quote (makan kuota). Repost polos: repost_of_id set &
+        -- quote_body null → 0 poin.
+        select coalesce(count(*), 0) as jinye_count
+        from jinye
+        where user_id = ${userId}
+          and status = 'published'
+          and (repost_of_id is null or quote_body is not null)
+      ) as jny
+      cross join (
         select coalesce(count(*), 0) * ${W.vote_received} as vote_received_points
         from votes v
         where v.value = 1
@@ -494,6 +504,7 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
     const eventCount = row?.eventCount ?? 0;
     const pantunCount = row?.pantunCount ?? 0;
     const articleCount = row?.articleCount ?? 0;
+    const jinyeCount = row?.jinyeCount ?? 0;
     const points =
       (row?.contributionPoints ?? 0) +
       (row?.verificationPoints ?? 0) +
@@ -503,7 +514,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       (row?.cuisinePoints ?? 0) +
       eventCount * W.event +
       pantunCount * W.pantun +
-      articleCount * W.article;
+      articleCount * W.article +
+      jinyeCount * W.jinye;
     const exploration =
       wordsCount +
       placeCount +
@@ -511,7 +523,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       (row?.cuisineNewCount ?? 0) +
       eventCount +
       pantunCount +
-      articleCount;
+      articleCount +
+      jinyeCount;
     const streakDays = computeStreakDays(
       parseStreakDayKeys(row?.streakDayKeysJson),
       wibDateKey(Date.now()),

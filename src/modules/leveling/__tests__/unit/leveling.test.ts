@@ -64,6 +64,7 @@ describe('pointsForContributionEntity', () => {
     expect(pointsForContributionEntity('meaning', true)).toBe(6 * IMPORT_POINT_FACTOR);
     expect(POINT_WEIGHTS.pantun).toBe(3);
     expect(POINT_WEIGHTS.article).toBe(10);
+    expect(POINT_WEIGHTS.jinye).toBe(3);
     expect(POINT_WEIGHTS.vote_received).toBe(1);
   });
 

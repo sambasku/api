@@ -64,7 +64,8 @@ export type PublicActivityKind =
   | 'correction'
   | 'comment'
   | 'verification'
-  | 'vote';
+  | 'vote'
+  | 'jinye';
 
 export interface PublicActivityItem {
   /** ULID sumber - dipakai sebagai cursor keyset (tidak dibocorkan ke response). */
