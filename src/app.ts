@@ -637,6 +637,10 @@ import { ListJinyeCommentsUseCase } from "@/modules/jinye/application/use-cases/
 import { DeleteJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-comment.use-case";
 import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
 import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
+import { JinyeReportRepositoryImpl } from "@/modules/jinye-report/infrastructure/jinye-report.repository.impl";
+import { SubmitJinyeReportUseCase } from "@/modules/jinye-report/application/use-cases/submit-jinye-report.use-case";
+import { JinyeReportController } from "@/modules/jinye-report/presentation/v1/jinye-report.controller";
+import { createJinyeReportRoutes } from "@/modules/jinye-report/presentation/v1/jinye-report.routes";
 import { DashboardController } from "@/modules/dashboard/presentation/v1/dashboard.controller";
 import { createDashboardRoutes } from "@/modules/dashboard/presentation/v1/dashboard.routes";
 import { GetDashboardStatsUseCase } from "@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case";
@@ -2937,6 +2941,19 @@ app.route(
 // ------------------------------------------------------------------
 // Jinye: status singkat (teks / foto / voice). Post-moderation.
 const jinyeRepo = new JinyeRepositoryImpl(db);
+const jinyeReportRepo = new JinyeReportRepositoryImpl(db);
+const jinyeReportController = new JinyeReportController({
+  submit: new SubmitJinyeReportUseCase(jinyeReportRepo, jinyeRepo, auditRepo),
+});
+// /reports sebelum /:id
+app.route(
+  "/api/v1/jinye",
+  createJinyeReportRoutes({
+    controller: jinyeReportController,
+    authenticate,
+    requireLegalConsent,
+  }),
+);
 const jinyeController = new JinyeController({
   create: new CreateJinyeUseCase(
     jinyeRepo,
@@ -2959,6 +2976,9 @@ const jinyeController = new JinyeController({
     commentBlocklistRepo,
     recordAbuseSignal,
     activityEvents,
+    userRepo,
+    recordInbox,
+    notifyUser,
   ),
   listComments: new ListJinyeCommentsUseCase(jinyeRepo),
   deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, auditRepo),

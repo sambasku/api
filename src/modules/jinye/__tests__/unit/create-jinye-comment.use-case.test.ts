@@ -143,4 +143,47 @@ describe('CreateJinyeCommentUseCase', () => {
       expect.objectContaining({ kind: 'jinye_comment_created' }),
     );
   });
+
+  it('notifikasi ke owner Jinye (skip self)', async () => {
+    const OWNER = '01OWNERJINYE0000000000000';
+    const COMMENTER = '01COMMENTER00000000000000';
+    const created = makeComment({ userId: COMMENTER, body: 'asal' });
+    const inbox = { execute: vi.fn(async () => undefined) };
+    const notify = { execute: vi.fn(async () => undefined) };
+    const repo = emptyRepo({
+      findById: vi.fn(async () => ({ ...makeJinye(), userId: OWNER })),
+      createComment: vi.fn(async () => created),
+    });
+    const uc = new CreateJinyeCommentUseCase(
+      repo,
+      { record: vi.fn(async () => undefined) } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+      undefined,
+      undefined,
+      {
+        findById: vi.fn(async () => ({
+          displayName: 'Citra',
+          username: 'citra',
+        })),
+      } as never,
+      inbox as never,
+      notify as never,
+    );
+    await uc.execute({
+      jinyeId: JINYE_ID,
+      userId: COMMENTER,
+      body: 'asal',
+    });
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: OWNER,
+        type: 'jinye_comment',
+        actionKind: 'jinye',
+        actionValue: JINYE_ID,
+      }),
+    );
+    expect(notify.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: OWNER }),
+    );
+  });
 });

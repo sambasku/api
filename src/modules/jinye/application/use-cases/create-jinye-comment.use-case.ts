@@ -1,7 +1,10 @@
 import { NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
@@ -10,6 +13,14 @@ import type { JinyeRepository } from '../../domain/repositories/jinye.repository
 
 const MAX_BODY = 500;
 const MAX_IMAGES = 4;
+const SNIPPET_MAX = 80;
+const REPLY_TITLE = 'Balasan Jinye baru';
+
+function truncateSnippet(text: string, max = SNIPPET_MAX): string {
+  const trimmed = text.trim().replace(/\s+/g, ' ');
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max - 1).trimEnd()}...`;
+}
 
 export interface CreateJinyeCommentCommand {
   jinyeId: string;
@@ -37,6 +48,9 @@ export class CreateJinyeCommentUseCase {
         dedupeKey: string;
       }) => Promise<void>;
     },
+    private readonly userRepo?: UserRepository,
+    private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly notifyUser?: NotifyUserUseCase,
   ) {}
 
   async execute(cmd: CreateJinyeCommentCommand): Promise<JinyeComment> {
@@ -48,6 +62,7 @@ export class CreateJinyeCommentUseCase {
     }
 
     let parentId: string | null = cmd.parentId?.trim() || null;
+    let parentAuthorId: string | null = null;
     if (parentId) {
       const parent = await this.repo.findCommentById(parentId);
       if (
@@ -68,6 +83,7 @@ export class CreateJinyeCommentUseCase {
           },
         ]);
       }
+      parentAuthorId = parent.userId;
     }
 
     let body = (cmd.body ?? '').trim();
@@ -157,6 +173,92 @@ export class CreateJinyeCommentUseCase {
       dedupeKey: `jinye_comment:${created.id}`,
     });
 
+    await this.notifyRecipients({
+      jinyeId: cmd.jinyeId,
+      jinyeOwnerId: jinye.userId,
+      jinyeBody: jinye.body,
+      parentAuthorId,
+      actorId: cmd.userId,
+      commentBody: created.body || (created.images.length > 0 ? 'Foto' : ''),
+    });
+
     return created;
+  }
+
+  /** Best-effort: owner Jinye + penulis komen induk (kalau reply). */
+  private async notifyRecipients(input: {
+    jinyeId: string;
+    jinyeOwnerId: string;
+    jinyeBody: string;
+    parentAuthorId: string | null;
+    actorId: string;
+    commentBody: string;
+  }): Promise<void> {
+    if (!this.inbox && !this.notifyUser) return;
+
+    try {
+      let actorName = 'Seseorang';
+      if (this.userRepo) {
+        const actor = await this.userRepo.findById(input.actorId);
+        if (actor) actorName = actor.displayName?.trim() || actor.username;
+      }
+
+      const topic = truncateSnippet(input.jinyeBody || 'Jinye');
+      const snippet = truncateSnippet(input.commentBody || 'Balasan baru');
+      const body = `${actorName} membalas di "${topic}": ${snippet}`;
+
+      const recipients = new Set<string>();
+      if (input.jinyeOwnerId !== input.actorId) {
+        recipients.add(input.jinyeOwnerId);
+      }
+      if (
+        input.parentAuthorId &&
+        input.parentAuthorId !== input.actorId &&
+        input.parentAuthorId !== input.jinyeOwnerId
+      ) {
+        recipients.add(input.parentAuthorId);
+      }
+
+      for (const userId of recipients) {
+        if (this.inbox) {
+          await this.inbox.execute({
+            userId,
+            type: 'jinye_comment',
+            targetKind: 'jinye',
+            targetId: input.jinyeId,
+            actorId: input.actorId,
+            title: REPLY_TITLE,
+            body,
+            refreshOnConflict: true,
+            actionKind: 'jinye',
+            actionValue: input.jinyeId,
+          });
+        }
+        if (this.notifyUser) {
+          await this.notifyUser.execute({
+            userId,
+            title: REPLY_TITLE,
+            body,
+            actorId: input.actorId,
+            data: {
+              type: 'jinye_comment',
+              target_kind: 'jinye',
+              target_id: input.jinyeId,
+              action_kind: 'jinye',
+              action_value: input.jinyeId,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          time: new Date().toISOString(),
+          msg: 'jinye comment notify failed',
+          err: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 }
