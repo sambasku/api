@@ -610,7 +610,9 @@ import {
   createEncyclopediaRoutes,
 } from "@/modules/encyclopedia/presentation/v1/encyclopedia.routes";
 import { CreatePantunUseCase } from "@/modules/pantun/application/use-cases/create-pantun.use-case";
+import { CreatePantunWithAudioUseCase } from "@/modules/pantun/application/use-cases/create-pantun-with-audio.use-case";
 import { CreatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply.use-case";
+import { CreatePantunReplyWithAudioUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply-with-audio.use-case";
 import { ListPublishedPantunsUseCase } from "@/modules/pantun/application/use-cases/list-published-pantuns.use-case";
 import { GetPantunDetailUseCase } from "@/modules/pantun/application/use-cases/get-pantun-detail.use-case";
 import { TakedownPantunUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun.use-case";
@@ -2808,6 +2810,17 @@ app.route(
 );
 
 const pantunRepo = new PantunRepositoryImpl(db);
+const createPantunReply = new CreatePantunReplyUseCase(
+  pantunRepo,
+  auditRepo,
+  commentBlocklistRepo,
+  recordAbuseSignal,
+  activityEvents,
+  userRepo,
+  recordInbox,
+  notifyUser,
+  pantunReplyPushCooldown,
+);
 const pantunController = new PantunController({
   create: new CreatePantunUseCase(
     pantunRepo,
@@ -2816,22 +2829,36 @@ const pantunController = new PantunController({
     recordAbuseSignal,
     activityEvents,
   ),
-  createReply: new CreatePantunReplyUseCase(
+  createWithAudio: new CreatePantunWithAudioUseCase(
     pantunRepo,
+    pronunciationStorage,
     auditRepo,
     commentBlocklistRepo,
     recordAbuseSignal,
     activityEvents,
-    userRepo,
-    recordInbox,
-    notifyUser,
-    pantunReplyPushCooldown,
+  ),
+  createReply: createPantunReply,
+  createReplyWithAudio: new CreatePantunReplyWithAudioUseCase(
+    createPantunReply,
+    pronunciationStorage,
   ),
   listPublished: new ListPublishedPantunsUseCase(pantunRepo, voteRepo),
   getDetail: new GetPantunDetailUseCase(pantunRepo, voteRepo),
-  takedown: new TakedownPantunUseCase(pantunRepo, auditRepo),
-  takedownReply: new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
-  deleteReply: new DeletePantunReplyUseCase(pantunRepo, auditRepo),
+  takedown: new TakedownPantunUseCase(
+    pantunRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
+  takedownReply: new TakedownPantunReplyUseCase(
+    pantunRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
+  deleteReply: new DeletePantunReplyUseCase(
+    pantunRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
   updateReply: new UpdatePantunReplyUseCase(
     pantunRepo,
     auditRepo,
@@ -2839,7 +2866,11 @@ const pantunController = new PantunController({
     recordAbuseSignal,
   ),
   getReplyEditHistory: new GetPantunReplyEditHistoryUseCase(pantunRepo),
-  deletePantun: new DeletePantunUseCase(pantunRepo, auditRepo),
+  deletePantun: new DeletePantunUseCase(
+    pantunRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
   listAdmin: new ListAdminPantunsUseCase(pantunRepo),
   search: new SearchPantunsUseCase(pantunRepo),
 });
@@ -2849,8 +2880,12 @@ const pantunReportController = new PantunReportController({
   list: new ListPantunReportsUseCase(pantunReportRepo),
   resolve: new ResolvePantunReportUseCase(
     pantunReportRepo,
-    new TakedownPantunUseCase(pantunRepo, auditRepo),
-    new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
+    new TakedownPantunUseCase(pantunRepo, auditRepo, pronunciationStorage),
+    new TakedownPantunReplyUseCase(
+      pantunRepo,
+      auditRepo,
+      pronunciationStorage,
+    ),
     auditRepo,
   ),
 });

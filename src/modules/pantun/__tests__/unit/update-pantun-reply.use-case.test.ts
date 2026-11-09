@@ -26,6 +26,7 @@ function makeReply(overrides: Partial<PantunReply> = {}): PantunReply {
     language: 'id',
     rhymeScheme: 'ABAB',
     lines: LINES,
+    audio: null,
     status: 'published',
     isEdited: false,
     createdAt: new Date('2026-10-25T00:00:00Z'),

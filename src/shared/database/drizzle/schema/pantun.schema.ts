@@ -42,6 +42,14 @@ export const pantuns = sqliteTable(
     }).notNull(),
     /** Empat baris pantun (JSON array string, urut pembayang-isi). */
     lines: text('lines', { mode: 'json' }).$type<string[]>().notNull(),
+    /** Bacaan suara opsional (GitHub sambasku/audios); teks tetap wajib. */
+    audioUrl: text('audio_url'),
+    audioMimeType: text('audio_mime_type'),
+    audioFileSize: integer('audio_file_size'),
+    audioDurationMs: integer('audio_duration_ms'),
+    audioProvider: text('audio_provider'),
+    audioProviderFileId: text('audio_provider_file_id'),
+    audioSha: text('audio_sha'),
     status: text('status', { enum: PANTUN_STATUSES })
       .notNull()
       .default('published'),
@@ -81,6 +89,14 @@ export const pantunReplies = sqliteTable(
       enum: PANTUN_RHYME_SCHEMES,
     }).notNull(),
     lines: text('lines', { mode: 'json' }).$type<string[]>().notNull(),
+    /** Bacaan suara opsional; teks 4 baris tetap wajib. */
+    audioUrl: text('audio_url'),
+    audioMimeType: text('audio_mime_type'),
+    audioFileSize: integer('audio_file_size'),
+    audioDurationMs: integer('audio_duration_ms'),
+    audioProvider: text('audio_provider'),
+    audioProviderFileId: text('audio_provider_file_id'),
+    audioSha: text('audio_sha'),
     status: text('status', { enum: PANTUN_REPLY_STATUSES })
       .notNull()
       .default('published'),

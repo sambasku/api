@@ -1,14 +1,21 @@
 import type { Context } from 'hono';
-import { UnauthorizedError } from '@/shared/errors/app-error';
+import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { AppVariables, AuthUser } from '@/shared/types';
-import type { Pantun, PantunReply } from '../../domain/entities/pantun.entity';
+import type {
+  Pantun,
+  PantunAudio,
+  PantunReply,
+} from '../../domain/entities/pantun.entity';
 import type {
   PantunReplyWithVotes,
   PantunWithVotes,
 } from '../../application/use-cases/get-pantun-detail.use-case';
 import type { CreatePantunUseCase } from '../../application/use-cases/create-pantun.use-case';
+import type { CreatePantunWithAudioUseCase } from '../../application/use-cases/create-pantun-with-audio.use-case';
 import type { CreatePantunReplyUseCase } from '../../application/use-cases/create-pantun-reply.use-case';
+import type { CreatePantunReplyWithAudioUseCase } from '../../application/use-cases/create-pantun-reply-with-audio.use-case';
 import type { ListPublishedPantunsUseCase } from '../../application/use-cases/list-published-pantuns.use-case';
 import type { GetPantunDetailUseCase } from '../../application/use-cases/get-pantun-detail.use-case';
 import type { TakedownPantunUseCase } from '../../application/use-cases/takedown-pantun.use-case';
@@ -28,8 +35,27 @@ import type {
   ListAdminPantunsQuery,
   PantunSearchQuery,
 } from './validators/pantun.validator';
+import { pantunLinesSchema, rhymeSchemeSchema } from './validators/pantun.validator';
+import { opaqueId } from '@/shared/validation/id';
+
+function audioWire(audio: PantunAudio | null | undefined, expose: boolean) {
+  if (!expose || !audio) {
+    return {
+      audio_url: null as string | null,
+      audio_mime_type: null as string | null,
+      audio_duration_ms: null as number | null,
+    };
+  }
+  return {
+    audio_url: audio.url,
+    audio_mime_type: audio.mimeType,
+    audio_duration_ms: audio.durationMs,
+  };
+}
 
 function toItem(p: Pantun | PantunWithVotes) {
+  const published = p.status === 'published';
+  const voiceOnly = p.lines.length === 0;
   return {
     id: p.id,
     user_id: p.userId,
@@ -40,8 +66,9 @@ function toItem(p: Pantun | PantunWithVotes) {
     parent_id: null as string | null,
     language: p.language,
     theme_id: p.categoryId,
-    rhyme_scheme: p.rhymeScheme,
+    rhyme_scheme: voiceOnly ? null : p.rhymeScheme,
     lines: p.lines,
+    ...audioWire(p.audio, published),
     status: p.status,
     upvotes: 'upvotes' in p ? p.upvotes : 0,
     downvotes: 'downvotes' in p ? p.downvotes : 0,
@@ -52,6 +79,9 @@ function toItem(p: Pantun | PantunWithVotes) {
 }
 
 function toReplyItem(r: PantunReply | PantunReplyWithVotes) {
+  const published = r.status === 'published';
+  const lines = published ? r.lines : [];
+  const voiceOnly = lines.length === 0;
   return {
     id: r.id,
     user_id: r.userId,
@@ -62,8 +92,9 @@ function toReplyItem(r: PantunReply | PantunReplyWithVotes) {
     parent_id: r.parentId,
     language: r.language,
     theme_id: r.categoryId,
-    rhyme_scheme: r.rhymeScheme,
-    lines: r.status === 'published' ? r.lines : [],
+    rhyme_scheme: voiceOnly ? null : r.rhymeScheme,
+    lines,
+    ...audioWire(r.audio, published),
     status: r.status,
     upvotes: 'upvotes' in r ? r.upvotes : 0,
     downvotes: 'downvotes' in r ? r.downvotes : 0,
@@ -73,11 +104,35 @@ function toReplyItem(r: PantunReply | PantunReplyWithVotes) {
   };
 }
 
+/** Multipart audio: lines opsional (kosong / absen = voice-only). */
+function parseOptionalLinesField(raw: unknown): string[] {
+  if (raw == null || raw === '') return [];
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === '[]') return [];
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed) && parsed.length === 0) return [];
+      return pantunLinesSchema.parse(parsed);
+    } catch {
+      throw new BadRequestError(
+        'VALIDATION_ERROR',
+        'Field lines harus JSON array 4 baris atau kosong',
+        [{ field: 'lines', message: 'Pantun harus terdiri dari 4 baris' }],
+      );
+    }
+  }
+  if (Array.isArray(raw) && raw.length === 0) return [];
+  return pantunLinesSchema.parse(raw);
+}
+
 export class PantunController {
   constructor(
     private readonly deps: {
       create: CreatePantunUseCase;
+      createWithAudio: CreatePantunWithAudioUseCase;
       createReply: CreatePantunReplyUseCase;
+      createReplyWithAudio: CreatePantunReplyWithAudioUseCase;
       listPublished: ListPublishedPantunsUseCase;
       getDetail: GetPantunDetailUseCase;
       takedown: TakedownPantunUseCase;
@@ -102,6 +157,107 @@ export class PantunController {
       requestId: this.requestId(c),
     });
     return c.json({ success: true as const, data: toItem(row) }, 201);
+  }
+
+  async createWithAudio(c: Context) {
+    const user = this.requireUser(c);
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError(
+        'AUDIO_TOO_LARGE',
+        'File audio terlalu besar (maks 5 MB)',
+        [{ field: 'audio', message: 'Ukuran maksimal 5 MB' }],
+      );
+    }
+
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError(
+        'VALIDATION_ERROR',
+        'File audio wajib diunggah',
+        [{ field: 'audio', message: 'Field multipart `audio` wajib berisi file' }],
+      );
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const lines = parseOptionalLinesField(body['lines']);
+    const rhymeRaw =
+      typeof body['rhyme_scheme'] === 'string' ? body['rhyme_scheme'] : undefined;
+    const rhymeScheme = rhymeRaw
+      ? rhymeSchemeSchema.parse(rhymeRaw)
+      : undefined;
+    const categoryId =
+      typeof body['category_id'] === 'string' && body['category_id'].trim()
+        ? opaqueId.parse(body['category_id'])
+        : null;
+    const language =
+      typeof body['language'] === 'string' ? body['language'] : null;
+
+    const row = await this.deps.createWithAudio.execute({
+      userId: user.user_id,
+      lines,
+      rhymeScheme: rhymeScheme ?? null,
+      categoryId,
+      language,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      durationMs: body['duration_ms'],
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: toItem(row) }, 201);
+  }
+
+  async createReplyWithAudio(c: Context, parentId: string) {
+    const user = this.requireUser(c);
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError(
+        'AUDIO_TOO_LARGE',
+        'File audio terlalu besar (maks 5 MB)',
+        [{ field: 'audio', message: 'Ukuran maksimal 5 MB' }],
+      );
+    }
+
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError(
+        'VALIDATION_ERROR',
+        'File audio wajib diunggah',
+        [{ field: 'audio', message: 'Field multipart `audio` wajib berisi file' }],
+      );
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const lines = parseOptionalLinesField(body['lines']);
+    const rhymeRaw =
+      typeof body['rhyme_scheme'] === 'string' ? body['rhyme_scheme'] : undefined;
+    const rhymeScheme = rhymeRaw
+      ? rhymeSchemeSchema.parse(rhymeRaw)
+      : undefined;
+    const categoryId =
+      typeof body['category_id'] === 'string' && body['category_id'].trim()
+        ? opaqueId.parse(body['category_id'])
+        : null;
+    const language =
+      typeof body['language'] === 'string' ? body['language'] : null;
+
+    const reply = await this.deps.createReplyWithAudio.execute({
+      parentId,
+      userId: user.user_id,
+      lines,
+      rhymeScheme: rhymeScheme ?? null,
+      categoryId,
+      language,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      durationMs: body['duration_ms'],
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: toReplyItem(reply) }, 201);
   }
 
   async listPublished(c: Context, query: ListPantunsQuery) {

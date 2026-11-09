@@ -95,8 +95,17 @@ const pantunLineItemSchema = z.object({
   parent_id: z.string().nullable(),
   language: z.string(),
   theme_id: z.string().nullable(),
-  rhyme_scheme: rhymeSchemeSchema,
-  lines: z.array(z.string()).length(4),
+  /** Null bila voice-only (lines kosong). */
+  rhyme_scheme: rhymeSchemeSchema.nullable(),
+  /** 0 = voice-only; 4 = pantun teks (opsional bersama audio). */
+  lines: z
+    .array(z.string())
+    .refine((v) => v.length === 0 || v.length === 4, {
+      message: 'Pantun harus 4 baris atau kosong (voice-only)',
+    }),
+  audio_url: z.string().nullable(),
+  audio_mime_type: z.string().nullable(),
+  audio_duration_ms: z.number().nullable(),
   status: z.enum(['published', 'taken_down', 'deleted_by_author']),
   upvotes: z.number(),
   downvotes: z.number(),

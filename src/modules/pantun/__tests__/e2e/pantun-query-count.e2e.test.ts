@@ -86,6 +86,7 @@ it('search FTS pantun + balasan pakai <= 3 query', async () => {
     language: 'id',
     rhymeScheme: 'ABAB',
     lines: ['Jalan jauh ke kota', 'Membeli terasi di pasar', 'Pulang bawa cerita', 'Hati senang bersinar'],
+    audio: null,
     status: 'published',
     createdAt: new Date(),
   });

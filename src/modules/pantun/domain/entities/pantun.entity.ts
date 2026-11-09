@@ -4,6 +4,17 @@ import type {
   PantunReplyStatus,
 } from '@/shared/database/drizzle/schema/pantun.schema';
 
+/** Metadata audio bacaan pantun (mirror DiscussionReplyAudio). */
+export interface PantunAudio {
+  url: string;
+  mimeType: string;
+  fileSize: number;
+  durationMs: number | null;
+  provider: string;
+  providerFileId: string;
+  sha: string | null;
+}
+
 export interface Pantun {
   id: string;
   userId: string;
@@ -15,6 +26,7 @@ export interface Pantun {
   language: string;
   rhymeScheme: PantunRhymeScheme;
   lines: string[];
+  audio: PantunAudio | null;
   status: PantunStatus;
   createdAt: Date;
   updatedAt: Date | null;
@@ -32,6 +44,7 @@ export interface PantunReply {
   language: string;
   rhymeScheme: PantunRhymeScheme;
   lines: string[];
+  audio: PantunAudio | null;
   status: PantunReplyStatus;
   /** EXISTS baris di pantun_reply_revisions (bukan sekadar updated_at). */
   isEdited?: boolean;
@@ -54,6 +67,9 @@ export interface NewPantun {
   language: string;
   rhymeScheme: PantunRhymeScheme;
   lines: string[];
+  audio?: PantunAudio | null;
+  /** Opsional: pakai id yang sudah digenerate (path audio). */
+  id?: string;
 }
 
 export interface NewPantunReply {
@@ -63,6 +79,8 @@ export interface NewPantunReply {
   language: string;
   rhymeScheme: PantunRhymeScheme;
   lines: string[];
+  audio?: PantunAudio | null;
+  id?: string;
 }
 
 export interface PantunListFilter {
