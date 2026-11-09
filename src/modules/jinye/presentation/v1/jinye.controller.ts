@@ -30,6 +30,11 @@ import type { PromoteJinyeExampleUseCase } from '../../application/use-cases/pro
 import type { CreateJinyeTranslationUseCase } from '../../application/use-cases/create-jinye-translation.use-case';
 import type { ListJinyeTranslationsUseCase } from '../../application/use-cases/list-jinye-translations.use-case';
 import type { ResolveJinyeTranslationUseCase } from '../../application/use-cases/resolve-jinye-translation.use-case';
+import type { UpdateJinyeUseCase } from '../../application/use-cases/update-jinye.use-case';
+import type { GetJinyeEditHistoryUseCase } from '../../application/use-cases/get-jinye-edit-history.use-case';
+import type { RepostJinyeUseCase } from '../../application/use-cases/repost-jinye.use-case';
+import type { UnrepostJinyeUseCase } from '../../application/use-cases/unrepost-jinye.use-case';
+import type { QuoteJinyeUseCase } from '../../application/use-cases/quote-jinye.use-case';
 import type {
   JinyeLemmaLink,
   JinyeTranslation,
@@ -42,8 +47,10 @@ import type {
   ListJinyeQuery,
   PromoteJinyeExampleBody,
   ProposeJinyeLemmaCorrectionBody,
+  QuoteJinyeBody,
   ResolveJinyeLemmaCorrectionBody,
   ResolveJinyeTranslationBody,
+  UpdateJinyeBody,
 } from './validators/jinye.validator';
 
 function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
@@ -91,6 +98,8 @@ function toWire(
     body: visible ? j.body : null,
     images,
     audio,
+    repost_of_id: j.repostOfId,
+    quote_body: visible ? j.quoteBody : null,
     status: j.status,
     comment_count: j.publishedCommentCount,
     repost_count: j.repostCount,
@@ -171,6 +180,11 @@ export class JinyeController {
       createTranslation: CreateJinyeTranslationUseCase;
       listTranslations: ListJinyeTranslationsUseCase;
       resolveTranslation: ResolveJinyeTranslationUseCase;
+      update: UpdateJinyeUseCase;
+      editHistory: GetJinyeEditHistoryUseCase;
+      repost: RepostJinyeUseCase;
+      unrepost: UnrepostJinyeUseCase;
+      quote: QuoteJinyeUseCase;
       imageController: ImageController;
     },
   ) {}
@@ -537,6 +551,61 @@ export class JinyeController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ data: toTranslationWire(row) });
+  }
+
+  async update(
+    c: Context<{ Variables: AppVariables }>,
+    id: string,
+    body: UpdateJinyeBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.update.execute({
+      id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toWire(row, { exposeStaging: true }) });
+  }
+
+  async editHistory(c: Context<{ Variables: AppVariables }>, id: string) {
+    const data = await this.deps.editHistory.execute(id);
+    return c.json({ data });
+  }
+
+  async repost(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = requireUser(c);
+    const row = await this.deps.repost.execute({
+      jinyeId: id,
+      userId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toWire(row, { exposeStaging: true }) }, 201);
+  }
+
+  async unrepost(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = requireUser(c);
+    await this.deps.unrepost.execute({
+      jinyeId: id,
+      userId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: { ok: true as const } });
+  }
+
+  async quote(
+    c: Context<{ Variables: AppVariables }>,
+    id: string,
+    body: QuoteJinyeBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.quote.execute({
+      jinyeId: id,
+      userId: user.user_id,
+      quoteBody: body.quote_body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ data: toWire(row, { exposeStaging: true }) }, 201);
   }
 }
 

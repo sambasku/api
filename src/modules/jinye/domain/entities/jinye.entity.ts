@@ -53,6 +53,16 @@ export interface NewJinye {
   images: JinyeImage[];
   audio?: JinyeAudio | null;
   id?: string;
+  repostOfId?: string | null;
+  quoteBody?: string | null;
+}
+
+export interface JinyeRevision {
+  id: string;
+  jinyeId: string;
+  editorId: string;
+  body: string;
+  createdAt: Date;
 }
 
 export interface JinyeListFilter {

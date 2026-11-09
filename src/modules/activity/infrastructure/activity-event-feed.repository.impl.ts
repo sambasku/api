@@ -65,6 +65,8 @@ vote_meaning: 'vote',
 announcement: 'announcement',
   jinye_created: 'jinye',
   jinye_comment_created: 'jinye',
+  jinye_reposted: 'jinye',
+  jinye_quote_created: 'jinye',
 };
 
 /** Label aksi per kind (badan feed; lemma diresolve terpisah). */
@@ -101,6 +103,8 @@ article_comment_created: 'Mengomentari artikel',
 announcement: 'Pengumuman',
   jinye_created: 'Jinye',
   jinye_comment_created: 'Membalas Jinye',
+  jinye_reposted: 'Membagikan ulang Jinye',
+  jinye_quote_created: 'Mengutip Jinye',
 };
 
 /** Entity type votes untuk kind event vote (legacy hydration #94). */
@@ -599,7 +603,11 @@ articleTitle: articles.title,
     .leftJoin(
       jinye,
       and(
-        eq(activityEvents.kind, 'jinye_created'),
+        inArray(activityEvents.kind, [
+          'jinye_created',
+          'jinye_reposted',
+          'jinye_quote_created',
+        ]),
         eq(jinye.id, activityEvents.targetId),
         eq(jinye.status, 'published'),
       ),
@@ -694,7 +702,7 @@ articleTitle: articles.title,
       // Pantun hanya tayang selama masih published (takedown = sembunyi).
       sql`(${activityEvents.kind} <> 'pantun_created' or ${pantuns.id} is not null)`,
       // Jinye hanya tayang selama published (arsip/hapus/takedown = sembunyi).
-      sql`(${activityEvents.kind} <> 'jinye_created' or ${jinye.id} is not null)`,
+      sql`(${activityEvents.kind} not in ('jinye_created','jinye_reposted','jinye_quote_created') or ${jinye.id} is not null)`,
       sql`(${activityEvents.kind} <> 'jinye_comment_created' or ${jinyeComments.id} is not null)`,
       sql`(${activityEvents.kind} <> 'jinye_comment_created' or ${jinyeForComment.id} is not null)`,
       // Balasan pantun: balasan & induknya harus published (visibility read-time).
@@ -944,6 +952,8 @@ case 'pantun_reply_created':
 case 'article_published':
 case 'jinye_created':
 case 'jinye_comment_created':
+case 'jinye_reposted':
+case 'jinye_quote_created':
 return KIND_BODY[kind];
       case 'search_miss':
         return lemma ? `Mencari "${lemma}" - belum ada di kamus.` : 'Mencari - belum ada di kamus.';
@@ -1056,6 +1066,8 @@ articleSlug?: string | null;
     case 'pantun_created':
       return row.targetId ? { type: 'pantun', id: row.targetId! } : null;
     case 'jinye_created':
+    case 'jinye_reposted':
+    case 'jinye_quote_created':
       return row.targetId ? { type: 'jinye', id: row.targetId! } : null;
     case 'jinye_comment_created':
       // Link ke Jinye induk (bukan id komen).

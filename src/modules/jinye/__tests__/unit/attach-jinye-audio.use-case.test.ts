@@ -52,6 +52,12 @@ describe('AttachJinyeAudioUseCase', () => {
       findById: vi.fn(async () => makeJinye()),
       list: vi.fn(),
       findLatestCreatedAtByUser: vi.fn(),
+      findLatestQuotaConsumingCreatedAtByUser: vi.fn(),
+      updateBody: vi.fn(),
+      listRevisions: vi.fn(),
+      markLemmaLinksStale: vi.fn(),
+      findPlainRepostByUser: vi.fn(),
+      adjustRepostCount: vi.fn(),
       markDeletedByAuthor: vi.fn(),
       setAudio: vi.fn(),
       createComment: vi.fn(),
@@ -102,6 +108,12 @@ describe('AttachJinyeAudioUseCase', () => {
       findById: vi.fn(async () => null),
       list: vi.fn(),
       findLatestCreatedAtByUser: vi.fn(),
+      findLatestQuotaConsumingCreatedAtByUser: vi.fn(),
+      updateBody: vi.fn(),
+      listRevisions: vi.fn(),
+      markLemmaLinksStale: vi.fn(),
+      findPlainRepostByUser: vi.fn(),
+      adjustRepostCount: vi.fn(),
       markDeletedByAuthor: vi.fn(),
       setAudio: vi.fn(),
       createComment: vi.fn(),
@@ -159,14 +171,20 @@ describe('AttachJinyeAudioUseCase', () => {
         sha: 'abc',
       },
     });
-    const repo: JinyeRepository = {
+    const repo = {
       create: vi.fn(),
       findById: vi.fn(async () => base),
       list: vi.fn(),
       findLatestCreatedAtByUser: vi.fn(),
+      findLatestQuotaConsumingCreatedAtByUser: vi.fn(),
+      updateBody: vi.fn(),
+      listRevisions: vi.fn(),
+      markLemmaLinksStale: vi.fn(),
+      findPlainRepostByUser: vi.fn(),
+      adjustRepostCount: vi.fn(),
       markDeletedByAuthor: vi.fn(),
       setAudio: vi.fn(async () => withAudio),
-    };
+    } as unknown as JinyeRepository;
     const upload = vi.fn(async () => ({
       url: 'https://cdn.example/a.wav',
       size: 3,

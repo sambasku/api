@@ -79,6 +79,8 @@ export const jinyeItemSchema = z.object({
   body: z.string().nullable(),
   images: z.array(jinyeImageWireSchema),
   audio: jinyeAudioWireSchema.nullable(),
+  repost_of_id: z.string().nullable(),
+  quote_body: z.string().nullable(),
   status: z.string(),
   comment_count: z.number().int(),
   repost_count: z.number().int(),
@@ -269,3 +271,36 @@ export const jinyeTranslationResponseSchema = z.object({
 export const listJinyeTranslationsResponseSchema = z.object({
   data: z.array(jinyeTranslationWireSchema),
 });
+
+export const updateJinyeBodySchema = z.object({
+  body: z
+    .string({ error: 'Teks tidak valid' })
+    .max(500, 'Teks maksimal 500 karakter'),
+});
+export type UpdateJinyeBody = z.infer<typeof updateJinyeBodySchema>;
+
+export const jinyeEditHistoryResponseSchema = z.object({
+  data: z.object({
+    current: z.object({
+      body: z.string(),
+      updated_at: z.string().nullable(),
+      is_edited: z.boolean(),
+    }),
+    revisions: z.array(
+      z.object({
+        body: z.string(),
+        editor_id: z.string(),
+        created_at: z.string(),
+      }),
+    ),
+  }),
+});
+
+export const quoteJinyeBodySchema = z.object({
+  quote_body: z
+    .string({ error: 'Kutipan tidak valid' })
+    .trim()
+    .min(1, 'Tulis kutipan dulu ya.')
+    .max(500, 'Kutipan maksimal 500 karakter'),
+});
+export type QuoteJinyeBody = z.infer<typeof quoteJinyeBodySchema>;

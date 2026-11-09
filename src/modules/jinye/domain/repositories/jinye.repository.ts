@@ -5,6 +5,7 @@ import type {
   JinyeComment,
   JinyeLemmaLink,
   JinyeListFilter,
+  JinyeRevision,
   JinyeTranslation,
   JinyeTranslationStatus,
   NewJinye,
@@ -19,9 +20,29 @@ export interface JinyeRepository {
   create(input: NewJinye): Promise<Jinye>;
   findById(id: string): Promise<Jinye | null>;
   list(filter: JinyeListFilter): Promise<CursorPage<Jinye>>;
-  /** Create terbaru user mana pun statusnya (untuk kuota 24 jam). */
+  /**
+   * Create yang makan kuota 24 jam: original + quote.
+   * Repost polos (repost_of_id set, quote_body null) tidak dihitung.
+   */
+  findLatestQuotaConsumingCreatedAtByUser(
+    userId: string,
+  ): Promise<Date | null>;
+  /** @deprecated pakai findLatestQuotaConsumingCreatedAtByUser */
   findLatestCreatedAtByUser(userId: string): Promise<Date | null>;
   markDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  updateBody(input: {
+    id: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<Jinye | null>;
+  listRevisions(jinyeId: string): Promise<JinyeRevision[]>;
+  markLemmaLinksStale(jinyeId: string): Promise<number>;
+  findPlainRepostByUser(
+    originalId: string,
+    userId: string,
+  ): Promise<Jinye | null>;
+  adjustRepostCount(jinyeId: string, delta: number): Promise<void>;
   setAudio(input: { id: string; audio: JinyeAudio }): Promise<Jinye | null>;
   /** published ↔ archived. Owner check di use case. */
   setStatus(input: {

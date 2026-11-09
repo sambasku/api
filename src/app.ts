@@ -649,6 +649,11 @@ import { PromoteJinyeExampleUseCase } from "@/modules/jinye/application/use-case
 import { CreateJinyeTranslationUseCase } from "@/modules/jinye/application/use-cases/create-jinye-translation.use-case";
 import { ListJinyeTranslationsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-translations.use-case";
 import { ResolveJinyeTranslationUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-translation.use-case";
+import { UpdateJinyeUseCase } from "@/modules/jinye/application/use-cases/update-jinye.use-case";
+import { GetJinyeEditHistoryUseCase } from "@/modules/jinye/application/use-cases/get-jinye-edit-history.use-case";
+import { RepostJinyeUseCase } from "@/modules/jinye/application/use-cases/repost-jinye.use-case";
+import { UnrepostJinyeUseCase } from "@/modules/jinye/application/use-cases/unrepost-jinye.use-case";
+import { QuoteJinyeUseCase } from "@/modules/jinye/application/use-cases/quote-jinye.use-case";
 import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
 import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
 import { JinyeReportRepositoryImpl } from "@/modules/jinye-report/infrastructure/jinye-report.repository.impl";
@@ -3025,6 +3030,22 @@ const jinyeController = new JinyeController({
   createTranslation: new CreateJinyeTranslationUseCase(jinyeRepo, auditRepo),
   listTranslations: new ListJinyeTranslationsUseCase(jinyeRepo),
   resolveTranslation: new ResolveJinyeTranslationUseCase(jinyeRepo, auditRepo),
+  update: new UpdateJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  editHistory: new GetJinyeEditHistoryUseCase(jinyeRepo),
+  repost: new RepostJinyeUseCase(jinyeRepo, auditRepo, activityEvents),
+  unrepost: new UnrepostJinyeUseCase(jinyeRepo, auditRepo, activityEvents),
+  quote: new QuoteJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
   imageController,
 });
 app.route(

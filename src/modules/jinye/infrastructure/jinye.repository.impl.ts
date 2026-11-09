@@ -31,6 +31,7 @@ import type {
   JinyeComment,
   JinyeLemmaLink,
   JinyeListFilter,
+  JinyeRevision,
   JinyeTranslation,
   JinyeTranslationStatus,
   NewJinye,
@@ -171,6 +172,8 @@ export class JinyeRepositoryImpl implements JinyeRepository {
         bodyOriginal: input.bodyOriginal ?? null,
         images: toImageRows(input.images),
         ...audioInsertValues(input.audio),
+        repostOfId: input.repostOfId ?? null,
+        quoteBody: input.quoteBody ?? null,
         status: 'published',
       })
       .returning();
@@ -212,6 +215,13 @@ export class JinyeRepositoryImpl implements JinyeRepository {
     if (filter.excludeId) {
       conds.push(sql`${jinye.id} <> ${filter.excludeId}`);
     }
+    // Hide repost/quote jika original hilang (bukan published).
+    conds.push(
+      sql`(${jinye.repostOfId} is null or exists (
+        select 1 from ${jinye} as orig
+        where orig.id = ${jinye.repostOfId} and orig.status = 'published'
+      ))`,
+    );
     if (cur) {
       conds.push(
         sql`(${jinye.createdAt} < ${cur.createdAt} or (${jinye.createdAt} = ${cur.createdAt} and ${jinye.id} < ${cur.id}))`,
@@ -246,13 +256,138 @@ export class JinyeRepositoryImpl implements JinyeRepository {
   }
 
   async findLatestCreatedAtByUser(userId: string): Promise<Date | null> {
+    return this.findLatestQuotaConsumingCreatedAtByUser(userId);
+  }
+
+  async findLatestQuotaConsumingCreatedAtByUser(
+    userId: string,
+  ): Promise<Date | null> {
     const rows = await this.db
       .select({ createdAt: jinye.createdAt })
       .from(jinye)
-      .where(eq(jinye.userId, userId))
+      .where(
+        and(
+          eq(jinye.userId, userId),
+          // Original ATAU quote (ada quote_body). Repost polos diabaikan.
+          sql`(${jinye.repostOfId} is null or ${jinye.quoteBody} is not null)`,
+        ),
+      )
       .orderBy(desc(jinye.createdAt))
       .limit(1);
     return rows[0]?.createdAt ?? null;
+  }
+
+  async updateBody(input: {
+    id: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<Jinye | null> {
+    const MAX_REVISIONS = 50;
+    const updatedId = await this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(jinye)
+        .where(and(eq(jinye.id, input.id), eq(jinye.status, 'published')))
+        .limit(1);
+      if (!existing) return null;
+
+      const bodyChanged = (existing.body ?? '') !== input.body;
+      if (bodyChanged) {
+        await tx.insert(jinyeRevisions).values({
+          jinyeId: input.id,
+          editorId: input.editorId,
+          body: existing.body ?? '',
+        });
+        const all = await tx
+          .select({ id: jinyeRevisions.id })
+          .from(jinyeRevisions)
+          .where(eq(jinyeRevisions.jinyeId, input.id))
+          .orderBy(asc(jinyeRevisions.createdAt), asc(jinyeRevisions.id));
+        if (all.length > MAX_REVISIONS) {
+          const drop = all.slice(0, all.length - MAX_REVISIONS);
+          for (const row of drop) {
+            await tx
+              .delete(jinyeRevisions)
+              .where(eq(jinyeRevisions.id, row.id));
+          }
+        }
+      }
+
+      await tx
+        .update(jinye)
+        .set({
+          body: input.body,
+          bodyOriginal: input.bodyOriginal,
+          updatedAt: new Date(),
+        })
+        .where(eq(jinye.id, input.id));
+      return input.id;
+    });
+    if (!updatedId) return null;
+    return this.findById(updatedId);
+  }
+
+  async listRevisions(jinyeId: string): Promise<JinyeRevision[]> {
+    const rows = await this.db
+      .select()
+      .from(jinyeRevisions)
+      .where(eq(jinyeRevisions.jinyeId, jinyeId))
+      .orderBy(desc(jinyeRevisions.createdAt), desc(jinyeRevisions.id));
+    return rows.map((r) => ({
+      id: r.id,
+      jinyeId: r.jinyeId,
+      editorId: r.editorId,
+      body: r.body,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  async markLemmaLinksStale(jinyeId: string): Promise<number> {
+    const rows = await this.db
+      .update(jinyeLemmaLinks)
+      .set({
+        status: 'stale',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(jinyeLemmaLinks.jinyeId, jinyeId),
+          sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
+        ),
+      )
+      .returning({ id: jinyeLemmaLinks.id });
+    return rows.length;
+  }
+
+  async findPlainRepostByUser(
+    originalId: string,
+    userId: string,
+  ): Promise<Jinye | null> {
+    const [row] = await this.db
+      .select({ id: jinye.id })
+      .from(jinye)
+      .where(
+        and(
+          eq(jinye.repostOfId, originalId),
+          eq(jinye.userId, userId),
+          eq(jinye.status, 'published'),
+          sql`${jinye.quoteBody} is null`,
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    return this.findById(row.id);
+  }
+
+  async adjustRepostCount(jinyeId: string, delta: number): Promise<void> {
+    await this.db
+      .update(jinye)
+      .set({
+        repostCount: sql`max(0, ${jinye.repostCount} + ${delta})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(jinye.id, jinyeId));
   }
 
   async markDeletedByAuthor(id: string, actorId: string): Promise<boolean> {

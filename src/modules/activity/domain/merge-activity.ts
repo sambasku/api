@@ -53,7 +53,12 @@ explore: [
 ],
   announcement: ['announcement'],
   joined: ['user_joined'],
-  jinye: ['jinye_created', 'jinye_comment_created'],
+  jinye: [
+    'jinye_created',
+    'jinye_comment_created',
+    'jinye_reposted',
+    'jinye_quote_created',
+  ],
 };
 
 /** Ambil per sumber sebelum merge (cukup untuk cap + limit). */

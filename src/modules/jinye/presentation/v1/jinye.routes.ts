@@ -32,8 +32,11 @@ import {
   promoteJinyeExampleBodySchema,
   promoteJinyeExampleResponseSchema,
   proposeJinyeLemmaCorrectionBodySchema,
+  quoteJinyeBodySchema,
   resolveJinyeLemmaCorrectionBodySchema,
   resolveJinyeTranslationBodySchema,
+  updateJinyeBodySchema,
+  jinyeEditHistoryResponseSchema,
   uploadCredentialsResponseSchema,
 } from './validators/jinye.validator';
 
@@ -433,6 +436,85 @@ const resolveTranslationRoute = createRoute({
   },
 });
 
+const updateJinyeRoute = createRoute({
+  method: 'patch',
+  path: '/{id}',
+  tags: ['Jinye'],
+  summary: 'Edit body Jinye (owner; tulis revisi)',
+  request: {
+    params: jinyeIdParamSchema,
+    body: { content: json(updateJinyeBodySchema), required: true },
+  },
+  responses: {
+    200: { description: 'OK', content: json(createJinyeResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Forbidden', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const editHistoryRoute = createRoute({
+  method: 'get',
+  path: '/{id}/edit-history',
+  tags: ['Jinye'],
+  summary: 'Riwayat sunting Jinye (publik; hanya published)',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: {
+      description: 'Current + revisions (newest first)',
+      content: json(jinyeEditHistoryResponseSchema),
+    },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const repostRoute = createRoute({
+  method: 'post',
+  path: '/{id}/repost',
+  tags: ['Jinye'],
+  summary: 'Repost polos (tidak makan kuota; depth 1)',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    201: { description: 'Created', content: json(createJinyeResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Forbidden', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    409: { description: 'Sudah merepost', content: json(errorResponseSchema) },
+  },
+});
+
+const unrepostRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/repost',
+  tags: ['Jinye'],
+  summary: 'Batalkan repost polos',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(deleteJinyeResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const quoteRoute = createRoute({
+  method: 'post',
+  path: '/{id}/quote',
+  tags: ['Jinye'],
+  summary: 'Quote-repost (makan kuota create 1/24 jam)',
+  request: {
+    params: jinyeIdParamSchema,
+    body: { content: json(quoteJinyeBodySchema), required: true },
+  },
+  responses: {
+    201: { description: 'Created', content: json(createJinyeResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    429: { description: 'Kuota 24 jam', content: json(errorResponseSchema) },
+  },
+});
+
 export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   const routes = createOpenApiApp();
   const writeLimit = rateLimit({
@@ -653,6 +735,47 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
       return writeLimit(c, next);
     });
   }
+
+  // PATCH /:id edit body
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'PATCH') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'PATCH') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'PATCH') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'PATCH') return next();
+    return writeLimit(c, next);
+  });
+
+  for (const sub of ['/:id/repost', '/:id/quote'] as const) {
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+      return deps.authenticate(c, next);
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+      if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+      return next();
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+      if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+      return next();
+    });
+    routes.use(sub, async (c, next) => {
+      if (c.req.method !== 'POST' && c.req.method !== 'DELETE') return next();
+      return writeLimit(c, next);
+    });
+  }
   routes.use('/:id/translations/*', async (c, next) => {
     if (c.req.method !== 'POST') return next();
     return deps.authenticate(c, next);
@@ -766,6 +889,22 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
       c.req.valid('json'),
     ) as never;
   });
+  routes.openapi(editHistoryRoute, (c) =>
+    deps.controller.editHistory(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(repostRoute, (c) =>
+    deps.controller.repost(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(unrepostRoute, (c) =>
+    deps.controller.unrepost(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(quoteRoute, (c) =>
+    deps.controller.quote(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
   routes.openapi(attachAudioRoute, (c) =>
     deps.controller.attachAudio(c, c.req.valid('param').id) as never,
   );
@@ -783,6 +922,13 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     const p = c.req.valid('param');
     return deps.controller.deleteComment(c, p.id, p.commentId) as never;
   });
+  routes.openapi(updateJinyeRoute, (c) =>
+    deps.controller.update(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
   routes.openapi(detailRouteDef, (c) =>
     deps.controller.detail(c, c.req.valid('param').id) as never,
   );
