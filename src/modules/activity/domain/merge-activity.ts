@@ -18,7 +18,8 @@ export type FeedCategory =
   | 'correction'
   | 'explore'
   | 'announcement'
-  | 'joined';
+  | 'joined'
+  | 'jinye';
 
 export const FEED_CATEGORY_KINDS: Record<
   FeedCategory,
@@ -52,6 +53,7 @@ explore: [
 ],
   announcement: ['announcement'],
   joined: ['user_joined'],
+  jinye: ['jinye_created'],
 };
 
 /** Ambil per sumber sebelum merge (cukup untuk cap + limit). */

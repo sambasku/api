@@ -626,6 +626,13 @@ import { SearchPantunsUseCase } from "@/modules/pantun/application/use-cases/sea
 import { PantunController } from "@/modules/pantun/presentation/v1/pantun.controller";
 import { createPantunRoutes } from "@/modules/pantun/presentation/v1/pantun.routes";
 import { createAdminPantunRoutes } from "@/modules/pantun/presentation/v1/admin-pantun.routes";
+import { JinyeRepositoryImpl } from "@/modules/jinye/infrastructure/jinye.repository.impl";
+import { CreateJinyeUseCase } from "@/modules/jinye/application/use-cases/create-jinye.use-case";
+import { ListPublishedJinyeUseCase } from "@/modules/jinye/application/use-cases/list-published-jinye.use-case";
+import { GetJinyeDetailUseCase } from "@/modules/jinye/application/use-cases/get-jinye-detail.use-case";
+import { DeleteJinyeUseCase } from "@/modules/jinye/application/use-cases/delete-jinye.use-case";
+import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
+import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
 import { DashboardController } from "@/modules/dashboard/presentation/v1/dashboard.controller";
 import { createDashboardRoutes } from "@/modules/dashboard/presentation/v1/dashboard.routes";
 import { GetDashboardStatsUseCase } from "@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case";
@@ -2920,6 +2927,33 @@ app.route(
   createAdminPantunReportRoutes({
     controller: pantunReportController,
     authenticate,
+  }),
+);
+
+// ------------------------------------------------------------------
+// Jinye: status singkat (teks / foto; voice Phase 1b). Post-moderation.
+const jinyeRepo = new JinyeRepositoryImpl(db);
+const jinyeController = new JinyeController({
+  create: new CreateJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  listPublished: new ListPublishedJinyeUseCase(jinyeRepo),
+  getDetail: new GetJinyeDetailUseCase(jinyeRepo),
+  deleteJinye: new DeleteJinyeUseCase(jinyeRepo, auditRepo),
+});
+app.route(
+  "/api/v1/jinye",
+  createJinyeRoutes({
+    controller: jinyeController,
+    authenticate,
+    optionalAuth: optionalAuthenticate,
+    requireApprovedClient: requirePantunWriteClient,
+    requireLegalConsent,
+    onUgcRateLimited,
   }),
 );
 

@@ -89,3 +89,4 @@ export * from "./encyclopedia.schema";
 export * from "./sponsorships.schema";
 export * from "./layanans.schema";
 export * from "./layanan-contributions.schema";
+export * from "./jinye.schema";

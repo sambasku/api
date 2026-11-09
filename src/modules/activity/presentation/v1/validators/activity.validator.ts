@@ -9,7 +9,7 @@ export const listActivityQuerySchema = z.object({
    * tidak berubah perilaku.
    */
   category: z
-    .enum(['all', 'search_miss', 'correction', 'explore', 'announcement', 'joined'])
+    .enum(['all', 'search_miss', 'correction', 'explore', 'announcement', 'joined', 'jinye'])
     .default('all'),
   /**
    * #167: deprecated, no-op. Bearer sah → server selalu membuang baris milik

@@ -1,0 +1,161 @@
+import type { MiddlewareHandler } from 'hono';
+import { createRoute } from '@hono/zod-openapi';
+import { z } from 'zod';
+import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
+import { createOpenApiApp } from '@/shared/openapi/openapi-app';
+import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
+import type { AppVariables } from '@/shared/types';
+import type { JinyeController } from './jinye.controller';
+import {
+  createJinyeBodySchema,
+  createJinyeResponseSchema,
+  deleteJinyeResponseSchema,
+  jinyeDetailResponseSchema,
+  jinyeIdParamSchema,
+  listJinyeQuerySchema,
+  listJinyeResponseSchema,
+} from './validators/jinye.validator';
+
+const json = <T extends z.ZodType>(schema: T) => ({
+  'application/json': { schema },
+});
+
+export interface JinyeRoutesDeps {
+  controller: JinyeController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  optionalAuth?: MiddlewareHandler<{ Variables: AppVariables }>;
+  requireApprovedClient?: MiddlewareHandler<{ Variables: AppVariables }>;
+  requireLegalConsent?: MiddlewareHandler<{ Variables: AppVariables }>;
+  onUgcRateLimited?: (userId: string) => void | Promise<void>;
+}
+
+function ugcRateLimitedHook(
+  onUgcRateLimited?: (userId: string) => void | Promise<void>,
+) {
+  return async (c: { get: (k: 'user') => { user_id: string } | undefined }) => {
+    const uid = c.get('user')?.user_id;
+    if (uid && onUgcRateLimited) await onUgcRateLimited(uid);
+  };
+}
+
+const createRouteDef = createRoute({
+  method: 'post',
+  path: '/',
+  tags: ['Jinye'],
+  summary: 'Buat Jinye',
+  request: {
+    body: { content: json(createJinyeBodySchema), required: true },
+  },
+  responses: {
+    201: { description: 'Created', content: json(createJinyeResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    429: { description: 'Kuota 24 jam', content: json(errorResponseSchema) },
+  },
+});
+
+const listRouteDef = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Jinye'],
+  summary: 'List Jinye published',
+  request: { query: listJinyeQuerySchema },
+  responses: {
+    200: { description: 'OK', content: json(listJinyeResponseSchema) },
+  },
+});
+
+const detailRouteDef = createRoute({
+  method: 'get',
+  path: '/{id}',
+  tags: ['Jinye'],
+  summary: 'Detail Jinye',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(jinyeDetailResponseSchema) },
+    404: { description: 'Not found', content: json(errorResponseSchema) },
+  },
+});
+
+const deleteRouteDef = createRoute({
+  method: 'delete',
+  path: '/{id}',
+  tags: ['Jinye'],
+  summary: 'Hapus Jinye sendiri',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    200: { description: 'OK', content: json(deleteJinyeResponseSchema) },
+    404: { description: 'Not found', content: json(errorResponseSchema) },
+  },
+});
+
+export function createJinyeRoutes(deps: JinyeRoutesDeps) {
+  const routes = createOpenApiApp();
+  const writeLimit = rateLimit({
+    points: 30,
+    duration: 3600,
+    keyFn: (c) => {
+      const uid = (
+        c as { get: (k: 'user') => { user_id: string } | undefined }
+      ).get('user')?.user_id;
+      return uid ? `jinye:user:${uid}` : '';
+    },
+    onLimited: ugcRateLimitedHook(deps.onUgcRateLimited),
+  });
+
+  routes.use('/', async (c, next) => {
+    if (c.req.method === 'POST') return deps.authenticate(c, next);
+    return next();
+  });
+  routes.use('/', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeLimit(c, next);
+  });
+
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method === 'GET' && deps.optionalAuth) {
+      return deps.optionalAuth(c, next);
+    }
+    if (c.req.method !== 'DELETE') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id', async (c, next) => {
+    if (c.req.method !== 'DELETE') return next();
+    return writeLimit(c, next);
+  });
+
+  routes.openapi(createRouteDef, (c) =>
+    deps.controller.create(c, c.req.valid('json')) as never,
+  );
+  routes.openapi(listRouteDef, (c) =>
+    deps.controller.list(c, c.req.valid('query')) as never,
+  );
+  routes.openapi(detailRouteDef, (c) =>
+    deps.controller.detail(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(deleteRouteDef, (c) =>
+    deps.controller.remove(c, c.req.valid('param').id) as never,
+  );
+
+  return routes;
+}

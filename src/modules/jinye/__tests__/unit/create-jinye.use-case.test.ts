@@ -1,0 +1,114 @@
+import { describe, expect, it, vi } from 'vitest';
+import { RateLimitedError, ValidationError } from '@/shared/errors/app-error';
+import { CreateJinyeUseCase } from '../../application/use-cases/create-jinye.use-case';
+import type { Jinye } from '../../domain/entities/jinye.entity';
+import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
+
+vi.mock('@/modules/word/application/utils/assert-can-contribute', () => ({
+  assertCanContribute: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/shared/moderation/assert-ugc-text-quality-with-strike', () => ({
+  assertUgcTextQualityWithStrike: vi.fn(async (text: string) => text),
+}));
+
+vi.mock(
+  '@/modules/comment-blocklist/application/utils/apply-blocklist-filter',
+  () => ({
+    applyBlocklistFilter: vi.fn((text: string) => text),
+  }),
+);
+
+const ACTOR = '01ACTORJINYE00000000000000';
+
+function makeJinye(overrides: Partial<Jinye> = {}): Jinye {
+  return {
+    id: '01JINYE0000000000000000001',
+    userId: ACTOR,
+    username: 'aji',
+    displayName: 'Aji',
+    avatarUrl: null,
+    userRole: 'contributor',
+    body: 'halo',
+    bodyOriginal: null,
+    images: [],
+    audio: null,
+    repostOfId: null,
+    quoteBody: null,
+    status: 'published',
+    publishedCommentCount: 0,
+    repostCount: 0,
+    createdAt: new Date(),
+    updatedAt: null,
+    isEdited: false,
+    ...overrides,
+  };
+}
+
+describe('CreateJinyeUseCase', () => {
+  it('menolak body kosong tanpa media', async () => {
+    const repo: JinyeRepository = {
+      create: vi.fn(),
+      findById: vi.fn(),
+      list: vi.fn(),
+      findLatestCreatedAtByUser: vi.fn(async () => null),
+      markDeletedByAuthor: vi.fn(),
+    };
+    const uc = new CreateJinyeUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+    );
+    await expect(uc.execute({ userId: ACTOR, body: '  ' })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it('menolak create kedua dalam 24 jam', async () => {
+    const repo: JinyeRepository = {
+      create: vi.fn(),
+      findById: vi.fn(),
+      list: vi.fn(),
+      findLatestCreatedAtByUser: vi.fn(async () => new Date()),
+      markDeletedByAuthor: vi.fn(),
+    };
+    const uc = new CreateJinyeUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+    );
+    await expect(
+      uc.execute({ userId: ACTOR, body: 'Halo Sambas' }),
+    ).rejects.toBeInstanceOf(RateLimitedError);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('menyimpan teks dan menulis activity', async () => {
+    const created = makeJinye({ body: 'Halo Sambas' });
+    const repo: JinyeRepository = {
+      create: vi.fn(async () => created),
+      findById: vi.fn(),
+      list: vi.fn(),
+      findLatestCreatedAtByUser: vi.fn(async () => null),
+      markDeletedByAuthor: vi.fn(),
+    };
+    const activity = { safe: vi.fn(async () => undefined) };
+    const audit = { record: vi.fn(async () => undefined) };
+    const uc = new CreateJinyeUseCase(
+      repo,
+      audit as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+      undefined,
+      activity,
+    );
+    const out = await uc.execute({ userId: ACTOR, body: 'Halo Sambas' });
+    expect(out.body).toBe('Halo Sambas');
+    expect(activity.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'jinye_created',
+        actorId: ACTOR,
+        targetId: created.id,
+      }),
+    );
+  });
+});
