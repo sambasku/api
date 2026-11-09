@@ -215,6 +215,18 @@ export class JinyeRepositoryImpl implements JinyeRepository {
     if (filter.excludeId) {
       conds.push(sql`${jinye.id} <> ${filter.excludeId}`);
     }
+    if (filter.wordId) {
+      // Satu subquery: distinct via IN, tanpa JOIN (hindari duplikat multi-span).
+      conds.push(
+        sql`${jinye.id} in (
+          select distinct ${jinyeLemmaLinks.jinyeId}
+          from ${jinyeLemmaLinks}
+          where ${jinyeLemmaLinks.wordId} = ${filter.wordId}
+            and ${jinyeLemmaLinks.status} in ('active', 'pending_correction')
+            and ${jinyeLemmaLinks.jinyeId} is not null
+        )`,
+      );
+    }
     // Hide repost/quote jika original hilang (bukan published).
     conds.push(
       sql`(${jinye.repostOfId} is null or exists (

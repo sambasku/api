@@ -15,6 +15,7 @@ export class ListPublishedJinyeUseCase {
     cursor?: string;
     userId?: string;
     username?: string;
+    wordId?: string;
   }): Promise<CursorPage<Jinye> & { pinnedId: string | null }> {
     let userId = input.userId;
     if (!userId && input.username) {
@@ -23,6 +24,17 @@ export class ListPublishedJinyeUseCase {
         throw new NotFoundError('USER_NOT_FOUND', 'Pengguna tidak ditemukan');
       }
       userId = user.id;
+    }
+
+    // Filter lemma: tanpa pin profil (bukan timeline user).
+    if (input.wordId) {
+      const page = await this.repo.list({
+        limit: input.limit,
+        cursor: input.cursor,
+        wordId: input.wordId,
+        status: 'published',
+      });
+      return { ...page, pinnedId: null };
     }
 
     let pinnedId: string | null = null;

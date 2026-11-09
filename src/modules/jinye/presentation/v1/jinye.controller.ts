@@ -216,6 +216,7 @@ export class JinyeController {
       cursor: q.cursor,
       userId: q.user_id,
       username: q.username,
+      wordId: q.word_id,
     });
     return c.json({
       data: page.items.map((j) =>

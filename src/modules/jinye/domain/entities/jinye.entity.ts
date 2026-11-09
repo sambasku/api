@@ -69,6 +69,11 @@ export interface JinyeListFilter {
   limit: number;
   cursor?: string;
   userId?: string;
+  /**
+   * Jinye published yang punya lemma link aktif ke kata ini
+   * (status link: active | pending_correction).
+   */
+  wordId?: string;
   /** Default published-only for public feed. */
   status?: JinyeStatus | 'all';
   /** Exclude id (mis. pin sudah diambil terpisah). */

@@ -50,6 +50,8 @@ export const listJinyeQuerySchema = z.object({
     .min(1)
     .max(64)
     .optional(),
+  /** Jinye yang menaut lemma ini (link active / pending_correction). */
+  word_id: opaqueId.optional(),
 });
 
 export type ListJinyeQuery = z.infer<typeof listJinyeQuerySchema>;
