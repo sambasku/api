@@ -45,16 +45,45 @@ describe('ResolveMapsUrlUseCase', () => {
     );
   });
 
-  it('MAPS_URL_NO_COORDS bila redirect tanpa angka', async () => {
+  it('MAPS_URL_NO_COORDS bila redirect tanpa angka dan tanpa nama place', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        redirect('https://www.google.com/maps/place/Pasar+Sambas'),
-      );
+      .mockResolvedValue(redirect('https://www.google.com/maps?q=Pasar+Sambas'));
     const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
     await expect(
       uc.execute('https://maps.app.goo.gl/nocoords'),
     ).rejects.toMatchObject({ errorCode: 'MAPS_URL_NO_COORDS' });
+  });
+
+  it('fallback Nominatim bila short link hanya place-id + nama', async () => {
+    const placeUrl =
+      'https://www.google.com/maps/place/Temajuk,+Kec.+Paloh,+Kabupaten+Sambas,+Kalimantan+Barat/data=!4m2!3m1!1s0x31e5337401887c35:0x50f63442eed2ad98';
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const href = String(input);
+      if (href.includes('maps.app.goo.gl')) return redirect(placeUrl);
+      if (href.includes('nominatim.openstreetmap.org')) {
+        const q = new URL(href).searchParams.get('q') ?? '';
+        // Nama Google penuh sering 0 hit; kandidat pendek yang kena.
+        if (q === 'Temajuk' || q === 'Temajuk Paloh Sambas') {
+          return Response.json([
+            {
+              lat: '1.9967876',
+              lon: '109.5950011',
+              display_name: 'Temajuk, Paloh, Sambas',
+            },
+          ]);
+        }
+        return Response.json([]);
+      }
+      return new Response('not found', { status: 404 });
+    });
+    const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
+    const result = await uc.execute(
+      'https://maps.app.goo.gl/2hSqgKSqKL6eaTNE9?g_st=ac',
+    );
+    expect(result.lat).toBeCloseTo(1.9967876);
+    expect(result.lng).toBeCloseTo(109.5950011);
+    expect(result.canonical_url).toContain('/maps/place/Temajuk');
   });
 
   it('MAPS_URL_OUT_OF_BOUNDS untuk titik di luar Sambas', async () => {

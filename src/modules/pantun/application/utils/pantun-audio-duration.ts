@@ -1,11 +1,11 @@
 import { ValidationError } from '@/shared/errors/app-error';
 
-/** Durasi bacaan pantun: min 10s, max 60s (keputusan produk #254). */
-export const PANTUN_AUDIO_MIN_MS = 10_000;
+/** Durasi bacaan pantun: min 7,5s, max 60s (keputusan produk #254). */
+export const PANTUN_AUDIO_MIN_MS = 7_500;
 export const PANTUN_AUDIO_MAX_MS = 60_000;
 
 /**
- * Validasi duration_ms dari client. Tolak di luar 10-60s
+ * Validasi duration_ms dari client. Tolak di luar 7,5-60s
  * (bukan clamp diam-diam seperti discussion).
  */
 export function assertPantunAudioDurationMs(raw: unknown): number {
@@ -19,7 +19,7 @@ export function assertPantunAudioDurationMs(raw: unknown): number {
     throw new ValidationError([
       {
         field: 'duration_ms',
-        message: 'Durasi rekaman wajib diisi (10-60 detik)',
+        message: 'Durasi rekaman wajib diisi (7,5-60 detik)',
       },
     ]);
   }
@@ -28,7 +28,7 @@ export function assertPantunAudioDurationMs(raw: unknown): number {
     throw new ValidationError([
       {
         field: 'duration_ms',
-        message: 'Rekaman terlalu pendek. Minimal 10 detik ya.',
+        message: 'Rekaman terlalu pendek. Minimal 7,5 detik ya.',
       },
     ]);
   }

@@ -7,14 +7,14 @@ import {
 } from '../../application/utils/pantun-audio-duration';
 
 describe('assertPantunAudioDurationMs', () => {
-  it('menerima 10s dan 60s', () => {
-    expect(assertPantunAudioDurationMs(PANTUN_AUDIO_MIN_MS)).toBe(10_000);
+  it('menerima 7,5s dan 60s', () => {
+    expect(assertPantunAudioDurationMs(PANTUN_AUDIO_MIN_MS)).toBe(7_500);
     expect(assertPantunAudioDurationMs(PANTUN_AUDIO_MAX_MS)).toBe(60_000);
     expect(assertPantunAudioDurationMs('15000')).toBe(15_000);
   });
 
-  it('tolak di bawah 10s', () => {
-    expect(() => assertPantunAudioDurationMs(9999)).toThrow(ValidationError);
+  it('tolak di bawah 7,5s', () => {
+    expect(() => assertPantunAudioDurationMs(7_499)).toThrow(ValidationError);
   });
 
   it('tolak di atas 60s', () => {

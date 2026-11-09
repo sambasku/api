@@ -3,10 +3,14 @@
  * Short link di-expand di use-case lewat fetch redirect.
  */
 
-/** Kotak produk Kabupaten Sambas - selaras mobile `inSambasBounds`. */
-export function inSambasBounds(lat: number, lng: number): boolean {
-  return lat >= 1.0 && lat <= 1.8 && lng >= 108.5 && lng <= 110.0;
-}
+export {
+  inSambasBounds,
+  SAMBAS_LAT_MAX,
+  SAMBAS_LAT_MIN,
+  SAMBAS_LNG_MAX,
+  SAMBAS_LNG_MIN,
+  SAMBAS_NOMINATIM_VIEWBOX,
+} from '@/shared/constants/sambas-bounds';
 
 const MAX_URL_LEN = 2048;
 
@@ -106,6 +110,69 @@ export function extractCoordsFromMapsUrl(urlStr: string): MapsCoords | null {
   }
 
   return null;
+}
+
+/**
+ * Nama tempat dari path `/maps/place/Nama+Tempat/...`.
+ * Dipakai fallback geocode bila short link hanya punya place-id (tanpa !3d/@).
+ */
+export function extractPlaceNameFromMapsUrl(urlStr: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(urlStr);
+  } catch {
+    return null;
+  }
+  const match = /^\/maps\/place\/([^/]+)/i.exec(u.pathname);
+  if (!match?.[1]) return null;
+  let name: string;
+  try {
+    name = decodeURIComponent(match[1].replace(/\+/g, ' '));
+  } catch {
+    name = match[1].replace(/\+/g, ' ');
+  }
+  name = name.replace(/\s+/g, ' ').trim();
+  if (name.length < 3 || name.length > 120) return null;
+  // Path kadang hanya "lat,lng" - itu bukan nama.
+  if (/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(name)) return null;
+  return name;
+}
+
+/**
+ * Kandidat query Nominatim dari nama Google Maps.
+ * Nama penuh Google (dengan "Kec." / "Kabupaten") sering 0 hit;
+ * prioritaskan segmen pendek supaya hemat rate limit Nominatim (1 req/dtk).
+ */
+export function buildPlaceGeocodeCandidates(name: string): string[] {
+  const out: string[] = [];
+  const push = (raw: string) => {
+    const t = raw.replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (t.length >= 3 && !out.includes(t)) out.push(t);
+  };
+
+  const parts = name
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts[0]) push(parts[0]);
+
+  const cleaned = parts
+    .map((p) =>
+      p
+        .replace(
+          /^(kec\.?|kab(?:upaten)?\.?|kota|provinsi|prov\.?)\s+/i,
+          '',
+        )
+        .trim(),
+    )
+    .filter((p) => p.length >= 2);
+  if (cleaned.length >= 2) push(cleaned.slice(0, 3).join(' '));
+
+  // Nama tanpa label admin (mis. "Pasar Sambas") tetap dicoba utuh.
+  const hasAdmin = /\b(kec\.?|kab(?:upaten)?|kota|provinsi)\b/i.test(name);
+  if (!hasAdmin) push(name);
+
+  return out;
 }
 
 /** Buang tracking query; URL di DB tetap bersih. */
