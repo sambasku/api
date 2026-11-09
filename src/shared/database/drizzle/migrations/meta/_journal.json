@@ -918,6 +918,13 @@
       "when": 1801628000000,
       "tag": "0130_jinye_translations",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "6",
+      "when": 1801629000000,
+      "tag": "0131_backfill_jinye_activity",
+      "breakpoints": true
     }
   ]
 }
