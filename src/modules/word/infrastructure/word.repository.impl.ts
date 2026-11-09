@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+  type AnyColumn,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { isForeignKeyViolation, isUniqueViolation, isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
@@ -872,9 +884,12 @@ export class WordRepositoryImpl implements WordRepository {
       : statuses
         ? inArray(meanings.status, statuses as ChildStatus[])
         : and(eq(meanings.status, 'published'), eq(meanings.isVerified, true));
+    // ponytail: jangan ikat ke typeof meanings.status - tableName literal
+    // (examples/pronunciations/…) beda → TS2345. Kolom status+isVerified
+    // cukup via AnyColumn.
     const childRowStatusFilter = (table: {
-      status: typeof meanings.status;
-      isVerified: typeof meanings.isVerified;
+      status: AnyColumn;
+      isVerified: AnyColumn;
     }) =>
       includeAll
         ? undefined

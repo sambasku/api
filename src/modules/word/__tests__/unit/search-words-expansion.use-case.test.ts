@@ -116,7 +116,10 @@ describe('SearchWordsUseCase - gate publik vs verifikator', () => {
     expect(wordRepo.search).toHaveBeenCalledWith(
       expect.objectContaining({ published: true, isVerified: true }),
     );
-    const args = vi.mocked(wordRepo.search).mock.calls[0]![0] as Record<string, unknown>;
+    const args = vi.mocked(wordRepo.search).mock.calls[0]![0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(args).not.toHaveProperty('statuses');
   });
 
@@ -132,7 +135,10 @@ describe('SearchWordsUseCase - gate publik vs verifikator', () => {
         statuses: ['published', 'pending_review'],
       }),
     );
-    const args = vi.mocked(wordRepo.search).mock.calls[0]![0] as Record<string, unknown>;
+    const args = vi.mocked(wordRepo.search).mock.calls[0]![0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(args).not.toHaveProperty('isVerified');
     expect(args).not.toHaveProperty('published');
   });
