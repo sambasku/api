@@ -58,7 +58,8 @@ describe('ResolveMapsUrlUseCase', () => {
   it('fallback Nominatim bila short link hanya place-id + nama', async () => {
     const placeUrl =
       'https://www.google.com/maps/place/Temajuk,+Kec.+Paloh,+Kabupaten+Sambas,+Kalimantan+Barat/data=!4m2!3m1!1s0x31e5337401887c35:0x50f63442eed2ad98';
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    // ponytail: Workers fetch input = string | Request | URL (bukan DOM RequestInfo).
+    const fetchMock = vi.fn(async (input: string | Request | URL) => {
       const href = String(input);
       if (href.includes('maps.app.goo.gl')) return redirect(placeUrl);
       if (href.includes('nominatim.openstreetmap.org')) {
