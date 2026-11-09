@@ -112,11 +112,37 @@ function toWire(
   };
 }
 
+type JinyeCommentImageWire = {
+  status: 'published' | 'pending_review';
+  public_url: string | null;
+  content_warnings: string[];
+  url?: string | null;
+  provider_file_id?: string | null;
+};
+
+type JinyeCommentWire = {
+  id: string;
+  jinye_id: string;
+  parent_id: string | null;
+  user_id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  is_verifier: boolean;
+  body: string;
+  images: JinyeCommentImageWire[];
+  status: string;
+  created_at: string;
+  upvotes: number;
+  downvotes: number;
+  replies?: JinyeCommentWire[];
+};
+
 function toCommentWire(
   c: JinyeComment,
   opts?: { exposeStaging?: boolean; includeReplies?: boolean },
-) {
-  const images = c.images.map((img) => {
+): JinyeCommentWire {
+  const images: JinyeCommentImageWire[] = c.images.map((img) => {
     const hasPublic = typeof img.publicUrl === 'string' && img.publicUrl.length > 0;
     return {
       status: (hasPublic ? 'published' : 'pending_review') as
@@ -130,7 +156,7 @@ function toCommentWire(
     };
   });
 
-  return {
+  const wire: JinyeCommentWire = {
     id: c.id,
     jinye_id: c.jinyeId,
     parent_id: c.parentId,
@@ -145,14 +171,13 @@ function toCommentWire(
     created_at: c.createdAt.toISOString(),
     upvotes: 0,
     downvotes: 0,
-    ...(opts?.includeReplies
-      ? {
-          replies: (c.replies ?? []).map((r) =>
-            toCommentWire(r, { exposeStaging: opts.exposeStaging }),
-          ),
-        }
-      : {}),
   };
+  if (opts?.includeReplies) {
+    wire.replies = (c.replies ?? []).map((r) =>
+      toCommentWire(r, { exposeStaging: opts.exposeStaging }),
+    );
+  }
+  return wire;
 }
 
 export class JinyeController {

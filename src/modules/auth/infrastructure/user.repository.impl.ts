@@ -216,6 +216,8 @@ WHERE o.user_id = users.id
 )`,
         // Kolom baru migrasi 0086 - hadir supaya cast ke UserRow valid.
         activeBorderId: users.activeBorderId,
+        // Kolom Jinye pin - wajib di select supaya cast ke UserRow valid.
+        pinnedJinyeId: users.pinnedJinyeId,
       })
       .from(users)
       .where(
