@@ -66,6 +66,7 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     findLatestQuotaConsumingCreatedAtByUser: vi.fn(async () => null),
     findLatestCreatedAtByUser: vi.fn(async () => null),
     markDeletedByAuthor: vi.fn(),
+    takedown: vi.fn(),
     updateBody: vi.fn(async () =>
       makeJinye({ body: 'edited', isEdited: true, updatedAt: new Date() }),
     ),
@@ -82,6 +83,7 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     findCommentById: vi.fn(),
     listCommentsByJinyeId: vi.fn(),
     markCommentDeletedByAuthor: vi.fn(),
+    takedownComment: vi.fn(),
     incrementPublishedCommentCount: vi.fn(),
     createLemmaLink: vi.fn(),
     findLemmaLinkById: vi.fn(),
@@ -249,6 +251,7 @@ describe('UnrepostJinyeUseCase', () => {
         }),
       ),
       markDeletedByAuthor: vi.fn(async () => true),
+      takedown: vi.fn(),
     });
     const activity = { safe: vi.fn(async () => undefined) };
     await new UnrepostJinyeUseCase(r, audit, activity).execute({

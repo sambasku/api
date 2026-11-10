@@ -66,7 +66,8 @@ export const listAdminJinyeQuerySchema = z.object({
 
 export type ListAdminJinyeQuery = z.infer<typeof listAdminJinyeQuerySchema>;
 
-export const jinyeCommentIdParamSchema = z.object({
+/** Path `/admin/jinye/comments/:id/takedown` - hanya id komentar. */
+export const adminJinyeCommentTakedownParamSchema = z.object({
   id: opaqueId,
 });
 

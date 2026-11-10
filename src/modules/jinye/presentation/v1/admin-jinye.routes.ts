@@ -8,9 +8,9 @@ import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
 import type { AppVariables } from '@/shared/types';
 import type { JinyeController } from './jinye.controller';
 import {
+  adminJinyeCommentTakedownParamSchema,
   adminJinyeItemResponseSchema,
   adminJinyeOkResponseSchema,
-  jinyeCommentIdParamSchema,
   jinyeIdParamSchema,
   listAdminJinyeQuerySchema,
   listAdminJinyeResponseSchema,
@@ -74,7 +74,7 @@ export function createAdminJinyeRoutes(deps: AdminJinyeRoutesDeps) {
     path: '/comments/:id/takedown',
     tags: ['Jinye', 'Admin'],
     summary: 'Takedown komentar Jinye',
-    request: { params: jinyeCommentIdParamSchema },
+    request: { params: adminJinyeCommentTakedownParamSchema },
     responses: {
       200: { description: 'Komentar di-takedown', content: json(adminJinyeOkResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
