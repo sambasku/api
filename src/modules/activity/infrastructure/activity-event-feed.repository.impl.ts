@@ -202,7 +202,11 @@ function jinyeImageCount(images: unknown): number {
   return Array.isArray(images) ? images.length : 0;
 }
 
-/** Copy Jinye dari payload beku atau kolom JOIN (event lama). */
+/**
+ * Copy Jinye dari payload beku atau kolom JOIN (event lama).
+ * Hanya kind jinye_* - jangan ambil payload kind lain (mis. word_verified
+ * "#56 Memverifikasi usulan X: {lemma}") atau placeholder lemma tak tersubstitusi.
+ */
 function jinyeCopyFromRow(
   kind: ActivityEventKind,
   row: Pick<
@@ -210,6 +214,7 @@ function jinyeCopyFromRow(
     'payload' | 'jinyeBody' | 'jinyeQuoteBody' | 'jinyeAudioUrl' | 'jinyeImages'
   >,
 ): string | null {
+  if (!kind.startsWith('jinye_')) return null;
   const frozen = row.payload?.trim();
   if (frozen) return frozen;
   if (kind === 'jinye_created' || kind === 'jinye_quote_created') {
