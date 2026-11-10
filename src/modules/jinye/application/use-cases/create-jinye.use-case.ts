@@ -4,9 +4,11 @@ import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/ut
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
+import { jinyeFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 import { RateLimitedError, ValidationError } from '@/shared/errors/app-error';
 import type { Jinye, JinyeImage } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
+import { isJinyeCreateQuotaEnforced } from '../utils/jinye-quota';
 
 const MAX_BODY = 500;
 const MAX_IMAGES = 4;
@@ -36,6 +38,7 @@ export class CreateJinyeUseCase {
         actorId: string;
         targetId: string;
         dedupeKey: string;
+        payload?: string | null;
       }) => Promise<void>;
     },
   ) {}
@@ -43,19 +46,21 @@ export class CreateJinyeUseCase {
   async execute(cmd: CreateJinyeCommand): Promise<Jinye> {
     await assertCanContribute(cmd.userId);
 
-    const lastAt = await this.repo.findLatestCreatedAtByUser(cmd.userId);
-    if (lastAt) {
-      const elapsed = Date.now() - lastAt.getTime();
-      if (elapsed < QUOTA_MS) {
-        const retryAfterSeconds = Math.max(
-          1,
-          Math.ceil((QUOTA_MS - elapsed) / 1000),
-        );
-        const hours = Math.max(1, Math.ceil(retryAfterSeconds / 3600));
-        throw new RateLimitedError(
-          `Kamu sudah membuat Jinye dalam 24 jam terakhir. Coba lagi sekitar ${hours} jam lagi ya.`,
-          retryAfterSeconds,
-        );
+    if (isJinyeCreateQuotaEnforced()) {
+      const lastAt = await this.repo.findLatestCreatedAtByUser(cmd.userId);
+      if (lastAt) {
+        const elapsed = Date.now() - lastAt.getTime();
+        if (elapsed < QUOTA_MS) {
+          const retryAfterSeconds = Math.max(
+            1,
+            Math.ceil((QUOTA_MS - elapsed) / 1000),
+          );
+          const hours = Math.max(1, Math.ceil(retryAfterSeconds / 3600));
+          throw new RateLimitedError(
+            `Kamu sudah membuat Jinye dalam 24 jam terakhir. Coba lagi sekitar ${hours} jam lagi ya.`,
+            retryAfterSeconds,
+          );
+        }
       }
     }
 
@@ -141,6 +146,11 @@ export class CreateJinyeUseCase {
       actorId: cmd.userId,
       targetId: created.id,
       dedupeKey: `jinye:${created.id}`,
+      payload: jinyeFeedPayload({
+        body: created.body,
+        imageCount: created.images.length,
+        hasAudio: !!cmd.hasPendingAudio,
+      }),
     });
 
     return created;

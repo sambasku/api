@@ -247,6 +247,7 @@ describe('CreateJinyeUseCase', () => {
         kind: 'jinye_created',
         actorId: ACTOR,
         targetId: created.id,
+        payload: 'Jinye : Halo Sambas',
       }),
     );
   });

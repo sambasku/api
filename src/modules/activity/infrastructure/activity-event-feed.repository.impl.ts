@@ -13,6 +13,7 @@ import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
+import { jinyeFeedPayload } from '../application/utils/activity-body-snippet';
 import { FEED_CATEGORY_KINDS, type ActivityCursor } from '../domain/merge-activity';
 
 const parentPantuns = alias(pantuns, 'parent_pantuns');
@@ -197,6 +198,31 @@ function profileCategoryOf(kind: ActivityEventKind): ProfileCategory {
   return hit ?? 'contribution';
 }
 
+function jinyeImageCount(images: unknown): number {
+  return Array.isArray(images) ? images.length : 0;
+}
+
+/** Copy Jinye dari payload beku atau kolom JOIN (event lama). */
+function jinyeCopyFromRow(
+  kind: ActivityEventKind,
+  row: Pick<
+    FeedRow,
+    'payload' | 'jinyeBody' | 'jinyeQuoteBody' | 'jinyeAudioUrl' | 'jinyeImages'
+  >,
+): string | null {
+  const frozen = row.payload?.trim();
+  if (frozen) return frozen;
+  if (kind === 'jinye_created' || kind === 'jinye_quote_created') {
+    return jinyeFeedPayload({
+      body: row.jinyeBody,
+      quoteBody: kind === 'jinye_quote_created' ? row.jinyeQuoteBody : null,
+      imageCount: jinyeImageCount(row.jinyeImages),
+      hasAudio: !!row.jinyeAudioUrl?.trim(),
+    });
+  }
+  return null;
+}
+
 /**
  * Baris selectVisible + kolom JOIN (#103): semua kebutuhan buildItem/
  * listPublicByActor datang dari SATU query tanpa resolve per baris.
@@ -232,6 +258,11 @@ interface FeedRow {
   replyParentId: string | null;
   /** Jinye induk untuk jinye_comment_created. */
   jinyeCommentParentId: string | null;
+  /** Fallback copy Jinye bila payload beku kosong (event lama). */
+  jinyeBody: string | null;
+  jinyeQuoteBody: string | null;
+  jinyeAudioUrl: string | null;
+  jinyeImages: unknown;
   usahaName: string | null;
   /** Acara untuk event_published (LEFT JOIN events, published saja). */
   eventSlug: string | null;
@@ -329,7 +360,6 @@ export class ActivityEventFeedRepositoryImpl {
       const lemma = row.targetWordId ? row.lemma : null;
       // #94: payload beku menang (satu sumber kebenaran feed+profil). Live
       // votes hanya fallback untuk event lama tanpa payload.
-      const frozen = row.payload?.trim() || null;
       const voteValue = row.voteValue;
       const profileKind =
         category === 'merged' ? profileCategoryOf(kind) : category;
@@ -341,15 +371,19 @@ export class ActivityEventFeedRepositoryImpl {
           : kind.startsWith('jinye_')
             ? row.targetId
             : null;
+      const jinyeCopy = jinyeCopyFromRow(kind, row);
+      const frozen = row.payload?.trim() || null;
       items.push({
         id: row.id,
         kind: profileKind,
         occurredAt: row.occurredAt,
         wordId: jinyeTargetId ?? row.targetWordId,
         lemma,
-        summary: frozen
-          ? this.applyLemmaPlaceholder(frozen, lemma)
-          : this.publicSummary(kind, lemma, row.targetId, voteValue),
+        summary: jinyeCopy
+          ? jinyeCopy
+          : frozen
+            ? this.applyLemmaPlaceholder(frozen, lemma)
+            : this.publicSummary(kind, lemma, row.targetId, voteValue),
       });
     }
     return {
@@ -534,6 +568,10 @@ export class ActivityEventFeedRepositoryImpl {
       // baris feed ikut sembunyi; induk takedown → sembunyi juga).
       replyParentId: parentPantuns.id,
       jinyeCommentParentId: jinyeForComment.id,
+      jinyeBody: jinye.body,
+      jinyeQuoteBody: jinye.quoteBody,
+      jinyeAudioUrl: jinye.audioUrl,
+      jinyeImages: jinye.images,
       eventSlug: events.slug,
       eventName: events.name,
       cuisineSlug: cuisines.slug,
@@ -835,12 +873,15 @@ sql`(${activityEvents.kind} <> 'article_comment_created' or ${articles.id} is no
     // #124: payload announcement = JSON {title,...} - bukan copy human.
     // Body wire announcement diisi setelah parse di bawah.
     const isAnnouncement = kind === 'announcement';
+    const jinyeCopy = jinyeCopyFromRow(kind, row);
     const body =
       isAnnouncement
         ? ''
-        : frozen !== null
-          ? this.applyLemmaPlaceholder(frozen, lemma)
-          : this.bodyFor(kind, lemma);
+        : jinyeCopy
+          ? jinyeCopy
+          : frozen !== null
+            ? this.applyLemmaPlaceholder(frozen, lemma)
+            : this.bodyFor(kind, lemma);
 const subtitle =
 kind === 'place_photo_added' || kind === 'place_published'
 ? row.placeName
