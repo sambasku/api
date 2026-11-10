@@ -53,6 +53,7 @@ export class CreateTranslationUseCase {
       ]);
     }
 
+    let sourceBody = '';
     if (input.reff === 'jinye') {
       const target = await this.jinyeRepo.findById(input.reffId);
       if (!target || target.status !== 'published') {
@@ -66,6 +67,8 @@ export class CreateTranslationUseCase {
           },
         ]);
       }
+      // Snapshot teks sumber - review tidak perlu JOIN ulang ke jinye.
+      sourceBody = target.body;
     }
 
     const existing = await this.translationRepo.findPendingByTranslator(
@@ -83,6 +86,7 @@ export class CreateTranslationUseCase {
     const created = await this.translationRepo.create({
       reff: input.reff,
       reffId: input.reffId,
+      sourceBody,
       body,
       translatorId: input.translatorId,
     });
@@ -92,7 +96,12 @@ export class CreateTranslationUseCase {
       action: 'create',
       entityType: 'translation',
       entityId: created.id,
-      newData: { reff: input.reff, reff_id: input.reffId, body },
+      newData: {
+        reff: input.reff,
+        reff_id: input.reffId,
+        source_body: sourceBody,
+        body,
+      },
       requestId: input.requestId ?? null,
     });
 

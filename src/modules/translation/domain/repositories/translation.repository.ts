@@ -3,14 +3,18 @@ import type { Translation, TranslationStatus } from '../entities/translation.ent
 export type CreateTranslationInput = {
   reff: string;
   reffId: string;
+  sourceBody: string;
   body: string;
   translatorId: string;
 };
 
 export type ListTranslationsFilter = {
   reff: string;
-  reffId: string;
+  /** Kosong = semua target untuk `reff` (antrian review). */
+  reffId?: string;
   status?: TranslationStatus;
+  /** Cap antrian; default repo. */
+  limit?: number;
 };
 
 export interface TranslationRepository {

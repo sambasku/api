@@ -4,6 +4,8 @@ export type Translation = {
   id: string;
   reff: string;
   reffId: string;
+  /** Snapshot teks sumber saat usulan. */
+  sourceBody: string;
   body: string;
   status: TranslationStatus;
   translatorId: string;

@@ -26,6 +26,11 @@ export const translations = sqliteTable(
       .$defaultFn(() => generateId()),
     reff: text('reff').notNull(),
     reffId: text('reff_id').notNull(),
+    /**
+     * Snapshot teks sumber saat usulan dibuat (mis. body Jinye).
+     * Bekukan sejarah review; edit sumber belakangan tidak mengubah baris ini.
+     */
+    sourceBody: text('source_body').notNull().default(''),
     /** Teks terjemahan. */
     body: text('body').notNull(),
     status: text('status', { enum: TRANSLATION_STATUSES })

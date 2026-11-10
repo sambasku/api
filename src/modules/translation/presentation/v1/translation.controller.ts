@@ -22,6 +22,7 @@ function toWire(row: Translation) {
     id: row.id,
     reff: row.reff,
     reff_id: row.reffId,
+    source_body: row.sourceBody,
     body: row.body,
     status: row.status,
     translator_id: row.translatorId,
@@ -48,6 +49,7 @@ export class TranslationController {
       reff: query.reff,
       reffId: query.reff_id,
       status: query.status,
+      limit: query.limit,
     });
     return c.json({ data: items.map(toWire) });
   }

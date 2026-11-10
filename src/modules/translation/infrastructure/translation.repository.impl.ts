@@ -17,6 +17,7 @@ function mapRow(row: typeof translations.$inferSelect): Translation {
     id: row.id,
     reff: row.reff,
     reffId: row.reffId,
+    sourceBody: row.sourceBody ?? '',
     body: row.body,
     status: row.status as TranslationStatus,
     translatorId: row.translatorId,
@@ -37,6 +38,7 @@ export class TranslationRepositoryImpl implements TranslationRepository {
       id,
       reff: input.reff,
       reffId: input.reffId,
+      sourceBody: input.sourceBody,
       body: input.body,
       status: 'pending',
       translatorId: input.translatorId,
@@ -57,16 +59,17 @@ export class TranslationRepositoryImpl implements TranslationRepository {
   }
 
   async list(filter: ListTranslationsFilter): Promise<Translation[]> {
-    const conds = [
-      eq(translations.reff, filter.reff),
-      eq(translations.reffId, filter.reffId),
-    ];
+    const conds = [eq(translations.reff, filter.reff)];
+    if (filter.reffId) conds.push(eq(translations.reffId, filter.reffId));
     if (filter.status) conds.push(eq(translations.status, filter.status));
+    // ponytail: hard cap antrian global; naikkan lewat filter.limit bila perlu
+    const limit = Math.min(Math.max(filter.limit ?? 50, 1), 100);
     const rows = await this.db
       .select()
       .from(translations)
       .where(and(...conds))
-      .orderBy(desc(translations.createdAt));
+      .orderBy(desc(translations.createdAt))
+      .limit(limit);
     return rows.map(mapRow);
   }
 

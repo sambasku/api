@@ -18,8 +18,9 @@ export class ListTranslationsUseCase {
 
   async execute(input: {
     reff: string;
-    reffId: string;
+    reffId?: string;
     status?: TranslationStatus;
+    limit?: number;
   }): Promise<Translation[]> {
     if (!isAllowedReff(input.reff)) {
       throw new BadRequestError(
@@ -27,10 +28,18 @@ export class ListTranslationsUseCase {
         'reff tidak didukung',
       );
     }
+    // Antrian global wajib status supaya tidak dump semua baris.
+    if (!input.reffId && !input.status) {
+      throw new BadRequestError(
+        'TRANSLATION_LIST_FILTER',
+        'Isi reff_id, atau status untuk antrian review ya.',
+      );
+    }
     return this.translationRepo.list({
       reff: input.reff,
       reffId: input.reffId,
       status: input.status,
+      limit: input.limit,
     });
   }
 }

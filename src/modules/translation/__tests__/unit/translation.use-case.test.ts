@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreateTranslationUseCase } from '../../application/use-cases/create-translation.use-case';
+import { ListTranslationsUseCase } from '../../application/use-cases/list-translations.use-case';
 import { ResolveTranslationUseCase } from '../../application/use-cases/resolve-translation.use-case';
+import { BadRequestError } from '@/shared/errors/app-error';
 
 vi.mock('@/modules/word/application/utils/assert-can-contribute', () => ({
   assertCanContribute: vi.fn().mockResolvedValue(undefined),
@@ -44,6 +46,7 @@ describe('CreateTranslationUseCase', () => {
       id: '01TR0000000000000000000001',
       reff: 'jinye',
       reffId: jinyeBase.id,
+      sourceBody: jinyeBase.body,
       body: 'Saya makan nasi',
       status: 'pending',
       translatorId: '01USER00000000000000000002',
@@ -70,6 +73,7 @@ describe('CreateTranslationUseCase', () => {
       expect.objectContaining({
         reff: 'jinye',
         reffId: jinyeBase.id,
+        sourceBody: jinyeBase.body,
         body: 'Saya makan nasi',
       }),
     );
@@ -95,6 +99,38 @@ describe('CreateTranslationUseCase', () => {
   });
 });
 
+describe('ListTranslationsUseCase', () => {
+  const translationRepo = {
+    list: vi.fn().mockResolvedValue([]),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('antrian global: reff + status tanpa reffId', async () => {
+    await new ListTranslationsUseCase(translationRepo as never).execute({
+      reff: 'jinye',
+      status: 'pending',
+    });
+    expect(translationRepo.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reff: 'jinye',
+        status: 'pending',
+        reffId: undefined,
+      }),
+    );
+  });
+
+  it('tanpa reffId dan tanpa status → BadRequest', async () => {
+    await expect(
+      new ListTranslationsUseCase(translationRepo as never).execute({
+        reff: 'jinye',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+});
+
 describe('ResolveTranslationUseCase', () => {
   const translationRepo = {
     findById: vi.fn(),
@@ -112,6 +148,7 @@ describe('ResolveTranslationUseCase', () => {
       id: '01TR0000000000000000000001',
       reff: 'jinye',
       reffId: jinyeBase.id,
+      sourceBody: jinyeBase.body,
       body: 'Saya makan nasi',
       status: 'pending',
       translatorId: '01USER00000000000000000002',
@@ -124,6 +161,7 @@ describe('ResolveTranslationUseCase', () => {
       id: '01TROLD0000000000000000001',
       reff: 'jinye',
       reffId: jinyeBase.id,
+      sourceBody: jinyeBase.body,
       body: 'lama',
       status: 'accepted',
       translatorId: '01USER00000000000000000003',
@@ -137,6 +175,7 @@ describe('ResolveTranslationUseCase', () => {
         id,
         reff: 'jinye',
         reffId: jinyeBase.id,
+        sourceBody: jinyeBase.body,
         body: 'Saya makan nasi',
         status,
         translatorId: '01USER00000000000000000002',
