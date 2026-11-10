@@ -129,12 +129,35 @@ function parseJsonArray<T>(raw: string | null): T[] {
   }
 }
 
-export function mapImages(raw: string | null): CuisineImage[] {
-  return parseJsonArray<Record<string, unknown>>(raw).map((img) => ({
-    url: String(img.url ?? ''),
+/**
+ * Pastikan tepat satu cover: true pertama menang; kalau tidak ada, index 0.
+ */
+export function ensureOneMainImage<T extends { isMain?: boolean }>(
+  images: T[],
+): Array<T & { isMain: boolean }> {
+  if (images.length === 0) return [];
+  const normalized = images.map((img) => ({
+    ...img,
     isMain: img.isMain === true,
-    attribution: (img.attribution as CuisineImage['attribution']) ?? null,
   }));
+  const firstMainIdx = normalized.findIndex((img) => img.isMain);
+  if (firstMainIdx < 0) {
+    return normalized.map((img, i) => ({ ...img, isMain: i === 0 }));
+  }
+  return normalized.map((img, i) => ({
+    ...img,
+    isMain: i === firstMainIdx,
+  }));
+}
+
+export function mapImages(raw: string | null): CuisineImage[] {
+  return ensureOneMainImage(
+    parseJsonArray<Record<string, unknown>>(raw).map((img) => ({
+      url: String(img.url ?? ''),
+      isMain: img.isMain === true,
+      attribution: (img.attribution as CuisineImage['attribution']) ?? null,
+    })),
+  );
 }
 
 export function mapSources(raw: string | null): CuisineSource[] {
