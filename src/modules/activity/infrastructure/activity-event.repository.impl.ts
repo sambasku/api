@@ -10,6 +10,7 @@ import {
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
+import { generateId } from '@/shared/utils/ulid';
 import type {
   ActivityEventKind,
   AppendActivityEventInput,
@@ -99,7 +100,9 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
         const payload = input.proposedByName
           ? `Memverifikasi usulan ${input.proposedByName}: {lemma}`
           : (input.payload ?? null);
+        const eventId = generateId();
         const values = {
+          id: eventId,
           kind: input.kind,
           actorId: input.actorId ?? null,
           targetWordId,
@@ -109,38 +112,29 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
           payload,
           hiddenAt: input.hidden ? new Date() : null,
         };
-        let eventId: string | undefined;
-        if (input.dedupeKey) {
-          const inserted = await tx
-            .insert(activityEvents)
-            .values(values)
-            .onConflictDoNothing({ target: activityEvents.dedupeKey })
-            .returning({ id: activityEvents.id });
-          if (inserted[0]) {
-            eventId = inserted[0].id;
-          } else {
-            await tx
-              .update(activityEvents)
-              .set({
-                hiddenAt: input.hidden ? new Date() : null,
-                ...(payload !== null ? { payload } : {}),
-              })
-              .where(eq(activityEvents.dedupeKey, input.dedupeKey));
-            const [existing] = await tx
-              .select({ id: activityEvents.id })
-              .from(activityEvents)
-              .where(eq(activityEvents.dedupeKey, input.dedupeKey))
-              .limit(1);
-            eventId = existing?.id;
-          }
-        } else {
-          const [inserted] = await tx
-            .insert(activityEvents)
-            .values(values)
-            .returning({ id: activityEvents.id });
-          eventId = inserted?.id;
+        // ponytail: Turso/libsql staging menolak ON CONFLICT…RETURNING
+        // ("Failed query"). INSERT polos + catch unique; id dari client.
+        let resolvedId = eventId;
+        try {
+          await tx.insert(activityEvents).values(values);
+        } catch (err) {
+          if (!isUniqueViolationOn(err, 'dedupe')) throw err;
+          if (!input.dedupeKey) return 'duplicate';
+          await tx
+            .update(activityEvents)
+            .set({
+              hiddenAt: input.hidden ? new Date() : null,
+              ...(payload !== null ? { payload } : {}),
+            })
+            .where(eq(activityEvents.dedupeKey, input.dedupeKey));
+          const [existing] = await tx
+            .select({ id: activityEvents.id })
+            .from(activityEvents)
+            .where(eq(activityEvents.dedupeKey, input.dedupeKey))
+            .limit(1);
+          if (!existing) return 'duplicate';
+          resolvedId = existing.id;
         }
-        if (!eventId) return 'duplicate';
         await tx
           .update(activityEvents)
           .set({ supersededAt: new Date() })
@@ -153,7 +147,7 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
               ]),
               isNull(activityEvents.supersededAt),
               // jangan supersede event verifikasi itu sendiri
-              ne(activityEvents.id, eventId),
+              ne(activityEvents.id, resolvedId),
             ),
           );
         return 'appended';
@@ -161,6 +155,7 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
     }
 
     const values = {
+      id: generateId(),
       kind: input.kind,
       actorId: input.actorId ?? null,
       targetWordId,
@@ -178,20 +173,19 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
     };
 
-    // ponytail: jangan ON CONFLICT DO UPDATE RETURNING - di Turso/libsql
-    // staging sempat gagal "Failed query" (cause hilang di log). INSERT
-    // OR IGNORE + UPDATE by dedupe = efek sama, 2 statement sederhana.
+    // ponytail: JANGAN ON CONFLICT + RETURNING - Turso staging gagal keduanya
+    // (DO UPDATE RETURNING lalu DO NOTHING RETURNING). INSERT polos + catch
+    // unique + UPDATE by dedupe = efek sama, SQL paling sederhana.
     if (input.dedupeKey) {
-      const inserted = await this.db
-        .insert(activityEvents)
-        .values(values)
-        .onConflictDoNothing({ target: activityEvents.dedupeKey })
-        .returning({ id: activityEvents.id });
-      if (inserted.length > 0) return 'appended';
-      await this.db
-        .update(activityEvents)
-        .set(conflictSet)
-        .where(eq(activityEvents.dedupeKey, input.dedupeKey));
+      try {
+        await this.db.insert(activityEvents).values(values);
+      } catch (err) {
+        if (!isUniqueViolationOn(err, 'dedupe')) throw err;
+        await this.db
+          .update(activityEvents)
+          .set(conflictSet)
+          .where(eq(activityEvents.dedupeKey, input.dedupeKey));
+      }
       return 'appended';
     }
 
