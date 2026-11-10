@@ -925,6 +925,13 @@
       "when": 1801629000000,
       "tag": "0131_backfill_jinye_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "6",
+      "when": 1801630000000,
+      "tag": "0132_backfill_jinye_activity_gap",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import {
   wordImages,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
+import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import type {
   ActivityEventKind,
   AppendActivityEventInput,
@@ -69,95 +70,138 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
   constructor(private readonly db: AppDatabase) {}
 
   async append(input: AppendActivityEventInput): Promise<AppendResult> {
-    return this.db.transaction(async (tx) => {
-      // Kontribusi anak: targetId = id baris anak; wordId induk diresolve di
-      // sini supaya semua caller cukup kirim entityId.
-      let targetWordId = input.targetWordId ?? null;
-      if (targetWordId === null && input.kind.startsWith('contribution_')) {
-        const entityType: Record<string, string> = {
-          contribution_image: 'word_image',
-          contribution_audio: 'word_audio',
-          contribution_pron: 'pronunciation',
-          contribution_example: 'example',
-        };
-        const mapped = entityType[input.kind];
-        if (mapped && input.targetId) {
-          targetWordId = await resolveContributionWordId(tx as unknown as AppDatabase, mapped, input.targetId);
-        }
+    // Kontribusi anak: targetId = id baris anak; wordId induk diresolve di
+    // sini supaya semua caller cukup kirim entityId.
+    let targetWordId = input.targetWordId ?? null;
+    if (targetWordId === null && input.kind.startsWith('contribution_')) {
+      const entityType: Record<string, string> = {
+        contribution_image: 'word_image',
+        contribution_audio: 'word_audio',
+        contribution_pron: 'pronunciation',
+        contribution_example: 'example',
+      };
+      const mapped = entityType[input.kind];
+      if (mapped && input.targetId) {
+        targetWordId = await resolveContributionWordId(
+          this.db,
+          mapped,
+          input.targetId,
+        );
       }
-      // #56: verifikasi kata = puncak cerita kata itu. Event usulan
-      // (contribution_submitted / word_created pengusul) utk kata yang sama
-      // ditandai superseded → feed home 1 baris, profil tetap memuat riwayat.
-      // Payload beku membawa nama pengusul (copy "Memverifikasi usulan X: ...").
-      if (input.kind === 'word_verified' && targetWordId) {
+    }
+
+    // #56: verifikasi kata = puncak cerita kata itu. Event usulan
+    // (contribution_submitted / word_created pengusul) utk kata yang sama
+    // ditandai superseded → feed home 1 baris, profil tetap memuat riwayat.
+    // Payload beku membawa nama pengusul (copy "Memverifikasi usulan X: ...").
+    if (input.kind === 'word_verified' && targetWordId) {
+      return this.db.transaction(async (tx) => {
         const payload = input.proposedByName
           ? `Memverifikasi usulan ${input.proposedByName}: {lemma}`
           : (input.payload ?? null);
-        const [inserted] = await tx
-          .insert(activityEvents)
-          .values({
-            kind: input.kind,
-            actorId: input.actorId ?? null,
-            targetWordId,
-            targetId: input.targetId ?? null,
-            occurredAt: input.occurredAt ?? new Date(),
-            dedupeKey: input.dedupeKey ?? null,
-            payload,
-            hiddenAt: input.hidden ? new Date() : null,
-          })
-          .onConflictDoUpdate({
-            target: activityEvents.dedupeKey,
-            set: {
-              hiddenAt: input.hidden ? new Date() : null,
-              ...(payload !== null ? { payload } : {}),
-            },
-          })
-          .returning({ id: activityEvents.id });
-        if (inserted) {
-          await tx
-            .update(activityEvents)
-            .set({ supersededAt: new Date() })
-            .where(
-              and(
-                eq(activityEvents.targetWordId, targetWordId),
-                inArray(activityEvents.kind, [
-                  'contribution_submitted',
-                  'word_created',
-                ]),
-                isNull(activityEvents.supersededAt),
-                // jangan supersede event verifikasi itu sendiri
-                ne(activityEvents.id, inserted.id),
-              ),
-            );
-          return 'appended';
-        }
-        return 'duplicate';
-      }
-      const rows = await tx
-        .insert(activityEvents)
-        .values({
+        const values = {
           kind: input.kind,
           actorId: input.actorId ?? null,
           targetWordId,
           targetId: input.targetId ?? null,
           occurredAt: input.occurredAt ?? new Date(),
           dedupeKey: input.dedupeKey ?? null,
-          payload: input.payload ?? null,
+          payload,
           hiddenAt: input.hidden ? new Date() : null,
-        })
-        .onConflictDoUpdate({
-          target: activityEvents.dedupeKey,
-          // Re-append event tersembunyi (dedupe key sama) = tampilkan lagi;
-          // waktu kejadian TIDAK di-reset (sejarah beku). Payload ikut
-          // ditimpa: flip arah vote dengan dedupe key sama menimpa copy.
-          set: {
-            hiddenAt: input.hidden ? new Date() : null,
-            ...(input.payload !== undefined ? { payload: input.payload } : {}),
-          },
-        })
+        };
+        let eventId: string | undefined;
+        if (input.dedupeKey) {
+          const inserted = await tx
+            .insert(activityEvents)
+            .values(values)
+            .onConflictDoNothing({ target: activityEvents.dedupeKey })
+            .returning({ id: activityEvents.id });
+          if (inserted[0]) {
+            eventId = inserted[0].id;
+          } else {
+            await tx
+              .update(activityEvents)
+              .set({
+                hiddenAt: input.hidden ? new Date() : null,
+                ...(payload !== null ? { payload } : {}),
+              })
+              .where(eq(activityEvents.dedupeKey, input.dedupeKey));
+            const [existing] = await tx
+              .select({ id: activityEvents.id })
+              .from(activityEvents)
+              .where(eq(activityEvents.dedupeKey, input.dedupeKey))
+              .limit(1);
+            eventId = existing?.id;
+          }
+        } else {
+          const [inserted] = await tx
+            .insert(activityEvents)
+            .values(values)
+            .returning({ id: activityEvents.id });
+          eventId = inserted?.id;
+        }
+        if (!eventId) return 'duplicate';
+        await tx
+          .update(activityEvents)
+          .set({ supersededAt: new Date() })
+          .where(
+            and(
+              eq(activityEvents.targetWordId, targetWordId),
+              inArray(activityEvents.kind, [
+                'contribution_submitted',
+                'word_created',
+              ]),
+              isNull(activityEvents.supersededAt),
+              // jangan supersede event verifikasi itu sendiri
+              ne(activityEvents.id, eventId),
+            ),
+          );
+        return 'appended';
+      });
+    }
+
+    const values = {
+      kind: input.kind,
+      actorId: input.actorId ?? null,
+      targetWordId,
+      targetId: input.targetId ?? null,
+      occurredAt: input.occurredAt ?? new Date(),
+      dedupeKey: input.dedupeKey ?? null,
+      payload: input.payload ?? null,
+      hiddenAt: input.hidden ? new Date() : null,
+    };
+    // Re-append event tersembunyi (dedupe key sama) = tampilkan lagi;
+    // waktu kejadian TIDAK di-reset (sejarah beku). Payload ikut ditimpa:
+    // flip arah vote dengan dedupe key sama menimpa copy.
+    const conflictSet = {
+      hiddenAt: input.hidden ? new Date() : null,
+      ...(input.payload !== undefined ? { payload: input.payload } : {}),
+    };
+
+    // ponytail: jangan ON CONFLICT DO UPDATE RETURNING - di Turso/libsql
+    // staging sempat gagal "Failed query" (cause hilang di log). INSERT
+    // OR IGNORE + UPDATE by dedupe = efek sama, 2 statement sederhana.
+    if (input.dedupeKey) {
+      const inserted = await this.db
+        .insert(activityEvents)
+        .values(values)
+        .onConflictDoNothing({ target: activityEvents.dedupeKey })
         .returning({ id: activityEvents.id });
-      return rows.length > 0 ? 'appended' : 'duplicate';
-    });
+      if (inserted.length > 0) return 'appended';
+      await this.db
+        .update(activityEvents)
+        .set(conflictSet)
+        .where(eq(activityEvents.dedupeKey, input.dedupeKey));
+      return 'appended';
+    }
+
+    try {
+      await this.db.insert(activityEvents).values(values);
+      return 'appended';
+    } catch (err) {
+      if (isUniqueViolationOn(err, 'dedupe')) return 'duplicate';
+      throw err;
+    }
   }
 
   async setHidden(
