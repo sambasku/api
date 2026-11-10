@@ -1,31 +1,34 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 import { users } from './users.schema';
-import { jinye } from './jinye.schema';
 
-export const JINYE_TRANSLATION_STATUSES = [
+export const TRANSLATION_STATUSES = [
   'pending',
   'accepted',
   'rejected',
 ] as const;
-export type JinyeTranslationStatus = (typeof JINYE_TRANSLATION_STATUSES)[number];
+export type TranslationStatus = (typeof TRANSLATION_STATUSES)[number];
+
+/** Reff yang didukung create/list. Tambah di sini saat sumber baru. */
+export const TRANSLATION_REFFS = ['jinye'] as const;
+export type TranslationReff = (typeof TRANSLATION_REFFS)[number];
 
 /**
- * Usulan terjemahan Indonesia untuk body Jinye.
+ * Usulan terjemahan generik (multi-sumber).
+ * Jinye: reff=`jinye`, reff_id=id Jinye.
  * Max satu `accepted` + satu `pending` per translator ditegakkan di use case.
  */
-export const jinyeTranslations = sqliteTable(
-  'jinye_translations',
+export const translations = sqliteTable(
+  'translations',
   {
     id: text('id')
       .primaryKey()
       .$defaultFn(() => generateId()),
-    jinyeId: text('jinye_id')
-      .notNull()
-      .references(() => jinye.id),
-    /** Teks Indonesia. */
-    bodyId: text('body_id').notNull(),
-    status: text('status', { enum: JINYE_TRANSLATION_STATUSES })
+    reff: text('reff').notNull(),
+    reffId: text('reff_id').notNull(),
+    /** Teks terjemahan. */
+    body: text('body').notNull(),
+    status: text('status', { enum: TRANSLATION_STATUSES })
       .notNull()
       .default('pending'),
     translatorId: text('translator_id')
@@ -39,7 +42,7 @@ export const jinyeTranslations = sqliteTable(
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
   },
   (t) => [
-    index('jinye_translations_jinye_idx').on(t.jinyeId, t.status),
-    index('jinye_translations_translator_idx').on(t.translatorId),
+    index('translations_reff_idx').on(t.reff, t.reffId, t.status),
+    index('translations_translator_idx').on(t.translatorId),
   ],
 );

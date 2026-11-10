@@ -64,13 +64,6 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     listActiveLemmaLinksForTarget: vi.fn(),
     updateLemmaLink: vi.fn(),
     deleteLemmaLink: vi.fn(),
-    createTranslation: vi.fn(),
-    findTranslationById: vi.fn(),
-    listTranslationsByJinyeId: vi.fn(),
-    findPendingTranslationByTranslator: vi.fn(),
-    findAcceptedTranslation: vi.fn(),
-    updateTranslation: vi.fn(),
-    rejectPendingTranslations: vi.fn(async () => 0),
     ...overrides,
   };
 }
@@ -80,13 +73,21 @@ const audit = { record: vi.fn(async () => undefined) } as never;
 describe('Archive / pin Jinye', () => {
   it('archive published → archived + clear pin', async () => {
     const r = repo();
-    const out = await new ArchiveJinyeUseCase(r, audit).execute({
+    const translations = {
+      rejectPending: vi.fn(async () => undefined),
+    };
+    const out = await new ArchiveJinyeUseCase(
+      r,
+      audit,
+      undefined,
+      translations,
+    ).execute({
       id: JINYE_ID,
       userId: OWNER,
     });
     expect(out.status).toBe('archived');
     expect(r.clearPinnedIf).toHaveBeenCalledWith(JINYE_ID);
-    expect(r.rejectPendingTranslations).toHaveBeenCalledWith(JINYE_ID);
+    expect(translations.rejectPending).toHaveBeenCalledWith('jinye', JINYE_ID);
   });
 
   it('unarchive archived → published', async () => {

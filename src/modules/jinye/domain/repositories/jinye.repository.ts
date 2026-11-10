@@ -6,8 +6,6 @@ import type {
   JinyeLemmaLink,
   JinyeListFilter,
   JinyeRevision,
-  JinyeTranslation,
-  JinyeTranslationStatus,
   NewJinye,
   NewJinyeComment,
 } from '../entities/jinye.entity';
@@ -95,27 +93,4 @@ export interface JinyeRepository {
     },
   ): Promise<JinyeLemmaLink | null>;
   deleteLemmaLink(id: string): Promise<boolean>;
-
-  createTranslation(input: {
-    jinyeId: string;
-    bodyId: string;
-    translatorId: string;
-  }): Promise<JinyeTranslation>;
-  findTranslationById(id: string): Promise<JinyeTranslation | null>;
-  listTranslationsByJinyeId(jinyeId: string): Promise<JinyeTranslation[]>;
-  findPendingTranslationByTranslator(
-    jinyeId: string,
-    translatorId: string,
-  ): Promise<JinyeTranslation | null>;
-  findAcceptedTranslation(jinyeId: string): Promise<JinyeTranslation | null>;
-  updateTranslation(
-    id: string,
-    patch: {
-      status?: JinyeTranslationStatus;
-      reviewedBy?: string | null;
-      reviewedAt?: Date | null;
-    },
-  ): Promise<JinyeTranslation | null>;
-  /** Reject semua pending translation saat sumber hilang. */
-  rejectPendingTranslations(jinyeId: string): Promise<number>;
 }

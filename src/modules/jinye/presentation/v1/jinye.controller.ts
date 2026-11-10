@@ -27,9 +27,6 @@ import type { ResolveJinyeLemmaCorrectionUseCase } from '../../application/use-c
 import type { DeleteJinyeLemmaLinkUseCase } from '../../application/use-cases/delete-jinye-lemma-link.use-case';
 import type { ListJinyeLemmaLinksUseCase } from '../../application/use-cases/list-jinye-lemma-links.use-case';
 import type { PromoteJinyeExampleUseCase } from '../../application/use-cases/promote-jinye-example.use-case';
-import type { CreateJinyeTranslationUseCase } from '../../application/use-cases/create-jinye-translation.use-case';
-import type { ListJinyeTranslationsUseCase } from '../../application/use-cases/list-jinye-translations.use-case';
-import type { ResolveJinyeTranslationUseCase } from '../../application/use-cases/resolve-jinye-translation.use-case';
 import type { UpdateJinyeUseCase } from '../../application/use-cases/update-jinye.use-case';
 import type { GetJinyeEditHistoryUseCase } from '../../application/use-cases/get-jinye-edit-history.use-case';
 import type { RepostJinyeUseCase } from '../../application/use-cases/repost-jinye.use-case';
@@ -38,22 +35,17 @@ import type { QuoteJinyeUseCase } from '../../application/use-cases/quote-jinye.
 import type { ListAdminJinyeUseCase } from '../../application/use-cases/list-admin-jinye.use-case';
 import type { TakedownJinyeUseCase } from '../../application/use-cases/takedown-jinye.use-case';
 import type { TakedownJinyeCommentUseCase } from '../../application/use-cases/takedown-jinye-comment.use-case';
-import type {
-  JinyeLemmaLink,
-  JinyeTranslation,
-} from '../../domain/entities/jinye.entity';
+import type { JinyeLemmaLink } from '../../domain/entities/jinye.entity';
 import type {
   CreateJinyeBody,
   CreateJinyeCommentBody,
   CreateJinyeLemmaLinkBody,
-  CreateJinyeTranslationBody,
   ListAdminJinyeQuery,
   ListJinyeQuery,
   PromoteJinyeExampleBody,
   ProposeJinyeLemmaCorrectionBody,
   QuoteJinyeBody,
   ResolveJinyeLemmaCorrectionBody,
-  ResolveJinyeTranslationBody,
   UpdateJinyeBody,
 } from './validators/jinye.validator';
 
@@ -206,9 +198,6 @@ export class JinyeController {
       resolveLemmaCorrection: ResolveJinyeLemmaCorrectionUseCase;
       deleteLemmaLink: DeleteJinyeLemmaLinkUseCase;
       promoteExample: PromoteJinyeExampleUseCase;
-      createTranslation: CreateJinyeTranslationUseCase;
-      listTranslations: ListJinyeTranslationsUseCase;
-      resolveTranslation: ResolveJinyeTranslationUseCase;
       update: UpdateJinyeUseCase;
       editHistory: GetJinyeEditHistoryUseCase;
       repost: RepostJinyeUseCase;
@@ -590,46 +579,6 @@ export class JinyeController {
     );
   }
 
-  async listTranslations(
-    c: Context<{ Variables: AppVariables }>,
-    jinyeId: string,
-  ) {
-    const items = await this.deps.listTranslations.execute(jinyeId);
-    return c.json({ data: items.map(toTranslationWire) });
-  }
-
-  async createTranslation(
-    c: Context<{ Variables: AppVariables }>,
-    jinyeId: string,
-    body: CreateJinyeTranslationBody,
-  ) {
-    const user = requireUser(c);
-    const row = await this.deps.createTranslation.execute({
-      jinyeId,
-      userId: user.user_id,
-      bodyId: body.body_id,
-      requestId: c.get('requestId') ?? null,
-    });
-    return c.json({ data: toTranslationWire(row) }, 201);
-  }
-
-  async resolveTranslation(
-    c: Context<{ Variables: AppVariables }>,
-    jinyeId: string,
-    translationId: string,
-    body: ResolveJinyeTranslationBody,
-  ) {
-    const user = requireUser(c);
-    const row = await this.deps.resolveTranslation.execute({
-      jinyeId,
-      translationId,
-      reviewerId: user.user_id,
-      action: body.action,
-      requestId: c.get('requestId') ?? null,
-    });
-    return c.json({ data: toTranslationWire(row) });
-  }
-
   async update(
     c: Context<{ Variables: AppVariables }>,
     id: string,
@@ -701,18 +650,5 @@ function toLemmaLinkWire(link: JinyeLemmaLink) {
     proposed_lemma: link.proposedLemma,
     proposed_by: link.proposedBy,
     created_at: link.createdAt.toISOString(),
-  };
-}
-
-function toTranslationWire(row: JinyeTranslation) {
-  return {
-    id: row.id,
-    jinye_id: row.jinyeId,
-    body_id: row.bodyId,
-    status: row.status,
-    translator_id: row.translatorId,
-    reviewed_by: row.reviewedBy,
-    reviewed_at: row.reviewedAt?.toISOString() ?? null,
-    created_at: row.createdAt.toISOString(),
   };
 }

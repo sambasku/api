@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PromoteJinyeExampleUseCase } from '../../application/use-cases/promote-jinye-example.use-case';
-import { CreateJinyeTranslationUseCase } from '../../application/use-cases/create-jinye-translation.use-case';
-import { ResolveJinyeTranslationUseCase } from '../../application/use-cases/resolve-jinye-translation.use-case';
 
 vi.mock('@/modules/word/application/utils/assert-can-contribute', () => ({
   assertCanContribute: vi.fn().mockResolvedValue(undefined),
@@ -110,99 +108,5 @@ describe('PromoteJinyeExampleUseCase', () => {
         wordId: '01WORD00000000000000000001',
       }),
     ).rejects.toMatchObject({ errorCode: 'NOT_OWNER' });
-  });
-});
-
-describe('Jinye translation use cases', () => {
-  const repo = {
-    findById: vi.fn(),
-    findPendingTranslationByTranslator: vi.fn(),
-    createTranslation: vi.fn(),
-    findTranslationById: vi.fn(),
-    findAcceptedTranslation: vi.fn(),
-    updateTranslation: vi.fn(),
-  };
-  const audit = { record: vi.fn().mockResolvedValue(undefined) };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    repo.findById.mockResolvedValue(jinyeBase);
-    repo.findPendingTranslationByTranslator.mockResolvedValue(null);
-    repo.createTranslation.mockResolvedValue({
-      id: '01TR0000000000000000000001',
-      jinyeId: jinyeBase.id,
-      bodyId: 'Saya makan nasi',
-      status: 'pending',
-      translatorId: '01USER00000000000000000002',
-      reviewedBy: null,
-      reviewedAt: null,
-      createdAt: new Date(),
-      updatedAt: null,
-    });
-  });
-
-  it('creates pending translation', async () => {
-    const row = await new CreateJinyeTranslationUseCase(
-      repo as never,
-      audit as never,
-    ).execute({
-      jinyeId: jinyeBase.id,
-      userId: '01USER00000000000000000002',
-      bodyId: 'Saya makan nasi',
-    });
-    expect(row.status).toBe('pending');
-    expect(repo.createTranslation).toHaveBeenCalled();
-  });
-
-  it('approves translation and supersedes previous accepted', async () => {
-    repo.findTranslationById.mockResolvedValue({
-      id: '01TR0000000000000000000001',
-      jinyeId: jinyeBase.id,
-      bodyId: 'Saya makan nasi',
-      status: 'pending',
-      translatorId: '01USER00000000000000000002',
-      reviewedBy: null,
-      reviewedAt: null,
-      createdAt: new Date(),
-      updatedAt: null,
-    });
-    repo.findAcceptedTranslation.mockResolvedValue({
-      id: '01TROLD0000000000000000001',
-      jinyeId: jinyeBase.id,
-      bodyId: 'lama',
-      status: 'accepted',
-      translatorId: '01USER00000000000000000003',
-      reviewedBy: null,
-      reviewedAt: null,
-      createdAt: new Date(),
-      updatedAt: null,
-    });
-    repo.updateTranslation.mockImplementation(async (id, patch) => ({
-      id,
-      jinyeId: jinyeBase.id,
-      bodyId: 'Saya makan nasi',
-      status: patch.status ?? 'pending',
-      translatorId: '01USER00000000000000000002',
-      reviewedBy: patch.reviewedBy ?? null,
-      reviewedAt: patch.reviewedAt ?? null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
-
-    const out = await new ResolveJinyeTranslationUseCase(
-      repo as never,
-      audit as never,
-    ).execute({
-      jinyeId: jinyeBase.id,
-      translationId: '01TR0000000000000000000001',
-      reviewerId: '01VER0000000000000000000001',
-      action: 'approve',
-    });
-
-    expect(repo.updateTranslation).toHaveBeenCalledWith(
-      '01TROLD0000000000000000001',
-      expect.objectContaining({ status: 'rejected' }),
-    );
-    expect(out.status).toBe('accepted');
   });
 });

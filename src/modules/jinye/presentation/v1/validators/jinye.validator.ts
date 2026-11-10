@@ -271,44 +271,6 @@ export const promoteJinyeExampleResponseSchema = z.object({
   }),
 });
 
-export const createJinyeTranslationBodySchema = z.object({
-  body_id: z.string().trim().min(1).max(1000),
-});
-export type CreateJinyeTranslationBody = z.infer<
-  typeof createJinyeTranslationBodySchema
->;
-
-export const resolveJinyeTranslationBodySchema = z.object({
-  action: z.enum(['approve', 'reject']),
-});
-export type ResolveJinyeTranslationBody = z.infer<
-  typeof resolveJinyeTranslationBodySchema
->;
-
-export const jinyeTranslationIdParamSchema = z.object({
-  id: opaqueId,
-  translationId: opaqueId,
-});
-
-export const jinyeTranslationWireSchema = z.object({
-  id: z.string(),
-  jinye_id: z.string(),
-  body_id: z.string(),
-  status: z.string(),
-  translator_id: z.string(),
-  reviewed_by: z.string().nullable(),
-  reviewed_at: z.string().nullable(),
-  created_at: z.string(),
-});
-
-export const jinyeTranslationResponseSchema = z.object({
-  data: jinyeTranslationWireSchema,
-});
-
-export const listJinyeTranslationsResponseSchema = z.object({
-  data: z.array(jinyeTranslationWireSchema),
-});
-
 export const updateJinyeBodySchema = z.object({
   body: z
     .string({ error: 'Teks tidak valid' })

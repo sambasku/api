@@ -1,4 +1,5 @@
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { TranslationRepository } from '@/modules/translation/domain/repositories/translation.repository';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import { NotFoundError } from '@/shared/errors/app-error';
 import type { Jinye } from '../../domain/entities/jinye.entity';
@@ -11,6 +12,10 @@ export class ArchiveJinyeUseCase {
     private readonly words?: Pick<
       WordRepository,
       'cancelPendingExamplesFromJinye'
+    >,
+    private readonly translations?: Pick<
+      TranslationRepository,
+      'rejectPending'
     >,
   ) {}
 
@@ -40,7 +45,7 @@ export class ArchiveJinyeUseCase {
 
     await this.repo.clearPinnedIf(input.id);
     await this.words?.cancelPendingExamplesFromJinye(input.id);
-    await this.repo.rejectPendingTranslations(input.id);
+    await this.translations?.rejectPending('jinye', input.id);
 
     await this.auditRepo.record({
       userId: input.userId,

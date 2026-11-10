@@ -126,20 +126,6 @@ export interface JinyeLemmaLink {
   updatedAt: Date | null;
 }
 
-export type JinyeTranslationStatus = 'pending' | 'accepted' | 'rejected';
-
-export interface JinyeTranslation {
-  id: string;
-  jinyeId: string;
-  bodyId: string;
-  status: JinyeTranslationStatus;
-  translatorId: string;
-  reviewedBy: string | null;
-  reviewedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date | null;
-}
-
 export interface JinyePromoteExampleResult {
   exampleId: string;
   wordAudioId: string | null;

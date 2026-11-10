@@ -646,10 +646,13 @@ import { ProposeJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/
 import { ResolveJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-lemma-correction.use-case";
 import { DeleteJinyeLemmaLinkUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-lemma-link.use-case";
 import { PromoteJinyeExampleUseCase } from "@/modules/jinye/application/use-cases/promote-jinye-example.use-case";
-import { CreateJinyeTranslationUseCase } from "@/modules/jinye/application/use-cases/create-jinye-translation.use-case";
-import { ListJinyeTranslationsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-translations.use-case";
-import { ResolveJinyeTranslationUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-translation.use-case";
 import { UpdateJinyeUseCase } from "@/modules/jinye/application/use-cases/update-jinye.use-case";
+import { TranslationRepositoryImpl } from "@/modules/translation/infrastructure/translation.repository.impl";
+import { CreateTranslationUseCase } from "@/modules/translation/application/use-cases/create-translation.use-case";
+import { ListTranslationsUseCase } from "@/modules/translation/application/use-cases/list-translations.use-case";
+import { ResolveTranslationUseCase } from "@/modules/translation/application/use-cases/resolve-translation.use-case";
+import { TranslationController } from "@/modules/translation/presentation/v1/translation.controller";
+import { createTranslationRoutes } from "@/modules/translation/presentation/v1/translation.routes";
 import { GetJinyeEditHistoryUseCase } from "@/modules/jinye/application/use-cases/get-jinye-edit-history.use-case";
 import { RepostJinyeUseCase } from "@/modules/jinye/application/use-cases/repost-jinye.use-case";
 import { UnrepostJinyeUseCase } from "@/modules/jinye/application/use-cases/unrepost-jinye.use-case";
@@ -2971,6 +2974,24 @@ app.route(
 // ------------------------------------------------------------------
 // Jinye: status singkat (teks / foto / voice). Post-moderation.
 const jinyeRepo = new JinyeRepositoryImpl(db);
+const translationRepo = new TranslationRepositoryImpl(db);
+const translationController = new TranslationController({
+  create: new CreateTranslationUseCase(
+    translationRepo,
+    jinyeRepo,
+    auditRepo,
+  ),
+  list: new ListTranslationsUseCase(translationRepo),
+  resolve: new ResolveTranslationUseCase(translationRepo, auditRepo),
+});
+app.route(
+  "/api/v1/translations",
+  createTranslationRoutes({
+    controller: translationController,
+    authenticate,
+    requireLegalConsent,
+  }),
+);
 const takedownJinye = new TakedownJinyeUseCase(jinyeRepo, auditRepo);
 const takedownJinyeComment = new TakedownJinyeCommentUseCase(
   jinyeRepo,
@@ -3006,7 +3027,12 @@ const jinyeController = new JinyeController({
   ),
   listPublished: new ListPublishedJinyeUseCase(jinyeRepo, userRepo),
   getDetail: new GetJinyeDetailUseCase(jinyeRepo),
-  deleteJinye: new DeleteJinyeUseCase(jinyeRepo, auditRepo, wordRepo),
+  deleteJinye: new DeleteJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    wordRepo,
+    translationRepo,
+  ),
   attachAudio: new AttachJinyeAudioUseCase(
     jinyeRepo,
     pronunciationStorage,
@@ -3024,7 +3050,12 @@ const jinyeController = new JinyeController({
   ),
   listComments: new ListJinyeCommentsUseCase(jinyeRepo),
   deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, auditRepo),
-  archive: new ArchiveJinyeUseCase(jinyeRepo, auditRepo, wordRepo),
+  archive: new ArchiveJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    wordRepo,
+    translationRepo,
+  ),
   unarchive: new UnarchiveJinyeUseCase(jinyeRepo, auditRepo),
   pin: new PinJinyeUseCase(jinyeRepo, auditRepo),
   unpin: new UnpinJinyeUseCase(jinyeRepo, auditRepo),
@@ -3050,9 +3081,6 @@ const jinyeController = new JinyeController({
     wordRepo,
     auditRepo,
   ),
-  createTranslation: new CreateJinyeTranslationUseCase(jinyeRepo, auditRepo),
-  listTranslations: new ListJinyeTranslationsUseCase(jinyeRepo),
-  resolveTranslation: new ResolveJinyeTranslationUseCase(jinyeRepo, auditRepo),
   update: new UpdateJinyeUseCase(
     jinyeRepo,
     auditRepo,

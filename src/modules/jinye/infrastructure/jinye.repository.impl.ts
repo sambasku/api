@@ -10,11 +10,9 @@ import {
   jinyeComments,
   jinyeLemmaLinks,
   jinyeRevisions,
-  jinyeTranslations,
   users,
   words,
 } from '@/shared/database/drizzle/schema';
-import type { JinyeTranslationStatus as JinyeTranslationStatusDb } from '@/shared/database/drizzle/schema/jinye-translations.schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
@@ -32,8 +30,6 @@ import type {
   JinyeLemmaLink,
   JinyeListFilter,
   JinyeRevision,
-  JinyeTranslation,
-  JinyeTranslationStatus,
   NewJinye,
   NewJinyeComment,
 } from '../domain/entities/jinye.entity';
@@ -752,138 +748,6 @@ export class JinyeRepositoryImpl implements JinyeRepository {
       .returning({ id: jinyeLemmaLinks.id });
     return deleted.length > 0;
   }
-
-  async createTranslation(input: {
-    jinyeId: string;
-    bodyId: string;
-    translatorId: string;
-  }): Promise<JinyeTranslation> {
-    const [row] = await this.db
-      .insert(jinyeTranslations)
-      .values({
-        jinyeId: input.jinyeId,
-        bodyId: input.bodyId,
-        translatorId: input.translatorId,
-        status: 'pending',
-      })
-      .returning();
-    return mapTranslation(row);
-  }
-
-  async findTranslationById(id: string): Promise<JinyeTranslation | null> {
-    const [row] = await this.db
-      .select()
-      .from(jinyeTranslations)
-      .where(eq(jinyeTranslations.id, id))
-      .limit(1);
-    return row ? mapTranslation(row) : null;
-  }
-
-  async listTranslationsByJinyeId(
-    jinyeId: string,
-  ): Promise<JinyeTranslation[]> {
-    const rows = await this.db
-      .select()
-      .from(jinyeTranslations)
-      .where(eq(jinyeTranslations.jinyeId, jinyeId))
-      .orderBy(desc(jinyeTranslations.createdAt));
-    return rows.map(mapTranslation);
-  }
-
-  async findPendingTranslationByTranslator(
-    jinyeId: string,
-    translatorId: string,
-  ): Promise<JinyeTranslation | null> {
-    const [row] = await this.db
-      .select()
-      .from(jinyeTranslations)
-      .where(
-        and(
-          eq(jinyeTranslations.jinyeId, jinyeId),
-          eq(jinyeTranslations.translatorId, translatorId),
-          eq(jinyeTranslations.status, 'pending'),
-        ),
-      )
-      .limit(1);
-    return row ? mapTranslation(row) : null;
-  }
-
-  async findAcceptedTranslation(
-    jinyeId: string,
-  ): Promise<JinyeTranslation | null> {
-    const [row] = await this.db
-      .select()
-      .from(jinyeTranslations)
-      .where(
-        and(
-          eq(jinyeTranslations.jinyeId, jinyeId),
-          eq(jinyeTranslations.status, 'accepted'),
-        ),
-      )
-      .limit(1);
-    return row ? mapTranslation(row) : null;
-  }
-
-  async updateTranslation(
-    id: string,
-    patch: {
-      status?: JinyeTranslationStatus;
-      reviewedBy?: string | null;
-      reviewedAt?: Date | null;
-    },
-  ): Promise<JinyeTranslation | null> {
-    const updated = await this.db
-      .update(jinyeTranslations)
-      .set({
-        ...(patch.status !== undefined
-          ? { status: patch.status as JinyeTranslationStatusDb }
-          : {}),
-        ...(patch.reviewedBy !== undefined
-          ? { reviewedBy: patch.reviewedBy }
-          : {}),
-        ...(patch.reviewedAt !== undefined
-          ? { reviewedAt: patch.reviewedAt }
-          : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(jinyeTranslations.id, id))
-      .returning({ id: jinyeTranslations.id });
-    if (updated.length === 0) return null;
-    return this.findTranslationById(id);
-  }
-
-  async rejectPendingTranslations(jinyeId: string): Promise<number> {
-    const rows = await this.db
-      .update(jinyeTranslations)
-      .set({
-        status: 'rejected',
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(jinyeTranslations.jinyeId, jinyeId),
-          eq(jinyeTranslations.status, 'pending'),
-        ),
-      )
-      .returning({ id: jinyeTranslations.id });
-    return rows.length;
-  }
-}
-
-function mapTranslation(
-  row: typeof jinyeTranslations.$inferSelect,
-): JinyeTranslation {
-  return {
-    id: row.id,
-    jinyeId: row.jinyeId,
-    bodyId: row.bodyId,
-    status: row.status as JinyeTranslationStatus,
-    translatorId: row.translatorId,
-    reviewedBy: row.reviewedBy ?? null,
-    reviewedAt: row.reviewedAt ?? null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt ?? null,
-  };
 }
 
 function mapLemmaLink(row: {

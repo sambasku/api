@@ -91,13 +91,6 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     listActiveLemmaLinksForTarget: vi.fn(),
     updateLemmaLink: vi.fn(),
     deleteLemmaLink: vi.fn(),
-    createTranslation: vi.fn(),
-    findTranslationById: vi.fn(),
-    listTranslationsByJinyeId: vi.fn(),
-    findPendingTranslationByTranslator: vi.fn(),
-    findAcceptedTranslation: vi.fn(),
-    updateTranslation: vi.fn(),
-    rejectPendingTranslations: vi.fn(),
     ...overrides,
   };
 }
