@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
+import {
+  BadRequestError,
+  ConflictError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/shared/errors/app-error';
 import {
   GetMyProfileUseCase,
   UpdateMyProfileUseCase,
@@ -241,5 +246,95 @@ describe('UpdateMyProfileUseCase', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestError);
     expect(userRepo.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('ganti username tersedia → updateProfile dipanggil', async () => {
+    const updated = makeUser({ username: 'warga.sambas' });
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser({ username: 'budi00' })),
+      findByUsername: vi.fn().mockResolvedValue(null),
+      updateProfile: vi.fn().mockResolvedValue(updated),
+    } as unknown as UserRepository;
+
+    const result = await new UpdateMyProfileUseCase(userRepo, regionRepo).execute(
+      USER_ID,
+      { username: 'warga.sambas' },
+    );
+
+    expect(userRepo.updateProfile).toHaveBeenCalledWith(USER_ID, {
+      username: 'warga.sambas',
+    });
+    expect(result.username).toBe('warga.sambas');
+  });
+
+  it('username sama (current) → tidak tulis username', async () => {
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser({ username: 'budi00' })),
+      findByUsername: vi.fn(),
+      updateProfile: vi.fn().mockResolvedValue(makeUser({ username: 'budi00' })),
+    } as unknown as UserRepository;
+
+    await new UpdateMyProfileUseCase(userRepo, regionRepo).execute(USER_ID, {
+      username: 'budi00',
+      displayName: 'Budi',
+    });
+
+    expect(userRepo.findByUsername).not.toHaveBeenCalled();
+    expect(userRepo.updateProfile).toHaveBeenCalledWith(USER_ID, {
+      displayName: 'Budi',
+    });
+  });
+
+  it('username diambil orang lain → CONFLICT', async () => {
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser({ username: 'budi00' })),
+      findByUsername: vi.fn().mockResolvedValue(makeUser({ id: 'OTHER', username: 'warga.sambas' })),
+      updateProfile: vi.fn(),
+    } as unknown as UserRepository;
+
+    await expect(
+      new UpdateMyProfileUseCase(userRepo, regionRepo).execute(USER_ID, {
+        username: 'warga.sambas',
+      }),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(userRepo.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('username reserved → VALIDATION_ERROR', async () => {
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser({ username: 'budi00' })),
+      findByUsername: vi.fn(),
+      updateProfile: vi.fn(),
+    } as unknown as UserRepository;
+
+    await expect(
+      new UpdateMyProfileUseCase(userRepo, regionRepo).execute(USER_ID, {
+        username: 'system',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(userRepo.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('checkUsernameAvailability: available / taken / current', async () => {
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser({ username: 'budi00' })),
+      findByUsername: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeUser({ id: 'OTHER', username: 'warga.sambas' })),
+    } as unknown as UserRepository;
+    const useCase = new UpdateMyProfileUseCase(userRepo, regionRepo);
+
+    await expect(
+      useCase.checkUsernameAvailability(USER_ID, 'warga.sambas'),
+    ).resolves.toEqual({ username: 'warga.sambas', status: 'available' });
+
+    await expect(
+      useCase.checkUsernameAvailability(USER_ID, 'warga.sambas'),
+    ).resolves.toEqual({ username: 'warga.sambas', status: 'taken' });
+
+    await expect(
+      useCase.checkUsernameAvailability(USER_ID, 'budi00'),
+    ).resolves.toEqual({ username: 'budi00', status: 'current' });
   });
 });

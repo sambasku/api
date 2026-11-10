@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  normalizeUsernameSlug,
+  USERNAME_HANDLE_REGEX,
+} from '@/modules/auth/application/utils/username-slug';
 
 /** ULID 26 (PK regions) atau slug lama dari CDN regions.json. */
 const REGION_REF =
@@ -15,8 +19,21 @@ function nullableRegionId(message: string) {
     .refine((v) => v == null || REGION_REF.test(v), { message });
 }
 
+const USERNAME_FORMAT_MESSAGE =
+  'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore).';
+
 export const updateMyProfileSchema = z
   .object({
+    username: z
+      .string()
+      .trim()
+      .min(1, 'Username wajib diisi')
+      .max(64, USERNAME_FORMAT_MESSAGE)
+      .optional()
+      .transform((v) => (v === undefined ? undefined : normalizeUsernameSlug(v)))
+      .refine((v) => v === undefined || USERNAME_HANDLE_REGEX.test(v), {
+        message: USERNAME_FORMAT_MESSAGE,
+      }),
     display_name: z
       .string()
       .trim()
@@ -45,6 +62,7 @@ export const updateMyProfileSchema = z
   })
   .refine(
     (body) =>
+      body.username !== undefined ||
       body.display_name !== undefined ||
       body.bio !== undefined ||
       body.has_read_contribution_guide !== undefined ||
@@ -57,6 +75,22 @@ export const updateMyProfileSchema = z
         'Minimal satu field profil atau preferensi notifikasi harus diisi',
     },
   );
+
+export const usernameAvailabilityQuerySchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(1, 'Username wajib diisi')
+    .max(64, USERNAME_FORMAT_MESSAGE),
+});
+
+export const usernameAvailabilityResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    username: z.string(),
+    status: z.enum(['available', 'current', 'invalid', 'reserved', 'taken']),
+  }),
+});
 
 export type UpdateMyProfileBody = z.infer<typeof updateMyProfileSchema>;
 

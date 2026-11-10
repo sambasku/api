@@ -1,4 +1,6 @@
 export interface UpdateMyProfileDto {
+  /** Handle publik. Field absen = tidak diubah. */
+  username?: string;
   displayName?: string;
   bio?: string | null;
   /** true = user tap "Mengerti" di guide swipe halaman kontribusi. */

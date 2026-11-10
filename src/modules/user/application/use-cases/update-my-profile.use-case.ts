@@ -1,4 +1,9 @@
-import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
+import {
+  BadRequestError,
+  ConflictError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/shared/errors/app-error';
 import type { User } from '@/modules/auth/domain/entities/user.entity';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
@@ -10,6 +15,10 @@ import type { UpdateMyProfileDto } from '../dto/update-my-profile.dto';
 import type { PublicUserRepository } from '../../domain/repositories/public-user.repository';
 import type { PublicProfileLeveling } from '../../domain/entities/public-profile.entity';
 import { buildLeveling } from '@/modules/leveling/domain/leveling';
+import {
+  resolveUsernameAvailability,
+  type UsernameAvailabilityResult,
+} from '../utils/username-availability';
 
 export interface MyProfileResult {
   username: string;
@@ -191,10 +200,55 @@ export class UpdateMyProfileUseCase {
     private readonly publicUserRepo?: PublicUserRepository,
   ) {}
 
+  /** Prefill status username untuk UI editor (tanpa menulis DB). */
+  async checkUsernameAvailability(
+    userId: string,
+    rawUsername: string,
+  ): Promise<UsernameAvailabilityResult> {
+    const user = await this.userRepo.findById(userId);
+    if (!user || user.deletedAt || !user.isActive) {
+      throw new UnauthorizedError('UNAUTHORIZED', 'Sesi tidak valid');
+    }
+    return resolveUsernameAvailability({
+      raw: rawUsername,
+      currentUsername: user.username,
+      currentUserId: user.id,
+      findByUsername: (username) => this.userRepo.findByUsername(username),
+    });
+  }
+
   async execute(userId: string, dto: UpdateMyProfileDto): Promise<MyProfileResult> {
     const user = await this.userRepo.findById(userId);
     if (!user || user.deletedAt || !user.isActive) {
       throw new UnauthorizedError('UNAUTHORIZED', 'Sesi tidak valid');
+    }
+
+    let nextUsername: string | undefined;
+    if (dto.username !== undefined) {
+      const availability = await resolveUsernameAvailability({
+        raw: dto.username,
+        currentUsername: user.username,
+        currentUserId: user.id,
+        findByUsername: (username) => this.userRepo.findByUsername(username),
+      });
+      if (availability.status === 'invalid' || availability.status === 'reserved') {
+        throw new ValidationError([
+          {
+            field: 'username',
+            message:
+              availability.status === 'reserved'
+                ? 'Username tidak bisa dipakai'
+                : 'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore).',
+          },
+        ]);
+      }
+      if (availability.status === 'taken') {
+        throw new ConflictError('USERNAME_ALREADY_EXISTS', 'Nama sudah dipakai');
+      }
+      if (availability.status === 'available') {
+        nextUsername = availability.username;
+      }
+      // current = no-op
     }
 
     const touchesLocation = dto.regionId !== undefined || dto.villageId !== undefined;
@@ -211,6 +265,7 @@ export class UpdateMyProfileUseCase {
     }
 
     const updated = await this.userRepo.updateProfile(userId, {
+      ...(nextUsername !== undefined ? { username: nextUsername } : {}),
       ...(dto.displayName !== undefined ? { displayName: dto.displayName } : {}),
       ...(dto.bio !== undefined ? { bio: dto.bio } : {}),
       ...(resolvedRegionId !== undefined ? { regionId: resolvedRegionId } : {}),

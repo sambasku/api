@@ -19,6 +19,8 @@ import {
 import {
   myProfileResponseSchema,
   updateMyProfileSchema,
+  usernameAvailabilityQuerySchema,
+  usernameAvailabilityResponseSchema,
 } from './validators/update-my-profile.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -148,7 +150,7 @@ export function createPublicUserRoutes(deps: { controller: UserController }) {
   return routes;
 }
 
-/** GET/PATCH /api/v1/users/me - edit display_name, bio, kecamatan, desa. Mount sebelum /:username. */
+/** GET/PATCH /api/v1/users/me - edit username, display_name, bio, kecamatan, desa. Mount sebelum /:username. */
 export function createMeProfileRoutes(deps: {
   controller: UserController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
@@ -157,10 +159,12 @@ export function createMeProfileRoutes(deps: {
 }) {
   const routes = createOpenApiApp();
 
+  // Auth + rate limit bersama (GET/PATCH / + cek username). 40/menit
+  // supaya debounce ketik username tidak cepat kena 429.
   routes.use(
-    '/',
+    '*',
     deps.authenticate,
-    rateLimit({ points: 20, duration: 60, keyFn: (c) => `me-profile:${c.get('user')?.user_id}` }),
+    rateLimit({ points: 40, duration: 60, keyFn: (c) => `me-profile:${c.get('user')?.user_id}` }),
   );
   if (deps.requireApprovedClient) {
     routes.on('patch', '/', deps.requireApprovedClient);
@@ -177,20 +181,43 @@ export function createMeProfileRoutes(deps: {
     },
   });
 
+  const usernameAvailabilityRoute = createRoute({
+    method: 'get',
+    path: '/username-availability',
+    tags: ['Users'],
+    summary: 'Cek ketersediaan username sebelum simpan profil',
+    request: { query: usernameAvailabilityQuerySchema },
+    responses: {
+      200: {
+        description: 'Status username',
+        content: json(usernameAvailabilityResponseSchema),
+      },
+      400: { description: 'Query tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada', content: json(errorResponseSchema) },
+    },
+  });
+
   const patchRoute = createRoute({
     method: 'patch',
     path: '/',
     tags: ['Users'],
-    summary: 'Edit display_name, bio, kecamatan, dan/atau desa',
+    summary: 'Edit username, display_name, bio, kecamatan, dan/atau desa',
     request: { body: { content: json(updateMyProfileSchema) } },
     responses: {
       200: { description: 'Profil diperbarui', content: json(myProfileResponseSchema) },
       400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
       401: { description: 'Token tidak ada', content: json(errorResponseSchema) },
+      409: { description: 'Username sudah dipakai', content: json(errorResponseSchema) },
     },
   });
 
   routes.openapi(getRoute, (c) => deps.controller.getMyProfile(c) as never);
+  routes.openapi(usernameAvailabilityRoute, (c) =>
+    deps.controller.checkUsernameAvailability(
+      c,
+      c.req.valid('query').username,
+    ) as never,
+  );
   routes.openapi(patchRoute, (c) =>
     deps.controller.updateMyProfile(c, c.req.valid('json')) as never,
   );

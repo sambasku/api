@@ -138,10 +138,27 @@ export class UserController {
     return this.deps.suggestMention.execute(q);
   }
 
+  async checkUsernameAvailability(c: Context, username: string) {
+    const user = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!user) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const result = await this.deps.updateMyProfile.checkUsernameAvailability(
+      user.user_id,
+      username,
+    );
+    return c.json({
+      success: true as const,
+      data: {
+        username: result.username,
+        status: result.status,
+      },
+    });
+  }
+
   async updateMyProfile(c: Context, body: UpdateMyProfileBody) {
     const user = (c as Context<{ Variables: AppVariables }>).get('user');
     if (!user) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
     const profile = await this.deps.updateMyProfile.execute(user.user_id, {
+      username: body.username,
       displayName: body.display_name,
       bio: body.bio,
       regionId: body.region_id,

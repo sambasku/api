@@ -100,4 +100,25 @@ describe('updateMyProfileSchema', () => {
     if (!parsed.success) return;
     expect(parsed.data.village_id).toBe(id);
   });
+
+  it('username valid dinormalisasi', () => {
+    const parsed = updateMyProfileSchema.safeParse({
+      username: 'Warga.Sambas',
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.username).toBe('warga.sambas');
+  });
+
+  it('username pendek ditolak', () => {
+    expect(
+      updateMyProfileSchema.safeParse({ username: 'abc' }).success,
+    ).toBe(false);
+  });
+
+  it('refine: username saja cukup sebagai field valid', () => {
+    expect(
+      updateMyProfileSchema.safeParse({ username: 'warga.sambas' }).success,
+    ).toBe(true);
+  });
 });
