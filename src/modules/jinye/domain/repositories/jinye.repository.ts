@@ -30,6 +30,8 @@ export interface JinyeRepository {
   /** @deprecated pakai findLatestQuotaConsumingCreatedAtByUser */
   findLatestCreatedAtByUser(userId: string): Promise<Date | null>;
   markDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  /** Admin: published → taken_down. */
+  takedown(id: string, actorId: string): Promise<Jinye | null>;
   updateBody(input: {
     id: string;
     editorId: string;
@@ -61,6 +63,8 @@ export interface JinyeRepository {
   /** Semua published comments untuk satu Jinye (top-level + replies). */
   listCommentsByJinyeId(jinyeId: string): Promise<JinyeComment[]>;
   markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  /** Admin: published → taken_down. */
+  takedownComment(id: string, actorId: string): Promise<boolean>;
   incrementPublishedCommentCount(jinyeId: string, delta: number): Promise<void>;
 
   createLemmaLink(input: {

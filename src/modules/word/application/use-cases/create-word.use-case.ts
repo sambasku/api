@@ -358,10 +358,39 @@ export class CreateWordUseCase {
   }
 
   private async assertSearchMissProvenance(dto: CreateWordDto): Promise<void> {
-    if (!dto.searchMissId) return;
     if (!this.searchMissRepo) {
-      throw new NotFoundError('SEARCH_MISS_NOT_FOUND', 'Search miss tidak ditemukan');
+      // Tanpa repo: hanya gagal kalau client kirim id eksplisit.
+      if (dto.searchMissId) {
+        throw new NotFoundError('SEARCH_MISS_NOT_FOUND', 'Search miss tidak ditemukan');
+      }
+      return;
     }
+
+    // #262 seamless: tanpa search_miss_id, tautkan miss aktif yang term-nya
+    // cocok (lemma dulu, lalu terjemahan pertama). Usulan biasa tanpa miss
+    // tetap valid.
+    if (!dto.searchMissId) {
+      const lemmaMiss = await this.searchMissRepo.findByTermAndDirection(
+        dto.lemma,
+        'lemma',
+      );
+      if (lemmaMiss) {
+        dto.searchMissId = lemmaMiss.id;
+      } else {
+        const firstText = dto.meanings[0]?.translations[0]?.translationText ?? '';
+        if (firstText.trim()) {
+          const translationMiss = await this.searchMissRepo.findByTermAndDirection(
+            firstText,
+            'translation',
+          );
+          if (translationMiss) {
+            dto.searchMissId = translationMiss.id;
+          }
+        }
+      }
+      if (!dto.searchMissId) return;
+    }
+
     const miss = await this.searchMissRepo.findById(dto.searchMissId);
     if (!miss) {
       throw new NotFoundError('SEARCH_MISS_NOT_FOUND', 'Search miss tidak ditemukan');

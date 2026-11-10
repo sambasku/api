@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { opaqueId } from '@/shared/validation/id';
 import { uploadCredentialsResponseSchema } from '@/modules/image/presentation/v1/validators/image.validator';
+import { JINYE_STATUSES } from '@/shared/database/drizzle/schema/jinye.schema';
 
 const imageInputSchema = z.object({
   url: z
@@ -55,6 +56,39 @@ export const listJinyeQuerySchema = z.object({
 });
 
 export type ListJinyeQuery = z.infer<typeof listJinyeQuerySchema>;
+
+export const listAdminJinyeQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().trim().min(1).max(512).optional(),
+  status: z.enum(JINYE_STATUSES).optional(),
+  username: z.string().trim().min(1).max(64).optional(),
+});
+
+export type ListAdminJinyeQuery = z.infer<typeof listAdminJinyeQuerySchema>;
+
+export const jinyeCommentIdParamSchema = z.object({
+  id: opaqueId,
+});
+
+export const listAdminJinyeResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.array(z.any()),
+  meta: z.object({
+    limit: z.number().int(),
+    next_cursor: z.string().nullable(),
+    has_more: z.boolean(),
+  }),
+});
+
+export const adminJinyeItemResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.any(),
+});
+
+export const adminJinyeOkResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.null(),
+});
 
 const jinyeImageWireSchema = z.object({
   status: z.enum(['pending_review', 'published']),

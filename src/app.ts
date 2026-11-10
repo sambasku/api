@@ -654,12 +654,21 @@ import { GetJinyeEditHistoryUseCase } from "@/modules/jinye/application/use-case
 import { RepostJinyeUseCase } from "@/modules/jinye/application/use-cases/repost-jinye.use-case";
 import { UnrepostJinyeUseCase } from "@/modules/jinye/application/use-cases/unrepost-jinye.use-case";
 import { QuoteJinyeUseCase } from "@/modules/jinye/application/use-cases/quote-jinye.use-case";
+import { ListAdminJinyeUseCase } from "@/modules/jinye/application/use-cases/list-admin-jinye.use-case";
+import { TakedownJinyeUseCase } from "@/modules/jinye/application/use-cases/takedown-jinye.use-case";
+import { TakedownJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/takedown-jinye-comment.use-case";
 import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
 import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
+import { createAdminJinyeRoutes } from "@/modules/jinye/presentation/v1/admin-jinye.routes";
 import { JinyeReportRepositoryImpl } from "@/modules/jinye-report/infrastructure/jinye-report.repository.impl";
 import { SubmitJinyeReportUseCase } from "@/modules/jinye-report/application/use-cases/submit-jinye-report.use-case";
+import { ListJinyeReportsUseCase } from "@/modules/jinye-report/application/use-cases/list-jinye-reports.use-case";
+import { ResolveJinyeReportUseCase } from "@/modules/jinye-report/application/use-cases/resolve-jinye-report.use-case";
 import { JinyeReportController } from "@/modules/jinye-report/presentation/v1/jinye-report.controller";
-import { createJinyeReportRoutes } from "@/modules/jinye-report/presentation/v1/jinye-report.routes";
+import {
+  createAdminJinyeReportRoutes,
+  createJinyeReportRoutes,
+} from "@/modules/jinye-report/presentation/v1/jinye-report.routes";
 import { DashboardController } from "@/modules/dashboard/presentation/v1/dashboard.controller";
 import { createDashboardRoutes } from "@/modules/dashboard/presentation/v1/dashboard.routes";
 import { GetDashboardStatsUseCase } from "@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case";
@@ -2960,9 +2969,21 @@ app.route(
 // ------------------------------------------------------------------
 // Jinye: status singkat (teks / foto / voice). Post-moderation.
 const jinyeRepo = new JinyeRepositoryImpl(db);
+const takedownJinye = new TakedownJinyeUseCase(jinyeRepo, auditRepo);
+const takedownJinyeComment = new TakedownJinyeCommentUseCase(
+  jinyeRepo,
+  auditRepo,
+);
 const jinyeReportRepo = new JinyeReportRepositoryImpl(db);
 const jinyeReportController = new JinyeReportController({
   submit: new SubmitJinyeReportUseCase(jinyeReportRepo, jinyeRepo, auditRepo),
+  list: new ListJinyeReportsUseCase(jinyeReportRepo),
+  resolve: new ResolveJinyeReportUseCase(
+    jinyeReportRepo,
+    takedownJinye,
+    takedownJinyeComment,
+    auditRepo,
+  ),
 });
 // /reports sebelum /:id
 app.route(
@@ -3046,6 +3067,9 @@ const jinyeController = new JinyeController({
     recordAbuseSignal,
     activityEvents,
   ),
+  listAdmin: new ListAdminJinyeUseCase(jinyeRepo, userRepo),
+  takedown: takedownJinye,
+  takedownComment: takedownJinyeComment,
   imageController,
 });
 app.route(
@@ -3057,6 +3081,20 @@ app.route(
     requireApprovedClient: requirePantunWriteClient,
     requireLegalConsent,
     onUgcRateLimited,
+  }),
+);
+app.route(
+  "/api/v1/admin/jinye",
+  createAdminJinyeRoutes({
+    controller: jinyeController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/jinye-reports",
+  createAdminJinyeReportRoutes({
+    controller: jinyeReportController,
+    authenticate,
   }),
 );
 

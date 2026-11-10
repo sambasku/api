@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, articles, culinaryPlaces, cuisines, discussions, events, jinye, jinyeComments, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, articles, contributions, culinaryPlaces, cuisines, discussions, events, jinye, jinyeComments, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -787,6 +787,14 @@ sql`(${activityEvents.kind} <> 'article_published' or ${articles.id} is not null
 // Komentar artikel: komentar & artikelnya harus published.
 sql`(${activityEvents.kind} <> 'article_comment_created' or ${articleComments.id} is not null)`,
 sql`(${activityEvents.kind} <> 'article_comment_created' or ${articles.id} is not null)`,
+// #262: pencarian warga closed saat ada usulan pending bertaut miss
+// (sama aturan GET /search-misses publik; derived, bukan flip hidden_at).
+sql`(${activityEvents.kind} <> 'search_miss' or not exists (
+  select 1 from ${contributions} c
+  where c.search_miss_id = ${activityEvents.targetId}
+    and c.status = 'pending'
+    and c.deleted_at is null
+))`,
 ),
 )
       .orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id))

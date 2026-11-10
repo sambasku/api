@@ -423,6 +423,22 @@ export class JinyeRepositoryImpl implements JinyeRepository {
     return updated.length > 0;
   }
 
+  async takedown(id: string, actorId: string): Promise<Jinye | null> {
+    const updated = await this.db
+      .update(jinye)
+      .set({
+        status: 'taken_down',
+        takenDownBy: actorId,
+        takenDownAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(jinye.id, id), eq(jinye.status, 'published')))
+      .returning({ id: jinye.id });
+    if (updated.length === 0) return null;
+    await this.clearPinnedIf(id);
+    return this.findById(id);
+  }
+
   async setStatus(input: {
     id: string;
     userId: string;
@@ -564,6 +580,22 @@ export class JinyeRepositoryImpl implements JinyeRepository {
           eq(jinyeComments.userId, actorId),
           eq(jinyeComments.status, 'published'),
         ),
+      )
+      .returning({ id: jinyeComments.id });
+    return updated.length > 0;
+  }
+
+  async takedownComment(id: string, actorId: string): Promise<boolean> {
+    const updated = await this.db
+      .update(jinyeComments)
+      .set({
+        status: 'taken_down',
+        takenDownBy: actorId,
+        takenDownAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(jinyeComments.id, id), eq(jinyeComments.status, 'published')),
       )
       .returning({ id: jinyeComments.id });
     return updated.length > 0;

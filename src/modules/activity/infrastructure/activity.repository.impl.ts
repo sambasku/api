@@ -597,6 +597,15 @@ export class ActivityRepositoryImpl implements ActivityRepository {
             ${searchMisses.direction} = 'lemma' AND ${isFulfilledLemmaSql}
           )`,
           sql`NOT ${matchesExcludedLemmaSql}`,
+          // #262: case closed di pencarian warga saat ada usulan pending
+          // yang menaut miss (sama aturan GET /search-misses publik).
+          // Qualified search_misses.id: subquery contributions juga punya id.
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${contributions} c
+            WHERE c.search_miss_id = search_misses.id
+              AND c.status = 'pending'
+              AND c.deleted_at IS NULL
+          )`,
           // Miss yang pernah dicari viewer sendiri disembunyikan. EXISTS (bukan
           // join) supaya tidak menggandakan baris miss.
           excludeUserId

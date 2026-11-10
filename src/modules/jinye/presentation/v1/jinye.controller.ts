@@ -35,6 +35,9 @@ import type { GetJinyeEditHistoryUseCase } from '../../application/use-cases/get
 import type { RepostJinyeUseCase } from '../../application/use-cases/repost-jinye.use-case';
 import type { UnrepostJinyeUseCase } from '../../application/use-cases/unrepost-jinye.use-case';
 import type { QuoteJinyeUseCase } from '../../application/use-cases/quote-jinye.use-case';
+import type { ListAdminJinyeUseCase } from '../../application/use-cases/list-admin-jinye.use-case';
+import type { TakedownJinyeUseCase } from '../../application/use-cases/takedown-jinye.use-case';
+import type { TakedownJinyeCommentUseCase } from '../../application/use-cases/takedown-jinye-comment.use-case';
 import type {
   JinyeLemmaLink,
   JinyeTranslation,
@@ -44,6 +47,7 @@ import type {
   CreateJinyeCommentBody,
   CreateJinyeLemmaLinkBody,
   CreateJinyeTranslationBody,
+  ListAdminJinyeQuery,
   ListJinyeQuery,
   PromoteJinyeExampleBody,
   ProposeJinyeLemmaCorrectionBody,
@@ -210,9 +214,56 @@ export class JinyeController {
       repost: RepostJinyeUseCase;
       unrepost: UnrepostJinyeUseCase;
       quote: QuoteJinyeUseCase;
+      listAdmin: ListAdminJinyeUseCase;
+      takedown: TakedownJinyeUseCase;
+      takedownComment: TakedownJinyeCommentUseCase;
       imageController: ImageController;
     },
   ) {}
+
+  async listAdmin(
+    c: Context<{ Variables: AppVariables }>,
+    query: ListAdminJinyeQuery,
+  ) {
+    const page = await this.deps.listAdmin.execute({
+      limit: query.limit,
+      cursor: query.cursor,
+      status: query.status,
+      username: query.username,
+    });
+    return c.json({
+      success: true as const,
+      data: page.items.map((j) => toWire(j, { exposeStaging: true })),
+      meta: {
+        limit: query.limit,
+        next_cursor: page.nextCursor,
+        has_more: page.hasMore,
+      },
+    });
+  }
+
+  async takedown(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = requireUser(c);
+    const row = await this.deps.takedown.execute({
+      id,
+      actorId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({
+      success: true as const,
+      data: toWire(row, { exposeStaging: true }),
+    });
+  }
+
+  async takedownComment(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = requireUser(c);
+    await this.deps.takedownComment.execute({
+      commentId: id,
+      actorId: user.user_id,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: null });
+  }
 
   uploadCredentials(c: Context<{ Variables: AppVariables }>, folder: string) {
     return this.deps.imageController.uploadCredentials(c, folder);

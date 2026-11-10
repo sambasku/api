@@ -10,6 +10,8 @@ export interface JinyeReport {
   targetType: JinyeReportTarget;
   targetId: string;
   userId: string;
+  username: string | null;
+  displayName: string | null;
   reasonCode: JinyeReportReason;
   note: string | null;
   status: JinyeReportStatus;
@@ -20,3 +22,23 @@ export interface JinyeReport {
   createdAt: Date;
   updatedAt: Date | null;
 }
+
+/** Laporan + snapshot target (LEFT JOIN, satu query). */
+export interface JinyeReportWithTarget extends JinyeReport {
+  targetBody: string | null;
+  targetHasImages: boolean;
+  targetHasAudio: boolean;
+  targetStatus: string | null;
+  targetUserId: string | null;
+  targetUsername: string | null;
+  targetDisplayName: string | null;
+}
+
+export const JINYE_REPORT_REASON_LABEL: Record<string, string> = {
+  inappropriate: 'Tidak pantas',
+  sexual: 'Konten seksual',
+  harassment: 'Pelecehan atau perundungan',
+  hate_speech: 'Ujaran kebencian',
+  spam: 'Spam',
+  other: 'Lainnya',
+};
