@@ -401,7 +401,18 @@ export interface WordRepository {
   findById(id: string): Promise<Word | null>;
   /** replace semantics: hapus children lama, insert baru - satu transaksi.
    *  Dipakai correct-contribution (modul contribution) & update admin (menyusul) */
-  updateWithRelations(id: string, word: WordToSave, actorId: string, tx?: unknown): Promise<Word | null>;
+  /**
+   * Replace penuh anak kata. `recordContribution` default true - set false
+   * saat jalur correct (keputusan review sudah menutup antrean; insert
+   * action=update di sini bikin ghost pending milik verifikator).
+   */
+  updateWithRelations(
+    id: string,
+    word: WordToSave,
+    actorId: string,
+    tx?: unknown,
+    options?: { recordContribution?: boolean },
+  ): Promise<Word | null>;
   search(params: SearchParams): Promise<CursorPage<WordSummary>>;
   /**
    * PRD relasi-lemma: perluasan pencarian via kelompok makna.

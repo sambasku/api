@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ForbiddenError, ValidationError } from '@/shared/errors/app-error';
+import { ValidationError } from '@/shared/errors/app-error';
 import { CreateJinyeLemmaLinkUseCase } from '../../application/use-cases/create-jinye-lemma-link.use-case';
 import { ProposeJinyeLemmaCorrectionUseCase } from '../../application/use-cases/propose-jinye-lemma-correction.use-case';
 import { ResolveJinyeLemmaCorrectionUseCase } from '../../application/use-cases/resolve-jinye-lemma-correction.use-case';
@@ -115,16 +115,27 @@ const words = {
 const audit = { record: vi.fn(async () => undefined) } as never;
 
 describe('Jinye lemma links', () => {
-  it('create: non-owner → Forbidden', async () => {
-    await expect(
-      new CreateJinyeLemmaLinkUseCase(repo(), words as never, audit).execute({
-        jinyeId: JINYE_ID,
-        userId: OTHER,
-        start: 4,
-        end: 9,
+  it('create: non-owner → source community', async () => {
+    const r = repo();
+    const out = await new CreateJinyeLemmaLinkUseCase(
+      r,
+      words as never,
+      audit,
+    ).execute({
+      jinyeId: JINYE_ID,
+      userId: OTHER,
+      start: 4,
+      end: 9,
+      wordId: WORD_ID,
+    });
+    expect(out.lemma).toBe('makan');
+    expect(r.createLemmaLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'community',
+        status: 'active',
         wordId: WORD_ID,
       }),
-    ).rejects.toBeInstanceOf(ForbiddenError);
+    );
   });
 
   it('create: span invalid → ValidationError', async () => {
@@ -139,7 +150,7 @@ describe('Jinye lemma links', () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
-  it('create: owner + span valid → createLemmaLink', async () => {
+  it('create: owner + span valid → source author', async () => {
     const r = repo();
     const out = await new CreateJinyeLemmaLinkUseCase(
       r,
@@ -153,7 +164,13 @@ describe('Jinye lemma links', () => {
       wordId: WORD_ID,
     });
     expect(out.lemma).toBe('makan');
-    expect(r.createLemmaLink).toHaveBeenCalled();
+    expect(r.createLemmaLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'author',
+        status: 'active',
+        wordId: WORD_ID,
+      }),
+    );
   });
 
   it('propose correction → pending_correction', async () => {

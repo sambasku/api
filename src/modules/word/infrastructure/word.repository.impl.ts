@@ -3254,7 +3254,14 @@ memberLemma: string;
     };
   }
 
-  async updateWithRelations(id: string, word: WordToSave, actorId: string, tx?: unknown): Promise<Word | null> {
+  async updateWithRelations(
+    id: string,
+    word: WordToSave,
+    actorId: string,
+    tx?: unknown,
+    options?: { recordContribution?: boolean },
+  ): Promise<Word | null> {
+    const recordContribution = options?.recordContribution !== false;
     const run = async (tx: Tx): Promise<Word | null> => {
         // Update baris words
         const now = new Date();
@@ -3363,15 +3370,18 @@ memberLemma: string;
         await this.insertChildren(tx, id, wordWithAttribution, actorId);
         await this.restoreWordAudios(tx, id, audioSnapshots);
 
-        // Catat kontribusi update - status antrean turunan dari status entity
-        // (correct oleh verifikator → published → 'approved', tidak mengotori antrean)
-        await tx.insert(contributions).values({
-          userId: actorId,
-          entityType: 'word',
-          entityId: id,
-          action: 'update',
-          status: contributionStatusOf(word.status, word.isVerified),
-        });
+        // Catat kontribusi update - kecuali jalur correct (recordContribution=false):
+        // keputusan review sudah menutup antrean; insert di sini (apalagi
+        // publish=false → pending) bikin ghost "update oleh verifikator".
+        if (recordContribution) {
+          await tx.insert(contributions).values({
+            userId: actorId,
+            entityType: 'word',
+            entityId: id,
+            action: 'update',
+            status: contributionStatusOf(word.status, word.isVerified),
+          });
+        }
 
         return toWord(wordRow);
     };

@@ -152,10 +152,20 @@ function makeDeps(
       ),
   } as unknown as WordRepository;
   const auditRepo = { record: vi.fn().mockResolvedValue(undefined), list: vi.fn() };
+  const sync = {
+    closeLive: vi.fn().mockResolvedValue(undefined),
+    closeMerged: vi.fn().mockResolvedValue(undefined),
+    reopenUnverified: vi.fn().mockResolvedValue(undefined),
+  };
   return {
     wordRepo,
     auditRepo,
-    useCase: new UpdateWordUseCase(wordRepo, auditRepo as unknown as AuditLogRepository),
+    sync,
+    useCase: new UpdateWordUseCase(
+      wordRepo,
+      auditRepo as unknown as AuditLogRepository,
+      sync as never,
+    ),
   };
 }
 
@@ -163,7 +173,7 @@ const ADMIN = { roles: ['admin'], userId: '01TESTULIDUSERID00000000', role: 'adm
 
 describe('UpdateWordUseCase', () => {
   it('happy path: updateWithRelations membawa publication + is_corrected lama; audit update old→new', async () => {
-    const { useCase, wordRepo, auditRepo } = makeDeps({
+    const { useCase, wordRepo, auditRepo, sync } = makeDeps({
       existing: makeDetail({ isCorrected: true, lemma: 'makatn lama', status: 'pending_review' }),
     });
 
@@ -194,6 +204,8 @@ describe('UpdateWordUseCase', () => {
         newData: expect.objectContaining({ lemma: 'makatn', status: 'published', meanings_count: 1 }),
       }),
     );
+    // self-verify → tutup sibling pending (ghost update / usulan lama)
+    expect(sync.closeLive).toHaveBeenCalledWith(WORD_ID, ADMIN.userId);
   });
 
   it('kata tidak ditemukan / soft-deleted → NotFoundError WORD_NOT_FOUND', async () => {

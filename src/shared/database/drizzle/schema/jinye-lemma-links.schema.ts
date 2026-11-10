@@ -18,7 +18,11 @@ export const JINYE_LEMMA_LINK_STATUSES = [
 ] as const;
 export type JinyeLemmaLinkStatus = (typeof JINYE_LEMMA_LINK_STATUSES)[number];
 
-export const JINYE_LEMMA_LINK_SOURCES = ['author', 'correction'] as const;
+export const JINYE_LEMMA_LINK_SOURCES = [
+  'author',
+  'community',
+  'correction',
+] as const;
 export type JinyeLemmaLinkSource = (typeof JINYE_LEMMA_LINK_SOURCES)[number];
 
 /**

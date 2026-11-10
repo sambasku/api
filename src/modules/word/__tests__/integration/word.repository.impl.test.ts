@@ -370,6 +370,23 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     expect(rows.map((r) => r.action)).toContain('update');
   });
 
+  it('updateWithRelations recordContribution=false → tidak menambah baris action=update (jalur correct)', async () => {
+    const word = await repo.saveWithRelations(baseWord(), ACTOR);
+    const before = await db.select().from(contributions).where(eq(contributions.entityId, word.id));
+
+    await repo.updateWithRelations(
+      word.id,
+      baseWord({ notes: 'koreksi tanpa jejak update baru' }),
+      ACTOR,
+      undefined,
+      { recordContribution: false },
+    );
+
+    const after = await db.select().from(contributions).where(eq(contributions.entityId, word.id));
+    expect(after).toHaveLength(before.length);
+    expect(after.map((r) => r.action)).not.toContain('update');
+  });
+
   it('updateWithRelations tidak gagal FK saat makna sudah punya vote (0101)', async () => {
     // meaning_vote_counts memegang FK ke meanings: tanpa menghapus ringkasan
     // lebih dulu, edit kata manapun yang sudah divote maknanya gagal FK ->

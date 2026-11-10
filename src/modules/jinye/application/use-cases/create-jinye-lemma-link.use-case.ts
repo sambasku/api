@@ -1,11 +1,7 @@
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
-import {
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from '@/shared/errors/app-error';
+import { NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { JinyeLemmaLink } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
 import {
@@ -35,12 +31,6 @@ export class CreateJinyeLemmaLinkUseCase {
     if (!jinye || jinye.status !== 'published') {
       throw new NotFoundError('JINYE_NOT_FOUND', 'Jinye tidak ditemukan');
     }
-    if (jinye.userId !== input.userId) {
-      throw new ForbiddenError(
-        'NOT_OWNER',
-        'Hanya penulis yang bisa menautkan lemma di Jinye ini',
-      );
-    }
 
     assertValidSpan(jinye.body, input.start, input.end);
 
@@ -65,12 +55,15 @@ export class CreateJinyeLemmaLinkUseCase {
     assertUnderLinkCap(existing.length);
     assertNoOverlap(input.start, input.end, existing);
 
+    // ponytail: source bedakan kredit; status tetap active (bukan pending)
+    const source = jinye.userId === input.userId ? 'author' : 'community';
+
     const created = await this.repo.createLemmaLink({
       jinyeId: input.jinyeId,
       start: input.start,
       end: input.end,
       wordId: input.wordId,
-      source: 'author',
+      source,
       status: 'active',
     });
 

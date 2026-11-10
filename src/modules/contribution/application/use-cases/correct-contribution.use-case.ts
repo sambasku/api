@@ -18,6 +18,7 @@ import type {
   WordAudioPatch,
   WordImagePatch,
 } from '../../domain/repositories/contribution.repository';
+import type { SyncLiveWordContributionsUseCase } from './sync-live-word-contributions.use-case';
 
 export interface CorrectContributionInput {
   /** entity_type 'word' - payload koreksi lengkap (replace semantics) */
@@ -58,6 +59,8 @@ export class CorrectContributionUseCase {
     private readonly wordRepo: WordRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
+    /** Tutup sibling pending (ghost update) setelah kata live+verified. */
+    private readonly syncContributions?: SyncLiveWordContributionsUseCase,
   ) {}
 
   async execute(cmd: CorrectContributionCommand): Promise<ReviewOutcome> {
@@ -107,7 +110,16 @@ export class CorrectContributionUseCase {
       // yang sama supaya koreksi dan setujui tidak saling menimpa.
       const wordSave = await this.prepareWordCorrection(contrib.entityId, input.word!, publish);
       outcome = await this.contributionRepo.withPendingLock(cmd.contributionId, async (tx) => {
-        const updated = await this.wordRepo.updateWithRelations(contrib.entityId, wordSave, cmd.actorId, tx);
+        // Jangan catat action=update baru: jalur correct sudah punya baris
+        // kontribusi yang sedang diputuskan. Insert di sini (publish=false →
+        // pending) jadi ghost "update oleh verifikator" di antrean orang lain.
+        const updated = await this.wordRepo.updateWithRelations(
+          contrib.entityId,
+          wordSave,
+          cmd.actorId,
+          tx,
+          { recordContribution: false },
+        );
         if (!updated) {
           throw new NotFoundError('WORD_NOT_FOUND', 'Kata kontribusi tidak ditemukan');
         }
@@ -176,6 +188,19 @@ export class CorrectContributionUseCase {
         targetId: outcome.contributionId,
         actorId: cmd.actorId,
       });
+      // Tutup sibling pending (ghost update dari koreksi lama / edit paralel).
+      if (contrib.entityType === 'word') {
+        const liveId = outcome.mergedIntoWordId ?? outcome.entityId;
+        if (outcome.mergedIntoWordId && outcome.mergedIntoWordId !== outcome.entityId) {
+          await this.syncContributions?.closeMerged(
+            outcome.mergedIntoWordId,
+            outcome.entityId,
+            cmd.actorId,
+          );
+        } else {
+          await this.syncContributions?.closeLive(liveId, cmd.actorId);
+        }
+      }
     }
 
     return outcome;
