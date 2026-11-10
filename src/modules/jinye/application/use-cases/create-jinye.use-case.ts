@@ -8,11 +8,14 @@ import { jinyeFeedPayload } from '@/modules/activity/application/utils/activity-
 import { RateLimitedError, ValidationError } from '@/shared/errors/app-error';
 import type { Jinye, JinyeImage } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
-import { isJinyeCreateQuotaEnforced } from '../utils/jinye-quota';
+import {
+  JINYE_CREATE_QUOTA_MS,
+  isJinyeCreateQuotaEnforced,
+  jinyeCreateQuotaLimited,
+} from '../utils/jinye-quota';
 
 const MAX_BODY = 500;
 const MAX_IMAGES = 4;
-const QUOTA_MS = 24 * 60 * 60 * 1000;
 
 export interface CreateJinyeCommand {
   userId: string;
@@ -50,16 +53,9 @@ export class CreateJinyeUseCase {
       const lastAt = await this.repo.findLatestCreatedAtByUser(cmd.userId);
       if (lastAt) {
         const elapsed = Date.now() - lastAt.getTime();
-        if (elapsed < QUOTA_MS) {
-          const retryAfterSeconds = Math.max(
-            1,
-            Math.ceil((QUOTA_MS - elapsed) / 1000),
-          );
-          const hours = Math.max(1, Math.ceil(retryAfterSeconds / 3600));
-          throw new RateLimitedError(
-            `Kamu sudah membuat Jinye dalam 24 jam terakhir. Coba lagi sekitar ${hours} jam lagi ya.`,
-            retryAfterSeconds,
-          );
+        if (elapsed < JINYE_CREATE_QUOTA_MS) {
+          const limited = jinyeCreateQuotaLimited(elapsed);
+          throw new RateLimitedError(limited.message, limited.retryAfterSeconds);
         }
       }
     }

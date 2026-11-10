@@ -296,7 +296,7 @@ describe('QuoteJinyeUseCase', () => {
     );
   });
 
-  it('kuota 24 jam → RateLimited', async () => {
+  it('kuota 1 jam → RateLimited', async () => {
     const r = repo({
       findLatestQuotaConsumingCreatedAtByUser: vi.fn(
         async () => new Date(),

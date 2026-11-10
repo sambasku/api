@@ -9,7 +9,7 @@ import {
 import type { Jinye } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
 
-/** Repost polos (toggle create). Tidak makan kuota 1/24 jam. Depth max 1. */
+/** Repost polos (toggle create). Tidak makan kuota 1/jam. Depth max 1. */
 export class RepostJinyeUseCase {
   constructor(
     private readonly repo: JinyeRepository,

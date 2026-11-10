@@ -21,7 +21,7 @@ export interface JinyeRepository {
   findById(id: string): Promise<Jinye | null>;
   list(filter: JinyeListFilter): Promise<CursorPage<Jinye>>;
   /**
-   * Create yang makan kuota 24 jam: original + quote.
+   * Create yang makan kuota 1 jam: original + quote.
    * Repost polos (repost_of_id set, quote_body null) tidak dihitung.
    */
   findLatestQuotaConsumingCreatedAtByUser(

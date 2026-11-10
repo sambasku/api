@@ -74,7 +74,7 @@ const createRouteDef = createRoute({
     201: { description: 'Created', content: json(createJinyeResponseSchema) },
     400: { description: 'Validation', content: json(errorResponseSchema) },
     401: { description: 'Unauthorized', content: json(errorResponseSchema) },
-    429: { description: 'Kuota 24 jam', content: json(errorResponseSchema) },
+    429: { description: 'Kuota 1 jam', content: json(errorResponseSchema) },
   },
 });
 
@@ -501,7 +501,7 @@ const quoteRoute = createRoute({
   method: 'post',
   path: '/{id}/quote',
   tags: ['Jinye'],
-  summary: 'Quote-repost (makan kuota create 1/24 jam)',
+  summary: 'Quote-repost (makan kuota create 1/jam)',
   request: {
     params: jinyeIdParamSchema,
     body: { content: json(quoteJinyeBodySchema), required: true },
@@ -511,7 +511,7 @@ const quoteRoute = createRoute({
     400: { description: 'Validation', content: json(errorResponseSchema) },
     401: { description: 'Unauthorized', content: json(errorResponseSchema) },
     404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
-    429: { description: 'Kuota 24 jam', content: json(errorResponseSchema) },
+    429: { description: 'Kuota 1 jam', content: json(errorResponseSchema) },
   },
 });
 

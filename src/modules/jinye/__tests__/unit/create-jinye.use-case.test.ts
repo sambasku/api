@@ -95,7 +95,7 @@ describe('CreateJinyeUseCase', () => {
     );
   });
 
-  it('menolak create kedua dalam 24 jam', async () => {
+  it('menolak create kedua dalam 1 jam', async () => {
     const repo: JinyeRepository = {
       create: vi.fn(),
       findById: vi.fn(),
@@ -143,6 +143,57 @@ describe('CreateJinyeUseCase', () => {
       uc.execute({ userId: ACTOR, body: 'Halo Sambas' }),
     ).rejects.toBeInstanceOf(RateLimitedError);
     expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('mengizinkan create lagi setelah 1 jam', async () => {
+    const created = makeJinye({ body: 'Halo lagi' });
+    const hourAgo = new Date(Date.now() - 61 * 60 * 1000);
+    const repo: JinyeRepository = {
+      create: vi.fn(async () => created),
+      findById: vi.fn(),
+      list: vi.fn(),
+      findLatestCreatedAtByUser: vi.fn(async () => hourAgo),
+      findLatestQuotaConsumingCreatedAtByUser: vi.fn(async () => hourAgo),
+      updateBody: vi.fn(),
+      listRevisions: vi.fn(),
+      markLemmaLinksStale: vi.fn(),
+      findPlainRepostByUser: vi.fn(),
+      adjustRepostCount: vi.fn(),
+      markDeletedByAuthor: vi.fn(),
+      takedown: vi.fn(),
+      setAudio: vi.fn(),
+      createComment: vi.fn(),
+      findCommentById: vi.fn(),
+      listCommentsByJinyeId: vi.fn(),
+      markCommentDeletedByAuthor: vi.fn(),
+      takedownComment: vi.fn(),
+      incrementPublishedCommentCount: vi.fn(),
+      setStatus: vi.fn(),
+      getPinnedJinyeId: vi.fn(),
+      setPinnedJinyeId: vi.fn(),
+      clearPinnedIf: vi.fn(),
+      createLemmaLink: vi.fn(),
+      findLemmaLinkById: vi.fn(),
+      listLemmaLinksByJinyeId: vi.fn(),
+      listActiveLemmaLinksForTarget: vi.fn(),
+      updateLemmaLink: vi.fn(),
+      deleteLemmaLink: vi.fn(),
+      createTranslation: vi.fn(),
+      findTranslationById: vi.fn(),
+      listTranslationsByJinyeId: vi.fn(),
+      findPendingTranslationByTranslator: vi.fn(),
+      findAcceptedTranslation: vi.fn(),
+      updateTranslation: vi.fn(),
+      rejectPendingTranslations: vi.fn(),
+    };
+    const uc = new CreateJinyeUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+    );
+    const out = await uc.execute({ userId: ACTOR, body: 'Halo lagi' });
+    expect(out.body).toBe('Halo lagi');
+    expect(repo.create).toHaveBeenCalled();
   });
 
   it('mengizinkan voice-only via hasPendingAudio', async () => {
