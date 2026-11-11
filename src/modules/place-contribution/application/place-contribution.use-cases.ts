@@ -75,12 +75,18 @@ export class PlaceContributionUseCases {
     if (!anon && (await this.contrib.countPending(userId)) >= PENDING_CAP) {
       throw new ConflictError('PENDING_CAP', 'Maksimal 10 usulan yang masih menunggu');
     }
-    let base: Date | null = null;
-    const place = placeId ? await this.loadPlace(placeId) : null;
+    // Klien suntingan bisa kehilangan place_id (draft/katalog miss). Pulihkan
+    // intent lewat slug payload yang sudah terbit - jangan simpan sebagai "baru".
+    let place = placeId ? await this.loadPlace(placeId) : null;
     if (placeId) {
       if (!place || place.status === 'archived') {
         throw new NotFoundError('PLACE_NOT_FOUND', 'Place tidak ditemukan');
       }
+    } else {
+      place = await this.resolveEditableBySlug(normalized.slug);
+    }
+    let base: Date | null = null;
+    if (place) {
       if (!anon && (await this.contrib.findPendingEdit(userId, place.id))) {
         throw new ConflictError('PENDING_EXISTS', 'Kamu sudah punya usulan suntingan untuk tempat ini');
       }
@@ -119,12 +125,15 @@ export class PlaceContributionUseCases {
     const row = await this.mustPending(id);
     const user = await this.users.findById(row.userId);
     const credit = user?.displayName || user?.username || 'Pengguna';
+    // Pending lama tanpa place_id (bug klien) masih bisa di-recover lewat slug.
+    const targetId =
+      row.placeId ?? (await this.resolveEditableBySlug(row.payload.slug))?.id ?? null;
     const images = row.payload.images.map((img, i) => ({
       url: img.url,
-      isMain: i === 0 && row.placeId == null,
+      isMain: i === 0 && targetId == null,
       attribution: { name: credit, provider: 'sambasku', authorId: row.userId },
     }));
-    if (!row.placeId) {
+    if (!targetId) {
       await this.createPlace.execute({
         // Slug usulan bisa bentrok (auto-slug dari nama di klien): ambil
         // slug unik dari nama, bukan pakai mentah - approve kedua untuk
@@ -145,17 +154,20 @@ export class PlaceContributionUseCases {
         images,
         status: 'published',
       });
-    await this.contrib.setStatus(id, 'approved');
-    await this.notifyDecision(row, 'approved', undefined, actorId);
-    return;
-  }
-    const place = await this.places.findById(row.placeId);
+      await this.contrib.setStatus(id, 'approved');
+      await this.notifyDecision(row, 'approved', undefined, actorId);
+      return;
+    }
+    const place = await this.places.findById(targetId);
     if (!place || place.status === 'archived') {
       throw new ConflictError('STALE_PROPOSAL', 'Tempat sudah tidak ada');
     }
+    // base null = usulan mislabel (tanpa place_id saat submit); skip stale.
     const base = row.baseUpdatedAt?.getTime() ?? null;
     const current = place.updatedAt?.getTime() ?? null;
-    if (base !== current) throw new ConflictError('STALE_PROPOSAL', 'Tempat berubah sejak usulan dikirim');
+    if (base != null && base !== current) {
+      throw new ConflictError('STALE_PROPOSAL', 'Tempat berubah sejak usulan dikirim');
+    }
     await this.updatePlace.execute({
       id: place.id,
       slug: row.payload.slug,
@@ -273,6 +285,13 @@ async reject(id: string, reasonCode: string, reasonText?: string | null, actorId
 
   private async loadPlace(idOrSlug: string) {
     return (await this.places.findById(idOrSlug)) ?? (await this.places.findBySlugAny(idOrSlug));
+  }
+
+  /** Tempat non-archived by slug; null jika belum ada / sudah diarsip. */
+  private async resolveEditableBySlug(slug: string) {
+    const place = await this.places.findBySlugAny(slug);
+    if (!place || place.status === 'archived') return null;
+    return place;
   }
 
   private async assertPayload(payload: ContributionPayload): Promise<ContributionPayload> {
