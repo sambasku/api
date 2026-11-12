@@ -1,5 +1,6 @@
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { SoftDeleteMeaningUseCase } from '@/modules/word/application/use-cases/soft-delete-meaning.use-case';
 import type { SetWordImageContentWarningsUseCase } from '@/modules/word/application/use-cases/set-word-image-content-warnings.use-case';
 import type { TakedownWordUseCase } from '@/modules/word/application/use-cases/takedown-word.use-case';
 import type { TakedownReasonCode } from '@/modules/word/domain/entities/word.entity';
@@ -27,6 +28,15 @@ export interface TakedownWordReportCommand {
 export interface FlagViolentImageReportCommand {
   id: string;
   actorId: string;
+  note?: string | null;
+  requestId?: string | null;
+}
+
+export interface RemoveMeaningWordReportCommand {
+  id: string;
+  actorId: string;
+  actorRole: string;
+  actorRoles?: string[];
   note?: string | null;
   requestId?: string | null;
 }
@@ -67,7 +77,12 @@ export class ResolveWordReportUseCase {
       action: cmd.resolution === 'dismissed' ? 'dismiss' : 'mark_corrected',
       entityType: 'word_report',
       entityId: cmd.id,
-      oldData: { status: 'open', word_id: existing.wordId, image_id: existing.imageId },
+      oldData: {
+        status: 'open',
+        word_id: existing.wordId,
+        image_id: existing.imageId,
+        meaning_id: existing.meaningId,
+      },
       newData: { status: 'resolved', resolution: cmd.resolution },
       requestId: cmd.requestId ?? null,
     });
@@ -210,6 +225,65 @@ export class FlagViolentImageReportUseCase {
         ...existing,
         status: 'resolved',
         resolution: 'flagged_image',
+        resolutionNote: note,
+      }
+    );
+  }
+}
+
+/** Hapus makna dari laporan makna terbuka (#253) lalu tutup laporan. */
+export class RemoveMeaningWordReportUseCase {
+  constructor(
+    private readonly reports: WordReportRepository,
+    private readonly softDeleteMeaning: SoftDeleteMeaningUseCase,
+  ) {}
+
+  async execute(cmd: RemoveMeaningWordReportCommand): Promise<WordReport> {
+    const note = cmd.note?.trim() ? cmd.note.trim() : null;
+    if (note && note.length > 1000) {
+      throw new ValidationError([{ field: 'note', message: 'Catatan maksimal 1000 karakter' }]);
+    }
+
+    const existing = await this.reports.findById(cmd.id);
+    if (!existing) {
+      throw new NotFoundError('WORD_REPORT_NOT_FOUND', 'Laporan entri tidak ditemukan');
+    }
+    if (existing.status !== 'open') {
+      throw new ConflictError('WORD_REPORT_ALREADY_RESOLVED', 'Laporan ini sudah ditutup');
+    }
+    if (!existing.meaningId) {
+      throw new ValidationError([
+        { field: 'id', message: 'Hanya laporan makna yang bisa dihapus lewat aksi ini' },
+      ]);
+    }
+
+    await this.softDeleteMeaning.execute(existing.wordId, existing.meaningId, {
+      userId: cmd.actorId,
+      role: cmd.actorRole,
+      roles: cmd.actorRoles?.length ? cmd.actorRoles : [cmd.actorRole],
+      requestId: cmd.requestId,
+    });
+
+    // soft-delete menutup semua open reports makna via onDeleted hook;
+    // pastikan laporan ini terbaca resolved.
+    const updated = await this.reports.findById(cmd.id);
+    if (updated && updated.status === 'resolved') {
+      return updated;
+    }
+
+    // Fallback bila hook belum menutup baris ini (race).
+    await this.reports.resolveOne({
+      id: cmd.id,
+      resolution: 'meaning_removed',
+      note,
+      actorId: cmd.actorId,
+    });
+    const again = await this.reports.findById(cmd.id);
+    return (
+      again ?? {
+        ...existing,
+        status: 'resolved',
+        resolution: 'meaning_removed',
         resolutionNote: note,
       }
     );

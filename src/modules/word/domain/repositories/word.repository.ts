@@ -556,7 +556,21 @@ export interface WordRepository {
   // ---- Kontribusi media (03-api-kontribusi-verifikasi.md) ----
 
   /** makna by id (belum soft-deleted) - untuk validasi parent contoh kalimat */
-  findMeaningById(meaningId: string): Promise<{ id: string; wordId: string } | null>;
+  findMeaningById(meaningId: string): Promise<{ id: string; wordId: string; definition: string } | null>;
+
+  /** Jumlah makna hidup (belum soft-deleted) pada kata - guard hapus makna terakhir (#253). */
+  countLiveMeanings(wordId: string): Promise<number>;
+
+  /**
+   * Soft-delete satu makna. null jika tidak ditemukan / bukan milik wordId /
+   * sudah dihapus. Tidak menghapus anak (examples/translations) - read-path
+   * menyembunyikannya lewat join meanings.deleted_at.
+   */
+  softDeleteMeaning(
+    wordId: string,
+    meaningId: string,
+    actorId: string,
+  ): Promise<{ id: string; definition: string } | null>;
 
   /** Insert pelafalan pada kata existing + baris contributions - satu transaksi */
   addPronunciation(

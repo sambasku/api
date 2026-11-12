@@ -83,6 +83,7 @@ describe('CreateWordReportUseCase', () => {
     expect(reports.create).toHaveBeenCalledWith({
       wordId: WORD,
       imageId: null,
+      meaningId: null,
       userId: USER,
       reasonCode: 'spam',
       note: null,

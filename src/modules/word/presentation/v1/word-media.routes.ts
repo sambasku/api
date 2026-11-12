@@ -8,6 +8,7 @@ import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { WordController } from './word.controller';
+import { opaqueId } from '@/shared/validation/id';
 import {
   addExampleResponseSchema,
   addExampleSchema,
@@ -65,6 +66,11 @@ export function createWordMediaRoutes(deps: WordMediaRoutesDeps) {
   routes.use('/:wordId/images', ...mediaMiddleware(deps, 'admin', 'editor', 'contributor', 'root', 'reviewer'));
   // 17-api-usul-definisi.md - kontribusi definisi pada kata existing
   routes.use('/:wordId/meanings', ...mediaMiddleware(deps, 'admin', 'editor', 'contributor', 'root', 'reviewer'));
+  // #253 hapus makna - hanya verifikator antrean (bukan editor/contributor)
+  routes.use(
+    '/:wordId/meanings/*',
+    ...mediaMiddleware(deps, 'admin', 'root', 'reviewer'),
+  );
 
   const addPronunciationRoute = createRoute({
     method: 'post',
@@ -175,6 +181,26 @@ export function createWordMediaRoutes(deps: WordMediaRoutesDeps) {
     },
   });
 
+  const deleteMeaningRoute = createRoute({
+    method: 'delete',
+    path: '/:wordId/meanings/{meaningId}',
+    tags: ['Words'],
+    summary: 'Soft-delete satu makna (#253). Hanya admin/root/reviewer. Tolak makna terakhir.',
+    request: {
+      params: z.object({
+        wordId: opaqueId,
+        meaningId: opaqueId,
+      }),
+    },
+    responses: {
+      204: { description: 'Makna dihapus' },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Role tidak diizinkan', content: json(errorResponseSchema) },
+      404: { description: 'Kata/makna tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Makna terakhir pada kata', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(addPronunciationRoute, (c) =>
     deps.controller.addPronunciation(c, c.req.param('wordId'), c.req.valid('json')) as never,
   );
@@ -211,6 +237,13 @@ export function createWordMediaRoutes(deps: WordMediaRoutesDeps) {
   );
   routes.openapi(addMeaningRoute, (c) =>
     deps.controller.addMeaning(c, c.req.param('wordId'), c.req.valid('json')) as never,
+  );
+  routes.openapi(deleteMeaningRoute, (c) =>
+    deps.controller.softDeleteMeaning(
+      c,
+      c.req.valid('param').wordId,
+      c.req.valid('param').meaningId,
+    ) as never,
   );
 
   return routes;

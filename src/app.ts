@@ -177,6 +177,7 @@ import { AddWordImageUseCase } from "@/modules/word/application/use-cases/add-wo
 import { AddExampleUseCase } from "@/modules/word/application/use-cases/add-example.use-case";
 import { UploadPronunciationAudioUseCase } from "@/modules/word/application/use-cases/upload-pronunciation-audio.use-case";
 import { DeletePronunciationAudioUseCase } from "@/modules/word/application/use-cases/delete-pronunciation-audio.use-case";
+import { SoftDeleteMeaningUseCase } from "@/modules/word/application/use-cases/soft-delete-meaning.use-case";
 import { createPronunciationStorage } from "@/modules/word/infrastructure/pronunciation-storage.factory";
 import { WordController } from "@/modules/word/presentation/v1/word.controller";
 import {
@@ -522,6 +523,7 @@ import { ListWordReportsUseCase } from "@/modules/word-report/application/use-ca
 import {
   ResolveWordReportUseCase,
   TakedownWordReportUseCase,
+  RemoveMeaningWordReportUseCase,
   FlagViolentImageReportUseCase,
 } from "@/modules/word-report/application/use-cases/resolve-word-report.use-case";
 import { SetWordImageContentWarningsUseCase } from "@/modules/word/application/use-cases/set-word-image-content-warnings.use-case";
@@ -1152,6 +1154,13 @@ const notifyWordOwnerMedia = new NotifyWordOwnerMediaUseCase(
 );
 const wordImportSessionRepo = new WordImportSessionRepositoryImpl(db);
 const wordReportRepo = new WordReportRepositoryImpl(db);
+const softDeleteMeaning = new SoftDeleteMeaningUseCase(
+  wordRepo,
+  auditRepo,
+  async ({ meaningId, actorId }) => {
+    await wordReportRepo.closeOpenForMeaning(meaningId, actorId, null);
+  },
+);
 const takedownWord = new TakedownWordUseCase(
   wordRepo,
   auditRepo,
@@ -1274,6 +1283,7 @@ const wordController = new WordController({
     pronunciationStorage,
     auditRepo,
   ),
+  softDeleteMeaning,
   listWordClasses: () => wordRepo.listWordClasses(),
   // Stempel provider gambar kata = GitHub publik (bukan ImageKit)
   imageProviderName: publicImageStorage.providerName,
@@ -2153,6 +2163,10 @@ const wordReportController = new WordReportController({
     wordReportRepo,
     setWordImageContentWarnings,
     auditRepo,
+  ),
+  removeMeaning: new RemoveMeaningWordReportUseCase(
+    wordReportRepo,
+    softDeleteMeaning,
   ),
 });
 app.route(

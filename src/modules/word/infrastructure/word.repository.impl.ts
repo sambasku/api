@@ -2523,12 +2523,42 @@ memberLemma: string;
     return updated.length > 0;
   }
 
-  async findMeaningById(meaningId: string): Promise<{ id: string; wordId: string } | null> {
+  async findMeaningById(
+    meaningId: string,
+  ): Promise<{ id: string; wordId: string; definition: string } | null> {
     const [row] = await this.db
-      .select({ id: meanings.id, wordId: meanings.wordId })
+      .select({ id: meanings.id, wordId: meanings.wordId, definition: meanings.definition })
       .from(meanings)
       .where(and(eq(meanings.id, meaningId), isNull(meanings.deletedAt)))
       .limit(1);
+    return row ?? null;
+  }
+
+  async countLiveMeanings(wordId: string): Promise<number> {
+    const rows = await this.db
+      .select({ id: meanings.id })
+      .from(meanings)
+      .where(and(eq(meanings.wordId, wordId), isNull(meanings.deletedAt)));
+    return rows.length;
+  }
+
+  async softDeleteMeaning(
+    wordId: string,
+    meaningId: string,
+    actorId: string,
+  ): Promise<{ id: string; definition: string } | null> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(meanings)
+      .set({ deletedAt: now, deletedBy: actorId, updatedAt: now, updatedBy: actorId })
+      .where(
+        and(
+          eq(meanings.id, meaningId),
+          eq(meanings.wordId, wordId),
+          isNull(meanings.deletedAt),
+        ),
+      )
+      .returning({ id: meanings.id, definition: meanings.definition });
     return row ?? null;
   }
 

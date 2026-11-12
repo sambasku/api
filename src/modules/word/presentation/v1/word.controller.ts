@@ -29,6 +29,7 @@ import type {
 } from '../../application/use-cases/word-import-session.use-cases';
 import type { UploadPronunciationAudioUseCase } from '../../application/use-cases/upload-pronunciation-audio.use-case';
 import type { DeletePronunciationAudioUseCase } from '../../application/use-cases/delete-pronunciation-audio.use-case';
+import type { SoftDeleteMeaningUseCase } from '../../application/use-cases/soft-delete-meaning.use-case';
 import type {
   CreateWordBody,
   SearchWordsQueryBody,
@@ -116,6 +117,7 @@ export class WordController {
       rollbackImportSession: RollbackWordImportSessionUseCase;
       uploadPronunciationAudio: UploadPronunciationAudioUseCase;
       deletePronunciationAudio: DeletePronunciationAudioUseCase;
+      softDeleteMeaning: SoftDeleteMeaningUseCase;
       listWordClasses: () => Promise<WordClassSummary[]>;
       /** provider gambar aktif - dari composition root, bukan hardcode */
       imageProviderName: string;
@@ -1115,6 +1117,13 @@ export class WordController {
   async deletePronunciationAudio(c: Context, wordId: string, audioId: string) {
     await this.withActor(c, (actor) =>
       this.deps.deletePronunciationAudio.execute(wordId, audioId, actor),
+    );
+    return c.body(null, 204);
+  }
+
+  async softDeleteMeaning(c: Context, wordId: string, meaningId: string) {
+    await this.withActor(c, (actor) =>
+      this.deps.softDeleteMeaning.execute(wordId, meaningId, actor),
     );
     return c.body(null, 204);
   }
