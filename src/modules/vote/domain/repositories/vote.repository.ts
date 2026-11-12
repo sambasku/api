@@ -210,6 +210,10 @@ export interface VoteDeckMeaning {
   meaningCount: number;
   /** Kelas kata makna ini (bukan kata). null = belum diisi. */
   wordClass: VoteDeckWordClass | null;
+  /** IPA tertulis pertama (published) milik kata; null = belum ada. */
+  pronunciationValue: string | null;
+  /** Ada audio lemma published (`word_audios.example_id` null). */
+  hasAudio: boolean;
   upvotes: number;
   downvotes: number;
   /** upvotes + downvotes - kunci cursor + sort */
