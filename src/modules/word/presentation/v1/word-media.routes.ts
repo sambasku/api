@@ -66,9 +66,10 @@ export function createWordMediaRoutes(deps: WordMediaRoutesDeps) {
   routes.use('/:wordId/images', ...mediaMiddleware(deps, 'admin', 'editor', 'contributor', 'root', 'reviewer'));
   // 17-api-usul-definisi.md - kontribusi definisi pada kata existing
   routes.use('/:wordId/meanings', ...mediaMiddleware(deps, 'admin', 'editor', 'contributor', 'root', 'reviewer'));
-  // #253 hapus makna - hanya verifikator antrean (bukan editor/contributor)
+  // #253 hapus makna - path DELETE spesifik saja (jangan meanings/*:
+  // Hono ikut match POST /meanings → contributor kena 403).
   routes.use(
-    '/:wordId/meanings/*',
+    '/:wordId/meanings/:meaningId',
     ...mediaMiddleware(deps, 'admin', 'root', 'reviewer'),
   );
 
