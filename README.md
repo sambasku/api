@@ -136,12 +136,13 @@ secret yang sudah terpasang. Vars non-secret (termasuk
 # Aman diulang - Anonim, Pengimpor Data CSV, bahasa/dialek/kelas/kategori
 gh workflow run seed-reference-staging.yml --ref staging
 
-# Hanya jika perlu reset password akun default → pass1234
+# Reset password akun default staging (upsert)
 gh workflow run seed-account-staging.yml --ref staging -f confirm=true
 ```
 
 Production: `seed-reference-production.yml` / `seed-account-production.yml` (`--ref main`).
-`seed-account-production` insert-only (`SEED_ACCOUNTS_INSERT_ONLY=1`) - tidak menimpa user yang sudah ada.
+`seed-account-production` upsert password dari org secret `SEED_ACCOUNTS_PASSWORD`
+(jangan tulis nilai password di README / workflow YAML).
 
 ## Audio pelafalan (GitHub asset repo)
 

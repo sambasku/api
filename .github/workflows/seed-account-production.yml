@@ -1,18 +1,19 @@
 name: Seed Account Production (manual)
 
 # Hanya akun default (admin/root/contributor/reviewer).
-# Insert-only: skip jika username sudah ada (tidak menimpa password/role/email).
-# TIDAK otomatis saat push/deploy.
+# Upsert: menimpa password dari secret SEED_ACCOUNTS_PASSWORD
+# (akun reviewer AppGallery / Play). TIDAK otomatis saat push/deploy.
 #
 # CLI: gh workflow run seed-account-production.yml --ref main -f confirm=true
 #
-# Secrets org: DB_PRODUCTION_TURSO_URL, DB_PRODUCTION_TURSO_AUTH_TOKEN
+# Secrets org: DB_PRODUCTION_TURSO_URL, DB_PRODUCTION_TURSO_AUTH_TOKEN,
+#   SEED_ACCOUNTS_PASSWORD
 
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Centang untuk seed akun PRODUCTION (insert-only; skip user yang sudah ada)'
+        description: 'Centang untuk seed akun PRODUCTION (upsert password dari secret)'
         type: boolean
         required: true
         default: false
@@ -36,6 +37,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN }}
+          SEED_ACCOUNTS_PASSWORD: ${{ secrets.SEED_ACCOUNTS_PASSWORD }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
             echo "::error::Secret DB_PRODUCTION_TURSO_URL kosong"
@@ -45,13 +47,17 @@ jobs:
             echo "::error::Secret DB_PRODUCTION_TURSO_AUTH_TOKEN kosong"
             exit 1
           fi
-          echo "Turso secrets OK"
+          if [ -z "$SEED_ACCOUNTS_PASSWORD" ]; then
+            echo "::error::Secret SEED_ACCOUNTS_PASSWORD kosong"
+            exit 1
+          fi
+          echo "Turso + seed password secrets OK"
 
       - name: Seed accounts production
         run: pnpm seed:accounts
         env:
           NODE_ENV: production
-          SEED_ACCOUNTS_INSERT_ONLY: '1'
+          SEED_ACCOUNTS_PASSWORD: ${{ secrets.SEED_ACCOUNTS_PASSWORD }}
           DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN }}
           JWT_PRIVATE_KEY: dummy

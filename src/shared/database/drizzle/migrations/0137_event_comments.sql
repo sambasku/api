@@ -1,4 +1,4 @@
--- Migration 0124: event_comments + event_comment_revisions
+-- Migration 0137: event_comments + event_comment_revisions
 -- Mirror pola article_comments / article_comment_revisions di encyclopedia.
 
 CREATE TABLE `event_comments` (

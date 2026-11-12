@@ -1,4 +1,4 @@
--- Migration 0125: event_goings - soft RSVP "berencana datang"
+-- Migration 0138: event_goings - soft RSVP "berencana datang"
 
 CREATE TABLE `event_goings` (
   `id` text PRIMARY KEY NOT NULL,

@@ -9,7 +9,8 @@ import { resolve } from 'node:path';
 
 /**
  * Akun login default - domain @sambasku.com (lihat api-base-stack.md).
- * Default: upsert menimpa password jadi pass1234.
+ * Default: upsert menimpa password (DEFAULT_SEED_PASSWORD untuk lokal).
+ * SEED_ACCOUNTS_PASSWORD: override (wajib di production via GitHub secret).
  * SEED_ACCOUNTS_INSERT_ONLY=1: insert saja, skip jika username sudah ada.
  */
 const SEED_USERS = [
@@ -19,13 +20,15 @@ const SEED_USERS = [
   { username: 'reviewer', email: 'reviewer@sambasku.com', roles: ['reviewer'] },
 ] as const;
 
-const SEED_PASSWORD = 'pass1234';
+/** Fallback lokal saja. Production/staging CI harus set SEED_ACCOUNTS_PASSWORD. */
+const DEFAULT_SEED_PASSWORD = 'pass1234';
 
 /** Seed akun default. Default upsert by username; insert-only jika SEED_ACCOUNTS_INSERT_ONLY=1. */
 export async function seedAccounts(): Promise<void> {
   const insertOnly = process.env.SEED_ACCOUNTS_INSERT_ONLY === '1';
+  const seedPassword = process.env.SEED_ACCOUNTS_PASSWORD?.trim() || DEFAULT_SEED_PASSWORD;
   const hasher = new Pbkdf2PasswordService();
-  const passwordHash = await hasher.hash(SEED_PASSWORD);
+  const passwordHash = await hasher.hash(seedPassword);
 
   for (const user of SEED_USERS) {
     const { roles, ...values } = { ...user, passwordHash, emailVerified: true, displayName: user.username };

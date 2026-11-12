@@ -1,17 +1,19 @@
 name: Seed Account Staging (manual)
 
 # Hanya akun default (admin/root/contributor/reviewer).
-# Menimpa password jadi `pass1234`. TIDAK otomatis saat push.
+# Upsert password (default lokal script, atau SEED_ACCOUNTS_PASSWORD
+# staging secret bila diset). TIDAK otomatis saat push.
 #
 # CLI: gh workflow run seed-account-staging.yml --ref staging -f confirm=true
 #
 # Secrets org: DB_STAGING_TURSO_URL, DB_STAGING_TURSO_AUTH_TOKEN
+# Opsional: SEED_ACCOUNTS_PASSWORD (staging)
 
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Centang untuk seed akun staging (menimpa password jadi pass1234)'
+        description: 'Centang untuk seed akun staging (upsert password)'
         type: boolean
         required: true
         default: false
@@ -35,6 +37,9 @@ jobs:
         run: pnpm seed:accounts
         env:
           NODE_ENV: staging
+          # Kosong = default lokal di seed-accounts.ts. Jangan hardcode
+          # password di YAML (repo publik).
+          SEED_ACCOUNTS_PASSWORD: ${{ secrets.SEED_ACCOUNTS_PASSWORD_STAGING }}
           DATABASE_URL: ${{ secrets.DB_STAGING_TURSO_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DB_STAGING_TURSO_AUTH_TOKEN }}
           JWT_PRIVATE_KEY: dummy
