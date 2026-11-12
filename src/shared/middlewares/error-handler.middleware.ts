@@ -45,6 +45,14 @@ export const errorHandler: ErrorHandler = (err, c) => {
     if (err instanceof ConflictError && err.data) {
       body.data = err.data;
     }
+    if (err instanceof RateLimitedError) {
+      // Duplikat header Retry-After supaya klien (mobile) bisa hitung jam
+      // reset kuota meski header hilang di proxy.
+      body.data = {
+        ...(body.data ?? {}),
+        retry_after: err.retryAfterSeconds,
+      };
+    }
     return c.json(body, err.statusCode as 400 | 401 | 403 | 404 | 409 | 429);
   }
 

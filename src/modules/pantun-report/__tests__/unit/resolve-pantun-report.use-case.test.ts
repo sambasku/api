@@ -48,7 +48,17 @@ function makeDeps(report: PantunReportWithTarget | null = makeReport()) {
   } as unknown as PantunReportRepository;
 
   const pantunRepo = {
-    takedown: vi.fn().mockResolvedValue({ id: TARGET_ID }),
+    findById: vi.fn().mockResolvedValue({
+      id: TARGET_ID,
+      audio: null,
+      status: 'published',
+    }),
+    findReplyById: vi.fn().mockResolvedValue({
+      id: TARGET_ID,
+      audio: null,
+      status: 'published',
+    }),
+    takedown: vi.fn().mockResolvedValue({ id: TARGET_ID, audio: null }),
     takedownReply: vi.fn().mockResolvedValue(true),
   } as unknown as PantunRepository;
 

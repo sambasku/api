@@ -549,6 +549,107 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     expect((await get("/api/v1/places/danau-kembar-2")).status).toBe(200);
   });
 
+  it("suntingan tanpa place_id: bind slug → update, bukan baris duplikat", async () => {
+    const createRes = await post(
+      "/api/v1/admin/places",
+      {
+        slug: "pantai-recover-e2e",
+        name: "Pantai Recover",
+        category: "wisata",
+        short_description: "Asli.",
+        region_id: "01E2EREGIONKEC0000000001",
+        village_id: "01E2EREGIONDESA000000001",
+      },
+      adminToken,
+    );
+    expect(createRes.status).toBe(200);
+    const placeId = (await createRes.json()).data.id as string;
+
+    // Klien suntingan kehilangan place_id - API pulihkan lewat slug.
+    const edit = await post(
+      "/api/v1/place-contributions",
+      {
+        slug: "pantai-recover-e2e",
+        name: "Pantai Recover Diedit",
+        category: "wisata",
+        short_description: "Suntingan tanpa place_id.",
+      },
+      userToken,
+    );
+    expect(edit.status).toBe(200);
+    const editBody = (await edit.json()).data as {
+      id: string;
+      place_id: string | null;
+      user_id: string;
+    };
+    expect(editBody.place_id).toBe(placeId);
+    expect(
+      (
+        await post(
+          `/api/v1/admin/place-contributions/${editBody.id}/approve`,
+          {},
+          adminToken,
+        )
+      ).status,
+    ).toBe(200);
+
+    const after = (await (await get("/api/v1/places/pantai-recover-e2e")).json())
+      .data;
+    expect(after.id).toBe(placeId);
+    expect(after.name).toBe("Pantai Recover Diedit");
+    expect((await get("/api/v1/places/pantai-recover-2")).status).toBe(404);
+    expect((await get("/api/v1/places/pantai-recover-diedit")).status).toBe(404);
+
+    // Pending lama di DB (place_id null) tetap di-update saat approve.
+    const { placeContributions } = await import(
+      "@/shared/database/drizzle/schema/place-contributions.schema"
+    );
+    const { getTestDb: getDb } = await import(
+      "@/shared/database/drizzle/test-client"
+    );
+    const { generateId } = await import("@/shared/utils/ulid");
+    const orphanId = generateId();
+    await getDb()
+      .insert(placeContributions)
+      .values({
+        id: orphanId,
+        userId: editBody.user_id,
+        placeId: null,
+        baseUpdatedAt: null,
+        payloadJson: JSON.stringify({
+          slug: "pantai-recover-e2e",
+          name: "Pantai Recover Orphan",
+          category: "wisata",
+          type: null,
+          lat: null,
+          lng: null,
+          mapsUrl: null,
+          shortDescription: "Pending lama tanpa place_id.",
+          regionId: null,
+          villageId: null,
+          hours: null,
+          contact: null,
+          images: [],
+        }),
+        status: "pending",
+      });
+    expect(
+      (
+        await post(
+          `/api/v1/admin/place-contributions/${orphanId}/approve`,
+          {},
+          adminToken,
+        )
+      ).status,
+    ).toBe(200);
+    const finalPlace = (
+      await (await get("/api/v1/places/pantai-recover-e2e")).json()
+    ).data;
+    expect(finalPlace.id).toBe(placeId);
+    expect(finalPlace.name).toBe("Pantai Recover Orphan");
+    expect((await get("/api/v1/places/pantai-recover-2")).status).toBe(404);
+  });
+
   it("reject usulan wajib beralasan: disimpan, tampil ke pengusul, masuk notifikasi", async () => {
     const submit = await post(
       "/api/v1/place-contributions",

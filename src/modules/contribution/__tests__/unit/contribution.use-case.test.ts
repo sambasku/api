@@ -127,6 +127,7 @@ describe('ReviewContributionUseCase', () => {
     const { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage } = makeReviewDeps();
     const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
     const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const sync = { closeLive: vi.fn(), closeMerged: vi.fn(), reopenUnverified: vi.fn() };
     const useCase = new ReviewContributionUseCase(
       contributionRepo,
       auditRepo as unknown as AuditLogRepository,
@@ -135,6 +136,11 @@ describe('ReviewContributionUseCase', () => {
       imageStorage as never,
       notifyUser as never,
       inbox as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sync as never,
     );
     const outcome = await useCase.execute({
       contributionId: '01CONTRIBULID0000000000000',
@@ -150,6 +156,7 @@ describe('ReviewContributionUseCase', () => {
     expect(auditRepo.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'approve', entityType: 'word', requestId: 'req-1' }),
     );
+    expect(sync.closeLive).toHaveBeenCalledWith('01WORDULID000000000000000', ACTOR.userId);
     expect(notifyUser.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: '01CONTRIBUTORULID0000000000',
@@ -750,6 +757,7 @@ describe('CorrectContributionUseCase', () => {
       expect.objectContaining({ status: 'published', isVerified: true, isCorrected: true }),
       ACTOR.userId,
       'lock',
+      { recordContribution: false },
     );
     expect(contributionRepo.review).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -786,6 +794,7 @@ describe('CorrectContributionUseCase', () => {
       expect.objectContaining({ status: 'pending_review', isVerified: false, isCorrected: true }),
       ACTOR.userId,
       'lock',
+      { recordContribution: false },
     );
     expect(contributionRepo.review).not.toHaveBeenCalled();
     expect(contributionRepo.applyChildCorrection).not.toHaveBeenCalled();
@@ -795,6 +804,27 @@ describe('CorrectContributionUseCase', () => {
         newData: expect.objectContaining({ status: 'pending', is_verified: false, published: false }),
       }),
     );
+  });
+
+  it('entity word + publish → sync closeLive tutup sibling ghost pending', async () => {
+    const { contributionRepo, wordRepo, auditRepo } = makeDeps();
+    const sync = { closeLive: vi.fn(), closeMerged: vi.fn(), reopenUnverified: vi.fn() };
+    const useCase = new CorrectContributionUseCase(
+      contributionRepo,
+      wordRepo,
+      auditRepo as unknown as AuditLogRepository,
+      undefined,
+      sync as never,
+    );
+    await useCase.execute({
+      contributionId: '01CONTRIBULID0000000000000',
+      actorId: ACTOR.userId,
+      comment: null,
+      publish: true,
+      input: { word: wordDto },
+    });
+    expect(sync.closeLive).toHaveBeenCalledWith('01WORDULID000000000000000', ACTOR.userId);
+    expect(sync.closeMerged).not.toHaveBeenCalled();
   });
 
   it('entity example + publish=false → applyChildCorrection, TANPA review, kontribusi tetap pending', async () => {

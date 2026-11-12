@@ -71,7 +71,10 @@ describe('Issue #153: Vulgar Auto-Flag and Open Report Endpoint', () => {
     // Assert
     expect(result).toBeDefined();
     expect(mockWordRepo.findById).toHaveBeenCalledWith(wordId);
-    expect(mockReportRepo.findOpenByUserAndWord).toHaveBeenCalledWith(userId, wordId, null);
+    expect(mockReportRepo.findOpenByUserAndWord).toHaveBeenCalledWith(userId, wordId, {
+      imageId: null,
+      meaningId: null,
+    });
     expect(mockReportRepo.create).toHaveBeenCalled();
     expect(mockAuditRepo.record).toHaveBeenNthCalledWith(1, {
       userId,
@@ -81,6 +84,7 @@ describe('Issue #153: Vulgar Auto-Flag and Open Report Endpoint', () => {
       newData: {
         word_id: wordId,
         image_id: null,
+        meaning_id: null,
         reason_code: 'vulgar',
         status: 'open',
       },

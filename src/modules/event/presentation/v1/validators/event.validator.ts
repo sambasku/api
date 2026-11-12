@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  SAMBAS_LAT_MAX,
+  SAMBAS_LAT_MIN,
+  SAMBAS_LNG_MAX,
+  SAMBAS_LNG_MIN,
+} from "@/shared/constants/sambas-bounds";
 import { opaqueId } from "@/shared/validation/id";
 
 export const eventCategorySchema = z
@@ -30,8 +36,12 @@ function optionalCoord(schema: z.ZodNumber) {
   );
 }
 
-const sambasLat = optionalCoord(z.number().min(1.0).max(1.8));
-const sambasLng = optionalCoord(z.number().min(108.5).max(110.0));
+const sambasLat = optionalCoord(
+  z.number().min(SAMBAS_LAT_MIN).max(SAMBAS_LAT_MAX),
+);
+const sambasLng = optionalCoord(
+  z.number().min(SAMBAS_LNG_MIN).max(SAMBAS_LNG_MAX),
+);
 
 // Field body event. Dipisah dari refinement supaya `.partial()` legal
 // (zod v4: object dengan refinement tidak bisa di-partial).

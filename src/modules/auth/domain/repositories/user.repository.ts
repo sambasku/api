@@ -39,6 +39,7 @@ export interface UserRepository {
   updateProfile(
     id: string,
     data: {
+      username?: string;
       displayName?: string;
       bio?: string | null;
       readContributionGuideAt?: Date;

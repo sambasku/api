@@ -47,6 +47,15 @@ export interface SearchMissRepository {
   recordSearchDay(now?: Date): Promise<void>;
   /** Load miss aktif (deleted_at IS NULL). Null kalau tidak ada / dismissed. */
   findById(id: string): Promise<SearchMiss | null>;
+  /**
+   * Load miss aktif by term+direction (unik). Term dinormalisasi di impl
+   * (trim+lower+collapse). Null kalau tidak ada / dismissed. Dipakai
+   * auto-attach provenance saat create-word tanpa search_miss_id (#262).
+   */
+  findByTermAndDirection(
+    term: string,
+    direction: SearchMissDirection,
+  ): Promise<SearchMiss | null>;
   list(filter: SearchMissListFilter): Promise<CursorPage<SearchMiss>>;
   /** Soft-delete (dismiss dari panel admin). Return false kalau tidak ada. */
   dismiss(id: string, actorId: string): Promise<boolean>;

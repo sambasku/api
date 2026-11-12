@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, articles, culinaryPlaces, cuisines, discussions, eventComments, events, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, articles, contributions, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -13,9 +13,11 @@ import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
+import { jinyeFeedPayload } from '../application/utils/activity-body-snippet';
 import { FEED_CATEGORY_KINDS, type ActivityCursor } from '../domain/merge-activity';
 
 const parentPantuns = alias(pantuns, 'parent_pantuns');
+const jinyeForComment = alias(jinye, 'jinye_for_comment');
 
 /**
  * Baca feed dari `activity_events` (write-through log) - pengganti agregasi
@@ -53,6 +55,7 @@ vote_meaning: 'vote',
   user_joined: 'welcome',
   card_shared: 'card_share',
   usaha_published: 'usaha',
+  layanan_published: 'layanan',
   cuisine_published: 'culinary',
   place_published: 'place_listing',
   event_published: 'event',
@@ -63,6 +66,10 @@ vote_meaning: 'vote',
   article_published: 'article',
   article_comment_created: 'article',
 announcement: 'announcement',
+  jinye_created: 'jinye',
+  jinye_comment_created: 'jinye',
+  jinye_reposted: 'jinye',
+  jinye_quote_created: 'jinye',
 };
 
 /** Label aksi per kind (badan feed; lemma diresolve terpisah). */
@@ -88,6 +95,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   user_joined: 'Bergabung di SambasKu',
   card_shared: 'Membagikan kartu',
   usaha_published: 'Menambahkan usaha',
+  layanan_published: 'Menambahkan layanan publik',
   cuisine_published: 'Menambahkan kuliner',
   place_published: 'Menambahkan wisata',
   event_published: 'Menambahkan acara',
@@ -98,6 +106,10 @@ pantun_reply_created: 'Membalas pantun',
 article_published: 'Menulis artikel',
 article_comment_created: 'Mengomentari artikel',
 announcement: 'Pengumuman',
+  jinye_created: 'Jinye',
+  jinye_comment_created: 'Membalas Jinye',
+  jinye_reposted: 'Membagikan ulang Jinye',
+  jinye_quote_created: 'Mengutip Jinye',
 };
 
 /** Entity type votes untuk kind event vote (legacy hydration #94). */
@@ -133,45 +145,54 @@ type ProfileCategory =
   | 'correction'
   | 'comment'
   | 'verification'
-  | 'vote';
+  | 'vote'
+  | 'jinye';
 
 /**
  * Kind event -> kategori profil. Empat set lama (kontrak 19-api-profil-publik)
  * tetap utuh; `correction` ditambahkan agar chip "Perbaikan" profil = set
  * "Perbaikan" feed beranda (#193), bukan `contribution` yang masih memuat
- * `word_created`/`contribution_submitted`.
+ * `word_created`/`contribution_submitted`. `jinye` = status Jinye (+ komen/
+ * repost/quote) supaya "Aktivitas terbaru" memuat karya status.
  */
 const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
-contribution: [
-'word_created',
-'contribution_image',
-'contribution_audio',
-'contribution_pron',
-'contribution_example',
-'suggestion_applied',
-'suggestion_created',
-'contribution_submitted',
-'place_photo_added',
-'usaha_photo_added',
-'usaha_published',
-'cuisine_published',
-'place_published',
-'event_published',
-'event_going',
-'article_published',
-],
+  contribution: [
+    'word_created',
+    'contribution_image',
+    'contribution_audio',
+    'contribution_pron',
+    'contribution_example',
+    'suggestion_applied',
+    'suggestion_created',
+    'contribution_submitted',
+    'place_photo_added',
+    'usaha_photo_added',
+    'usaha_published',
+    'layanan_published',
+    'cuisine_published',
+    'place_published',
+    'event_published',
+    'article_published',
+  ],
   correction: FEED_CATEGORY_KINDS.correction!,
   comment: ['comment_created', 'article_comment_created', 'event_comment_created'],
   verification: ['word_verified', 'suggestion_selfapply'],
   vote: ['vote_word', 'vote_comment', 'vote_meaning'],
+  jinye: [
+    'jinye_created',
+    'jinye_comment_created',
+    'jinye_reposted',
+    'jinye_quote_created',
+  ],
 };
 
-/** Mode merge profil: 1 query, 13 kind = gabungan 4 kategori (#103). */
+/** Mode merge profil: 1 query, gabungan kategori (#103). */
 const MERGED_PROFILE_KINDS: ActivityEventKind[] = [
   ...PROFILE_KIND_SETS.contribution,
   ...PROFILE_KIND_SETS.comment,
   ...PROFILE_KIND_SETS.verification,
   ...PROFILE_KIND_SETS.vote,
+  ...PROFILE_KIND_SETS.jinye,
 ];
 
 function profileCategoryOf(kind: ActivityEventKind): ProfileCategory {
@@ -179,6 +200,36 @@ function profileCategoryOf(kind: ActivityEventKind): ProfileCategory {
     (cat) => (PROFILE_KIND_SETS[cat] as readonly string[]).includes(kind),
   );
   return hit ?? 'contribution';
+}
+
+function jinyeImageCount(images: unknown): number {
+  return Array.isArray(images) ? images.length : 0;
+}
+
+/**
+ * Copy Jinye dari payload beku atau kolom JOIN (event lama).
+ * Hanya kind jinye_* - jangan ambil payload kind lain (mis. word_verified
+ * "#56 Memverifikasi usulan X: {lemma}") atau placeholder lemma tak tersubstitusi.
+ */
+function jinyeCopyFromRow(
+  kind: ActivityEventKind,
+  row: Pick<
+    FeedRow,
+    'payload' | 'jinyeBody' | 'jinyeQuoteBody' | 'jinyeAudioUrl' | 'jinyeImages'
+  >,
+): string | null {
+  if (!kind.startsWith('jinye_')) return null;
+  const frozen = row.payload?.trim();
+  if (frozen) return frozen;
+  if (kind === 'jinye_created' || kind === 'jinye_quote_created') {
+    return jinyeFeedPayload({
+      body: row.jinyeBody,
+      quoteBody: kind === 'jinye_quote_created' ? row.jinyeQuoteBody : null,
+      imageCount: jinyeImageCount(row.jinyeImages),
+      hasAudio: !!row.jinyeAudioUrl?.trim(),
+    });
+  }
+  return null;
 }
 
 /**
@@ -210,8 +261,17 @@ interface FeedRow {
   placeName: string | null;
   /** Usaha untuk usaha_published (LEFT JOIN usahas, published saja). */
   usahaSlug: string | null;
+  layananSlug: string | null;
+  layananName: string | null;
   /** Pantun pembuka untuk pantun_reply_created (LEFT JOIN, published saja). */
   replyParentId: string | null;
+  /** Jinye induk untuk jinye_comment_created. */
+  jinyeCommentParentId: string | null;
+  /** Fallback copy Jinye bila payload beku kosong (event lama). */
+  jinyeBody: string | null;
+  jinyeQuoteBody: string | null;
+  jinyeAudioUrl: string | null;
+  jinyeImages: unknown;
   usahaName: string | null;
   /** Acara untuk event_published (LEFT JOIN events, published saja). */
   eventSlug: string | null;
@@ -309,19 +369,30 @@ export class ActivityEventFeedRepositoryImpl {
       const lemma = row.targetWordId ? row.lemma : null;
       // #94: payload beku menang (satu sumber kebenaran feed+profil). Live
       // votes hanya fallback untuk event lama tanpa payload.
-      const frozen = row.payload?.trim() || null;
       const voteValue = row.voteValue;
+      const profileKind =
+        category === 'merged' ? profileCategoryOf(kind) : category;
+      // kind=jinye: word_id di wire = id Jinye (navigasi detail). Komen
+      // Jinye mengarah ke induk (sama target feed beranda).
+      const jinyeTargetId =
+        kind === 'jinye_comment_created'
+          ? row.jinyeCommentParentId
+          : kind.startsWith('jinye_')
+            ? row.targetId
+            : null;
+      const jinyeCopy = jinyeCopyFromRow(kind, row);
+      const frozen = row.payload?.trim() || null;
       items.push({
         id: row.id,
-        // mode 'merged': kategori diturunkan dari kind (kontrak 4 kategori
-        // profil tetap utuh).
-        kind: category === 'merged' ? profileCategoryOf(kind) : category,
+        kind: profileKind,
         occurredAt: row.occurredAt,
-        wordId: row.targetWordId,
+        wordId: jinyeTargetId ?? row.targetWordId,
         lemma,
-        summary: frozen
-          ? this.applyLemmaPlaceholder(frozen, lemma)
-          : this.publicSummary(kind, lemma, row.targetId, voteValue),
+        summary: jinyeCopy
+          ? jinyeCopy
+          : frozen
+            ? this.applyLemmaPlaceholder(frozen, lemma)
+            : this.publicSummary(kind, lemma, row.targetId, voteValue),
       });
     }
     return {
@@ -374,6 +445,8 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menambahkan foto usaha';
     case 'usaha_published':
       return 'Menambahkan usaha';
+    case 'layanan_published':
+      return 'Menambahkan layanan publik';
     case 'place_published':
       return 'Menambahkan wisata';
     case 'event_published':
@@ -386,6 +459,14 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menulis pantun';
     case 'pantun_reply_created':
       return 'Membalas pantun';
+    case 'jinye_created':
+      return 'Menulis Jinye';
+    case 'jinye_comment_created':
+      return 'Membalas Jinye';
+    case 'jinye_reposted':
+      return 'Membagikan ulang Jinye';
+    case 'jinye_quote_created':
+      return 'Mengutip Jinye';
     case 'comment_created':
         return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
     case 'article_comment_created':
@@ -410,6 +491,7 @@ export class ActivityEventFeedRepositoryImpl {
     return sql`(
       ${words.deletedAt} is null
       and ${words.status} = 'published'
+      and ${words.isVerified} = 1
       and ${sql.join(
         FEED_EXCLUDED_USAGE_LABELS.map(
           (label) => sql`${words.usageLabels} NOT LIKE ${`%\"${label}\"%`}`,
@@ -495,9 +577,16 @@ export class ActivityEventFeedRepositoryImpl {
       placeName: places.name,
       usahaSlug: usahas.slug,
       usahaName: usahas.name,
+      layananSlug: layanans.slug,
+      layananName: layanans.name,
       // pantun_reply_created: link ke pantun pembuka (balasan takedown →
       // baris feed ikut sembunyi; induk takedown → sembunyi juga).
       replyParentId: parentPantuns.id,
+      jinyeCommentParentId: jinyeForComment.id,
+      jinyeBody: jinye.body,
+      jinyeQuoteBody: jinye.quoteBody,
+      jinyeAudioUrl: jinye.audioUrl,
+      jinyeImages: jinye.images,
       eventSlug: events.slug,
       eventName: events.name,
       cuisineSlug: cuisines.slug,
@@ -536,6 +625,14 @@ articleTitle: articles.title,
         eq(usahas.id, activityEvents.targetId),
         eq(usahas.publishStatus, 'published'),
         sql`${usahas.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      layanans,
+      and(
+        eq(activityEvents.kind, 'layanan_published'),
+        eq(layanans.id, activityEvents.targetId),
+        eq(layanans.publishStatus, 'published'),
       ),
     )
     .leftJoin(
@@ -599,6 +696,34 @@ articleTitle: articles.title,
         eq(activityEvents.kind, 'pantun_created'),
         eq(pantuns.id, activityEvents.targetId),
         eq(pantuns.status, 'published'),
+      ),
+    )
+    .leftJoin(
+      jinye,
+      and(
+        inArray(activityEvents.kind, [
+          'jinye_created',
+          'jinye_reposted',
+          'jinye_quote_created',
+        ]),
+        eq(jinye.id, activityEvents.targetId),
+        eq(jinye.status, 'published'),
+      ),
+    )
+    .leftJoin(
+      jinyeComments,
+      and(
+        eq(activityEvents.kind, 'jinye_comment_created'),
+        eq(jinyeComments.id, activityEvents.targetId),
+        eq(jinyeComments.status, 'published'),
+      ),
+    )
+    .leftJoin(
+      jinyeForComment,
+      and(
+        eq(activityEvents.kind, 'jinye_comment_created'),
+        eq(jinyeForComment.id, jinyeComments.jinyeId),
+        eq(jinyeForComment.status, 'published'),
       ),
     )
     // pantun_reply_created: join balasan (published) + pantun induknya.
@@ -675,11 +800,16 @@ articleTitle: articles.title,
       sql`(${activityEvents.kind} <> 'discussion_created' or ${discussions.id} is not null)`,
       // Pantun hanya tayang selama masih published (takedown = sembunyi).
       sql`(${activityEvents.kind} <> 'pantun_created' or ${pantuns.id} is not null)`,
+      // Jinye hanya tayang selama published (arsip/hapus/takedown = sembunyi).
+      sql`(${activityEvents.kind} not in ('jinye_created','jinye_reposted','jinye_quote_created') or ${jinye.id} is not null)`,
+      sql`(${activityEvents.kind} <> 'jinye_comment_created' or ${jinyeComments.id} is not null)`,
+      sql`(${activityEvents.kind} <> 'jinye_comment_created' or ${jinyeForComment.id} is not null)`,
       // Balasan pantun: balasan & induknya harus published (visibility read-time).
       sql`(${activityEvents.kind} <> 'pantun_reply_created' or ${pantunReplies.id} is not null)`,
       sql`(${activityEvents.kind} <> 'pantun_reply_created' or ${parentPantuns.id} is not null)`,
         // Usaha hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'usaha_published' or ${usahas.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'layanan_published' or ${layanans.id} is not null)`,
         sql`(${activityEvents.kind} <> 'usaha_photo_added' or ${usahas.id} is not null)`,
 // Kuliner/tempat kuliner hanya tayang selama masih published.
 sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null or ${culinaryPlaces.id} is not null)`,
@@ -688,9 +818,14 @@ sql`(${activityEvents.kind} <> 'article_published' or ${articles.id} is not null
 // Komentar artikel: komentar & artikelnya harus published.
 sql`(${activityEvents.kind} <> 'article_comment_created' or ${articleComments.id} is not null)`,
 sql`(${activityEvents.kind} <> 'article_comment_created' or ${articles.id} is not null)`,
-// Komentar acara: komentar & acaranya harus published.
-sql`(${activityEvents.kind} <> 'event_comment_created' or ${eventComments.id} is not null)`,
-sql`(${activityEvents.kind} <> 'event_comment_created' or ${events.id} is not null)`,
+// #262: pencarian warga closed saat ada usulan pending bertaut miss
+// (sama aturan GET /search-misses publik; derived, bukan flip hidden_at).
+sql`(${activityEvents.kind} <> 'search_miss' or not exists (
+  select 1 from ${contributions} c
+  where c.search_miss_id = ${activityEvents.targetId}
+    and c.status = 'pending'
+    and c.deleted_at is null
+))`,
 ),
 )
       .orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id))
@@ -782,12 +917,15 @@ sql`(${activityEvents.kind} <> 'event_comment_created' or ${events.id} is not nu
     // #124: payload announcement = JSON {title,...} - bukan copy human.
     // Body wire announcement diisi setelah parse di bawah.
     const isAnnouncement = kind === 'announcement';
+    const jinyeCopy = jinyeCopyFromRow(kind, row);
     const body =
       isAnnouncement
         ? ''
-        : frozen !== null
-          ? this.applyLemmaPlaceholder(frozen, lemma)
-          : this.bodyFor(kind, lemma);
+        : jinyeCopy
+          ? jinyeCopy
+          : frozen !== null
+            ? this.applyLemmaPlaceholder(frozen, lemma)
+            : this.bodyFor(kind, lemma);
 const subtitle =
 kind === 'place_photo_added' || kind === 'place_published'
 ? row.placeName
@@ -795,7 +933,9 @@ kind === 'place_photo_added' || kind === 'place_published'
 ? (row.cuisineName ?? row.culinaryPlaceName)
 : kind === 'usaha_published' || kind === 'usaha_photo_added'
 ? row.usahaName
-: kind === 'event_published' || kind === 'event_going' || kind === 'event_comment_created'
+: kind === 'layanan_published'
+? row.layananName
+: kind === 'event_published'
 ? row.eventName
 : kind === 'article_published' || kind === 'article_comment_created'
 ? row.articleTitle
@@ -913,6 +1053,7 @@ kind === 'place_photo_added' || kind === 'place_published'
     case 'card_shared':
       return lemma ? `Membagikan kartu · ${quoted(lemma)}` : 'Membagikan kartu';
 case 'usaha_published':
+case 'layanan_published':
 case 'cuisine_published':
 case 'place_published':
 case 'event_published':
@@ -921,6 +1062,10 @@ case 'event_comment_created':
 case 'pantun_created':
 case 'pantun_reply_created':
 case 'article_published':
+case 'jinye_created':
+case 'jinye_comment_created':
+case 'jinye_reposted':
+case 'jinye_quote_created':
 return KIND_BODY[kind];
       case 'search_miss':
         return lemma ? `Mencari "${lemma}" - belum ada di kamus.` : 'Mencari - belum ada di kamus.';
@@ -972,10 +1117,12 @@ return KIND_BODY[kind];
       missDirection: string | null;
       placeSlug?: string | null;
       usahaSlug?: string | null;
+      layananSlug?: string | null;
       eventSlug?: string | null;
 cuisineSlug?: string | null;
 culinaryPlaceSlug?: string | null;
 replyParentId?: string | null;
+jinyeCommentParentId?: string | null;
 articleSlug?: string | null;
 },
     word: { id: string; lemma: string } | null,
@@ -1022,6 +1169,8 @@ articleSlug?: string | null;
       case 'usaha_published':
       case 'usaha_photo_added':
         return row.usahaSlug ? { type: 'usaha', id: row.usahaSlug } : null;
+      case 'layanan_published':
+        return row.layananSlug ? { type: 'layanan', id: row.layananSlug } : null;
       case 'place_published':
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'event_published':
@@ -1031,6 +1180,15 @@ articleSlug?: string | null;
         return row.eventSlug ? { type: 'event', id: row.eventSlug } : null;
     case 'pantun_created':
       return row.targetId ? { type: 'pantun', id: row.targetId! } : null;
+    case 'jinye_created':
+    case 'jinye_reposted':
+    case 'jinye_quote_created':
+      return row.targetId ? { type: 'jinye', id: row.targetId! } : null;
+    case 'jinye_comment_created':
+      // Link ke Jinye induk (bukan id komen).
+      return row.jinyeCommentParentId
+        ? { type: 'jinye', id: row.jinyeCommentParentId }
+        : null;
     case 'pantun_reply_created':
       // Link ke pantun pembuka yang dibalas (bukan id balasan).
       return row.replyParentId

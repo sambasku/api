@@ -5,6 +5,7 @@ import {
   type CursorPage,
   type WordRepository,
 } from '../../domain/repositories/word.repository';
+import { publicReadGate } from '../utils/resolve-publication';
 
 export interface ListWordsQuery {
   q: string;
@@ -16,6 +17,8 @@ export interface ListWordsQuery {
   isVerified?: boolean;
   /** Filter kategori (api#50): id ULID atau nama case-insensitive. */
   category?: string;
+  /** Role dari soft auth - gate verifikator (pending_review + published). */
+  viewerRoles?: string[];
 }
 
 export interface ListWordsResult extends CursorPage<WordSummary> {
@@ -40,14 +43,19 @@ export class ListWordsUseCase {
       }
     }
 
+    const gate = publicReadGate(query.viewerRoles);
+    // Publik A-Z: published + verified. Verifikator: statuses tanpa paksa verified.
+    // Query is_verified dari klien diabaikan di kedua mode.
     const { items, nextCursor, hasMore } = await this.wordRepo.listAtoZ({
       q: query.q.trim(),
       letter: query.letter,
       limit: query.limit,
       wordType: query.wordType,
-      isVerified: query.isVerified,
       category: query.category?.trim() || undefined,
       cursor,
+      ...(gate.statuses
+        ? { statuses: gate.statuses }
+        : { isVerified: true }),
     });
 
     return {

@@ -8,6 +8,7 @@ import type {
   ResolveWordReportUseCase,
   TakedownWordReportUseCase,
   FlagViolentImageReportUseCase,
+  RemoveMeaningWordReportUseCase,
 } from '../../application/use-cases/resolve-word-report.use-case';
 import type {
   CreateWordReportBody,
@@ -21,6 +22,8 @@ export function toWordReportItem(row: WordReport) {
     id: row.id,
     word_id: row.wordId,
     image_id: row.imageId,
+    meaning_id: row.meaningId,
+    meaning_definition: row.meaningDefinition,
     lemma: row.wordLemma,
     word_status: row.wordStatus,
     user_id: row.userId,
@@ -44,6 +47,7 @@ export class WordReportController {
       resolve: ResolveWordReportUseCase;
       takedown: TakedownWordReportUseCase;
       flagViolentImage: FlagViolentImageReportUseCase;
+      removeMeaning: RemoveMeaningWordReportUseCase;
     },
   ) {}
 
@@ -52,6 +56,7 @@ export class WordReportController {
     const row = await this.deps.create.execute({
       wordId,
       imageId: body.image_id,
+      meaningId: body.meaning_id,
       userId: user.user_id,
       reasonCode: body.reason_code,
       note: body.note,
@@ -64,6 +69,7 @@ export class WordReportController {
           id: row.id,
           word_id: row.wordId,
           image_id: row.imageId,
+          meaning_id: row.meaningId,
           status: 'open' as const,
           created_at: row.createdAt.toISOString(),
         },
@@ -75,6 +81,7 @@ export class WordReportController {
   async list(c: Context, query: ListWordReportsQuery) {
     const page = await this.deps.list.execute({
       status: query.status,
+      target: query.target,
       limit: query.limit,
       cursor: query.cursor,
     });
@@ -116,6 +123,19 @@ export class WordReportController {
     const row = await this.deps.flagViolentImage.execute({
       id,
       actorId: user.user_id,
+      note: body.note,
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: toWordReportItem(row) });
+  }
+
+  async removeMeaning(c: Context, id: string, body: ResolveWordReportBody) {
+    const user = this.requireUser(c);
+    const row = await this.deps.removeMeaning.execute({
+      id,
+      actorId: user.user_id,
+      actorRole: user.role,
+      actorRoles: user.roles,
       note: body.note,
       requestId: this.requestId(c),
     });

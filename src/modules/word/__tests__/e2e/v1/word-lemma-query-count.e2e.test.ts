@@ -30,6 +30,7 @@ describe.skipIf(!hasTestDb)('Subrequest budget - GET /words/lemma/:lemma', () =>
       languageId: '01E2ELANGSMB',
       lemma: 'jabbong',
       status: 'published',
+      isVerified: true,
     });
 
     // Client SINGLETON yang sama dipakai app.ts (db drizzle di atasnya).

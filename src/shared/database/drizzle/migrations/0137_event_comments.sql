@@ -1,4 +1,4 @@
--- Migration 0124: event_comments + event_comment_revisions
+-- Migration 0137: event_comments + event_comment_revisions
 -- Mirror pola article_comments / article_comment_revisions di encyclopedia.
 
 CREATE TABLE `event_comments` (
@@ -14,10 +14,11 @@ CREATE TABLE `event_comments` (
   `updated_at` integer,
   `deleted_at` integer
 );
-
+--> statement-breakpoint
 CREATE INDEX `event_comments_event_status_idx` ON `event_comments` (`event_id`, `status`, `id`);
+--> statement-breakpoint
 CREATE INDEX `event_comments_user_status_idx` ON `event_comments` (`user_id`, `status`, `id`);
-
+--> statement-breakpoint
 CREATE TABLE `event_comment_revisions` (
   `id` text PRIMARY KEY NOT NULL,
   `comment_id` text NOT NULL REFERENCES `event_comments`(`id`) ON DELETE CASCADE,
@@ -25,5 +26,5 @@ CREATE TABLE `event_comment_revisions` (
   `body` text NOT NULL,
   `created_at` integer NOT NULL
 );
-
+--> statement-breakpoint
 CREATE INDEX `event_comment_revisions_comment_idx` ON `event_comment_revisions` (`comment_id`, `created_at`);

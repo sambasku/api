@@ -27,6 +27,7 @@ const pantun: Pantun = {
   language: 'id',
   rhymeScheme: 'ABAB',
   lines: ['a', 'b', 'c', 'd'],
+  audio: null,
   status: 'published',
   createdAt: new Date('2026-10-20T00:00:00Z'),
   updatedAt: null,

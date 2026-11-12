@@ -122,6 +122,7 @@ function makeDeps(missing: Partial<MissingReferences> = {}, duplicate = false, i
   const auditRepo = { record: vi.fn().mockResolvedValue(undefined), list: vi.fn() };
   const searchMissRepo = {
     findById: vi.fn().mockResolvedValue(null),
+    findByTermAndDirection: vi.fn().mockResolvedValue(null),
     record: vi.fn(),
     list: vi.fn(),
     dismiss: vi.fn(),
@@ -853,5 +854,51 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
         ADMIN,
       ),
     ).rejects.toMatchObject({ errorCode: 'SEARCH_MISS_TERM_MISMATCH' });
+  });
+
+  it('tanpa search_miss_id + term lemma cocok → auto-attach (#262)', async () => {
+    const { useCase, searchMissRepo, wordRepo } = makeDeps();
+    searchMissRepo.findByTermAndDirection = vi.fn().mockImplementation((_term, direction) => {
+      if (direction === 'lemma') {
+        return Promise.resolve({
+          id: MISS_ID,
+          term: 'makatn',
+          direction: 'lemma',
+          hitCount: 1,
+          lastSearchedAt: new Date(),
+          isFulfilled: false,
+          isVisible: true,
+          pendingContributionCount: 0,
+          pendingContributionId: null,
+          createdAt: new Date(),
+        });
+      }
+      return Promise.resolve(null);
+    });
+    searchMissRepo.findById = vi.fn().mockResolvedValue({
+      id: MISS_ID,
+      term: 'makatn',
+      direction: 'lemma',
+      hitCount: 1,
+      lastSearchedAt: new Date(),
+      isFulfilled: false,
+      isVisible: true,
+      pendingContributionCount: 0,
+      pendingContributionId: null,
+      createdAt: new Date(),
+    });
+    const result = await useCase.execute(makeDto({ lemma: 'Makatn' }), ADMIN);
+    expect(result.searchMissId).toBe(MISS_ID);
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({ searchMissId: MISS_ID }),
+      ADMIN.userId,
+    );
+  });
+
+  it('tanpa search_miss_id + tidak ada miss → tetap lolos tanpa attach', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    const result = await useCase.execute(makeDto(), ADMIN);
+    expect(result.searchMissId).toBeNull();
+    expect(wordRepo.saveWithRelations).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
+import { ANONIM_EMAIL, ANONIM_USER_ID, ANONIM_USERNAME } from '@/shared/constants/anonim';
 import { capturedOtpDisplayCode, e2eRegisterBody} from '@/shared/testing/e2e-auth';
 import { eq } from 'drizzle-orm';
 
@@ -49,6 +50,13 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
       { id: IDN, code: 'id', name: 'Indonesia' },
     ]);
     await db.insert(wordClasses).values({ id: NOMINA, code: 'n', name: 'Nomina' });
+    // User sistem Anonim - penampung kontribusi tanpa login (#262 e2e)
+    await db.insert(users).values({
+      id: ANONIM_USER_ID,
+      username: ANONIM_USERNAME,
+      email: ANONIM_EMAIL,
+      passwordHash: 'bukan-hash-login',
+    });
 
     const appModule = await import('@/app');
     app = appModule.app;
@@ -431,5 +439,98 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
     expect(done.is_fulfilled).toBe(true);
     expect(done.pending_contribution_count).toBe(0);
     expect(done.pending_contribution_id).toBeNull();
+  });
+
+  it('#262 usulan pending (anon) → hilang dari beranda publik; reject → muncul lagi', async () => {
+    // 1. Cari + tayangkan miss
+    await get('/api/v1/words/search?q=Bandong262');
+    const panel = await get('/api/v1/admin/search-misses', adminToken);
+    const miss = (await panel.json()).data.find((m: { term: string }) => m.term === 'bandong262');
+    expect(miss).toBeTruthy();
+    await patch(`/api/v1/admin/search-misses/${miss.id}`, { is_visible: true }, adminToken);
+
+    const berandaBefore = await get('/api/v1/search-misses?limit=50');
+    expect(
+      (await berandaBefore.json()).data.some((m: { term: string }) => m.term === 'bandong262'),
+    ).toBe(true);
+
+    // 2. Usulan tamu (pending_review, belum fulfilled) bertaut miss →
+    //    beranda/feed menutup case via filter pending (#262), bukan is_fulfilled.
+    const submit = await post('/api/v1/contributions/words', {
+      language_id: SMB,
+      lemma: 'Bandong262',
+      word_type: 'word',
+      category_ids: [],
+      related_words: [],
+      meanings: [
+        {
+          word_class_id: NOMINA,
+          definition: 'bodoh',
+          order_index: 1,
+          translations: [
+            { language_id: IDN, translation_text: 'bodoh', translation_type: 'direct' },
+          ],
+        },
+      ],
+      search_miss_id: miss.id,
+    });
+    expect(submit.status).toBe(201);
+    expect((await submit.json()).data.status).toBe('pending_review');
+
+    const berandaPending = await get('/api/v1/search-misses?limit=50');
+    expect(
+      (await berandaPending.json()).data.some((m: { term: string }) => m.term === 'bandong262'),
+    ).toBe(false);
+
+    // Feed pencarian warga ikut menutup case
+    const feedPending = await get('/api/v1/activity?limit=50&category=search_miss');
+    expect(feedPending.status).toBe(200);
+    expect(
+      (await feedPending.json()).data.some(
+        (i: { target?: { id?: string } }) => i.target?.id === miss.id,
+      ),
+    ).toBe(false);
+
+    // Panel admin tetap melihat miss + pending (belum fulfilled)
+    const panelPending = await get('/api/v1/admin/search-misses', adminToken);
+    const pending = (await panelPending.json()).data.find(
+      (m: { term: string }) => m.term === 'bandong262',
+    );
+    expect(pending).toMatchObject({
+      is_fulfilled: false,
+      is_visible: true,
+      pending_contribution_count: 1,
+    });
+
+    // 3. Reject usulan → miss muncul lagi di beranda + feed
+    const contributions = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word',
+      adminToken,
+    );
+    const queue = (await contributions.json()).data as {
+      id: string;
+      search_miss_id?: string | null;
+    }[];
+    const target = queue.find((c) => c.search_miss_id === miss.id);
+    expect(target).toBeTruthy();
+
+    const reject = await post(
+      `/api/v1/admin/contributions/${target!.id}/reject`,
+      { comment: 'Tidak cocok untuk kamus' },
+      adminToken,
+    );
+    expect(reject.status).toBe(200);
+
+    const berandaAfterReject = await get('/api/v1/search-misses?limit=50');
+    expect(
+      (await berandaAfterReject.json()).data.some((m: { term: string }) => m.term === 'bandong262'),
+    ).toBe(true);
+
+    const feedAfterReject = await get('/api/v1/activity?limit=50&category=search_miss');
+    expect(
+      (await feedAfterReject.json()).data.some(
+        (i: { target?: { id?: string } }) => i.target?.id === miss.id,
+      ),
+    ).toBe(true);
   });
 });

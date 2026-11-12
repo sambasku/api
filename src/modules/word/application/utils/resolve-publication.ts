@@ -1,4 +1,4 @@
-import type { ChildStatus } from '../../domain/entities/word.entity';
+import type { ChildStatus, WordStatus } from '../../domain/entities/word.entity';
 
 // Tayang (`status`) dan dipercaya (`isVerified`) terpisah.
 // Verifikator: published + terverifikasi, tidak masuk antrean.
@@ -14,6 +14,21 @@ export function isVerifierRole(role: string | string[]): boolean {
   const verifier = ['admin', 'editor', 'root', 'reviewer'];
   const roles = Array.isArray(role) ? role : [role];
   return roles.some((r) => verifier.includes(r));
+}
+
+/** Status yang boleh dilihat verifikator di search/list/detail publik. */
+export const VERIFIER_VISIBLE_STATUSES: WordStatus[] = ['published', 'pending_review'];
+
+/** Gate baca publik vs verifikator (search / list / detail). */
+export function publicReadGate(roles?: string | string[]): {
+  statuses?: WordStatus[];
+  published?: boolean;
+  isVerified?: boolean;
+} {
+  if (roles && isVerifierRole(roles)) {
+    return { statuses: VERIFIER_VISIBLE_STATUSES };
+  }
+  return { published: true, isVerified: true };
 }
 
 export interface PublicationDecision {

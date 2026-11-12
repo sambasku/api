@@ -11,7 +11,7 @@ export interface WordReportRepository {
   findOpenByUserAndWord(
     userId: string,
     wordId: string,
-    imageId?: string | null,
+    opts?: { imageId?: string | null; meaningId?: string | null },
   ): Promise<WordReport | null>;
   findById(id: string): Promise<WordReport | null>;
   list(filter: WordReportListFilter): Promise<CursorPage<WordReport>>;
@@ -24,4 +24,10 @@ export interface WordReportRepository {
   }): Promise<boolean>;
   /** Tutup semua laporan open pada satu kata (efek takedown). */
   closeOpenForWord(wordId: string, actorId: string, note: string | null): Promise<void>;
+  /** Tutup semua laporan open yang mengarah ke satu makna (#253). */
+  closeOpenForMeaning(
+    meaningId: string,
+    actorId: string,
+    note: string | null,
+  ): Promise<void>;
 }

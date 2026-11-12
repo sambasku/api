@@ -218,6 +218,8 @@ WHERE o.user_id = users.id
 )`,
         // Kolom baru migrasi 0086 - hadir supaya cast ke UserRow valid.
         activeBorderId: users.activeBorderId,
+        // Kolom Jinye pin - wajib di select supaya cast ke UserRow valid.
+        pinnedJinyeId: users.pinnedJinyeId,
       })
       .from(users)
       .where(
@@ -416,6 +418,7 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
   async updateProfile(
     id: string,
     data: {
+      username?: string;
       displayName?: string;
       bio?: string | null;
       readContributionGuideAt?: Date;
@@ -426,27 +429,36 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
       notifyLevelUp?: boolean;
     },
   ): Promise<User> {
-    const [updated] = await this.db
-      .update(users)
-      .set({
-        ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
-        ...(data.bio !== undefined ? { bio: data.bio } : {}),
-        ...(data.regionId !== undefined ? { regionId: data.regionId } : {}),
-        ...(data.villageId !== undefined ? { villageId: data.villageId } : {}),
-        ...(data.readContributionGuideAt !== undefined
-          ? { readContributionGuideAt: data.readContributionGuideAt }
-          : {}),
-        ...(data.levelSeen !== undefined ? { levelSeen: data.levelSeen } : {}),
-        ...(data.notifyStreakReminder !== undefined
-          ? { notifyStreakReminder: data.notifyStreakReminder }
-          : {}),
-        ...(data.notifyLevelUp !== undefined
-          ? { notifyLevelUp: data.notifyLevelUp }
-          : {}),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(users.id, id), isNull(users.deletedAt)))
-      .returning();
+    let updated: UserRow | undefined;
+    try {
+      [updated] = await this.db
+        .update(users)
+        .set({
+          ...(data.username !== undefined ? { username: data.username } : {}),
+          ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
+          ...(data.bio !== undefined ? { bio: data.bio } : {}),
+          ...(data.regionId !== undefined ? { regionId: data.regionId } : {}),
+          ...(data.villageId !== undefined ? { villageId: data.villageId } : {}),
+          ...(data.readContributionGuideAt !== undefined
+            ? { readContributionGuideAt: data.readContributionGuideAt }
+            : {}),
+          ...(data.levelSeen !== undefined ? { levelSeen: data.levelSeen } : {}),
+          ...(data.notifyStreakReminder !== undefined
+            ? { notifyStreakReminder: data.notifyStreakReminder }
+            : {}),
+          ...(data.notifyLevelUp !== undefined
+            ? { notifyLevelUp: data.notifyLevelUp }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(users.id, id), isNull(users.deletedAt)))
+        .returning();
+    } catch (err) {
+      if (isUniqueViolationOn(err, 'username')) {
+        throw new ConflictError('USERNAME_ALREADY_EXISTS', 'Nama sudah dipakai');
+      }
+      throw err;
+    }
 
     if (!updated) {
       throw new NotFoundError('USER_NOT_FOUND', `User ${id} tidak ditemukan`);

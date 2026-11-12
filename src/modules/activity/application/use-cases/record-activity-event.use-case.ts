@@ -1,3 +1,4 @@
+import { collectMessages } from '@/shared/errors/error-chain';
 import type { ActivityEventRepository } from '../../domain/repositories/activity-event.repository';
 import type { ActivityEventKind } from '../../domain/entities/activity-event.entity';
 
@@ -33,10 +34,13 @@ export class RecordActivityEventUseCase {
     try {
       await this.eventRepo.append(cmd);
     } catch (err) {
+      // Drizzle bungkus driver error jadi "Failed query: ..."; SQLite cause
+      // (FK / UNIQUE / ...) ada di rantai cause - wajib ikut di log.
       console.error('[activity-event] append gagal (diabaikan):', {
         kind: cmd.kind,
         targetId: cmd.targetId,
-        err: err instanceof Error ? err.message : err,
+        dedupeKey: cmd.dedupeKey ?? null,
+        err: collectMessages(err).join(' | '),
       });
     }
   }

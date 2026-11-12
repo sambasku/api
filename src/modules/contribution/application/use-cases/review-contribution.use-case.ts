@@ -18,6 +18,7 @@ import {
   RecordAbuseSignalUseCase,
   safeRecordAbuseSignal,
 } from '@/shared/moderation/record-abuse-signal.use-case';
+import type { SyncLiveWordContributionsUseCase } from './sync-live-word-contributions.use-case';
 
 export interface ImageReviewDecision {
   imageId: string;
@@ -65,6 +66,8 @@ export class ReviewContributionUseCase {
     private readonly activityEvents?: RecordActivityEventUseCase,
     /** #133: approve audio pelafalan → notif pemilik kata. */
     private readonly notifyWordOwnerMedia?: NotifyWordOwnerMediaUseCase,
+    /** Tutup sibling pending (ghost update) setelah kata live+verified. */
+    private readonly syncContributions?: SyncLiveWordContributionsUseCase,
   ) {}
 
   async execute(cmd: ReviewContributionCommand): Promise<ReviewOutcome> {
@@ -96,6 +99,20 @@ export class ReviewContributionUseCase {
     // Soft-delete foto ditahan (stock + ImageKit) agar hilang dari GET publik.
     if (rejectedImageIds.length > 0) {
       await this.wordRepo.softDeleteWordImages(rejectedImageIds);
+    }
+
+    // Approve kata → tutup sibling pending (ghost action=update dari correct
+    // lama / edit paralel) supaya antrean verifikator lain bersih.
+    if (cmd.decision === 'approve' && outcome.entityType === 'word') {
+      if (outcome.mergedIntoWordId && outcome.mergedIntoWordId !== outcome.entityId) {
+        await this.syncContributions?.closeMerged(
+          outcome.mergedIntoWordId,
+          outcome.entityId,
+          cmd.actorId,
+        );
+      } else {
+        await this.syncContributions?.closeLive(outcome.entityId, cmd.actorId);
+      }
     }
 
     // Event feed (AGENTS.md #25): approve = kejadian publik. Actor event = KONTRIBUTOR

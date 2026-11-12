@@ -19,6 +19,7 @@ export const inboxNotificationTypeSchema = z.enum([
   'discussion_mention',
   'pantun_reply',
   'pantun_mention',
+  'jinye_comment',
   'word_comment',
   'word_vote',
   'word_example',
@@ -38,6 +39,7 @@ export const notificationTargetKindSchema = z.enum([
   'campaign',
   'verifier_application',
   'pantun',
+  'jinye',
   'day',
   'level',
 ]);
@@ -48,6 +50,7 @@ export const notificationActionKindSchema = z.enum([
   'suggestion',
   'discussion',
   'pantun',
+  'jinye',
   'url',
 ]);
 

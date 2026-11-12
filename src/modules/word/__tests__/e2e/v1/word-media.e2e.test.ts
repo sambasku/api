@@ -32,7 +32,8 @@ describe.skipIf(!hasTestDb)('Word Media E2E v1 - kontribusi pronounce/gambar/con
       body: JSON.stringify(body),
       headers: token ? { authorization: `Bearer ${token}` } : {},
     });
-  const get = (path: string) => request(path);
+  const get = (path: string, token?: string) =>
+    request(path, { headers: token ? { authorization: `Bearer ${token}` } : {} });
 
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
@@ -105,9 +106,16 @@ describe.skipIf(!hasTestDb)('Word Media E2E v1 - kontribusi pronounce/gambar/con
     expect(body.data).toMatchObject({ status: 'published', is_verified: false, is_corrected: false });
     expect(body.data.id).toHaveLength(26);
 
+    // Pronounce belum verified: tidak di detail publik
     const detail = await get(`/api/v1/words/${wordId}`);
     const detailBody = await detail.json();
-    expect(detailBody.data.pronunciations.some((p: { value: string }) => p.value === '/makatn/')).toBe(true);
+    expect(detailBody.data.pronunciations.some((p: { value: string }) => p.value === '/makatn/')).toBe(false);
+    const adminDetail = await get(`/api/v1/admin/words/${wordId}`, adminToken);
+    expect(
+      (await adminDetail.json()).data.pronunciations.some(
+        (p: { value: string }) => p.value === '/makatn/',
+      ),
+    ).toBe(true);
   });
 
   it('gambar (admin) → 201 published + tampil di detail publik', async () => {

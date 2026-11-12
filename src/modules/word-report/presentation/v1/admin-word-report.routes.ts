@@ -47,6 +47,7 @@ export function createAdminWordReportRoutes(deps: AdminWordReportRoutesDeps) {
   routes.use('/:id/mark-corrected', ...admin);
   routes.use('/:id/takedown', ...admin);
   routes.use('/:id/flag-violent-image', ...admin);
+  routes.use('/:id/remove-meaning', ...admin);
 
   const listRoute = createRoute({
     method: 'get',
@@ -149,6 +150,28 @@ export function createAdminWordReportRoutes(deps: AdminWordReportRoutesDeps) {
     },
   });
 
+  const removeMeaningRoute = createRoute({
+    method: 'post',
+    path: '/:id/remove-meaning',
+    tags: ['Word Reports', 'Admin'],
+    summary: 'Hapus makna yang dilaporkan (#253) dan tutup laporan. Kata tetap tayang.',
+    request: {
+      params: wordReportIdParamSchema,
+      body: { content: json(resolveWordReportBodySchema) },
+    },
+    responses: {
+      200: { description: 'Makna dihapus', content: json(wordReportItemResponseSchema) },
+      400: { description: 'Bukan laporan makna', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Role tidak diizinkan', content: json(errorResponseSchema) },
+      404: { description: 'Laporan atau makna tidak ditemukan', content: json(errorResponseSchema) },
+      409: {
+        description: 'Laporan sudah ditutup atau makna terakhir',
+        content: json(errorResponseSchema),
+      },
+    },
+  });
+
   routes.openapi(listRoute, (c) => deps.controller.list(c, c.req.valid('query')) as never);
   routes.openapi(getRoute, (c) => deps.controller.get(c, c.req.valid('param').id) as never);
   routes.openapi(
@@ -167,6 +190,11 @@ export function createAdminWordReportRoutes(deps: AdminWordReportRoutesDeps) {
     flagViolentImageRoute,
     (c) =>
       deps.controller.flagViolentImage(c, c.req.valid('param').id, c.req.valid('json')) as never,
+  );
+  routes.openapi(
+    removeMeaningRoute,
+    (c) =>
+      deps.controller.removeMeaning(c, c.req.valid('param').id, c.req.valid('json')) as never,
   );
 
   return routes;

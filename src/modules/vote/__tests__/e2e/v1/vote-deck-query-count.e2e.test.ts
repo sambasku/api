@@ -62,6 +62,7 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
         isHaveDefinition: j === 0,
         orderIndex: j,
         status: 'published',
+        isVerified: true,
         // Kelas kata menempel di MAKNA; separuh null supaya LEFT JOIN teruji.
         wordClassId: j === 0 ? '01DQCCLASS00000000000001' : null,
       })),
@@ -103,5 +104,11 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
     expect(withClass[0]!.wordClass!.code).toBe('n');
     expect(withClass[0]!.wordClass!.alias).toBe('Kata Benda');
     expect(page.items.some((m) => m.wordClass === null)).toBe(true);
+
+    // #260: IPA/audio ikut scalar subquery - field selalu ada, seed tanpa media.
+    for (const item of page.items) {
+      expect(item.pronunciationValue).toBeNull();
+      expect(item.hasAudio).toBe(false);
+    }
   });
 });

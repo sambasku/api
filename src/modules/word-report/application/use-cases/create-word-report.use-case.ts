@@ -10,6 +10,7 @@ import { hasConflictingUsageLabels } from '@/shared/constants/usage-labels';
 export interface CreateWordReportCommand {
   wordId: string;
   imageId?: string | null;
+  meaningId?: string | null;
   userId: string;
   reasonCode: WordReportReasonCode;
   note?: string | null;
@@ -25,6 +26,13 @@ export class CreateWordReportUseCase {
 
   async execute(cmd: CreateWordReportCommand): Promise<WordReport> {
     const imageId = cmd.imageId?.trim() || null;
+    const meaningId = cmd.meaningId?.trim() || null;
+
+    if (imageId && meaningId) {
+      throw new ValidationError([
+        { field: 'meaning_id', message: 'Laporan tidak bisa sekaligus foto dan makna' },
+      ]);
+    }
     if (cmd.reasonCode === 'violent_image' && !imageId) {
       throw new ValidationError([
         { field: 'image_id', message: 'ID foto wajib diisi untuk laporan kekerasan' },
@@ -33,6 +41,11 @@ export class CreateWordReportUseCase {
     if (cmd.reasonCode !== 'violent_image' && imageId) {
       throw new ValidationError([
         { field: 'image_id', message: 'image_id hanya untuk alasan violent_image' },
+      ]);
+    }
+    if (cmd.reasonCode === 'violent_image' && meaningId) {
+      throw new ValidationError([
+        { field: 'meaning_id', message: 'Laporan makna tidak memakai alasan violent_image' },
       ]);
     }
 
@@ -52,20 +65,36 @@ export class CreateWordReportUseCase {
       }
     }
 
-    const open = await this.reports.findOpenByUserAndWord(cmd.userId, cmd.wordId, imageId);
+    if (meaningId) {
+      const meaning = await this.words.findMeaningById(meaningId);
+      if (!meaning || meaning.wordId !== cmd.wordId) {
+        throw new NotFoundError('MEANING_NOT_FOUND', 'Makna tidak ditemukan pada kata ini');
+      }
+    }
+
+    const open = await this.reports.findOpenByUserAndWord(cmd.userId, cmd.wordId, {
+      imageId,
+      meaningId,
+    });
     if (open) {
       throw new ConflictError(
         'WORD_REPORT_ALREADY_OPEN',
-        imageId
-          ? 'Kamu sudah melaporkan foto ini dan laporannya masih terbuka'
-          : 'Kamu sudah melaporkan entri ini dan laporannya masih terbuka',
+        meaningId
+          ? 'Kamu sudah melaporkan makna ini dan laporannya masih terbuka'
+          : imageId
+            ? 'Kamu sudah melaporkan foto ini dan laporannya masih terbuka'
+            : 'Kamu sudah melaporkan entri ini dan laporannya masih terbuka',
       );
     }
 
-    // Auto-flag "kasar" for vulgar content
+    // Auto-flag "kasar" for vulgar content (entri/makna; bukan foto)
     let updatedWord = word;
     const originalUsageLabels = [...(word.usageLabels ?? [])];
-    if (cmd.reasonCode === 'vulgar' && !hasConflictingUsageLabels(word.usageLabels ?? [])) {
+    if (
+      cmd.reasonCode === 'vulgar' &&
+      !imageId &&
+      !hasConflictingUsageLabels(word.usageLabels ?? [])
+    ) {
       const newLabels = new Set(word.usageLabels ?? []);
       if (!newLabels.has('kasar')) {
         newLabels.add('kasar');
@@ -77,6 +106,7 @@ export class CreateWordReportUseCase {
     const row = await this.reports.create({
       wordId: cmd.wordId,
       imageId,
+      meaningId,
       userId: cmd.userId,
       reasonCode: cmd.reasonCode,
       note,
@@ -90,13 +120,13 @@ export class CreateWordReportUseCase {
       newData: {
         word_id: cmd.wordId,
         image_id: imageId,
+        meaning_id: meaningId,
         reason_code: cmd.reasonCode,
         status: 'open',
       },
       requestId: cmd.requestId ?? null,
     });
 
-    // Record auto-flag audit log if vulgar reason and label was added
     if (cmd.reasonCode === 'vulgar' && originalUsageLabels.length !== (updatedWord.usageLabels ?? []).length) {
       await this.auditRepo.record({
         userId: cmd.userId,

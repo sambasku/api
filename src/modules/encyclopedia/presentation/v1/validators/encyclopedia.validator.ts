@@ -58,7 +58,14 @@ const articlePayloadFields = {
 
 export const submitContributionBodySchema = z.object({
   kind: z.enum(['new', 'edit'], { error: 'Jenis usulan tidak valid' }),
-  article_id: opaqueId.nullable().optional(),
+  // Id ULID atau slug publik (klien suntingan sering kirim slug dari URL).
+  article_id: z
+    .string()
+    .trim()
+    .min(1, 'Artikel wajib dipilih')
+    .max(120, 'Artikel tidak valid')
+    .nullable()
+    .optional(),
   ...articlePayloadFields,
 });
 

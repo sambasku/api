@@ -21,6 +21,7 @@ import type {
   NewPantun,
   NewPantunReply,
   Pantun,
+  PantunAudio,
   PantunListFilter,
   PantunReply,
   PantunReplyRevision,
@@ -29,6 +30,61 @@ import type { PantunRepository, PantunSearchHit } from '../domain/repositories/p
 
 type PantunRow = typeof pantuns.$inferSelect;
 type ReplyRow = typeof pantunReplies.$inferSelect;
+
+function toAudio(
+  row: Pick<
+    PantunRow,
+    | 'audioUrl'
+    | 'audioMimeType'
+    | 'audioFileSize'
+    | 'audioDurationMs'
+    | 'audioProvider'
+    | 'audioProviderFileId'
+    | 'audioSha'
+  >,
+): PantunAudio | null {
+  if (
+    typeof row.audioUrl !== 'string' ||
+    row.audioUrl.length === 0 ||
+    typeof row.audioMimeType !== 'string' ||
+    typeof row.audioProvider !== 'string' ||
+    typeof row.audioProviderFileId !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    url: row.audioUrl,
+    mimeType: row.audioMimeType,
+    fileSize: row.audioFileSize ?? 0,
+    durationMs: row.audioDurationMs ?? null,
+    provider: row.audioProvider,
+    providerFileId: row.audioProviderFileId,
+    sha: row.audioSha ?? null,
+  };
+}
+
+function audioInsertValues(audio: PantunAudio | null | undefined) {
+  if (!audio) {
+    return {
+      audioUrl: null as string | null,
+      audioMimeType: null as string | null,
+      audioFileSize: null as number | null,
+      audioDurationMs: null as number | null,
+      audioProvider: null as string | null,
+      audioProviderFileId: null as string | null,
+      audioSha: null as string | null,
+    };
+  }
+  return {
+    audioUrl: audio.url,
+    audioMimeType: audio.mimeType,
+    audioFileSize: audio.fileSize,
+    audioDurationMs: audio.durationMs,
+    audioProvider: audio.provider,
+    audioProviderFileId: audio.providerFileId,
+    audioSha: audio.sha,
+  };
+}
 
 const REPLY_REVISION_CAP = 50;
 
@@ -95,6 +151,7 @@ function toSearchHit(row: PantunSearchRow): PantunSearchHit {
         language: row.language,
         rhymeScheme: row.rhyme_scheme as PantunRhymeScheme,
         lines,
+        audio: null,
         status: row.status as PantunReplyStatus,
         createdAt,
         updatedAt,
@@ -114,6 +171,7 @@ function toSearchHit(row: PantunSearchRow): PantunSearchHit {
       language: row.language,
       rhymeScheme: row.rhyme_scheme as PantunRhymeScheme,
       lines,
+      audio: null,
       status: row.status as PantunStatus,
       createdAt,
       updatedAt,
@@ -146,6 +204,7 @@ function toPantun(
     language: row.language,
     rhymeScheme: row.rhymeScheme as PantunRhymeScheme,
     lines: toLines(row.lines),
+    audio: toAudio(row),
     status: row.status as PantunStatus,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -172,6 +231,7 @@ function toReply(
     language: row.language,
     rhymeScheme: row.rhymeScheme as PantunRhymeScheme,
     lines: toLines(row.lines),
+    audio: toAudio(row),
     status: row.status as PantunReplyStatus,
     isEdited,
     createdAt: row.createdAt,
@@ -186,11 +246,13 @@ export class PantunRepositoryImpl implements PantunRepository {
     const [row] = await this.db
       .insert(pantuns)
       .values({
+        ...(input.id ? { id: input.id } : {}),
         userId: input.userId,
         categoryId: input.categoryId ?? null,
         language: input.language,
         rhymeScheme: input.rhymeScheme,
         lines: input.lines,
+        ...audioInsertValues(input.audio),
         status: 'published',
       })
       .returning();
@@ -267,12 +329,14 @@ export class PantunRepositoryImpl implements PantunRepository {
     const [row] = await this.db
       .insert(pantunReplies)
       .values({
+        ...(input.id ? { id: input.id } : {}),
         parentId: input.parentId,
         userId: input.userId,
         categoryId: input.categoryId ?? null,
         language: input.language,
         rhymeScheme: input.rhymeScheme,
         lines: input.lines,
+        ...audioInsertValues(input.audio),
         status: 'published',
       })
       .returning();

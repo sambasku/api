@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import { createRoute } from '@hono/zod-openapi';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
@@ -60,6 +61,120 @@ function pantunUserLimit(
     onLimited: ugcRateLimitedHook(onUgcRateLimited),
   });
 }
+
+/** Audio pantun: lebih ketat dari teks (10/jam). */
+function pantunAudioUserLimit(
+  onUgcRateLimited?: (userId: string) => void | Promise<void>,
+) {
+  return rateLimit({
+    points: 10,
+    duration: 3600,
+    keyFn: (c) => {
+      const uid = (
+        c as { get: (k: 'user') => { user_id: string } | undefined }
+      ).get('user')?.user_id;
+      return uid ? `pantun-audio:user:${uid}` : '';
+    },
+    onLimited: ugcRateLimitedHook(onUgcRateLimited),
+  });
+}
+
+const audioBodyLimit = bodyLimit({
+  maxSize: 6 * 1024 * 1024,
+  onError: (c) =>
+    c.json(
+      {
+        success: false as const,
+        error_code: 'AUDIO_TOO_LARGE',
+        message: 'File audio terlalu besar (maks 5 MB)',
+      },
+      400,
+    ),
+});
+
+const createWithAudioRoute = createRoute({
+  method: 'post',
+  path: '/audio',
+  tags: ['Pantun'],
+  summary: 'Kirim pantun 4 baris + bacaan suara (multipart; 10-60s)',
+  request: {
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: z.object({
+            audio: z.any().openapi({ type: 'string', format: 'binary' }),
+            lines: z.string().openapi({
+              description: 'JSON array 4 baris pantun',
+            }),
+            duration_ms: z.string().optional(),
+            rhyme_scheme: z.enum(['ABAB', 'AAAA']).optional(),
+            category_id: z.string().optional(),
+            language: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Tersimpan published + audio',
+      content: json(createPantunResponseSchema),
+    },
+    400: {
+      description: 'Struktur/rima/durasi/MIME tidak valid',
+      content: json(errorResponseSchema),
+    },
+    401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+    429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    503: {
+      description: 'Storage audio belum dikonfigurasi',
+      content: json(errorResponseSchema),
+    },
+  },
+});
+
+const createReplyWithAudioRoute = createRoute({
+  method: 'post',
+  path: '/:id/replies/audio',
+  tags: ['Pantun'],
+  summary: 'Balas pantun dengan teks + bacaan suara (multipart; 10-60s)',
+  request: {
+    params: pantunIdParamSchema,
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: z.object({
+            audio: z.any().openapi({ type: 'string', format: 'binary' }),
+            lines: z.string().openapi({
+              description: 'JSON array 4 baris pantun',
+            }),
+            duration_ms: z.string().optional(),
+            rhyme_scheme: z.enum(['ABAB', 'AAAA']).optional(),
+            category_id: z.string().optional(),
+            language: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Balasan tersimpan + audio',
+      content: json(createPantunResponseSchema),
+    },
+    400: {
+      description: 'Struktur/rima/durasi/MIME tidak valid',
+      content: json(errorResponseSchema),
+    },
+    401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+    404: { description: 'Pantun tidak ditemukan', content: json(errorResponseSchema) },
+    429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    503: {
+      description: 'Storage audio belum dikonfigurasi',
+      content: json(errorResponseSchema),
+    },
+  },
+});
 
 const createRouteDef = createRoute({
   method: 'post',
@@ -197,6 +312,7 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
     : [];
   const legalConsent = deps.requireLegalConsent ? [deps.requireLegalConsent] : [];
   const writeLimit = pantunUserLimit(deps.onUgcRateLimited);
+  const audioLimit = pantunAudioUserLimit(deps.onUgcRateLimited);
 
   routes.use('/', async (c, next) => {
     if (c.req.method === 'POST') return deps.authenticate(c, next);
@@ -216,7 +332,23 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
     if (c.req.method !== 'POST') return next();
     return writeLimit(c, next);
   });
+  routes.use(
+    '/audio',
+    deps.authenticate,
+    ...writeClient,
+    ...legalConsent,
+    audioLimit,
+    audioBodyLimit,
+  );
   // Balas pantun = POST /:id/replies (bukan /replies/:id yang hanya DELETE).
+  routes.use(
+    '/:id/replies/audio',
+    deps.authenticate,
+    ...writeClient,
+    ...legalConsent,
+    audioLimit,
+    audioBodyLimit,
+  );
   routes.use(
     '/:id/replies',
     deps.authenticate,
@@ -260,6 +392,10 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
     return next();
   });
 
+  // '/audio' SEBELUM '/:id': literal harus menang.
+  routes.openapi(createWithAudioRoute, (c) =>
+    deps.controller.createWithAudio(c) as never,
+  );
   routes.openapi(createRouteDef, (c) =>
     deps.controller.create(c, c.req.valid('json')) as never,
   );
@@ -272,6 +408,9 @@ export function createPantunRoutes(deps: PantunRoutesDeps) {
   );
   routes.openapi(detailRoute, (c) =>
     deps.controller.getDetail(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(createReplyWithAudioRoute, (c) =>
+    deps.controller.createReplyWithAudio(c, c.req.valid('param').id) as never,
   );
   routes.openapi(createReplyRoute, (c) =>
     deps.controller.createReply(

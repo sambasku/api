@@ -6,23 +6,29 @@ import type { UserRepository } from '@/modules/auth/domain/repositories/user.rep
 import { resolveDiscussionNotifyRecipients } from '@/modules/comment/application/utils/resolve-discussion-notify-recipients';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
-import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import { type RhymeScheme } from '../../application/utils/rhyme-check';
-import { resolveRhymeScheme } from '../../application/utils/resolve-rhyme';
-import type { Pantun, PantunReply } from '../../domain/entities/pantun.entity';
+import {
+  prepareOptionalPantunLines,
+  preparePantunLines,
+} from '../../application/utils/prepare-pantun-lines';
+import type { Pantun, PantunAudio, PantunReply } from '../../domain/entities/pantun.entity';
 import type { PantunRepository } from '../../domain/repositories/pantun.repository';
 
 export interface CreatePantunReplyCommand {
   parentId: string;
   userId: string;
-  lines: string[];
+  /** Wajib 4 baris bila tanpa audio; boleh kosong bila ada audio (voice-only). */
+  lines?: string[] | null;
   /** Opsional: kosong = server deteksi sendiri (ABAB lalu AAAA). */
   rhymeScheme?: RhymeScheme | null;
   categoryId?: string | null;
   language?: string | null;
   requestId?: string | null;
+  /** Bacaan suara opsional (dari use case audio). */
+  audio?: PantunAudio | null;
+  id?: string;
 }
 
 /**
@@ -52,40 +58,40 @@ export class CreatePantunReplyUseCase {
   async execute(cmd: CreatePantunReplyCommand): Promise<PantunReply> {
     await assertCanContribute(cmd.userId);
 
-    if (cmd.lines.length !== 4) {
-      throw new ValidationError([
-        { field: 'lines', message: 'Pantun harus terdiri dari 4 baris' },
-      ]);
-    }
-    const cleaned = cmd.lines.map((l) => l.trim().replace(/\s+/g, ' '));
-    if (cleaned.some((l) => l.length === 0)) {
-      throw new ValidationError([
-        { field: 'lines', message: 'Ada baris kosong. Lengkapi keempat barisnya ya.' },
-      ]);
-    }
-    const joined = cleaned.join('\n');
-    if (joined.length > 600) {
-      throw new ValidationError([
-        { field: 'lines', message: 'Total isi pantun maksimal 600 karakter' },
-      ]);
-    }
-    const scheme = resolveRhymeScheme(cleaned, cmd.rhymeScheme);
-    void (await assertUgcTextQualityWithStrike(joined, {
-      userId: cmd.userId,
-      abuse: this.abuse,
-      entityType: 'pantun_reply',
-      requestId: cmd.requestId,
-    }));
-
-    const activeWords = await this.blocklistRepo.listAllActiveWords();
-    const lowerLines = cleaned.map((l) => l.toLowerCase());
-    for (const w of activeWords) {
-      const word = w.toLowerCase();
-      if (lowerLines.some((l) => l.includes(word))) {
+    const hasAudio = Boolean(cmd.audio);
+    let cleaned: string[];
+    let scheme: RhymeScheme;
+    let voiceOnly = false;
+    if (hasAudio) {
+      const prepared = await prepareOptionalPantunLines({
+        lines: cmd.lines,
+        rhymeScheme: cmd.rhymeScheme,
+        userId: cmd.userId,
+        entityType: 'pantun_reply',
+        requestId: cmd.requestId,
+        blocklistRepo: this.blocklistRepo,
+        abuse: this.abuse,
+      });
+      cleaned = prepared.cleaned;
+      scheme = prepared.scheme;
+      voiceOnly = prepared.voiceOnly;
+    } else {
+      if (!cmd.lines || cmd.lines.length === 0) {
         throw new ValidationError([
-          { field: 'lines', message: 'Isi pantun mengandung kata yang tidak boleh dipakai' },
+          { field: 'lines', message: 'Pantun harus terdiri dari 4 baris' },
         ]);
       }
+      const prepared = await preparePantunLines({
+        lines: cmd.lines,
+        rhymeScheme: cmd.rhymeScheme,
+        userId: cmd.userId,
+        entityType: 'pantun_reply',
+        requestId: cmd.requestId,
+        blocklistRepo: this.blocklistRepo,
+        abuse: this.abuse,
+      });
+      cleaned = prepared.cleaned;
+      scheme = prepared.scheme;
     }
 
     const parent = await this.repo.findById(cmd.parentId);
@@ -97,12 +103,14 @@ export class CreatePantunReplyUseCase {
     }
 
     const reply = await this.repo.createReply({
+      id: cmd.id,
       parentId: cmd.parentId,
       userId: cmd.userId,
       categoryId: cmd.categoryId ?? null,
       language: cmd.language?.trim() || 'id',
       rhymeScheme: scheme,
       lines: cleaned,
+      audio: cmd.audio ?? null,
     });
 
     await this.auditRepo.record({
@@ -110,40 +118,37 @@ export class CreatePantunReplyUseCase {
       action: 'create',
       entityType: 'pantun_reply',
       entityId: reply.id,
-      newData: { parent_id: cmd.parentId, rhyme_scheme: reply.rhymeScheme },
+      newData: {
+        parent_id: cmd.parentId,
+        rhyme_scheme: voiceOnly ? null : reply.rhymeScheme,
+        has_audio: hasAudio,
+        voice_only: voiceOnly,
+      },
       requestId: cmd.requestId ?? null,
     });
-    // Event feed: balasan tayang (post-moderation = momen create).
     await this.activityEvents?.safe({
       kind: 'pantun_reply_created',
       actorId: cmd.userId,
       targetId: reply.id,
       dedupeKey: `pantun_reply:${reply.id}`,
     });
-    // Notifikasi: pemilik pantun induk + semua peserta yang pernah membalas
-    // (kecuali aktor). Best-effort, tidak menggagalkan create.
     await this.notifyThreadParticipants({
       parentId: cmd.parentId,
       ownerUserId: parent.userId,
       actorId: cmd.userId,
       replyLines: cleaned,
+      hasAudio,
     });
 
     return reply;
   }
 
-  /**
-   * Inbox + push ke seluruh peserta thread pantun.
-   *
-   * Skenario 1 -> 2 -> 3 -> 4: setiap balasan baru memberi tahu pemilik
-   * pantun dan SEMUA penulis balasan sebelumnya (bukan hanya yang terakhir),
-   * pola sama dengan `notifyThreadParticipants` Ruang Diskusi.
-   */
   private async notifyThreadParticipants(input: {
     parentId: string;
     ownerUserId: string;
     actorId: string;
     replyLines: string[];
+    hasAudio: boolean;
   }): Promise<void> {
     if (!this.inbox && !this.notifyUser) return;
 
@@ -163,7 +168,9 @@ export class CreatePantunReplyUseCase {
         const actor = await this.userRepo.findById(input.actorId);
         if (actor) actorName = actor.displayName?.trim() || actor.username;
       }
-      const snippet = truncateSnippet(input.replyLines.join(' / '));
+      const snippet = input.hasAudio
+        ? 'mengirim rekaman pantun'
+        : truncateSnippet(input.replyLines.join(' / '));
       const body = `${actorName} membalas pantunmu: ${snippet}`;
       const title = 'Balasan pantun baru';
 
@@ -204,8 +211,6 @@ export class CreatePantunReplyUseCase {
         }
       }
     } catch (err) {
-      // Best-effort: notif gagal tidak boleh menggagalkan balasan yang
-      // sebenarnya sudah tersimpan.
       console.error(
         JSON.stringify({
           level: 'error',

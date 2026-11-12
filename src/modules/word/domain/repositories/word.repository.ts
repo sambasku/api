@@ -210,8 +210,14 @@ export interface SearchParams {
    * - true  → hanya published
    * - false → selain published (draft/pending_review/rejected)
    * - omit  → semua status (belum soft-deleted)
+   * Diabaikan bila `statuses` diisi.
    */
   published?: boolean;
+  /**
+   * Filter status eksplisit (verifikator: published + pending_review).
+   * Mengalahkan `published` bila diisi.
+   */
+  statuses?: WordStatus[];
   /** Panel admin: true = bergambar, false = tanpa gambar, omit = semua. */
   hasImage?: boolean;
 }
@@ -233,6 +239,11 @@ export interface ListAtoZParams {
   wordType?: string;
   /** Omit = semua yang tayang. Sitemap web mengirim true. */
   isVerified?: boolean;
+  /**
+   * Filter status eksplisit (verifikator: published + pending_review).
+   * Default publik: hanya published (lewat eq status di repo).
+   */
+  statuses?: WordStatus[];
   /** Filter kategori (api#50): id ULID atau nama case-insensitive. */
   category?: string;
   cursor?: { lemma: string; id: string };
@@ -347,14 +358,19 @@ export interface WordRepository {
     }[]
   >;
   /**
-   * Hanya published + belum soft-deleted.
+   * Default publik: published + is_verified + belum soft-deleted.
    * includeAllStatuses = layar review (semua status).
+   * statuses = subset (verifikator: published + pending_review).
    * includeDeleted = baris kata yang sudah di-soft-delete tetap dibaca,
    * supaya review tidak kehilangan lemma dan makna.
    */
   findDetailById(
     id: string,
-    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+    opts?: {
+      includeAllStatuses?: boolean;
+      includeDeleted?: boolean;
+      statuses?: WordStatus[];
+    },
   ): Promise<WordDetail | null>;
   /**
    * Makna yang sudah ada di kata lain yang tertaut ke wordId ini
@@ -368,9 +384,13 @@ export interface WordRepository {
    */
   findAuditSnapshotById(id: string): Promise<WordAuditSnapshot | null>;
   /** URL publik /words/<lemma> - resolusi lemma + detail full dalam 2 round-trip
-   *  (word+meanings batch, children batch). Null = lemma tidak ada / tak published.
-   *  Homonim: terverifikasi & terlama menang (deterministik). */
-  findPublishedDetailByLemma(lemma: string): Promise<WordDetail | null>;
+   *  (word+meanings batch, children batch). Null = lemma tidak ada / tak lolos gate.
+   *  Homonim: terverifikasi & terlama menang (deterministik).
+   *  opts.statuses = gate verifikator (published + pending_review). */
+  findPublishedDetailByLemma(
+    lemma: string,
+    opts?: { statuses?: WordStatus[] },
+  ): Promise<WordDetail | null>;
   /**
    * 28-api-word-of-the-day.md: id kata published untuk tanggal WIB
    * ('YYYY-MM-DD'). Deterministik: ORDER BY md5(id || ':' || date) -
@@ -381,7 +401,18 @@ export interface WordRepository {
   findById(id: string): Promise<Word | null>;
   /** replace semantics: hapus children lama, insert baru - satu transaksi.
    *  Dipakai correct-contribution (modul contribution) & update admin (menyusul) */
-  updateWithRelations(id: string, word: WordToSave, actorId: string, tx?: unknown): Promise<Word | null>;
+  /**
+   * Replace penuh anak kata. `recordContribution` default true - set false
+   * saat jalur correct (keputusan review sudah menutup antrean; insert
+   * action=update di sini bikin ghost pending milik verifikator).
+   */
+  updateWithRelations(
+    id: string,
+    word: WordToSave,
+    actorId: string,
+    tx?: unknown,
+    options?: { recordContribution?: boolean },
+  ): Promise<Word | null>;
   search(params: SearchParams): Promise<CursorPage<WordSummary>>;
   /**
    * PRD relasi-lemma: perluasan pencarian via kelompok makna.
@@ -525,7 +556,21 @@ export interface WordRepository {
   // ---- Kontribusi media (03-api-kontribusi-verifikasi.md) ----
 
   /** makna by id (belum soft-deleted) - untuk validasi parent contoh kalimat */
-  findMeaningById(meaningId: string): Promise<{ id: string; wordId: string } | null>;
+  findMeaningById(meaningId: string): Promise<{ id: string; wordId: string; definition: string } | null>;
+
+  /** Jumlah makna hidup (belum soft-deleted) pada kata - guard hapus makna terakhir (#253). */
+  countLiveMeanings(wordId: string): Promise<number>;
+
+  /**
+   * Soft-delete satu makna. null jika tidak ditemukan / bukan milik wordId /
+   * sudah dihapus. Tidak menghapus anak (examples/translations) - read-path
+   * menyembunyikannya lewat join meanings.deleted_at.
+   */
+  softDeleteMeaning(
+    wordId: string,
+    meaningId: string,
+    actorId: string,
+  ): Promise<{ id: string; definition: string } | null>;
 
   /** Insert pelafalan pada kata existing + baris contributions - satu transaksi */
   addPronunciation(
@@ -648,12 +693,19 @@ export interface WordRepository {
       targetLanguageId?: string | null;
       targetSentence?: string | null;
       sourceType?: string | null;
+      sourceReference?: string | null;
       notes?: string | null;
       status: ChildStatus;
       isVerified: boolean;
     },
     actorId: string,
   ): Promise<ExampleMedia>;
+
+  /** Soft-delete contoh pending yang bersumber dari Jinye (archive/delete). */
+  cancelPendingExamplesFromJinye(jinyeId: string): Promise<number>;
+
+  /** Makna pertama (order_index) untuk kata - promote tanpa meaning_id. */
+  findFirstMeaningId(wordId: string): Promise<string | null>;
 
   /**
    * Resolve search-miss sebagai variasi penulisan pada kata existing.

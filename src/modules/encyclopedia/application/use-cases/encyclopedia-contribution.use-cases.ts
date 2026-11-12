@@ -262,6 +262,7 @@ export class SubmitArticleContributionUseCase {
 
     let article = null;
     let baseUpdatedAt: Date | null = null;
+    let resolvedArticleId: string | null = null;
     if (input.kind === 'edit') {
       if (!input.articleId) {
         throw new BadRequestError(
@@ -270,15 +271,19 @@ export class SubmitArticleContributionUseCase {
           [{ field: 'article_id', message: 'Artikel wajib dipilih' }],
         );
       }
-      article = await this.repo.findById(input.articleId);
+      // Klien sering kirim slug dari URL; normalisasi ke ULID sebelum simpan.
+      article =
+        (await this.repo.findById(input.articleId)) ??
+        (await this.repo.findBySlug(input.articleId));
       if (!article || article.status !== 'published') {
         throw new NotFoundError(
           'ARTICLE_NOT_FOUND',
           'Artikel tidak ditemukan atau sudah tidak tayang',
         );
       }
+      resolvedArticleId = article.id;
       baseUpdatedAt = article.updatedAt ?? article.createdAt;
-      if (await this.repo.hasActiveEditByOthers(input.articleId, input.userId)) {
+      if (await this.repo.hasActiveEditByOthers(resolvedArticleId, input.userId)) {
         throw new ConflictError(
           'CONTRIBUTION_CONFLICT',
           'Sudah ada usulan perubahan lain untuk artikel ini. Tunggu sampai diproses ya.',
@@ -289,7 +294,7 @@ export class SubmitArticleContributionUseCase {
     const created = await this.repo.createContribution({
       userId: input.userId,
       kind: input.kind,
-      articleId: input.kind === 'edit' ? input.articleId : null,
+      articleId: resolvedArticleId,
       payload: input.payload,
       baseUpdatedAt,
     });
@@ -298,7 +303,7 @@ export class SubmitArticleContributionUseCase {
       action: 'submit',
       entityType: 'article_contribution',
       entityId: created.id,
-      newData: { kind: input.kind, article_id: input.articleId },
+      newData: { kind: input.kind, article_id: resolvedArticleId },
       requestId: input.requestId ?? null,
     });
     return created;

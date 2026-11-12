@@ -62,6 +62,21 @@ export function censorSuggestionText(
         translationText: censor(t.translationText, `meanings.${i}.translations.${j}.translation_text`),
       })),
     })),
+    examples: changes.examples?.map((ex, i) => ({
+      ...ex,
+      sourceSentence:
+        ex.sourceSentence === undefined
+          ? undefined
+          : censor(ex.sourceSentence, `examples.${i}.source_sentence`),
+      targetSentence:
+        ex.targetSentence === null || ex.targetSentence === undefined
+          ? ex.targetSentence
+          : censor(ex.targetSentence, `examples.${i}.target_sentence`),
+    })),
+    pronunciations: changes.pronunciations?.map((p, i) => ({
+      ...p,
+      value: censor(p.value, `pronunciations.${i}.value`),
+    })),
   };
 
   return {

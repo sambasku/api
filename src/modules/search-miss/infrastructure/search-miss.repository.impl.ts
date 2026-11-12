@@ -164,6 +164,31 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
     return this.toEntity(row, fulfilled);
   }
 
+  async findByTermAndDirection(
+    term: string,
+    direction: SearchMissDirection,
+  ): Promise<SearchMiss | null> {
+    const normalized = normalizeSearchMissTerm(term);
+    if (!normalized) return null;
+    const [row] = await this.db
+      .select()
+      .from(searchMisses)
+      .where(
+        and(
+          eq(searchMisses.term, normalized),
+          eq(searchMisses.direction, direction),
+          isNull(searchMisses.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    const fulfilled =
+      row.direction === 'translation'
+        ? (await this.fulfilledTranslationTerms([row.term])).has(row.term)
+        : (await this.fulfilledLemmaTerms([row.term])).has(row.term);
+    return this.toEntity(row, fulfilled);
+  }
+
   async list(filter: SearchMissListFilter): Promise<CursorPage<SearchMiss>> {
     const isPublic = filter.scope === 'public';
 
@@ -180,9 +205,12 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
         and(
           isNull(searchMisses.deletedAt),
           filter.direction ? eq(searchMisses.direction, filter.direction) : undefined,
-          // Beranda: hanya tayang + BELUM terjawab (14-api + 03-api)
+          // Beranda (#262): tayang + BELUM terjawab + BELUM ada usulan pending
+          // yang menaut miss ini. Filter derived (bukan soft-delete) supaya
+          // reject usulan terakhir → miss muncul lagi otomatis.
           isPublic ? eq(searchMisses.isVisible, true) : undefined,
           isPublic ? sql`NOT ${isFulfilledSql}` : undefined,
+          isPublic ? sql`(${pendingCountSql}) = 0` : undefined,
           // Admin filter status fulfilled (derived)
           !isPublic && filter.fulfilled === true ? isFulfilledSql : undefined,
           !isPublic && filter.fulfilled === false ? sql`NOT ${isFulfilledSql}` : undefined,

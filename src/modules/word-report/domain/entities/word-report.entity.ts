@@ -4,12 +4,23 @@ import type {
 } from '@/modules/word/domain/entities/word.entity';
 
 export type WordReportStatus = 'open' | 'resolved';
-export type WordReportResolution = 'dismissed' | 'taken_down' | 'corrected' | 'flagged_image';
+export type WordReportResolution =
+  | 'dismissed'
+  | 'taken_down'
+  | 'corrected'
+  | 'flagged_image'
+  | 'meaning_removed';
+
+/** Filter list admin: entri kata / foto / makna (#253). */
+export type WordReportTarget = 'entry' | 'image' | 'meaning';
 
 export interface WordReport {
   id: string;
   wordId: string;
   imageId: string | null;
+  meaningId: string | null;
+  /** Cuplikan definisi bila meaning_id terisi. */
+  meaningDefinition: string | null;
   wordLemma: string;
   wordStatus: string;
   userId: string;
@@ -30,6 +41,7 @@ export interface WordReport {
 export interface NewWordReport {
   wordId: string;
   imageId?: string | null;
+  meaningId?: string | null;
   userId: string;
   reasonCode: WordReportReasonCode;
   note: string | null;
@@ -37,6 +49,7 @@ export interface NewWordReport {
 
 export interface WordReportListFilter {
   status?: WordReportStatus;
+  target?: WordReportTarget;
   limit: number;
   cursor?: string;
 }

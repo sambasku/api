@@ -177,6 +177,7 @@ import { AddWordImageUseCase } from "@/modules/word/application/use-cases/add-wo
 import { AddExampleUseCase } from "@/modules/word/application/use-cases/add-example.use-case";
 import { UploadPronunciationAudioUseCase } from "@/modules/word/application/use-cases/upload-pronunciation-audio.use-case";
 import { DeletePronunciationAudioUseCase } from "@/modules/word/application/use-cases/delete-pronunciation-audio.use-case";
+import { SoftDeleteMeaningUseCase } from "@/modules/word/application/use-cases/soft-delete-meaning.use-case";
 import { createPronunciationStorage } from "@/modules/word/infrastructure/pronunciation-storage.factory";
 import { WordController } from "@/modules/word/presentation/v1/word.controller";
 import {
@@ -393,6 +394,15 @@ import {
   createAdminUsahaContributionRoutes,
   createUsahaContributionRoutes,
 } from "@/modules/usaha-contribution/presentation/v1/usaha-contribution.routes";
+import { LayananRepositoryImpl } from "@/modules/layanan/infrastructure/layanan.repository.impl";
+import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases";
+import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
+import {
+  createAdminLayananContributionRoutes,
+  createAdminLayananRoutes,
+  createLayananContributionRoutes,
+  createPublicLayananRoutes,
+} from "@/modules/layanan/presentation/v1/layanan.routes";
 import { UsahaClaimRepositoryImpl } from "@/modules/usaha-claim/infrastructure/usaha-claim.repository.impl";
 import { UsahaClaimUseCases } from "@/modules/usaha-claim/application/usaha-claim.use-cases";
 import { UsahaClaimController } from "@/modules/usaha-claim/presentation/v1/usaha-claim.controller";
@@ -533,6 +543,7 @@ import { ListWordReportsUseCase } from "@/modules/word-report/application/use-ca
 import {
   ResolveWordReportUseCase,
   TakedownWordReportUseCase,
+  RemoveMeaningWordReportUseCase,
   FlagViolentImageReportUseCase,
 } from "@/modules/word-report/application/use-cases/resolve-word-report.use-case";
 import { SetWordImageContentWarningsUseCase } from "@/modules/word/application/use-cases/set-word-image-content-warnings.use-case";
@@ -621,7 +632,9 @@ import {
   createEncyclopediaRoutes,
 } from "@/modules/encyclopedia/presentation/v1/encyclopedia.routes";
 import { CreatePantunUseCase } from "@/modules/pantun/application/use-cases/create-pantun.use-case";
+import { CreatePantunWithAudioUseCase } from "@/modules/pantun/application/use-cases/create-pantun-with-audio.use-case";
 import { CreatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply.use-case";
+import { CreatePantunReplyWithAudioUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply-with-audio.use-case";
 import { ListPublishedPantunsUseCase } from "@/modules/pantun/application/use-cases/list-published-pantuns.use-case";
 import { GetPantunDetailUseCase } from "@/modules/pantun/application/use-cases/get-pantun-detail.use-case";
 import { TakedownPantunUseCase } from "@/modules/pantun/application/use-cases/takedown-pantun.use-case";
@@ -635,6 +648,52 @@ import { SearchPantunsUseCase } from "@/modules/pantun/application/use-cases/sea
 import { PantunController } from "@/modules/pantun/presentation/v1/pantun.controller";
 import { createPantunRoutes } from "@/modules/pantun/presentation/v1/pantun.routes";
 import { createAdminPantunRoutes } from "@/modules/pantun/presentation/v1/admin-pantun.routes";
+import { JinyeRepositoryImpl } from "@/modules/jinye/infrastructure/jinye.repository.impl";
+import { CreateJinyeUseCase } from "@/modules/jinye/application/use-cases/create-jinye.use-case";
+import { ListPublishedJinyeUseCase } from "@/modules/jinye/application/use-cases/list-published-jinye.use-case";
+import { GetJinyeDetailUseCase } from "@/modules/jinye/application/use-cases/get-jinye-detail.use-case";
+import { DeleteJinyeUseCase } from "@/modules/jinye/application/use-cases/delete-jinye.use-case";
+import { AttachJinyeAudioUseCase } from "@/modules/jinye/application/use-cases/attach-jinye-audio.use-case";
+import { CreateJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/create-jinye-comment.use-case";
+import { ListJinyeCommentsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-comments.use-case";
+import { DeleteJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-comment.use-case";
+import { ArchiveJinyeUseCase } from "@/modules/jinye/application/use-cases/archive-jinye.use-case";
+import { UnarchiveJinyeUseCase } from "@/modules/jinye/application/use-cases/unarchive-jinye.use-case";
+import { PinJinyeUseCase } from "@/modules/jinye/application/use-cases/pin-jinye.use-case";
+import { UnpinJinyeUseCase } from "@/modules/jinye/application/use-cases/unpin-jinye.use-case";
+import { ListArchivedJinyeUseCase } from "@/modules/jinye/application/use-cases/list-archived-jinye.use-case";
+import { CreateJinyeLemmaLinkUseCase } from "@/modules/jinye/application/use-cases/create-jinye-lemma-link.use-case";
+import { ListJinyeLemmaLinksUseCase } from "@/modules/jinye/application/use-cases/list-jinye-lemma-links.use-case";
+import { ProposeJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/propose-jinye-lemma-correction.use-case";
+import { ResolveJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-lemma-correction.use-case";
+import { DeleteJinyeLemmaLinkUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-lemma-link.use-case";
+import { PromoteJinyeExampleUseCase } from "@/modules/jinye/application/use-cases/promote-jinye-example.use-case";
+import { UpdateJinyeUseCase } from "@/modules/jinye/application/use-cases/update-jinye.use-case";
+import { TranslationRepositoryImpl } from "@/modules/translation/infrastructure/translation.repository.impl";
+import { CreateTranslationUseCase } from "@/modules/translation/application/use-cases/create-translation.use-case";
+import { ListTranslationsUseCase } from "@/modules/translation/application/use-cases/list-translations.use-case";
+import { ResolveTranslationUseCase } from "@/modules/translation/application/use-cases/resolve-translation.use-case";
+import { TranslationController } from "@/modules/translation/presentation/v1/translation.controller";
+import { createTranslationRoutes } from "@/modules/translation/presentation/v1/translation.routes";
+import { GetJinyeEditHistoryUseCase } from "@/modules/jinye/application/use-cases/get-jinye-edit-history.use-case";
+import { RepostJinyeUseCase } from "@/modules/jinye/application/use-cases/repost-jinye.use-case";
+import { UnrepostJinyeUseCase } from "@/modules/jinye/application/use-cases/unrepost-jinye.use-case";
+import { QuoteJinyeUseCase } from "@/modules/jinye/application/use-cases/quote-jinye.use-case";
+import { ListAdminJinyeUseCase } from "@/modules/jinye/application/use-cases/list-admin-jinye.use-case";
+import { TakedownJinyeUseCase } from "@/modules/jinye/application/use-cases/takedown-jinye.use-case";
+import { TakedownJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/takedown-jinye-comment.use-case";
+import { JinyeController } from "@/modules/jinye/presentation/v1/jinye.controller";
+import { createJinyeRoutes } from "@/modules/jinye/presentation/v1/jinye.routes";
+import { createAdminJinyeRoutes } from "@/modules/jinye/presentation/v1/admin-jinye.routes";
+import { JinyeReportRepositoryImpl } from "@/modules/jinye-report/infrastructure/jinye-report.repository.impl";
+import { SubmitJinyeReportUseCase } from "@/modules/jinye-report/application/use-cases/submit-jinye-report.use-case";
+import { ListJinyeReportsUseCase } from "@/modules/jinye-report/application/use-cases/list-jinye-reports.use-case";
+import { ResolveJinyeReportUseCase } from "@/modules/jinye-report/application/use-cases/resolve-jinye-report.use-case";
+import { JinyeReportController } from "@/modules/jinye-report/presentation/v1/jinye-report.controller";
+import {
+  createAdminJinyeReportRoutes,
+  createJinyeReportRoutes,
+} from "@/modules/jinye-report/presentation/v1/jinye-report.routes";
 import { DashboardController } from "@/modules/dashboard/presentation/v1/dashboard.controller";
 import { createDashboardRoutes } from "@/modules/dashboard/presentation/v1/dashboard.routes";
 import { GetDashboardStatsUseCase } from "@/modules/dashboard/application/use-cases/get-dashboard-stats.use-case";
@@ -1115,6 +1174,13 @@ const notifyWordOwnerMedia = new NotifyWordOwnerMediaUseCase(
 );
 const wordImportSessionRepo = new WordImportSessionRepositoryImpl(db);
 const wordReportRepo = new WordReportRepositoryImpl(db);
+const softDeleteMeaning = new SoftDeleteMeaningUseCase(
+  wordRepo,
+  auditRepo,
+  async ({ meaningId, actorId }) => {
+    await wordReportRepo.closeOpenForMeaning(meaningId, actorId, null);
+  },
+);
 const takedownWord = new TakedownWordUseCase(
   wordRepo,
   auditRepo,
@@ -1177,7 +1243,7 @@ const wordController = new WordController({
     activityEventRepo,
     syncLiveWordContributions,
   ),
-  update: new UpdateWordUseCase(wordRepo, auditRepo),
+  update: new UpdateWordUseCase(wordRepo, auditRepo, syncLiveWordContributions),
   getById: new GetWordByIdUseCase(wordRepo),
   getByLemma: new GetWordByLemmaUseCase(wordRepo),
   wordOfDay: new GetWordOfDayUseCase(wordRepo, appSettingsRepo),
@@ -1237,6 +1303,7 @@ const wordController = new WordController({
     pronunciationStorage,
     auditRepo,
   ),
+  softDeleteMeaning,
   listWordClasses: () => wordRepo.listWordClasses(),
   // Stempel provider gambar kata = GitHub publik (bukan ImageKit)
   imageProviderName: publicImageStorage.providerName,
@@ -1263,12 +1330,14 @@ const contributionController = new ContributionController({
     recordAbuseSignal,
     activityEvents,
     notifyWordOwnerMedia,
+    syncLiveWordContributions,
   ),
   correct: new CorrectContributionUseCase(
     contributionRepo,
     wordRepo,
     auditRepo,
     recordInbox,
+    syncLiveWordContributions,
   ),
   reopen: new ReopenContributionUseCase(contributionRepo, auditRepo),
   skip: new SkipContributionUseCase(contributionRepo, userSkipRepo),
@@ -1469,6 +1538,9 @@ const usahaContributionUseCases = new UsahaContributionUseCases(
 );
 const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
+);
+const layananController = new LayananController(
+  new LayananUseCases(new LayananRepositoryImpl(db), regionRepo, activityEvents),
 );
 const usahaClaimUseCases = new UsahaClaimUseCases(
   usahaClaimRepo,
@@ -2137,6 +2209,10 @@ const wordReportController = new WordReportController({
     setWordImageContentWarnings,
     auditRepo,
   ),
+  removeMeaning: new RemoveMeaningWordReportUseCase(
+    wordReportRepo,
+    softDeleteMeaning,
+  ),
 });
 app.route(
   "/api/v1/words",
@@ -2572,6 +2648,28 @@ app.route(
   "/api/v1/usaha",
   createPublicUsahaRoutes({ controller: usahaController, optionalAuthenticate }),
 );
+app.route(
+  "/api/v1/admin/layanan",
+  createAdminLayananRoutes({ controller: layananController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/layanan-contributions",
+  createAdminLayananContributionRoutes({
+    controller: layananController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/layanan-contributions",
+  createLayananContributionRoutes({
+    controller: layananController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/layanan",
+  createPublicLayananRoutes({ controller: layananController }),
+);
 // PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
 // Fitur Kuliner - jelajah kuliner & tempat makan (PRD kuliner).
 // Urutan penting: route usulan/klaim/laporan didaftarkan SEBELUM route
@@ -2845,6 +2943,17 @@ app.route(
 );
 
 const pantunRepo = new PantunRepositoryImpl(db);
+const createPantunReply = new CreatePantunReplyUseCase(
+  pantunRepo,
+  auditRepo,
+  commentBlocklistRepo,
+  recordAbuseSignal,
+  activityEvents,
+  userRepo,
+  recordInbox,
+  notifyUser,
+  pantunReplyPushCooldown,
+);
 const pantunController = new PantunController({
   create: new CreatePantunUseCase(
     pantunRepo,
@@ -2853,22 +2962,36 @@ const pantunController = new PantunController({
     recordAbuseSignal,
     activityEvents,
   ),
-  createReply: new CreatePantunReplyUseCase(
+  createWithAudio: new CreatePantunWithAudioUseCase(
     pantunRepo,
+    pronunciationStorage,
     auditRepo,
     commentBlocklistRepo,
     recordAbuseSignal,
     activityEvents,
-    userRepo,
-    recordInbox,
-    notifyUser,
-    pantunReplyPushCooldown,
+  ),
+  createReply: createPantunReply,
+  createReplyWithAudio: new CreatePantunReplyWithAudioUseCase(
+    createPantunReply,
+    pronunciationStorage,
   ),
   listPublished: new ListPublishedPantunsUseCase(pantunRepo, voteRepo),
   getDetail: new GetPantunDetailUseCase(pantunRepo, voteRepo),
-  takedown: new TakedownPantunUseCase(pantunRepo, auditRepo),
-  takedownReply: new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
-  deleteReply: new DeletePantunReplyUseCase(pantunRepo, auditRepo),
+  takedown: new TakedownPantunUseCase(
+    pantunRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
+  takedownReply: new TakedownPantunReplyUseCase(
+    pantunRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
+  deleteReply: new DeletePantunReplyUseCase(
+    pantunRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
   updateReply: new UpdatePantunReplyUseCase(
     pantunRepo,
     auditRepo,
@@ -2876,7 +2999,11 @@ const pantunController = new PantunController({
     recordAbuseSignal,
   ),
   getReplyEditHistory: new GetPantunReplyEditHistoryUseCase(pantunRepo),
-  deletePantun: new DeletePantunUseCase(pantunRepo, auditRepo),
+  deletePantun: new DeletePantunUseCase(
+    pantunRepo,
+    auditRepo,
+    pronunciationStorage,
+  ),
   listAdmin: new ListAdminPantunsUseCase(pantunRepo),
   search: new SearchPantunsUseCase(pantunRepo),
 });
@@ -2886,8 +3013,12 @@ const pantunReportController = new PantunReportController({
   list: new ListPantunReportsUseCase(pantunReportRepo),
   resolve: new ResolvePantunReportUseCase(
     pantunReportRepo,
-    new TakedownPantunUseCase(pantunRepo, auditRepo),
-    new TakedownPantunReplyUseCase(pantunRepo, auditRepo),
+    new TakedownPantunUseCase(pantunRepo, auditRepo, pronunciationStorage),
+    new TakedownPantunReplyUseCase(
+      pantunRepo,
+      auditRepo,
+      pronunciationStorage,
+    ),
     auditRepo,
   ),
 });
@@ -2921,6 +3052,163 @@ app.route(
   "/api/v1/admin/pantun-reports",
   createAdminPantunReportRoutes({
     controller: pantunReportController,
+    authenticate,
+  }),
+);
+
+// ------------------------------------------------------------------
+// Jinye: status singkat (teks / foto / voice). Post-moderation.
+const jinyeRepo = new JinyeRepositoryImpl(db);
+const translationRepo = new TranslationRepositoryImpl(db);
+const translationController = new TranslationController({
+  create: new CreateTranslationUseCase(
+    translationRepo,
+    jinyeRepo,
+    auditRepo,
+  ),
+  list: new ListTranslationsUseCase(translationRepo),
+  resolve: new ResolveTranslationUseCase(translationRepo, auditRepo),
+});
+app.route(
+  "/api/v1/translations",
+  createTranslationRoutes({
+    controller: translationController,
+    authenticate,
+    requireLegalConsent,
+  }),
+);
+const takedownJinye = new TakedownJinyeUseCase(jinyeRepo, auditRepo);
+const takedownJinyeComment = new TakedownJinyeCommentUseCase(
+  jinyeRepo,
+  auditRepo,
+);
+const jinyeReportRepo = new JinyeReportRepositoryImpl(db);
+const jinyeReportController = new JinyeReportController({
+  submit: new SubmitJinyeReportUseCase(jinyeReportRepo, jinyeRepo, auditRepo),
+  list: new ListJinyeReportsUseCase(jinyeReportRepo),
+  resolve: new ResolveJinyeReportUseCase(
+    jinyeReportRepo,
+    takedownJinye,
+    takedownJinyeComment,
+    auditRepo,
+  ),
+});
+// /reports sebelum /:id
+app.route(
+  "/api/v1/jinye",
+  createJinyeReportRoutes({
+    controller: jinyeReportController,
+    authenticate,
+    requireLegalConsent,
+  }),
+);
+const jinyeController = new JinyeController({
+  create: new CreateJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  listPublished: new ListPublishedJinyeUseCase(jinyeRepo, userRepo),
+  getDetail: new GetJinyeDetailUseCase(jinyeRepo),
+  deleteJinye: new DeleteJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    wordRepo,
+    translationRepo,
+  ),
+  attachAudio: new AttachJinyeAudioUseCase(
+    jinyeRepo,
+    pronunciationStorage,
+    auditRepo,
+  ),
+  createComment: new CreateJinyeCommentUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+    userRepo,
+    recordInbox,
+    notifyUser,
+  ),
+  listComments: new ListJinyeCommentsUseCase(jinyeRepo),
+  deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, auditRepo),
+  archive: new ArchiveJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    wordRepo,
+    translationRepo,
+  ),
+  unarchive: new UnarchiveJinyeUseCase(jinyeRepo, auditRepo),
+  pin: new PinJinyeUseCase(jinyeRepo, auditRepo),
+  unpin: new UnpinJinyeUseCase(jinyeRepo, auditRepo),
+  listArchived: new ListArchivedJinyeUseCase(jinyeRepo),
+  createLemmaLink: new CreateJinyeLemmaLinkUseCase(
+    jinyeRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  listLemmaLinks: new ListJinyeLemmaLinksUseCase(jinyeRepo),
+  proposeLemmaCorrection: new ProposeJinyeLemmaCorrectionUseCase(
+    jinyeRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  resolveLemmaCorrection: new ResolveJinyeLemmaCorrectionUseCase(
+    jinyeRepo,
+    auditRepo,
+  ),
+  deleteLemmaLink: new DeleteJinyeLemmaLinkUseCase(jinyeRepo, auditRepo),
+  promoteExample: new PromoteJinyeExampleUseCase(
+    jinyeRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  update: new UpdateJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  editHistory: new GetJinyeEditHistoryUseCase(jinyeRepo),
+  repost: new RepostJinyeUseCase(jinyeRepo, auditRepo, activityEvents),
+  unrepost: new UnrepostJinyeUseCase(jinyeRepo, auditRepo, activityEvents),
+  quote: new QuoteJinyeUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  listAdmin: new ListAdminJinyeUseCase(jinyeRepo, userRepo),
+  takedown: takedownJinye,
+  takedownComment: takedownJinyeComment,
+  imageController,
+});
+app.route(
+  "/api/v1/jinye",
+  createJinyeRoutes({
+    controller: jinyeController,
+    authenticate,
+    optionalAuth: optionalAuthenticate,
+    requireApprovedClient: requirePantunWriteClient,
+    requireLegalConsent,
+    onUgcRateLimited,
+  }),
+);
+app.route(
+  "/api/v1/admin/jinye",
+  createAdminJinyeRoutes({
+    controller: jinyeController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/jinye-reports",
+  createAdminJinyeReportRoutes({
+    controller: jinyeReportController,
     authenticate,
   }),
 );

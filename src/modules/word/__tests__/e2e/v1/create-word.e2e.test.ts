@@ -156,11 +156,18 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     expect(body.data.status).toBe('published');
     expect(body.data.is_verified).toBe(false);
 
+    // Gate publik: published belum verified → 404 / tidak di search
     const detail = await request(`/api/v1/words/${body.data.word_id}`);
-    expect(detail.status).toBe(200);
+    expect(detail.status).toBe(404);
     const search = await request('/api/v1/words/search?q=minum');
     const searchBody = await search.json();
-    expect(searchBody.data.some((w: { lemma: string }) => w.lemma === 'minum')).toBe(true);
+    expect(searchBody.data.some((w: { lemma: string }) => w.lemma === 'minum')).toBe(false);
+
+    const adminDetail = await request(`/api/v1/admin/words/${body.data.word_id}`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(adminDetail.status).toBe(200);
+    expect((await adminDetail.json()).data.is_verified).toBe(false);
   });
 
   it('GET detail kata impor CSV → import_source sitasi; kata biasa tanpa field', async () => {
@@ -321,7 +328,11 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     });
     expect(unverify.status).toBe(200);
 
-    const res = await request(`/api/v1/words/${data.word_id}`);
+    // Publik hilang setelah unverify; atribusi dibaca lewat admin detail
+    expect((await request(`/api/v1/words/${data.word_id}`)).status).toBe(404);
+    const res = await request(`/api/v1/admin/words/${data.word_id}`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.is_verified).toBe(false);
@@ -564,7 +575,10 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     expect(res.status).toBe(200);
-    const detail = await request(`/api/v1/words/${data.word_id}`);
+    expect((await request(`/api/v1/words/${data.word_id}`)).status).toBe(404);
+    const detail = await request(`/api/v1/admin/words/${data.word_id}`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
     expect((await detail.json()).data.is_verified).toBe(false);
 
     const { and, eq } = await import('drizzle-orm');
@@ -689,8 +703,17 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
       is_verified: false,
     });
 
-    const inlineDetail = await request(`/api/v1/words/${body.data.inline_created_words[0].word_id}`);
-    expect(inlineDetail.status).toBe(200);
+    // Belum verified → tidak di feed publik; admin detail tetap terbuka
+    const inlineDetail = await request(
+      `/api/v1/words/${body.data.inline_created_words[0].word_id}`,
+    );
+    expect(inlineDetail.status).toBe(404);
+    const adminInline = await request(
+      `/api/v1/admin/words/${body.data.inline_created_words[0].word_id}`,
+      { headers: { authorization: `Bearer ${adminToken}` } },
+    );
+    expect(adminInline.status).toBe(200);
+    expect((await adminInline.json()).data.is_verified).toBe(false);
   });
 
   it('04: gagal validasi → 400 dengan field path related_words.N.word.*', async () => {

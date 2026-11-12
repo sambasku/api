@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { ValidationError } from '@/shared/errors/app-error';
 import type { CulinaryContributionUseCases } from '../../application/culinary-contribution.use-cases';
 import type {
   ContributionImage,
@@ -11,11 +12,12 @@ import type {
   NewCuisinePayload,
   NewPlacePayload,
 } from '../../domain/culinary-contribution.entity';
-import type {
-  listCulinaryContributionsQuerySchema,
-  submitCulinaryChangeBodySchema,
-  submitNewCuisineBodySchema,
-  submitNewPlaceBodySchema,
+import {
+  approveCulinaryContributionBodySchema,
+  type listCulinaryContributionsQuerySchema,
+  type submitCulinaryChangeBodySchema,
+  type submitNewCuisineBodySchema,
+  type submitNewPlaceBodySchema,
 } from './validators/culinary-contribution.validator';
 
 function serialize(r: CulinaryContribution | CulinaryContributionWithTarget) {
@@ -99,6 +101,45 @@ function toNewPlace(
     website: payload.website ?? null,
     socialUrl: payload.social_url ?? null,
     coverUrl: payload.cover_url ?? null,
+  };
+}
+
+/**
+ * Body approve opsional (override foto admin). POST tanpa body / body kosong
+ * = `{}` supaya mobile/Bruno/curl tidak kena INTERNAL_ERROR dari JSON.parse.
+ */
+export function parseApproveCulinaryBody(raw: unknown): {
+  images?: ContributionImage[];
+} {
+  // Body kosong / null (Content-Type json tanpa payload) = tidak override.
+  const candidate =
+    raw == null || typeof raw !== 'object' || Array.isArray(raw) ? {} : raw;
+  const parsed = approveCulinaryContributionBodySchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new ValidationError(
+      parsed.error.issues.map((i) => ({
+        field: i.path.join('.') || 'body',
+        message: i.message,
+      })),
+    );
+  }
+  if (parsed.data.images === undefined) return {};
+  return {
+    images: parsed.data.images.map(
+      (img): ContributionImage => ({
+        url: img.url,
+        isMain: img.is_main === true,
+        attribution: img.attribution
+          ? {
+              name: img.attribution.name,
+              provider: img.attribution.provider,
+              url: img.attribution.url,
+              license: img.attribution.license,
+              license_url: img.attribution.license_url,
+            }
+          : null,
+      }),
+    ),
   };
 }
 
@@ -217,14 +258,18 @@ export class CulinaryContributionController {
     );
   }
 
-  approve(
-    c: Context<{ Variables: AppVariables }>,
-    id: string,
-    body?: { images?: ContributionImage[] },
-  ) {
-    return this.uc
-      .approve(id, c.get('user')?.user_id, this.requestId(c), body)
-      .then(() => c.json({ success: true as const, data: null }));
+  async approve(c: Context<{ Variables: AppVariables }>, id: string) {
+    // Jangan c.req.valid('json'): body required:false + POST kosong
+    // (mobile/Bruno) → SyntaxError → INTERNAL_ERROR.
+    const raw = await c.req.json().catch(() => ({}));
+    const body = parseApproveCulinaryBody(raw);
+    await this.uc.approve(
+      id,
+      c.get('user')?.user_id,
+      this.requestId(c),
+      body.images !== undefined ? body : undefined,
+    );
+    return c.json({ success: true as const, data: null });
   }
 
   reject(

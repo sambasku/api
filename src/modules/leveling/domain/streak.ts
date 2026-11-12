@@ -17,6 +17,7 @@ export const STREAK_ACTIVITY_KINDS = [
   'contribution_example',
   'place_photo_added',
   'usaha_published',
+  'layanan_published',
   'cuisine_published',
   'place_published',
   'event_published',
@@ -25,7 +26,10 @@ export const STREAK_ACTIVITY_KINDS = [
   'discussion_created',
   'article_published',
   'article_comment_created',
-  'event_comment_created',
+  'jinye_created',
+  'jinye_comment_created',
+  'jinye_reposted',
+  'jinye_quote_created',
 ] as const;
 
 export const STREAK_WINDOW_DAYS = 90;

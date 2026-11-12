@@ -6,12 +6,13 @@ import {
 import {
   slugifyUsaha,
 } from '@/modules/usaha/application/use-cases/usaha.use-cases';
-import type {
-  CuisineDetail,
-  CuisineImage,
-  CuisinePlaceLink,
-  CulinaryCategoryRef,
-  CulinaryPlaceDetail,
+import {
+  ensureOneMainImage,
+  type CuisineDetail,
+  type CuisineImage,
+  type CuisinePlaceLink,
+  type CulinaryCategoryRef,
+  type CulinaryPlaceDetail,
 } from '../../domain/entities/culinary.entity';
 import type {
   CreateCuisineInput,
@@ -205,9 +206,9 @@ export function imagesToJson(
 ): string | null {
   if (!images?.length) return null;
   return JSON.stringify(
-    images.map((img) => ({
+    ensureOneMainImage(images).map((img) => ({
       url: img.url,
-      isMain: img.isMain === true,
+      isMain: img.isMain,
       attribution: img.attribution ?? null,
     })),
   );

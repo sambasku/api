@@ -2,6 +2,7 @@ import { logger } from '@/shared/logging/logger';
 import type { SearchMissRepository } from '@/modules/search-miss/domain/repositories/search-miss.repository';
 import type { WordSummary } from '../../domain/entities/word.entity';
 import type { CursorPage, WordRepository } from '../../domain/repositories/word.repository';
+import { publicReadGate } from '../utils/resolve-publication';
 
 export interface SearchWordsQuery {
   q: string;
@@ -17,6 +18,8 @@ export interface SearchWordsQuery {
    * miss itu dari berandanya sendiri. Tanpa id (tamu) tidak ada yang dicatat.
    */
   viewerId?: string;
+  /** Role dari soft auth - gate verifikator (pending_review + published). */
+  viewerRoles?: string[];
 }
 
 export interface SearchWordsResult extends CursorPage<WordSummary> {
@@ -36,14 +39,16 @@ export class SearchWordsUseCase {
   ) {}
 
   async execute(query: SearchWordsQuery): Promise<SearchWordsResult> {
-    // `viewerId` milik atribusi search-miss, bukan parameter query kata -
-    // dilepas sebelum diteruskan ke repo (query di sini juga jadi argumen REST).
-    const { viewerId, ...wordQuery } = query;
+    // `viewerId` / `viewerRoles` milik soft-auth - dilepas sebelum diteruskan
+    // ke repo (query di sini juga jadi argumen REST).
+    const { viewerId, viewerRoles, isVerified: _ignored, ...wordQuery } = query;
+    const gate = publicReadGate(viewerRoles);
 
-    // Publik / dropdown: selalu published saja
     const { items, nextCursor, hasMore } = await this.wordRepo.search({
       ...wordQuery,
-      published: true,
+      ...(gate.statuses
+        ? { statuses: gate.statuses }
+        : { published: true, isVerified: true }),
     });
 
     // Counter pencarian harian (hit + miss) untuk chart dashboard.

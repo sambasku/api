@@ -7,6 +7,8 @@ import {
   words,
   meanings,
   meaningTranslations,
+  examples,
+  pronunciations,
   wordCategories,
   auditLogs,
   lexicalRelations,
@@ -498,6 +500,98 @@ export async function applyChangesToWord(
           .where(eq(meanings.id, mc.meaningId));
         changesApplied++;
       }
+    }
+  }
+
+  // #244: ubah contoh kalimat published.
+  if (changes.examples && changes.examples.length > 0) {
+    for (const ec of changes.examples) {
+      if (ec.action !== 'update' || !ec.exampleId) continue;
+      const [row] = await db
+        .select({
+          id: examples.id,
+          sourceSentence: examples.sourceSentence,
+          targetSentence: examples.targetSentence,
+        })
+        .from(examples)
+        .innerJoin(meanings, eq(examples.meaningId, meanings.id))
+        .where(
+          and(
+            eq(examples.id, ec.exampleId),
+            eq(meanings.wordId, word.id),
+            isNull(examples.deletedAt),
+            isNull(meanings.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!row) continue;
+      const patch: {
+        sourceSentence?: string;
+        targetSentence?: string | null;
+        updatedBy: string;
+        updatedAt: Date;
+      } = { updatedBy: reviewerId, updatedAt: new Date() };
+      let touched = false;
+      if (ec.sourceSentence !== undefined && ec.sourceSentence !== row.sourceSentence) {
+        patch.sourceSentence = ec.sourceSentence;
+        touched = true;
+      }
+      if (
+        ec.targetSentence !== undefined &&
+        (ec.targetSentence ?? null) !== (row.targetSentence ?? null)
+      ) {
+        patch.targetSentence = ec.targetSentence;
+        touched = true;
+      }
+      if (!touched) continue;
+      await db.update(examples).set(patch).where(eq(examples.id, row.id));
+      changesApplied++;
+    }
+  }
+
+  // Ubah notasi pelafalan published.
+  if (changes.pronunciations && changes.pronunciations.length > 0) {
+    for (const pc of changes.pronunciations) {
+      if (pc.action !== 'update' || !pc.pronunciationId) continue;
+      const next = pc.value.trim();
+      if (!next) continue;
+      const [row] = await db
+        .select({
+          id: pronunciations.id,
+          value: pronunciations.value,
+          dialectId: pronunciations.dialectId,
+          notation: pronunciations.notation,
+        })
+        .from(pronunciations)
+        .where(
+          and(
+            eq(pronunciations.id, pc.pronunciationId),
+            eq(pronunciations.wordId, word.id),
+            isNull(pronunciations.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!row) continue;
+      if (next === row.value.trim()) continue;
+      try {
+        await db
+          .update(pronunciations)
+          .set({
+            value: next,
+            updatedBy: reviewerId,
+            updatedAt: new Date(),
+          })
+          .where(eq(pronunciations.id, row.id));
+      } catch (err) {
+        if (isUniqueViolationOn(err, 'pronunciations_unique')) {
+          throw new ConflictError(
+            'PRONUNCIATION_EXISTS',
+            'Pelafalan dengan notasi itu sudah ada di kata ini',
+          );
+        }
+        throw err;
+      }
+      changesApplied++;
     }
   }
 

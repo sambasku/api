@@ -22,6 +22,7 @@ describe('GET /pantuns/search', () => {
       language: 'id',
       rhymeScheme: 'ABAB',
       lines: ['a satu', 'a dua', 'a tiga', 'a empat'],
+      audio: null,
       status: 'published',
       createdAt: new Date('2026-01-01T00:00:00Z'),
       updatedAt: null,

@@ -15,3 +15,20 @@ export function discussionCreatedPayload(
   const t = body?.trim();
   return t ? snippetActivityBody(t, 120) : 'Membuka ruang diskusi';
 }
+
+/**
+ * Copy feed/timeline Jinye (`jinye_created` / `jinye_quote_created`).
+ * Prioritas: teks → Foto → Suara → "Jinye".
+ */
+export function jinyeFeedPayload(input: {
+  body?: string | null;
+  quoteBody?: string | null;
+  imageCount?: number;
+  hasAudio?: boolean;
+}): string {
+  const text = (input.quoteBody ?? input.body ?? '').trim();
+  if (text) return `Jinye : ${snippetActivityBody(text, 120)}`;
+  if ((input.imageCount ?? 0) > 0) return 'Jinye : Foto';
+  if (input.hasAudio) return 'Jinye : Suara';
+  return 'Jinye';
+}

@@ -1,11 +1,15 @@
 import { BadRequestError } from '@/shared/errors/app-error';
+import { SAMBAS_NOMINATIM_VIEWBOX } from '@/shared/constants/sambas-bounds';
 import {
+  buildPlaceGeocodeCandidates,
   cleanCanonicalMapsUrl,
   extractCoordsFromMapsUrl,
   extractHttpsUrl,
+  extractPlaceNameFromMapsUrl,
   inSambasBounds,
   isAllowedMapsUrl,
   isShortMapsUrl,
+  type MapsCoords,
 } from './parse-maps-url';
 
 export type ResolveMapsUrlResult = {
@@ -39,9 +43,20 @@ export class ResolveMapsUrlUseCase {
     let working = extracted;
     let coords = extractCoordsFromMapsUrl(working);
 
+    // Short link: sama acuan produk - follow redirect lalu baca URL
+    // final (response.url) dan ambil !3d!4d / @ / q.
     if (!coords && isShortMapsUrl(working)) {
-      working = await this.followRedirects(working);
+      working = await this.expandShortUrl(working);
       coords = extractCoordsFromMapsUrl(working);
+    }
+
+    // Short/place share sering hanya place-id (tanpa !3d/@). Fallback:
+    // geocode nama di path lewat Nominatim (tanpa Google Places API).
+    if (!coords) {
+      const placeName = extractPlaceNameFromMapsUrl(working);
+      if (placeName) {
+        coords = await this.geocodePlaceName(placeName);
+      }
     }
 
     if (!coords) {
@@ -69,7 +84,106 @@ export class ResolveMapsUrlUseCase {
     };
   }
 
-  private async followRedirects(startUrl: string): Promise<string> {
+  private async geocodePlaceName(name: string): Promise<MapsCoords | null> {
+    for (const q of buildPlaceGeocodeCandidates(name)) {
+      const hit = await this.nominatimSearch(q);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  private async nominatimSearch(q: string): Promise<MapsCoords | null> {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('limit', '1');
+    url.searchParams.set('q', q);
+    url.searchParams.set('countrycodes', 'id');
+    url.searchParams.set('viewbox', SAMBAS_NOMINATIM_VIEWBOX);
+    url.searchParams.set('bounded', '1');
+
+    const timeoutMs = this.deps.timeoutMs ?? 5000;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await this.deps.fetch(url.toString(), {
+        method: 'GET',
+        signal: ac.signal,
+        headers: {
+          Accept: 'application/json',
+          'Accept-Language': 'id',
+          'User-Agent': UA,
+        },
+      });
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!res.ok) return null;
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      return null;
+    }
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const row = data[0];
+    if (!row || typeof row !== 'object') return null;
+    const lat = Number((row as { lat?: unknown }).lat);
+    const lng = Number((row as { lon?: unknown }).lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+  }
+
+  /**
+   * Expand short link. Prefer `redirect: 'follow'` + `response.url`
+   * (pola acuan extractCoordinatesShortUrl). Fallback hop manual bila
+   * follow gagal / landas di host non-allowlist.
+   */
+  private async expandShortUrl(startUrl: string): Promise<string> {
+    const timeoutMs = this.deps.timeoutMs ?? 5000;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const res = await this.deps.fetch(startUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: ac.signal,
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'User-Agent': UA,
+        },
+      });
+      // `response.url` terisi setelah follow (acuan extractCoordinatesShortUrl).
+      // Mock/fetch tanpa url → jatuh ke hop manual.
+      const finalUrl =
+        typeof res.url === 'string' && res.url.trim().length > 0
+          ? res.url.trim()
+          : '';
+      if (finalUrl) {
+        if (!isAllowedMapsUrl(finalUrl)) {
+          throw new BadRequestError(
+            'MAPS_URL_INVALID',
+            'Tautan Maps dialihkan ke host yang tidak diizinkan.',
+          );
+        }
+        if (!isShortMapsUrl(finalUrl) || extractCoordsFromMapsUrl(finalUrl)) {
+          return finalUrl;
+        }
+      }
+    } catch (err) {
+      if (err instanceof BadRequestError) throw err;
+      // network / abort → hop manual
+    } finally {
+      clearTimeout(timer);
+    }
+    return this.followRedirectsManual(startUrl);
+  }
+
+  private async followRedirectsManual(startUrl: string): Promise<string> {
     const max = this.deps.maxRedirects ?? 5;
     const timeoutMs = this.deps.timeoutMs ?? 5000;
     let current = startUrl;

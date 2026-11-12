@@ -173,7 +173,7 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     expect(rows).toHaveLength(1);
     // Contoh dari makna duplikat tetap tersimpan, menempel ke makna bertahan.
     expect(await db.select().from(examples).where(eq(examples.meaningId, rows[0].id))).toHaveLength(1);
-    const detail = await repo.findDetailById(word.id);
+    const detail = await repo.findDetailById(word.id, { includeAllStatuses: true });
     expect(detail?.meanings).toHaveLength(1);
   });
 
@@ -207,7 +207,8 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
   });
 
   it('kontribusi media: add* menulis status gerbang + baris contributions turunan', async () => {
-    const word = await repo.saveWithRelations(baseWord(), ACTOR);
+    // Induk verified supaya findDetailById publik tidak null (gate PR #98)
+    const word = await repo.saveWithRelations(baseWord({ isVerified: true }), ACTOR);
 
     const pron = await repo.addPronunciation(
       word.id,
@@ -369,6 +370,23 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     expect(rows.map((r) => r.action)).toContain('update');
   });
 
+  it('updateWithRelations recordContribution=false → tidak menambah baris action=update (jalur correct)', async () => {
+    const word = await repo.saveWithRelations(baseWord(), ACTOR);
+    const before = await db.select().from(contributions).where(eq(contributions.entityId, word.id));
+
+    await repo.updateWithRelations(
+      word.id,
+      baseWord({ notes: 'koreksi tanpa jejak update baru' }),
+      ACTOR,
+      undefined,
+      { recordContribution: false },
+    );
+
+    const after = await db.select().from(contributions).where(eq(contributions.entityId, word.id));
+    expect(after).toHaveLength(before.length);
+    expect(after.map((r) => r.action)).not.toContain('update');
+  });
+
   it('updateWithRelations tidak gagal FK saat makna sudah punya vote (0101)', async () => {
     // meaning_vote_counts memegang FK ke meanings: tanpa menghapus ringkasan
     // lebih dulu, edit kata manapun yang sudah divote maknanya gagal FK ->
@@ -514,7 +532,7 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
 
     await repo.updateWithRelations(word.id, baseWord({ images: [image] }), ACTOR);
 
-    const detail = await repo.findDetailById(word.id);
+    const detail = await repo.findDetailById(word.id, { includeAllStatuses: true });
     expect(detail?.images[0]?.attribution).toEqual(attribution);
   });
 
@@ -534,7 +552,7 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
       ACTOR,
     );
 
-    const detail = await repo.findDetailById(word.id);
+    const detail = await repo.findDetailById(word.id, { includeAllStatuses: true });
     expect(detail?.images).toEqual([
       {
         id: expect.any(String),
@@ -548,6 +566,8 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
         attribution: null,
         // ImageKit staging tidak auto-verified; kata induk juga belum verified
         isVerified: false,
+        status: 'published',
+        isCorrected: false,
       },
     ]);
   });
@@ -610,7 +630,8 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     );
 
     // Detail peribahasa: komponen + variant ber-afiks
-    const detail = await repo.findDetailById(pb.id);
+    // includeAll: fixture default belum is_verified (gate publik PR #98)
+    const detail = await repo.findDetailById(pb.id, { includeAllStatuses: true });
     expect(detail?.wordType).toBe('peribahasa');
     expect(detail?.relatedWords).toEqual([
       { wordId: miyang.id, lemma: 'miyang', relationType: 'has_component' },
@@ -624,7 +645,7 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
     });
 
     // Detail komponen: muncul dalam peribahasa (invers - derived, tak disimpan)
-    const detailMiyang = await repo.findDetailById(miyang.id);
+    const detailMiyang = await repo.findDetailById(miyang.id, { includeAllStatuses: true });
     expect(detailMiyang?.appearsIn).toEqual([
       { wordId: pb.id, lemma: 'miyang rabong', relationType: 'has_component' },
     ]);
@@ -666,7 +687,10 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
 
   it('findDetailById: lengkap untuk published, null untuk draft', async () => {
     await db.insert(userRoles).values({ userId: ACTOR, role: 'contributor' });
-    const published = await repo.saveWithRelations(baseWord({ lemma: 'terbit' }), ACTOR);
+    const published = await repo.saveWithRelations(
+      baseWord({ lemma: 'terbit', isVerified: true }),
+      ACTOR,
+    );
     await repo.saveWithRelations(baseWord({ lemma: 'konsep', status: 'draft' }), ACTOR);
 
     const detail = await repo.findDetailById(published.id);
@@ -706,7 +730,7 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
       })
       .returning();
     const imported = await repo.saveWithRelations(
-      baseWord({ lemma: 'impor', importSessionId: session.id }),
+      baseWord({ lemma: 'impor', importSessionId: session.id, isVerified: true }),
       ACTOR,
     );
 
@@ -730,13 +754,16 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
       })
       .returning();
     const bareWord = await repo.saveWithRelations(
-      baseWord({ lemma: 'impor kosong', importSessionId: bare.id }),
+      baseWord({ lemma: 'impor kosong', importSessionId: bare.id, isVerified: true }),
       ACTOR,
     );
     expect((await repo.findDetailById(bareWord.id))?.importSource).toBeNull();
 
     // Kata biasa tanpa import_session_id
-    const biasa = await repo.saveWithRelations(baseWord({ lemma: 'biasa' }), ACTOR);
+    const biasa = await repo.saveWithRelations(
+      baseWord({ lemma: 'biasa', isVerified: true }),
+      ACTOR,
+    );
     expect((await repo.findDetailById(biasa.id))?.importSource).toBeNull();
   });
 
@@ -1002,11 +1029,19 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
   });
 
   it('04: findDetailById - makna inline memuat provenance; inline pending_review belumlah related_words induk', async () => {
-    const result = await repo.saveWithInlineRelations(baseWord({ lemma: 'induk4' }), ACTOR, [
-      inlineSynonym('inlinepublik', {}, { inheritedFrom: { 0: 0 }, inheritedMeaningsCount: 1, overriddenMeaningsCount: 0 }),
-      // contributor-style: pending_review - TIDAK tayang
-      inlineSynonym('inlinepending', { status: 'pending_review', isVerified: false }),
-    ]);
+    const result = await repo.saveWithInlineRelations(
+      baseWord({ lemma: 'induk4', isVerified: true }),
+      ACTOR,
+      [
+        inlineSynonym(
+          'inlinepublik',
+          { isVerified: true },
+          { inheritedFrom: { 0: 0 }, inheritedMeaningsCount: 1, overriddenMeaningsCount: 0 },
+        ),
+        // contributor-style: pending_review - TIDAK tayang
+        inlineSynonym('inlinepending', { status: 'pending_review', isVerified: false }),
+      ],
+    );
 
     const detail = await repo.findDetailById(result.word.id);
     expect(detail).not.toBeNull();
@@ -1260,10 +1295,12 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
   });
 
   it('listLatest: definisi kosong jatuh ke terjemahan; verified_at null tetap tayang', async () => {
-    const plain = await repo.saveWithRelations(baseWord({ lemma: 'polos', isVerified: false }), ACTOR);
+    // Gate publik: wajib is_verified; verified_at boleh null → COALESCE ke created_at
+    const plain = await repo.saveWithRelations(baseWord({ lemma: 'polos', isVerified: true }), ACTOR);
     await repo.saveWithRelations(
       baseWord({
         lemma: 'tanpadef',
+        isVerified: true,
         meanings: [
           {
             wordClassId: NOMINA,
@@ -1285,12 +1322,24 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
   });
 
   it('listLatest: kata dengan label kasar/tabu/seksual/diskriminatif tidak ikut', async () => {
-    await repo.saveWithRelations(baseWord({ lemma: 'aman', usageLabels: ['informal'] }), ACTOR);
-    await repo.saveWithRelations(baseWord({ lemma: 'kasarx', usageLabels: ['kasar'] }), ACTOR);
-    await repo.saveWithRelations(baseWord({ lemma: 'tabux', usageLabels: ['tabu'] }), ACTOR);
-    await repo.saveWithRelations(baseWord({ lemma: 'seksx', usageLabels: ['seksual'] }), ACTOR);
     await repo.saveWithRelations(
-      baseWord({ lemma: 'diskrx', usageLabels: ['diskriminatif'] }),
+      baseWord({ lemma: 'aman', usageLabels: ['informal'], isVerified: true }),
+      ACTOR,
+    );
+    await repo.saveWithRelations(
+      baseWord({ lemma: 'kasarx', usageLabels: ['kasar'], isVerified: true }),
+      ACTOR,
+    );
+    await repo.saveWithRelations(
+      baseWord({ lemma: 'tabux', usageLabels: ['tabu'], isVerified: true }),
+      ACTOR,
+    );
+    await repo.saveWithRelations(
+      baseWord({ lemma: 'seksx', usageLabels: ['seksual'], isVerified: true }),
+      ACTOR,
+    );
+    await repo.saveWithRelations(
+      baseWord({ lemma: 'diskrx', usageLabels: ['diskriminatif'], isVerified: true }),
       ACTOR,
     );
 

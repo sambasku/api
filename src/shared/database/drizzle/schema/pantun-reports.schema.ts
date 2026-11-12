@@ -21,6 +21,7 @@ export const PANTUN_REPORT_REASONS = [
   'harassment', // pelecehan/perundungan
   'hate_speech', // ujaran kebencian
   'spam', // spam/promosi
+  'not_a_pantun', // bukan pantun / rekaman acak
   'other', // wajib catatan
 ] as const;
 export type PantunReportReason = (typeof PANTUN_REPORT_REASONS)[number];

@@ -32,11 +32,43 @@ const meaningChangeSchema = z.object({
       }),
     )
     .optional(),
-  // Contoh tidak pernah diterapkan lewat usulan; tolak supaya tidak hilang diam-diam.
+  // Tambah contoh baru tetap lewat POST /meanings/:id/examples, bukan nested di meanings.
   examples: z
     .array(z.unknown())
     .max(0, 'Contoh kalimat ditambahkan lewat menu Tambah contoh, bukan usulan perubahan')
     .optional(),
+});
+
+/** #244: ubah contoh published - top-level proposed_changes.examples. */
+const exampleChangeSchema = z
+  .object({
+    example_id: ulid,
+    action: z.literal('update'),
+    source_sentence: z.string().trim().min(1).max(2000).optional(),
+    target_sentence: z.string().trim().max(2000).nullish(),
+  })
+  .superRefine((ex, ctx) => {
+    if (ex.source_sentence === undefined && ex.target_sentence === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['source_sentence'],
+        message: 'Isi kalimat contoh atau artinya yang baru',
+      });
+    }
+  });
+
+/** Ubah notasi pelafalan published - top-level proposed_changes.pronunciations. */
+const pronunciationChangeSchema = z.object({
+  pronunciation_id: ulid,
+  action: z.literal('update'),
+  // Raw tanpa slash tepi; client normalisasi sebelum kirim.
+  value: z
+    .string()
+    .trim()
+    .min(1, 'Isi pelafalan yang baru')
+    .max(255)
+    .transform((v) => v.replace(/^\/+|\/+$/g, '').trim())
+    .refine((v) => v.length > 0, 'Isi pelafalan yang baru'),
 });
 
 const relationChangeSchema = z
@@ -162,6 +194,8 @@ const proposedChangesObjectSchema = z
     lemma: z.string().trim().min(1).max(255).optional(),
     notes: z.string().max(2000).optional(),
     meanings: z.array(meaningChangeSchema).max(10).optional(),
+    examples: z.array(exampleChangeSchema).max(10).optional(),
+    pronunciations: z.array(pronunciationChangeSchema).max(10).optional(),
     category_ids_to_add: z.array(ulid).optional(),
     category_ids_to_remove: z.array(ulid).optional(),
     relations: z.array(relationChangeSchema).max(10).optional(),
@@ -175,6 +209,8 @@ const proposedChangesObjectSchema = z
       p.lemma !== undefined ||
       p.notes !== undefined ||
       (p.meanings?.length ?? 0) > 0 ||
+      (p.examples?.length ?? 0) > 0 ||
+      (p.pronunciations?.length ?? 0) > 0 ||
       (p.category_ids_to_add?.length ?? 0) > 0 ||
       (p.category_ids_to_remove?.length ?? 0) > 0 ||
       (p.relations?.length ?? 0) > 0 ||
@@ -264,6 +300,17 @@ export function mapProposedChanges(
         translationType: t.translation_type,
       })),
     })),
+    examples: raw.examples?.map((ex) => ({
+      exampleId: ex.example_id,
+      action: ex.action,
+      sourceSentence: ex.source_sentence,
+      targetSentence: ex.target_sentence === undefined ? undefined : ex.target_sentence,
+    })),
+    pronunciations: raw.pronunciations?.map((p) => ({
+      pronunciationId: p.pronunciation_id,
+      action: p.action,
+      value: p.value,
+    })),
     categoryIdsToAdd: raw.category_ids_to_add,
     categoryIdsToRemove: raw.category_ids_to_remove,
     relations: raw.relations?.map((r) => ({
@@ -329,6 +376,8 @@ export const suggestionListResponseSchema = z.object({
         notes: z.string().nullable(),
         word_type: z.string().nullable(),
         meanings_count: z.number(),
+        examples_count: z.number(),
+        pronunciations_count: z.number(),
     categories_added: z.number(),
     categories_removed: z.number(),
     relations_count: z.number(),
@@ -371,6 +420,22 @@ export const suggestionDetailResponseSchema = z.object({
           word_class: z.object({ code: z.string(), name: z.string() }).nullable(),
           definition: z.string(),
           translations: z.array(z.object({ translation_text: z.string() })),
+        }),
+      ),
+      examples: z.array(
+        z.object({
+          id: z.string().length(26),
+          meaning_id: z.string().length(26),
+          source_sentence: z.string(),
+          target_sentence: z.string().nullable(),
+        }),
+      ),
+      pronunciations: z.array(
+        z.object({
+          id: z.string().length(26),
+          notation: z.string(),
+          value: z.string(),
+          dialect_id: z.string().nullable(),
         }),
       ),
       category_ids: z.array(z.string().length(26)),
@@ -423,6 +488,32 @@ export const suggestionDetailResponseSchema = z.object({
       meanings: z.array(
         z.object({
           meaning_id: z.string().length(26).nullable(),
+          changes: z.array(
+            z.object({
+              label: z.string().optional(),
+              current: z.string().nullable(),
+              proposed: z.string().nullable(),
+              changed: z.boolean(),
+            }),
+          ),
+        }),
+      ),
+      examples: z.array(
+        z.object({
+          example_id: z.string().length(26),
+          changes: z.array(
+            z.object({
+              label: z.string().optional(),
+              current: z.string().nullable(),
+              proposed: z.string().nullable(),
+              changed: z.boolean(),
+            }),
+          ),
+        }),
+      ),
+      pronunciations: z.array(
+        z.object({
+          pronunciation_id: z.string().length(26),
           changes: z.array(
             z.object({
               label: z.string().optional(),

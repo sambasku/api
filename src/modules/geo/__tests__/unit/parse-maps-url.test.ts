@@ -3,6 +3,8 @@ import {
   cleanCanonicalMapsUrl,
   extractCoordsFromMapsUrl,
   extractHttpsUrl,
+  buildPlaceGeocodeCandidates,
+  extractPlaceNameFromMapsUrl,
   inSambasBounds,
   isAllowedMapsUrl,
   isShortMapsUrl,
@@ -81,9 +83,48 @@ describe('extractCoordsFromMapsUrl', () => {
 });
 
 describe('inSambasBounds', () => {
-  it('terima pusat, tolak luar kotak', () => {
+  it('terima pusat dan Temajuk, tolak luar kotak', () => {
     expect(inSambasBounds(1.36, 109.3)).toBe(true);
+    expect(inSambasBounds(1.997, 109.595)).toBe(true); // Temajuk
     expect(inSambasBounds(-6.2, 106.8)).toBe(false);
+    expect(inSambasBounds(2.5, 109.3)).toBe(false);
+  });
+});
+
+describe('extractPlaceNameFromMapsUrl', () => {
+  it('ambil nama dari path /maps/place/', () => {
+    expect(
+      extractPlaceNameFromMapsUrl(
+        'https://www.google.com/maps/place/Temajuk,+Kec.+Paloh,+Kabupaten+Sambas,+Kalimantan+Barat/data=!4m2!3m1!1s0x31e5337401887c35:0x50f63442eed2ad98',
+      ),
+    ).toBe('Temajuk, Kec. Paloh, Kabupaten Sambas, Kalimantan Barat');
+  });
+
+  it('null bila bukan place path / hanya koordinat', () => {
+    expect(
+      extractPlaceNameFromMapsUrl('https://www.google.com/maps?q=1.36,109.3'),
+    ).toBeNull();
+    expect(
+      extractPlaceNameFromMapsUrl(
+        'https://www.google.com/maps/place/1.36,109.30/@1.36,109.30,17z',
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('buildPlaceGeocodeCandidates', () => {
+  it('prioritas nama pendek + tanpa prefiks admin', () => {
+    expect(
+      buildPlaceGeocodeCandidates(
+        'Temajuk, Kec. Paloh, Kabupaten Sambas, Kalimantan Barat',
+      ),
+    ).toEqual(['Temajuk', 'Temajuk Paloh Sambas']);
+  });
+
+  it('nama sederhana tanpa admin → satu kandidat', () => {
+    expect(buildPlaceGeocodeCandidates('Pasar Sambas')).toEqual([
+      'Pasar Sambas',
+    ]);
   });
 });
 

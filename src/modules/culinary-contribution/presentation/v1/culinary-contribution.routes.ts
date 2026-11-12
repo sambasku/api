@@ -271,7 +271,7 @@ export function createAdminCulinaryContributionRoutes(deps: {
     deps.controller.listAdmin(c, c.req.valid('query')) as never,
   );
   routes.openapi(approveRoute, (c) =>
-    deps.controller.approve(c, c.req.param('id'), c.req.valid('json')) as never,
+    deps.controller.approve(c, c.req.param('id')) as never,
   );
   routes.openapi(rejectRoute, (c) =>
     deps.controller.reject(c, c.req.param('id'), c.req.valid('json')) as never,

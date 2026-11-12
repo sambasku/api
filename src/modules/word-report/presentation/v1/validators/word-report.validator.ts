@@ -29,9 +29,17 @@ export const createWordReportBodySchema = z
     reason_code: wordReportReasonCodeSchema,
     note: noteSchema,
     image_id: opaqueId.optional(),
+    meaning_id: opaqueId.optional(),
   })
   .superRefine(requireNoteForReason)
   .superRefine((value, ctx) => {
+    if (value.image_id && value.meaning_id) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['meaning_id'],
+        message: 'Laporan tidak bisa sekaligus foto dan makna',
+      });
+    }
     if (value.reason_code === 'violent_image' && !value.image_id) {
       ctx.addIssue({
         code: 'custom',
@@ -44,6 +52,13 @@ export const createWordReportBodySchema = z
         code: 'custom',
         path: ['image_id'],
         message: 'image_id hanya untuk alasan violent_image',
+      });
+    }
+    if (value.reason_code === 'violent_image' && value.meaning_id) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['meaning_id'],
+        message: 'Laporan makna tidak memakai alasan violent_image',
       });
     }
   });
@@ -73,6 +88,7 @@ export const wordReportIdParamSchema = z.object({ id: opaqueId });
 
 export const listWordReportsQuerySchema = z.object({
   status: z.enum(['open', 'resolved']).optional(),
+  target: z.enum(['entry', 'image', 'meaning']).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: opaqueId.optional(),
 });
@@ -83,6 +99,7 @@ export const createWordReportResponseSchema = z.object({
     id: z.string(),
     word_id: z.string(),
     image_id: z.string().nullable().optional(),
+    meaning_id: z.string().nullable().optional(),
     status: z.literal('open'),
     created_at: z.string(),
   }),
@@ -92,6 +109,8 @@ export const wordReportItemSchema = z.object({
   id: z.string(),
   word_id: z.string(),
   image_id: z.string().nullable(),
+  meaning_id: z.string().nullable(),
+  meaning_definition: z.string().nullable(),
   lemma: z.string(),
   word_status: z.string(),
   user_id: z.string(),
@@ -100,7 +119,9 @@ export const wordReportItemSchema = z.object({
   reason_code: wordReportReasonCodeSchema,
   note: z.string().nullable(),
   status: z.enum(['open', 'resolved']),
-  resolution: z.enum(['dismissed', 'taken_down', 'corrected', 'flagged_image']).nullable(),
+  resolution: z
+    .enum(['dismissed', 'taken_down', 'corrected', 'flagged_image', 'meaning_removed'])
+    .nullable(),
   resolution_note: z.string().nullable(),
   resolved_at: z.string().nullable(),
   created_at: z.string(),

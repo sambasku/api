@@ -12,6 +12,7 @@ import {
   DUPLICATE_LEMMA_PENDING_MERGE,
   DUPLICATE_LEMMA_USE_TAB,
 } from '../utils/duplicate-lemma-warning';
+import type { SyncLiveWordContributionsUseCase } from '@/modules/contribution/application/use-cases/sync-live-word-contributions.use-case';
 
 export interface UpdateWordResult {
   word: Word;
@@ -26,6 +27,7 @@ export class UpdateWordUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly syncContributions?: SyncLiveWordContributionsUseCase,
   ) {}
 
   async execute(id: string, dto: UpdateWordDto, actor: Actor): Promise<UpdateWordResult> {
@@ -156,6 +158,16 @@ export class UpdateWordUseCase {
       },
       requestId: actor.requestId ?? null,
     });
+
+    // Verifikator self-verify: tutup sibling pending (usulan lama / ghost update)
+    // supaya tidak mengotori antrean verifikator lain.
+    if (word.isVerified) {
+      if (word.id !== id) {
+        await this.syncContributions?.closeMerged(word.id, id, actor.userId);
+      } else {
+        await this.syncContributions?.closeLive(word.id, actor.userId);
+      }
+    }
 
     return { word, warnings };
   }

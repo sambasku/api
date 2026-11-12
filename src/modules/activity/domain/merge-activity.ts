@@ -18,7 +18,8 @@ export type FeedCategory =
   | 'correction'
   | 'explore'
   | 'announcement'
-  | 'joined';
+  | 'joined'
+  | 'jinye';
 
 export const FEED_CATEGORY_KINDS: Record<
   FeedCategory,
@@ -41,6 +42,7 @@ export const FEED_CATEGORY_KINDS: Record<
 explore: [
 'place_published',
 'usaha_published',
+'layanan_published',
 'cuisine_published',
 'event_published',
 'event_going',
@@ -52,6 +54,12 @@ explore: [
 ],
   announcement: ['announcement'],
   joined: ['user_joined'],
+  jinye: [
+    'jinye_created',
+    'jinye_comment_created',
+    'jinye_reposted',
+    'jinye_quote_created',
+  ],
 };
 
 /** Ambil per sumber sebelum merge (cukup untuk cap + limit). */

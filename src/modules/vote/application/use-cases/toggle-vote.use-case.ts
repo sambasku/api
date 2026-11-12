@@ -70,6 +70,14 @@ export class ToggleVoteUseCase {
         },
       ]);
     }
+    if (cmd.targetType === 'jinye' && cmd.value === -1) {
+      throw new ValidationError([
+        {
+          field: 'value',
+          message: 'Jinye hanya bisa di-upvote',
+        },
+      ]);
+    }
 
     let targetType = cmd.targetType;
     let targetId = cmd.targetId;

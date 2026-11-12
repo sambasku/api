@@ -123,9 +123,16 @@ describe.skipIf(!hasTestDb)('Add Meaning E2E v1 - kontribusi definisi (17 doc)',
     expect(body.data.order_index).toBeGreaterThan(1);
     pendingMeaningId = body.data.id;
 
+    // Makna belum verified: tidak di detail publik; admin detail tetap memuatnya
     const detail = await get(`/api/v1/words/${wordId}`);
     const detailBody = await detail.json();
-    expect(detailBody.data.meanings.some((m: { definition: string }) => m.definition === 'kondisi tidak benar, rusak')).toBe(true);
+    expect(detailBody.data.meanings.some((m: { definition: string }) => m.definition === 'kondisi tidak benar, rusak')).toBe(false);
+    const adminDetail = await get(`/api/v1/admin/words/${wordId}`, adminToken);
+    expect(
+      (await adminDetail.json()).data.meanings.some(
+        (m: { definition: string }) => m.definition === 'kondisi tidak benar, rusak',
+      ),
+    ).toBe(true);
 
     // antrean admin membawa entity_type meaning + detail payload
     const list = await get('/api/v1/admin/contributions?status=pending&entity_type=meaning', adminToken);

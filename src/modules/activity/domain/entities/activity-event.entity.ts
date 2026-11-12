@@ -29,6 +29,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'user_joined',
   'card_shared',
  'usaha_published',
+  'layanan_published',
  'cuisine_published',
  'place_published',
  'event_published',
@@ -39,6 +40,10 @@ export const ACTIVITY_EVENT_KINDS = [
   'article_comment_created',
   'event_comment_created',
   'announcement',
+  'jinye_created',
+  'jinye_comment_created',
+  'jinye_reposted',
+  'jinye_quote_created',
 ] as const;
 
 export type ActivityEventKind = (typeof ACTIVITY_EVENT_KINDS)[number];
@@ -87,6 +92,8 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'card_share';
     case 'usaha_published':
       return 'usaha';
+    case 'layanan_published':
+      return 'layanan';
     case 'cuisine_published':
       return 'culinary';
     case 'place_published':
@@ -103,6 +110,11 @@ case 'article_comment_created':
       return 'article';
 case 'announcement':
       return 'announcement';
+    case 'jinye_created':
+    case 'jinye_comment_created':
+    case 'jinye_reposted':
+    case 'jinye_quote_created':
+      return 'jinye';
   }
 }
 

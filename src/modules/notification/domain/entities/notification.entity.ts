@@ -16,6 +16,7 @@ export type InboxNotificationType =
   | 'discussion_mention'
   | 'pantun_reply'
   | 'pantun_mention'
+  | 'jinye_comment'
   | 'word_comment'
   | 'word_comment_mention'
   /** #200: foto komentar pre-moderation terpisah dari teks. */
@@ -66,6 +67,7 @@ export type NotificationTargetKind =
   | 'culinary_claim'
   | 'achievement'
   | 'pantun'
+  | 'jinye'
   | 'day';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
@@ -81,7 +83,8 @@ export type NotificationActionKind =
 | 'usaha_claim'
 | 'culinary_contribution'
 | 'culinary_claim'
-| 'pantun';
+| 'pantun'
+| 'jinye';
 
 export interface InboxNotification {
   id: string;
@@ -201,6 +204,12 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       return {
         title: 'Kamu disebut di pantun',
         body: 'Seseorang menyebutmu di pantun.',
+        bodyType: 'plain',
+      };
+    case 'jinye_comment':
+      return {
+        title: 'Balasan Jinye baru',
+        body: 'Ada balasan baru di Jinye kamu.',
         bodyType: 'plain',
       };
     case 'word_comment':

@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+  type AnyColumn,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { isForeignKeyViolation, isUniqueViolation, isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
@@ -835,7 +847,11 @@ export class WordRepositoryImpl implements WordRepository {
 
   async findDetailById(
     id: string,
-    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+    opts?: {
+      includeAllStatuses?: boolean;
+      includeDeleted?: boolean;
+      statuses?: WordStatus[];
+    },
   ): Promise<WordDetail | null> {
     return this.loadDetail({ kind: 'id', id }, opts);
   }
@@ -843,16 +859,52 @@ export class WordRepositoryImpl implements WordRepository {
   /** URL publik /words/<lemma> - resolusi lemma + detail dalam SATU round-trip.
    *  Sebelumnya use-case memanggil findPublishedIdByLemma lalu findDetailById
    *  = 4 round-trip Turso; sekarang word+meanings di-batch (1) + children (1). */
-  async findPublishedDetailByLemma(lemma: string): Promise<WordDetail | null> {
-    return this.loadDetail({ kind: 'lemma', lemma });
+  async findPublishedDetailByLemma(
+    lemma: string,
+    opts?: { statuses?: WordStatus[] },
+  ): Promise<WordDetail | null> {
+    return this.loadDetail({ kind: 'lemma', lemma }, opts);
   }
 
   private async loadDetail(
     key: { kind: 'id'; id: string } | { kind: 'lemma'; lemma: string },
-    opts?: { includeAllStatuses?: boolean; includeDeleted?: boolean },
+    opts?: {
+      includeAllStatuses?: boolean;
+      includeDeleted?: boolean;
+      statuses?: WordStatus[];
+    },
   ): Promise<WordDetail | null> {
     const includeAll = opts?.includeAllStatuses === true;
     const includeDeleted = opts?.includeDeleted === true;
+    const statuses = opts?.statuses?.length ? opts.statuses : undefined;
+    // Verifikator: anak ikut status yang sama (published | pending_review).
+    // Publik: published + verified. Admin includeAll: tanpa filter status anak.
+    const childStatusFilter = includeAll
+      ? undefined
+      : statuses
+        ? inArray(meanings.status, statuses as ChildStatus[])
+        : and(eq(meanings.status, 'published'), eq(meanings.isVerified, true));
+    // ponytail: jangan ikat ke typeof meanings.status - tableName literal
+    // (examples/pronunciations/…) beda → TS2345. Kolom status+isVerified
+    // cukup via AnyColumn.
+    const childRowStatusFilter = (table: {
+      status: AnyColumn;
+      isVerified: AnyColumn;
+    }) =>
+      includeAll
+        ? undefined
+        : statuses
+          ? inArray(table.status, statuses as ChildStatus[])
+          : and(eq(table.status, 'published'), eq(table.isVerified, true));
+    const lemmaWordPickSql = statuses
+      ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.kind === 'lemma' ? key.lemma.trim() : ''}) AND w2.status IN (${sql.join(
+          statuses.map((s) => sql`${s}`),
+          sql`, `,
+        )}) AND w2.deleted_at IS NULL ORDER BY w2.is_verified DESC, w2.created_at LIMIT 1)`
+      : sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.kind === 'lemma' ? key.lemma.trim() : ''}) AND w2.status = 'published' AND w2.is_verified = 1 AND w2.deleted_at IS NULL ORDER BY w2.created_at LIMIT 1)`;
+    const wordStatusWhere = statuses
+      ? inArray(words.status, statuses)
+      : and(eq(words.status, 'published'), eq(words.isVerified, true));
     const verifierUsers = alias(users, 'word_verifier');
     const creatorUsers = alias(users, 'word_creator');
     const isLemma = key.kind === 'lemma';
@@ -884,14 +936,14 @@ export class WordRepositoryImpl implements WordRepository {
         isLemma
           ? and(
               sql`lower(${words.lemma}) = lower(${key.lemma.trim()})`,
-              eq(words.status, 'published'),
+              wordStatusWhere,
               isNull(words.deletedAt),
             )
           : includeAll
             ? and(eq(words.id, key.id), includeDeleted ? undefined : isNull(words.deletedAt))
-            : and(eq(words.id, key.id), eq(words.status, 'published'), isNull(words.deletedAt)),
+            : and(eq(words.id, key.id), wordStatusWhere, isNull(words.deletedAt)),
       )
-      // Homonim (mode lemma): entri terverifikasi duluan, lalu terlama.
+      // Homonim (mode lemma): verified dulu, lalu terlama.
       // id-mode selalu <=1 baris (PK), jadi order ini sisa sort 1 baris - murah.
       .orderBy(desc(words.isVerified), words.createdAt)
       .limit(1);
@@ -903,15 +955,9 @@ export class WordRepositoryImpl implements WordRepository {
         and(
           // Correlated subquery lemma-mode supaya TIDAK perlu id word dulu
           // (hemat round-trip); id-mode langsung literal id.
-          sql`${meanings.wordId} = ${
-            isLemma
-              ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.lemma.trim()}) AND w2.status = 'published' AND w2.deleted_at IS NULL ORDER BY w2.is_verified DESC, w2.created_at LIMIT 1)`
-              : key.id
-          }`,
+          sql`${meanings.wordId} = ${isLemma ? lemmaWordPickSql : key.id}`,
           isNull(meanings.deletedAt),
-          // 17: makna kontribusi (pending_review) tidak tayang publik -
-          // pola examples/pronunciations di bawah; admin memakai includeAll
-          includeAll ? undefined : eq(meanings.status, 'published'),
+          childStatusFilter,
         ),
       )
       .orderBy(meanings.orderIndex);
@@ -993,7 +1039,7 @@ export class WordRepositoryImpl implements WordRepository {
             and(
               inArray(examples.meaningId, meaningIds),
               isNull(examples.deletedAt),
-              includeAll ? undefined : eq(examples.status, 'published'),
+              childRowStatusFilter(examples),
             ),
           ),
       );
@@ -1017,7 +1063,7 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(pronunciations.wordId, wordRow.id),
             isNull(pronunciations.deletedAt),
-            includeAll ? undefined : eq(pronunciations.status, 'published'),
+            childRowStatusFilter(pronunciations),
           ),
         ),
     );
@@ -1031,7 +1077,7 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(wordImages.wordId, wordRow.id),
             isNull(wordImages.deletedAt),
-            includeAll ? undefined : eq(wordImages.status, 'published'),
+            childRowStatusFilter(wordImages),
           ),
         ),
     );
@@ -1045,7 +1091,7 @@ export class WordRepositoryImpl implements WordRepository {
           and(
             eq(wordAudios.wordId, wordRow.id),
             isNull(wordAudios.deletedAt),
-            includeAll ? undefined : eq(wordAudios.status, 'published'),
+            childRowStatusFilter(wordAudios),
           ),
         ),
     );
@@ -1067,11 +1113,18 @@ export class WordRepositoryImpl implements WordRepository {
             // PRD relasi-lemma: baris pending/rejected tidak tampil publik
             includeAll
               ? undefined
-              : and(
-                  eq(lexicalRelations.status, 'published'),
-                  eq(words.status, 'published'),
-                  isNull(words.deletedAt),
-                ),
+              : statuses
+                ? and(
+                    inArray(lexicalRelations.status, statuses as ChildStatus[]),
+                    inArray(words.status, statuses),
+                    isNull(words.deletedAt),
+                  )
+                : and(
+                    eq(lexicalRelations.status, 'published'),
+                    eq(words.status, 'published'),
+                    eq(words.isVerified, true),
+                    isNull(words.deletedAt),
+                  ),
           ),
         )
         .orderBy(asc(words.lemma)),
@@ -1093,11 +1146,18 @@ export class WordRepositoryImpl implements WordRepository {
             isNull(lexicalRelations.deletedAt),
             includeAll
               ? undefined
-              : and(
-                  eq(lexicalRelations.status, 'published'),
-                  eq(words.status, 'published'),
-                  isNull(words.deletedAt),
-                ),
+              : statuses
+                ? and(
+                    inArray(lexicalRelations.status, statuses as ChildStatus[]),
+                    inArray(words.status, statuses),
+                    isNull(words.deletedAt),
+                  )
+                : and(
+                    eq(lexicalRelations.status, 'published'),
+                    eq(words.status, 'published'),
+                    eq(words.isVerified, true),
+                    isNull(words.deletedAt),
+                  ),
           ),
         )
         .orderBy(asc(words.lemma)),
@@ -1477,8 +1537,16 @@ memberLemma: string;
     // di tengah sesi pencarian, drift offset kecil dan bisa diterima.
     // ponytail: index error/empty -> fallback LIKE penuh di bawah, jadi
     // kerusakan index tidak pernah bikin search mati total.
+    // FTS hanya untuk korpus published publik. Mode verifikator (ada
+    // pending_review di statuses) pakai LIKE supaya pending ketemu.
+    const verifierBrowse = Boolean(params.statuses?.includes('pending_review'));
     let ftsOffset = -1;
-    if (this.searchIndex && terms.length > 0 && params.published === true) {
+    if (
+      this.searchIndex &&
+      terms.length > 0 &&
+      params.published === true &&
+      !verifierBrowse
+    ) {
       if (params.cursor === undefined) ftsOffset = 0;
       else if (/^o:\d+$/.test(params.cursor)) ftsOffset = Number(params.cursor.slice(2));
     }
@@ -1495,12 +1563,14 @@ memberLemma: string;
 
     const where = and(
       isNull(words.deletedAt),
-      // Publik: published only. Admin: published? true|false|all (omit)
-      params.published === true
-        ? eq(words.status, 'published')
-        : params.published === false
-          ? ne(words.status, 'published')
-          : undefined,
+      // statuses (verifikator) mengalahkan published true/false/omit
+      params.statuses?.length
+        ? inArray(words.status, params.statuses)
+        : params.published === true
+          ? eq(words.status, 'published')
+          : params.published === false
+            ? ne(words.status, 'published')
+            : undefined,
       // 11-api-variasi-penulisan.md: q cocok lemma ATAU bentuk variasi
       // (mis. cari "ketex" menemukan entri "ketek"). EXISTS - bukan JOIN -
       // supaya hasil tetap satu baris per kata (cursor words.id aman).
@@ -1648,6 +1718,7 @@ memberLemma: string;
         and(
           eq(wgmWord.id, wgmOther.wordId),
           eq(wgmWord.status, 'published'),
+          eq(wgmWord.isVerified, true),
           isNull(wgmWord.deletedAt),
         ),
       )
@@ -1745,12 +1816,13 @@ memberLemma: string;
     const q = params.q?.trim() ?? '';
     const letter = params.letter?.trim().toLowerCase();
     // Browse tanpa q: jangan ekspos kasar/diskriminatif di listing publik.
-    // Filter q / search endpoint tetap boleh menemukan + menampilkan badge.
     // `letter` = prefix A-Z (panel beranda); `q` = contains (kotak filter).
+    // Gate publik: published + verified. Verifikator: statuses (pending+published).
     const where = and(
       isNull(words.deletedAt),
-      // Endpoint publik - selalu published (bukan opsional seperti search())
-      eq(words.status, 'published'),
+      params.statuses?.length
+        ? inArray(words.status, params.statuses)
+        : eq(words.status, 'published'),
       q ? ilikeCompat(words.lemma, `%${escapeLike(q)}%`) : browseSafeUsageLabelsSql(),
       letter ? sql`${lemmaAz} LIKE ${`${escapeLike(letter)}%`}` : undefined,
       params.wordType ? eq(words.wordType, params.wordType) : undefined,
@@ -1914,6 +1986,7 @@ memberLemma: string;
     const where = and(
       isNull(words.deletedAt),
       eq(words.status, 'published'),
+      eq(words.isVerified, true),
       feedSafeUsageLabelsSql(),
       params.cursor
         ? sql`(${approvedAtExpr}, ${words.id}) < (${cursorEpoch}, ${params.cursor.id})`
@@ -2042,16 +2115,19 @@ memberLemma: string;
     const terms = searchTerms(params.q ?? '');
     const where = and(
       isNull(words.deletedAt),
-      params.published === true
-        ? eq(words.status, 'published')
-        : params.published === false
-          ? ne(words.status, 'published')
-          : undefined,
+      params.statuses?.length
+        ? inArray(words.status, params.statuses)
+        : params.published === true
+          ? eq(words.status, 'published')
+          : params.published === false
+            ? ne(words.status, 'published')
+            : undefined,
       isNull(meanings.deletedAt),
-      // 17: makna kontribusi pending tidak boleh bocor ke pencarian;
-      // sentinel "-" (placeholder tanpa definisi) juga bukan hasil yang
-      // bermakna untuk pencarian terjemahan.
-      eq(meanings.status, 'published'),
+      // Verifikator: makna published|pending_review. Publik: published saja.
+      // Sentinel "-" bukan hasil bermakna untuk pencarian terjemahan.
+      params.statuses?.length
+        ? inArray(meanings.status, params.statuses as ChildStatus[])
+        : eq(meanings.status, 'published'),
       ne(meaningTranslations.translationText, '-'),
       isNull(meaningTranslations.deletedAt),
       terms.length > 0
@@ -2447,12 +2523,42 @@ memberLemma: string;
     return updated.length > 0;
   }
 
-  async findMeaningById(meaningId: string): Promise<{ id: string; wordId: string } | null> {
+  async findMeaningById(
+    meaningId: string,
+  ): Promise<{ id: string; wordId: string; definition: string } | null> {
     const [row] = await this.db
-      .select({ id: meanings.id, wordId: meanings.wordId })
+      .select({ id: meanings.id, wordId: meanings.wordId, definition: meanings.definition })
       .from(meanings)
       .where(and(eq(meanings.id, meaningId), isNull(meanings.deletedAt)))
       .limit(1);
+    return row ?? null;
+  }
+
+  async countLiveMeanings(wordId: string): Promise<number> {
+    const rows = await this.db
+      .select({ id: meanings.id })
+      .from(meanings)
+      .where(and(eq(meanings.wordId, wordId), isNull(meanings.deletedAt)));
+    return rows.length;
+  }
+
+  async softDeleteMeaning(
+    wordId: string,
+    meaningId: string,
+    actorId: string,
+  ): Promise<{ id: string; definition: string } | null> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(meanings)
+      .set({ deletedAt: now, deletedBy: actorId, updatedAt: now, updatedBy: actorId })
+      .where(
+        and(
+          eq(meanings.id, meaningId),
+          eq(meanings.wordId, wordId),
+          isNull(meanings.deletedAt),
+        ),
+      )
+      .returning({ id: meanings.id, definition: meanings.definition });
     return row ?? null;
   }
 
@@ -2782,6 +2888,7 @@ memberLemma: string;
       targetLanguageId?: string | null;
       targetSentence?: string | null;
       sourceType?: string | null;
+      sourceReference?: string | null;
       notes?: string | null;
       status: ChildStatus;
       isVerified: boolean;
@@ -2799,6 +2906,7 @@ memberLemma: string;
             targetLanguageId: data.targetLanguageId ?? null,
             targetSentence: data.targetSentence ?? null,
             sourceType: data.sourceType ?? null,
+            sourceReference: data.sourceReference ?? null,
             notes: data.notes ?? null,
             status: data.status,
             isVerified: data.isVerified,
@@ -2818,6 +2926,37 @@ memberLemma: string;
       mapMediaViolation(err, '');
       throw err;
     }
+  }
+
+  async cancelPendingExamplesFromJinye(jinyeId: string): Promise<number> {
+    const now = new Date();
+    const rows = await this.db
+      .update(examples)
+      .set({
+        status: 'rejected',
+        deletedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(examples.sourceType, 'jinye'),
+          eq(examples.sourceReference, jinyeId),
+          eq(examples.status, 'pending_review'),
+          isNull(examples.deletedAt),
+        ),
+      )
+      .returning({ id: examples.id });
+    return rows.length;
+  }
+
+  async findFirstMeaningId(wordId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: meanings.id })
+      .from(meanings)
+      .where(and(eq(meanings.wordId, wordId), isNull(meanings.deletedAt)))
+      .orderBy(asc(meanings.orderIndex), asc(meanings.id))
+      .limit(1);
+    return row?.id ?? null;
   }
 
   async addMeaning(
@@ -3145,7 +3284,14 @@ memberLemma: string;
     };
   }
 
-  async updateWithRelations(id: string, word: WordToSave, actorId: string, tx?: unknown): Promise<Word | null> {
+  async updateWithRelations(
+    id: string,
+    word: WordToSave,
+    actorId: string,
+    tx?: unknown,
+    options?: { recordContribution?: boolean },
+  ): Promise<Word | null> {
+    const recordContribution = options?.recordContribution !== false;
     const run = async (tx: Tx): Promise<Word | null> => {
         // Update baris words
         const now = new Date();
@@ -3254,15 +3400,18 @@ memberLemma: string;
         await this.insertChildren(tx, id, wordWithAttribution, actorId);
         await this.restoreWordAudios(tx, id, audioSnapshots);
 
-        // Catat kontribusi update - status antrean turunan dari status entity
-        // (correct oleh verifikator → published → 'approved', tidak mengotori antrean)
-        await tx.insert(contributions).values({
-          userId: actorId,
-          entityType: 'word',
-          entityId: id,
-          action: 'update',
-          status: contributionStatusOf(word.status, word.isVerified),
-        });
+        // Catat kontribusi update - kecuali jalur correct (recordContribution=false):
+        // keputusan review sudah menutup antrean; insert di sini (apalagi
+        // publish=false → pending) bikin ghost "update oleh verifikator".
+        if (recordContribution) {
+          await tx.insert(contributions).values({
+            userId: actorId,
+            entityType: 'word',
+            entityId: id,
+            action: 'update',
+            status: contributionStatusOf(word.status, word.isVerified),
+          });
+        }
 
         return toWord(wordRow);
     };

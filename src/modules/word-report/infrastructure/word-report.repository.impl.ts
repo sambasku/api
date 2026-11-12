@@ -1,5 +1,5 @@
-import { and, desc, eq, isNull, lt } from 'drizzle-orm';
-import { users, wordReports, words } from '@/shared/database/drizzle/schema';
+import { and, desc, eq, isNotNull, isNull, lt } from 'drizzle-orm';
+import { meanings, users, wordReports, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { ConflictError } from '@/shared/errors/app-error';
 import { isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
@@ -20,6 +20,7 @@ type Joined = {
   wordStatus: string | null;
   username: string | null;
   displayName: string | null;
+  meaningDefinition: string | null;
 };
 
 function toEntity(row: Joined): WordReport {
@@ -28,6 +29,8 @@ function toEntity(row: Joined): WordReport {
     id: row.report.id,
     wordId: row.report.wordId,
     imageId: row.report.imageId ?? null,
+    meaningId: row.report.meaningId ?? null,
+    meaningDefinition: row.meaningDefinition ?? null,
     wordLemma: row.lemma ?? '',
     wordStatus: row.wordStatus ?? '',
     userId: row.report.userId,
@@ -45,6 +48,16 @@ function toEntity(row: Joined): WordReport {
   };
 }
 
+function alreadyOpenMessage(input: NewWordReport): string {
+  if (input.meaningId) {
+    return 'Kamu sudah melaporkan makna ini dan laporannya masih terbuka';
+  }
+  if (input.imageId) {
+    return 'Kamu sudah melaporkan foto ini dan laporannya masih terbuka';
+  }
+  return 'Kamu sudah melaporkan entri ini dan laporannya masih terbuka';
+}
+
 export class WordReportRepositoryImpl implements WordReportRepository {
   constructor(private readonly db: AppDatabase) {}
 
@@ -56,10 +69,12 @@ export class WordReportRepositoryImpl implements WordReportRepository {
         wordStatus: words.status,
         username: users.username,
         displayName: users.displayName,
+        meaningDefinition: meanings.definition,
       })
       .from(wordReports)
       .leftJoin(words, eq(words.id, wordReports.wordId))
-      .leftJoin(users, eq(users.id, wordReports.userId));
+      .leftJoin(users, eq(users.id, wordReports.userId))
+      .leftJoin(meanings, eq(meanings.id, wordReports.meaningId));
   }
 
   async create(input: NewWordReport): Promise<WordReport> {
@@ -69,6 +84,7 @@ export class WordReportRepositoryImpl implements WordReportRepository {
         .values({
           wordId: input.wordId,
           imageId: input.imageId ?? null,
+          meaningId: input.meaningId ?? null,
           userId: input.userId,
           reasonCode: input.reasonCode,
           note: input.note,
@@ -81,12 +97,7 @@ export class WordReportRepositoryImpl implements WordReportRepository {
       return row;
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new ConflictError(
-          'WORD_REPORT_ALREADY_OPEN',
-          input.imageId
-            ? 'Kamu sudah melaporkan foto ini dan laporannya masih terbuka'
-            : 'Kamu sudah melaporkan entri ini dan laporannya masih terbuka',
-        );
+        throw new ConflictError('WORD_REPORT_ALREADY_OPEN', alreadyOpenMessage(input));
       }
       throw err;
     }
@@ -95,12 +106,16 @@ export class WordReportRepositoryImpl implements WordReportRepository {
   async findOpenByUserAndWord(
     userId: string,
     wordId: string,
-    imageId?: string | null,
+    opts?: { imageId?: string | null; meaningId?: string | null },
   ): Promise<WordReport | null> {
+    const imageId = opts?.imageId ?? null;
+    const meaningId = opts?.meaningId ?? null;
     const imageFilter =
-      imageId == null || imageId === undefined
-        ? isNull(wordReports.imageId)
-        : eq(wordReports.imageId, imageId);
+      imageId == null ? isNull(wordReports.imageId) : eq(wordReports.imageId, imageId);
+    const meaningFilter =
+      meaningId == null
+        ? isNull(wordReports.meaningId)
+        : eq(wordReports.meaningId, meaningId);
     const [row] = await this.selectJoined()
       .where(
         and(
@@ -108,6 +123,7 @@ export class WordReportRepositoryImpl implements WordReportRepository {
           eq(wordReports.wordId, wordId),
           eq(wordReports.status, 'open'),
           imageFilter,
+          meaningFilter,
         ),
       )
       .limit(1);
@@ -120,10 +136,20 @@ export class WordReportRepositoryImpl implements WordReportRepository {
   }
 
   async list(filter: WordReportListFilter): Promise<CursorPage<WordReport>> {
+    const targetFilter =
+      filter.target === 'meaning'
+        ? isNotNull(wordReports.meaningId)
+        : filter.target === 'image'
+          ? isNotNull(wordReports.imageId)
+          : filter.target === 'entry'
+            ? and(isNull(wordReports.imageId), isNull(wordReports.meaningId))
+            : undefined;
+
     const rows = await this.selectJoined()
       .where(
         and(
           filter.status ? eq(wordReports.status, filter.status) : undefined,
+          targetFilter,
           filter.cursor ? lt(wordReports.id, filter.cursor) : undefined,
         ),
       )
@@ -175,5 +201,29 @@ export class WordReportRepositoryImpl implements WordReportRepository {
         updatedAt: now,
       })
       .where(and(eq(wordReports.wordId, wordId), eq(wordReports.status, 'open')));
+  }
+
+  async closeOpenForMeaning(
+    meaningId: string,
+    actorId: string,
+    note: string | null,
+  ): Promise<void> {
+    const now = new Date();
+    await this.db
+      .update(wordReports)
+      .set({
+        status: 'resolved',
+        resolution: 'meaning_removed',
+        resolutionNote: note,
+        resolvedBy: actorId,
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(wordReports.meaningId, meaningId),
+          eq(wordReports.status, 'open'),
+        ),
+      );
   }
 }
