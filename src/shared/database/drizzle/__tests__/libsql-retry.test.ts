@@ -20,6 +20,14 @@ describe('withLibsqlRetry', () => {
     await expect(withLibsqlRetry(fn)).rejects.toThrow('SQLITE_CONSTRAINT');
     expect(fn).toHaveBeenCalledTimes(1);
   });
+
+  it('hormati maxAttempts override', async () => {
+    const fn = vi.fn<() => Promise<number>>().mockRejectedValue(http429);
+    await expect(
+      withLibsqlRetry(fn, { maxAttempts: 2, baseDelayMs: 1 }),
+    ).rejects.toThrow(/429/);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('execBatched', () => {

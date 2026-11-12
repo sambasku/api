@@ -18,16 +18,26 @@ const BATCH_CHUNK = 50;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export type WithLibsqlRetryOptions = {
+	maxAttempts?: number;
+	baseDelayMs?: number;
+};
+
 /** Jalankan fn, retry bila error libsql transient (429/5xx/jaringan). */
-export async function withLibsqlRetry<T>(fn: () => Promise<T>): Promise<T> {
+export async function withLibsqlRetry<T>(
+	fn: () => Promise<T>,
+	opts?: WithLibsqlRetryOptions,
+): Promise<T> {
+	const maxAttempts = opts?.maxAttempts ?? MAX_ATTEMPTS;
+	const baseDelayMs = opts?.baseDelayMs ?? BASE_DELAY_MS;
 	let lastError: unknown;
-	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 		try {
 			return await fn();
 		} catch (err) {
 			lastError = err;
-			if (attempt >= MAX_ATTEMPTS || !isTransientLibsqlError(err)) break;
-			await sleep(BASE_DELAY_MS * attempt);
+			if (attempt >= maxAttempts || !isTransientLibsqlError(err)) break;
+			await sleep(baseDelayMs * attempt);
 		}
 	}
 	throw lastError;

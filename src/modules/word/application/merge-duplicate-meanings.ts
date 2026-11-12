@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Client } from '@libsql/client';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
-import { execBatched } from '@/shared/database/drizzle/libsql-retry';
+import { execBatched, withLibsqlRetry } from '@/shared/database/drizzle/libsql-retry';
 import {
   activityEvents,
   examples,
@@ -167,10 +167,19 @@ export async function applySafeMeaningMerges(
   const trBy = new Map(meaningRows.map((row) => [row.id, row.translations]));
   const planned = planSafeMeaningMerges(meaningRows);
   const loserToWinner = new Map<string, string>();
+  // Prod Turso sering 429 saat banyak kelompok merge beruntun (staging
+  // biasanya lolos karena data lebih kecil). Retry + jeda antar kelompok.
+  const paceMs = planned.length > 20 ? 100 : 0;
   for (const group of planned) {
     for (const loserId of group.loserIds) loserToWinner.set(loserId, group.winnerId);
     if (group.loserIds.length === 0) continue;
-    await db.transaction((tx) => mergeGroup(tx, group));
+    await withLibsqlRetry(
+      () => db.transaction((tx) => mergeGroup(tx, group)),
+      { maxAttempts: 8, baseDelayMs: 1000 },
+    );
+    if (paceMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, paceMs));
+    }
   }
   // Tanpa transaksi: satu tx besar utk semua survivor membuat transaksi
   // interaktif hrana putus/timeout, lalu rollback gagal "no transaction
