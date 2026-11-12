@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, articles, contributions, culinaryPlaces, cuisines, discussions, events, jinye, jinyeComments, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, articles, contributions, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
