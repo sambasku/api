@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { authIdentities, userRoles, users } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import { isUniqueViolation, isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
+import { isUniqueViolation, isUniqueViolationOn, isUsernameHandleConstraint } from '@/shared/database/drizzle/sqlite-errors';
 import { ConflictError } from '@/shared/errors/app-error';
 import { ROLE_RANK, derivePrimaryRole } from '../domain/entities/user.entity';
 import type { NewUser, User } from '../domain/entities/user.entity';
@@ -220,11 +220,13 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
               .returning();
             break;
           } catch (err) {
-            if (isUniqueViolationOn(err, 'users.email') || isUniqueViolationOn(err, 'users_email_unique')) {
-              throw err;
-            }
-            if (!isUniqueViolationOn(err, 'username')) throw err;
-            // username bentrok (race): coba kandidat berikutnya
+          if (isUniqueViolationOn(err, 'users.email') || isUniqueViolationOn(err, 'users_email_unique')) {
+            throw err;
+          }
+          // Trigger guard handle (app versi lama vs skema baru): coba kandidat
+          // berikutnya, sama seperti konflik UNIQUE - jangan 500 unhandled.
+          if (!isUniqueViolationOn(err, 'username') && !isUsernameHandleConstraint(err)) throw err;
+          // username bentrok (race): coba kandidat berikutnya
           }
         }
         if (!userRow) {

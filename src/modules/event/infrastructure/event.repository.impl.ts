@@ -1,27 +1,67 @@
-import { and, desc, eq, gt, gte, getTableColumns, inArray, isNull, lt, or, asc } from "drizzle-orm";
+import { and, desc, eq, gt, gte, getTableColumns, inArray, isNull, lt, or, asc, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/shared/database/drizzle/client";
 import { events, eventPlaces } from "@/shared/database/drizzle/schema/events.schema";
+import { eventComments, eventCommentRevisions } from "@/shared/database/drizzle/schema/event-comments.schema";
 import { eventCategories } from "@/shared/database/drizzle/schema/event-categories.schema";
 import { places } from "@/shared/database/drizzle/schema/places.schema";
 import { regions } from "@/shared/database/drizzle/schema/regions.schema";
+import { users } from "@/shared/database/drizzle/schema/users.schema";
 import { ilikeCompat } from "@/shared/database/drizzle/ilike-compat";
 import { generateId } from "@/shared/utils/ulid";
 import { ConflictError } from "@/shared/errors/app-error";
+import { highestUserRoleSql } from "@/shared/database/highest-user-role-sql";
 import type {
   Event,
   EventCategoryRef,
+  EventComment,
   EventListItem,
   EventPlaceRef,
   EventVillageRef,
 } from "../domain/entities/event.entity";
 import type {
   CreateEventInput,
+  EventCommentListFilter,
   EventRepository,
   ListEventsInput,
   ListEventsResult,
+  NewEventCommentInput,
   UpdateEventInput,
 } from "../domain/repositories/event.repository";
 import { resolvePublicAuthor } from "@/shared/utils/resolve-public-author";
+import type { CursorPage } from "@/modules/word/domain/repositories/word.repository";
+
+/** Cap riwayat edit per komentar. */
+const COMMENT_REVISION_CAP = 50;
+
+type EventCommentRow = typeof eventComments.$inferSelect;
+
+function toEventComment(
+  row: EventCommentRow,
+  meta: {
+    username: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+    userRole: string | null;
+    authorDeletedAt: Date | null;
+    isEdited: boolean;
+  },
+): EventComment {
+  return {
+    id: row.id,
+    eventId: row.eventId,
+    userId: row.userId,
+    username: meta.authorDeletedAt ? null : meta.username,
+    displayName: meta.authorDeletedAt ? null : meta.displayName,
+    avatarUrl: meta.authorDeletedAt ? null : meta.avatarUrl,
+    userRole: meta.authorDeletedAt ? null : meta.userRole,
+    authorDeletedAt: meta.authorDeletedAt,
+    body: row.body,
+    status: row.status,
+    isEdited: meta.isEdited,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt ?? null,
+  };
+}
 
 type EventRow = typeof events.$inferSelect;
 
@@ -488,5 +528,183 @@ export class EventRepositoryImpl implements EventRepository {
       .from(events)
       .where(inArray(events.slug, slugs));
     return new Set(rows.map((r) => r.slug));
+  }
+
+  // ---------------------------------------------------------------- komentar
+
+  async createComment(input: NewEventCommentInput): Promise<EventComment> {
+    const [row] = await this.db
+      .insert(eventComments)
+      .values({
+        eventId: input.eventId,
+        userId: input.userId,
+        body: input.body,
+        bodyOriginal: input.bodyOriginal,
+        createdAt: new Date(),
+      })
+      .returning();
+    if (!row) throw new Error('gagal menyimpan komentar acara');
+    const comment = await this.findCommentById(row.id);
+    if (!comment) throw new Error('komentar acara tidak ditemukan setelah dibuat');
+    return comment;
+  }
+
+  async findCommentById(id: string): Promise<EventComment | null> {
+    const [row] = await this.db
+      .select({
+        c: eventComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${eventCommentRevisions}
+          WHERE ${eventCommentRevisions.commentId} = ${eventComments.id}
+        )`,
+      })
+      .from(eventComments)
+      .leftJoin(users, eq(users.id, eventComments.userId))
+      .where(eq(eventComments.id, id))
+      .limit(1);
+    if (!row) return null;
+    return toEventComment(row.c, {
+      username: row.username,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+      userRole: row.userRole,
+      authorDeletedAt: row.authorDeletedAt,
+      isEdited: Boolean(row.isEdited),
+    });
+  }
+
+  async listComments(
+    eventId: string,
+    filter: EventCommentListFilter,
+  ): Promise<CursorPage<EventComment>> {
+    const limit = filter.limit;
+    const conditions = [eq(eventComments.eventId, eventId)];
+    if (filter.status) conditions.push(eq(eventComments.status, filter.status));
+    // Komentar id = ULID monoton -> lt(id, cursor) aman sebagai keyset
+    // (satu kolom sort by id desc, bukan composite - lihat rule keyset).
+    if (filter.cursor) conditions.push(lt(eventComments.id, filter.cursor));
+
+    const rows = await this.db
+      .select({
+        c: eventComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${eventCommentRevisions}
+          WHERE ${eventCommentRevisions.commentId} = ${eventComments.id}
+        )`,
+      })
+      .from(eventComments)
+      .leftJoin(users, eq(users.id, eventComments.userId))
+      .where(and(...conditions))
+      .orderBy(desc(eventComments.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      items: page.map((row) =>
+        toEventComment(row.c, {
+          username: row.username,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          userRole: row.userRole,
+          authorDeletedAt: row.authorDeletedAt,
+          isEdited: Boolean(row.isEdited),
+        }),
+      ),
+      nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
+      hasMore,
+    };
+  }
+
+  async updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<EventComment | null> {
+    const now = new Date();
+    const updated = await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ body: eventComments.body })
+        .from(eventComments)
+        .where(eq(eventComments.id, input.commentId))
+        .limit(1);
+      if (!current) return null;
+
+      await tx.insert(eventCommentRevisions).values({
+        commentId: input.commentId,
+        editorId: input.editorId,
+        body: current.body,
+        createdAt: now,
+      });
+      const excess = await tx
+        .select({ id: eventCommentRevisions.id })
+        .from(eventCommentRevisions)
+        .where(eq(eventCommentRevisions.commentId, input.commentId))
+        .orderBy(desc(eventCommentRevisions.createdAt))
+        .offset(COMMENT_REVISION_CAP);
+      if (excess.length > 0) {
+        await tx
+          .delete(eventCommentRevisions)
+          .where(inArray(eventCommentRevisions.id, excess.map((r) => r.id)));
+      }
+
+      const [row] = await tx
+        .update(eventComments)
+        .set({ body: input.body, updatedAt: now })
+        .where(
+          and(
+            eq(eventComments.id, input.commentId),
+            eq(eventComments.status, 'published'),
+            eq(eventComments.userId, input.editorId),
+          ),
+        )
+        .returning({ id: eventComments.id });
+      return row?.id ?? null;
+    });
+    if (!updated) return null;
+    return this.findCommentById(updated);
+  }
+
+  async markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(eventComments)
+      .set({ status: 'deleted_by_author', deletedAt: new Date() })
+      .where(
+        and(
+          eq(eventComments.id, id),
+          eq(eventComments.userId, actorId),
+          eq(eventComments.status, 'published'),
+        ),
+      )
+      .returning({ id: eventComments.id });
+    return Boolean(row);
+  }
+
+  async takedownComment(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(eventComments)
+      .set({ status: 'taken_down', reviewedBy: actorId, reviewedAt: new Date() })
+      .where(and(eq(eventComments.id, id), eq(eventComments.status, 'published')))
+      .returning({ id: eventComments.id });
+    return Boolean(row);
+  }
+
+  async eventTargetExists(id: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.id, id), eq(events.status, 'published'), isNull(events.deletedAt)))
+      .limit(1);
+    return Boolean(row);
   }
 }

@@ -9,7 +9,7 @@ export interface ContributionPayload {
   slug: string;
   name: string;
   category: string;
-  type: 'sejarah' | 'alam' | 'budaya' | 'pantai' | 'belanja' | null;
+  type: 'sejarah' | 'alam' | 'religi' | 'tirta' | 'agro' | 'bahari' | 'budaya' | null;
   lat: number | null;
   lng: number | null;
   mapsUrl: string | null;

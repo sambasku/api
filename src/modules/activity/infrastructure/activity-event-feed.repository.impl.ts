@@ -59,6 +59,8 @@ vote_meaning: 'vote',
   cuisine_published: 'culinary',
   place_published: 'place_listing',
   event_published: 'event',
+  event_going: 'event',
+  event_comment_created: 'event',
   pantun_created: 'pantun',
   pantun_reply_created: 'pantun',
   article_published: 'article',
@@ -97,6 +99,8 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   cuisine_published: 'Menambahkan kuliner',
   place_published: 'Menambahkan wisata',
   event_published: 'Menambahkan acara',
+  event_going: 'Berencana datang ke acara',
+  event_comment_created: 'Mengomentari acara',
 pantun_created: 'Menulis pantun',
 pantun_reply_created: 'Membalas pantun',
 article_published: 'Menulis artikel',
@@ -171,7 +175,7 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'article_published',
   ],
   correction: FEED_CATEGORY_KINDS.correction!,
-  comment: ['comment_created', 'article_comment_created'],
+  comment: ['comment_created', 'article_comment_created', 'event_comment_created'],
   verification: ['word_verified', 'suggestion_selfapply'],
   vote: ['vote_word', 'vote_comment', 'vote_meaning'],
   jinye: [
@@ -447,6 +451,10 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menambahkan wisata';
     case 'event_published':
       return 'Menambahkan acara';
+    case 'event_going':
+      return q ? `Berencana datang ke ${q}`.trim() : 'Berencana datang ke acara';
+    case 'event_comment_created':
+      return 'Mengomentari acara';
     case 'pantun_created':
       return 'Menulis pantun';
     case 'pantun_reply_created':
@@ -461,6 +469,8 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Mengutip Jinye';
     case 'comment_created':
         return targetId ? `Mengomentari kata ${q}`.trim() : 'Mengomentari';
+    case 'article_comment_created':
+      return 'Mengomentari artikel';
       case 'word_verified':
         return `Memverifikasi kata ${q}`.trim();
       case 'vote_word':
@@ -643,11 +653,31 @@ articleTitle: articles.title,
         sql`${culinaryPlaces.deletedAt} is null`,
       ),
     )
+    // Komentar acara: join dulu agar event join bisa pakai event_comments.event_id.
+    .leftJoin(
+      eventComments,
+      and(
+        eq(activityEvents.kind, 'event_comment_created'),
+        eq(eventComments.id, activityEvents.targetId),
+        eq(eventComments.status, 'published'),
+      ),
+    )
+    // Events: event_published pakai target_id; event_comment_created pakai
+    // event_id dari join di atas (pola sama seperti article_comment_created).
     .leftJoin(
       events,
       and(
-        eq(activityEvents.kind, 'event_published'),
-        eq(events.id, activityEvents.targetId),
+        sql`${activityEvents.kind} in ('event_published', 'event_going', 'event_comment_created')`,
+        or(
+          and(
+            sql`${activityEvents.kind} in ('event_published', 'event_going')`,
+            eq(events.id, activityEvents.targetId),
+          ),
+          and(
+            eq(activityEvents.kind, 'event_comment_created'),
+            eq(events.id, eventComments.eventId),
+          ),
+        ),
         eq(events.status, 'published'),
         sql`${events.deletedAt} is null`,
       ),
@@ -763,8 +793,9 @@ articleTitle: articles.title,
         sql`(${activityEvents.kind} <> 'place_photo_added' or ${places.id} is not null)`,
         // Wisata baru hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'place_published' or ${places.id} is not null)`,
-        // Acara baru hanya tayang selama masih published (visibility read-time).
+        // Acara baru / berencana datang hanya tayang selama masih published.
         sql`(${activityEvents.kind} <> 'event_published' or ${events.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'event_going' or ${events.id} is not null)`,
       // Diskusi hanya tayang selama masih published (edit re-queue / cabut = sembunyi).
       sql`(${activityEvents.kind} <> 'discussion_created' or ${discussions.id} is not null)`,
       // Pantun hanya tayang selama masih published (takedown = sembunyi).
@@ -1026,6 +1057,8 @@ case 'layanan_published':
 case 'cuisine_published':
 case 'place_published':
 case 'event_published':
+case 'event_going':
+case 'event_comment_created':
 case 'pantun_created':
 case 'pantun_reply_created':
 case 'article_published':
@@ -1141,6 +1174,9 @@ articleSlug?: string | null;
       case 'place_published':
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'event_published':
+      case 'event_going':
+      case 'event_comment_created':
+        // Link ke acara yang di-publish / dikomentari / dihadiri (bukan id komentar).
         return row.eventSlug ? { type: 'event', id: row.eventSlug } : null;
     case 'pantun_created':
       return row.targetId ? { type: 'pantun', id: row.targetId! } : null;

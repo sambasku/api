@@ -1,6 +1,13 @@
 /** Id slug di tabel `place_categories`. */
 export type PlaceCategory = string;
-export type PlaceType = "sejarah" | "alam" | "budaya" | "pantai" | "belanja";
+export type PlaceType =
+  | "sejarah"
+  | "alam"
+  | "religi"
+  | "tirta"
+  | "agro"
+  | "bahari"
+  | "budaya";
 export type PlaceStatus = "draft" | "published" | "archived";
 
 export interface PlaceSource {

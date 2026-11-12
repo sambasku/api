@@ -10,7 +10,7 @@ export const places = sqliteTable(
     name: text('name').notNull(),
     category: text('category').notNull(),
     type: text('type', {
-      enum: ['sejarah', 'alam', 'budaya', 'pantai', 'belanja'],
+      enum: ['sejarah', 'alam', 'religi', 'tirta', 'agro', 'bahari', 'budaya'],
     }),
     lat: real('lat'),
     lng: real('lng'),

@@ -321,8 +321,17 @@ import {
 import { EventController } from "@/modules/event/presentation/v1/event.controller";
 import {
   createAdminEventRoutes,
+  createAdminEventCommentRoutes,
   createPublicEventRoutes,
+  createPublicEventCommentRoutes,
 } from "@/modules/event/presentation/v1/event.routes";
+import {
+  CreateEventCommentUseCase,
+  DeleteEventCommentUseCase,
+  ListEventCommentsUseCase,
+  TakedownEventCommentUseCase,
+  UpdateEventCommentUseCase,
+} from "@/modules/event/application/use-cases/event-comment.use-cases";
 import { EventContributionRepositoryImpl } from "@/modules/event-contribution/infrastructure/event-contribution.repository.impl";
 import { EventContributionUseCases } from "@/modules/event-contribution/application/event-contribution.use-cases";
 import { EventContributionController } from "@/modules/event-contribution/presentation/v1/event-contribution.controller";
@@ -330,6 +339,17 @@ import {
   createAdminEventContributionRoutes,
   createEventContributionRoutes,
 } from "@/modules/event-contribution/presentation/v1/event-contribution.routes";
+import { EventGoingRepositoryImpl } from "@/modules/event-going/infrastructure/event-going.repository.impl";
+import {
+  ListEventGoingsUseCase,
+  MarkEventGoingUseCase,
+  UnmarkEventGoingUseCase,
+} from "@/modules/event-going/application/use-cases/event-going.use-cases";
+import { EventGoingController } from "@/modules/event-going/presentation/v1/event-going.controller";
+import {
+  createAdminEventGoingRoutes,
+  createEventGoingRoutes,
+} from "@/modules/event-going/presentation/v1/event-going.routes";
 // Fitur Usaha (PRD usaha): direktori usaha + usulan + klaim + laporan.
 import { UsahaCategoryRepositoryImpl } from "@/modules/usaha-category/infrastructure/usaha-category.repository.impl";
 import {
@@ -1431,6 +1451,12 @@ const regionController = new RegionController(
 
 // ---- Modul event/acara (PRD event) ----
 const eventRepo = new EventRepositoryImpl(db);
+const eventGoingRepo = new EventGoingRepositoryImpl(db);
+const eventGoingController = new EventGoingController({
+  mark: new MarkEventGoingUseCase(eventGoingRepo, activityEvents),
+  unmark: new UnmarkEventGoingUseCase(eventGoingRepo, activityEvents),
+  list: new ListEventGoingsUseCase(eventGoingRepo),
+});
 const eventController = new EventController(
   new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
   new UpdateEventUseCase(eventRepo, regionRepo, activityEvents),
@@ -1439,6 +1465,25 @@ const eventController = new EventController(
   new GetEventBySlugUseCase(eventRepo),
   new SetEventCancelledUseCase(eventRepo),
   new ListEventCategoriesUseCase(eventRepo),
+  {
+    listComments: new ListEventCommentsUseCase(eventRepo),
+    createComment: new CreateEventCommentUseCase(
+      eventRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
+    ),
+    updateComment: new UpdateEventCommentUseCase(
+      eventRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+    ),
+    deleteComment: new DeleteEventCommentUseCase(eventRepo),
+    takedownComment: new TakedownEventCommentUseCase(eventRepo, auditRepo),
+  },
+  eventGoingRepo,
 );
 const eventContributionController = new EventContributionController(
   new EventContributionUseCases(
@@ -2486,9 +2531,35 @@ app.route(
   createAdminEventRoutes({ controller: eventController, authenticate }),
 );
 app.route(
+  "/api/v1/admin/events",
+  createAdminEventCommentRoutes({ controller: eventController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/events",
+  createAdminEventGoingRoutes({
+    controller: eventGoingController,
+    authenticate,
+  }),
+);
+app.route(
   "/api/v1/events",
   createPublicEventRoutes({
     controller: eventController,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/events",
+  createEventGoingRoutes({
+    controller: eventGoingController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/events",
+  createPublicEventCommentRoutes({
+    controller: eventController,
+    authenticate,
     optionalAuthenticate,
   }),
 );

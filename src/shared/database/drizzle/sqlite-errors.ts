@@ -27,6 +27,15 @@ export function isUniqueViolationOn(err: unknown, needle: string): boolean {
   return collectMessages(err).join(' ').toLowerCase().includes(needle.toLowerCase());
 }
 
+/**
+ * True bila error = ABORT dari trigger guard username (RAISE(ABORT, 'username
+ * harus handle...')). Terjadi saat versi app tertinggal dari skema DB (mis.
+ * container lama min 3 vs trigger min 6). Dipakai insert-retry supaya
+ * kandidat username berikutnya dicoba, bukan 500 unhandled.
+ */
+export function isUsernameHandleConstraint(err: unknown): boolean {
+  return collectMessages(err).join(' ').toLowerCase().includes('username harus handle');
+}
 export function isForeignKeyViolation(err: unknown): boolean {
   const codes = collectCodes(err);
   if (

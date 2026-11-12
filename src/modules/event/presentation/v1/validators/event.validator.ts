@@ -239,6 +239,10 @@ export const eventResponseSchema = z.object({
     })
     .nullable()
     .optional(),
+  /** Jumlah orang yang berencana datang. */
+  going_count: z.number().int().nonnegative().default(0),
+  /** True bila user login sudah menandai berencana datang. */
+  viewer_going: z.boolean().default(false),
   created_at: z.string(),
   updated_at: z.string().nullable(),
 });
@@ -253,3 +257,43 @@ export const cancelEventBodySchema = z
     cancelled: z.boolean().default(true),
   })
   .strict();
+
+// ---------------------------------------------------------------- komentar
+
+export const eventCommentsQuerySchema = z.object({
+  cursor: opaqueId.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export const createEventCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Komentar wajib diisi' })
+    .trim()
+    .min(1, 'Komentar wajib diisi')
+    .max(1000, 'Komentar maksimal 1000 karakter'),
+});
+
+export const updateEventCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Komentar wajib diisi' })
+    .trim()
+    .min(1, 'Komentar wajib diisi')
+    .max(1000, 'Komentar maksimal 1000 karakter'),
+});
+
+export const eventCommentResponseSchema = z.object({
+  id: opaqueId,
+  event_id: z.string(),
+  user: z.object({
+    user_id: z.string(),
+    username: z.string().nullable(),
+    display_name: z.string().nullable(),
+    avatar_url: z.string().nullable(),
+    is_verifier: z.boolean(),
+  }),
+  body: z.string(),
+  status: z.enum(['published', 'taken_down', 'deleted_by_author']),
+  is_edited: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string().nullable(),
+});

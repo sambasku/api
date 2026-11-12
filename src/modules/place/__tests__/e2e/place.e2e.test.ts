@@ -136,7 +136,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
         slug: "pantai-test-e2e",
         name: "Pantai Test E2E",
         category: "wisata",
-        type: "pantai",
+        type: "bahari",
         lat: 1.35,
         lng: 109.2,
         short_description: "Deskripsi singkat untuk uji e2e.",
@@ -183,7 +183,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
     ).toBe(true);
 
     const typedRes = await get(
-      "/api/v1/places?category=wisata&type=pantai&limit=50",
+      "/api/v1/places?category=wisata&type=bahari&limit=50",
     );
     expect(typedRes.status).toBe(200);
     const typed = (await typedRes.json()).data.items;
@@ -245,7 +245,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
         slug: "pantai-usulan",
         name: "Pantai Usulan",
         category: "wisata",
-        type: "pantai",
+        type: "bahari",
         lat: 1.36,
         lng: 109.3,
         short_description: "Usulan dari user.",
@@ -371,7 +371,7 @@ describe.skipIf(!hasTestDb)("Place E2E - CRUD admin + list publik", () => {
         slug: "pantai-usulan",
         name: "Pantai Usulan Baru",
         category: "wisata",
-        type: "pantai",
+        type: "bahari",
         lat: 1.36,
         lng: 109.3,
         short_description: "Suntingan.",

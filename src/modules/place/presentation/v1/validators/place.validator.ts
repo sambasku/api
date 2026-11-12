@@ -17,9 +17,11 @@ const placeCategorySchema = z
 const placeTypeSchema = z.enum([
   "sejarah",
   "alam",
+  "religi",
+  "tirta",
+  "agro",
+  "bahari",
   "budaya",
-  "pantai",
-  "belanja",
 ]);
 const placeStatusSchema = z.enum(["draft", "published", "archived"]);
 
