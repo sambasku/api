@@ -124,6 +124,9 @@ export class VoteController {
         meaning_count: m.meaningCount,
         // Kelas kata milik MAKNA ini, bukan kata induk. null = belum diisi.
         word_class: m.wordClass,
+        // Pelafalan kata induk - CTA tulis/rekam di kartu deck (#260).
+        pronunciation_value: m.pronunciationValue,
+        has_audio: m.hasAudio,
         upvotes: m.upvotes,
         downvotes: m.downvotes,
       })),

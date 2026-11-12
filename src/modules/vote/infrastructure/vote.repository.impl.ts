@@ -19,6 +19,7 @@ import {
   votes,
   wordImages,
   meaningVoteCounts,
+  wordAudios,
   wordClasses,
   words,
 } from '@/shared/database/drizzle/schema';
@@ -1361,6 +1362,24 @@ if (articleCommentIds.length > 0) {
         wcCode: wordClasses.code,
         wcName: wordClasses.name,
         wcAlias: wordClasses.alias,
+        // Pelafalan kata (bukan makna): scalar subquery - tetap 1 query.
+        pronunciationValue: sql<string | null>`(
+          select ${pronunciations.value} from ${pronunciations}
+          where ${pronunciations.wordId} = ${words.id}
+            and ${pronunciations.deletedAt} is null
+            and ${pronunciations.status} = 'published'
+          order by ${pronunciations.id}
+          limit 1
+        )`,
+        hasAudio: sql<number>`(
+          select exists(
+            select 1 from ${wordAudios}
+            where ${wordAudios.wordId} = ${words.id}
+              and ${wordAudios.deletedAt} is null
+              and ${wordAudios.exampleId} is null
+              and ${wordAudios.status} = 'published'
+          )
+        )`.mapWith(Number),
         totalVotes: totalVotesExpr,
       })
       .from(meanings)
@@ -1402,6 +1421,8 @@ if (articleCommentIds.length > 0) {
       wordClass: r.wcId
         ? { id: r.wcId, code: r.wcCode ?? '', name: r.wcName ?? '', alias: r.wcAlias ?? null }
         : null,
+      pronunciationValue: r.pronunciationValue?.trim() || null,
+      hasAudio: r.hasAudio === 1,
       sense: null,
       lemma: r.lemma,
       languageId: r.languageId,
