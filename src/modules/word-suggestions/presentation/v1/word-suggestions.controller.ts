@@ -178,6 +178,7 @@ export class WordSuggestionController {
             word_type: item.summaryChanges.wordType,
             meanings_count: item.summaryChanges.meaningsCount,
             examples_count: item.summaryChanges.examplesCount,
+            pronunciations_count: item.summaryChanges.pronunciationsCount,
             categories_added: item.summaryChanges.categoriesAdded,
             categories_removed: item.summaryChanges.categoriesRemoved,
             relations_count: item.summaryChanges.relationsCount,
@@ -243,6 +244,12 @@ export class WordSuggestionController {
               source_sentence: ex.sourceSentence,
               target_sentence: ex.targetSentence,
             })),
+            pronunciations: detail.currentWord.pronunciations.map((p) => ({
+              id: p.id,
+              notation: p.notation,
+              value: p.value,
+              dialect_id: p.dialectId,
+            })),
             category_ids: detail.currentWord.categoryIds,
             relations: detail.currentWord.relations.map((r) => ({
               relation_type: r.relationType,
@@ -278,6 +285,10 @@ export class WordSuggestionController {
             examples: detail.diff.examples.map((ex) => ({
               example_id: ex.exampleId,
               changes: ex.changes,
+            })),
+            pronunciations: detail.diff.pronunciations.map((p) => ({
+              pronunciation_id: p.pronunciationId,
+              changes: p.changes,
             })),
             categories: detail.diff.categories,
             relations: {

@@ -8,6 +8,7 @@ import {
   meanings,
   meaningTranslations,
   examples,
+  pronunciations,
   wordCategories,
   auditLogs,
   lexicalRelations,
@@ -544,6 +545,52 @@ export async function applyChangesToWord(
       }
       if (!touched) continue;
       await db.update(examples).set(patch).where(eq(examples.id, row.id));
+      changesApplied++;
+    }
+  }
+
+  // Ubah notasi pelafalan published.
+  if (changes.pronunciations && changes.pronunciations.length > 0) {
+    for (const pc of changes.pronunciations) {
+      if (pc.action !== 'update' || !pc.pronunciationId) continue;
+      const next = pc.value.trim();
+      if (!next) continue;
+      const [row] = await db
+        .select({
+          id: pronunciations.id,
+          value: pronunciations.value,
+          dialectId: pronunciations.dialectId,
+          notation: pronunciations.notation,
+        })
+        .from(pronunciations)
+        .where(
+          and(
+            eq(pronunciations.id, pc.pronunciationId),
+            eq(pronunciations.wordId, word.id),
+            isNull(pronunciations.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!row) continue;
+      if (next === row.value.trim()) continue;
+      try {
+        await db
+          .update(pronunciations)
+          .set({
+            value: next,
+            updatedBy: reviewerId,
+            updatedAt: new Date(),
+          })
+          .where(eq(pronunciations.id, row.id));
+      } catch (err) {
+        if (isUniqueViolationOn(err, 'pronunciations_unique')) {
+          throw new ConflictError(
+            'PRONUNCIATION_EXISTS',
+            'Pelafalan dengan notasi itu sudah ada di kata ini',
+          );
+        }
+        throw err;
+      }
       changesApplied++;
     }
   }

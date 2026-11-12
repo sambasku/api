@@ -26,6 +26,7 @@ export const SUGGESTION_CATEGORY_CODES = [
   'add_photo',
   'change_photo',
   'change_example',
+  'change_pronunciation',
   'synonym',
   'antonym',
   'variant_of',
@@ -71,6 +72,7 @@ export const REASON_CODE_LABELS: Record<SuggestionReasonCode, string> = {
   add_photo: 'Tambah foto',
   change_photo: 'Ubah foto',
   change_example: 'Ubah contoh',
+  change_pronunciation: 'Ubah pelafalan',
   synonym: 'Sinonim',
   antonym: 'Antonim',
   variant_of: 'Variasi bentuk',
@@ -128,6 +130,8 @@ export interface ProposedChanges {
   meanings?: MeaningChange[];
   /** #244: ubah contoh kalimat yang sudah tayang (bukan tambah lewat POST examples). */
   examples?: ExampleChange[];
+  /** Ubah notasi pelafalan published (bukan tambah lewat POST pronunciations). */
+  pronunciations?: PronunciationChange[];
   categoryIdsToAdd?: string[];
   categoryIdsToRemove?: string[];
   relations?: RelationChange[];
@@ -143,6 +147,13 @@ export interface ExampleChange {
   action: 'update';
   sourceSentence?: string;
   targetSentence?: string | null;
+}
+
+/** Usulan perbaikan notasi pelafalan published. */
+export interface PronunciationChange {
+  pronunciationId: string;
+  action: 'update';
+  value: string;
 }
 
 export interface MeaningChange {
@@ -219,6 +230,7 @@ export interface SuggestionSummary {
     wordType: string | null;
     meaningsCount: number;
     examplesCount: number;
+    pronunciationsCount: number;
     categoriesAdded: number;
     categoriesRemoved: number;
   relationsCount: number;
@@ -242,6 +254,7 @@ export interface CurrentWordSnapshot {
   languageId: string;
   meanings: CurrentMeaningSnapshot[];
   examples: CurrentExampleSnapshot[];
+  pronunciations: CurrentPronunciationSnapshot[];
   categoryIds: string[];
   relations: { relationType: string; wordId: string; lemma: string }[];
   variants: { form: string; variantType: string; dialectId: string | null }[];
@@ -255,6 +268,13 @@ export interface CurrentExampleSnapshot {
   meaningId: string;
   sourceSentence: string;
   targetSentence: string | null;
+}
+
+export interface CurrentPronunciationSnapshot {
+  id: string;
+  notation: string;
+  value: string;
+  dialectId: string | null;
 }
 
 export interface CurrentMeaningSnapshot {
@@ -296,10 +316,16 @@ export interface DiffResult {
     setPrimary: { imageId: string }[];
   };
   examples: DiffExample[];
+  pronunciations: DiffPronunciation[];
 }
 
 export interface DiffExample {
   exampleId: string;
+  changes: DiffField[];
+}
+
+export interface DiffPronunciation {
+  pronunciationId: string;
   changes: DiffField[];
 }
 

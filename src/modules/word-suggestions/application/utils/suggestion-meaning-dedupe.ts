@@ -149,6 +149,7 @@ export function suggestionHasOtherChanges(changes: ProposedChanges): boolean {
     (changes.images?.length ?? 0) > 0 ||
     (changes.groups?.length ?? 0) > 0 ||
     (changes.examples?.length ?? 0) > 0 ||
+    (changes.pronunciations?.length ?? 0) > 0 ||
     (changes.meanings ?? []).some((mc) => mc.action === 'delete' || mc.action === 'update')
   );
 }

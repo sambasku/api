@@ -15,6 +15,7 @@ type Part =
   | 'notes'
   | 'meanings'
   | 'examples'
+  | 'pronunciations'
   | 'categories'
   | 'relations'
   | 'variants'
@@ -28,6 +29,7 @@ function presentParts(c: ProposedChanges): Set<Part> {
   if (c.notes !== undefined) parts.add('notes');
   if (c.meanings?.length) parts.add('meanings');
   if (c.examples?.length) parts.add('examples');
+  if (c.pronunciations?.length) parts.add('pronunciations');
   if (c.categoryIdsToAdd?.length || c.categoryIdsToRemove?.length) parts.add('categories');
   if (c.relations?.length) parts.add('relations');
   if (c.variants?.length) parts.add('variants');
@@ -44,6 +46,7 @@ const ALLOWED: Record<string, Part[]> = {
   add_photo: ['images'],
   change_photo: ['images'],
   change_example: ['examples'],
+  change_pronunciation: ['pronunciations'],
   synonym: ['relations'],
   antonym: ['relations'],
   variant_of: ['relations'],
@@ -156,6 +159,23 @@ export function checkSuggestionCategoryShape(
       });
       break;
     }
+    case 'change_pronunciation': {
+      const seen = new Set<string>();
+      (c.pronunciations ?? []).forEach((p, i) => {
+        const at = `pronunciations.${i}`;
+        if (p.action !== 'update' || !p.pronunciationId) {
+          issues.push({ field: at, message: 'Pilih pelafalan yang ingin diubah' });
+        } else if (seen.has(p.pronunciationId)) {
+          issues.push({ field: at, message: 'Pelafalan yang sama tidak boleh diusulkan dua kali' });
+        } else {
+          seen.add(p.pronunciationId);
+        }
+        if (!p.value?.trim()) {
+          issues.push({ field: `${at}.value`, message: 'Isi pelafalan yang baru' });
+        }
+      });
+      break;
+    }
     case 'synonym':
     case 'antonym':
     // PRD relasi-lemma: kategori relasi baru - satu kategori satu tipe.
@@ -181,6 +201,7 @@ export function isRevertibleForApplyPending(c: ProposedChanges): boolean {
   if (c.relations?.length || c.variants?.length || c.groups?.length) return false;
   if ((c.meanings ?? []).some((m) => m.action !== 'update')) return false;
   if ((c.examples ?? []).some((e) => e.action !== 'update')) return false;
+  if ((c.pronunciations ?? []).some((p) => p.action !== 'update')) return false;
   if ((c.images ?? []).some((i) => i.action !== 'add')) return false;
   return true;
 }

@@ -73,6 +73,10 @@ export function censorSuggestionText(
           ? ex.targetSentence
           : censor(ex.targetSentence, `examples.${i}.target_sentence`),
     })),
+    pronunciations: changes.pronunciations?.map((p, i) => ({
+      ...p,
+      value: censor(p.value, `pronunciations.${i}.value`),
+    })),
   };
 
   return {

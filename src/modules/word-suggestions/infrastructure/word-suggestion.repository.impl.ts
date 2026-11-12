@@ -7,6 +7,7 @@ import {
   meanings,
   meaningTranslations,
   examples,
+  pronunciations,
   wordCategories,
   wordClasses,
   auditLogs,
@@ -112,6 +113,13 @@ async function captureBaseline(
         .from(examples)
         .where(and(inArray(examples.meaningId, meaningIds), isNull(examples.deletedAt)))
     : [];
+  const pronunciationRows = await db
+    .select({
+      id: pronunciations.id,
+      value: pronunciations.value,
+    })
+    .from(pronunciations)
+    .where(and(eq(pronunciations.wordId, wordId), isNull(pronunciations.deletedAt)));
   return {
     lemma,
     notes,
@@ -129,6 +137,10 @@ async function captureBaseline(
       id: ex.id,
       sourceSentence: ex.sourceSentence,
       targetSentence: ex.targetSentence,
+    })),
+    pronunciations: pronunciationRows.map((p) => ({
+      id: p.id,
+      value: p.value,
     })),
   };
 }
@@ -224,6 +236,40 @@ async function assertProposedTargetsCurrent(wordId: string, c: ProposedChanges):
       if (!changed) {
         throw new BadRequestError('SUGGESTION_NO_CHANGES', 'Tidak ada yang berubah dari data sekarang', [
           { field: 'examples', message: 'Isi masih sama dengan data sekarang' },
+        ]);
+      }
+    }
+  }
+
+  const pronunciationIds = [
+    ...new Set(
+      (c.pronunciations ?? []).filter((p) => p.pronunciationId).map((p) => p.pronunciationId),
+    ),
+  ];
+  if (pronunciationIds.length > 0) {
+    const rows = await db
+      .select({
+        id: pronunciations.id,
+        value: pronunciations.value,
+        status: pronunciations.status,
+      })
+      .from(pronunciations)
+      .where(
+        and(
+          inArray(pronunciations.id, pronunciationIds),
+          eq(pronunciations.wordId, wordId),
+          isNull(pronunciations.deletedAt),
+        ),
+      );
+    if (rows.length !== pronunciationIds.length) throw stale();
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const pc of c.pronunciations ?? []) {
+      const cur = byId.get(pc.pronunciationId);
+      if (!cur) throw stale();
+      if (cur.status !== 'published') throw stale();
+      if (pc.value.trim() === (cur.value ?? '').trim()) {
+        throw new BadRequestError('SUGGESTION_NO_CHANGES', 'Tidak ada yang berubah dari data sekarang', [
+          { field: 'pronunciations', message: 'Isi masih sama dengan data sekarang' },
         ]);
       }
     }
@@ -378,6 +424,17 @@ export async function restoreBaseline(
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(examples.id, ex.id));
   }
+
+  const snapPronById = new Map((snap.pronunciations ?? []).map((p) => [p.id, p]));
+  for (const pc of proposed.pronunciations ?? []) {
+    if (pc.action !== 'update' || !pc.pronunciationId) continue;
+    const p = snapPronById.get(pc.pronunciationId);
+    if (!p) continue;
+    await db
+      .update(pronunciations)
+      .set({ value: p.value, updatedAt: new Date() })
+      .where(eq(pronunciations.id, p.id));
+  }
 }
 
 async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapshot | null> {
@@ -449,6 +506,22 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
               isNull(examples.deletedAt),
             ),
           );
+
+  const pronunciationRows = await db
+    .select({
+      id: pronunciations.id,
+      notation: pronunciations.notation,
+      value: pronunciations.value,
+      dialectId: pronunciations.dialectId,
+    })
+    .from(pronunciations)
+    .where(
+      and(
+        eq(pronunciations.wordId, wordId),
+        eq(pronunciations.status, 'published'),
+        isNull(pronunciations.deletedAt),
+      ),
+    );
 
   const catRows = await db
     .select({ categoryId: wordCategories.categoryId })
@@ -544,6 +617,12 @@ async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapsh
       meaningId: ex.meaningId,
       sourceSentence: ex.sourceSentence,
       targetSentence: ex.targetSentence,
+    })),
+    pronunciations: pronunciationRows.map((p) => ({
+      id: p.id,
+      notation: p.notation,
+      value: p.value,
+      dialectId: p.dialectId,
     })),
     categoryIds: catRows.map((c) => c.categoryId),
     relations: relRows.map((r) => ({
@@ -686,6 +765,24 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
     examplesDiff.push({ exampleId: ec.exampleId, changes });
   }
 
+  const pronunciationsDiff: DiffResult['pronunciations'] = [];
+  for (const pc of proposed.pronunciations ?? []) {
+    if (pc.action !== 'update' || !pc.pronunciationId) continue;
+    const cur = current.pronunciations.find((p) => p.id === pc.pronunciationId);
+    const d = cur?.value ?? null;
+    pronunciationsDiff.push({
+      pronunciationId: pc.pronunciationId,
+      changes: [
+        {
+          label: 'Pelafalan',
+          current: d,
+          proposed: pc.value,
+          changed: pc.value !== d,
+        },
+      ],
+    });
+  }
+
   const curCats = new Set(current.categoryIds);
   const lemmaOf = await relationLemmas(proposed, current);
   // Form B (lemma): kata yang sudah ada → word_id + lemma; belum ada →
@@ -788,6 +885,7 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
     wordType,
     meanings: meaningsDiff,
     examples: examplesDiff,
+    pronunciations: pronunciationsDiff,
     categories: {
       added: (proposed.categoryIdsToAdd ?? []).filter((c) => !curCats.has(c)),
       removed: (proposed.categoryIdsToRemove ?? []).filter((c) => curCats.has(c)),
@@ -1181,6 +1279,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           wordType: pc.wordType ?? null,
           meaningsCount: pc.meanings?.length ?? 0,
           examplesCount: pc.examples?.length ?? 0,
+          pronunciationsCount: pc.pronunciations?.length ?? 0,
           categoriesAdded: pc.categoryIdsToAdd?.length ?? 0,
           categoriesRemoved: pc.categoryIdsToRemove?.length ?? 0,
           relationsCount: pc.relations?.length ?? 0,
