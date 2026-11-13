@@ -55,11 +55,14 @@ export class ResolveMapsUrlUseCase {
     let working = extracted;
     let coords = extractCoordsFromMapsUrl(working);
 
-    // Short link: sama acuan produk - follow redirect lalu baca URL
-    // final (response.url) dan ambil !3d!4d / @ / q.
+    // Short link: follow redirect → baca URL final + HTML (kadang !3d
+    // hanya di body, tidak di response.url).
     if (!coords && isShortMapsUrl(working)) {
-      working = await this.expandShortUrl(working);
-      coords = extractCoordsFromMapsUrl(working);
+      const expanded = await this.expandShortUrl(working);
+      working = expanded.url;
+      coords =
+        extractCoordsFromMapsUrl(working) ??
+        (expanded.html ? extractCoordsFromMapsUrl(expanded.html) : null);
     }
 
     // Share GPS Google: 1 hop HTTP ke place-id (tanpa !3d/@ di Location).
@@ -244,10 +247,12 @@ export class ResolveMapsUrlUseCase {
 
   /**
    * Expand short link. Prefer `redirect: 'follow'` + `response.url`
-   * (pola acuan extractCoordinatesShortUrl). Fallback hop manual bila
-   * follow gagal / landas di host non-allowlist.
+   * (pola acuan extractCoordinatesShortUrl). Baca juga HTML bila ada
+   * (kadang pin hanya di body). Fallback hop manual bila follow gagal.
    */
-  private async expandShortUrl(startUrl: string): Promise<string> {
+  private async expandShortUrl(
+    startUrl: string,
+  ): Promise<{ url: string; html: string | null }> {
     const timeoutMs = this.deps.timeoutMs ?? 5000;
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
@@ -274,8 +279,19 @@ export class ResolveMapsUrlUseCase {
             'Tautan Maps dialihkan ke host yang tidak diizinkan.',
           );
         }
+        let html: string | null = null;
+        if (!extractCoordsFromMapsUrl(finalUrl)) {
+          try {
+            html = await res.text();
+          } catch {
+            html = null;
+          }
+        }
         if (!isShortMapsUrl(finalUrl) || extractCoordsFromMapsUrl(finalUrl)) {
-          return finalUrl;
+          return { url: finalUrl, html };
+        }
+        if (html && extractCoordsFromMapsUrl(html)) {
+          return { url: finalUrl, html };
         }
       }
     } catch (err) {
@@ -284,7 +300,8 @@ export class ResolveMapsUrlUseCase {
     } finally {
       clearTimeout(timer);
     }
-    return this.followRedirectsManual(startUrl);
+    const manual = await this.followRedirectsManual(startUrl);
+    return { url: manual, html: null };
   }
 
   private async followRedirectsManual(startUrl: string): Promise<string> {
