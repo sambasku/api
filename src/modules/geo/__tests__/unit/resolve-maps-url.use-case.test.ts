@@ -44,6 +44,20 @@ describe('ResolveMapsUrlUseCase', () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: 'follow' });
   });
 
+  it('ambil !3d!4d dari HTML bila URL final hanya place-id', async () => {
+    const placeUrl =
+      'https://www.google.com/maps/place/Foo/data=!4m2!3m1!1s0xabc:0xdef';
+    const html =
+      '<html>…!3d1.36!4d109.30… dan kamera @0.1,0.2 diabaikan karena pin terakhir</html>';
+    const res = new Response(html, { status: 200 });
+    Object.defineProperty(res, 'url', { value: placeUrl });
+    const fetchMock = vi.fn().mockResolvedValue(res);
+    const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
+    const result = await uc.execute('https://maps.app.goo.gl/htmlpin');
+    expect(result.lat).toBe(1.36);
+    expect(result.lng).toBe(109.3);
+  });
+
   it('MAPS_URL_INVALID untuk host asing', async () => {
     const uc = new ResolveMapsUrlUseCase({ fetch: vi.fn() });
     await expect(uc.execute('https://evil.test/maps?q=1,2')).rejects.toMatchObject(

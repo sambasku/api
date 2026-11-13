@@ -26,7 +26,15 @@ export type ResolveMapsUrlDeps = {
   timeoutMs?: number;
 };
 
-const UA = 'SambasKu/1.0 (maps-url-resolve; https://sambasku.com)';
+/** Identitas Nominatim (wajib). */
+const NOMINATIM_UA = 'SambasKu/1.0 (maps-url-resolve; https://sambasku.com)';
+
+/**
+ * Browser UA untuk fetch Google Maps.
+ * Bot UA sering dapat halaman berbeda / tanpa redirect place yang berguna.
+ */
+const MAPS_FETCH_UA =
+  'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
 
 export class ResolveMapsUrlUseCase {
   constructor(private readonly deps: ResolveMapsUrlDeps) {}
@@ -43,11 +51,14 @@ export class ResolveMapsUrlUseCase {
     let working = extracted;
     let coords = extractCoordsFromMapsUrl(working);
 
-    // Short link: sama acuan produk - follow redirect lalu baca URL
-    // final (response.url) dan ambil !3d!4d / @ / q.
+    // Short link: follow redirect → baca URL final + HTML (kadang !3d
+    // hanya di body, tidak di response.url).
     if (!coords && isShortMapsUrl(working)) {
-      working = await this.expandShortUrl(working);
-      coords = extractCoordsFromMapsUrl(working);
+      const expanded = await this.expandShortUrl(working);
+      working = expanded.url;
+      coords =
+        extractCoordsFromMapsUrl(working) ??
+        (expanded.html ? extractCoordsFromMapsUrl(expanded.html) : null);
     }
 
     // Short/place share sering hanya place-id (tanpa !3d/@). Fallback:
@@ -112,7 +123,7 @@ export class ResolveMapsUrlUseCase {
         headers: {
           Accept: 'application/json',
           'Accept-Language': 'id',
-          'User-Agent': UA,
+          'User-Agent': NOMINATIM_UA,
         },
       });
     } catch {
@@ -140,10 +151,12 @@ export class ResolveMapsUrlUseCase {
 
   /**
    * Expand short link. Prefer `redirect: 'follow'` + `response.url`
-   * (pola acuan extractCoordinatesShortUrl). Fallback hop manual bila
-   * follow gagal / landas di host non-allowlist.
+   * (pola acuan extractCoordinatesShortUrl). Baca juga HTML bila ada
+   * (kadang pin hanya di body). Fallback hop manual bila follow gagal.
    */
-  private async expandShortUrl(startUrl: string): Promise<string> {
+  private async expandShortUrl(
+    startUrl: string,
+  ): Promise<{ url: string; html: string | null }> {
     const timeoutMs = this.deps.timeoutMs ?? 5000;
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
@@ -154,7 +167,7 @@ export class ResolveMapsUrlUseCase {
         signal: ac.signal,
         headers: {
           Accept: 'text/html,application/xhtml+xml',
-          'User-Agent': UA,
+          'User-Agent': MAPS_FETCH_UA,
         },
       });
       // `response.url` terisi setelah follow (acuan extractCoordinatesShortUrl).
@@ -170,8 +183,19 @@ export class ResolveMapsUrlUseCase {
             'Tautan Maps dialihkan ke host yang tidak diizinkan.',
           );
         }
+        let html: string | null = null;
+        if (!extractCoordsFromMapsUrl(finalUrl)) {
+          try {
+            html = await res.text();
+          } catch {
+            html = null;
+          }
+        }
         if (!isShortMapsUrl(finalUrl) || extractCoordsFromMapsUrl(finalUrl)) {
-          return finalUrl;
+          return { url: finalUrl, html };
+        }
+        if (html && extractCoordsFromMapsUrl(html)) {
+          return { url: finalUrl, html };
         }
       }
     } catch (err) {
@@ -180,7 +204,8 @@ export class ResolveMapsUrlUseCase {
     } finally {
       clearTimeout(timer);
     }
-    return this.followRedirectsManual(startUrl);
+    const manual = await this.followRedirectsManual(startUrl);
+    return { url: manual, html: null };
   }
 
   private async followRedirectsManual(startUrl: string): Promise<string> {
@@ -206,7 +231,7 @@ export class ResolveMapsUrlUseCase {
           signal: ac.signal,
           headers: {
             Accept: 'text/html,application/xhtml+xml',
-            'User-Agent': UA,
+            'User-Agent': MAPS_FETCH_UA,
           },
         });
       } catch {
