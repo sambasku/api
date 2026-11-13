@@ -127,6 +127,8 @@ export function extractPlaceNameFromMapsUrl(urlStr: string): string | null {
   if (!match?.[1]) return null;
   let name: string;
   try {
+    // Urutan penting: `+` di path = spasi dulu, baru decode `%2B` → `+`
+    // (Plus Code `F6HG%2BCFG` tetap utuh).
     name = decodeURIComponent(match[1].replace(/\+/g, ' '));
   } catch {
     name = match[1].replace(/\+/g, ' ');
@@ -136,6 +138,34 @@ export function extractPlaceNameFromMapsUrl(urlStr: string): string | null {
   // Path kadang hanya "lat,lng" - itu bukan nama.
   if (/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(name)) return null;
   return name;
+}
+
+/** Alfabet Open Location Code (Plus Code). */
+const PLUS_CODE_RE =
+  /\b([23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{2,3})\b/i;
+
+/**
+ * Ambil Plus Code dari teks/URL place (mis. `F6HG+CFG Sakura Mart…`).
+ * Share GPS Google sering bawa Plus Code di path tanpa `!3d`/`@`.
+ */
+export function extractPlusCodeFromText(text: string): string | null {
+  let decoded = text;
+  try {
+    decoded = decodeURIComponent(text);
+  } catch {
+    // pakai mentah
+  }
+  const m = PLUS_CODE_RE.exec(decoded);
+  return m?.[1]?.toUpperCase() ?? null;
+}
+
+export function extractPlusCodeFromMapsUrl(urlStr: string): string | null {
+  const name = extractPlaceNameFromMapsUrl(urlStr);
+  if (name) {
+    const fromName = extractPlusCodeFromText(name);
+    if (fromName) return fromName;
+  }
+  return extractPlusCodeFromText(urlStr);
 }
 
 /**
@@ -154,11 +184,20 @@ export function buildPlaceGeocodeCandidates(name: string): string[] {
     .split(',')
     .map((p) => p.trim())
     .filter(Boolean);
-  if (parts[0]) push(parts[0]);
+
+  // Buang Plus Code di depan segmen ("F6HG+CFG Sakura Mart" → "Sakura Mart").
+  const stripPlus = (raw: string) =>
+    raw.replace(PLUS_CODE_RE, '').replace(/\s+/g, ' ').trim();
+
+  if (parts[0]) {
+    const first = stripPlus(parts[0]);
+    if (first) push(first);
+    else push(parts[0]);
+  }
 
   const cleaned = parts
     .map((p) =>
-      p
+      stripPlus(p)
         .replace(
           /^(kec\.?|kab(?:upaten)?\.?|kota|provinsi|prov\.?)\s+/i,
           '',
@@ -170,7 +209,7 @@ export function buildPlaceGeocodeCandidates(name: string): string[] {
 
   // Nama tanpa label admin (mis. "Pasar Sambas") tetap dicoba utuh.
   const hasAdmin = /\b(kec\.?|kab(?:upaten)?|kota|provinsi)\b/i.test(name);
-  if (!hasAdmin) push(name);
+  if (!hasAdmin) push(stripPlus(name) || name);
 
   return out;
 }

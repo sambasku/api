@@ -63,6 +63,25 @@ describe('ResolveMapsUrlUseCase', () => {
     ).rejects.toMatchObject({ errorCode: 'MAPS_URL_NO_COORDS' });
   });
 
+  it('fallback Plus Code bila share GPS hanya place-id tanpa !3d', async () => {
+    // Hop HTTP Google berhenti di sini; URL @/!3d hanya muncul lewat JS browser.
+    const placeUrl =
+      'https://www.google.com/maps/place/F6HG%2BCFG+Sakura+Mart,+Jl.+Jembatan+Besi,+Sungai+Serabek,+Kec.+Tlk.+Keramat,+Kabupaten+Sambas,+Kalimantan+Barat+79465/data=!4m2!3m1!1s0x31e4c1ae5df10b3b:0x9339a4183049c394!18m1!1e1';
+    const fetchMock = vi.fn().mockResolvedValue(followed(placeUrl));
+    const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
+    const result = await uc.execute(
+      'https://maps.app.goo.gl/Ri3DDfXQpcGfRUhTA?g_st=ac',
+    );
+    expect(result.lat).toBeCloseTo(1.4785743, 3);
+    expect(result.lng).toBeCloseTo(109.2261941, 3);
+    // Tidak perlu Nominatim.
+    expect(
+      fetchMock.mock.calls.some((c) =>
+        String(c[0]).includes('nominatim.openstreetmap.org'),
+      ),
+    ).toBe(false);
+  });
+
   it('fallback Nominatim bila short link hanya place-id + nama', async () => {
     const placeUrl =
       'https://www.google.com/maps/place/Temajuk,+Kec.+Paloh,+Kabupaten+Sambas,+Kalimantan+Barat/data=!4m2!3m1!1s0x31e5337401887c35:0x50f63442eed2ad98';

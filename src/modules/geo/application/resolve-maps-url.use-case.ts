@@ -6,11 +6,13 @@ import {
   extractCoordsFromMapsUrl,
   extractHttpsUrl,
   extractPlaceNameFromMapsUrl,
+  extractPlusCodeFromMapsUrl,
   inSambasBounds,
   isAllowedMapsUrl,
   isShortMapsUrl,
   type MapsCoords,
 } from './parse-maps-url';
+import { coordsFromPlusCode } from './plus-code-coords';
 
 export type ResolveMapsUrlResult = {
   lat: number;
@@ -50,8 +52,17 @@ export class ResolveMapsUrlUseCase {
       coords = extractCoordsFromMapsUrl(working);
     }
 
-    // Short/place share sering hanya place-id (tanpa !3d/@). Fallback:
-    // geocode nama di path lewat Nominatim (tanpa Google Places API).
+    // Share GPS Google: 1 hop HTTP ke place-id + Plus Code (tanpa !3d/@).
+    // Browser baru JS-redirect ke URL @/!3d - server tidak dapat hop itu.
+    // Decode Plus Code offline (acuan kotak Sambas).
+    if (!coords) {
+      const plus = extractPlusCodeFromMapsUrl(working);
+      if (plus) {
+        coords = coordsFromPlusCode(plus);
+      }
+    }
+
+    // Fallback: geocode nama di path lewat Nominatim (tanpa Google Places API).
     if (!coords) {
       const placeName = extractPlaceNameFromMapsUrl(working);
       if (placeName) {
