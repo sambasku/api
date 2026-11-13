@@ -12,11 +12,15 @@ export function verifyProposedChanges(changes: ProposedChanges): {
 } {
   const errors: ValidationError[] = [];
 
+  // examples + pronunciations wajib ikut: tanpa ini change_example /
+  // change_pronunciation dianggap kosong → SUGGESTION_NO_CHANGES palsu.
   const hasContent =
     changes.wordType !== undefined ||
     changes.lemma !== undefined ||
     changes.notes !== undefined ||
     (changes.meanings?.length ?? 0) > 0 ||
+    (changes.examples?.length ?? 0) > 0 ||
+    (changes.pronunciations?.length ?? 0) > 0 ||
     (changes.categoryIdsToAdd?.length ?? 0) > 0 ||
     (changes.categoryIdsToRemove?.length ?? 0) > 0 ||
     (changes.relations?.length ?? 0) > 0 ||

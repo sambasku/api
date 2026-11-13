@@ -31,6 +31,32 @@ describe('verifyProposedChanges', () => {
     expect(r.errors[0]?.field).toBe('proposed_changes');
   });
 
+  it('menerima hanya pronunciations (change_pronunciation)', () => {
+    const r = verifyProposedChanges({
+      pronunciations: [
+        {
+          pronunciationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          action: 'update',
+          value: 'sa.dap',
+        },
+      ],
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it('menerima hanya examples (change_example)', () => {
+    const r = verifyProposedChanges({
+      examples: [
+        {
+          exampleId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          action: 'update',
+          sourceSentence: 'Ia makan nasi',
+        },
+      ],
+    });
+    expect(r.valid).toBe(true);
+  });
+
   it('menolak add tanpa translation bila definisi kosong', () => {
     const r = verifyProposedChanges({
       meanings: [{ action: 'add', definition: '' }],

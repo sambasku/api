@@ -553,7 +553,7 @@ export async function applyChangesToWord(
   if (changes.pronunciations && changes.pronunciations.length > 0) {
     for (const pc of changes.pronunciations) {
       if (pc.action !== 'update' || !pc.pronunciationId) continue;
-      const next = pc.value.trim();
+      const next = pc.value.trim().replace(/^\/+|\/+$/g, '').trim();
       if (!next) continue;
       const [row] = await db
         .select({
@@ -572,7 +572,8 @@ export async function applyChangesToWord(
         )
         .limit(1);
       if (!row) continue;
-      if (next === row.value.trim()) continue;
+      const curRaw = row.value.trim().replace(/^\/+|\/+$/g, '').trim();
+      if (next === curRaw) continue;
       try {
         await db
           .update(pronunciations)

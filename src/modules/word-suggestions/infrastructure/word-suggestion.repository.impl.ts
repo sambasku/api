@@ -267,7 +267,10 @@ async function assertProposedTargetsCurrent(wordId: string, c: ProposedChanges):
       const cur = byId.get(pc.pronunciationId);
       if (!cur) throw stale();
       if (cur.status !== 'published') throw stale();
-      if (pc.value.trim() === (cur.value ?? '').trim()) {
+      // Samakan dengan strip slash tepi di validator (data lama bisa `/ipa/`).
+      const next = pc.value.trim().replace(/^\/+|\/+$/g, '').trim();
+      const curRaw = (cur.value ?? '').trim().replace(/^\/+|\/+$/g, '').trim();
+      if (next === curRaw) {
         throw new BadRequestError('SUGGESTION_NO_CHANGES', 'Tidak ada yang berubah dari data sekarang', [
           { field: 'pronunciations', message: 'Isi masih sama dengan data sekarang' },
         ]);
