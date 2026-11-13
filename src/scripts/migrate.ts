@@ -168,11 +168,27 @@ async function ensureMigrationsTable(client: Client): Promise<void> {
  * Prod/staging drift: hash migrasi hilang di `__drizzle_migrations` padahal
  * migrasi berikutnya sudah applied (drizzle skip karena `when` / sync partial).
  * Re-apply SQL secara idempotent (batch + retry 429), lalu tandai hash.
+ *
+ * Fresh DB (CI `file:./test.db`, local kosong): JANGAN repair - biarkan
+ * migrator normal apply berurutan. Repair hanya jika last created_at sudah
+ * melewati `when` migrasi itu (drizzle tidak akan pernah apply lagi).
  */
 async function repairSkippedMigrations(client: Client): Promise<void> {
   await ensureMigrationsTable(client);
 
+  const lastMig = await client.execute(
+    `SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1`,
+  );
+  if (lastMig.rows.length === 0) return;
+
+  const lastAt = Number(
+    rowField((lastMig.rows[0] ?? {}) as never, 'created_at', 0) ?? 0,
+  );
+
   for (const { tag, when } of SKIPPED_MIGRATION_REPAIRS) {
+    // Belum lewat titik ini → migrator normal yang bertugas.
+    if (lastAt < when) continue;
+
     const sqlPath = resolve(migrationsFolder, `${tag}.sql`);
     const query = readFileSync(sqlPath, 'utf8');
     const hash = createHash('sha256').update(query).digest('hex');
