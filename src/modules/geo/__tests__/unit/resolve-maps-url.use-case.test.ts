@@ -82,6 +82,59 @@ describe('ResolveMapsUrlUseCase', () => {
     ).toBe(false);
   });
 
+  it('ambil !3d/@ dari Google tbm=map bila share GPS tanpa pin di URL', async () => {
+    const placeUrl =
+      'https://www.google.com/maps/place/Bank+BRI+ATM+-+TERAS+BRI+MATANG+SURI,+Jl.+Stadion,+Sentebang,+Jawai,+Sambas+Regency,+West+Kalimantan+79454/data=!4m2!3m1!1s0x31e49148f61ea8ff:0xd6a3bc8e7525a8fb';
+    const fetchMock = vi.fn(async (input: string | Request | URL) => {
+      const href = String(input);
+      if (href.includes('maps.app.goo.gl')) return followed(placeUrl);
+      if (href.includes('google.com/search') && href.includes('tbm=map')) {
+        return new Response(
+          '…marker @1.3181755,109.0488453 !3d1.3181755!4d109.0488453 …',
+          { status: 200 },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+    const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
+    const result = await uc.execute('https://maps.app.goo.gl/95xe3PPukVkerjw39');
+    expect(result.lat).toBeCloseTo(1.3181755);
+    expect(result.lng).toBeCloseTo(109.0488453);
+  });
+
+  it('fallback Nominatim desa bila POI tanpa !3d dan tanpa Plus Code', async () => {
+    const placeUrl =
+      'https://www.google.com/maps/place/Bank+BRI+ATM+-+TERAS+BRI+MATANG+SURI,+Jl.+Stadion,+Sentebang,+Jawai,+Sambas+Regency,+West+Kalimantan+79454/data=!4m2!3m1!1s0x31e49148f61ea8ff:0xd6a3bc8e7525a8fb';
+    const fetchMock = vi.fn(async (input: string | Request | URL) => {
+      const href = String(input);
+      if (href.includes('maps.app.goo.gl')) return followed(placeUrl);
+      if (href.includes('google.com/search') && href.includes('tbm=map')) {
+        return new Response('no coords here', { status: 200 });
+      }
+      if (href.includes('output=embed')) {
+        return new Response('no coords', { status: 200 });
+      }
+      if (href.includes('nominatim.openstreetmap.org')) {
+        const q = new URL(href).searchParams.get('q') ?? '';
+        if (q === 'Sentebang Jawai' || q === 'Sentebang') {
+          return Response.json([
+            {
+              lat: '1.3186986',
+              lon: '109.0481387',
+              display_name: 'Sentebang, Jawai, Sambas',
+            },
+          ]);
+        }
+        return Response.json([]);
+      }
+      return new Response('not found', { status: 404 });
+    });
+    const uc = new ResolveMapsUrlUseCase({ fetch: fetchMock });
+    const result = await uc.execute('https://maps.app.goo.gl/95xe3PPukVkerjw39');
+    expect(result.lat).toBeCloseTo(1.3186986);
+    expect(result.lng).toBeCloseTo(109.0481387);
+  });
+
   it('fallback Nominatim bila short link hanya place-id + nama', async () => {
     const placeUrl =
       'https://www.google.com/maps/place/Temajuk,+Kec.+Paloh,+Kabupaten+Sambas,+Kalimantan+Barat/data=!4m2!3m1!1s0x31e5337401887c35:0x50f63442eed2ad98';

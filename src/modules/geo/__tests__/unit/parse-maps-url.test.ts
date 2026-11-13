@@ -121,7 +121,7 @@ describe('buildPlaceGeocodeCandidates', () => {
       buildPlaceGeocodeCandidates(
         'Temajuk, Kec. Paloh, Kabupaten Sambas, Kalimantan Barat',
       ),
-    ).toEqual(['Temajuk', 'Temajuk Paloh Sambas']);
+    ).toEqual(['Temajuk', 'Temajuk Paloh Sambas', 'Paloh Sambas', 'Paloh']);
   });
 
   it('nama sederhana tanpa admin → satu kandidat', () => {
@@ -136,6 +136,16 @@ describe('buildPlaceGeocodeCandidates', () => {
         'F6HG+CFG Sakura Mart, Jl. Jembatan Besi, Sungai Serabek, Kec. Tlk. Keramat, Kabupaten Sambas',
       )[0],
     ).toBe('Sakura Mart');
+  });
+
+  it('share ATM tanpa Plus Code → kandidat desa/kecamatan', () => {
+    const c = buildPlaceGeocodeCandidates(
+      'Bank BRI ATM - TERAS BRI MATANG SURI, Jl. Stadion, Sentebang, Jawai, Sambas Regency, West Kalimantan 79454',
+    );
+    expect(c[0]).toBe('Bank BRI ATM - TERAS BRI MATANG SURI');
+    expect(c).toContain('TERAS BRI MATANG SURI');
+    expect(c).toContain('Sentebang Jawai');
+    expect(c).toContain('Sentebang');
   });
 });
 

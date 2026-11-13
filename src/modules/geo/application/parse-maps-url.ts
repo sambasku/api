@@ -169,9 +169,38 @@ export function extractPlusCodeFromMapsUrl(urlStr: string): string | null {
 }
 
 /**
+ * Feature id Google `0x…:0x…` dari path data=`!1s…`.
+ * Dipakai cadangan embed `?cid=` (bagian kanan = decimal cid).
+ */
+export function extractMapsFeatureId(urlStr: string): string | null {
+  let decoded = urlStr;
+  try {
+    decoded = decodeURIComponent(urlStr);
+  } catch {
+    // mentah
+  }
+  const m = /!1s(0x[0-9a-fA-F]+:0x[0-9a-fA-F]+)/.exec(decoded);
+  return m?.[1]?.toLowerCase() ?? null;
+}
+
+/** Decimal CID dari feature id `0xhex:0xhex` (bagian kanan). */
+export function mapsFeatureIdToCid(featureId: string): string | null {
+  const right = featureId.split(':')[1];
+  if (!right || !/^0x[0-9a-fA-F]+$/.test(right)) return null;
+  try {
+    return BigInt(right).toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Kandidat query Nominatim dari nama Google Maps.
  * Nama penuh Google (dengan "Kec." / "Kabupaten") sering 0 hit;
  * prioritaskan segmen pendek supaya hemat rate limit Nominatim (1 req/dtk).
+ *
+ * Share GPS tanpa !3d/Plus Code: POI jarang ada di OSM → cadangkan
+ * desa/kecamatan dari path (`…, Sentebang, Jawai, Sambas…`).
  */
 export function buildPlaceGeocodeCandidates(name: string): string[] {
   const out: string[] = [];
@@ -189,29 +218,61 @@ export function buildPlaceGeocodeCandidates(name: string): string[] {
   const stripPlus = (raw: string) =>
     raw.replace(PLUS_CODE_RE, '').replace(/\s+/g, ' ').trim();
 
+  const stripAdminPrefix = (raw: string) =>
+    raw
+      .replace(
+        /^(kec\.?|kab(?:upaten)?\.?|kota|provinsi|prov\.?)\s+/i,
+        '',
+      )
+      .trim();
+
+  const isStreet = (p: string) => /^(jl\.?|jalan|gg\.?|gang)\b/i.test(p);
+  const isNoise = (p: string) =>
+    /\b(regency|province|kalimantan|indonesia|west|east|north|south)\b/i.test(
+      p,
+    ) || /^\d{5}\b/.test(p);
+
   if (parts[0]) {
     const first = stripPlus(parts[0]);
-    if (first) push(first);
-    else push(parts[0]);
+    if (first) {
+      push(first);
+      // "Bank BRI ATM - TERAS BRI MATANG SURI" → coba bagian setelah " - "
+      const dashParts = first.split(/\s+-\s+/).map((s) => s.trim());
+      if (dashParts.length >= 2) {
+        push(dashParts[dashParts.length - 1]!);
+      }
+    } else {
+      push(parts[0]);
+    }
   }
 
   const cleaned = parts
-    .map((p) =>
-      stripPlus(p)
-        .replace(
-          /^(kec\.?|kab(?:upaten)?\.?|kota|provinsi|prov\.?)\s+/i,
-          '',
-        )
-        .trim(),
-    )
+    .map((p) => stripAdminPrefix(stripPlus(p)))
     .filter((p) => p.length >= 2);
   if (cleaned.length >= 2) push(cleaned.slice(0, 3).join(' '));
+
+  // Desa / kecamatan dari path alamat (lewati jalan + noise provinsi).
+  const localities = parts
+    .slice(1)
+    .map((p) => stripAdminPrefix(stripPlus(p)))
+    .filter(
+      (p) =>
+        p.length >= 3 &&
+        p.length <= 40 &&
+        !isStreet(p) &&
+        !isNoise(p),
+    );
+  if (localities.length >= 2) {
+    push(`${localities[0]} ${localities[1]}`);
+  }
+  if (localities[0]) push(localities[0]);
 
   // Nama tanpa label admin (mis. "Pasar Sambas") tetap dicoba utuh.
   const hasAdmin = /\b(kec\.?|kab(?:upaten)?|kota|provinsi)\b/i.test(name);
   if (!hasAdmin) push(stripPlus(name) || name);
 
-  return out;
+  // Cap 5: hemat rate limit Nominatim.
+  return out.slice(0, 5);
 }
 
 /** Buang tracking query; URL di DB tetap bersih. */
