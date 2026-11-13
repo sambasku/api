@@ -5,10 +5,13 @@ import {
   extractHttpsUrl,
   buildPlaceGeocodeCandidates,
   extractPlaceNameFromMapsUrl,
+  extractPlusCodeFromMapsUrl,
+  extractPlusCodeFromText,
   inSambasBounds,
   isAllowedMapsUrl,
   isShortMapsUrl,
 } from '../../application/parse-maps-url';
+import { coordsFromPlusCode } from '../../application/plus-code-coords';
 
 describe('extractHttpsUrl', () => {
   it('ambil URL dari teks ber-spasi/newline', () => {
@@ -118,13 +121,48 @@ describe('buildPlaceGeocodeCandidates', () => {
       buildPlaceGeocodeCandidates(
         'Temajuk, Kec. Paloh, Kabupaten Sambas, Kalimantan Barat',
       ),
-    ).toEqual(['Temajuk', 'Temajuk Paloh Sambas']);
+    ).toEqual(['Temajuk', 'Temajuk Paloh Sambas', 'Paloh Sambas', 'Paloh']);
   });
 
   it('nama sederhana tanpa admin → satu kandidat', () => {
     expect(buildPlaceGeocodeCandidates('Pasar Sambas')).toEqual([
       'Pasar Sambas',
     ]);
+  });
+
+  it('buang Plus Code di depan nama POI', () => {
+    expect(
+      buildPlaceGeocodeCandidates(
+        'F6HG+CFG Sakura Mart, Jl. Jembatan Besi, Sungai Serabek, Kec. Tlk. Keramat, Kabupaten Sambas',
+      )[0],
+    ).toBe('Sakura Mart');
+  });
+
+  it('share ATM tanpa Plus Code → kandidat desa/kecamatan', () => {
+    const c = buildPlaceGeocodeCandidates(
+      'Bank BRI ATM - TERAS BRI MATANG SURI, Jl. Stadion, Sentebang, Jawai, Sambas Regency, West Kalimantan 79454',
+    );
+    expect(c[0]).toBe('Bank BRI ATM - TERAS BRI MATANG SURI');
+    expect(c).toContain('TERAS BRI MATANG SURI');
+    expect(c).toContain('Sentebang Jawai');
+    expect(c).toContain('Sentebang');
+  });
+});
+
+describe('Plus Code dari share GPS Maps', () => {
+  it('extract F6HG+CFG dari path %2B', () => {
+    const url =
+      'https://www.google.com/maps/place/F6HG%2BCFG+Sakura+Mart,+Jl.+Jembatan+Besi,+Sungai+Serabek,+Kec.+Tlk.+Keramat,+Kabupaten+Sambas,+Kalimantan+Barat+79465/data=!4m2!3m1!1s0x31e4c1ae5df10b3b:0x9339a4183049c394';
+    expect(extractPlusCodeFromMapsUrl(url)).toBe('F6HG+CFG');
+    expect(extractPlusCodeFromText('F6HG+CFG Sakura Mart')).toBe('F6HG+CFG');
+  });
+
+  it('decode dekat pin Sakuramart (~1.6 m)', () => {
+    const coords = coordsFromPlusCode('F6HG+CFG');
+    expect(coords).not.toBeNull();
+    expect(coords!.lat).toBeCloseTo(1.4785743, 3);
+    expect(coords!.lng).toBeCloseTo(109.2261941, 3);
+    expect(inSambasBounds(coords!.lat, coords!.lng)).toBe(true);
   });
 });
 

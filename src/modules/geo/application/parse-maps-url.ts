@@ -127,6 +127,8 @@ export function extractPlaceNameFromMapsUrl(urlStr: string): string | null {
   if (!match?.[1]) return null;
   let name: string;
   try {
+    // Urutan penting: `+` di path = spasi dulu, baru decode `%2B` → `+`
+    // (Plus Code `F6HG%2BCFG` tetap utuh).
     name = decodeURIComponent(match[1].replace(/\+/g, ' '));
   } catch {
     name = match[1].replace(/\+/g, ' ');
@@ -138,10 +140,67 @@ export function extractPlaceNameFromMapsUrl(urlStr: string): string | null {
   return name;
 }
 
+/** Alfabet Open Location Code (Plus Code). */
+const PLUS_CODE_RE =
+  /\b([23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{2,3})\b/i;
+
+/**
+ * Ambil Plus Code dari teks/URL place (mis. `F6HG+CFG Sakura Mart…`).
+ * Share GPS Google sering bawa Plus Code di path tanpa `!3d`/`@`.
+ */
+export function extractPlusCodeFromText(text: string): string | null {
+  let decoded = text;
+  try {
+    decoded = decodeURIComponent(text);
+  } catch {
+    // pakai mentah
+  }
+  const m = PLUS_CODE_RE.exec(decoded);
+  return m?.[1]?.toUpperCase() ?? null;
+}
+
+export function extractPlusCodeFromMapsUrl(urlStr: string): string | null {
+  const name = extractPlaceNameFromMapsUrl(urlStr);
+  if (name) {
+    const fromName = extractPlusCodeFromText(name);
+    if (fromName) return fromName;
+  }
+  return extractPlusCodeFromText(urlStr);
+}
+
+/**
+ * Feature id Google `0x…:0x…` dari path data=`!1s…`.
+ * Dipakai cadangan embed `?cid=` (bagian kanan = decimal cid).
+ */
+export function extractMapsFeatureId(urlStr: string): string | null {
+  let decoded = urlStr;
+  try {
+    decoded = decodeURIComponent(urlStr);
+  } catch {
+    // mentah
+  }
+  const m = /!1s(0x[0-9a-fA-F]+:0x[0-9a-fA-F]+)/.exec(decoded);
+  return m?.[1]?.toLowerCase() ?? null;
+}
+
+/** Decimal CID dari feature id `0xhex:0xhex` (bagian kanan). */
+export function mapsFeatureIdToCid(featureId: string): string | null {
+  const right = featureId.split(':')[1];
+  if (!right || !/^0x[0-9a-fA-F]+$/.test(right)) return null;
+  try {
+    return BigInt(right).toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Kandidat query Nominatim dari nama Google Maps.
  * Nama penuh Google (dengan "Kec." / "Kabupaten") sering 0 hit;
  * prioritaskan segmen pendek supaya hemat rate limit Nominatim (1 req/dtk).
+ *
+ * Share GPS tanpa !3d/Plus Code: POI jarang ada di OSM → cadangkan
+ * desa/kecamatan dari path (`…, Sentebang, Jawai, Sambas…`).
  */
 export function buildPlaceGeocodeCandidates(name: string): string[] {
   const out: string[] = [];
@@ -154,25 +213,66 @@ export function buildPlaceGeocodeCandidates(name: string): string[] {
     .split(',')
     .map((p) => p.trim())
     .filter(Boolean);
-  if (parts[0]) push(parts[0]);
+
+  // Buang Plus Code di depan segmen ("F6HG+CFG Sakura Mart" → "Sakura Mart").
+  const stripPlus = (raw: string) =>
+    raw.replace(PLUS_CODE_RE, '').replace(/\s+/g, ' ').trim();
+
+  const stripAdminPrefix = (raw: string) =>
+    raw
+      .replace(
+        /^(kec\.?|kab(?:upaten)?\.?|kota|provinsi|prov\.?)\s+/i,
+        '',
+      )
+      .trim();
+
+  const isStreet = (p: string) => /^(jl\.?|jalan|gg\.?|gang)\b/i.test(p);
+  const isNoise = (p: string) =>
+    /\b(regency|province|kalimantan|indonesia|west|east|north|south)\b/i.test(
+      p,
+    ) || /^\d{5}\b/.test(p);
+
+  if (parts[0]) {
+    const first = stripPlus(parts[0]);
+    if (first) {
+      push(first);
+      // "Bank BRI ATM - TERAS BRI MATANG SURI" → coba bagian setelah " - "
+      const dashParts = first.split(/\s+-\s+/).map((s) => s.trim());
+      if (dashParts.length >= 2) {
+        push(dashParts[dashParts.length - 1]!);
+      }
+    } else {
+      push(parts[0]);
+    }
+  }
 
   const cleaned = parts
-    .map((p) =>
-      p
-        .replace(
-          /^(kec\.?|kab(?:upaten)?\.?|kota|provinsi|prov\.?)\s+/i,
-          '',
-        )
-        .trim(),
-    )
+    .map((p) => stripAdminPrefix(stripPlus(p)))
     .filter((p) => p.length >= 2);
   if (cleaned.length >= 2) push(cleaned.slice(0, 3).join(' '));
 
+  // Desa / kecamatan dari path alamat (lewati jalan + noise provinsi).
+  const localities = parts
+    .slice(1)
+    .map((p) => stripAdminPrefix(stripPlus(p)))
+    .filter(
+      (p) =>
+        p.length >= 3 &&
+        p.length <= 40 &&
+        !isStreet(p) &&
+        !isNoise(p),
+    );
+  if (localities.length >= 2) {
+    push(`${localities[0]} ${localities[1]}`);
+  }
+  if (localities[0]) push(localities[0]);
+
   // Nama tanpa label admin (mis. "Pasar Sambas") tetap dicoba utuh.
   const hasAdmin = /\b(kec\.?|kab(?:upaten)?|kota|provinsi)\b/i.test(name);
-  if (!hasAdmin) push(name);
+  if (!hasAdmin) push(stripPlus(name) || name);
 
-  return out;
+  // Cap 5: hemat rate limit Nominatim.
+  return out.slice(0, 5);
 }
 
 /** Buang tracking query; URL di DB tetap bersih. */

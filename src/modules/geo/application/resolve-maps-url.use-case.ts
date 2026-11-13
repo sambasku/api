@@ -5,12 +5,16 @@ import {
   cleanCanonicalMapsUrl,
   extractCoordsFromMapsUrl,
   extractHttpsUrl,
+  extractMapsFeatureId,
   extractPlaceNameFromMapsUrl,
+  extractPlusCodeFromMapsUrl,
   inSambasBounds,
   isAllowedMapsUrl,
   isShortMapsUrl,
+  mapsFeatureIdToCid,
   type MapsCoords,
 } from './parse-maps-url';
+import { coordsFromPlusCode } from './plus-code-coords';
 
 export type ResolveMapsUrlResult = {
   lat: number;
@@ -30,8 +34,8 @@ export type ResolveMapsUrlDeps = {
 const NOMINATIM_UA = 'SambasKu/1.0 (maps-url-resolve; https://sambasku.com)';
 
 /**
- * Browser UA untuk fetch Google Maps.
- * Bot UA sering dapat halaman berbeda / tanpa redirect place yang berguna.
+ * Browser UA untuk fetch Google (expand + tbm=map).
+ * Bot UA sering dapat halaman tanpa `@`/`!3d`.
  */
 const MAPS_FETCH_UA =
   'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
@@ -61,8 +65,22 @@ export class ResolveMapsUrlUseCase {
         (expanded.html ? extractCoordsFromMapsUrl(expanded.html) : null);
     }
 
-    // Short/place share sering hanya place-id (tanpa !3d/@). Fallback:
-    // geocode nama di path lewat Nominatim (tanpa Google Places API).
+    // Share GPS Google: 1 hop HTTP ke place-id (tanpa !3d/@ di Location).
+    // Browser JS baru menulis !3d ke address bar - fetch biasa tidak ikut.
+    // 1) Plus Code di path (offline)
+    // 2) Google search tbm=map / embed cid → body sering punya @lat,lng / !3d
+    // 3) Nominatim nama/desa
+    if (!coords) {
+      const plus = extractPlusCodeFromMapsUrl(working);
+      if (plus) {
+        coords = coordsFromPlusCode(plus);
+      }
+    }
+
+    if (!coords) {
+      coords = await this.lookupGoogleMapsPin(working);
+    }
+
     if (!coords) {
       const placeName = extractPlaceNameFromMapsUrl(working);
       if (placeName) {
@@ -147,6 +165,84 @@ export class ResolveMapsUrlUseCase {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
     return { lat, lng };
+  }
+
+  /**
+   * Ambil pin exact yang browser tulis sebagai !3d/@ setelah JS.
+   * Fetch `search?tbm=map&q=nama` (atau embed cid) - body sering memuat @lat,lng.
+   */
+  private async lookupGoogleMapsPin(
+    workingUrl: string,
+  ): Promise<MapsCoords | null> {
+    const placeName = extractPlaceNameFromMapsUrl(workingUrl);
+    if (placeName) {
+      const fromSearch = await this.fetchMapsSearchCoords(placeName);
+      if (fromSearch) return fromSearch;
+    }
+
+    const featureId = extractMapsFeatureId(workingUrl);
+    const cid = featureId ? mapsFeatureIdToCid(featureId) : null;
+    if (cid) {
+      const fromEmbed = await this.fetchMapsEmbedCoords(cid);
+      if (fromEmbed) return fromEmbed;
+    }
+    return null;
+  }
+
+  private async fetchMapsSearchCoords(
+    placeName: string,
+  ): Promise<MapsCoords | null> {
+    const url = new URL('https://www.google.com/search');
+    url.searchParams.set('tbm', 'map');
+    url.searchParams.set('hl', 'id');
+    url.searchParams.set('q', placeName.slice(0, 160));
+
+    const html = await this.fetchText(url.toString());
+    if (!html) return null;
+    return extractCoordsFromMapsUrl(html);
+  }
+
+  private async fetchMapsEmbedCoords(cid: string): Promise<MapsCoords | null> {
+    const html = await this.fetchText(
+      `https://www.google.com/maps?cid=${cid}&output=embed`,
+    );
+    if (!html) return null;
+    const fromUrl = extractCoordsFromMapsUrl(html);
+    if (fromUrl) return fromUrl;
+    // Embed pb sering: [zoom,lng,lat]
+    const m =
+      /\[(?:[0-9.]+),(-?\d+\.\d+),(-?\d+\.\d+)\]/.exec(html) ??
+      null;
+    if (!m) return null;
+    const lng = Number(m[1]);
+    const lat = Number(m[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+  }
+
+  private async fetchText(url: string): Promise<string | null> {
+    const timeoutMs = this.deps.timeoutMs ?? 5000;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const res = await this.deps.fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: ac.signal,
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'Accept-Language': 'id,en;q=0.8',
+          'User-Agent': MAPS_FETCH_UA,
+        },
+      });
+      if (!res.ok) return null;
+      return await res.text();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
