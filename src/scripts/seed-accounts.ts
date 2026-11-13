@@ -9,13 +9,15 @@ import { resolve } from 'node:path';
 
 /**
  * Akun login default - domain @sambasku.com (lihat api-base-stack.md).
- * Default: upsert menimpa password (DEFAULT_SEED_PASSWORD untuk lokal).
+ * Login by email. Username harus lolos guard handle 6-30 (migration 0122):
+ * `admin`/`root` kependekan → `admin_user`/`root_user` (selaras backfill migrate).
+ * Default: upsert by email menimpa password (DEFAULT_SEED_PASSWORD untuk lokal).
  * SEED_ACCOUNTS_PASSWORD: override (wajib di production via GitHub secret).
- * SEED_ACCOUNTS_INSERT_ONLY=1: insert saja, skip jika username sudah ada.
+ * SEED_ACCOUNTS_INSERT_ONLY=1: insert saja, skip jika email sudah ada.
  */
 const SEED_USERS = [
-  { username: 'admin', email: 'admin@sambasku.com', roles: ['admin'] },
-  { username: 'root', email: 'root@sambasku.com', roles: ['root'] },
+  { username: 'admin_user', email: 'admin@sambasku.com', roles: ['admin'] },
+  { username: 'root_user', email: 'root@sambasku.com', roles: ['root'] },
   { username: 'contributor', email: 'contributor@sambasku.com', roles: ['contributor'] },
   { username: 'reviewer', email: 'reviewer@sambasku.com', roles: ['reviewer'] },
 ] as const;
@@ -23,7 +25,7 @@ const SEED_USERS = [
 /** Fallback lokal saja. Production/staging CI harus set SEED_ACCOUNTS_PASSWORD. */
 const DEFAULT_SEED_PASSWORD = 'pass1234';
 
-/** Seed akun default. Default upsert by username; insert-only jika SEED_ACCOUNTS_INSERT_ONLY=1. */
+/** Seed akun default. Default upsert by email; insert-only jika SEED_ACCOUNTS_INSERT_ONLY=1. */
 export async function seedAccounts(): Promise<void> {
   const insertOnly = process.env.SEED_ACCOUNTS_INSERT_ONLY === '1';
   const seedPassword = process.env.SEED_ACCOUNTS_PASSWORD?.trim() || DEFAULT_SEED_PASSWORD;
@@ -31,13 +33,18 @@ export async function seedAccounts(): Promise<void> {
   const passwordHash = await hasher.hash(seedPassword);
 
   for (const user of SEED_USERS) {
-    const { roles, ...values } = { ...user, passwordHash, emailVerified: true, displayName: user.username };
+    const { roles, ...values } = {
+      ...user,
+      passwordHash,
+      emailVerified: true,
+      displayName: user.username,
+    };
 
     if (insertOnly) {
       const result = await db
         .insert(users)
         .values(values)
-        .onConflictDoNothing({ target: users.username })
+        .onConflictDoNothing({ target: users.email })
         .returning({ id: users.id });
       const inserted = result.length > 0;
       if (inserted) {
@@ -52,13 +59,15 @@ export async function seedAccounts(): Promise<void> {
       continue;
     }
 
+    // Upsert by email (stabil). Set username juga supaya baris legacy
+    // `admin`/`root` (pre-0122) ikut rename tanpa kena trigger abort.
     const [row] = await db
       .insert(users)
       .values(values)
       .onConflictDoUpdate({
-        target: users.username,
+        target: users.email,
         set: {
-          email: user.email,
+          username: user.username,
           passwordHash,
           emailVerified: true,
           updatedAt: new Date(),
