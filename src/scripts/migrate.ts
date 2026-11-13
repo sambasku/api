@@ -34,6 +34,19 @@ const migrationsFolder = resolve(
 /** Harus sama dengan `when` di meta/_journal.json untuk tag 0026_user-last-seen. */
 const MIGRATION_0026_WHEN = 1_792_600_000_000;
 
+/**
+ * Migrasi yang pernah ter-skip di prod (hash absen di `__drizzle_migrations`
+ * sementara migrasi berikutnya sudah applied). Re-apply idempotent + tandai hash.
+ * `when` harus sama dengan meta/_journal.json.
+ */
+const SKIPPED_MIGRATION_REPAIRS: ReadonlyArray<{ tag: string; when: number }> = [
+  { tag: '0027_username-handle-slug', when: 1_792_700_000_000 },
+  // when diperbaiki ke antara 0062 dan 0064 (dulu 1791347785661 → skip selamanya)
+  { tag: '0063_category_suggestions', when: 1_799_946_450_000 },
+  { tag: '0072_places_seed', when: 1_800_246_900_000 },
+  { tag: '0123_layanan', when: 1_801_621_010_000 },
+];
+
 function fail(message: string, err?: unknown): never {
   console.error(`[db:migrate] ${message}`);
   if (err !== undefined) {
@@ -99,6 +112,97 @@ async function repairLastSeenDrift(client: Client): Promise<void> {
   console.log(
     '[db:migrate] repair: 0026_user-last-seen ditandai applied (last_seen_at sudah ada)',
   );
+}
+
+/** Buat DDL aman diulang (CREATE TABLE/INDEX → IF NOT EXISTS). */
+function toIdempotentSql(statement: string): string {
+  let sql = statement.trim();
+  if (!sql) return sql;
+  sql = sql.replace(/^CREATE\s+TABLE\s+`/i, 'CREATE TABLE IF NOT EXISTS `');
+  sql = sql.replace(/^CREATE\s+UNIQUE\s+INDEX\s+`/i, 'CREATE UNIQUE INDEX IF NOT EXISTS `');
+  sql = sql.replace(/^CREATE\s+INDEX\s+`/i, 'CREATE INDEX IF NOT EXISTS `');
+  return sql;
+}
+
+function httpStatusOf(err: unknown): number | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  if ('cause' in err && err.cause && typeof err.cause === 'object' && 'status' in err.cause) {
+    return Number((err.cause as { status?: number }).status);
+  }
+  return undefined;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Retry singkat untuk 429 dari sqld/Turso. */
+async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 6): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const status = httpStatusOf(err);
+      if (status !== 429 || i === attempts - 1) throw err;
+      const waitMs = 1000 * (i + 1);
+      console.warn(`[db:migrate] 429 on ${label}, retry ${i + 1}/${attempts} in ${waitMs}ms`);
+      await sleep(waitMs);
+    }
+  }
+  throw lastErr;
+}
+
+async function ensureMigrationsTable(client: Client): Promise<void> {
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hash text NOT NULL,
+      created_at numeric
+    )
+  `);
+}
+
+/**
+ * Prod/staging drift: hash migrasi hilang di `__drizzle_migrations` padahal
+ * migrasi berikutnya sudah applied (drizzle skip karena `when` / sync partial).
+ * Re-apply SQL secara idempotent (batch + retry 429), lalu tandai hash.
+ */
+async function repairSkippedMigrations(client: Client): Promise<void> {
+  await ensureMigrationsTable(client);
+
+  for (const { tag, when } of SKIPPED_MIGRATION_REPAIRS) {
+    const sqlPath = resolve(migrationsFolder, `${tag}.sql`);
+    const query = readFileSync(sqlPath, 'utf8');
+    const hash = createHash('sha256').update(query).digest('hex');
+    const existing = await withRetry(`${tag}:hash-check`, () =>
+      client.execute({
+        sql: `SELECT 1 AS ok FROM __drizzle_migrations WHERE hash = ? LIMIT 1`,
+        args: [hash],
+      }),
+    );
+    if (existing.rows.length > 0) continue;
+
+    const stmts = query
+      .split(/-->\s*statement-breakpoint/)
+      .map(toIdempotentSql)
+      .filter(Boolean);
+    // Batch per 25: seed besar (0072) tidak membanjiri HTTP satu per satu.
+    const chunkSize = 25;
+    for (let i = 0; i < stmts.length; i += chunkSize) {
+      const chunk = stmts.slice(i, i + chunkSize);
+      await withRetry(`${tag}:batch-${i}`, () => client.batch(chunk, 'write'));
+      if (i + chunkSize < stmts.length) await sleep(200);
+    }
+    await withRetry(`${tag}:mark`, () =>
+      client.execute({
+        sql: `INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)`,
+        args: [hash, when],
+      }),
+    );
+    console.log(`[db:migrate] repair: ${tag} applied + ditandai`);
+  }
 }
 
 /** Live check: username sudah dipakai user lain (bukan baris yang di-backfill). */
@@ -235,6 +339,7 @@ const db = drizzle(client, { schema });
 
 try {
   await repairLastSeenDrift(client);
+  await repairSkippedMigrations(client);
   // Backfill HARUS sebelum migrate: trigger 0091 menolak UPDATE username
   // legacy (kapital/spasi), jadi normalisasi harus lebih dulu. Di DB fresh
   // tabel `users` belum ada → query error → catch → skip (aman, idempotent).
@@ -245,10 +350,16 @@ try {
   await backfillUsernameHandles(client);
   // Setelah kolom dedupe_key ada. Idempotent: jalan lagi saat deploy
   // berikutnya tidak menulis ulang kelompok yang sudah digabung.
-  const merged = await applySafeMeaningMerges(db);
-  console.log(
-    `[db:migrate] makna duplikat: ${merged.groups} kelompok, ${merged.closedSuggestions} usulan ditutup`,
-  );
+  // Soft-fail: 429/timeout di merge tidak boleh menggagalkan migrate
+  // setelah schema sudah seragam.
+  try {
+    const merged = await applySafeMeaningMerges(db);
+    console.log(
+      `[db:migrate] makna duplikat: ${merged.groups} kelompok, ${merged.closedSuggestions} usulan ditutup`,
+    );
+  } catch (mergeErr) {
+    console.error('[db:migrate] meaning merge dilewati (non-fatal):', mergeErr);
+  }
   console.log('[db:migrate] OK - migrations applied');
 } catch (err) {
   fail('Migrate gagal', err);
