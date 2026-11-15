@@ -202,7 +202,15 @@ export interface VoteDeckMeaning {
   isVerified: boolean;
   /** COALESCE(words.verified_at, words.created_at) */
   approvedAt: Date;
-  /** Definisi makna ini; fallback ke terjemahan pertama bila kosong. */
+  /**
+   * Definisi makna ini (`is_have_definition` true, bukan placeholder);
+   * null bila belum diisi. Dikirim terpisah supaya kartu bisa menampilkan
+   * terjemahan dan definisi sebagai dua baris.
+   */
+  definition: string | null;
+  /** Terjemahan pertama makna ini (`translation_text` peringkat awal). */
+  translation: string | null;
+  /** `definition ?? translation` - kompat klien lama yang hanya baca `sense`. */
   sense: string | null;
   /** Posisi 1-based antar makna published kata ini - konteks "makna ke-N". */
   orderIndex: number;

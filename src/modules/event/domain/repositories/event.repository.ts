@@ -1,11 +1,13 @@
 import type {
-  EventCategoryRef,
-  EventComment,
-  EventListItem,
-  EventPlaceRef,
-  EventSourceType,
-  EventStatus,
-  EventVillageRef,
+EventCategoryRef,
+EventComment,
+EventImage,
+EventImageAttribution,
+EventListItem,
+EventPlaceRef,
+EventSourceType,
+EventStatus,
+EventVillageRef,
 } from "../entities/event.entity";
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 
@@ -144,4 +146,25 @@ export interface EventRepository {
   takedownComment(id: string, actorId: string): Promise<boolean>;
   /** Cek event masih published (dipakai use case sebelum create comment). */
   eventTargetExists(id: string): Promise<boolean>;
+
+  // --- galeri foto acara ---
+  /** Halaman foto (offset-based, hidden_at IS NULL). */
+  listImages(
+    eventId: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ items: EventImage[]; total: number }>;
+  /** Append foto (batch). `attributionJson` diisi service. */
+  appendImages(
+    eventId: string,
+    images: { url: string; attribution: EventImageAttribution | null }[],
+  ): Promise<void>;
+  /** Jumlah unggahan user untuk event ini sejak `since` (rate limit). */
+  countUploadsSince(
+    eventId: string,
+    authorId: string,
+    since: Date,
+  ): Promise<number>;
+  /** Soft-hide foto (takedown admin). Null = tidak ada. */
+  hideImage(eventId: string, imageId: string): Promise<{ url: string } | null>;
 }

@@ -17,6 +17,7 @@ import type { RestoreWordUseCase } from '../../application/use-cases/restore-wor
 import type { AddPronunciationUseCase } from '../../application/use-cases/add-pronunciation.use-case';
 import type { AddWordImageUseCase } from '../../application/use-cases/add-word-image.use-case';
 import type { AddExampleUseCase } from '../../application/use-cases/add-example.use-case';
+import type { UpdateExampleUseCase } from '../../application/use-cases/update-example.use-case';
 import type { AddMeaningUseCase } from '../../application/use-cases/add-meaning.use-case';
 import type { ImportWordsUseCase } from '../../application/use-cases/import-words.use-case';
 import type { BatchContributeWordsUseCase } from '../../application/use-cases/batch-contribute-words.use-case';
@@ -53,6 +54,7 @@ import type {
   AddMeaningBody,
   AddPronunciationBody,
   AddWordImageBody,
+  UpdateExampleBody,
 } from './validators/word-media.validator';
 import { toCreateWordDto, toUpdateWordDto } from './map-create-word';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
@@ -107,6 +109,7 @@ export class WordController {
       addPronunciation: AddPronunciationUseCase;
       addWordImage: AddWordImageUseCase;
       addExample: AddExampleUseCase;
+      updateExample: UpdateExampleUseCase;
       addMeaning: AddMeaningUseCase;
       importWords: ImportWordsUseCase;
       batchContributeWords: BatchContributeWordsUseCase;
@@ -1164,6 +1167,94 @@ export class WordController {
     );
   }
 
+  /** GET /api/v1/examples/:exampleId - #244 prefill edit contoh milik sendiri */
+  async getMyExample(c: Context, exampleId: string) {
+    const media = await this.withActor(c, (actor) => this.deps.updateExample.getMine(exampleId, actor));
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          id: media.id,
+          meaning_id: media.meaningId,
+          source_language_id: media.sourceLanguageId,
+          source_sentence: media.sourceSentence,
+          target_language_id: media.targetLanguageId,
+          target_sentence: media.targetSentence,
+          source_type: media.sourceType,
+          notes: media.notes,
+          status: media.status,
+          is_verified: media.isVerified,
+          is_corrected: media.isCorrected,
+        },
+      },
+      200,
+    );
+  }
+
+  /** GET /api/v1/words/:wordId/my-pending-examples - #244 daftar contoh pending milik user untuk kata ini */
+  async getMyPendingExamplesForWord(c: Context, wordId: string) {
+    const list = await this.withActor(c, (actor) =>
+      this.deps.updateExample.listMineForWord(wordId, actor),
+    );
+    return c.json(
+      {
+        success: true as const,
+        data: list.map((media) => ({
+          id: media.id,
+          meaning_id: media.meaningId,
+          source_language_id: media.sourceLanguageId,
+          source_sentence: media.sourceSentence,
+          target_language_id: media.targetLanguageId,
+          target_sentence: media.targetSentence,
+          source_type: media.sourceType,
+          notes: media.notes,
+          status: media.status,
+          is_verified: media.isVerified,
+          is_corrected: media.isCorrected,
+        })),
+      },
+      200,
+    );
+  }
+
+  /** PATCH /api/v1/examples/:exampleId - #244 edit contoh pending milik sendiri */
+  async updateExample(c: Context, exampleId: string, body: UpdateExampleBody) {
+    const result = await this.withActor(c, (actor) =>
+      this.deps.updateExample.execute(
+        exampleId,
+        {
+          sourceSentence: body.source_sentence,
+          targetSentence: body.target_sentence ?? undefined,
+          sourceType: body.source_type,
+          notes: body.notes,
+        },
+        actor,
+      ),
+    );
+    if (result.outcome === 'no_changes') {
+      return c.json({ success: true as const, data: { id: exampleId, no_changes: true } });
+    }
+    const media = result.media;
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          id: media.id,
+          meaning_id: media.meaningId,
+          source_language_id: media.sourceLanguageId,
+          source_sentence: media.sourceSentence,
+          target_language_id: media.targetLanguageId,
+          target_sentence: media.targetSentence,
+          source_type: media.sourceType,
+          notes: media.notes,
+          status: media.status,
+          is_verified: media.isVerified,
+          is_corrected: media.isCorrected,
+        },
+      },
+      200,
+    );
+  }
   /** POST /api/v1/words/:wordId/meanings - kontribusi definisi (17-api) */
   async addMeaning(c: Context, wordId: string, body: AddMeaningBody) {
     const media = await this.withActor(c, (actor) =>

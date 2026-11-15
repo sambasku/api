@@ -103,6 +103,63 @@ export function createPublicEventRoutes(deps: {
     getRoute,
     (c) => deps.controller.getBySlug(c, c.req.param("slug")) as never,
   );
+
+  // ---------------------------------------------------------------- galeri foto
+  const imagesListRoute = createRoute({
+    method: "get",
+    path: "/:slug/images",
+    tags: ["Events"],
+    summary: "Galeri foto acara, 12 per halaman",
+    request: {
+      params: slugParam,
+      query: z.object({ offset: z.coerce.number().int().min(0).default(0) }),
+    },
+    responses: {
+      200: {
+        description: "Halaman foto",
+        content: json(
+          z.object({ success: z.literal(true) }).passthrough(),
+        ),
+      },
+      404: { description: "Acara tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(imagesListRoute, (c) =>
+    deps.controller.listImages(c) as never,
+  );
+
+  return routes;
+}
+export function createUserEventImageRoutes(deps: {
+  controller: EventController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}) {
+  const routes = createOpenApiApp();
+  routes.use("*", rateLimit({ points: 30, duration: 60 }));
+  routes.use("*", deps.authenticate);
+  const appendRoute = createRoute({
+    method: "post",
+    path: "/:slug/images",
+    tags: ["Events"],
+    summary: "Tambah foto ke acara terbit (login, max 4 per submit)",
+    request: {
+      params: slugParam,
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({ urls: z.array(z.string().url()).min(1).max(4) }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: { description: "Foto ditambahkan", content: json(okNullResponseSchema) },
+      400: { description: "Batas foto", content: json(errorResponseSchema) },
+      401: { description: "Tidak terautentikasi", content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(appendRoute, (c) => deps.controller.appendImages(c) as never);
   return routes;
 }
 
@@ -258,6 +315,23 @@ export function createAdminEventRoutes(deps: {
   routes.openapi(
     deleteRoute,
     (c) => deps.controller.remove(c, c.req.param("id")) as never,
+  );
+
+  // Galeri foto acara (admin: takedown).
+  const hideImageRoute = createRoute({
+    method: "delete",
+    path: "/:id/images/:imageId",
+    tags: ["Admin Events"],
+    summary: "Takedown foto acara (admin)",
+    request: { params: z.object({ id: z.string().min(1).max(64), imageId: z.string().min(1).max(64) }) },
+    responses: {
+      200: { description: "Takedown", content: json(okNullResponseSchema) },
+      404: { description: "Acara/foto tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(hideImageRoute, (c) =>
+    deps.controller.hideImage(c) as never,
   );
   return routes;
 }

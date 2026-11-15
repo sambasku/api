@@ -1423,6 +1423,8 @@ if (articleCommentIds.length > 0) {
         : null,
       pronunciationValue: r.pronunciationValue?.trim() || null,
       hasAudio: r.hasAudio === 1,
+      definition: null,
+      translation: null,
       sense: null,
       lemma: r.lemma,
       languageId: r.languageId,
@@ -1440,48 +1442,46 @@ if (articleCommentIds.length > 0) {
     }));
 
     // Sense kartu: definisi makna ITU dari row utama (tanpa query tambahan).
-    const needTranslation: string[] = [];
     const byId = new Map(page.map((p) => [p.id, p]));
     for (const r of pageRows) {
       const item = byId.get(r.id);
       if (!item) continue;
       const definition = r.definition.trim();
-      if (r.isHaveDefinition && definition.length > 0 && definition !== '-') {
-        item.sense = definition;
-      } else {
-        needTranslation.push(r.id);
-      }
+      item.definition =
+        r.isHaveDefinition && !isPlaceholderMeaningText(definition) ? definition : null;
     }
 
-    // Fallback terjemahan pertama (semantik listLatest) - hanya makna tanpa
-    // definisi. Query tambahan bersyarat; deck dengan definisi lengkap
-    // tidak membayarnya.
-    if (needTranslation.length > 0) {
-      const translationRows = await this.db
-        .select({
-          meaningId: meaningTranslations.meaningId,
-          translationText: meaningTranslations.translationText,
-        })
-        .from(meaningTranslations)
-        .where(
-          and(
-            inArray(meaningTranslations.meaningId, needTranslation),
-            isNull(meaningTranslations.deletedAt),
-            ne(meaningTranslations.translationText, '-'),
+    // Terjemahan makna (untuk baris terpisah di kartu). Satu query batch
+    // untuk seluruh halaman - tetap dalam budget 3 subrequest.
+    const translationRows = await this.db
+      .select({
+        meaningId: meaningTranslations.meaningId,
+        translationText: meaningTranslations.translationText,
+      })
+      .from(meaningTranslations)
+      .where(
+        and(
+          inArray(
+            meaningTranslations.meaningId,
+            page.map((p) => p.id),
           ),
-        )
-        .orderBy(asc(meaningTranslations.id));
+          isNull(meaningTranslations.deletedAt),
+          ne(meaningTranslations.translationText, '-'),
+        ),
+      )
+      .orderBy(asc(meaningTranslations.id));
 
-      const textByMeaning = new Map<string, string>();
-      for (const row of translationRows) {
-        const text = row.translationText.trim();
-        if (!text || textByMeaning.has(row.meaningId)) continue;
-        textByMeaning.set(row.meaningId, text);
-      }
-      for (const id of needTranslation) {
-        const item = byId.get(id)!;
-        item.sense = textByMeaning.get(id) ?? null;
-      }
+    const textByMeaning = new Map<string, string>();
+    for (const row of translationRows) {
+      const text = row.translationText.trim();
+      if (!text || textByMeaning.has(row.meaningId)) continue;
+      textByMeaning.set(row.meaningId, text);
+    }
+    for (const item of page) {
+      const translation = textByMeaning.get(item.id) ?? null;
+      item.translation = translation;
+      // Kompat klien lama: sense = definisi, fallback terjemahan.
+      item.sense = item.definition ?? translation;
     }
 
     await this.attachDeckCounts(page);

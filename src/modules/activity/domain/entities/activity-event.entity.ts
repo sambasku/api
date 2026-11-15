@@ -16,6 +16,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'contribution_example',
   'place_photo_added',
   'usaha_photo_added',
+  'event_photo_added',
   'comment_created',
   'vote_word',
   'vote_comment',
@@ -101,6 +102,7 @@ export function wireKind(kind: ActivityEventKind): string {
 case 'event_published':
 case 'event_going':
 case 'event_comment_created':
+case 'event_photo_added':
 return 'event';
   case 'pantun_created':
   case 'pantun_reply_created':

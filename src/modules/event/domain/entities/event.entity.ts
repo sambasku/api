@@ -52,12 +52,15 @@ export interface Event {
   cancelledAt: Date | null;
   publishedAt: Date | null;
   authorId: string | null;
-  /** Pengusul live; diisi di path detail. List boleh null. */
-  author: EventAuthorRef | null;
-  /** Id-nama tempat wisata terkait (dipaket dari JOIN). */
-  places: EventPlaceRef[];
-  createdAt: Date;
-  updatedAt: Date | null;
+/** Pengusul live; diisi di path detail. List boleh null. */
+author: EventAuthorRef | null;
+/** Id-nama tempat wisata terkait (dipaket dari JOIN). */
+places: EventPlaceRef[];
+/** Galeri foto acara (user-generated, pola place_images #187). Hanya
+ * diisi di path detail (3 foto pratinjau); list kosong. */
+images: EventImage[];
+createdAt: Date;
+updatedAt: Date | null;
 }
 
 export interface EventAuthorRef {
@@ -71,6 +74,20 @@ export interface EventPlaceRef {
   slug: string;
   name: string;
   category: string | null;
+}
+
+/** Kredit foto galeri acara (pola PlaceImageAttribution). */
+export interface EventImageAttribution {
+  name: string;
+  provider?: string;
+  authorId?: string | null;
+}
+
+/** Satu foto galeri acara (user-generated, pola place_images #187). */
+export interface EventImage {
+  id: string;
+  url: string;
+  attribution: EventImageAttribution | null;
 }
 
 /** Nama kategori + village/desa yang ikut dipaketkan untuk display. */

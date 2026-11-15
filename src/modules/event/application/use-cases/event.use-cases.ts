@@ -1,9 +1,12 @@
 import {
-  BadRequestError,
-  ConflictError,
-  NotFoundError,
+BadRequestError,
+ConflictError,
+NotFoundError,
+RateLimitedError,
+UnauthorizedError,
 } from "@/shared/errors/app-error";
 import type { RegionRepository } from "@/modules/region/domain/repositories/region.repository";
+import type { UserRepository } from "@/modules/auth/domain/repositories/user.repository";
 import type { RecordActivityEventUseCase } from "@/modules/activity/application/use-cases/record-activity-event.use-case";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import type {
@@ -266,5 +269,132 @@ export class ListEventCategoriesUseCase {
 
   execute(publicOnly = true): Promise<EventCategoryRef[]> {
     return this.repo.listCategories(publicOnly);
+  }
+}
+
+/** Galeri 12 foto per halaman (pola GALLERY_PAGE place). */
+const GALLERY_PAGE = 12;
+/** Batas total foto per acara. */
+const PHOTO_CAP = 100;
+/** Batas unggahan per user per acara per 24 jam. */
+const PHOTO_DAILY = 5;
+/** Batas foto per satu kali submit (permintaan fitur). */
+const PHOTO_PER_SUBMIT = 4;
+
+export class ListEventImagesUseCase {
+  constructor(private readonly repo: EventRepository) {}
+
+  async execute(slug: string, offset: number) {
+    const event = await this.repo.findBySlug(slug, { publicOnly: true });
+    if (!event) {
+      throw new NotFoundError("EVENT_NOT_FOUND", "Acara tidak ditemukan");
+    }
+    const page = await this.repo.listImages(event.id, offset, GALLERY_PAGE);
+    const next =
+      offset + page.items.length < page.total
+        ? offset + page.items.length
+        : null;
+    return { items: page.items, total: page.total, nextOffset: next };
+  }
+}
+
+export class AppendEventImagesUseCase {
+  constructor(
+    private readonly repo: EventRepository,
+    private readonly users: UserRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
+  ) {}
+
+  async execute(slug: string, authorId: string, urls: string[]): Promise<void> {
+    // Foto acara tayang publik + masuk feed -> wajib akun.
+    if (authorId === ANONIM_USER_ID) {
+      throw new UnauthorizedError(
+        "UNAUTHORIZED",
+        "Masuk dulu untuk menambah foto acara",
+      );
+    }
+    if (urls.length > PHOTO_PER_SUBMIT) {
+      throw new BadRequestError(
+        "PHOTO_LIMIT",
+        `Maksimal ${PHOTO_PER_SUBMIT} foto per kiriman`,
+      );
+    }
+    const event = await this.repo.findBySlug(slug, { publicOnly: true });
+    if (!event || event.status !== "published") {
+      throw new NotFoundError("EVENT_NOT_FOUND", "Acara tidak ditemukan");
+    }
+    for (const url of urls) assertOurEventImage(url);
+
+    const total = (await this.repo.listImages(event.id, 0, 1)).total;
+    if (total + urls.length > PHOTO_CAP) {
+      throw new BadRequestError(
+        "PHOTO_CAP",
+        "Foto acara ini sudah penuh (100)",
+      );
+    }
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const today = await this.repo.countUploadsSince(event.id, authorId, since);
+    if (today + urls.length > PHOTO_DAILY) {
+      throw new RateLimitedError("Maksimal 5 foto per acara dalam 24 jam");
+    }
+
+    const page = await this.repo.listImages(event.id, 0, PHOTO_CAP);
+    const have = new Set(page.items.map((img) => img.url));
+    const fresh = urls.filter((url) => !have.has(url));
+    if (fresh.length === 0) return;
+
+    // Nama penulis dari user repo (pola AppendPlaceImagesUseCase).
+    const user = await this.users.findById(authorId);
+    if (!user) {
+      throw new NotFoundError("USER_NOT_FOUND", "User tidak ditemukan");
+    }
+    const name = user.displayName || user.username;
+    await this.repo.appendImages(
+      event.id,
+      fresh.map((url) => ({
+        url,
+        attribution: { name, provider: "sambasku", authorId },
+      })),
+    );
+
+    // Satu event per batch unggah (pola place_photo_added #187).
+    await this.activityEvents?.safe({
+      kind: "event_photo_added",
+      actorId: authorId,
+      targetId: event.id,
+      dedupeKey: `event_photo:${event.id}:${fresh.join("|")}`,
+      payload: `Menambahkan foto acara ${event.name}`,
+    });
+  }
+}
+
+/**
+ * Takedown foto acara oleh admin. Foto disembunyikan permanen (soft-hide,
+ * berkas tetap di CDN) lalu event feed yang menyebut URL itu ikut
+ * disembunyikan.
+ */
+export class HideEventImageUseCase {
+  constructor(
+    private readonly repo: EventRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
+  ) {}
+
+  async execute(eventId: string, imageId: string): Promise<void> {
+    const image = await this.repo.hideImage(eventId, imageId);
+    if (!image) {
+      throw new NotFoundError("IMAGE_NOT_FOUND", "Foto tidak ditemukan");
+    }
+    await this.activityEvents?.safeHidePlacePhoto(eventId, image.url);
+  }
+}
+
+/** Foto acara wajib hasil unggah SambasKu (CDN jsdelivr assets/events). */
+export function assertOurEventImage(url: string): void {
+  if (
+    !url.startsWith("https://cdn.jsdelivr.net/") ||
+    !url.includes("/assets/events/")
+  ) {
+    throw new BadRequestError("IMAGE_URL", "Foto harus hasil unggah SambasKu");
   }
 }

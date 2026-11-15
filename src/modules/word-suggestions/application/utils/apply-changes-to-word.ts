@@ -503,10 +503,36 @@ export async function applyChangesToWord(
     }
   }
 
-  // #244: ubah contoh kalimat published.
+  // #244: ubah atau hapus contoh kalimat published.
   if (changes.examples && changes.examples.length > 0) {
     for (const ec of changes.examples) {
-      if (ec.action !== 'update' || !ec.exampleId) continue;
+      if (!ec.exampleId) continue;
+
+      if (ec.action === 'delete') {
+        const [row] = await db
+          .select({ id: examples.id })
+          .from(examples)
+          .innerJoin(meanings, eq(examples.meaningId, meanings.id))
+          .where(
+            and(
+              eq(examples.id, ec.exampleId),
+              eq(meanings.wordId, word.id),
+              isNull(examples.deletedAt),
+              isNull(meanings.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!row) continue;
+        await db
+          .update(examples)
+          .set({ deletedAt: new Date(), deletedBy: reviewerId })
+          .where(eq(examples.id, row.id));
+        changesApplied++;
+        continue;
+      }
+
+      if (ec.action !== 'update') continue;
       const [row] = await db
         .select({
           id: examples.id,

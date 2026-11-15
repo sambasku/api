@@ -1,6 +1,7 @@
-import { and, desc, eq, gt, gte, getTableColumns, inArray, isNull, lt, or, asc, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, getTableColumns, inArray, isNull, lt, or, asc, sql, count } from "drizzle-orm";
 import type { AppDatabase } from "@/shared/database/drizzle/client";
 import { events, eventPlaces } from "@/shared/database/drizzle/schema/events.schema";
+import { eventImages } from "@/shared/database/drizzle/schema/event-images.schema";
 import { eventComments, eventCommentRevisions } from "@/shared/database/drizzle/schema/event-comments.schema";
 import { eventCategories } from "@/shared/database/drizzle/schema/event-categories.schema";
 import { places } from "@/shared/database/drizzle/schema/places.schema";
@@ -11,12 +12,14 @@ import { generateId } from "@/shared/utils/ulid";
 import { ConflictError } from "@/shared/errors/app-error";
 import { highestUserRoleSql } from "@/shared/database/highest-user-role-sql";
 import type {
-  Event,
-  EventCategoryRef,
-  EventComment,
-  EventListItem,
-  EventPlaceRef,
-  EventVillageRef,
+Event,
+EventCategoryRef,
+EventComment,
+EventImage,
+EventImageAttribution,
+EventListItem,
+EventPlaceRef,
+EventVillageRef,
 } from "../domain/entities/event.entity";
 import type {
   CreateEventInput,
@@ -60,6 +63,29 @@ function toEventComment(
     isEdited: meta.isEdited,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? null,
+  };
+}
+
+type EventImageRow = typeof eventImages.$inferSelect;
+
+function parseEventImageAttribution(
+  raw: string | null,
+): EventImageAttribution | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as EventImageAttribution;
+    if (!v || typeof v.name !== "string") return null;
+    return v;
+  } catch {
+    return null;
+  }
+}
+
+function mapEventImage(row: EventImageRow): EventImage {
+  return {
+    id: row.id,
+    url: row.url,
+    attribution: parseEventImageAttribution(row.attributionJson),
   };
 }
 
@@ -111,6 +137,7 @@ function mapEvent(
     authorId: row.authorId ?? null,
     author: null,
     places: placeRefs,
+    images: [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? null,
   };
@@ -706,5 +733,84 @@ export class EventRepositoryImpl implements EventRepository {
       .where(and(eq(events.id, id), eq(events.status, 'published'), isNull(events.deletedAt)))
       .limit(1);
     return Boolean(row);
+  }
+
+  // --- galeri foto acara (pola place_images #187) ---
+
+  async listImages(
+    eventId: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ items: EventImage[]; total: number }> {
+    const visible = and(
+      eq(eventImages.eventId, eventId),
+      isNull(eventImages.hiddenAt),
+    );
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(eventImages)
+      .where(visible);
+    const rows = await this.db
+      .select()
+      .from(eventImages)
+      .where(visible)
+      .orderBy(desc(eventImages.createdAt), desc(eventImages.id))
+      .limit(limit)
+      .offset(offset);
+    return {
+      items: rows.map(mapEventImage),
+      total: totalRow?.total ?? 0,
+    };
+  }
+
+  async appendImages(
+    eventId: string,
+    images: { url: string; attribution: EventImageAttribution | null }[],
+  ): Promise<void> {
+    if (images.length === 0) return;
+    await this.db.insert(eventImages).values(
+      images.map((img) => ({
+        eventId,
+        url: img.url,
+        attributionJson: img.attribution ? JSON.stringify(img.attribution) : null,
+      })),
+    );
+  }
+
+  async countUploadsSince(
+    eventId: string,
+    authorId: string,
+    since: Date,
+  ): Promise<number> {
+    const rows = await this.db
+      .select({ attributionJson: eventImages.attributionJson })
+      .from(eventImages)
+      .where(
+        and(
+          eq(eventImages.eventId, eventId),
+          gte(eventImages.createdAt, since),
+        ),
+      );
+    return rows.filter(
+      (row) => parseEventImageAttribution(row.attributionJson)?.authorId === authorId,
+    ).length;
+  }
+
+  async hideImage(
+    eventId: string,
+    imageId: string,
+  ): Promise<{ url: string } | null> {
+    const rows = await this.db
+      .update(eventImages)
+      .set({ hiddenAt: new Date() })
+      .where(
+        and(
+          eq(eventImages.id, imageId),
+          eq(eventImages.eventId, eventId),
+          isNull(eventImages.hiddenAt),
+        ),
+      )
+      .returning({ url: eventImages.url });
+    return rows[0] ?? null;
   }
 }

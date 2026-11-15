@@ -39,16 +39,16 @@ const meaningChangeSchema = z.object({
     .optional(),
 });
 
-/** #244: ubah contoh published - top-level proposed_changes.examples. */
+/** #244: ubah atau hapus contoh published - top-level proposed_changes.examples. */
 const exampleChangeSchema = z
   .object({
     example_id: ulid,
-    action: z.literal('update'),
+    action: z.enum(['update', 'delete']),
     source_sentence: z.string().trim().min(1).max(2000).optional(),
     target_sentence: z.string().trim().max(2000).nullish(),
   })
   .superRefine((ex, ctx) => {
-    if (ex.source_sentence === undefined && ex.target_sentence === undefined) {
+    if (ex.action === 'update' && ex.source_sentence === undefined && ex.target_sentence === undefined) {
       ctx.addIssue({
         code: 'custom',
         path: ['source_sentence'],

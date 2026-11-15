@@ -31,6 +31,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `USER_NOT_FOUND` | 404 | User tidak ditemukan (profil publik by username; akun soft-deleted / nonaktif; update role admin; cabut mute abuse; user id tidak ada) |
 | `WORD_NOT_FOUND` | 404 | Kata tidak ditemukan by id (modul word - belum implement; toggle bookmark kata tidak ada / sudah dihapus) |
 | `MEANING_NOT_FOUND` | 404 | Makna tidak ditemukan by id (kontribusi contoh kalimat) |
+| `EXAMPLE_NOT_FOUND` | 404 | Contoh kalimat tidak ditemukan by id / bukan milik pemohon (edit contoh pending #244) |
 | `CONTRIBUTION_NOT_FOUND` | 404 | Kontribusi tidak ditemukan by id (antrean review) |
 | `SEARCH_MISS_NOT_FOUND` | 404 | Pencarian kosong tidak ditemukan by id (dismiss / create-from-miss / update / resolve) |
 | `SEARCH_MISS_BULK_EMPTY` | 400 | Mass dismiss pencarian tanpa id |
@@ -97,6 +98,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `WORD_ALREADY_UNVERIFIED` | 409 | Unverify dipanggil pada kata yang sudah `is_verified = false` (tanpa audit baru) |
 | `SUGGESTION_NOT_FOUND` | 404 | Usulan perubahan kata tidak ditemukan |
 | `SUGGESTION_ALREADY_REVIEWED` | 400/409 | Usulan sudah punya keputusan (approve/reject/correct) |
+| `EXAMPLE_ALREADY_REVIEWED` | 409 | Contoh kalimat sudah direview (tidak pending) - edit in-place #244 ditolak, pakai usulan change_example |
 | `WORD_NOT_PUBLISHED` | 400 | Usul edit hanya untuk kata berstatus published |
 | `CANNOT_SUGGEST_OWN_WORD` | 403 | Kontributor tidak boleh mengusulkan edit pada kata buatannya sendiri |
 | `INVALID_SUGGESTION_CHANGES` | 400 | proposed_changes kosong / tidak valid |

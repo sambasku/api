@@ -175,6 +175,7 @@ import {
 import { WordImportSessionRepositoryImpl } from "@/modules/word/infrastructure/word-import-session.repository.impl";
 import { AddWordImageUseCase } from "@/modules/word/application/use-cases/add-word-image.use-case";
 import { AddExampleUseCase } from "@/modules/word/application/use-cases/add-example.use-case";
+import { UpdateExampleUseCase } from "@/modules/word/application/use-cases/update-example.use-case";
 import { UploadPronunciationAudioUseCase } from "@/modules/word/application/use-cases/upload-pronunciation-audio.use-case";
 import { DeletePronunciationAudioUseCase } from "@/modules/word/application/use-cases/delete-pronunciation-audio.use-case";
 import { SoftDeleteMeaningUseCase } from "@/modules/word/application/use-cases/soft-delete-meaning.use-case";
@@ -185,6 +186,7 @@ import {
   createPublicWordRoutes,
 } from "@/modules/word/presentation/v1/word.routes";
 import {
+  createExampleSelfRoutes,
   createMeaningExampleRoutes,
   createWordMediaRoutes,
 } from "@/modules/word/presentation/v1/word-media.routes";
@@ -310,19 +312,23 @@ import {
 } from "@/modules/place-contribution/presentation/v1/place-contribution.routes";
 import { EventRepositoryImpl } from "@/modules/event/infrastructure/event.repository.impl";
 import {
-  CreateEventUseCase,
-  DeleteEventUseCase,
-  GetEventBySlugUseCase,
-  ListEventCategoriesUseCase,
-  ListEventsUseCase,
-  SetEventCancelledUseCase,
-  UpdateEventUseCase,
+CreateEventUseCase,
+DeleteEventUseCase,
+GetEventBySlugUseCase,
+ListEventCategoriesUseCase,
+ListEventImagesUseCase,
+AppendEventImagesUseCase,
+HideEventImageUseCase,
+ListEventsUseCase,
+SetEventCancelledUseCase,
+UpdateEventUseCase,
 } from "@/modules/event/application/use-cases/event.use-cases";
 import { EventController } from "@/modules/event/presentation/v1/event.controller";
 import {
   createAdminEventRoutes,
   createAdminEventCommentRoutes,
   createPublicEventRoutes,
+  createUserEventImageRoutes,
   createPublicEventCommentRoutes,
 } from "@/modules/event/presentation/v1/event.routes";
 import {
@@ -1269,6 +1275,7 @@ const wordController = new WordController({
     publicImageStorage.providerName,
   ),
   addExample: new AddExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo, notifyWordOwnerMedia),
+  updateExample: new UpdateExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
   importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo, activityEventRepo),
   batchContributeWords: new BatchContributeWordsUseCase(
@@ -1482,6 +1489,11 @@ const eventController = new EventController(
     ),
     deleteComment: new DeleteEventCommentUseCase(eventRepo),
     takedownComment: new TakedownEventCommentUseCase(eventRepo, auditRepo),
+  },
+  {
+    listImages: new ListEventImagesUseCase(eventRepo),
+    appendImages: new AppendEventImagesUseCase(eventRepo, userRepo, activityEvents),
+    hideImage: new HideEventImageUseCase(eventRepo, activityEvents),
   },
   eventGoingRepo,
 );
@@ -2259,6 +2271,14 @@ app.route(
   }),
 );
 app.route(
+  "/api/v1/examples",
+  createExampleSelfRoutes({
+    controller: wordController,
+    authenticate,
+    requireApprovedClient: requireContributeWriteClient,
+  }),
+);
+app.route(
   "/api/v1/word-classes",
   createWordClassRoutes({ controller: wordController }),
 );
@@ -2561,6 +2581,13 @@ app.route(
     controller: eventController,
     authenticate,
     optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/events",
+  createUserEventImageRoutes({
+    controller: eventController,
+    authenticate,
   }),
 );
 app.route(

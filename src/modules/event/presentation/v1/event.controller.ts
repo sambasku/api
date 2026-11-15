@@ -3,13 +3,16 @@ import type { AppVariables, AuthUser } from "@/shared/types";
 import { UnauthorizedError } from "@/shared/errors/app-error";
 import type { z } from "zod";
 import type {
-  CreateEventUseCase,
-  DeleteEventUseCase,
-  GetEventBySlugUseCase,
-  ListEventCategoriesUseCase,
-  ListEventsUseCase,
-  SetEventCancelledUseCase,
-  UpdateEventUseCase,
+CreateEventUseCase,
+DeleteEventUseCase,
+GetEventBySlugUseCase,
+ListEventCategoriesUseCase,
+ListEventImagesUseCase,
+ListEventsUseCase,
+AppendEventImagesUseCase,
+HideEventImageUseCase,
+SetEventCancelledUseCase,
+UpdateEventUseCase,
 } from "../../application/use-cases/event.use-cases";
 import type {
   CreateEventCommentUseCase,
@@ -19,7 +22,7 @@ import type {
   UpdateEventCommentUseCase,
 } from "../../application/use-cases/event-comment.use-cases";
 import { occurrenceStatus } from "../../domain/entities/event.entity";
-import type { EventComment } from "../../domain/entities/event.entity";
+import type { EventComment, EventImage } from "../../domain/entities/event.entity";
 import type { EventGoingRepository } from "@/modules/event-going/domain/repositories/event-going.repository";
 import { isVerifierRole } from "@/modules/word/application/utils/resolve-publication";
 import type {
@@ -156,6 +159,12 @@ export interface EventCommentControllerDeps {
   takedownComment: TakedownEventCommentUseCase;
 }
 
+export interface EventImageControllerDeps {
+  listImages: ListEventImagesUseCase;
+  appendImages: AppendEventImagesUseCase;
+  hideImage: HideEventImageUseCase;
+}
+
 export class EventController {
   constructor(
     private readonly createUc: CreateEventUseCase,
@@ -166,6 +175,7 @@ export class EventController {
     private readonly setCancelledUc: SetEventCancelledUseCase,
     private readonly listCategoriesUc: ListEventCategoriesUseCase,
     private readonly commentDeps?: EventCommentControllerDeps,
+    private readonly imageDeps?: EventImageControllerDeps,
     private readonly goingRepo?: EventGoingRepository,
   ) {}
 
@@ -438,6 +448,54 @@ export class EventController {
     const user = requireUser(c);
     const { id } = c.req.valid('param' as never) as { id: string };
     await this.comments.takedownComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
+  }
+
+  // ---------------------------------------------------------------- galeri foto
+  private get images(): EventImageControllerDeps {
+    if (!this.imageDeps) throw new Error('image deps not wired');
+    return this.imageDeps;
+  }
+
+  private serializeImage(img: EventImage) {
+    return {
+      id: img.id,
+      url: img.url,
+      attribution: img.attribution
+        ? {
+            name: img.attribution.name,
+            provider: img.attribution.provider,
+            authorId: img.attribution.authorId ?? null,
+          }
+        : null,
+    };
+  }
+
+  async listImages(c: Context<{ Variables: AppVariables }>) {
+    const { slug } = c.req.valid('param' as never) as { slug: string };
+    const offset = Number(c.req.query('offset') ?? 0);
+    const page = await this.images.listImages.execute(slug, offset);
+    return c.json({
+      success: true as const,
+      data: {
+        items: page.items.map(this.serializeImage),
+        total: page.total,
+        next_offset: page.nextOffset,
+      },
+    });
+  }
+
+  async appendImages(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { slug } = c.req.valid('param' as never) as { slug: string };
+    const body = c.req.valid('json' as never) as { urls: string[] };
+    await this.images.appendImages.execute(slug, user.user_id, body.urls);
+    return c.json({ success: true as const, data: null });
+  }
+
+  async hideImage(c: Context<{ Variables: AppVariables }>) {
+    const { id, imageId } = c.req.valid('param' as never) as { id: string; imageId: string };
+    await this.images.hideImage.execute(id, imageId);
     return c.json({ success: true as const, data: null });
   }
 }

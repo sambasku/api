@@ -50,6 +50,15 @@ export type AddWordImageBody = z.infer<typeof addWordImageSchema>;
 export type AddExampleBody = z.infer<typeof addExampleSchema>;
 export type AddMeaningBody = z.infer<typeof addMeaningSchema>;
 
+// #244: edit in-place contoh pending milik sendiri (03-api-kontribusi-verifikasi.md)
+export const updateExampleSchema = z.object({
+  source_sentence: z.string().trim().min(1, 'Contoh kalimat tidak boleh kosong'),
+  target_sentence: z.string().nullable().optional(),
+  source_type: z.enum(['native_speaker', 'book', 'corpus', 'interview', 'other']).optional(),
+  notes: z.string().optional(),
+});
+export type UpdateExampleBody = z.infer<typeof updateExampleSchema>;
+
 // Response 201 - field publikasi per role (contributor → pending_review)
 export const addPronunciationResponseSchema = z.object({
   success: z.literal(true),

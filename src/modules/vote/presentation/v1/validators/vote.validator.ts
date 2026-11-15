@@ -187,8 +187,12 @@ export const voteDeckResponseSchema = z.object({
       word_type: z.string(),
       status: z.string(),
       is_verified: z.boolean(),
-      approved_at: z.string(),
-      sense: z.string().nullable(),
+        approved_at: z.string(),
+        // Definisi dan terjemahan dikirim terpisah; `sense` = definition ??
+        // translation untuk klien lama (mobile <= v0.5.x).
+        definition: z.string().nullable(),
+        translation: z.string().nullable(),
+        sense: z.string().nullable(),
       order_index: z.number().int(),
       meaning_count: z.number().int(),
       // Kelas kata milik MAKNA ini (bukan kata induk); null = belum diisi.

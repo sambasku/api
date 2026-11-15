@@ -2834,6 +2834,79 @@ memberLemma: string;
     return row ?? null;
   }
 
+  /** #244: contoh milik actor + status - dasar edit pending. */
+  async findExampleForOwner(exampleId: string, actorId: string): Promise<(ExampleMedia & { wordId: string }) | null> {
+    const [row] = await this.db
+      .select({ ex: examples, wordId: meanings.wordId })
+      .from(examples)
+      .innerJoin(meanings, eq(meanings.id, examples.meaningId))
+      .where(
+        and(
+          eq(examples.id, exampleId),
+          eq(examples.createdBy, actorId),
+          isNull(examples.deletedAt),
+          isNull(meanings.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row ? { ...toExample(row.ex), wordId: row.wordId } : null;
+  }
+
+  /** #244: edit in-place konten contoh pending milik sendiri (race guard status). */
+  async updateExampleContent(
+    exampleId: string,
+    actorId: string,
+    data: {
+      sourceSentence: string;
+      targetSentence?: string | null;
+      sourceType?: string | null;
+      notes?: string | null;
+    },
+  ): Promise<ExampleMedia | null> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(examples)
+      .set({
+        sourceSentence: data.sourceSentence,
+        targetSentence: data.targetSentence ?? null,
+        ...(data.sourceType !== undefined ? { sourceType: data.sourceType } : {}),
+        ...(data.notes !== undefined ? { notes: data.notes } : {}),
+        updatedBy: actorId,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(examples.id, exampleId),
+          eq(examples.createdBy, actorId),
+          eq(examples.status, 'pending_review'),
+          isNull(examples.deletedAt),
+        ),
+      )
+      .returning();
+    return row ? toExample(row) : null;
+  }
+
+  /** #244: contoh pending milik actor untuk kata - overlay edit di detail lemma. */
+  async findPendingExamplesForWord(
+    wordId: string,
+    actorId: string,
+  ): Promise<ExampleMedia[]> {
+    const rows = await this.db
+      .select({ ex: examples, meaningId: meanings.id })
+      .from(examples)
+      .innerJoin(meanings, eq(meanings.id, examples.meaningId))
+      .where(
+        and(
+          eq(meanings.wordId, wordId),
+          eq(examples.createdBy, actorId),
+          eq(examples.status, 'pending_review'),
+          isNull(examples.deletedAt),
+          isNull(meanings.deletedAt),
+        ),
+      );
+    return rows.map((r) => toExample(r.ex));
+  }
+
   /** #133: owner kata induk media anak - satu JOIN, bukan dua query berurutan. */
   async findWordOwnerByChild(
     entityType: 'example' | 'word_audio',

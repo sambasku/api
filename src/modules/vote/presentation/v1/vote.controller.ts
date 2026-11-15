@@ -119,6 +119,10 @@ export class VoteController {
         status: m.status,
         is_verified: m.isVerified,
         approved_at: m.approvedAt.toISOString(),
+        // Definisi & terjemahan terpisah untuk kartu deck (lemma →
+        // terjemahan → definisi). `sense` tetap dikirim untuk klien lama.
+        definition: m.definition,
+        translation: m.translation,
         sense: m.sense,
         order_index: m.orderIndex,
         meaning_count: m.meaningCount,

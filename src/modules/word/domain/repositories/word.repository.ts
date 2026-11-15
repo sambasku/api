@@ -673,6 +673,36 @@ export interface WordRepository {
   ): Promise<{ id: string; meaningId: string; wordId: string } | null>;
 
   /**
+   * #244: contoh milik actor (created_by) + status - dasar edit pending.
+   * Null kalau tidak ada / soft-delete / bukan milik actor.
+   */
+  findExampleForOwner(
+    exampleId: string,
+    actorId: string,
+  ): Promise<(ExampleMedia & { wordId: string }) | null>;
+
+  /**
+   * #244: edit in-place konten contoh pending milik sendiri.
+   * WHERE status='pending_review' (race guard direview bersamaan) - null kalau kalah race.
+   */
+  updateExampleContent(
+    exampleId: string,
+    actorId: string,
+    data: {
+      sourceSentence: string;
+      targetSentence?: string | null;
+      sourceType?: string | null;
+      notes?: string | null;
+    },
+  ): Promise<ExampleMedia | null>;
+
+  /** #244: contoh pending milik actor untuk kata - overlay edit di detail lemma. */
+  findPendingExamplesForWord(
+    wordId: string,
+    actorId: string,
+  ): Promise<ExampleMedia[]>;
+
+  /**
    * #133: pemilik kata induk untuk media anak (contoh/audio) dalam SATU query.
    * Null kalau entity atau kata sudah soft-delete.
    */
