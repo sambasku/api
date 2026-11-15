@@ -981,6 +981,13 @@
       "when": 1801637000000,
       "tag": "0139_place_type_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "6",
+      "when": 1801638000000,
+      "tag": "0140_layanan_search_fts",
+      "breakpoints": true
     }
   ]
 }

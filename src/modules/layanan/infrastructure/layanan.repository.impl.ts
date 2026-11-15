@@ -55,11 +55,37 @@ function parsePayload(raw: string): LayananFields {
 export class LayananRepositoryImpl {
   constructor(private readonly db: AppDatabase) {}
 
-  async listPublic(input: { regionRef?: string; category?: Layanan['category'] }): Promise<Layanan[]> {
+  async listPublic(input: {
+    regionRef?: string;
+    category?: Layanan['category'];
+    q?: string;
+  }): Promise<Layanan[]> {
     const conds = [eq(layanans.publishStatus, 'published')];
     if (input.category) conds.push(eq(layanans.category, input.category));
     if (input.regionRef) {
       conds.push(or(eq(regions.id, input.regionRef), eq(regions.slug, input.regionRef))!);
+    }
+    if (input.q && input.q.trim().length > 0) {
+      // FTS5 trigram: nama layanan + alamat + nama kecamatan. Term < 3
+      // karakter di luar jangkauan trigram -> LIKE penuh (pola pantun).
+      const terms = [
+        ...new Set(input.q.trim().toLowerCase().split(/\s+/).filter(Boolean)),
+      ].slice(0, 5);
+      const usable = terms.filter((t) => t.length >= 3 && !t.includes('"'));
+      if (usable.length > 0) {
+        const match = usable.map((t) => `"${t}"`).join(' OR ');
+        conds.push(
+          sql`${layanans.id} IN (
+            SELECT owner_id FROM layanans_search_fts
+            WHERE layanans_search_fts MATCH ${match}
+          )`,
+        );
+      } else if (terms.length > 0) {
+        const like = `%${terms[0]}%`;
+        conds.push(
+          sql`(${layanans.name} LIKE ${like} OR ${layanans.addressText} LIKE ${like} OR ${regions.name} LIKE ${like})`,
+        );
+      }
     }
     const rows = await this.db
       .select({
@@ -77,20 +103,25 @@ export class LayananRepositoryImpl {
     return rows.map((r) => toLayanan(r.layanan, r.regionName, r.regionSlug, r.villageName));
   }
 
-  async listManage(): Promise<Layanan[]> {
+  async listManage(): Promise<(Layanan & { authorName: string | null })[]> {
     const rows = await this.db
       .select({
         layanan: layanans,
         regionName: regions.name,
         regionSlug: regions.slug,
         villageName: village.name,
+        authorName: users.username,
       })
       .from(layanans)
       .innerJoin(regions, eq(layanans.regionId, regions.id))
       .leftJoin(village, eq(layanans.villageId, village.id))
+      .leftJoin(users, eq(layanans.authorId, users.id))
       .orderBy(desc(layanans.updatedAt), desc(layanans.createdAt))
       .limit(200);
-    return rows.map((r) => toLayanan(r.layanan, r.regionName, r.regionSlug, r.villageName));
+    return rows.map((r) => ({
+      ...toLayanan(r.layanan, r.regionName, r.regionSlug, r.villageName),
+      authorName: r.authorName,
+    }));
   }
 
   async findPublishedBySlug(slug: string): Promise<Layanan | null> {

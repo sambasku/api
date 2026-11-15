@@ -14,7 +14,7 @@ export class LayananUseCases {
     private readonly activity: RecordActivityEventUseCase,
   ) {}
 
-  listPublic(input: { regionRef?: string; category?: Layanan['category'] }) {
+  listPublic(input: { regionRef?: string; category?: Layanan['category']; q?: string }) {
     return this.repo.listPublic(input);
   }
 

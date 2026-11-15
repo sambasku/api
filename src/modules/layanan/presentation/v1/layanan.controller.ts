@@ -53,7 +53,10 @@ function phoneWire(row: LayananPhone) {
   };
 }
 
-function toLayananWire(row: Layanan, admin: boolean) {
+function toLayananWire(
+  row: Layanan & { authorName?: string | null },
+  admin: boolean,
+) {
   return {
     id: row.id,
     slug: row.slug,
@@ -76,6 +79,7 @@ function toLayananWire(row: Layanan, admin: boolean) {
       ? {
           publish_status: row.publishStatus,
           author_id: row.authorId,
+          author_username: row.authorName ?? null,
           created_at: row.createdAt.toISOString(),
         }
       : {}),
@@ -115,6 +119,7 @@ export class LayananController {
     const items = await this.uc.listPublic({
       regionRef: query.region_id,
       category: query.category,
+      q: query.q,
     });
     return c.json({ success: true as const, data: { items: items.map((row) => toLayananWire(row, false)) } });
   }
