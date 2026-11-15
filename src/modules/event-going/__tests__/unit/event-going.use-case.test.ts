@@ -13,8 +13,9 @@ function repoMock(over: Partial<EventGoingRepository> = {}): EventGoingRepositor
       slug: 'pawai-test',
       status: 'published',
       cancelledAt: null,
-      startsAt: new Date(Date.now() + 86_400_000),
-      endsAt: new Date(Date.now() + 90_000_000),
+      // Berlangsung sekarang - presensi valid (ongoing).
+      startsAt: new Date(Date.now() - 3_600_000),
+      endsAt: new Date(Date.now() + 3_600_000),
     }),
     mark: vi.fn().mockResolvedValue({ goingCount: 1, viewerGoing: true }),
     unmark: vi.fn().mockResolvedValue({ goingCount: 0, viewerGoing: false }),
@@ -26,7 +27,24 @@ function repoMock(over: Partial<EventGoingRepository> = {}): EventGoingRepositor
 }
 
 describe('MarkEventGoingUseCase', () => {
-  it('menolak acara completed', async () => {
+  it('menolak acara sebelum hari-H (upcoming)', async () => {
+    const repo = repoMock({
+      findPublishedEvent: vi.fn().mockResolvedValue({
+        id: '01EVENTGOINGTEST000000001',
+        name: 'Pawai Test',
+        slug: 'pawai-test',
+        status: 'published',
+        cancelledAt: null,
+        startsAt: new Date(Date.now() + 86_400_000),
+        endsAt: new Date(Date.now() + 90_000_000),
+      }),
+    });
+    await expect(
+      new MarkEventGoingUseCase(repo).execute('user1', '01EVENTGOINGTEST000000001'),
+    ).rejects.toMatchObject({ errorCode: 'EVENT_NOT_STARTED' });
+  });
+
+  it('menerima acara sudah selesai (completed)', async () => {
     const repo = repoMock({
       findPublishedEvent: vi.fn().mockResolvedValue({
         id: '01EVENTGOINGTEST000000001',
@@ -37,10 +55,13 @@ describe('MarkEventGoingUseCase', () => {
         startsAt: new Date(Date.now() - 90_000_000),
         endsAt: new Date(Date.now() - 86_400_000),
       }),
+      viewerGoingByEventIds: vi.fn().mockResolvedValue(new Set()),
     });
-    await expect(
-      new MarkEventGoingUseCase(repo).execute('user1', '01EVENTGOINGTEST000000001'),
-    ).rejects.toMatchObject({ errorCode: 'EVENT_COMPLETED' });
+    const result = await new MarkEventGoingUseCase(repo).execute(
+      'user1',
+      '01EVENTGOINGTEST000000001',
+    );
+    expect(result.viewerGoing).toBe(true);
   });
 
   it('menulis activity saat mark pertama kali', async () => {
