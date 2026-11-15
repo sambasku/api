@@ -126,6 +126,19 @@ describe('checkSuggestionCategoryShape', () => {
     ).toEqual([]);
   });
 
+  it('#244 change_example menerima hapus contoh', () => {
+    expect(
+      checkSuggestionCategoryShape('change_example', {
+        examples: [
+          {
+            exampleId: '01EXAMPLE00000000000000001',
+            action: 'delete',
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
   it('#244 change_example menolak contoh ganda dan tanpa isi', () => {
     const dup = checkSuggestionCategoryShape('change_example', {
       examples: [
@@ -136,8 +149,7 @@ describe('checkSuggestionCategoryShape', () => {
         },
         {
           exampleId: '01EXAMPLE00000000000000001',
-          action: 'update',
-          sourceSentence: 'b',
+          action: 'delete',
         },
       ],
     });

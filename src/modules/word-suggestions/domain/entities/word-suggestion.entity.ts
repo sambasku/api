@@ -144,7 +144,7 @@ export interface ProposedChanges {
 /** Usulan perbaikan contoh kalimat published (issue mobile#244). */
 export interface ExampleChange {
   exampleId: string;
-  action: 'update';
+  action: 'update' | 'delete';
   sourceSentence?: string;
   targetSentence?: string | null;
 }

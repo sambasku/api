@@ -226,13 +226,15 @@ async function assertProposedTargetsCurrent(wordId: string, c: ProposedChanges):
     for (const ec of c.examples ?? []) {
       const cur = byId.get(ec.exampleId);
       if (!cur) throw stale();
-      // Hanya contoh yang sudah tayang bisa diusulkan ubah (pending = jalur review kontribusi).
-      if (cur.status !== 'published') throw stale();
-      const changed =
-        (ec.sourceSentence !== undefined &&
-          ec.sourceSentence.trim() !== (cur.sourceSentence ?? '').trim()) ||
-        (ec.targetSentence !== undefined &&
-          (ec.targetSentence ?? '').trim() !== (cur.targetSentence ?? '').trim());
+        // Hanya contoh yang sudah tayang bisa diusulkan ubah (pending = jalur review kontribusi).
+        if (cur.status !== 'published') throw stale();
+        // action=delete tidak butuh isi baru; existence + published check di atas sudah cukup.
+        const changed =
+          ec.action === 'delete' ||
+          (ec.sourceSentence !== undefined &&
+            ec.sourceSentence.trim() !== (cur.sourceSentence ?? '').trim()) ||
+          (ec.targetSentence !== undefined &&
+            (ec.targetSentence ?? '').trim() !== (cur.targetSentence ?? '').trim());
       if (!changed) {
         throw new BadRequestError('SUGGESTION_NO_CHANGES', 'Tidak ada yang berubah dari data sekarang', [
           { field: 'examples', message: 'Isi masih sama dengan data sekarang' },
@@ -744,9 +746,20 @@ async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot
 
   const examplesDiff: DiffResult['examples'] = [];
   for (const ec of proposed.examples ?? []) {
-    if (ec.action !== 'update' || !ec.exampleId) continue;
+    if (!ec.exampleId) continue;
     const cur = current.examples.find((ex) => ex.id === ec.exampleId);
     const changes: DiffResult['examples'][0]['changes'] = [];
+    if (ec.action === 'delete') {
+      // Penghapusan contoh: reviewer lihat baris "dihapus", bukan diff kalimat.
+      changes.push({
+        label: 'Kalimat contoh',
+        current: cur?.sourceSentence ?? null,
+        proposed: null,
+        changed: true,
+      });
+      examplesDiff.push({ exampleId: ec.exampleId, changes });
+      continue;
+    }
     if (ec.sourceSentence !== undefined) {
       const d = cur?.sourceSentence ?? null;
       changes.push({
