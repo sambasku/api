@@ -13,6 +13,7 @@ import type {
   LayananFields,
 } from '../domain/layanan';
 import { parsePhonesJson, serializePhones } from '../domain/layanan';
+import { resolvePublicAuthor } from '@/shared/utils/resolve-public-author';
 
 const village = alias(regions, 'layanan_village');
 
@@ -43,6 +44,7 @@ function toLayanan(
     note: row.note,
     publishStatus: row.publishStatus,
     authorId: row.authorId,
+    author: null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -137,7 +139,10 @@ export class LayananRepositoryImpl {
       .leftJoin(village, eq(layanans.villageId, village.id))
       .where(and(eq(layanans.slug, slug), eq(layanans.publishStatus, 'published')))
       .limit(1);
-    return row ? toLayanan(row.layanan, row.regionName, row.regionSlug, row.villageName) : null;
+    if (!row) return null;
+    const item = toLayanan(row.layanan, row.regionName, row.regionSlug, row.villageName);
+    item.author = await resolvePublicAuthor(this.db, item.authorId);
+    return item;
   }
 
   async findById(id: string): Promise<Layanan | null> {

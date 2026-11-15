@@ -75,6 +75,13 @@ function toLayananWire(
     village_name: row.villageName,
     note: row.note,
     updated_at: (row.updatedAt ?? row.createdAt).toISOString(),
+    author: row.author
+      ? {
+          id: row.author.id,
+          username: row.author.username,
+          display_name: row.author.displayName,
+        }
+      : null,
     ...(admin
       ? {
           publish_status: row.publishStatus,
