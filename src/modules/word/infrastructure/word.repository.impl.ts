@@ -2368,8 +2368,9 @@ memberLemma: string;
   async publishOrMergeMeanings(
     id: string,
     actorId: string,
+    opts?: { skipPublishIfNoTwin?: boolean },
   ): Promise<{ wordId: string; mergedIntoWordId: string | null } | null> {
-    return this.db.transaction((tx) => publishOrMergeMeaningsInTx(tx, id, actorId));
+    return this.db.transaction((tx) => publishOrMergeMeaningsInTx(tx, id, actorId, opts));
   }
 
   async listDuplicateGroups(): Promise<DuplicateWordGroup[]> {

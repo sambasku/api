@@ -471,6 +471,7 @@ export interface WordRepository {
   publishOrMergeMeanings(
     id: string,
     actorId: string,
+    opts?: { skipPublishIfNoTwin?: boolean },
   ): Promise<{ wordId: string; mergedIntoWordId: string | null } | null>;
 
   /**

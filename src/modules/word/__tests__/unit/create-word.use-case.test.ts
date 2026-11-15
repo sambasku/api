@@ -376,6 +376,58 @@ describe('CreateWordUseCase', () => {
     ]);
   });
 
+  // #252: kontributor duplikat TANPA kembaran published tidak boleh
+  // ter-stamp verified_by=dirinya - publish ditahan (skipPublishIfNoTwin).
+  it('kontributor + duplikat lemma published tanpa twin → skip publish, warning pending merge', async () => {
+    const { useCase, wordRepo } = makeDeps({}, true);
+    const result = await useCase.execute(makeDto({ status: 'published' }), CONTRIBUTOR);
+
+    expect(wordRepo.publishOrMergeMeanings).toHaveBeenCalledWith(
+      '01WORDULID000000000000000',
+      CONTRIBUTOR.userId,
+      { skipPublishIfNoTwin: true },
+    );
+    expect(result.word.isVerified).toBe(false);
+    expect(result.word.verifiedBy).toBeNull();
+    expect(result.warnings).toEqual([
+      {
+        field: 'lemma',
+        message: expect.stringContaining('Selesaikan di tab Duplikasi'),
+      },
+    ]);
+  });
+
+  it('kontributor + duplikat lemma published DENGAN twin → tetap auto-merge', async () => {
+    const { useCase, wordRepo } = makeDeps({}, true);
+    const keptId = '01WORDULIDKEPT00000000000';
+    (wordRepo.publishOrMergeMeanings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      wordId: keptId,
+      mergedIntoWordId: keptId,
+    });
+    (wordRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeWord({ id: keptId, status: 'published', isVerified: true }),
+    );
+    const result = await useCase.execute(makeDto({ status: 'published' }), CONTRIBUTOR);
+
+    expect(wordRepo.publishOrMergeMeanings).toHaveBeenCalledWith(
+      '01WORDULID000000000000000',
+      CONTRIBUTOR.userId,
+      { skipPublishIfNoTwin: true },
+    );
+    expect(result.word.id).toBe(keptId);
+  });
+
+  it('verifikator + duplikat lemma published → publish-or-merge tanpa skip', async () => {
+    const { useCase, wordRepo } = makeDeps({}, true);
+    await useCase.execute(makeDto({ status: 'published' }), ADMIN);
+
+    expect(wordRepo.publishOrMergeMeanings).toHaveBeenCalledWith(
+      '01WORDULID000000000000000',
+      ADMIN.userId,
+      { skipPublishIfNoTwin: false },
+    );
+  });
+
   it('tanpa duplikat → tidak ada field warnings', async () => {
     const { useCase } = makeDeps();
     const result = await useCase.execute(makeDto(), ADMIN);

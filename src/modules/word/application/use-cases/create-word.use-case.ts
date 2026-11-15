@@ -18,7 +18,7 @@ import type {
   InlineWordDto,
   MeaningOverrideDto,
 } from '../dto/create-word.dto';
-import { resolvePublication } from '../utils/resolve-publication';
+import { resolvePublication, isVerifierRole } from '../utils/resolve-publication';
 import { assertCanContribute } from '../utils/assert-can-contribute';
 import { assertContributorWordImageProvider } from '../utils/assert-word-image-provider';
 import {
@@ -170,7 +170,7 @@ export class CreateWordUseCase {
     const { word, warnings } = await this.resolveDuplicateAfterSave(
       saved,
       parentWasDuplicate,
-      actor.userId,
+      actor,
       'lemma',
     );
 
@@ -247,7 +247,7 @@ export class CreateWordUseCase {
   private async resolveDuplicateAfterSave(
     saved: Word,
     wasDuplicate: boolean,
-    actorId: string,
+    actor: Actor,
     field: string,
   ): Promise<{ word: Word; warnings: { field: string; message: string }[] }> {
     if (!wasDuplicate) return { word: saved, warnings: [] };
@@ -259,9 +259,16 @@ export class CreateWordUseCase {
       };
     }
 
-    const merge = await this.wordRepo.publishOrMergeMeanings(saved.id, actorId);
+    // #252: kontributor hanya boleh MERGE ke kembaran published - tanpa twin,
+    // publish-or-merge dulu men-stamp verified_by=dirinya sendiri (non-
+    // verifikator). skipPublishIfNoTwin menahan publish sampai reviewer
+    // approve (jalur itu memakai reviewerId + guard preserve).
+    const canVerify = isVerifierRole(actor.roles);
+    const merge = await this.wordRepo.publishOrMergeMeanings(saved.id, actor.userId, {
+      skipPublishIfNoTwin: !canVerify,
+    });
     if (merge?.mergedIntoWordId) {
-      await this.syncContributions?.closeMerged(merge.mergedIntoWordId, saved.id, actorId);
+      await this.syncContributions?.closeMerged(merge.mergedIntoWordId, saved.id, actor.userId);
       const kept = await this.wordRepo.findById(merge.mergedIntoWordId);
       return {
         word: kept ?? saved,
