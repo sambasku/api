@@ -109,6 +109,8 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     createComment: vi.fn(),
     findCommentById: vi.fn(),
     listCommentsByJinyeId: vi.fn(),
+    updateCommentWithRevision: vi.fn(),
+    listCommentRevisions: vi.fn(),
     markCommentDeletedByAuthor: vi.fn(),
     takedownComment: vi.fn(),
     incrementPublishedCommentCount: vi.fn(),
@@ -189,8 +191,80 @@ describe('Jinye lemma links', () => {
         source: 'author',
         status: 'active',
         wordId: WORD_ID,
+        commentId: null,
       }),
     );
+    expect(r.listActiveLemmaLinksForTarget).toHaveBeenCalledWith({
+      jinyeId: JINYE_ID,
+    });
+  });
+
+  it('create: span di komentar → commentId + source author komentar', async () => {
+    const COMMENT_ID = '01COMMENT00000000000000001';
+    const r = repo({
+      findCommentById: vi.fn(async () => ({
+        id: COMMENT_ID,
+        jinyeId: JINYE_ID,
+        parentId: null,
+        userId: OTHER,
+        username: 'budi',
+        displayName: 'Budi',
+        avatarUrl: null,
+        userRole: null,
+        body: 'enak sekali',
+        bodyOriginal: null,
+        images: [],
+        status: 'published' as const,
+        createdAt: new Date(),
+        updatedAt: null,
+      })),
+      createLemmaLink: vi.fn(async () =>
+        makeLink({
+          commentId: COMMENT_ID,
+          start: 0,
+          end: 4,
+          source: 'author',
+          lemma: 'enak',
+        }),
+      ),
+    });
+    await new CreateJinyeLemmaLinkUseCase(r, words as never, audit).execute({
+      jinyeId: JINYE_ID,
+      userId: OTHER,
+      start: 0,
+      end: 4,
+      wordId: WORD_ID,
+      commentId: COMMENT_ID,
+    });
+    expect(r.createLemmaLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jinyeId: JINYE_ID,
+        commentId: COMMENT_ID,
+        source: 'author',
+        start: 0,
+        end: 4,
+      }),
+    );
+    expect(r.listActiveLemmaLinksForTarget).toHaveBeenCalledWith({
+      commentId: COMMENT_ID,
+    });
+  });
+
+  it('create: comment_id tidak valid → NotFoundError', async () => {
+    await expect(
+      new CreateJinyeLemmaLinkUseCase(
+        repo({ findCommentById: vi.fn(async () => null) }),
+        words as never,
+        audit,
+      ).execute({
+        jinyeId: JINYE_ID,
+        userId: OWNER,
+        start: 0,
+        end: 4,
+        wordId: WORD_ID,
+        commentId: '01MISSINGCOMMENT0000000000',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('create: comment span → source from comment author + scoped list', async () => {

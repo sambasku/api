@@ -59,6 +59,7 @@ export * from "./word-reports.schema";
 export * from "./word-card-shares.schema";
 export * from "./activity-events.schema";
 export * from "./discussions.schema";
+export * from "./discussion-lemma-links.schema";
 export * from "./word-audios.schema";
 export * from "./word-import-sessions.schema";
 export * from "./app-settings.schema";

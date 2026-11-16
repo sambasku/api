@@ -16,6 +16,8 @@ import type { AttachJinyeAudioUseCase } from '../../application/use-cases/attach
 import type { CreateJinyeCommentUseCase } from '../../application/use-cases/create-jinye-comment.use-case';
 import type { ListJinyeCommentsUseCase } from '../../application/use-cases/list-jinye-comments.use-case';
 import type { DeleteJinyeCommentUseCase } from '../../application/use-cases/delete-jinye-comment.use-case';
+import type { UpdateJinyeCommentUseCase } from '../../application/use-cases/update-jinye-comment.use-case';
+import type { GetJinyeCommentEditHistoryUseCase } from '../../application/use-cases/get-jinye-comment-edit-history.use-case';
 import type { ArchiveJinyeUseCase } from '../../application/use-cases/archive-jinye.use-case';
 import type { UnarchiveJinyeUseCase } from '../../application/use-cases/unarchive-jinye.use-case';
 import type { PinJinyeUseCase } from '../../application/use-cases/pin-jinye.use-case';
@@ -47,6 +49,7 @@ import type {
   QuoteJinyeBody,
   ResolveJinyeLemmaCorrectionBody,
   UpdateJinyeBody,
+  UpdateJinyeCommentBody,
 } from './validators/jinye.validator';
 
 function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
@@ -129,6 +132,8 @@ type JinyeCommentWire = {
   images: JinyeCommentImageWire[];
   status: string;
   created_at: string;
+  updated_at: string | null;
+  is_edited: boolean;
   upvotes: number;
   downvotes: number;
   replies?: JinyeCommentWire[];
@@ -165,6 +170,8 @@ function toCommentWire(
     images,
     status: c.status,
     created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt?.toISOString() ?? null,
+    is_edited: !!c.isEdited,
     upvotes: 0,
     downvotes: 0,
   };
@@ -187,6 +194,8 @@ export class JinyeController {
       createComment: CreateJinyeCommentUseCase;
       listComments: ListJinyeCommentsUseCase;
       deleteComment: DeleteJinyeCommentUseCase;
+      updateComment: UpdateJinyeCommentUseCase;
+      commentEditHistory: GetJinyeCommentEditHistoryUseCase;
       archive: ArchiveJinyeUseCase;
       unarchive: UnarchiveJinyeUseCase;
       pin: PinJinyeUseCase;
@@ -472,6 +481,37 @@ export class JinyeController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ data: { ok: true as const } });
+  }
+
+  async updateComment(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    commentId: string,
+    body: UpdateJinyeCommentBody,
+  ) {
+    const user = requireUser(c);
+    const row = await this.deps.updateComment.execute({
+      jinyeId,
+      commentId,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({
+      data: toCommentWire(row, { exposeStaging: true }),
+    });
+  }
+
+  async commentEditHistory(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    commentId: string,
+  ) {
+    const data = await this.deps.commentEditHistory.execute({
+      jinyeId,
+      commentId,
+    });
+    return c.json({ data });
   }
 
   async listLemmaLinks(c: Context<{ Variables: AppVariables }>, jinyeId: string) {

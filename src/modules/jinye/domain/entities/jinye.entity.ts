@@ -95,7 +95,17 @@ export interface JinyeComment {
   status: JinyeCommentStatus;
   createdAt: Date;
   updatedAt: Date | null;
+  /** true jika pernah disunting (EXISTS di jinye_comment_revisions). */
+  isEdited?: boolean;
   replies?: JinyeComment[];
+}
+
+export interface JinyeCommentRevision {
+  id: string;
+  commentId: string;
+  editorId: string;
+  body: string;
+  createdAt: Date;
 }
 
 export interface NewJinyeComment {

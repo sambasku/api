@@ -677,6 +677,8 @@ import { AttachJinyeAudioUseCase } from "@/modules/jinye/application/use-cases/a
 import { CreateJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/create-jinye-comment.use-case";
 import { ListJinyeCommentsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-comments.use-case";
 import { DeleteJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-comment.use-case";
+import { UpdateJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/update-jinye-comment.use-case";
+import { GetJinyeCommentEditHistoryUseCase } from "@/modules/jinye/application/use-cases/get-jinye-comment-edit-history.use-case";
 import { ArchiveJinyeUseCase } from "@/modules/jinye/application/use-cases/archive-jinye.use-case";
 import { UnarchiveJinyeUseCase } from "@/modules/jinye/application/use-cases/unarchive-jinye.use-case";
 import { PinJinyeUseCase } from "@/modules/jinye/application/use-cases/pin-jinye.use-case";
@@ -3222,6 +3224,13 @@ const jinyeController = new JinyeController({
   ),
   listComments: new ListJinyeCommentsUseCase(jinyeRepo),
   deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, auditRepo),
+  updateComment: new UpdateJinyeCommentUseCase(
+    jinyeRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  commentEditHistory: new GetJinyeCommentEditHistoryUseCase(jinyeRepo),
   archive: new ArchiveJinyeUseCase(
     jinyeRepo,
     auditRepo,

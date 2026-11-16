@@ -83,6 +83,8 @@ function emptyRepo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     createComment: vi.fn(async () => makeComment()),
     findCommentById: vi.fn(),
     listCommentsByJinyeId: vi.fn(),
+    updateCommentWithRevision: vi.fn(),
+    listCommentRevisions: vi.fn(),
     markCommentDeletedByAuthor: vi.fn(),
     takedownComment: vi.fn(),
     incrementPublishedCommentCount: vi.fn(),

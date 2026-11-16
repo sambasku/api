@@ -1030,6 +1030,13 @@
       "when": 1801645000000,
       "tag": "0146_discussion_lemma_links",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "6",
+      "when": 1801646000000,
+      "tag": "0147_jinye_comment_revisions",
+      "breakpoints": true
     }
   ]
 }

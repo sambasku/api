@@ -15,6 +15,7 @@ import {
   createJinyeLemmaLinkBodySchema,
   deleteJinyeCommentResponseSchema,
   deleteJinyeResponseSchema,
+  jinyeCommentEditHistoryResponseSchema,
   jinyeCommentIdParamSchema,
   jinyeDetailResponseSchema,
   jinyeIdParamSchema,
@@ -31,6 +32,7 @@ import {
   quoteJinyeBodySchema,
   resolveJinyeLemmaCorrectionBodySchema,
   updateJinyeBodySchema,
+  updateJinyeCommentBodySchema,
   jinyeEditHistoryResponseSchema,
   uploadCredentialsResponseSchema,
 } from './validators/jinye.validator';
@@ -198,6 +200,39 @@ const deleteCommentRoute = createRoute({
   responses: {
     200: { description: 'OK', content: json(deleteJinyeCommentResponseSchema) },
     403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const updateCommentRoute = createRoute({
+  method: 'patch',
+  path: '/{id}/comments/{commentId}',
+  tags: ['Jinye'],
+  summary: 'Edit komen sendiri (tulis revisi)',
+  request: {
+    params: jinyeCommentIdParamSchema,
+    body: { content: json(updateJinyeCommentBodySchema), required: true },
+  },
+  responses: {
+    200: { description: 'OK', content: json(createJinyeCommentResponseSchema) },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    403: { description: 'Bukan penulis', content: json(errorResponseSchema) },
+    404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+  },
+});
+
+const commentEditHistoryRoute = createRoute({
+  method: 'get',
+  path: '/{id}/comments/{commentId}/edit-history',
+  tags: ['Jinye'],
+  summary: 'Riwayat sunting komen (published only)',
+  request: { params: jinyeCommentIdParamSchema },
+  responses: {
+    200: {
+      description: 'Current + revisions (newest first)',
+      content: json(jinyeCommentEditHistoryResponseSchema),
+    },
     404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
   },
 });
@@ -553,21 +588,24 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     return writeLimit(c, next);
   });
   routes.use('/:id/comments/*', async (c, next) => {
-    if (c.req.method !== 'DELETE') return next();
+    if (c.req.method === 'GET' && deps.optionalAuth) {
+      return deps.optionalAuth(c, next);
+    }
+    if (c.req.method !== 'DELETE' && c.req.method !== 'PATCH') return next();
     return deps.authenticate(c, next);
   });
   routes.use('/:id/comments/*', async (c, next) => {
-    if (c.req.method !== 'DELETE') return next();
+    if (c.req.method !== 'DELETE' && c.req.method !== 'PATCH') return next();
     if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
     return next();
   });
   routes.use('/:id/comments/*', async (c, next) => {
-    if (c.req.method !== 'DELETE') return next();
+    if (c.req.method !== 'DELETE' && c.req.method !== 'PATCH') return next();
     if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
     return next();
   });
   routes.use('/:id/comments/*', async (c, next) => {
-    if (c.req.method !== 'DELETE') return next();
+    if (c.req.method !== 'DELETE' && c.req.method !== 'PATCH') return next();
     return writeLimit(c, next);
   });
   routes.use('/:id/audio', async (c, next) => {
@@ -811,6 +849,19 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   routes.openapi(deleteCommentRoute, (c) => {
     const p = c.req.valid('param');
     return deps.controller.deleteComment(c, p.id, p.commentId) as never;
+  });
+  routes.openapi(updateCommentRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.updateComment(
+      c,
+      p.id,
+      p.commentId,
+      c.req.valid('json'),
+    ) as never;
+  });
+  routes.openapi(commentEditHistoryRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.commentEditHistory(c, p.id, p.commentId) as never;
   });
   routes.openapi(updateJinyeRoute, (c) =>
     deps.controller.update(

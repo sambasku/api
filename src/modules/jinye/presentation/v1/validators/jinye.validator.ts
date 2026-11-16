@@ -162,6 +162,13 @@ export const createJinyeCommentBodySchema = z.object({
 
 export type CreateJinyeCommentBody = z.infer<typeof createJinyeCommentBodySchema>;
 
+export const updateJinyeCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Teks tidak valid' })
+    .max(500, 'Teks maksimal 500 karakter'),
+});
+export type UpdateJinyeCommentBody = z.infer<typeof updateJinyeCommentBodySchema>;
+
 export const jinyeCommentIdParamSchema = z.object({
   id: opaqueId,
   commentId: opaqueId,
@@ -180,6 +187,8 @@ const jinyeCommentWireBase = z.object({
   images: z.array(jinyeImageWireSchema),
   status: z.string(),
   created_at: z.string(),
+  updated_at: z.string().nullable(),
+  is_edited: z.boolean(),
   upvotes: z.number().int(),
   downvotes: z.number().int(),
 });
@@ -295,6 +304,10 @@ export const jinyeEditHistoryResponseSchema = z.object({
     ),
   }),
 });
+
+/** Sama bentuk wire OP edit-history. */
+export const jinyeCommentEditHistoryResponseSchema =
+  jinyeEditHistoryResponseSchema;
 
 export const quoteJinyeBodySchema = z.object({
   quote_body: z

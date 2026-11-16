@@ -83,6 +83,8 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     createComment: vi.fn(),
     findCommentById: vi.fn(),
     listCommentsByJinyeId: vi.fn(),
+    updateCommentWithRevision: vi.fn(),
+    listCommentRevisions: vi.fn(),
     markCommentDeletedByAuthor: vi.fn(),
     takedownComment: vi.fn(),
     incrementPublishedCommentCount: vi.fn(),

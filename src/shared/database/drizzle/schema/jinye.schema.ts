@@ -135,3 +135,27 @@ export const jinyeComments = sqliteTable(
     index('jinye_comments_status_idx').on(t.status, t.id),
   ],
 );
+
+/** Snapshot body komen tayang sebelum setiap edit (cap 50 di repo). */
+export const jinyeCommentRevisions = sqliteTable(
+  'jinye_comment_revisions',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    commentId: text('comment_id')
+      .notNull()
+      .references(() => jinyeComments.id, { onDelete: 'cascade' }),
+    editorId: text('editor_id')
+      .notNull()
+      .references(() => users.id),
+    /** Body yang ditampilkan sebelum diganti (pasca-blocklist). */
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index('jinye_comment_revisions_comment_idx').on(t.commentId, t.createdAt),
+  ],
+);
