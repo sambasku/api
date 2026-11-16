@@ -22,6 +22,8 @@ export interface Article {
   authorDisplayName: string | null;
   authorAvatarUrl: string | null;
   authorDeletedAt: Date | null;
+  /** Role tertinggi penulis (untuk `is_verifier` wire); null bila bukan staf. */
+  authorRole: string | null;
   status: ArticleStatus;
   tags: string[];
   publishedAt: Date | null;

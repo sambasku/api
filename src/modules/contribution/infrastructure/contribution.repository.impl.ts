@@ -149,21 +149,37 @@ export class ContributionRepositoryImpl implements ContributionRepository {
         ? or(isNull(contributions.reopenedBy), eq(contributions.reopenedBy, filter.viewerId))
         : undefined;
 
-    const hideSkipped =
-      filter.hideSkipped && filter.viewerId
-        ? notExists(
-            this.db
-              .select({ id: userSkips.id })
-              .from(userSkips)
-              .where(
-                and(
-                  eq(userSkips.userId, filter.viewerId),
-                  eq(userSkips.targetType, 'contribution'),
-                  eq(userSkips.targetId, contributions.id),
-                ),
-              ),
-          )
-        : undefined;
+const hideSkipped =
+  filter.hideSkipped && filter.viewerId
+    ? notExists(
+        this.db
+          .select({ id: userSkips.id })
+          .from(userSkips)
+          .where(
+            and(
+              eq(userSkips.userId, filter.viewerId),
+              eq(userSkips.targetType, 'contribution'),
+              eq(userSkips.targetId, contributions.id),
+            ),
+          ),
+      )
+    : undefined;
+// #259: mode daftar dilewati - kebalikan hideSkipped.
+const skippedOnly =
+  filter.skippedOnly && filter.viewerId
+    ? exists(
+        this.db
+          .select({ id: userSkips.id })
+          .from(userSkips)
+          .where(
+            and(
+              eq(userSkips.userId, filter.viewerId),
+              eq(userSkips.targetType, 'contribution'),
+              eq(userSkips.targetId, contributions.id),
+            ),
+          ),
+      )
+    : undefined;
 
     const rows = await this.db
       .select(contributionColumns)
@@ -181,6 +197,7 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           mineScope,
           reopenVisibility,
           hideSkipped,
+          skippedOnly,
         ),
       )
       .orderBy(desc(contributions.id))

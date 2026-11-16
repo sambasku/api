@@ -399,6 +399,14 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const hiddenBody = (await hidden.json()) as { data: { id: string }[] };
     expect(hiddenBody.data.some((c) => c.id === item.id)).toBe(false);
 
+    // #259: skipped_only=true hanya balikin item yang reviewer itu skip.
+    const skippedList = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&skipped_only=true',
+      adminToken,
+    );
+    const skippedBody = (await skippedList.json()) as { data: { id: string }[] };
+    expect(skippedBody.data.some((c) => c.id === item.id)).toBe(true);
+
     const still = await get(
       '/api/v1/admin/contributions?status=pending&entity_type=word',
       adminToken,
@@ -426,6 +434,18 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const otherBody = (await other.json()) as { data: { id: string }[] };
     expect(otherBody.data.some((c) => c.id === item.id)).toBe(true);
 
+    // Skip reviewer lain tidak muncul di daftar dilewati admin (#259):
+    // reviewer baru ini belum skip apa pun.
+    const reviewerSkippedList = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&skipped_only=true',
+      reviewerToken,
+    );
+    expect(
+      ((await reviewerSkippedList.json()) as { data: { id: string }[] }).data.some(
+        (c) => c.id === item.id,
+      ),
+    ).toBe(false);
+
     const undo = await request(`/api/v1/admin/contributions/${item.id}/skip`, {
       method: 'DELETE',
       headers: { authorization: `Bearer ${adminToken}` },
@@ -439,5 +459,16 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     );
     const backBody = (await back.json()) as { data: { id: string }[] };
     expect(backBody.data.some((c) => c.id === item.id)).toBe(true);
+
+    // Setelah unskip, item hilang dari daftar dilewati.
+    const unskippedList = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&skipped_only=true',
+      adminToken,
+    );
+    expect(
+      ((await unskippedList.json()) as { data: { id: string }[] }).data.some(
+        (c) => c.id === item.id,
+      ),
+    ).toBe(false);
   });
 });

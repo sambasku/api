@@ -102,6 +102,7 @@ function toArticle(row: ArticleRow, tags: string[]): Article {
     authorDisplayName: null,
     authorAvatarUrl: null,
     authorDeletedAt: null,
+    authorRole: null,
     status: row.status as ArticleStatus,
     tags,
     publishedAt: row.publishedAt,
@@ -159,6 +160,14 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
     return map;
   }
 
+  /** Isi tags artikel (satu query batch) tanpa menyentuh field lain. */
+  private async fillTags(items: Article[]): Promise<Article[]> {
+    if (items.length === 0) return [];
+    const tagMap = await this.loadTagsByArticle(items.map((a) => a.id));
+    for (const a of items) a.tags = tagMap.get(a.id) ?? [];
+    return items;
+  }
+
   private async attachTags(rows: ArticleRow[]): Promise<Article[]> {
     if (rows.length === 0) return [];
     const tagMap = await this.loadTagsByArticle(rows.map((r) => r.id));
@@ -203,26 +212,56 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
     return created;
   }
 
-  async findById(id: string): Promise<Article | null> {
+  /**
+   * Artikel + profil penulis live (JOIN users sekali, termasuk role) -
+   * pola sama dengan wisata/usaha. Role dipakai untuk `is_verifier` wire.
+   */
+  private async getArticleWithAuthor(
+    key: string,
+    by: 'id' | 'slug',
+  ): Promise<Article | null> {
     const [row] = await this.db
-      .select()
+      .select({
+        article: articles,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        authorRole: highestUserRoleSql,
+      })
       .from(articles)
-      .where(and(eq(articles.id, id), sql`${articles.deletedAt} is null`))
+      .leftJoin(users, eq(users.id, articles.authorUserId))
+      .where(
+        and(
+          by === 'id' ? eq(articles.id, key) : eq(articles.slug, key),
+          sql`${articles.deletedAt} is null`,
+        ),
+      )
       .limit(1);
     if (!row) return null;
-    const [article] = await this.attachTags([row]);
-    return article ?? null;
+    const article = toArticle(row.article, []);
+    if (row.authorDeletedAt === null) {
+      article.authorUsername = row.username;
+      article.authorDisplayName = row.displayName;
+      article.authorAvatarUrl = row.avatarUrl;
+    }
+    article.authorDeletedAt = row.authorDeletedAt;
+    article.authorRole = row.authorRole;
+    return article;
+  }
+
+  async findById(id: string): Promise<Article | null> {
+    const article = await this.getArticleWithAuthor(id, 'id');
+    if (!article) return null;
+    const [withTags] = await this.fillTags([article]);
+    return withTags ?? null;
   }
 
   async findBySlug(slug: string): Promise<Article | null> {
-    const [row] = await this.db
-      .select()
-      .from(articles)
-      .where(and(eq(articles.slug, slug), sql`${articles.deletedAt} is null`))
-      .limit(1);
-    if (!row) return null;
-    const [article] = await this.attachTags([row]);
-    return article ?? null;
+    const article = await this.getArticleWithAuthor(slug, 'slug');
+    if (!article) return null;
+    const [withTags] = await this.fillTags([article]);
+    return withTags ?? null;
   }
 
   async list(filter: ArticleListFilter): Promise<CursorPage<Article>> {

@@ -41,6 +41,11 @@ export const listContributionsQuerySchema = z.object({
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .optional()
     .transform((v) => v === true || v === 'true' || v === '1'),
+  /** true = hanya item yang user auth sudah skip (mobile #259: daftar dilewati) */
+  skipped_only: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === true || v === 'true' || v === '1'),
 });
 
 export type ListContributionsQueryBody = z.infer<typeof listContributionsQuerySchema>;

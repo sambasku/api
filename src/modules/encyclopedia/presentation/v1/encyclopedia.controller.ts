@@ -74,7 +74,7 @@ function toArticleWire(a: Article, opts?: { bookmarked?: boolean | null }) {
         ? null
         : publicName(a.authorUsername, a.authorDisplayName),
       avatar_url: authorDeleted ? null : a.authorAvatarUrl,
-      is_verifier: !authorDeleted && isVerifierRole(''),
+      is_verifier: !authorDeleted && isVerifierRole(a.authorRole ?? ''),
     },
     status: a.status,
     published_at: a.publishedAt?.toISOString() ?? null,

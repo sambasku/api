@@ -108,6 +108,7 @@ export class ContributionController {
       viewerId: actor.userId,
       viewerIsElevated: elevated,
       hideSkipped: query.hide_skipped === true,
+      skippedOnly: query.skipped_only === true,
     randomize: query.randomize === true,
       limit: query.limit,
       cursor: query.cursor,
