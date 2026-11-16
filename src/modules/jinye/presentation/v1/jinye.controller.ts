@@ -491,6 +491,7 @@ export class JinyeController {
       start: body.start,
       end: body.end,
       wordId: body.word_id,
+      commentId: body.comment_id ?? null,
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ data: toLemmaLinkWire(row) }, 201);

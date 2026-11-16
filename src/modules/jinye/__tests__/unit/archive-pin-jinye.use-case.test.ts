@@ -43,6 +43,7 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     updateBody: vi.fn(),
     listRevisions: vi.fn(),
     markLemmaLinksStale: vi.fn(),
+    markCommentLemmaLinksStale: vi.fn(),
     findPlainRepostByUser: vi.fn(),
     adjustRepostCount: vi.fn(),
     markDeletedByAuthor: vi.fn(),

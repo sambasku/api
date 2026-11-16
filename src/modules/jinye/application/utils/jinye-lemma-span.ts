@@ -13,7 +13,7 @@ export function assertValidSpan(body: string, start: number, end: number): strin
     throw new ValidationError([
       {
         field: 'start',
-        message: 'Span tidak valid. Pilih teks di dalam status ya.',
+        message: 'Span tidak valid. Pilih teks di dalam status atau komentar ya.',
       },
     ]);
   }
@@ -50,7 +50,7 @@ export function assertUnderLinkCap(count: number): void {
     throw new ValidationError([
       {
         field: 'start',
-        message: `Maksimal ${MAX_LINKS} tautan lemma per Jinye`,
+        message: `Maksimal ${MAX_LINKS} tautan lemma per teks`,
       },
     ]);
   }

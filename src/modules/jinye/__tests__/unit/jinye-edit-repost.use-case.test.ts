@@ -72,6 +72,7 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     ),
     listRevisions: vi.fn(async () => []),
     markLemmaLinksStale: vi.fn(async () => 0),
+    markCommentLemmaLinksStale: vi.fn(async () => 0),
     findPlainRepostByUser: vi.fn(async () => null),
     adjustRepostCount: vi.fn(async () => undefined),
     setAudio: vi.fn(),

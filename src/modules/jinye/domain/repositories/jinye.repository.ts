@@ -37,7 +37,10 @@ export interface JinyeRepository {
     bodyOriginal: string | null;
   }): Promise<Jinye | null>;
   listRevisions(jinyeId: string): Promise<JinyeRevision[]>;
+  /** Hanya tautan OP (comment_id IS NULL). */
   markLemmaLinksStale(jinyeId: string): Promise<number>;
+  /** Tautan lemma pada satu komentar (untuk edit komentar di masa depan). */
+  markCommentLemmaLinksStale(commentId: string): Promise<number>;
   findPlainRepostByUser(
     originalId: string,
     userId: string,

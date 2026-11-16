@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -61,10 +62,11 @@ export const jinyeLemmaLinks = sqliteTable(
     index('jinye_lemma_links_jinye_idx').on(t.jinyeId, t.status),
     index('jinye_lemma_links_comment_idx').on(t.commentId, t.status),
     index('jinye_lemma_links_word_idx').on(t.wordId),
-    uniqueIndex('jinye_lemma_links_jinye_span_uidx').on(
-      t.jinyeId,
-      t.start,
-      t.end,
-    ),
+    uniqueIndex('jinye_lemma_links_jinye_span_uidx')
+      .on(t.jinyeId, t.start, t.end)
+      .where(sql`comment_id IS NULL`),
+    uniqueIndex('jinye_lemma_links_comment_span_uidx')
+      .on(t.commentId, t.start, t.end)
+      .where(sql`comment_id IS NOT NULL`),
   ],
 );

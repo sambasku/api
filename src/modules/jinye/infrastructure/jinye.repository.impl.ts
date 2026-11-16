@@ -361,6 +361,24 @@ export class JinyeRepositoryImpl implements JinyeRepository {
       .where(
         and(
           eq(jinyeLemmaLinks.jinyeId, jinyeId),
+          sql`${jinyeLemmaLinks.commentId} is null`,
+          sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
+        ),
+      )
+      .returning({ id: jinyeLemmaLinks.id });
+    return rows.length;
+  }
+
+  async markCommentLemmaLinksStale(commentId: string): Promise<number> {
+    const rows = await this.db
+      .update(jinyeLemmaLinks)
+      .set({
+        status: 'stale',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(jinyeLemmaLinks.commentId, commentId),
           sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
         ),
       )
@@ -682,9 +700,11 @@ export class JinyeRepositoryImpl implements JinyeRepository {
     const conds = [
       sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
     ];
-    if (input.jinyeId) conds.push(eq(jinyeLemmaLinks.jinyeId, input.jinyeId));
     if (input.commentId) {
       conds.push(eq(jinyeLemmaLinks.commentId, input.commentId));
+    } else if (input.jinyeId) {
+      conds.push(eq(jinyeLemmaLinks.jinyeId, input.jinyeId));
+      conds.push(sql`${jinyeLemmaLinks.commentId} is null`);
     }
     const rows = await this.db
       .select({

@@ -23,6 +23,7 @@ export class CreateJinyeLemmaLinkUseCase {
     start: number;
     end: number;
     wordId: string;
+    commentId?: string | null;
     requestId?: string | null;
   }): Promise<JinyeLemmaLink> {
     await assertCanContribute(input.userId);
@@ -32,7 +33,27 @@ export class CreateJinyeLemmaLinkUseCase {
       throw new NotFoundError('JINYE_NOT_FOUND', 'Jinye tidak ditemukan');
     }
 
-    assertValidSpan(jinye.body, input.start, input.end);
+    const commentId = input.commentId ?? null;
+    let spanBody = jinye.body;
+    let sourceAuthorId = jinye.userId;
+
+    if (commentId) {
+      const comment = await this.repo.findCommentById(commentId);
+      if (
+        !comment ||
+        comment.jinyeId !== input.jinyeId ||
+        comment.status !== 'published'
+      ) {
+        throw new NotFoundError(
+          'JINYE_COMMENT_NOT_FOUND',
+          'Komentar tidak ditemukan',
+        );
+      }
+      spanBody = comment.body;
+      sourceAuthorId = comment.userId;
+    }
+
+    assertValidSpan(spanBody, input.start, input.end);
 
     const word = await this.words.findById(input.wordId);
     if (
@@ -49,17 +70,20 @@ export class CreateJinyeLemmaLinkUseCase {
       ]);
     }
 
-    const existing = await this.repo.listActiveLemmaLinksForTarget({
-      jinyeId: input.jinyeId,
-    });
+    const existing = await this.repo.listActiveLemmaLinksForTarget(
+      commentId
+        ? { commentId }
+        : { jinyeId: input.jinyeId },
+    );
     assertUnderLinkCap(existing.length);
     assertNoOverlap(input.start, input.end, existing);
 
     // ponytail: source bedakan kredit; status tetap active (bukan pending)
-    const source = jinye.userId === input.userId ? 'author' : 'community';
+    const source = sourceAuthorId === input.userId ? 'author' : 'community';
 
     const created = await this.repo.createLemmaLink({
       jinyeId: input.jinyeId,
+      commentId,
       start: input.start,
       end: input.end,
       wordId: input.wordId,
@@ -74,6 +98,7 @@ export class CreateJinyeLemmaLinkUseCase {
       entityId: created.id,
       newData: {
         jinye_id: input.jinyeId,
+        comment_id: commentId,
         start: input.start,
         end: input.end,
         word_id: input.wordId,

@@ -204,6 +204,7 @@ export const createJinyeLemmaLinkBodySchema = z.object({
   start: z.coerce.number().int().min(0),
   end: z.coerce.number().int().min(1),
   word_id: opaqueId,
+  comment_id: opaqueId.optional().nullable(),
 });
 export type CreateJinyeLemmaLinkBody = z.infer<
   typeof createJinyeLemmaLinkBodySchema

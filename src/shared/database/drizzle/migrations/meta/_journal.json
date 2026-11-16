@@ -1009,6 +1009,13 @@
       "when": 1801641000000,
       "tag": "0143_karya",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "6",
+      "when": 1801644000000,
+      "tag": "0145_jinye_lemma_comment_span",
+      "breakpoints": true
     }
   ]
 }
