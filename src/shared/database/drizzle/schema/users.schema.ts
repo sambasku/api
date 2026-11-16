@@ -58,6 +58,11 @@ export const users = sqliteTable(
      * dengan schema jinye - FK dibuat di migration `0128_jinye_pin.sql`.
      */
     pinnedJinyeId: text('pinned_jinye_id'),
+    /**
+     * Waktu terakhir ganti ke username *baru* (bukan reclaim).
+     * Null = belum pernah ganti; ganti pertama bebas (mobile#257).
+     */
+    usernameChangedAt: integer('username_changed_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
     /** Piggyback presence: di-touch dari request authenticated (throttle 5 mnt). */

@@ -70,6 +70,8 @@ export interface User {
   isTeam: boolean;
   teamAs: string | null;
   teamNote: string | null;
+  /** Waktu terakhir ganti ke username baru (bukan reclaim). Null = belum pernah. */
+  usernameChangedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null; // soft delete - tidak boleh bisa login lagi

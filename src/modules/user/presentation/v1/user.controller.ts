@@ -9,6 +9,7 @@ import type { UploadAvatarUseCase } from '../../application/use-cases/upload-ava
 import type { DeleteAvatarUseCase } from '../../application/use-cases/delete-avatar.use-case';
 import type {
   GetMyProfileUseCase,
+  MyProfileResult,
   UpdateMyProfileUseCase,
 } from '../../application/use-cases/update-my-profile.use-case';
 import { MAX_IMAGE_BYTES } from '@/modules/public-image/application/utils/validate-image-file';
@@ -25,6 +26,26 @@ function toLevelingWire(leveling: PublicProfileLeveling) {
     ...leveling,
     titleCode: leveling.titleCode as TitleCode,
   });
+}
+
+function toMyProfileWire(profile: MyProfileResult) {
+  return {
+    username: profile.username,
+    display_name: profile.displayName,
+    bio: profile.bio,
+    region_id: profile.regionId,
+    village_id: profile.villageId,
+    avatar_url: profile.avatarUrl,
+    has_read_contribution_guide: profile.hasReadContributionGuide,
+    requires_consent: profile.requiresConsent,
+    leveling: toLevelingWire(profile.leveling),
+    notify_streak_reminder: profile.notifyStreakReminder,
+    notify_level_up: profile.notifyLevelUp,
+    username_changed_at: profile.usernameChangedAt?.toISOString() ?? null,
+    username_change_allowed_at:
+      profile.usernameChangeAllowedAt?.toISOString() ?? null,
+    username_change_cooldown_days: profile.usernameChangeCooldownDays,
+  };
 }
 
 export class UserController {
@@ -99,18 +120,24 @@ export class UserController {
     const profile = await this.deps.getMyProfile.execute(user.user_id);
     return c.json({
       success: true as const,
+      data: toMyProfileWire(profile),
+    });
+  }
+
+  async getUsernameHistory(c: Context) {
+    const user = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!user) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const items = await this.deps.updateMyProfile.listUsernameHistory(user.user_id);
+    return c.json({
+      success: true as const,
       data: {
-        username: profile.username,
-        display_name: profile.displayName,
-        bio: profile.bio,
-        region_id: profile.regionId,
-        village_id: profile.villageId,
-        avatar_url: profile.avatarUrl,
-        has_read_contribution_guide: profile.hasReadContributionGuide,
-        requires_consent: profile.requiresConsent,
-        leveling: toLevelingWire(profile.leveling),
-        notify_streak_reminder: profile.notifyStreakReminder,
-        notify_level_up: profile.notifyLevelUp,
+        items: items.map((item) => ({
+          old_username: item.oldUsername,
+          new_username: item.newUsername,
+          changed_at: item.changedAt.toISOString(),
+          hold_until: item.holdUntil.toISOString(),
+          can_reclaim: item.canReclaim,
+        })),
       },
     });
   }
@@ -169,19 +196,7 @@ export class UserController {
     });
     return c.json({
       success: true as const,
-      data: {
-        username: profile.username,
-        display_name: profile.displayName,
-        bio: profile.bio,
-        region_id: profile.regionId,
-        village_id: profile.villageId,
-        avatar_url: profile.avatarUrl,
-        has_read_contribution_guide: profile.hasReadContributionGuide,
-        requires_consent: profile.requiresConsent,
-        leveling: toLevelingWire(profile.leveling),
-        notify_streak_reminder: profile.notifyStreakReminder,
-        notify_level_up: profile.notifyLevelUp,
-      },
+      data: toMyProfileWire(profile),
     });
   }
 

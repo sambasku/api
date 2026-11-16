@@ -58,7 +58,8 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `WORDS_BULK_EMPTY` | 400 | Mass-action kata tanpa id |
 | `WORDS_BULK_TOO_LARGE` | 400 | Mass-action kata lebih dari 50 id |
 | `EMAIL_ALREADY_EXISTS` | 409 | Registrasi dengan email yang sudah dipakai |
-| `USERNAME_ALREADY_EXISTS` | 409 | Registrasi dengan nama (username) yang sudah dipakai |
+| `USERNAME_ALREADY_EXISTS` | 409 | Registrasi / ganti username yang sudah dipakai atau masih di-hold user lain |
+| `USERNAME_CHANGE_TOO_SOON` | 409 | Ganti username baru sebelum cooldown 7 hari selesai (`data.next_allowed_at`) |
 | `PHONE_ALREADY_EXISTS` | 409 | Registrasi / pengajuan verifikator / buat user admin dengan nomor HP yang sudah dipakai user lain |
 | `CONSENT_REQUIRED` | 400 | Register/accept-legal tanpa consents terms+privacy lengkap, atau dokumen legal belum dikonfigurasi |
 | `LEGAL_CONSENT_OUTDATED` | 400/403 | Versi terms/privacy yang dikirim bukan versi aktif; atau user belum setuju versi terbaru saat write |

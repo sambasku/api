@@ -9,7 +9,8 @@ export type UsernameAvailabilityStatus =
   | 'current'
   | 'invalid'
   | 'reserved'
-  | 'taken';
+  | 'taken'
+  | 'reclaimable';
 
 export interface UsernameAvailabilityResult {
   username: string;
@@ -35,13 +36,17 @@ export function classifyUsernameLocal(
 
 /**
  * Status ketersediaan handle untuk user yang sedang login.
- * `current` = sama dengan handle sekarang (case-insensitive setelah normalize).
+ * `current` = sama dengan handle sekarang.
+ * `reclaimable` = masih di-hold oleh user ini (boleh reclaim tanpa cooldown).
  */
 export async function resolveUsernameAvailability(opts: {
   raw: string;
   currentUsername: string;
   currentUserId: string;
   findByUsername: (username: string) => Promise<{ id: string } | null>;
+  findActiveHold?: (
+    username: string,
+  ) => Promise<{ userId: string } | null>;
 }): Promise<UsernameAvailabilityResult> {
   const local = classifyUsernameLocal(opts.raw);
   if (local.status === 'invalid' || local.status === 'reserved') {
@@ -50,6 +55,16 @@ export async function resolveUsernameAvailability(opts: {
 
   if (local.username === normalizeUsernameSlug(opts.currentUsername)) {
     return { username: local.username, status: 'current' };
+  }
+
+  const hold = opts.findActiveHold
+    ? await opts.findActiveHold(local.username)
+    : null;
+  if (hold) {
+    if (hold.userId === opts.currentUserId) {
+      return { username: local.username, status: 'reclaimable' };
+    }
+    return { username: local.username, status: 'taken' };
   }
 
   const other = await opts.findByUsername(local.username);

@@ -58,4 +58,28 @@ describe('resolveUsernameAvailability', () => {
       }),
     ).resolves.toEqual({ username: 'warga.sambas', status: 'available' });
   });
+
+  it('hold milik sendiri → reclaimable', async () => {
+    await expect(
+      resolveUsernameAvailability({
+        raw: 'budi00',
+        currentUsername: 'warga.sambas',
+        currentUserId: 'u1',
+        findByUsername: async () => null,
+        findActiveHold: async () => ({ userId: 'u1' }),
+      }),
+    ).resolves.toEqual({ username: 'budi00', status: 'reclaimable' });
+  });
+
+  it('hold milik orang lain → taken', async () => {
+    await expect(
+      resolveUsernameAvailability({
+        raw: 'budi00',
+        currentUsername: 'warga.sambas',
+        currentUserId: 'u1',
+        findByUsername: async () => null,
+        findActiveHold: async () => ({ userId: 'u2' }),
+      }),
+    ).resolves.toEqual({ username: 'budi00', status: 'taken' });
+  });
 });

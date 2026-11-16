@@ -59,6 +59,7 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     isTeam: row.isTeam ?? false,
     teamAs: row.teamAs ?? null,
     teamNote: row.teamNote ?? null,
+    usernameChangedAt: row.usernameChangedAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt,

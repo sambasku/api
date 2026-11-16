@@ -772,6 +772,7 @@ import { GetMyBookmarksUseCase } from "@/modules/bookmark/application/use-cases/
 import { BookmarkController } from "@/modules/bookmark/presentation/v1/bookmark.controller";
 import { createBookmarkRoutes } from "@/modules/bookmark/presentation/v1/bookmark.routes";
 import { PublicUserRepositoryImpl } from "@/modules/user/infrastructure/public-user.repository.impl";
+import { UsernameChangeRepositoryImpl } from "@/modules/user/infrastructure/username-change.repository.impl";
 import { GetPublicProfileUseCase } from "@/modules/user/application/use-cases/get-public-profile.use-case";
 import { GetPublicActivityUseCase } from "@/modules/user/application/use-cases/get-public-activity.use-case";
 import { UploadAvatarUseCase } from "@/modules/user/application/use-cases/upload-avatar.use-case";
@@ -1862,6 +1863,7 @@ const userController = new UserController({
     userRepo,
     regionRepo,
     publicUserRepo,
+    new UsernameChangeRepositoryImpl(db),
   ),
 });
 

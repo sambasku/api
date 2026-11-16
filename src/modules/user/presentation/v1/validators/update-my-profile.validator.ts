@@ -88,7 +88,14 @@ export const usernameAvailabilityResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     username: z.string(),
-    status: z.enum(['available', 'current', 'invalid', 'reserved', 'taken']),
+    status: z.enum([
+      'available',
+      'current',
+      'invalid',
+      'reserved',
+      'taken',
+      'reclaimable',
+    ]),
   }),
 });
 
@@ -106,5 +113,23 @@ export const myProfileResponseSchema = z.object({
     has_read_contribution_guide: z.boolean(),
     /** True bila user belum setujui terms/privacy versi aktif. */
     requires_consent: z.boolean(),
+    username_changed_at: z.string().datetime().nullable(),
+    username_change_allowed_at: z.string().datetime().nullable(),
+    username_change_cooldown_days: z.number().int().positive(),
+  }),
+});
+
+export const usernameHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    items: z.array(
+      z.object({
+        old_username: z.string(),
+        new_username: z.string(),
+        changed_at: z.string().datetime(),
+        hold_until: z.string().datetime(),
+        can_reclaim: z.boolean(),
+      }),
+    ),
   }),
 });
