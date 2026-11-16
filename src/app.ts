@@ -403,12 +403,21 @@ import {
 import { LayananRepositoryImpl } from "@/modules/layanan/infrastructure/layanan.repository.impl";
 import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases";
 import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
+import { KaryaRepositoryImpl } from "@/modules/karya/infrastructure/karya.repository.impl";
+import { KaryaUseCases } from "@/modules/karya/application/karya.use-cases";
+import { KaryaController } from "@/modules/karya/presentation/v1/karya.controller";
 import {
   createAdminLayananContributionRoutes,
   createAdminLayananRoutes,
   createLayananContributionRoutes,
   createPublicLayananRoutes,
 } from "@/modules/layanan/presentation/v1/layanan.routes";
+import {
+  createAdminKaryaContributionRoutes,
+  createAdminKaryaRoutes,
+  createKaryaContributionRoutes,
+  createPublicKaryaRoutes,
+} from "@/modules/karya/presentation/v1/karya.routes";
 import { UsahaClaimRepositoryImpl } from "@/modules/usaha-claim/infrastructure/usaha-claim.repository.impl";
 import { UsahaClaimUseCases } from "@/modules/usaha-claim/application/usaha-claim.use-cases";
 import { UsahaClaimController } from "@/modules/usaha-claim/presentation/v1/usaha-claim.controller";
@@ -1555,6 +1564,9 @@ const usahaContributionController = new UsahaContributionController(
 const layananController = new LayananController(
   new LayananUseCases(new LayananRepositoryImpl(db), regionRepo, activityEvents),
 );
+const karyaController = new KaryaController(
+  new KaryaUseCases(new KaryaRepositoryImpl(db), activityEvents),
+);
 const usahaClaimUseCases = new UsahaClaimUseCases(
   usahaClaimRepo,
   usahaRepo,
@@ -2698,6 +2710,28 @@ app.route(
 app.route(
   "/api/v1/layanan",
   createPublicLayananRoutes({ controller: layananController }),
+);
+app.route(
+  "/api/v1/admin/karya",
+  createAdminKaryaRoutes({ controller: karyaController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/karya-contributions",
+  createAdminKaryaContributionRoutes({
+    controller: karyaController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/karya-contributions",
+  createKaryaContributionRoutes({
+    controller: karyaController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/karya",
+  createPublicKaryaRoutes({ controller: karyaController }),
 );
 // PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
 // Fitur Kuliner - jelajah kuliner & tempat makan (PRD kuliner).

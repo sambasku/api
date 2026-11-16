@@ -269,3 +269,25 @@ export const listKaryaQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 });
+
+/** Body admin create/update (sama min field usulan baru). */
+export const karyaFieldsSchema = newKaryaPayloadSchema;
+
+export const rejectKaryaSchema = z.object({
+  reason_code: z.enum([
+    'missing_sambas',
+    'invalid_metadata',
+    'rights',
+    'duplicate',
+    'other',
+  ]),
+  reason_text: z.string().trim().max(500).nullish(),
+});
+
+export const revisionNoteSchema = z.object({
+  note: z.string().trim().min(3).max(500),
+});
+
+export const contributionListQuerySchema = z.object({
+  status: z.enum(['pending', 'needs_revision', 'approved', 'rejected']).optional(),
+});

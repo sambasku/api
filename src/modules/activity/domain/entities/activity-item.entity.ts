@@ -23,6 +23,7 @@ export type ActivityKind =
   | 'event'
 | 'usaha'
 | 'layanan'
+| 'karya'
 | 'culinary'
 | 'pantun'
 | 'article'

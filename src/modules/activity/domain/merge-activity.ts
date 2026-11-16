@@ -43,6 +43,7 @@ explore: [
 'place_published',
 'usaha_published',
 'layanan_published',
+'karya_published',
 'cuisine_published',
 'event_published',
 'event_going',

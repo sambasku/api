@@ -31,7 +31,8 @@ export const ACTIVITY_EVENT_KINDS = [
   'card_shared',
  'usaha_published',
   'layanan_published',
- 'cuisine_published',
+  'karya_published',
+  'cuisine_published',
  'place_published',
  'event_published',
   'event_going',
@@ -95,6 +96,8 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'usaha';
     case 'layanan_published':
       return 'layanan';
+    case 'karya_published':
+      return 'karya';
     case 'cuisine_published':
       return 'culinary';
     case 'place_published':
