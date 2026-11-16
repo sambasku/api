@@ -14,6 +14,11 @@ export const users = sqliteTable(
     displayName: text('display_name').notNull().default(''),
     // Bio publik opsional (edit profil).
     bio: text('bio'),
+    /**
+     * Self-declare status bahasa (mobile#258).
+     * `native` = penutur asli; `learner` = sedang belajar; null = belum diisi.
+     */
+    speakerStatus: text('speaker_status'),
     /** Id kecamatan (`regions.id`). Null = belum diisi. */
     regionId: text('region_id'),
     /** Id desa (`regions.id`, parent = region_id). Null = belum diisi. */
@@ -95,6 +100,7 @@ export const users = sqliteTable(
     uniqueIndex('users_phone_unique').on(t.phone).where(sql`phone is not null`),
     index('users_last_seen_at_idx').on(t.lastSeenAt),
     index('users_is_team_idx').on(t.isTeam),
+    index('users_speaker_status_idx').on(t.speakerStatus),
   ],
 );
 

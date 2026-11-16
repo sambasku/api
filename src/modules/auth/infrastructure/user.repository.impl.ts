@@ -5,8 +5,8 @@ import { NotFoundError, ConflictError } from '@/shared/errors/app-error';
 import { isUniqueViolationOn, isUsernameHandleConstraint } from '@/shared/database/drizzle/sqlite-errors';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { UserRepository } from '../domain/repositories/user.repository';
-import type { NewUser, User, UserListFilter, UserRole } from '../domain/entities/user.entity';
-import { derivePrimaryRole } from '../domain/entities/user.entity';
+import type { NewUser, SpeakerStatus, User, UserListFilter, UserRole } from '../domain/entities/user.entity';
+import { derivePrimaryRole, parseSpeakerStatus } from '../domain/entities/user.entity';
 import { filterAvailableUsernames } from './filter-available-usernames';
 
 type UserRow = typeof users.$inferSelect;
@@ -35,6 +35,7 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     username: row.username,
     displayName: row.displayName || row.username,
     bio: row.bio ?? null,
+    speakerStatus: parseSpeakerStatus(row.speakerStatus),
     regionId: row.regionId ?? null,
     villageId: row.villageId ?? null,
     email: row.email,
@@ -253,7 +254,7 @@ WHERE o.user_id = users.id
 
 return {
 items: page.map((r) => {
-const entity = toEntity({ ...r, passwordHash: null } as UserRow, rolesMap.get(r.id) ?? []);
+const entity = toEntity({ ...r, passwordHash: null } as unknown as UserRow, rolesMap.get(r.id) ?? []);
 return {
 ...entity,
 authProviders: r.authProviders ? r.authProviders.split(',') : [],
@@ -422,6 +423,7 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
       username?: string;
       displayName?: string;
       bio?: string | null;
+      speakerStatus?: SpeakerStatus | null;
       readContributionGuideAt?: Date;
       regionId?: string | null;
       villageId?: string | null;
@@ -438,6 +440,9 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
           ...(data.username !== undefined ? { username: data.username } : {}),
           ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
           ...(data.bio !== undefined ? { bio: data.bio } : {}),
+          ...(data.speakerStatus !== undefined
+            ? { speakerStatus: data.speakerStatus }
+            : {}),
           ...(data.regionId !== undefined ? { regionId: data.regionId } : {}),
           ...(data.villageId !== undefined ? { villageId: data.villageId } : {}),
           ...(data.readContributionGuideAt !== undefined

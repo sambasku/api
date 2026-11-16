@@ -1011,6 +1011,13 @@
       "breakpoints": true
     },
     {
+      "idx": 144,
+      "version": "6",
+      "when": 1801643000000,
+      "tag": "0144_speaker_status",
+      "breakpoints": true
+    },
+    {
       "idx": 145,
       "version": "6",
       "when": 1801644000000,

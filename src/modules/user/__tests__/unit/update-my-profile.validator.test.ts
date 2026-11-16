@@ -121,4 +121,19 @@ describe('updateMyProfileSchema', () => {
       updateMyProfileSchema.safeParse({ username: 'warga.sambas' }).success,
     ).toBe(true);
   });
+
+  it('speaker_status native|learner|null diterima', () => {
+    for (const value of ['native', 'learner', null] as const) {
+      const parsed = updateMyProfileSchema.safeParse({ speaker_status: value });
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) return;
+      expect(parsed.data.speaker_status).toBe(value);
+    }
+  });
+
+  it('speaker_status invalid ditolak', () => {
+    expect(
+      updateMyProfileSchema.safeParse({ speaker_status: 'penutur' }).success,
+    ).toBe(false);
+  });
 });

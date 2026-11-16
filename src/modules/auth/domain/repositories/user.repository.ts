@@ -1,4 +1,11 @@
-import type { NewUser, User, UserListFilter, UserListResult, UserRole } from '../entities/user.entity';
+import type {
+  NewUser,
+  SpeakerStatus,
+  User,
+  UserListFilter,
+  UserListResult,
+  UserRole,
+} from '../entities/user.entity';
 
 export interface UserRepository {
   findById(id: string): Promise<User | null>;
@@ -42,6 +49,7 @@ export interface UserRepository {
       username?: string;
       displayName?: string;
       bio?: string | null;
+      speakerStatus?: SpeakerStatus | null;
       readContributionGuideAt?: Date;
       regionId?: string | null;
       villageId?: string | null;

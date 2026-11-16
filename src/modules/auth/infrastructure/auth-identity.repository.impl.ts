@@ -54,6 +54,10 @@ function toUserEntity(row: UserRow, roles: User['roles']): User {
     username: row.username,
     displayName: row.displayName || row.username,
     bio: row.bio ?? null,
+    speakerStatus:
+      row.speakerStatus === 'native' || row.speakerStatus === 'learner'
+        ? row.speakerStatus
+        : null,
     regionId: row.regionId ?? null,
     villageId: row.villageId ?? null,
     email: row.email,

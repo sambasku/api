@@ -196,6 +196,7 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
       username: 'anonim',
       display_name: 'anonim',
       bio: null,
+      speaker_status: null,
       role: 'contributor',
       is_verifier: false,
       stats: { contributions_approved: 0, words_approved: 0, corrections_approved: 0, verifications_done: 0, comments_published: 0 },

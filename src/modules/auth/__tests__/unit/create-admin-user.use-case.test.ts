@@ -21,6 +21,7 @@ function makeDeps(overrides: {
         id: '01TESTULIDUSERID00000000',
         displayName: user.username,
         bio: null,
+        speakerStatus: null,
         regionId: null,
         villageId: null,
         canContribute: true,

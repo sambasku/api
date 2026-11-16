@@ -22,6 +22,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     username: 'budi',
     displayName: 'budi',
     bio: null,
+    speakerStatus: null,
     regionId: null,
     villageId: null,
     email: 'budi@test.com',
@@ -60,6 +61,7 @@ describe('GetMyProfileUseCase', () => {
       username: 'budi',
       displayName: 'Budi Santoso',
       bio: 'Kontributor Sambas',
+      speakerStatus: null,
       regionId: null,
       villageId: null,
       avatarUrl: null,
@@ -137,6 +139,24 @@ describe('UpdateMyProfileUseCase', () => {
     });
     expect(result.displayName).toBe('Nama Baru');
     expect(result.bio).toBe('Bio baru');
+  });
+
+  it('menyimpan speaker_status native', async () => {
+    const updated = makeUser({ speakerStatus: 'native' });
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser()),
+      updateProfile: vi.fn().mockResolvedValue(updated),
+    } as unknown as UserRepository;
+
+    const result = await new UpdateMyProfileUseCase(userRepo, regionRepo).execute(
+      USER_ID,
+      { speakerStatus: 'native' },
+    );
+
+    expect(userRepo.updateProfile).toHaveBeenCalledWith(USER_ID, {
+      speakerStatus: 'native',
+    });
+    expect(result.speakerStatus).toBe('native');
   });
 
   it('tap Mengerti → set read_contribution_guide_at', async () => {

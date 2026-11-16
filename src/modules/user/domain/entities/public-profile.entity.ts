@@ -24,6 +24,8 @@ export interface PublicProfile {
   username: string;
   displayName: string;
   bio: string | null;
+  /** Self-declare: `native` | `learner` | null. */
+  speakerStatus: 'native' | 'learner' | null;
   roles: string[];
   /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: string;
@@ -42,6 +44,8 @@ export interface PublicUserRow {
   username: string;
   displayName: string;
   bio: string | null;
+  /** Self-declare: `native` | `learner` | null. */
+  speakerStatus: 'native' | 'learner' | null;
   roles: string[];
   /** @deprecated Derived tertinggi dari roles (wire compat). */
   role: string;

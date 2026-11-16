@@ -4,7 +4,7 @@ import {
   UnauthorizedError,
   ValidationError,
 } from '@/shared/errors/app-error';
-import type { User } from '@/modules/auth/domain/entities/user.entity';
+import type { SpeakerStatus, User } from '@/modules/auth/domain/entities/user.entity';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
@@ -32,6 +32,7 @@ export interface MyProfileResult {
   username: string;
   displayName: string;
   bio: string | null;
+  speakerStatus: SpeakerStatus | null;
   regionId: string | null;
   villageId: string | null;
   avatarUrl: string | null;
@@ -57,6 +58,7 @@ function toMyProfile(
     username: user.username,
     displayName: user.displayName,
     bio: user.bio,
+    speakerStatus: user.speakerStatus,
     regionId: user.regionId,
     villageId: user.villageId,
     avatarUrl: user.avatarUrl,
@@ -327,6 +329,9 @@ export class UpdateMyProfileUseCase {
         : {}),
       ...(dto.displayName !== undefined ? { displayName: dto.displayName } : {}),
       ...(dto.bio !== undefined ? { bio: dto.bio } : {}),
+      ...(dto.speakerStatus !== undefined
+        ? { speakerStatus: dto.speakerStatus }
+        : {}),
       ...(resolvedRegionId !== undefined ? { regionId: resolvedRegionId } : {}),
       ...(resolvedVillageId !== undefined ? { villageId: resolvedVillageId } : {}),
       ...(dto.hasReadContributionGuide === true && user.readContributionGuideAt === null
