@@ -50,6 +50,8 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     updateReplyBodyWithRevision: vi.fn().mockImplementation(async () =>
       makeReply({ body: 'teks baru', isEdited: true, updatedAt: new Date() }),
     ),
+    markLemmaLinksStale: vi.fn().mockResolvedValue(0),
+    markReplyLemmaLinksStale: vi.fn().mockResolvedValue(0),
     ...overrides,
   } as unknown as DiscussionRepository;
 }

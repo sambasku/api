@@ -600,6 +600,11 @@ import { GetDiscussionReplyEditHistoryUseCase } from "@/modules/discussion/appli
 import { GetDiscussionEditHistoryUseCase } from "@/modules/discussion/application/use-cases/get-discussion-edit-history.use-case";
 import { PinDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/pin-discussion-reply.use-case";
 import { TakedownDiscussionReplyUseCase } from "@/modules/discussion/application/use-cases/takedown-discussion-reply.use-case";
+import { CreateDiscussionLemmaLinkUseCase } from "@/modules/discussion/application/use-cases/create-discussion-lemma-link.use-case";
+import { ListDiscussionLemmaLinksUseCase } from "@/modules/discussion/application/use-cases/list-discussion-lemma-links.use-case";
+import { ProposeDiscussionLemmaCorrectionUseCase } from "@/modules/discussion/application/use-cases/propose-discussion-lemma-correction.use-case";
+import { ResolveDiscussionLemmaCorrectionUseCase } from "@/modules/discussion/application/use-cases/resolve-discussion-lemma-correction.use-case";
+import { DeleteDiscussionLemmaLinkUseCase } from "@/modules/discussion/application/use-cases/delete-discussion-lemma-link.use-case";
 import { DiscussionController } from "@/modules/discussion/presentation/v1/discussion.controller";
 import { createDiscussionRoutes } from "@/modules/discussion/presentation/v1/discussion.routes";
 import { createAdminDiscussionRoutes } from "@/modules/discussion/presentation/v1/admin-discussion.routes";
@@ -2984,6 +2989,25 @@ const discussionController = new DiscussionController({
   editHistory: new GetDiscussionEditHistoryUseCase(discussionRepo),
   pinReply: new PinDiscussionReplyUseCase(discussionRepo, auditRepo),
   takedownReply: new TakedownDiscussionReplyUseCase(discussionRepo, auditRepo),
+  createLemmaLink: new CreateDiscussionLemmaLinkUseCase(
+    discussionRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  listLemmaLinks: new ListDiscussionLemmaLinksUseCase(discussionRepo),
+  proposeLemmaCorrection: new ProposeDiscussionLemmaCorrectionUseCase(
+    discussionRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  resolveLemmaCorrection: new ResolveDiscussionLemmaCorrectionUseCase(
+    discussionRepo,
+    auditRepo,
+  ),
+  deleteLemmaLink: new DeleteDiscussionLemmaLinkUseCase(
+    discussionRepo,
+    auditRepo,
+  ),
   imageController,
 });
 app.route(

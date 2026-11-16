@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
+import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
 import type { AppVariables } from '@/shared/types';
@@ -9,18 +10,23 @@ import { clientIpKey, rateLimit } from '@/shared/middlewares/rate-limit.middlewa
 import type { DiscussionController } from './discussion.controller';
 import {
   createDiscussionBodySchema,
+  createDiscussionLemmaLinkBodySchema,
   createDiscussionReplyBodySchema,
   createDiscussionReplyResponseSchema,
   createDiscussionResponseSchema,
+  deleteDiscussionLemmaLinkResponseSchema,
   deleteDiscussionReplyResponseSchema,
   deleteDiscussionResponseSchema,
   discussionEditHistoryResponseSchema,
+  discussionLemmaLinkIdParamSchema,
+  discussionLemmaLinkResponseSchema,
   discussionReplyEditHistoryResponseSchema,
   updateDiscussionBodySchema,
   updateDiscussionReplyBodySchema,
   updateDiscussionReplyResponseSchema,
   updateDiscussionResponseSchema,
   attachDiscussionAudioResponseSchema,
+  listDiscussionLemmaLinksResponseSchema,
   listMyDiscussionsQuerySchema,
   listDiscussionsQuerySchema,
   discussionIdParamSchema,
@@ -30,6 +36,8 @@ import {
   discussionPublicListResponseSchema,
   discussionReplyIdParamSchema,
   discussionUploadTokenQuerySchema,
+  proposeDiscussionLemmaCorrectionBodySchema,
+  resolveDiscussionLemmaCorrectionBodySchema,
   uploadCredentialsResponseSchema,
 } from './validators/discussion.validator';
 
@@ -202,6 +210,45 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   ] as const;
   routes.on('delete', '/:id', ...topicWriteChain);
   routes.on('patch', '/:id', ...topicWriteChain);
+
+  routes.use('/:id/lemma-links', async (c, next) => {
+    if (c.req.method === 'GET') return deps.optionalAuthenticate(c, next);
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/lemma-links', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/lemma-links', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/lemma-links', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return submitLimit(c, next);
+  });
+  routes.use('/:id/lemma-links/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/lemma-links/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/lemma-links/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/lemma-links/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return submitLimit(c, next);
+  });
+  routes.on('delete', '/:id/lemma-links/:linkId', ...topicWriteChain);
 
   const uploadTokenRoute = createRoute({
     method: 'get',
@@ -462,6 +509,105 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     },
   });
 
+  const listLemmaLinksRoute = createRoute({
+    method: 'get',
+    path: '/{id}/lemma-links',
+    tags: ['Discussions'],
+    summary: 'List tautan lemma pada diskusi',
+    request: { params: discussionIdParamSchema },
+    responses: {
+      200: {
+        description: 'OK',
+        content: json(listDiscussionLemmaLinksResponseSchema),
+      },
+      404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const createLemmaLinkRoute = createRoute({
+    method: 'post',
+    path: '/{id}/lemma-links',
+    tags: ['Discussions'],
+    summary: 'Tambah span lemma (OP atau balasan)',
+    request: {
+      params: discussionIdParamSchema,
+      body: { content: json(createDiscussionLemmaLinkBodySchema), required: true },
+    },
+    responses: {
+      201: {
+        description: 'Created',
+        content: json(discussionLemmaLinkResponseSchema),
+      },
+      400: { description: 'Validasi gagal', content: json(errorResponseSchema) },
+      401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+      404: { description: 'Diskusi/balasan tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const proposeLemmaCorrectionRoute = createRoute({
+    method: 'post',
+    path: '/{id}/lemma-links/{linkId}/corrections',
+    tags: ['Discussions'],
+    summary: 'Usul koreksi lemma pada span',
+    request: {
+      params: discussionLemmaLinkIdParamSchema,
+      body: {
+        content: json(proposeDiscussionLemmaCorrectionBodySchema),
+        required: true,
+      },
+    },
+    responses: {
+      200: {
+        description: 'OK',
+        content: json(discussionLemmaLinkResponseSchema),
+      },
+      400: { description: 'Validasi gagal', content: json(errorResponseSchema) },
+      401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+      404: { description: 'Tautan tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Koreksi sudah pending', content: json(errorResponseSchema) },
+    },
+  });
+
+  const resolveLemmaCorrectionRoute = createRoute({
+    method: 'post',
+    path: '/{id}/lemma-links/{linkId}/resolve',
+    tags: ['Discussions'],
+    summary: 'Approve/reject koreksi lemma (verifikator)',
+    request: {
+      params: discussionLemmaLinkIdParamSchema,
+      body: {
+        content: json(resolveDiscussionLemmaCorrectionBodySchema),
+        required: true,
+      },
+    },
+    responses: {
+      200: {
+        description: 'OK',
+        content: json(discussionLemmaLinkResponseSchema),
+      },
+      400: { description: 'Validasi gagal', content: json(errorResponseSchema) },
+      401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+      404: { description: 'Tautan tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const deleteLemmaLinkRoute = createRoute({
+    method: 'delete',
+    path: '/{id}/lemma-links/{linkId}',
+    tags: ['Discussions'],
+    summary: 'Hapus tautan lemma (penulis OP / penulis balasan / staf)',
+    request: { params: discussionLemmaLinkIdParamSchema },
+    responses: {
+      200: {
+        description: 'OK',
+        content: json(deleteDiscussionLemmaLinkResponseSchema),
+      },
+      401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+      403: { description: 'Bukan pemilik', content: json(errorResponseSchema) },
+      404: { description: 'Tautan tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.openapi(
     uploadTokenRoute,
     (c) => deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
@@ -504,6 +650,43 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
   routes.openapi(deleteDiscussionRoute, (c) =>
     deps.controller.delete(c, c.req.valid('param').id) as never,
   );
+  routes.openapi(listLemmaLinksRoute, (c) =>
+    deps.controller.listLemmaLinks(c, c.req.valid('param').id) as never,
+  );
+  routes.openapi(createLemmaLinkRoute, (c) =>
+    deps.controller.createLemmaLink(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
+  routes.openapi(proposeLemmaCorrectionRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.proposeLemmaCorrection(
+      c,
+      p.id,
+      p.linkId,
+      c.req.valid('json'),
+    ) as never;
+  });
+  routes.use(
+    '/:id/lemma-links/:linkId/resolve',
+    deps.authenticate,
+    authorizeRole('root', 'admin', 'reviewer', 'editor', 'verifier'),
+  );
+  routes.openapi(resolveLemmaCorrectionRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.resolveLemmaCorrection(
+      c,
+      p.id,
+      p.linkId,
+      c.req.valid('json'),
+    ) as never;
+  });
+  routes.openapi(deleteLemmaLinkRoute, (c) => {
+    const p = c.req.valid('param');
+    return deps.controller.deleteLemmaLink(c, p.id, p.linkId) as never;
+  });
 
   return routes;
 }

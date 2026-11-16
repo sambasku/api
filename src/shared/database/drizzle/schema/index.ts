@@ -96,6 +96,7 @@ export * from "./layanan-contributions.schema";
 export * from "./jinye.schema";
 export * from "./jinye-reports.schema";
 export * from "./jinye-lemma-links.schema";
+export * from "./discussion-lemma-links.schema";
 export * from "./translations.schema";
 export * from "./kreators.schema";
 export * from "./karyas.schema";

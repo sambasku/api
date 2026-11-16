@@ -124,6 +124,8 @@ export class UpdateDiscussionUseCase {
     const linkUrl =
       cmd.linkUrl === undefined ? (help.linkUrl ?? null) : normalizeLinkUrl(cmd.linkUrl);
 
+    const bodyChanged = (help.body ?? '') !== filteredBody;
+
     const updated = await this.repo.updateDiscussionBodyWithRevision({
       discussionId: cmd.discussionId,
       editorId: cmd.actorId,
@@ -134,6 +136,10 @@ export class UpdateDiscussionUseCase {
     });
     if (!updated) {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');
+    }
+
+    if (bodyChanged) {
+      await this.repo.markLemmaLinksStale(cmd.discussionId);
     }
 
     await this.auditRepo.record({

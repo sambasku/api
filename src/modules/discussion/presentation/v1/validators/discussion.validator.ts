@@ -294,6 +294,7 @@ export const discussionPublicDetailResponseSchema = z.object({
   success: z.literal(true),
   data: discussionPublicItemSchema.extend({
     replies: z.array(discussionReplyPublicSchema),
+    lemma_links: z.array(z.any()).optional(),
   }),
 });
 
@@ -301,6 +302,7 @@ export const discussionOwnerDetailResponseSchema = z.object({
   success: z.literal(true),
   data: discussionOwnerItemSchema.extend({
     replies: z.array(discussionReplyPublicSchema),
+    lemma_links: z.array(z.any()).optional(),
   }),
 });
 
@@ -389,4 +391,64 @@ export const discussionEditHistoryResponseSchema = z.object({
       }),
     ),
   }),
+});
+
+export const createDiscussionLemmaLinkBodySchema = z.object({
+  start: z.coerce.number().int().min(0),
+  end: z.coerce.number().int().min(1),
+  word_id: opaqueId,
+  reply_id: opaqueId.optional().nullable(),
+});
+export type CreateDiscussionLemmaLinkBody = z.infer<
+  typeof createDiscussionLemmaLinkBodySchema
+>;
+
+export const proposeDiscussionLemmaCorrectionBodySchema = z.object({
+  word_id: opaqueId,
+});
+export type ProposeDiscussionLemmaCorrectionBody = z.infer<
+  typeof proposeDiscussionLemmaCorrectionBodySchema
+>;
+
+export const resolveDiscussionLemmaCorrectionBodySchema = z.object({
+  action: z.enum(['approve', 'reject']),
+});
+export type ResolveDiscussionLemmaCorrectionBody = z.infer<
+  typeof resolveDiscussionLemmaCorrectionBodySchema
+>;
+
+export const discussionLemmaLinkIdParamSchema = z.object({
+  id: opaqueId,
+  linkId: opaqueId,
+});
+
+export const discussionLemmaLinkWireSchema = z.object({
+  id: z.string(),
+  discussion_id: z.string(),
+  reply_id: z.string().nullable(),
+  start: z.number().int(),
+  end: z.number().int(),
+  word_id: z.string(),
+  lemma: z.string().nullable(),
+  status: z.string(),
+  source: z.string(),
+  proposed_word_id: z.string().nullable(),
+  proposed_lemma: z.string().nullable(),
+  proposed_by: z.string().nullable(),
+  created_at: z.string(),
+});
+
+export const discussionLemmaLinkResponseSchema = z.object({
+  success: z.literal(true),
+  data: discussionLemmaLinkWireSchema,
+});
+
+export const listDiscussionLemmaLinksResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.array(discussionLemmaLinkWireSchema),
+});
+
+export const deleteDiscussionLemmaLinkResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ ok: z.literal(true) }),
 });

@@ -6,6 +6,7 @@ import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio
 import {
   isVerifierRole,
   type Discussion,
+  type DiscussionLemmaLink,
   type DiscussionReply,
 } from '../../domain/entities/discussion.entity';
 import type { CreateDiscussionUseCase } from '../../application/use-cases/create-discussion.use-case';
@@ -27,14 +28,22 @@ import type { UpdateDiscussionReplyUseCase } from '../../application/use-cases/u
 import type { UpdateDiscussionUseCase } from '../../application/use-cases/update-discussion.use-case';
 import type { PinDiscussionReplyUseCase } from '../../application/use-cases/pin-discussion-reply.use-case';
 import type { TakedownDiscussionReplyUseCase } from '../../application/use-cases/takedown-discussion-reply.use-case';
+import type { CreateDiscussionLemmaLinkUseCase } from '../../application/use-cases/create-discussion-lemma-link.use-case';
+import type { ListDiscussionLemmaLinksUseCase } from '../../application/use-cases/list-discussion-lemma-links.use-case';
+import type { ProposeDiscussionLemmaCorrectionUseCase } from '../../application/use-cases/propose-discussion-lemma-correction.use-case';
+import type { ResolveDiscussionLemmaCorrectionUseCase } from '../../application/use-cases/resolve-discussion-lemma-correction.use-case';
+import type { DeleteDiscussionLemmaLinkUseCase } from '../../application/use-cases/delete-discussion-lemma-link.use-case';
 import type {
   CreateDiscussionBody,
+  CreateDiscussionLemmaLinkBody,
   CreateDiscussionReplyBody,
   ListAdminDiscussionsQuery,
   ListMyDiscussionsQuery,
   ListDiscussionsQuery,
   PinDiscussionReplyBody,
+  ProposeDiscussionLemmaCorrectionBody,
   RejectDiscussionBody,
+  ResolveDiscussionLemmaCorrectionBody,
   UpdateDiscussionBody,
   UpdateDiscussionReplyBody,
 } from './validators/discussion.validator';
@@ -344,6 +353,11 @@ export class DiscussionController {
       editHistory: GetDiscussionEditHistoryUseCase;
       pinReply: PinDiscussionReplyUseCase;
       takedownReply: TakedownDiscussionReplyUseCase;
+      createLemmaLink: CreateDiscussionLemmaLinkUseCase;
+      listLemmaLinks: ListDiscussionLemmaLinksUseCase;
+      proposeLemmaCorrection: ProposeDiscussionLemmaCorrectionUseCase;
+      resolveLemmaCorrection: ResolveDiscussionLemmaCorrectionUseCase;
+      deleteLemmaLink: DeleteDiscussionLemmaLinkUseCase;
       imageController: ImageController;
     },
   ) {}
@@ -417,12 +431,14 @@ export class DiscussionController {
 
     const isOwner = user?.user_id === help.userId;
     const replyCount = replies.filter((r) => r.status === 'published').length;
+    const lemmaLinks = await this.deps.listLemmaLinks.execute(help.id);
     if (help.status === 'published') {
       return c.json({
         success: true as const,
         data: {
           ...toPublicItem({ ...help, replyCount }),
           replies: replies.map((r) => toPublicReply(r, help.pinnedReplyId)),
+          lemma_links: lemmaLinks.map(toLemmaLinkWire),
         },
       });
     }
@@ -438,6 +454,7 @@ export class DiscussionController {
       data: {
         ...toOwnerItem({ ...help, replyCount }),
         replies: replies.map((r) => toPublicReply(r, help.pinnedReplyId)),
+        lemma_links: lemmaLinks.map(toLemmaLinkWire),
       },
     });
   }
@@ -685,6 +702,85 @@ export class DiscussionController {
     });
   }
 
+  async listLemmaLinks(c: Context, discussionId: string) {
+    const items = await this.deps.listLemmaLinks.execute(discussionId);
+    return c.json({
+      success: true as const,
+      data: items.map(toLemmaLinkWire),
+    });
+  }
+
+  async createLemmaLink(
+    c: Context,
+    discussionId: string,
+    body: CreateDiscussionLemmaLinkBody,
+  ) {
+    const user = this.requireUser(c);
+    const row = await this.deps.createLemmaLink.execute({
+      discussionId,
+      userId: user.user_id,
+      start: body.start,
+      end: body.end,
+      wordId: body.word_id,
+      replyId: body.reply_id ?? null,
+      requestId: this.requestId(c),
+    });
+    return c.json(
+      { success: true as const, data: toLemmaLinkWire(row) },
+      201,
+    );
+  }
+
+  async proposeLemmaCorrection(
+    c: Context,
+    discussionId: string,
+    linkId: string,
+    body: ProposeDiscussionLemmaCorrectionBody,
+  ) {
+    const user = this.requireUser(c);
+    const row = await this.deps.proposeLemmaCorrection.execute({
+      discussionId,
+      linkId,
+      userId: user.user_id,
+      wordId: body.word_id,
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: toLemmaLinkWire(row) });
+  }
+
+  async resolveLemmaCorrection(
+    c: Context,
+    discussionId: string,
+    linkId: string,
+    body: ResolveDiscussionLemmaCorrectionBody,
+  ) {
+    const user = this.requireUser(c);
+    const row = await this.deps.resolveLemmaCorrection.execute({
+      discussionId,
+      linkId,
+      reviewerId: user.user_id,
+      action: body.action,
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: toLemmaLinkWire(row) });
+  }
+
+  async deleteLemmaLink(c: Context, discussionId: string, linkId: string) {
+    const user = this.requireUser(c);
+    const roles = user.roles ?? [];
+    const isStaff = roles.some((r) =>
+      ['admin', 'root', 'reviewer', 'editor', 'verifier'].includes(r),
+    );
+    await this.deps.deleteLemmaLink.execute({
+      discussionId,
+      linkId,
+      userId: user.user_id,
+      isStaff,
+      requestId: this.requestId(c),
+    });
+    return c.json({ success: true as const, data: { ok: true as const } });
+  }
+
   private optionalUser(c: Context): AuthUser | undefined {
     return (c as Context<{ Variables: AppVariables }>).get('user');
   }
@@ -698,4 +794,22 @@ export class DiscussionController {
   private requestId(c: Context): string | undefined {
     return (c as Context<{ Variables: AppVariables }>).get('requestId');
   }
+}
+
+function toLemmaLinkWire(link: DiscussionLemmaLink) {
+  return {
+    id: link.id,
+    discussion_id: link.discussionId,
+    reply_id: link.replyId,
+    start: link.start,
+    end: link.end,
+    word_id: link.wordId,
+    lemma: link.lemma,
+    status: link.status,
+    source: link.source,
+    proposed_word_id: link.proposedWordId,
+    proposed_lemma: link.proposedLemma,
+    proposed_by: link.proposedBy,
+    created_at: link.createdAt.toISOString(),
+  };
 }
