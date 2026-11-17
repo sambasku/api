@@ -39,7 +39,7 @@ export function createActivityRoutes(deps: {
     'Auth opsional (tidak pernah 401). Cursor opaque (created_at + id); ' +
     'limit 1-50 (default 20). ' +
     '#193: `category` memfilter chips feed beranda (all | search_miss | ' +
-    'correction | announcement | joined); default `all` = tanpa filter. ' +
+    'correction | explore | jinye | announcement | joined); default `all` = tanpa filter. ' +
     '#167: Bearer sah → baris milik sendiri selalu dibuang server; ' +
     'tamu/token basi tetap feed publik penuh. Query `exclude_self` ' +
     'deprecated (no-op), diterima untuk kompatibilitas klien lama.',

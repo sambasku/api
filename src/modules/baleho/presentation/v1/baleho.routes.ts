@@ -149,5 +149,26 @@ export function createAdminBalehoRoutes(deps: {
       deps.controller.adminMarkPaid(c, c.req.valid('param').id) as never,
   );
 
+  routes.openapi(
+    createRoute({
+      method: 'post',
+      path: '/placements/{id}/pause',
+      tags: ['Baleho'],
+      request: {
+        params: idParam,
+        body: {
+          content: { 'application/json': { schema: rejectBalehoBodySchema } },
+        },
+      },
+      responses: { 200: { description: 'Pause/takedown', content: json } },
+    }),
+    (c) =>
+      deps.controller.adminPause(
+        c,
+        c.req.valid('param').id,
+        c.req.valid('json'),
+      ) as never,
+  );
+
   return routes;
 }

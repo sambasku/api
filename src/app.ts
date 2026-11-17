@@ -1582,8 +1582,14 @@ const layananController = new LayananController(
 const karyaController = new KaryaController(
   new KaryaUseCases(new KaryaRepositoryImpl(db), activityEvents),
 );
+/** Diisi `sendWa` setelah OpenWA di-wire (lihat bawah). */
+const balehoNotify: {
+  mailer: typeof mailer;
+  userRepo: typeof userRepo;
+  sendWa?: import('@/modules/wa/application/use-cases/send-wa-message.use-case').SendWaMessageUseCase;
+} = { mailer, userRepo };
 const balehoController = new BalehoController(
-  new BalehoUseCases(new BalehoRepositoryImpl(db)),
+  new BalehoUseCases(new BalehoRepositoryImpl(db), balehoNotify),
 );
 const usahaClaimUseCases = new UsahaClaimUseCases(
   usahaClaimRepo,
@@ -3534,6 +3540,7 @@ const sendWaMessage = new SendWaMessageUseCase(
   waTemplateRepo,
   appSettingsRepo,
 );
+balehoNotify.sendWa = sendWaMessage;
 const sendVerifierWa = new SendVerifierWaNotificationUseCase(sendWaMessage);
 async function readWaSettings(): Promise<{ enabled: boolean; ctaUrl: string }> {
   return sendWaMessage.readWaSettings();

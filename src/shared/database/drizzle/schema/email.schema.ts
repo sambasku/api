@@ -40,7 +40,14 @@ export const emailLogs = sqliteTable('email_logs', {
   provider: text('provider').notNull(),
   toEmail: text('to_email').notNull(),
   category: text('category', {
-    enum: ['otp', 'reset_password', 'account_deletion', 'verifier_approved', 'test'],
+    enum: [
+      'otp',
+      'reset_password',
+      'account_deletion',
+      'verifier_approved',
+      'baleho_payment',
+      'test',
+    ],
   }).notNull(),
   status: text('status', {
     enum: ['sent', 'failed', 'skipped_quota', 'skipped_env'],

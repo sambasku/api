@@ -13,6 +13,10 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/shared/errors/app-error';
+import type { MailerPort } from '@/modules/auth/application/ports/mailer.port';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { SendWaMessageUseCase } from '@/modules/wa/application/use-cases/send-wa-message.use-case';
+import { logger } from '@/shared/logging/logger';
 import type { CreateBalehoPlacementInput } from '../domain/baleho';
 import type { BalehoRepository } from '../domain/repositories/baleho.repository';
 
@@ -44,7 +48,7 @@ function assertRect(input: CreateBalehoPlacementInput) {
   }
   if (col < 0 || row < 0 || col + w > BALEHO_COLS || row + h > BALEHO_ROWS) {
     throw new ValidationError([
-      { field: 'position', message: 'Area keluar dari papan 4x5' },
+      { field: 'position', message: 'Area keluar dari papan 4x6' },
     ]);
   }
   if (!input.creativeId && !input.frames.length) {
@@ -88,8 +92,17 @@ function assertRect(input: CreateBalehoPlacementInput) {
   }
 }
 
+export type BalehoNotifyDeps = {
+  mailer?: MailerPort;
+  sendWa?: SendWaMessageUseCase;
+  userRepo?: UserRepository;
+};
+
 export class BalehoUseCases {
-  constructor(private readonly repo: BalehoRepository) {}
+  constructor(
+    private readonly repo: BalehoRepository,
+    private readonly notify: BalehoNotifyDeps = {},
+  ) {}
 
   getBoard(slide: number, viewerUserId: string | null) {
     if (slide !== 1 && slide !== 2) {
@@ -182,6 +195,16 @@ export class BalehoUseCases {
   }
 
   async approve(placementId: string) {
+    const row = await this.repo.getPlacementNotify(placementId);
+    if (!row) {
+      throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
+    }
+    if (row.status !== 'pending_review') {
+      throw new BadRequestError(
+        'BALEHO_BAD_STATUS',
+        'Hanya pesanan pending_review yang bisa disetujui',
+      );
+    }
     const ok = await this.repo.updatePlacementStatus({
       placementId,
       status: 'awaiting_payment',
@@ -190,6 +213,7 @@ export class BalehoUseCases {
     if (!ok) {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
     }
+    await this.notifyPayment(row);
   }
 
   async reject(placementId: string, reason?: string) {
@@ -205,6 +229,16 @@ export class BalehoUseCases {
   }
 
   async markPaid(placementId: string) {
+    const row = await this.repo.getPlacementNotify(placementId);
+    if (!row) {
+      throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
+    }
+    if (row.status !== 'awaiting_payment') {
+      throw new BadRequestError(
+        'BALEHO_BAD_STATUS',
+        'Hanya pesanan awaiting_payment yang bisa ditandai lunas',
+      );
+    }
     const now = new Date();
     const ok = await this.repo.updatePlacementStatus({
       placementId,
@@ -217,7 +251,93 @@ export class BalehoUseCases {
     }
   }
 
+  /** Pause/takedown live atau awaiting - lepaskan slot. */
+  async pause(placementId: string, reason?: string) {
+    const row = await this.repo.getPlacementNotify(placementId);
+    if (!row) {
+      throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
+    }
+    if (row.status !== 'live' && row.status !== 'awaiting_payment') {
+      throw new BadRequestError(
+        'BALEHO_BAD_STATUS',
+        'Hanya pesanan live atau awaiting_payment yang bisa di-pause',
+      );
+    }
+    const ok = await this.repo.updatePlacementStatus({
+      placementId,
+      status: 'cancelled',
+      rejectReason: reason ?? 'paused',
+      clearOccupancy: true,
+    });
+    if (!ok) {
+      throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
+    }
+  }
+
   recordEvent(placementId: string, frameId: string | null, eventType: string) {
     return this.repo.recordEvent({ placementId, frameId, eventType });
+  }
+
+  private async notifyPayment(row: {
+    id: string;
+    col: number;
+    row: number;
+    w: number;
+    h: number;
+    advertiserUserId: string;
+  }): Promise<void> {
+    const { mailer, sendWa, userRepo } = this.notify;
+    if (!mailer && !sendWa) return;
+    if (!userRepo) return;
+    try {
+      const user = await userRepo.findById(row.advertiserUserId);
+      if (!user) return;
+      const displayName = user.displayName?.trim() || user.username;
+      const sizeLabel = `${row.w}x${row.h}`;
+      const positionLabel = `kolom ${row.col + 1}, baris ${row.row + 1}`;
+      const payload = {
+        displayName,
+        placementId: row.id,
+        sizeLabel,
+        positionLabel,
+      };
+      if (mailer) {
+        try {
+          await mailer.sendBalehoPaymentEmail(user.email, payload);
+        } catch (err) {
+          logger.warn(
+            { err: err instanceof Error ? err.message : String(err), placementId: row.id },
+            'baleho email bayar gagal',
+          );
+        }
+      }
+      if (sendWa && user.phone) {
+        const body = [
+          `Halo ${displayName},`,
+          'Pesanan Baleho kamu lolos cek dan menunggu pembayaran (48 jam).',
+          `ID: ${row.id} · ${sizeLabel} · ${positionLabel}`,
+          'Balas chat ini atau email kamu untuk instruksi rekening.',
+        ].join('\n');
+        try {
+          await sendWa.execute({
+            eventKey: 'baleho_payment',
+            toPhone: user.phone,
+            channel: 'text',
+            bodyText: body,
+            templateName: 'baleho_payment',
+          });
+        } catch (err) {
+          logger.warn(
+            { err: err instanceof Error ? err.message : String(err), placementId: row.id },
+            'baleho WA bayar gagal',
+          );
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err), placementId: row.id },
+        'baleho notifikasi bayar gagal',
+      );
+    }
   }
 }

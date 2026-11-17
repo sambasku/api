@@ -114,6 +114,7 @@ export class BalehoController {
         h: r.h,
         status: r.status,
         advertiser_user_id: r.advertiserUserId,
+        advertiser_username: r.advertiserUsername,
         referral_username: r.referralUsername,
         created_at: r.createdAt.toISOString(),
       })),
@@ -142,6 +143,15 @@ export class BalehoController {
     placementId: string,
   ) {
     await this.uc.markPaid(placementId);
+    return c.json({ success: true as const, data: { id: placementId } });
+  }
+
+  async adminPause(
+    c: Context<{ Variables: AppVariables }>,
+    placementId: string,
+    body: RejectBody,
+  ) {
+    await this.uc.pause(placementId, body.reason);
     return c.json({ success: true as const, data: { id: placementId } });
   }
 }

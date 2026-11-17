@@ -74,6 +74,32 @@ export class SmtpMailerService implements MailerPort {
     });
   }
 
+  async sendBalehoPaymentEmail(
+    to: string,
+    input: {
+      displayName: string;
+      placementId: string;
+      sizeLabel: string;
+      positionLabel: string;
+    },
+  ): Promise<void> {
+    const { balehoPaymentEmailHtml, balehoPaymentEmailText } = await import(
+      './baleho-payment-email'
+    );
+    if (!this.transporter) {
+      logger.info({ to }, 'DEV: email bayar Baleho tidak dikirim, SMTP belum di-set');
+      return;
+    }
+    await this.transporter.sendMail({
+      from: env.SMTP_USER,
+      to,
+      subject: 'Pesanan Baleho siap dibayar - SambasKu',
+      text: balehoPaymentEmailText(input),
+      html: balehoPaymentEmailHtml(input),
+      attachments: [this.logoAttachment()],
+    });
+  }
+
   private logoAttachment() {
     return {
       filename: OTP_EMAIL_LOGO_FILENAME,

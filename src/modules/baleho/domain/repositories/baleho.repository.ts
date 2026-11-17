@@ -38,10 +38,20 @@ export type BalehoRepository = {
       h: number;
       status: BalehoPlacementStatus;
       advertiserUserId: string;
+      advertiserUsername: string | null;
       referralUsername: string | null;
       createdAt: Date;
     }>
   >;
+  getPlacementNotify(placementId: string): Promise<{
+    id: string;
+    col: number;
+    row: number;
+    w: number;
+    h: number;
+    status: BalehoPlacementStatus;
+    advertiserUserId: string;
+  } | null>;
   updatePlacementStatus(args: {
     placementId: string;
     status: BalehoPlacementStatus;

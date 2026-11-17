@@ -3,6 +3,7 @@ export type EmailCategory =
   | 'reset_password'
   | 'account_deletion'
   | 'verifier_approved'
+  | 'baleho_payment'
   | 'test';
 
 export type EmailLogStatus = 'sent' | 'failed' | 'skipped_quota' | 'skipped_env';

@@ -10,7 +10,7 @@ import { generateId } from '@/shared/utils/ulid';
 import { users } from './users.schema';
 
 export const BALEHO_COLS = 4;
-export const BALEHO_ROWS = 5;
+export const BALEHO_ROWS = 6;
 export const BALEHO_MAX_W = 4;
 export const BALEHO_MAX_H = 2;
 export const BALEHO_MAX_ACTIVE_PER_USER = 2;

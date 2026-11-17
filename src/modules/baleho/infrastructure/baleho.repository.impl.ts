@@ -11,6 +11,7 @@ import {
   type BalehoPlacementStatus,
 } from '@/shared/database/drizzle/schema/baleho.schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
+import { isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
 import { ConflictError } from '@/shared/errors/app-error';
 import { generateId } from '@/shared/utils/ulid';
 import type {
@@ -54,26 +55,30 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       )
       .orderBy(asc(balehoPlacements.row), asc(balehoPlacements.col));
 
-    const visible = rows.filter((p) => {
-      if (p.status === 'live') return true;
-      if (
-        viewerUserId &&
-        p.advertiserUserId === viewerUserId &&
-        (p.status === 'pending_review' || p.status === 'awaiting_payment')
-      ) {
-        return true;
-      }
-      return false;
-    });
-
-    const creativeIds = [...new Set(visible.map((p) => p.creativeId))];
+    // Semua status locking wajib tampil sebagai area terisi (buat semua viewer).
+    // Konten frame hanya untuk live + milik sendiri (pending/awaiting).
+    // Tanpa ini: orang lain lihat sel kosong → pesan → UNIQUE occupancy → 500/409.
+    const contentCreativeIds = [
+      ...new Set(
+        rows
+          .filter((p) => {
+            if (p.status === 'live') return true;
+            return (
+              !!viewerUserId &&
+              p.advertiserUserId === viewerUserId &&
+              (p.status === 'pending_review' || p.status === 'awaiting_payment')
+            );
+          })
+          .map((p) => p.creativeId),
+      ),
+    ];
     const frames =
-      creativeIds.length === 0
+      contentCreativeIds.length === 0
         ? []
         : await this.db
             .select()
             .from(balehoFrames)
-            .where(inArray(balehoFrames.creativeId, creativeIds))
+            .where(inArray(balehoFrames.creativeId, contentCreativeIds))
             .orderBy(asc(balehoFrames.sortOrder));
 
     const framesByCreative = new Map<string, BalehoFrame[]>();
@@ -92,23 +97,28 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       framesByCreative.set(f.creativeId, list);
     }
 
-    const placements: BalehoPlacementView[] = visible.map((p) => ({
-      id: p.id,
-      slide: p.slide,
-      col: p.col,
-      row: p.row,
-      w: p.w,
-      h: p.h,
-      status: p.status,
-      advertiserUserId: p.advertiserUserId,
-      isOwnerPending:
-        !!viewerUserId &&
-        p.advertiserUserId === viewerUserId &&
-        p.status !== 'live',
-      frames: framesByCreative.get(p.creativeId) ?? [],
-      entityType: p.entityType,
-      entityId: p.entityId,
-    }));
+    const placements: BalehoPlacementView[] = rows.map((p) => {
+      const isOwner =
+        !!viewerUserId && p.advertiserUserId === viewerUserId;
+      const showContent =
+        p.status === 'live' ||
+        (isOwner &&
+          (p.status === 'pending_review' || p.status === 'awaiting_payment'));
+      return {
+        id: p.id,
+        slide: p.slide,
+        col: p.col,
+        row: p.row,
+        w: p.w,
+        h: p.h,
+        status: p.status,
+        advertiserUserId: p.advertiserUserId,
+        isOwnerPending: isOwner && p.status !== 'live',
+        frames: showContent ? (framesByCreative.get(p.creativeId) ?? []) : [],
+        entityType: showContent ? p.entityType : null,
+        entityId: showContent ? p.entityId : null,
+      };
+    });
 
     return { slide, cols: BALEHO_COLS, rows: BALEHO_ROWS, placements };
   }
@@ -244,11 +254,12 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         );
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/UNIQUE|unique|constraint/i.test(msg)) {
+      // Drizzle bungkus LibSQL: "Failed query..." di message luar;
+      // UNIQUE ada di cause → pakai helper yang telusuri rantai.
+      if (isUniqueViolation(err)) {
         throw new ConflictError(
           'SLOT_TAKEN',
-          'Slot ini baru saja terisi. Pilih area lain ya.',
+          'Area ini baru saja terisi. Pilih yang lain ya.',
         );
       }
       throw err;
@@ -268,17 +279,42 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         h: balehoPlacements.h,
         status: balehoPlacements.status,
         advertiserUserId: balehoPlacements.advertiserUserId,
+        advertiserUsername: users.username,
         referralUsername: balehoPlacements.referralUsername,
         createdAt: balehoPlacements.createdAt,
       })
       .from(balehoPlacements)
+      .leftJoin(users, eq(users.id, balehoPlacements.advertiserUserId))
       .where(isNull(balehoPlacements.deletedAt))
       .orderBy(desc(balehoPlacements.createdAt))
       .limit(limit);
     return rows.map((r) => ({
       ...r,
+      advertiserUsername: r.advertiserUsername ?? null,
       createdAt: r.createdAt,
     }));
+  }
+
+  async getPlacementNotify(placementId: string) {
+    const rows = await this.db
+      .select({
+        id: balehoPlacements.id,
+        col: balehoPlacements.col,
+        row: balehoPlacements.row,
+        w: balehoPlacements.w,
+        h: balehoPlacements.h,
+        status: balehoPlacements.status,
+        advertiserUserId: balehoPlacements.advertiserUserId,
+      })
+      .from(balehoPlacements)
+      .where(
+        and(
+          eq(balehoPlacements.id, placementId),
+          isNull(balehoPlacements.deletedAt),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
   }
 
   async updatePlacementStatus(args: {
