@@ -110,6 +110,8 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `INTERNAL_ERROR` | 500 | Error tak terduga (bug, koneksi DB putus, dst) |
 | `UPSTREAM_CAPACITY` | 503 | Kapasitas runtime habis, bukan bug: batas subrequest / CPU Workers terlampaui. SATU-SATUNYA kode yang memicu circuit breaker klien pindah tier (kebijakan failover internal). Hanya muncul di tier 1 (Workers); tier 2/3 proses Node tanpa batas subrequest |
 | `IMAGE_UPLOAD_UNAVAILABLE` | 503 | Provider penyimpanan gambar belum dikonfigurasi (env `IMAGEKIT_*`) |
+| `IMAGE_PROXY_UNAVAILABLE` | 503 | Proxy bukti gambar gagal (URL di luar endpoint / fetch ImageKit gagal) |
+| `BALEHO_PAYMENT_PROOF_NOT_FOUND` | 404 | Placement belum punya bukti bayar |
 | `PUBLIC_IMAGE_UPLOAD_UNAVAILABLE` | 503 | Provider gambar publik belum dikonfigurasi / token GitHub invalid (`PUBLIC_IMAGE_GITHUB_*`) |
 | `PUBLIC_IMAGE_UPLOAD_FAILED` | 502 | Upload gambar publik ke GitHub Contents API gagal |
 | `IMAGE_TOO_LARGE` | 400 | File gambar melebihi 5 MB |

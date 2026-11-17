@@ -92,6 +92,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         mediaType: f.mediaType,
         mediaUrl: f.mediaUrl,
         title: f.title,
+        body: f.body,
         ctaLabel: f.ctaLabel,
         actionType: f.actionType,
         actionPayload: f.actionPayload,
@@ -346,6 +347,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
                 mediaType: f.mediaType,
                 mediaUrl: f.mediaUrl ?? null,
                 title: f.title ?? null,
+                body: f.body ?? null,
                 ctaLabel: f.ctaLabel ?? null,
                 actionType: f.actionType,
                 actionPayload: f.actionPayload,
@@ -552,6 +554,30 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       )
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  async getPaymentProof(placementId: string) {
+    const rows = await this.db
+      .select({
+        paymentProofUrl: balehoPlacements.paymentProofUrl,
+        paymentProofFileId: balehoPlacements.paymentProofFileId,
+      })
+      .from(balehoPlacements)
+      .where(
+        and(
+          eq(balehoPlacements.id, placementId),
+          isNull(balehoPlacements.deletedAt),
+        ),
+      )
+      .limit(1);
+    const row = rows[0];
+    if (!row?.paymentProofUrl?.trim() || !row.paymentProofFileId?.trim()) {
+      return null;
+    }
+    return {
+      paymentProofUrl: row.paymentProofUrl.trim(),
+      paymentProofFileId: row.paymentProofFileId.trim(),
+    };
   }
 
   async updatePlacementStatus(args: {

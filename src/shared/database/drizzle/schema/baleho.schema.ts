@@ -105,6 +105,8 @@ export const balehoFrames = sqliteTable(
     mediaType: text('media_type').notNull().$type<BalehoMediaType>(),
     mediaUrl: text('media_url'),
     title: text('title'),
+    /** Teks body sheet (maks 320 di validator). */
+    body: text('body'),
     ctaLabel: text('cta_label'),
     actionType: text('action_type').notNull().$type<BalehoActionType>(),
     actionPayload: text('action_payload').notNull(),

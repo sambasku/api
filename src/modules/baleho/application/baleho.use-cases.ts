@@ -31,7 +31,7 @@ import type { BalehoRepository } from '../domain/repositories/baleho.repository'
 function fingerprintOf(input: CreateBalehoPlacementInput): string {
   const parts = input.frames.map(
     (f) =>
-      `${f.mediaType}|${f.mediaUrl ?? ''}|${f.title ?? ''}|${f.ctaLabel ?? ''}|${f.actionType}|${f.actionPayload}`,
+      `${f.mediaType}|${f.mediaUrl ?? ''}|${f.title ?? ''}|${f.body ?? ''}|${f.ctaLabel ?? ''}|${f.actionType}|${f.actionPayload}`,
   );
   return parts.join('||');
 }
@@ -297,6 +297,20 @@ export class BalehoUseCases {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
     }
     await this.notifyDecision(row, 'rejected');
+  }
+
+  /**
+   * URL internal bukti bayar untuk proxy admin. Tidak diekspos ke wire list.
+   */
+  async getPaymentProofUrl(placementId: string): Promise<string> {
+    const proof = await this.repo.getPaymentProof(placementId);
+    if (!proof) {
+      throw new NotFoundError(
+        'BALEHO_PAYMENT_PROOF_NOT_FOUND',
+        'Bukti pembayaran belum ada untuk pesanan ini',
+      );
+    }
+    return proof.paymentProofUrl;
   }
 
   async markPaid(

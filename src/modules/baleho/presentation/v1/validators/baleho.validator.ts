@@ -10,6 +10,7 @@ const frameSchema = z.object({
   media_type: z.enum(BALEHO_MEDIA_TYPES),
   media_url: z.string().url().max(2000).nullable().optional(),
   title: z.string().max(120).nullable().optional(),
+  body: z.string().max(320).nullable().optional(),
   cta_label: z.string().max(40).nullable().optional(),
   action_type: z.enum(BALEHO_ACTION_TYPES),
   action_payload: z.string().min(1).max(2000),

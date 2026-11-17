@@ -1,4 +1,6 @@
 import type { Context } from 'hono';
+import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
+import { ForbiddenError, ServiceUnavailableError } from '@/shared/errors/app-error';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import type { BalehoUseCases } from '../../application/baleho.use-cases';
@@ -13,6 +15,8 @@ type CreateBody = z.infer<typeof createBalehoPlacementBodySchema>;
 type EventBody = z.infer<typeof balehoEventBodySchema>;
 type RejectBody = z.infer<typeof rejectBalehoBodySchema>;
 type MarkPaidBody = z.infer<typeof markPaidBalehoBodySchema>;
+
+const PAYMENT_PROOF_ROLES = new Set(['root', 'admin']);
 
 function serializeBoard(board: Awaited<ReturnType<BalehoUseCases['getBoard']>>) {
   return {
@@ -37,6 +41,7 @@ function serializeBoard(board: Awaited<ReturnType<BalehoUseCases['getBoard']>>) 
         media_type: f.mediaType,
         media_url: f.mediaUrl,
         title: f.title,
+        body: f.body,
         cta_label: f.ctaLabel,
         action_type: f.actionType,
         action_payload: f.actionPayload,
@@ -46,7 +51,10 @@ function serializeBoard(board: Awaited<ReturnType<BalehoUseCases['getBoard']>>) 
 }
 
 export class BalehoController {
-  constructor(private readonly uc: BalehoUseCases) {}
+  constructor(
+    private readonly uc: BalehoUseCases,
+    private readonly imageStorage?: ImageStoragePort,
+  ) {}
 
   async getBoard(c: Context<{ Variables: AppVariables }>, slide: number) {
     const viewer = c.get('user')?.user_id ?? null;
@@ -85,6 +93,7 @@ export class BalehoController {
         mediaType: f.media_type,
         mediaUrl: f.media_url,
         title: f.title,
+        body: f.body,
         ctaLabel: f.cta_label,
         actionType: f.action_type,
         actionPayload: f.action_payload,
@@ -174,7 +183,8 @@ export class BalehoController {
           advertiser_user_id: r.advertiserUserId,
           advertiser_username: r.advertiserUsername,
           referral_username: r.referralUsername,
-          payment_proof_url: r.paymentProofUrl,
+          // Raw ImageKit URL tidak diekspos - preview lewat GET .../payment-proof.
+          has_payment_proof: Boolean(r.paymentProofUrl?.trim()),
           quoted_amount: r.quotedAmount,
           price_per_cell_per_day: r.pricePerCellPerDay,
           days: r.days,
@@ -214,6 +224,40 @@ export class BalehoController {
       paymentProofFileId: body.payment_proof_file_id,
     });
     return c.json({ success: true as const, data: { id: placementId } });
+  }
+
+  /**
+   * Stream bukti bayar - hanya root/admin. Client fetch dengan Bearer,
+   * tampilkan sebagai blob di popup (jangan buka URL CDN mentah).
+   */
+  async adminPaymentProof(
+    c: Context<{ Variables: AppVariables }>,
+    placementId: string,
+  ) {
+    const user = c.get('user');
+    const allowed = user?.roles.some((r) => PAYMENT_PROOF_ROLES.has(r)) ?? false;
+    if (!allowed) {
+      throw new ForbiddenError(
+        'FORBIDDEN',
+        'Bukti pembayaran hanya bisa dilihat admin.',
+      );
+    }
+    if (!this.imageStorage) {
+      throw new ServiceUnavailableError(
+        'IMAGE_PROXY_UNAVAILABLE',
+        'Proxy gambar belum siap',
+      );
+    }
+    const url = await this.uc.getPaymentProofUrl(placementId);
+    const file = await this.imageStorage.fetchAuthenticatedFile(url);
+    return new Response(file.bytes, {
+      status: 200,
+      headers: {
+        'Content-Type': file.contentType,
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
   }
 
   async adminPause(

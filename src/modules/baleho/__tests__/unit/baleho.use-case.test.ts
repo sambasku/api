@@ -53,6 +53,7 @@ function mockRepo(partial: Partial<BalehoRepository> = {}): BalehoRepository {
     listAdmin: vi.fn(),
     listMine: vi.fn().mockResolvedValue([]),
     getPlacementNotify: vi.fn(),
+    getPaymentProof: vi.fn().mockResolvedValue(null),
     updatePlacementStatus: vi.fn(),
     releaseDue: vi.fn().mockResolvedValue({ cancelled: 0, expired: 0 }),
     createCommissionUnclaimed: vi.fn(),
@@ -244,6 +245,29 @@ describe('BalehoUseCases.createPlacement quote', () => {
         pricePerCellPerDay: 3000,
         quotedAmount: 2 * 1 * 7 * 3000,
       }),
+    );
+  });
+});
+
+describe('BalehoUseCases.getPaymentProofUrl', () => {
+  it('404 bila belum ada bukti', async () => {
+    const uc = new BalehoUseCases(mockRepo());
+    await expect(uc.getPaymentProofUrl('01PLACEMENT00000000000001')).rejects.toMatchObject({
+      errorCode: 'BALEHO_PAYMENT_PROOF_NOT_FOUND',
+    });
+  });
+
+  it('kembalikan URL internal bila ada', async () => {
+    const uc = new BalehoUseCases(
+      mockRepo({
+        getPaymentProof: vi.fn().mockResolvedValue({
+          paymentProofUrl: 'https://ik.imagekit.io/x/baleho/payment-proofs/a.jpg',
+          paymentProofFileId: 'file_1',
+        }),
+      }),
+    );
+    await expect(uc.getPaymentProofUrl('01PLACEMENT00000000000001')).resolves.toBe(
+      'https://ik.imagekit.io/x/baleho/payment-proofs/a.jpg',
     );
   });
 });

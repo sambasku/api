@@ -101,6 +101,11 @@ export type BalehoRepository = {
     advertiserUserId: string;
     referrerUserId: string | null;
   } | null>;
+  /** URL + file id bukti bayar (internal) - null bila belum ada. */
+  getPaymentProof(placementId: string): Promise<{
+    paymentProofUrl: string;
+    paymentProofFileId: string;
+  } | null>;
   updatePlacementStatus(args: {
     placementId: string;
     status: BalehoPlacementStatus;

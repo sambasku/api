@@ -213,6 +213,30 @@ export function createAdminBalehoRoutes(deps: {
 
   routes.openapi(
     createRoute({
+      method: 'get',
+      path: '/placements/{id}/payment-proof',
+      tags: ['Baleho'],
+      request: { params: idParam },
+      responses: {
+        200: {
+          description:
+            'Byte gambar bukti bayar (root/admin saja). Cache-Control: private, no-store.',
+          content: {
+            'image/*': { schema: z.any() },
+            'application/octet-stream': { schema: z.any() },
+          },
+        },
+      },
+    }),
+    (c) =>
+      deps.controller.adminPaymentProof(
+        c,
+        c.req.valid('param').id,
+      ) as never,
+  );
+
+  routes.openapi(
+    createRoute({
       method: 'post',
       path: '/placements/{id}/pause',
       tags: ['Baleho'],

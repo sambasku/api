@@ -12,6 +12,7 @@ export type BalehoFrame = {
   mediaType: BalehoMediaType;
   mediaUrl: string | null;
   title: string | null;
+  body: string | null;
   ctaLabel: string | null;
   actionType: BalehoActionType;
   actionPayload: string;
@@ -53,6 +54,7 @@ export type CreateBalehoPlacementInput = {
     mediaType: BalehoMediaType;
     mediaUrl?: string | null;
     title?: string | null;
+    body?: string | null;
     ctaLabel?: string | null;
     actionType: BalehoActionType;
     actionPayload: string;

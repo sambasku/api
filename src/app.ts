@@ -1632,7 +1632,7 @@ const balehoUseCases = new BalehoUseCases(
   balehoNotify,
   appSettingsRepo,
 );
-const balehoController = new BalehoController(balehoUseCases);
+const balehoController = new BalehoController(balehoUseCases, imageStorage);
 const usahaClaimUseCases = new UsahaClaimUseCases(
   usahaClaimRepo,
   usahaRepo,

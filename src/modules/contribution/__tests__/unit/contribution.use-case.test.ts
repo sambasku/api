@@ -97,7 +97,12 @@ function makeReviewDeps() {
     softDeleteWordImages: vi.fn().mockResolvedValue(undefined),
   });
   const publicImageStorage = { providerName: 'github', upload: vi.fn(), delete: vi.fn() };
-  const imageStorage = { providerName: 'imagekit', createUploadCredentials: vi.fn(), deleteFile: vi.fn() };
+  const imageStorage = {
+    providerName: 'imagekit',
+    createUploadCredentials: vi.fn(),
+    deleteFile: vi.fn(),
+    fetchAuthenticatedFile: vi.fn(),
+  };
   return { contributionRepo, wordRepo, auditRepo, publicImageStorage, imageStorage };
 }
 
