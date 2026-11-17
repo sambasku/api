@@ -66,6 +66,24 @@ export type BalehoRepository = {
       taps: number;
     }>
   >;
+  listMine(
+    advertiserUserId: string,
+    limit: number,
+  ): Promise<
+    Array<{
+      id: string;
+      slide: number;
+      col: number;
+      row: number;
+      w: number;
+      h: number;
+      status: BalehoPlacementStatus;
+      title: string | null;
+      mediaUrl: string | null;
+      createdAt: Date;
+      endsAt: Date | null;
+    }>
+  >;
   getPlacementNotify(placementId: string): Promise<{
     id: string;
     col: number;

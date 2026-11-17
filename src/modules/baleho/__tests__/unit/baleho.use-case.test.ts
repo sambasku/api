@@ -51,6 +51,7 @@ function mockRepo(partial: Partial<BalehoRepository> = {}): BalehoRepository {
       creativeId: '01CREATIVE000000000000001',
     }),
     listAdmin: vi.fn(),
+    listMine: vi.fn().mockResolvedValue([]),
     getPlacementNotify: vi.fn(),
     updatePlacementStatus: vi.fn(),
     releaseDue: vi.fn().mockResolvedValue({ cancelled: 0, expired: 0 }),

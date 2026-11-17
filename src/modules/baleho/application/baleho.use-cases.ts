@@ -219,6 +219,10 @@ export class BalehoUseCases {
     return this.repo.listApprovedCreatives(ownerUserId);
   }
 
+  listMyPlacements(advertiserUserId: string, limit = 50) {
+    return this.repo.listMine(advertiserUserId, limit);
+  }
+
   listAdmin(limit = 50) {
     return this.repo.listAdmin(limit);
   }

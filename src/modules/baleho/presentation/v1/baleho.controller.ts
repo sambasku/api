@@ -118,6 +118,29 @@ export class BalehoController {
     });
   }
 
+  async listMyPlacements(c: Context<{ Variables: AppVariables }>) {
+    const userId = c.get('user')!.user_id;
+    const rows = await this.uc.listMyPlacements(userId);
+    return c.json({
+      success: true as const,
+      data: {
+        items: rows.map((r) => ({
+          id: r.id,
+          slide: r.slide,
+          col: r.col,
+          row: r.row,
+          w: r.w,
+          h: r.h,
+          status: r.status,
+          title: r.title,
+          media_url: r.mediaUrl,
+          created_at: r.createdAt.toISOString(),
+          ends_at: r.endsAt?.toISOString() ?? null,
+        })),
+      },
+    });
+  }
+
   async adminList(c: Context<{ Variables: AppVariables }>) {
     const rows = await this.uc.listAdmin(100);
     return c.json({

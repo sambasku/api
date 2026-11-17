@@ -450,6 +450,73 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     });
   }
 
+  async listMine(advertiserUserId: string, limit: number) {
+    const rows = await this.db
+      .select({
+        id: balehoPlacements.id,
+        slide: balehoPlacements.slide,
+        col: balehoPlacements.col,
+        row: balehoPlacements.row,
+        w: balehoPlacements.w,
+        h: balehoPlacements.h,
+        status: balehoPlacements.status,
+        creativeId: balehoPlacements.creativeId,
+        createdAt: balehoPlacements.createdAt,
+        endsAt: balehoPlacements.endsAt,
+      })
+      .from(balehoPlacements)
+      .where(
+        and(
+          eq(balehoPlacements.advertiserUserId, advertiserUserId),
+          isNull(balehoPlacements.deletedAt),
+        ),
+      )
+      .orderBy(desc(balehoPlacements.createdAt))
+      .limit(limit);
+
+    if (rows.length === 0) return [];
+
+    const creativeIds = [...new Set(rows.map((r) => r.creativeId))];
+    const frames = await this.db
+      .select({
+        creativeId: balehoFrames.creativeId,
+        sortOrder: balehoFrames.sortOrder,
+        title: balehoFrames.title,
+        mediaUrl: balehoFrames.mediaUrl,
+      })
+      .from(balehoFrames)
+      .where(inArray(balehoFrames.creativeId, creativeIds))
+      .orderBy(asc(balehoFrames.sortOrder));
+    const firstFrame = new Map<
+      string,
+      { title: string | null; mediaUrl: string | null }
+    >();
+    for (const f of frames) {
+      if (firstFrame.has(f.creativeId)) continue;
+      firstFrame.set(f.creativeId, {
+        title: f.title,
+        mediaUrl: f.mediaUrl,
+      });
+    }
+
+    return rows.map((r) => {
+      const frame = firstFrame.get(r.creativeId);
+      return {
+        id: r.id,
+        slide: r.slide,
+        col: r.col,
+        row: r.row,
+        w: r.w,
+        h: r.h,
+        status: r.status,
+        title: frame?.title ?? null,
+        mediaUrl: frame?.mediaUrl ?? null,
+        createdAt: r.createdAt,
+        endsAt: r.endsAt,
+      };
+    });
+  }
+
   async getPlacementNotify(placementId: string) {
     const rows = await this.db
       .select({
