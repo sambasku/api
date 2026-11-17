@@ -28,9 +28,9 @@ import type {
   ListArticleCommentsUseCase,
   ListArticleContributionsUseCase,
   ListMyArticleContributionsUseCase,
-  ResubmitArticleContributionUseCase,
   ReviewArticleContributionUseCase,
   SubmitArticleContributionUseCase,
+  UpdateArticleContributionUseCase,
   TakedownArticleCommentUseCase,
   ToggleArticleBookmarkUseCase,
   UpdateArticleCommentUseCase,
@@ -187,7 +187,8 @@ export interface EncyclopediaControllerDeps {
   takedownComment: TakedownArticleCommentUseCase;
   toggleBookmark: ToggleArticleBookmarkUseCase;
   submitContribution: SubmitArticleContributionUseCase;
-  resubmitContribution: ResubmitArticleContributionUseCase;
+  /** Alias runtime: ResubmitArticleContributionUseCase (= UpdateArticleContributionUseCase). */
+  resubmitContribution: UpdateArticleContributionUseCase;
   listMyContributions: ListMyArticleContributionsUseCase;
   listContributions: ListArticleContributionsUseCase;
   reviewContribution: ReviewArticleContributionUseCase;
