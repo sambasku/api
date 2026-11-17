@@ -259,15 +259,15 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
       method: 'patch',
       path: '/contributions/:id',
       tags: ['Encyclopedia', 'Encyclopedia Contributions'],
-      summary: 'Kirim ulang usulan yang berstatus needs_revision',
+      summary: 'Ubah usulan pending / needs_revision (in-place, milik pengusul)',
       request: {
         params: articleIdParamSchema,
         body: { content: json(resubmitContributionBodySchema) },
       },
       responses: {
-        201: okResponse('Usulan dikirim ulang'),
+        200: okResponse('Usulan diperbarui'),
         404: { description: 'Usulan tidak ditemukan', content: json(errorResponseSchema) },
-        409: { description: 'Status tidak bisa dikirim ulang', content: json(errorResponseSchema) },
+        409: { description: 'Usulan sudah diverifikasi', content: json(errorResponseSchema) },
       },
     }),
     createRoute({

@@ -7,6 +7,10 @@ import {
   discussions,
 } from '@/shared/database/drizzle/schema/discussions.schema';
 import { articles } from '@/shared/database/drizzle/schema/encyclopedia.schema';
+import {
+  leaderboardWeekEntries,
+  leaderboardWeeks,
+} from '@/shared/database/drizzle/schema/leaderboard.schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
 import type { AchievementCriteria } from './entities/achievement.entity';
 
@@ -211,6 +215,51 @@ const discussionRepliesPublishedSource: AchievementSourceDefinition = {
   },
 };
 
+/**
+ * Pernah masuk rentang rank di snapshot minggu yang sudah finalized.
+ * filters.rank_min / rank_max (string angka, inklusif). Threshold tidak dipakai
+ * (cukup EXISTS sekali); repeat_count dihitung di list dari COUNT entries.
+ */
+const leaderboardTopSource: AchievementSourceDefinition = {
+  source: 'leaderboard_top',
+  label: 'Peringkat mingguan',
+  description:
+    'Pernah masuk rentang rank pada snapshot leaderboard minggu yang sudah dibekukan.',
+  kind: 'user_match',
+  supportsThreshold: false,
+  supportsWindow: true,
+  filterFields: [
+    { key: 'rank_min', label: 'Rank minimum (inklusif)' },
+    { key: 'rank_max', label: 'Rank maksimum (inklusif)' },
+  ],
+  buildMatch(criteria: AchievementCriteria): SQL {
+    const minRaw = criteria.filters?.rank_min;
+    const maxRaw = criteria.filters?.rank_max;
+    const rankMin = minRaw != null ? Number(minRaw) : NaN;
+    const rankMax = maxRaw != null ? Number(maxRaw) : NaN;
+    if (!Number.isFinite(rankMin) || !Number.isFinite(rankMax) || rankMin < 1 || rankMax < rankMin) {
+      return sql`1 = 0`;
+    }
+    const from = criteria.window?.from;
+    const to = criteria.window?.to;
+    const fromBound = from ? parseWindowBound(from, 'from') : null;
+    const toBound = to ? parseWindowBound(to, 'to') : null;
+    return sql`exists (
+      select 1
+      from ${leaderboardWeekEntries} e
+      inner join ${leaderboardWeeks} w
+        on w.week_id = e.week_id
+       and w.finalized_at is not null
+       and w.deleted_at is null
+      where e.user_id = ${users.id}
+        and e.rank >= ${rankMin}
+        and e.rank <= ${rankMax}
+        ${fromBound ? sql`and w.started_at >= ${fromBound}` : sql``}
+        ${toBound ? sql`and w.started_at < ${toBound}` : sql``}
+    )`;
+  },
+};
+
 export const ACHIEVEMENT_SOURCE_REGISTRY: Record<string, AchievementSourceDefinition> = {
   registration: registrationSource,
   manual: manualSource,
@@ -220,6 +269,7 @@ export const ACHIEVEMENT_SOURCE_REGISTRY: Record<string, AchievementSourceDefini
   discussions_created: discussionsCreatedSource,
   discussion_replies_published: discussionRepliesPublishedSource,
   articles_published: articlesPublishedSource,
+  leaderboard_top: leaderboardTopSource,
 };
 
 export const ACHIEVEMENT_SELECTABLE_SOURCES: AchievementSourceDefinition[] =

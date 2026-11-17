@@ -106,3 +106,4 @@ export * from "./karya-excerpts.schema";
 export * from "./karya-lemma-links.schema";
 export * from "./karya-contributions.schema";
 export * from "./baleho.schema";
+export * from "./leaderboard.schema";

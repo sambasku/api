@@ -34,8 +34,11 @@ export class RunDueAchievementScanUseCase {
     private readonly auditRepo?: AuditLogRepository,
   ) {}
 
-  async execute(now: Date = new Date()): Promise<RunDueAchievementScanResult> {
-    if (this.settingsRepo) {
+  async execute(
+    now: Date = new Date(),
+    opts?: { force?: boolean },
+  ): Promise<RunDueAchievementScanResult> {
+    if (!opts?.force && this.settingsRepo) {
       const lastRaw = await this.settingsRepo.getValue(ACHIEVEMENTS_LAST_SCAN_KEY);
       if (lastRaw) {
         const last = new Date(lastRaw);

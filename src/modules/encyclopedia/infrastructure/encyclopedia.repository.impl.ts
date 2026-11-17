@@ -1029,6 +1029,32 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
     return this.findContributionById(row.id);
   }
 
+  async updateContributionPayload(input: {
+    id: string;
+    payload: ArticlePayload;
+    resetToPending: boolean;
+  }): Promise<ArticleContribution | null> {
+    const [row] = await this.db
+      .update(articleContributions)
+      .set({
+        payloadJson: JSON.stringify(input.payload),
+        updatedAt: new Date(),
+        ...(input.resetToPending
+          ? {
+              status: 'pending' as const,
+              revisionNote: null,
+              rejectReasonCode: null,
+              rejectReasonText: null,
+              reviewedAt: null,
+            }
+          : {}),
+      })
+      .where(eq(articleContributions.id, input.id))
+      .returning({ id: articleContributions.id });
+    if (!row) return null;
+    return this.findContributionById(row.id);
+  }
+
   async clearActiveEdit(articleId: string, userId: string): Promise<void> {
     // Index partial unik hanya menjaga status aktif; setelah approve/reject
     // baris tetap ada sebagai riwayat, jadi tidak perlu update apa pun.

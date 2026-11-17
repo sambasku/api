@@ -119,6 +119,8 @@ discussions,
   balehoPlacements,
   balehoFrames,
   balehoCreatives,
+  leaderboardWeekEntries,
+  leaderboardWeeks,
 } from "./schema";
 import { FIRST_PARTY_SCOPE_STRING } from "@/modules/developer-oauth/domain/entities/api-client.entity";
 
@@ -537,6 +539,9 @@ pantuns,
     balehoPlacements,
     balehoFrames,
     balehoCreatives,
+    // Leaderboard (entries sebelum weeks; entries FK users)
+    leaderboardWeekEntries,
+    leaderboardWeeks,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,

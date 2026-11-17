@@ -160,6 +160,16 @@ export interface ArticleRepository {
     rejectReasonText?: string | null;
     resultArticleId?: string | null;
   }): Promise<ArticleContribution | null>;
+  /**
+   * Update payload usulan milik pengusul (pending / needs_revision → pending).
+   * Tidak menulis reviewedAt (bukan aksi review admin).
+   */
+  updateContributionPayload(input: {
+    id: string;
+    payload: ArticlePayload;
+    /** true bila dari needs_revision: status balik pending + bersihkan catatan. */
+    resetToPending: boolean;
+  }): Promise<ArticleContribution | null>;
   /** Kosongkan posisi usulan edit aktif (setelah approve/reject) supaya index partial bebas. */
   clearActiveEdit(articleId: string, userId: string): Promise<void>;
   /** Ada usulan edit aktif lain (user lain) di artikel ini? */

@@ -22,6 +22,8 @@ export type BalehoRepository = {
     creativeId: string,
     ownerUserId: string,
   ): Promise<BalehoCreativeMeta | null>;
+  /** Jumlah slide/frame creative (untuk quote × slide). */
+  countFrames(creativeId: string): Promise<number>;
   /** Creative approved milik user (untuk reaktivasi). */
   listApprovedCreatives(ownerUserId: string): Promise<
     Array<{
@@ -29,6 +31,7 @@ export type BalehoRepository = {
       fingerprint: string;
       title: string | null;
       mediaUrl: string | null;
+      frameCount: number;
       lastReferralUsername: string | null;
       lastReferrerUserId: string | null;
     }>

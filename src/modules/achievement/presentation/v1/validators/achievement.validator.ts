@@ -120,6 +120,33 @@ export const achievementCriteriaSchema = z
         }
       }
     }
+
+    if (c.source === 'leaderboard_top') {
+      const minRaw = filters?.rank_min;
+      const maxRaw = filters?.rank_max;
+      const rankMin = minRaw != null ? Number(minRaw) : NaN;
+      const rankMax = maxRaw != null ? Number(maxRaw) : NaN;
+      if (!Number.isFinite(rankMin) || rankMin < 1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['filters', 'rank_min'],
+          message: 'leaderboard_top wajib filters.rank_min angka >= 1',
+        });
+      }
+      if (!Number.isFinite(rankMax) || rankMax < 1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['filters', 'rank_max'],
+          message: 'leaderboard_top wajib filters.rank_max angka >= 1',
+        });
+      } else if (Number.isFinite(rankMin) && rankMax < rankMin) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['filters', 'rank_max'],
+          message: 'rank_max harus >= rank_min',
+        });
+      }
+    }
   });
 
 /** Slug kode achievement: lowercase, angka, hyphen. Stabil, tidak diubah. */
@@ -221,6 +248,8 @@ const achievementOwnershipSchema = achievementItemSchema.extend({
     })
     .nullable()
     .optional(),
+  /** Owned leaderboard_top: berapa kali masuk rentang rank. */
+  repeat_count: z.number().int().nonnegative().nullable().optional(),
 });
 
 export const achievementItemResponseSchema = z.object({

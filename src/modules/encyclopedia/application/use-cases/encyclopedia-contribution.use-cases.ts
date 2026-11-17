@@ -310,15 +310,23 @@ export class SubmitArticleContributionUseCase {
   }
 }
 
-export class ResubmitArticleContributionUseCase {
+/**
+ * Update usulan milik pengusul selama belum diverifikasi
+ * (`pending` atau `needs_revision`) - payload diganti in-place.
+ * Alias historis: ResubmitArticleContributionUseCase (PATCH yang sama).
+ */
+export class UpdateArticleContributionUseCase {
   constructor(
     private readonly repo: ArticleRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
-  ) {}
+  ) {
+    void this.blocklistRepo;
+    void this.abuse;
+  }
 
-  /** Kirim ulang usulan yang statusnya needs_revision: payload diganti. */  async execute(input: {
+  async execute(input: {
     contributionId: string;
     userId: string;
     payload: SubmitContributionInput['payload'];
@@ -329,50 +337,38 @@ export class ResubmitArticleContributionUseCase {
     if (!existing || existing.userId !== input.userId) {
       throw new NotFoundError('CONTRIBUTION_NOT_FOUND', 'Usulan tidak ditemukan');
     }
-    if (existing.status !== 'needs_revision') {
+    if (existing.status !== 'pending' && existing.status !== 'needs_revision') {
       throw new ConflictError(
-        'CONTRIBUTION_NOT_RESUBMITTABLE',
-        'Hanya usulan dengan catatan revisi yang bisa dikirim ulang',
+        'CONTRIBUTION_NOT_EDITABLE',
+        'Usulan yang sudah diverifikasi tidak bisa diubah',
       );
     }
     validateArticlePayload(input.payload);
-    // Reuse submit path: payload baru jadi usulan pending (riwayat lama
-    // tetap tercatat di baris lama; statusnya sudah bukan aktif).
-    void this.blocklistRepo;
-    return this.submitNew(input, existing);
-  }
 
-  private async submitNew(
-    input: {
-      contributionId: string;
-      userId: string;
-      payload: SubmitContributionInput['payload'];
-      requestId?: string | null;
-    },
-    previous: ArticleContribution,
-  ): Promise<ArticleContribution> {
-    // Tandai baris lama selesai (rejected tanpa alasan = resubmit path).
-    await this.repo.setContributionStatus({
-      id: previous.id,
-      status: 'rejected',
-      rejectReasonCode: 'resubmitted',
-      rejectReasonText: 'Dikirim ulang sebagai usulan baru',
-    });
-    const submitter = new SubmitArticleContributionUseCase(
-      this.repo,
-      this.auditRepo,
-      this.blocklistRepo,
-      this.abuse,
-    );
-    return submitter.execute({
-      userId: input.userId,
-      kind: previous.kind,
-      articleId: previous.articleId,
+    const updated = await this.repo.updateContributionPayload({
+      id: existing.id,
       payload: input.payload,
-      requestId: input.requestId,
+      resetToPending: existing.status === 'needs_revision',
     });
+    if (!updated) {
+      throw new NotFoundError('CONTRIBUTION_NOT_FOUND', 'Usulan tidak ditemukan');
+    }
+
+    await this.auditRepo.record({
+      userId: input.userId,
+      action: 'update',
+      entityType: 'article_contribution',
+      entityId: updated.id,
+      oldData: { status: existing.status },
+      newData: { status: updated.status },
+      requestId: input.requestId ?? null,
+    });
+    return updated;
   }
 }
+
+/** @deprecated Pakai UpdateArticleContributionUseCase - nama lama untuk DI. */
+export const ResubmitArticleContributionUseCase = UpdateArticleContributionUseCase;
 
 export class ListMyArticleContributionsUseCase {
   constructor(private readonly repo: ArticleRepository) {}

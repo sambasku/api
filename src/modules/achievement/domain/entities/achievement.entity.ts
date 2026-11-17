@@ -73,6 +73,11 @@ export interface AchievementWithOwnership extends Achievement {
    * / profil publik.
    */
   progress?: AchievementProgress | null;
+  /**
+   * Berapa kali masuk rentang rank (source `leaderboard_top`, owned).
+   * Derived COUNT dari snapshot finalized; null = bukan source itu / locked.
+   */
+  repeatCount?: number | null;
 }
 
 /** Pemenuh kriteria untuk preview / backfill. */

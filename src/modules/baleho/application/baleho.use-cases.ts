@@ -36,6 +36,18 @@ function fingerprintOf(input: CreateBalehoPlacementInput): string {
   return parts.join('||');
 }
 
+/** Qty = sel × hari × slide. 2 slide = ×2. */
+function quoteAmount(args: {
+  w: number;
+  h: number;
+  days: number;
+  pricePerCellPerDay: number;
+  slideCount: number;
+}): number {
+  const slides = Math.max(1, args.slideCount);
+  return args.w * args.h * args.days * args.pricePerCellPerDay * slides;
+}
+
 function assertRect(input: CreateBalehoPlacementInput) {
   const { col, row, w, h, slide } = input;
   if (slide !== 1 && slide !== 2) {
@@ -149,7 +161,6 @@ export class BalehoUseCases {
 
     const days = Math.min(Math.max(input.days ?? BALEHO_MAX_DAYS, 1), BALEHO_MAX_DAYS);
     const pricePerCellPerDay = await this.readPricePerCellPerDay();
-    const quotedAmount = input.w * input.h * days * pricePerCellPerDay;
 
     // Reaktivasi creative approved → skip review, awaiting_payment.
     if (input.creativeId) {
@@ -179,6 +190,14 @@ export class BalehoUseCases {
       }
       // Spec: reaktivasi ikut referrer lama (abaikan ref baru dari form).
       const lastRef = await this.repo.getLatestReferralForCreative(input.creativeId);
+      const slideCount = Math.max(1, await this.repo.countFrames(input.creativeId));
+      const quotedAmount = quoteAmount({
+        w: input.w,
+        h: input.h,
+        days,
+        pricePerCellPerDay,
+        slideCount,
+      });
       const endsAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
       return this.repo.createPlacement({
         advertiserUserId,
@@ -223,6 +242,15 @@ export class BalehoUseCases {
         'Konten dan aksi ini sama dengan pesanan aktifmu. Ubah dulu ya.',
       );
     }
+
+    const slideCount = Math.max(1, input.frames.length);
+    const quotedAmount = quoteAmount({
+      w: input.w,
+      h: input.h,
+      days,
+      pricePerCellPerDay,
+      slideCount,
+    });
 
     return this.repo.createPlacement({
       advertiserUserId,

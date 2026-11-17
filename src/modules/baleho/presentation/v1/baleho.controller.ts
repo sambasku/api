@@ -134,6 +134,7 @@ export class BalehoController {
           fingerprint: r.fingerprint,
           title: r.title,
           media_url: r.mediaUrl,
+          frame_count: r.frameCount,
           last_referral_username: r.lastReferralUsername,
         })),
       },

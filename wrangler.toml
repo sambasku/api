@@ -56,6 +56,8 @@ PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/sambasku/audios"
 # Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
 SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
+# Leaderboard CDN (opsional sampai repo + secret siap).
+LEADERBOARD_GITHUB_URL = "https://github.com/sambasku/leaderboard"
 # Gate JWT azp pada write (true = ketat: token tanpa azp -> CLIENT_REQUIRED).
 # Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
 # -> client paksa re-login. Cutover lewat redeploy.
@@ -135,6 +137,8 @@ PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/coem/staging-audios"
 # Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
 SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
+# Leaderboard CDN staging (pisah dari prod sambasku/leaderboard).
+LEADERBOARD_GITHUB_URL = "https://github.com/coem/staging-leaderboard"
 # Gate JWT azp pada write (true = ketat: token tanpa azp -> CLIENT_REQUIRED).
 # Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
 # -> client paksa re-login. Cutover lewat redeploy.

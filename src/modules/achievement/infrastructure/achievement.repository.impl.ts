@@ -8,6 +8,8 @@ import {
   contributions,
   discussionReplies,
   discussions,
+  leaderboardWeekEntries,
+  leaderboardWeeks,
   userAchievements,
   users,
 } from '@/shared/database/drizzle/schema';
@@ -860,6 +862,30 @@ export class AchievementRepositoryImpl implements AchievementRepository {
       criteriaList.map((c) => this.buildUserProgressCountSelect(userId, c)) as any,
     )) as Array<Array<{ count: number }>>;
     return results.map((rows) => rows[0]?.count ?? 0);
+  }
+
+  async listFinalizedLeaderboardRanks(
+    userId: string,
+  ): Promise<Array<{ rank: number; weekStartedAt: Date }>> {
+    const rows = await this.db
+      .select({
+        rank: leaderboardWeekEntries.rank,
+        weekStartedAt: leaderboardWeeks.startedAt,
+      })
+      .from(leaderboardWeekEntries)
+      .innerJoin(
+        leaderboardWeeks,
+        and(
+          eq(leaderboardWeeks.weekId, leaderboardWeekEntries.weekId),
+          isNotNull(leaderboardWeeks.finalizedAt),
+          isNull(leaderboardWeeks.deletedAt),
+        ),
+      )
+      .where(eq(leaderboardWeekEntries.userId, userId));
+    return rows.map((r) => ({
+      rank: r.rank,
+      weekStartedAt: r.weekStartedAt instanceof Date ? r.weekStartedAt : new Date(Number(r.weekStartedAt)),
+    }));
   }
 
   // -------------------------------------------------------------- border --

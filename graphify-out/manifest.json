@@ -24,9 +24,9 @@
     "semantic_hash": ""
   },
   "src/app.ts": {
-    "mtime": 1794905851.7575364,
-    "seen": 1794906003.156045,
-    "ast_hash": "915f636350bb386b8ea7bf78611c4c28",
+    "mtime": 1794908241.9062958,
+    "seen": 1794908520.524728,
+    "ast_hash": "b7dba3e70aa2ef52505857c81299d2a0",
     "semantic_hash": ""
   },
   "src/main.ts": {
@@ -5058,9 +5058,9 @@
     "semantic_hash": ""
   },
   "src/shared/config/env.ts": {
-    "mtime": 1794118026.0685556,
-    "seen": 1794119304.3922381,
-    "ast_hash": "7db3c543e07790611b74f959757bbc14",
+    "mtime": 1794908054.0659294,
+    "seen": 1794908520.561118,
+    "ast_hash": "c7da6a34a505464d6a70c3b70232633d",
     "semantic_hash": ""
   },
   "src/shared/constants/anonim.ts": {
@@ -5256,9 +5256,9 @@
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/migrations/meta/_journal.json": {
-    "mtime": 1794893279.4327772,
-    "seen": 1794906003.18952,
-    "ast_hash": "8e16cb8d805b9d92bc02be018989d103",
+    "mtime": 1794907859.891858,
+    "seen": 1794908520.562208,
+    "ast_hash": "eb8a61c511e5289e9016acba86169d8a",
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/account-deletion-tokens.schema.ts": {
@@ -5394,9 +5394,9 @@
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/index.ts": {
-    "mtime": 1794893277.151185,
-    "seen": 1794906003.1905658,
-    "ast_hash": "f5cc6a63aade93622fe5442b13f3501e",
+    "mtime": 1794907860.6469135,
+    "seen": 1794908520.5633469,
+    "ast_hash": "88e17d3787cd2af3a60320cdd7b86b1a",
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/languages.schema.ts": {
@@ -5658,9 +5658,9 @@
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/test-utils.ts": {
-    "mtime": 1794884616.7115266,
-    "seen": 1794906003.1922472,
-    "ast_hash": "c027e35dbc26b3bb305be9469710cd60",
+    "mtime": 1794907877.3098707,
+    "seen": 1794908520.565593,
+    "ast_hash": "eee8cebeb86ac18cc72cc0aa2c02beeb",
     "semantic_hash": ""
   },
   "src/shared/database/highest-user-role-sql.ts": {
@@ -5892,9 +5892,9 @@
     "semantic_hash": ""
   },
   "src/worker.ts": {
-    "mtime": 1794884386.7871556,
-    "seen": 1794906003.193342,
-    "ast_hash": "01451f489eb3cca37b9d21573c3e1bf4",
+    "mtime": 1794908054.478619,
+    "seen": 1794908520.566902,
+    "ast_hash": "86dc4c71c3da5980dadcafc2e9188df1",
     "semantic_hash": ""
   },
   "tsconfig.json": {
@@ -5964,9 +5964,9 @@
     "semantic_hash": ""
   },
   "ERROR_CODES.md": {
-    "mtime": 1794905944.2816658,
-    "seen": 1794906003.193648,
-    "ast_hash": "2af971cde353d8e3d94f00381fd2451b",
+    "mtime": 1794908059.702254,
+    "seen": 1794908520.567256,
+    "ast_hash": "6f68bb9889c9511d3f32a54bbaa9b33b",
     "semantic_hash": ""
   },
   "README.md": {
@@ -6018,15 +6018,15 @@
     "semantic_hash": ""
   },
   "src/modules/achievement/application/use-cases/list-achievements.use-case.ts": {
-    "mtime": 1794118025.1726906,
-    "seen": 1794119304.375229,
-    "ast_hash": "8c703553c9b6bfe146426935ce9a996e",
+    "mtime": 1794908201.427122,
+    "seen": 1794908520.5253592,
+    "ast_hash": "ad8eb7aa95d34dd89a40d0982646ce20",
     "semantic_hash": ""
   },
   "src/modules/achievement/application/use-cases/run-due-achievement-scan.use-case.ts": {
-    "mtime": 1794118025.1731694,
-    "seen": 1794119304.375229,
-    "ast_hash": "a45d7f0a064e6a03015e1a2a32df2bf4",
+    "mtime": 1794908239.2053354,
+    "seen": 1794908520.52536,
+    "ast_hash": "ff2fe48ccb57b2c4c7ddddd0e4e290af",
     "semantic_hash": ""
   },
   "src/modules/achievement/application/use-cases/scan-achievement.use-case.ts": {
@@ -6036,33 +6036,33 @@
     "semantic_hash": ""
   },
   "src/modules/achievement/domain/achievement-registry.ts": {
-    "mtime": 1794118025.1736445,
-    "seen": 1794119304.3752582,
-    "ast_hash": "511dec22cfa7c0f0c804a1052fdb3a3e",
+    "mtime": 1794908145.6693048,
+    "seen": 1794908520.5253901,
+    "ast_hash": "75cebc01060f2f1cf29f08f056eda92b",
     "semantic_hash": ""
   },
   "src/modules/achievement/domain/entities/achievement.entity.ts": {
-    "mtime": 1794118025.1740806,
-    "seen": 1794119304.375259,
-    "ast_hash": "7cb3935b646359b7aeda40218162752a",
+    "mtime": 1794908130.9939868,
+    "seen": 1794908520.5253901,
+    "ast_hash": "2ded9e208fe91e27ce466dd8a884d6f4",
     "semantic_hash": ""
   },
   "src/modules/achievement/domain/repositories/achievement.repository.ts": {
-    "mtime": 1794118025.1745243,
-    "seen": 1794119304.3752599,
-    "ast_hash": "4212535ed99af0bff1d40899a8f33034",
+    "mtime": 1794908164.6029503,
+    "seen": 1794908520.5253918,
+    "ast_hash": "a3ed033b02aec4e5258283f1b8a02724",
     "semantic_hash": ""
   },
   "src/modules/achievement/infrastructure/achievement.repository.impl.ts": {
-    "mtime": 1794118025.1751492,
-    "seen": 1794119304.3752599,
-    "ast_hash": "40416cbc2b084493d17bf6a0064c7131",
+    "mtime": 1794908175.1607864,
+    "seen": 1794908520.5253918,
+    "ast_hash": "e7ed11d2a0a22e0f987e31b07ef5a4cd",
     "semantic_hash": ""
   },
   "src/modules/achievement/presentation/v1/achievement.controller.ts": {
-    "mtime": 1794118025.1757565,
-    "seen": 1794119304.3752608,
-    "ast_hash": "978c3044aad17c4973b0fd6704d49bfd",
+    "mtime": 1794908203.9324038,
+    "seen": 1794908520.525393,
+    "ast_hash": "3336e4bf19ba2aabe61252ca1ef4709e",
     "semantic_hash": ""
   },
   "src/modules/achievement/presentation/v1/achievement.routes.ts": {
@@ -6072,9 +6072,9 @@
     "semantic_hash": ""
   },
   "src/modules/achievement/presentation/v1/validators/achievement.validator.ts": {
-    "mtime": 1794118025.1766908,
-    "seen": 1794119304.375262,
-    "ast_hash": "7d8dd8628ecacf104bcd250060cc0292",
+    "mtime": 1794908243.7004802,
+    "seen": 1794908520.525425,
+    "ast_hash": "4bba2776c0bc5dea8101e3fdc8ac8a9c",
     "semantic_hash": ""
   },
   "src/modules/activity/__tests__/e2e/v1/activity-category.e2e.test.ts": {
@@ -6138,9 +6138,9 @@
     "semantic_hash": ""
   },
   "src/scripts/seed-achievements.ts": {
-    "mtime": 1794118026.065593,
-    "seen": 1794119304.392191,
-    "ast_hash": "00da4442d0265ed42b60affffc65f9a7",
+    "mtime": 1794908250.5535202,
+    "seen": 1794908520.560995,
+    "ast_hash": "feb2feeae6c45ffbaa724e5b70169710",
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/achievements.schema.ts": {
@@ -8742,15 +8742,15 @@
     "semantic_hash": ""
   },
   "src/modules/baleho/application/baleho.use-cases.ts": {
-    "mtime": 1794905819.4830651,
-    "seen": 1794906003.1616151,
-    "ast_hash": "dd98c5b7f2f2fc9cb27049bee549e7d9",
+    "mtime": 1794906234.230709,
+    "seen": 1794908520.530983,
+    "ast_hash": "6e13ad20034ba9ab64341f043f80f5be",
     "semantic_hash": ""
   },
   "src/modules/baleho/domain/baleho.ts": {
-    "mtime": 1794876219.1769974,
-    "seen": 1794906003.1616158,
-    "ast_hash": "b843724f0e68ebdfe0f8052401e737d3",
+    "mtime": 1794906223.3198147,
+    "seen": 1794908520.530984,
+    "ast_hash": "94f668d23eeda1992e26f397f4b987e4",
     "semantic_hash": ""
   },
   "src/modules/baleho/domain/repositories/baleho.repository.ts": {
@@ -8760,15 +8760,15 @@
     "semantic_hash": ""
   },
   "src/modules/baleho/infrastructure/baleho.repository.impl.ts": {
-    "mtime": 1794905812.640581,
-    "seen": 1794906003.1616158,
-    "ast_hash": "46d1c157548c0ab609163b42015aa215",
+    "mtime": 1794906229.9827583,
+    "seen": 1794908520.531014,
+    "ast_hash": "cf92c8c863e84a9f2082bd6b3b15a706",
     "semantic_hash": ""
   },
   "src/modules/baleho/presentation/v1/baleho.controller.ts": {
-    "mtime": 1794905981.978244,
-    "seen": 1794906003.1616168,
-    "ast_hash": "c117e779845da0d893d44b8936e88ed8",
+    "mtime": 1794906244.6031442,
+    "seen": 1794908520.531014,
+    "ast_hash": "53229a69ccaff3fd1d269ce10793e8c7",
     "semantic_hash": ""
   },
   "src/modules/baleho/presentation/v1/baleho.routes.ts": {
@@ -8778,9 +8778,9 @@
     "semantic_hash": ""
   },
   "src/modules/baleho/presentation/v1/validators/baleho.validator.ts": {
-    "mtime": 1794886365.2374954,
-    "seen": 1794906003.161618,
-    "ast_hash": "604c583e2ae8a394f452677919f91a35",
+    "mtime": 1794906218.7628956,
+    "seen": 1794908520.5310469,
+    "ast_hash": "b23d72636d3ac55494b40ace99070f12",
     "semantic_hash": ""
   },
   "src/modules/discussion/__tests__/unit/discussion-lemma-link.use-case.test.ts": {
@@ -8958,9 +8958,9 @@
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/baleho.schema.ts": {
-    "mtime": 1794891607.572835,
-    "seen": 1794906003.189734,
-    "ast_hash": "bfc638d80302af26363fbcfa6a309900",
+    "mtime": 1794906215.9569104,
+    "seen": 1794908520.562454,
+    "ast_hash": "9bd5fdbb8acf674d5201c6214bcdf7da",
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/karya-lemma-links.schema.ts": {
@@ -8973,6 +8973,120 @@
     "mtime": 1794892582.5899818,
     "seen": 1794906003.190681,
     "ast_hash": "b8e45b8ffc82c8399d70d8fcd2ccce7c",
+    "semantic_hash": ""
+  },
+  "src/modules/achievement/__tests__/unit/leaderboard-top-repeat.test.ts": {
+    "mtime": 1794908256.9834754,
+    "seen": 1794908520.5252988,
+    "ast_hash": "9a3acec248d54248d04a1ea17e51d019",
+    "semantic_hash": ""
+  },
+  "src/modules/achievement/domain/leaderboard-top-repeat.ts": {
+    "mtime": 1794908178.850839,
+    "seen": 1794908520.525391,
+    "ast_hash": "aeab9e777e30074130e576466522e5aa",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/__tests__/unit/iso-week.test.ts": {
+    "mtime": 1794908043.665551,
+    "seen": 1794908520.5431612,
+    "ast_hash": "b321b93ee344c8331e7e0a5bd048fa4e",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/application/ports/leaderboard-storage.port.ts": {
+    "mtime": 1794908009.3351102,
+    "seen": 1794908520.543162,
+    "ast_hash": "e1a9ba2e9cc9da39be8586ef1db01448",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/application/use-cases/compute-live-leaderboard.use-case.ts": {
+    "mtime": 1794908019.276771,
+    "seen": 1794908520.543162,
+    "ast_hash": "7a41329d21fda640dc910650ce7bc536",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/application/use-cases/finalize-leaderboard-week.use-case.ts": {
+    "mtime": 1794908225.1083317,
+    "seen": 1794908520.5431628,
+    "ast_hash": "f8b77b27c27b9defcaff29e78d99651d",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/application/use-cases/get-leaderboard.use-case.ts": {
+    "mtime": 1794908030.6818912,
+    "seen": 1794908520.5431628,
+    "ast_hash": "ac934e62c90a22fa502e4868ecdca80b",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/application/use-cases/leaderboard-payload.utils.ts": {
+    "mtime": 1794908017.4991372,
+    "seen": 1794908520.543164,
+    "ast_hash": "e9c7dfc16579146cb6a45e41af4eead9",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/application/use-cases/run-due-leaderboard-jobs.use-case.ts": {
+    "mtime": 1794908023.7189755,
+    "seen": 1794908520.543165,
+    "ast_hash": "549e5dc1975c189270d9b500d3a6f91d",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/domain/entities/leaderboard-entry.entity.ts": {
+    "mtime": 1794907972.1066978,
+    "seen": 1794908520.543165,
+    "ast_hash": "00b55ca8eda4ce5cef1c2666eba5280d",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/domain/repositories/leaderboard.repository.ts": {
+    "mtime": 1794907972.1067033,
+    "seen": 1794908520.543165,
+    "ast_hash": "e2aac7f9d0490ad871833ccc637644b0",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/domain/utils/iso-week.ts": {
+    "mtime": 1794907853.7615504,
+    "seen": 1794908520.543166,
+    "ast_hash": "30aa9ed7c5109bf529bd381d00a91d44",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/infrastructure/github-leaderboard-storage.service.ts": {
+    "mtime": 1794908012.9695184,
+    "seen": 1794908520.543166,
+    "ast_hash": "216083963cae459d111830c27c965686",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/infrastructure/leaderboard-storage.factory.ts": {
+    "mtime": 1794908014.620024,
+    "seen": 1794908520.5431669,
+    "ast_hash": "78a969db16e34083bbc22c7ab531072a",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/infrastructure/leaderboard.repository.impl.ts": {
+    "mtime": 1794908000.3252485,
+    "seen": 1794908520.5431669,
+    "ast_hash": "9bd5da7d29bf39cb222fd430f6ffbf98",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/presentation/v1/leaderboard.controller.ts": {
+    "mtime": 1794908033.6602812,
+    "seen": 1794908520.543168,
+    "ast_hash": "e95d8510957e2b8979b03fb5eaf88a81",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/presentation/v1/leaderboard.routes.ts": {
+    "mtime": 1794908036.2981699,
+    "seen": 1794908520.543168,
+    "ast_hash": "d4368516269f0eed5738bdcd1b5dc810",
+    "semantic_hash": ""
+  },
+  "src/modules/leaderboard/presentation/v1/validators/leaderboard.validator.ts": {
+    "mtime": 1794908033.344811,
+    "seen": 1794908520.543169,
+    "ast_hash": "4a8ee61e2d5217636cd9adf7757c80a5",
+    "semantic_hash": ""
+  },
+  "src/shared/database/drizzle/schema/leaderboard.schema.ts": {
+    "mtime": 1794907825.6251512,
+    "seen": 1794908520.563736,
+    "ast_hash": "ca879df02e893d64e4df9f2f2aa0c15d",
     "semantic_hash": ""
   }
 }

@@ -356,7 +356,7 @@ export class EncyclopediaController {
     const user = requireUser(c);
     const { id } = c.req.valid('param' as never) as { id: string };
     const body = c.req.valid('json' as never) as SubmitContributionBody;
-    const created = await this.deps.resubmitContribution.execute({
+    const updated = await this.deps.resubmitContribution.execute({
       contributionId: id,
       userId: user.user_id,
       payload: {
@@ -371,7 +371,7 @@ export class EncyclopediaController {
       },
       requestId: c.get('requestId') ?? null,
     });
-    return c.json({ success: true as const, data: toContributionWire(created) }, 201);
+    return c.json({ success: true as const, data: toContributionWire(updated) }, 200);
   }
 
   async myContributions(c: Context<{ Variables: AppVariables }>) {

@@ -1,60 +1,60 @@
 # Graph Report - api  (2026-11-17)
 
 ## Corpus Check
-- 1618 files · ~819,297 words
+- 1668 files · ~843,359 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 14 file(s) not represented in the graph (top: (none) 6, .mdc 4, .example 2)
 
 ## Summary
-- 11270 nodes · 37921 edges · 293 communities (265 shown, 28 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 1890 edges (avg confidence: 0.81)
+- 11683 nodes · 39394 edges · 286 communities (261 shown, 25 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 1964 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8f46bf8b`
+- Built from commit: `0c618274`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - vitest
-- DiscussionRepository
-- word.repository.impl.ts
-- facebook-token-verifier.ts
+- discussion.controller.ts
+- word-suggestion.repository.impl.ts
+- ServiceUnavailableError
 - app.ts
-- search-miss.repository.impl.ts
-- createOpenApiApp
-- culinary.validator.ts
+- ValidationError
+- zod
+- culinary.routes.ts
 - run-streak-reminder.use-case.ts
-- layanan.controller.ts
+- LayananUseCases
 - generateId
 - batch-contribute-words.use-case.ts
-- Comment
+- comment.controller.ts
 - CulinaryRepository
 - fcm-analytics.provider.ts
 - wa-message.repository.impl.ts
 - ResolvedRange
-- region.controller.ts
+- region.routes.ts
 - web-analytics.entity.ts
-- AppDatabase
-- jinye-report.repository.impl.ts
-- CursorPage
-- culinary-contribution.use-cases.ts
+- test-utils.ts
+- JinyeReportRepository
+- baleho.use-cases.ts
+- CulinaryContributionUseCases
 - AboutRepository
 - bug-report.use-case.test.ts
 - AppSettingsRepository
-- PublicUserRepository
-- place-category.routes.ts
+- public-profile.entity.ts
+- word-import-session.use-cases.ts
 - word-suggestion.entity.ts
 - notification-campaign.repository.impl.ts
 - play-stats.provider.ts
 - list-share-backgrounds.use-case.ts
-- word.repository.ts
+- word.repository.impl.ts
 - announcement.controller.ts
 - place-category.repository.impl.ts
 - dashboard.repository.impl.ts
 - campaign.validator.ts
 - EncyclopediaRepositoryImpl
-- abuse.routes.ts
+- abuse.controller.ts
 - EventRepository
 - EventRepositoryImpl
 - lemma-definition.mapper.ts
@@ -62,256 +62,249 @@
 - NotificationCampaignRepository
 - suggestion.validator.ts
 - legal.controller.ts
-- map-create-word.ts
-- WordRepository
+- create-word.dto.ts
+- AuditLogRepository
 - jinye.routes.ts
-- quota-aware-mailer.ts
+- resend-mailer.service.ts
 - email.repository.impl.ts
-- rate-limit.middleware.ts
+- AuthUser
 - verifier-application.validator.ts
-- culinary.repository.impl.ts
+- culinary.controller.ts
 - ga4.provider.ts
 - WordSuggestionRepositoryImpl
 - culinary-category.repository.impl.ts
 - get-play-analytics.use-case.ts
 - place.repository.impl.ts
-- CulinaryRepositoryImpl
-- dns-email-domain-verifier.ts
+- NotificationPushCooldownRepository
+- register-user.use-case.test.ts
 - word-group.controller.ts
 - WordController
 - discussion.validator.ts
 - id.ts
-- activity.repository.impl.ts
-- update-pantun-reply.use-case.ts
-- pantun-report.repository.impl.ts
+- ActivityItem
+- create-pantun-with-audio.use-case.ts
+- submit-pantun-report.use-case.ts
 - bookmark.repository.impl.ts
-- encyclopedia.repository.impl.ts
-- culinary-contribution.repository.impl.ts
+- Article
+- culinary-contribution.use-cases.ts
 - register-user.use-case.ts
-- ServiceUnavailableError
-- pantun.repository.impl.ts
+- github-public-image-storage.service.ts
+- legal.routes.ts
 - ContributionRepositoryImpl
 - merge-activity.ts
 - admin-user.routes.ts
-- LanguageRepository
+- jinye.validator.ts
 - place.use-cases.ts
-- VoteRepository
-- achievement.validator.ts
+- skip-vote-deck-word.use-case.ts
+- achievement.routes.ts
 - trigger-sqlite-backup.use-case.ts
-- web-import.repository.impl.ts
-- ApiClientRepository
-- DiscussionController
-- JinyeRepository
+- web-import.use-cases.ts
+- contribution.entity.ts
+- toAdminItem
+- app-error.ts
 - culinary-claim.routes.ts
 - event-contribution.use-cases.ts
 - system-supabase.controller.ts
-- event.controller.ts
+- event.routes.ts
 - RegionRepository
 - vote.repository.ts
 - AchievementRepository
 - logger.ts
 - place-contribution.use-cases.ts
-- word.entity.ts
-- admin-comment-blocklist.routes.ts
+- WordReport
+- comment-blocklist.validator.ts
 - create-word.validator.ts
 - UserConsentRepository
-- hono
-- public-image-path.ts
+- notification.routes.ts
+- PublicImageStoragePort
 - user.routes.ts
 - .processSelectedAudience
 - usaha.use-cases.ts
 - usaha-category.repository.impl.ts
-- Sponsorship
-- api-client.validator.ts
+- layanan.controller.ts
+- admin-api-client.routes.ts
 - PushSenderPort
-- validate-audio-file.ts
-- ActivityEventFeedRepositoryImpl
-- zod
-- usaha-claim.routes.ts
+- DiscussionController
+- record-activity-event.use-case.ts
+- UnauthorizedError
+- LoginMeta
 - scripts
 - QuotaAwareMailer
-- import-session.validator.ts
+- kreator.controller.ts
 - UsahaRepositoryImpl
-- UnauthorizedError
+- UserRepository
 - wa-admin.routes.ts
 - package.json
 - SmtpMailerService
 - encyclopedia.routes.ts
-- usaha.validator.ts
+- usaha.controller.ts
 - DeviceTokenRepository
-- admin-vote.controller.ts
+- admin-vote.routes.ts
 - vote.routes.ts
 - compilerOptions
-- culinary-claim.repository.impl.ts
+- CulinaryClaim
 - usaha-contribution.use-cases.ts
 - search-miss.routes.ts
 - achievement-registry.ts
 - VerifierApplication
 - AppVariables
-- review-category-suggestion.use-case.ts
+- propose-category-suggestion.use-case.ts
 - usaha-claim.repository.impl.ts
-- pantun.controller.ts
+- CursorPage
 - WordReportController
-- SearchMissRepositoryImpl
-- CommentBlocklistWord
+- jinye-report.routes.ts
+- comment-blocklist.controller.ts
 - dependencies
-- word.controller.ts
+- word.repository.ts
 - SambasKu-API
 - AchievementRepositoryImpl
-- jinye.repository.impl.ts
-- search-miss.controller.ts
+- get-mobile-analytics.use-case.ts
+- word-group.routes.ts
 - UsahaContributionUseCases
 - fts-word-search-index.ts
-- event.entity.ts
+- event-going.use-cases.ts
 - devDependencies
-- ContributionRepository
+- contribution.use-case.test.ts
 - mobile-release.controller.ts
-- culinary-contribution.controller.ts
-- pantun.routes.ts
-- run-due-achievement-scan.use-case.ts
-- UsahaReport
+- culinary-contribution.routes.ts
+- pantun.controller.ts
+- web-import.controller.ts
+- usaha-report.use-cases.ts
 - SearchMissRepository
 - leveling.ts
-- jinye.controller.ts
+- JinyeController
 - UserRepositoryImpl
 - update-my-profile.use-case.ts
-- mailer.factory.ts
-- achievement.controller.ts
+- quota-aware-mailer.ts
+- Achievement
 - Translation
 - category-suggestion.controller.ts
-- Jinye
+- event.use-cases.ts
 - comment.validator.ts
 - CategoryRepository
 - KaryaUseCases
-- comment.repository.impl.ts
+- discussion.repository.impl.ts
 - jwt-token.service.ts
 - VoteRepositoryImpl
-- app-error.ts
+- ForbiddenError
 - karya.validator.ts
-- seed-reference.ts
+- AppDatabase
 - get-web-analytics.use-case.ts
-- scan-achievement.test.ts
-- culinary-report.use-cases.ts
+- AwardTarget
+- CulinaryReport
 - openwa-wa.sender.ts
-- usaha-report.routes.ts
-- contribution.controller.ts
-- about.controller.ts
+- EventController
+- ContributionController
+- verifier-application.repository.impl.ts
 - CommentController
-- usage-labels.ts
-- google-token-verifier.ts
+- verifier-application.repository.ts
+- layanan.repository.impl.ts
 - usaha.repository.impl.ts
 - encyclopedia.controller.ts
 - karya.controller.ts
 - activity-event-feed.repository.impl.ts
 - ArticleRepository
-- send-wa-message.use-case.test.ts
+- send-wa-message.use-case.ts
 - deno.json
 - ERROR_CODES.md
 - ports/README.md
-- JinyeLemmaLink
-- usaha-contribution.validator.ts
+- RecordActivityEventUseCase
+- karya-lemma-link.routes.ts
 - system-database.routes.ts
 - service-account-token.ts
 - NotFoundError
 - openwa-exploration-group.notifier.ts
-- ugc-anon-abuse.repository.ts
+- UgcAnonAbuseRepositoryImpl
 - list-audit-logs.use-case.ts
-- about.repository.impl.ts
+- split-comma-words.ts
 - karya.ts
-- admin-user.controller.ts
-- PlaceRepositoryImpl
+- UgcAnonAbuseRepository
+- usaha.entity.ts
 - .findById
 - about.routes.ts
-- WaUsage
+- WaUsageRepository
 - CategorySuggestionRepositoryImpl
 - record-supabase-health.ts
 - WaMessageTemplate
 - PublicUserRepositoryImpl
-- bulk-dismiss-search-miss.use-case.ts
-- create-jinye.use-case.ts
-- announcement.routes.ts
-- list-admin-votes.use-case.ts
-- username-slug.ts
-- AuthController
-- notification-campaign.controller.ts
-- word-media.routes.ts
+- bookmark.routes.ts
+- verifier-application.use-case.test.ts
+- word-report.validator.ts
+- VoteRepository
+- migrate.ts
+- EventListItem
+- resolve-word-report.use-case.ts
+- share.routes.ts
 - merge-duplicate-meanings.ts
-- assert-ugc-text-quality.ts
+- device.routes.ts
 - lookup-lemma-definition.validator.ts
 - resolve-maps-url.use-case.ts
 - culinary-report.routes.ts
-- ActivityItem
+- WordSummary
 - translation.routes.ts
-- bulk-words-action.use-case.ts
-- jinye-edit-repost.use-case.test.ts
-- PantunController
-- github-oauth-code-exchanger.ts
+- UgcAbuseEventRepository
+- PublicUserRepository
+- authenticate.middleware.ts
+- BalehoUseCases
 - smoke.sh
-- ResendMailerService
-- usaha-category.routes.ts
+- rememberOtp
+- ResolveKaryaRelated
 - UsahaController
-- pantun-report.validator.ts
+- get-public-profile.use-case.ts
 - staging-down.sh
 - staging-up.sh
-- place-contribution.routes.ts
-- branded-email.ts
+- place.validator.ts
+- WordReportRepositoryImpl
 - event-going.routes.ts
-- bulk-words.validator.ts
-- VerifierApplicationController
-- VoteTargetType
-- map-word-image-url.ts
-- update-word.use-case.test.ts
+- WaMessageLogRepository
+- verifier-application.controller.ts
+- admin-vote.controller.ts
+- create-word-report.use-case.ts
+- update-word.use-case.ts
 - CategoryRepositoryImpl
-- import-words.validator.ts
-- .execute
-- migrate.ts
-- ugc-abuse-event.repository.ts
-- Achievement
-- promote-word-image-staging.ts
+- RefreshTokenUseCase
 - admin-api-client.use-cases.ts
-- create-word.validator.test.ts
+- CategorySuggestionRepository
+- ugc-abuse-event.repository.ts
+- word-report.use-case.test.ts
+- ugc-anon-abuse.repository.ts
+- admin-discussion.routes.ts
+- toLemmaLinkWire
 - ArticleContribution
 - production-up.sh
-- karya.repository.impl.ts
+- kreator.repository.impl.ts
 - ListAchievementsFilter
-- word-voters.routes.ts
+- category-suggestion.dtos.ts
 - production-down.sh
 - AdminUsersController
-- bookmark.repository.impl.test.ts
-- event-comment.use-cases.ts
+- pantun.routes.test.ts
+- worker.ts
 - UserSkipRepository
 - article-report.use-cases.ts
-- audit.routes.ts
-- ApiClient
+- baleho-payment-email.ts
+- toCommentWire
 - usaha-contribution.use-case.test.ts
-- create-jinye-comment.use-case.test.ts
-- add-meaning.use-case.test.ts
+- ListMyUsahaUseCase
+- update-verifier-application-screenshot.use-case.test.ts
 - culinary-contribution.use-case.test.ts
-- update-my-profile.validator.ts
-- fold-lemma-case.ts
-- EncyclopediaCategory
-- get-vote-counts.use-case.test.ts
-- send-wa-message.use-case.ts
+- user.controller.ts
+- get-vote-counts.use-case.ts
+- send-verifier-wa.use-case.ts
 - OpenLocationCode
 - update-pantun-reply.use-case.test.ts
-- require-approved-client.middleware.ts
-- CategoryController
-- ref_node_crypto
-- reset-votes-by-client.use-case.ts
-- submit-article-contribution.use-case.test.ts
 - share-query-denylist.ts
 
 ## God Nodes (most connected - your core abstractions)
-1. `NotFoundError` - 517 edges
-2. `AppVariables` - 444 edges
-3. `AuditLogRepository` - 365 edges
-4. `vitest` - 310 edges
-5. `generateId()` - 295 edges
-6. `ConflictError` - 285 edges
-7. `drizzle-orm` - 276 edges
-8. `BadRequestError` - 230 edges
-9. `createOpenApiApp()` - 228 edges
-10. `rateLimit()` - 224 edges
+1. `NotFoundError` - 550 edges
+2. `AppVariables` - 469 edges
+3. `AuditLogRepository` - 377 edges
+4. `vitest` - 321 edges
+5. `generateId()` - 316 edges
+6. `ConflictError` - 296 edges
+7. `drizzle-orm` - 284 edges
+8. `createOpenApiApp()` - 242 edges
+9. `BadRequestError` - 241 edges
+10. `rateLimit()` - 238 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `1. Verifikasi file sudah benar (RED evidence dulu)` --references--> `createMailer()`  [INFERRED]
@@ -328,171 +321,171 @@
 ## Import Cycles
 - None detected.
 
-## Communities (293 total, 28 thin omitted)
+## Communities (286 total, 25 thin omitted)
 
 ### Community 0 - "vitest"
 Cohesion: 0.02
-Nodes (165): dotenv, @libsql/client, vitest, { parsed }, { parsed }, { parsed }, { parsed }, { parsed } (+157 more)
+Nodes (168): dotenv, @libsql/client, vitest, { parsed }, { parsed }, { parsed }, { parsed }, { parsed } (+160 more)
 
-### Community 1 - "DiscussionRepository"
+### Community 1 - "discussion.controller.ts"
+Cohesion: 0.02
+Nodes (96): ApproveDiscussionCommand, ApproveDiscussionUseCase, fetchImageBytes(), normalizeApproveImageContentWarnings(), AttachDiscussionAudioCommand, AttachDiscussionAudioUseCase, CreateDiscussionLemmaLinkUseCase, CreateDiscussionReplyAudioUseCase (+88 more)
+
+### Community 2 - "word-suggestion.repository.impl.ts"
 Cohesion: 0.03
-Nodes (85): ApproveDiscussionCommand, ApproveDiscussionUseCase, AttachDiscussionAudioCommand, AttachDiscussionAudioUseCase, CreateDiscussionReplyAudioUseCase, CreateDiscussionReplyUseCase, CreateDiscussionCommand, CreateDiscussionUseCase (+77 more)
+Nodes (105): AchievementRow, newAchievementId, CONTRIB_BODY, isFulfilledLemmaSql, matchesExcludedLemmaSql, WORD_BOUND_VOTE_TYPES, contributionColumns, Tx (+97 more)
 
-### Community 2 - "word.repository.impl.ts"
-Cohesion: 0.03
-Nodes (135): contributionColumns, Tx, KONTRIBUTOR, NOMINA, { parsed }, REVIEWER, SMB, ENTITY_LABEL (+127 more)
-
-### Community 3 - "facebook-token-verifier.ts"
-Cohesion: 0.16
-Nodes (11): FacebookAccessTokenClaims, FACEBOOK_GRAPH_VERSION, FacebookFetch, FacebookTokenVerifier, facebookTokenVerifier, facebookTokenVerifierHolder, invalidToken(), isExpired() (+3 more)
+### Community 3 - "ServiceUnavailableError"
+Cohesion: 0.06
+Nodes (28): FacebookAccessTokenClaims, GithubOauthCodeExchangerPort, GithubUserClaims, GoogleIdTokenClaims, FACEBOOK_GRAPH_VERSION, FacebookFetch, FacebookTokenVerifier, facebookTokenVerifier (+20 more)
 
 ### Community 4 - "app.ts"
 Cohesion: 0.01
-Nodes (232): aboutController, aboutRepo, abuseController, accountDeletion, achievementRepo, activityController, activityEventFeedRepo, activityEventRepo (+224 more)
+Nodes (388): aboutController, aboutRepo, abuseController, accountDeletion, achievementRepo, activityController, activityEventFeedRepo, activityEventRepo (+380 more)
 
-### Community 5 - "search-miss.repository.impl.ts"
-Cohesion: 0.14
-Nodes (8): UpdateSearchMissCommand, UpdateSearchMissUseCase, normalizeSearchMissTerm(), SearchMissUpdatePatch, isFulfilledSql, lemmaFulfilledSql, normalizeTerm, translationFulfilledSql
+### Community 5 - "ValidationError"
+Cohesion: 0.07
+Nodes (24): assertRect(), extractContentWarningsField(), parseApprovePayload(), assertNoOverlap(), assertUnderLinkCap(), assertValidSpan(), CreateKaryaLemmaLinkUseCase, DeleteKaryaLemmaLinkUseCase (+16 more)
 
-### Community 6 - "createOpenApiApp"
+### Community 6 - "zod"
 Cohesion: 0.03
-Nodes (169): @hono/zod-openapi, createAdminAchievementRoutes(), createMyAchievementRoutes(), createMyProfileBorderRoutes(), createPublicAchievementRoutes(), createPublicUserAchievementsRoutes(), idParam, json() (+161 more)
+Nodes (120): hono, @hono/zod-openapi, zod, activityActorSchema, activityItemSchema, activityTargetSchema, listActivityQuerySchema, listActivityResponseSchema (+112 more)
 
-### Community 7 - "culinary.validator.ts"
-Cohesion: 0.08
-Nodes (24): cuisineBodyFields, cuisineImageResponseSchema, cuisineImageSchema, cuisineListResponseSchema, cuisinePlaceLinkSchema, cuisinePublishStatusSchema, cuisineResponseSchema, cuisineSourceResponseSchema (+16 more)
+### Community 7 - "culinary.routes.ts"
+Cohesion: 0.06
+Nodes (33): serializeLink(), idParam, slugParam, createCuisineBodySchema, createLinkBodySchema, cuisineBodyFields, cuisineImageResponseSchema, cuisineImageSchema (+25 more)
 
 ### Community 8 - "run-streak-reminder.use-case.ts"
-Cohesion: 0.09
-Nodes (22): ACTIVITY_EVENT_KINDS, ActivityEventRow, isWibQuietHoursOpen(), RunStreakReminderUseCase, STREAK_REMINDER_BATCH, STREAK_REMINDER_ENABLED_KEY, STREAK_REMINDER_INACTIVE_MS, STREAK_REMINDER_MIN_VERIFIED_MS (+14 more)
+Cohesion: 0.10
+Nodes (19): ACTIVITY_EVENT_KINDS, ActivityEventRow, isWibQuietHoursOpen(), STREAK_REMINDER_BATCH, STREAK_REMINDER_ENABLED_KEY, STREAK_REMINDER_INACTIVE_MS, STREAK_REMINDER_MIN_VERIFIED_MS, computeStreakDays() (+11 more)
 
-### Community 9 - "layanan.controller.ts"
-Cohesion: 0.06
-Nodes (31): LayananUseCases, Layanan, LAYANAN_CATEGORIES, LAYANAN_PHONES_MAX, LAYANAN_PHONES_MIN, LayananAuthorRef, LayananCategory, LayananContribution (+23 more)
+### Community 9 - "LayananUseCases"
+Cohesion: 0.14
+Nodes (5): LayananUseCases, Layanan, LayananFields, serializePhones(), LayananRepositoryImpl
 
 ### Community 10 - "generateId"
-Cohesion: 0.04
-Nodes (90): drizzle-orm, buildCommentAudioPath(), buildDiscussionReplyAudioPath(), buildJinyeAudioPath(), buildPantunAudioPath(), buildPantunReplyAudioPath(), ContributionStatus, ContributeGateSnapshot (+82 more)
+Cohesion: 0.03
+Nodes (107): drizzle-orm, Row, Row, CuisineRow, cuisineSelect, LinkRow, PlaceRow, placeSelect (+99 more)
 
 ### Community 11 - "batch-contribute-words.use-case.ts"
 Cohesion: 0.05
-Nodes (36): AppendActivityEventInput, ActivityEventCursor, AppendResult, resolveContributionWordId(), canVerifyImport(), decideImportPublication(), ImportMeaningInput, ImportOutcome (+28 more)
+Nodes (35): AppendActivityEventInput, ActivityEventCursor, AppendResult, resolveContributionWordId(), ListDialectsUseCase, ListLanguagesUseCase, Dialect, Language (+27 more)
 
-### Community 12 - "Comment"
-Cohesion: 0.07
-Nodes (19): CommentEditHistoryResult, GetCommentEditHistoryUseCase, CommentWithVotes, ListWordCommentsResult, ListWordCommentsUseCase, UncensorCommentCommand, Comment, CommentAudio (+11 more)
+### Community 12 - "comment.controller.ts"
+Cohesion: 0.04
+Nodes (42): ApproveCommentImageCommand, ApproveCommentImageUseCase, fetchImageBytes(), normalizeContentWarnings(), AttachCommentImageUseCase, CreateCommentAudioUseCase, CreateCommentUseCase, DeleteCommentCommand (+34 more)
 
 ### Community 13 - "CulinaryRepository"
-Cohesion: 0.04
-Nodes (27): AssertPlaceManagerUseCase, DeleteCulinaryUseCase, FindCulinaryDuplicatesUseCase, GetCuisineBySlugUseCase, GetCulinaryPlaceBySlugUseCase, ListCuisinesUseCase, ListCulinaryCategoriesUseCase, ListCulinaryPlacesUseCase (+19 more)
+Cohesion: 0.05
+Nodes (17): AssertPlaceManagerUseCase, DeleteCulinaryUseCase, FindCulinaryDuplicatesUseCase, GetCuisineBySlugUseCase, GetCulinaryPlaceBySlugUseCase, ListCuisinesUseCase, ListCulinaryCategoriesUseCase, ListCulinaryPlacesUseCase (+9 more)
 
 ### Community 14 - "fcm-analytics.provider.ts"
 Cohesion: 0.05
-Nodes (53): AnalyticsProviderError, AnalyticsProviderErrorKind, FcmAnalyticsProvider, CacheEntry, ERROR_SUFFIX, errorMessage(), FCM_DATA_LAG_DAYS, GetFcmAnalyticsInput (+45 more)
+Nodes (51): AnalyticsProviderError, AnalyticsProviderErrorKind, FcmAnalyticsProvider, CacheEntry, ERROR_SUFFIX, errorMessage(), FCM_DATA_LAG_DAYS, GetFcmAnalyticsInput (+43 more)
 
 ### Community 15 - "wa-message.repository.impl.ts"
-Cohesion: 0.16
-Nodes (13): DEFAULT_WA_MONTHLY_LIMIT, WA_PROVIDERS, WaLogStatus, WaMessageLog, WaProvider, WaSendResult, WaTemplateParam, WaLogListQuery (+5 more)
+Cohesion: 0.22
+Nodes (9): DEFAULT_WA_MONTHLY_LIMIT, WA_PROVIDERS, WaLogStatus, WaProvider, WaSendResult, WaTemplateParam, WaTemplateCreateInput, WaTemplateUpdateInput (+1 more)
 
 ### Community 16 - "ResolvedRange"
-Cohesion: 0.05
-Nodes (64): MobileAnalyticsProvider, MobileAnalyticsProviderErrorKind, CacheEntry, ERROR_SUFFIX, errorMessage(), GetMobileAnalyticsInput, GetMobileAnalyticsUseCase, isEmpty() (+56 more)
+Cohesion: 0.06
+Nodes (55): MobileAnalyticsProvider, MobileAnalyticsProviderError, AppVersionRow, CountryRow, DateRangeWire, EventRow, MobileAudience, MobileEvents (+47 more)
 
-### Community 17 - "region.controller.ts"
-Cohesion: 0.12
+### Community 17 - "region.routes.ts"
+Cohesion: 0.15
 Nodes (15): RegionController, serialize(), createRegionBodySchema, listRegionsQuerySchema, regionCatalogItemSchema, regionCatalogResponseSchema, regionIdQuerySchema, regionItemResponseSchema (+7 more)
 
 ### Community 18 - "web-analytics.entity.ts"
 Cohesion: 0.05
-Nodes (54): SearchAnalyticsProvider, VisitorAnalyticsProvider, GetWebAnalyticsUseCase, BreakdownRow, ChannelRow, EventRow, Ga4Sources, Ga4Totals (+46 more)
+Nodes (60): SearchAnalyticsProvider, VisitorAnalyticsProvider, GetWebAnalyticsUseCase, BreakdownRow, ChannelRow, EventRow, Ga4Sources, Ga4Totals (+52 more)
 
-### Community 19 - "AppDatabase"
+### Community 19 - "test-utils.ts"
 Cohesion: 0.02
-Nodes (76): ActivityEventRepositoryImpl, EmailVerificationOtp, AccountDeletionTokenRecord, NewAccountDeletionToken, NewGoogleIdentity, NewEmailVerificationOtp, NewPasswordResetToken, NewRefreshToken (+68 more)
+Nodes (63): NewRefreshToken, RefreshTokenRecord, mapRow(), RefreshTokenRepositoryImpl, BM_BARU, BM_DEP, BM_LAMA, { parsed } (+55 more)
 
-### Community 20 - "jinye-report.repository.impl.ts"
-Cohesion: 0.07
-Nodes (38): ListJinyeReportsUseCase, ResolveJinyeReportCommand, ResolveJinyeReportUseCase, SubmitJinyeReportCommand, SubmitJinyeReportUseCase, JINYE_REPORT_REASON_LABEL, JinyeReport, JinyeReportWithTarget (+30 more)
+### Community 20 - "JinyeReportRepository"
+Cohesion: 0.12
+Nodes (15): ListJinyeReportsUseCase, SubmitJinyeReportCommand, JINYE_REPORT_REASON_LABEL, JinyeReport, JinyeReportWithTarget, JinyeReportListFilter, JinyeReportRepository, hasImages() (+7 more)
 
-### Community 21 - "CursorPage"
-Cohesion: 0.24
-Nodes (7): ListAdminPantunsUseCase, PantunListFilter, ListAdminWordsResult, ListLatestWordsResult, ListWordsResult, SearchWordsResult, CursorPage
+### Community 21 - "baleho.use-cases.ts"
+Cohesion: 0.06
+Nodes (37): BalehoNotifyDeps, fingerprintOf(), BalehoBoard, BalehoCreativeMeta, BalehoFrame, BalehoPlacementView, CreateBalehoPlacementInput, BalehoRepository (+29 more)
 
-### Community 22 - "culinary-contribution.use-cases.ts"
-Cohesion: 0.07
-Nodes (25): canonicalCulinaryFields(), CUISINE_EDIT_FIELDS, CulinaryContributionUseCases, culinaryJenis(), decisionCopy(), overlaps(), PLACE_EDIT_FIELDS, SubmitCulinaryChangeInput (+17 more)
+### Community 22 - "CulinaryContributionUseCases"
+Cohesion: 0.12
+Nodes (5): CulinaryContributionUseCases, culinaryJenis(), ContributionImage, NewCuisinePayload, CulinaryContributionRepository
 
 ### Community 23 - "AboutRepository"
-Cohesion: 0.09
-Nodes (9): CreateSponsorshipUseCase, DeleteSponsorshipUseCase, ListAdminSponsorshipsUseCase, ListContributorsUseCase, ListPublicSponsorshipsUseCase, ListTeamUseCase, ListVerifiersUseCase, SetUserSponsorUseCase (+1 more)
+Cohesion: 0.06
+Nodes (27): CreateSponsorshipUseCase, DeleteSponsorshipUseCase, ListAdminSponsorshipsUseCase, ListContributorsUseCase, ListPublicSponsorshipsUseCase, ListTeamUseCase, ListVerifiersUseCase, SetUserSponsorUseCase (+19 more)
 
 ### Community 24 - "bug-report.use-case.test.ts"
-Cohesion: 0.11
-Nodes (21): CreateBugReportCommand, CreateBugReportUseCase, ListBugReportsUseCase, ResolveBugReportCommand, ResolveBugReportUseCase, BugReport, BugReportImage, BugReportListFilter (+13 more)
+Cohesion: 0.10
+Nodes (22): CreateBugReportCommand, CreateBugReportUseCase, ListBugReportsUseCase, ResolveBugReportCommand, ResolveBugReportUseCase, BugReport, BugReportImage, BugReportListFilter (+14 more)
 
 ### Community 25 - "AppSettingsRepository"
-Cohesion: 0.04
-Nodes (56): GetContributionDetailUseCase, ReopenContributionUseCase, ReviewContributionUseCase, ACTOR, makeContribution(), makeDeps(), makePushCooldownGate(), makeReviewDeps() (+48 more)
+Cohesion: 0.08
+Nodes (24): ALLOWED, UpdateAppSettingsUseCase, APP_SETTING_KEYS, AppSetting, AppSettingKey, AppSettingType, BALEHO_PRICE_PER_CELL_PER_DAY_KEY, DEFAULT_OAUTH_CONSENT_ENFORCEMENT (+16 more)
 
-### Community 26 - "PublicUserRepository"
-Cohesion: 0.12
-Nodes (15): GetPublicActivityUseCase, PublicActivityPageResult, GetPublicProfileUseCase, PublicActivityQueryInput, MENTION_SUGGEST_LIMIT, SuggestMentionUsersUseCase, MentionUserRow, PublicActivityItem (+7 more)
-
-### Community 27 - "place-category.routes.ts"
+### Community 26 - "public-profile.entity.ts"
 Cohesion: 0.19
-Nodes (13): PlaceCategoryController, serialize(), createAdminPlaceCategoryRoutes(), createPublicPlaceCategoryRoutes(), json(), createPlaceCategoryBodySchema, idSchema, listPlaceCategoriesQuerySchema (+5 more)
+Nodes (8): GetPublicActivityUseCase, PublicActivityPageResult, PublicActivityQueryInput, PublicActivityItem, PublicActivityKind, PublicProfileStats, actor(), FeedKey
+
+### Community 27 - "word-import-session.use-cases.ts"
+Cohesion: 0.08
+Nodes (23): ResolveDiscussionNotifyRecipientsInput, SYSTEM_USER_IDS, RollbackImportSessionResult, RollbackWordImportSessionUseCase, ClaimWordImportSessionUseCase, emptyToNull(), GetWordImportSessionUseCase, ListWordImportSessionsUseCase (+15 more)
 
 ### Community 28 - "word-suggestion.entity.ts"
-Cohesion: 0.05
-Nodes (37): CATEGORY_SET, ChangeAction, CurrentExampleSnapshot, CurrentMeaningSnapshot, CurrentPronunciationSnapshot, CurrentWordSnapshot, DiffExample, DiffField (+29 more)
+Cohesion: 0.07
+Nodes (28): CATEGORY_SET, ChangeAction, CurrentExampleSnapshot, CurrentMeaningSnapshot, CurrentPronunciationSnapshot, CurrentWordSnapshot, DiffExample, DiffField (+20 more)
 
 ### Community 29 - "notification-campaign.repository.impl.ts"
-Cohesion: 0.07
-Nodes (28): CreateCampaignDraftUseCase, ProcessCampaignDeliveryUseCase, SendCampaignUseCase, buildCampaignPushData(), CAMPAIGN_CHUNK_SIZE, CAMPAIGN_FCM_TOPIC, CAMPAIGN_MAX_CHUNKS_PER_RUN, CampaignAudienceType (+20 more)
+Cohesion: 0.08
+Nodes (25): buildCampaignPushData(), CAMPAIGN_CHUNK_SIZE, CAMPAIGN_FCM_TOPIC, CAMPAIGN_MAX_CHUNKS_PER_RUN, CampaignAudienceType, CampaignBodyType, campaignInboxAction(), CampaignRecipient (+17 more)
 
 ### Community 30 - "play-stats.provider.ts"
 Cohesion: 0.11
-Nodes (29): AnalyticsProviderError, findCol(), isOverviewCsv(), isRelevantPlayCsv(), normalizePlayDate(), num(), numOrNull(), parsePlayStatsCsv() (+21 more)
+Nodes (30): PlayRatingBucket, PlayTotals, findCol(), isOverviewCsv(), isRelevantPlayCsv(), normalizePlayDate(), num(), numOrNull() (+22 more)
 
 ### Community 31 - "list-share-backgrounds.use-case.ts"
-Cohesion: 0.06
-Nodes (50): SHARE_BACKGROUND_PROVIDER_IDS, SHARE_MEDIA_KINDS, SHARE_ORIENTATIONS, SHARE_PROVIDER_MEDIA, ShareBackgroundItem, ShareBackgroundProviderId, ShareBackgroundProviderInfo, ShareBackgroundProviderPort (+42 more)
+Cohesion: 0.08
+Nodes (40): SHARE_BACKGROUND_PROVIDER_IDS, SHARE_PROVIDER_MEDIA, ShareBackgroundItem, ShareBackgroundProviderId, ShareBackgroundProviderInfo, ShareBackgroundProviderPort, ShareBackgroundSearchOptions, ShareBackgroundSort (+32 more)
 
-### Community 32 - "word.repository.ts"
-Cohesion: 0.02
-Nodes (71): wordController, CreateWordExampleDto, CreateWordImageDto, CreateWordMeaningDto, CreateWordRelatedDto, CreateWordTranslationDto, CreateWordVariantDto, InlineWordDto (+63 more)
+### Community 32 - "word.repository.impl.ts"
+Cohesion: 0.04
+Nodes (43): LemmaCaseGroup, LemmaCaseRow, planLemmaCaseMerges(), UpdateWordResult, normalizeLemma(), MeaningMedia, ChildStatus, LatestWordSummary (+35 more)
 
 ### Community 33 - "announcement.controller.ts"
-Cohesion: 0.09
-Nodes (19): CreateAnnouncementCommand, CreateAnnouncementUseCase, DeleteAnnouncementUseCase, ListPinnedAnnouncementsUseCase, UpdateAnnouncementCommand, ListAnnouncementsUseCase, Announcement, ANNOUNCEMENT_EVENT_KIND (+11 more)
+Cohesion: 0.08
+Nodes (22): announcementController, CreateAnnouncementCommand, CreateAnnouncementUseCase, DeleteAnnouncementUseCase, ListPinnedAnnouncementsUseCase, UpdateAnnouncementCommand, UpdateAnnouncementUseCase, ListAnnouncementsUseCase (+14 more)
 
 ### Community 34 - "place-category.repository.impl.ts"
-Cohesion: 0.10
-Nodes (16): CreatePlaceCategoryUseCase, DeletePlaceCategoryUseCase, GetPlaceCategoryUseCase, ListPlaceCategoriesUseCase, UpdatePlaceCategoryUseCase, PlaceCategoryRecord, PlaceCategoryStatus, CreatePlaceCategoryInput (+8 more)
+Cohesion: 0.09
+Nodes (18): CreatePlaceCategoryUseCase, DeletePlaceCategoryUseCase, GetPlaceCategoryUseCase, ListPlaceCategoriesUseCase, UpdatePlaceCategoryUseCase, PlaceCategoryRecord, PlaceCategoryStatus, CreatePlaceCategoryInput (+10 more)
 
 ### Community 35 - "dashboard.repository.impl.ts"
-Cohesion: 0.07
-Nodes (40): { parsed }, USER_A, USER_B, WORD_1, LAST_SEEN_TOUCH_THROTTLE_MS, ONLINE_RECENTLY_WINDOW_MS, onlineRecentlySince(), GetDashboardStatsUseCase (+32 more)
+Cohesion: 0.08
+Nodes (35): onlineRecentlySince(), GetDashboardStatsUseCase, ActivityDailyPoint, AppRoleKey, ContributionStatusKey, DashboardStats, ProblemSourceCounts, ProblemsStats (+27 more)
 
 ### Community 36 - "campaign.validator.ts"
-Cohesion: 0.10
-Nodes (29): createAdminNotificationCampaignRoutes(), createAdminNotificationTemplateRoutes(), json(), NotificationCampaignRoutesDeps, ALLOWED_DEEP_LINK_HOSTS, audienceTypeSchema, bodySchema, campaignBodyTypeSchema (+21 more)
+Cohesion: 0.07
+Nodes (36): mapCampaign(), mapTemplate(), AdminCtx, NotificationCampaignController, NotificationCampaignRoutesDeps, ALLOWED_DEEP_LINK_HOSTS, audienceTypeSchema, bodySchema (+28 more)
 
 ### Community 37 - "EncyclopediaRepositoryImpl"
 Cohesion: 0.07
-Nodes (8): stripMarkdown(), Article, ArticleRevision, ArticleListFilter, NewArticleInput, EncyclopediaRepositoryImpl, ftsMatch(), toArticle()
+Nodes (12): ArticleComment, ArticlePayload, ArticleRevision, EncyclopediaCategory, ArticleCommentListFilter, NewArticleCommentInput, NewArticleContributionInput, NewArticleInput (+4 more)
 
-### Community 38 - "abuse.routes.ts"
-Cohesion: 0.12
-Nodes (20): AbuseController, AdminCtx, authErrors, createAbuseRoutes(), json(), anonAbuseEventListResponseSchema, anonMuteListResponseSchema, LiftAnonMuteBody (+12 more)
+### Community 38 - "abuse.controller.ts"
+Cohesion: 0.24
+Nodes (5): AbuseController, AdminCtx, LiftAnonMuteBody, ListAnonAbuseEventsQuery, ListUserAbuseEventsQuery
 
 ### Community 39 - "EventRepository"
-Cohesion: 0.05
-Nodes (29): AppendEventImagesUseCase, assertCategoryPublished(), assertPlaces(), CreateEventUseCase, DeleteEventUseCase, GetEventBySlugUseCase, HideEventImageUseCase, ListEventCategoriesUseCase (+21 more)
+Cohesion: 0.06
+Nodes (20): DeleteEventCommentUseCase, ListEventCommentsUseCase, TakedownEventCommentUseCase, AppendEventImagesUseCase, DeleteEventUseCase, GetEventBySlugUseCase, HideEventImageUseCase, ListEventCategoriesUseCase (+12 more)
 
 ### Community 40 - "EventRepositoryImpl"
-Cohesion: 0.06
-Nodes (12): EventCategoryRef, EventComment, EventImageAttribution, EventCommentListFilter, NewEventCommentInput, EventRepositoryImpl, loadPlaces(), mapEvent() (+4 more)
+Cohesion: 0.07
+Nodes (10): EventCategoryRef, EventComment, EventCommentListFilter, NewEventCommentInput, EventRepositoryImpl, loadPlaces(), mapEvent(), mapEventImage() (+2 more)
 
 ### Community 41 - "lemma-definition.mapper.ts"
 Cohesion: 0.09
@@ -500,59 +493,59 @@ Nodes (27): LemmaDefinitionEntryDto, LemmaDefinitionLookupResultDto, LemmaDefini
 
 ### Community 42 - "NotificationRepository"
 Cohesion: 0.08
-Nodes (18): GetUnreadNotificationCountUseCase, ListMyNotificationsUseCase, MarkAllNotificationsReadUseCase, logError(), RecordInboxNotificationCommand, inboxCopyFor(), InboxNotification, InboxNotificationType (+10 more)
+Nodes (17): GetUnreadNotificationCountUseCase, ListMyNotificationsUseCase, MarkAllNotificationsReadUseCase, MarkNotificationReadUseCase, RecordInboxNotificationCommand, InboxNotification, InboxNotificationType, NotificationActionKind (+9 more)
 
 ### Community 43 - "NotificationCampaignRepository"
-Cohesion: 0.07
-Nodes (12): assertDeepLink(), CancelCampaignUseCase, EstimateCampaignAudienceUseCase, GetCampaignDetailUseCase, ListCampaignsUseCase, RetryFailedCampaignRecipientsUseCase, CreateNotificationTemplateUseCase, DeleteNotificationTemplateUseCase (+4 more)
+Cohesion: 0.06
+Nodes (14): assertDeepLink(), CancelCampaignUseCase, CreateCampaignDraftUseCase, EstimateCampaignAudienceUseCase, GetCampaignDetailUseCase, ListCampaignsUseCase, ProcessDueCampaignsUseCase, RetryFailedCampaignRecipientsUseCase (+6 more)
 
 ### Community 44 - "suggestion.validator.ts"
 Cohesion: 0.06
-Nodes (39): ALLOWED, checkSuggestionCategoryShape(), isRevertibleForApplyPending(), Part, presentParts(), composeReasonDisplay(), isSuggestionCategory(), SUGGESTION_REASON_CODES (+31 more)
+Nodes (46): ALLOWED, checkSuggestionCategoryShape(), isRevertibleForApplyPending(), Part, presentParts(), composeReasonDisplay(), isSuggestionCategory(), SUGGESTION_REASON_CODES (+38 more)
 
 ### Community 45 - "legal.controller.ts"
+Cohesion: 0.08
+Nodes (23): ArchiveLegalDocumentUseCase, CreateLegalDocumentDraftUseCase, ListAdminLegalDocumentsUseCase, PublishLegalDocumentUseCase, UpdateLegalDocumentDraftUseCase, GetAppSettingsUseCase, CurrentLegalSummary, GetCurrentLegalUseCase (+15 more)
+
+### Community 46 - "create-word.dto.ts"
 Cohesion: 0.06
-Nodes (32): AcceptLegalUseCase, ArchiveLegalDocumentUseCase, CreateLegalDocumentDraftUseCase, ListAdminLegalDocumentsUseCase, PublishLegalDocumentUseCase, UpdateLegalDocumentDraftUseCase, GetAppSettingsUseCase, CurrentLegalSummary (+24 more)
+Nodes (42): CreateWordExampleDto, CreateWordImageDto, CreateWordMeaningDto, CreateWordRelatedDto, CreateWordTranslationDto, CreateWordVariantDto, InlineWordDto, MeaningOverrideDto (+34 more)
 
-### Community 46 - "map-create-word.ts"
-Cohesion: 0.13
-Nodes (23): isAllowedStockImageUrl(), isStockWordImageProvider(), resolveWordImageProvider(), STOCK_URL_HOST_SUFFIXES, STOCK_WORD_IMAGE_PROVIDERS, stockImageAttribution(), StockWordImageProvider, wordImageIsAutoVerified() (+15 more)
-
-### Community 47 - "WordRepository"
-Cohesion: 0.03
-Nodes (11): ReviewOutcome, ClosedLiveContribution, ApplyCommaSplitCommand, ApplyCommaSplitUseCase, ListAdminWordsQuery, ListAdminWordsUseCase, ListCommaSplitsUseCase, MarkCommaLiteralCommand (+3 more)
+### Community 47 - "AuditLogRepository"
+Cohesion: 0.02
+Nodes (82): NewAuditLog, AuditLogRepository, SetCanContributeUseCase, ConfirmDuplicateMeaningDto, ConfirmDuplicateMeaningResult, ConfirmDuplicateMeaningUseCase, makeDeps(), DeleteJinyeUseCase (+74 more)
 
 ### Community 48 - "jinye.routes.ts"
-Cohesion: 0.04
-Nodes (65): archiveRoute, attachAudioRoute, createCommentRoute, createLemmaLinkRoute, createRouteDef, deleteCommentRoute, deleteLemmaLinkRoute, deleteRouteDef (+57 more)
+Cohesion: 0.05
+Nodes (35): archiveRoute, attachAudioRoute, commentEditHistoryRoute, createCommentRoute, createLemmaLinkRoute, createRouteDef, deleteCommentRoute, deleteLemmaLinkRoute (+27 more)
 
-### Community 49 - "quota-aware-mailer.ts"
-Cohesion: 0.21
-Nodes (17): accountDeletionEmailHtml(), accountDeletionEmailText(), otpCapture, DEFAULT_MAIL_FROM, EMAIL_AVATAR_URL, OTP_EMAIL_LOGO_BASE64, OTP_EMAIL_LOGO_CONTENT_ID, OTP_EMAIL_LOGO_FILENAME (+9 more)
+### Community 49 - "resend-mailer.service.ts"
+Cohesion: 0.20
+Nodes (19): brandedCodeEmailHtml(), brandedMessageEmailHtml(), documentShell(), emailActionHref(), escapeEmailHtml(), eyebrowRow(), otpCapture, DEFAULT_MAIL_FROM (+11 more)
 
 ### Community 50 - "email.repository.impl.ts"
-Cohesion: 0.09
-Nodes (21): EMAIL_PROVIDERS, EmailCategory, EmailLog, EmailLogStatus, EmailProvider, EmailQuotaWithUsage, EmailLogEntry, EmailLogListQuery (+13 more)
+Cohesion: 0.10
+Nodes (22): EMAIL_PROVIDERS, EmailCategory, EmailLog, EmailLogStatus, EmailProvider, EmailQuotaWithUsage, EmailLogEntry, EmailLogListQuery (+14 more)
 
-### Community 51 - "rate-limit.middleware.ts"
+### Community 51 - "AuthUser"
 Cohesion: 0.05
-Nodes (52): AdminBugReportRoutesDeps, createAdminBugReportRoutes(), json(), BugReportController, toAdminItem(), BugReportRoutesDeps, createBugReportRoutes(), json() (+44 more)
+Nodes (47): AdminBugReportRoutesDeps, json(), BugReportController, toAdminItem(), BugReportRoutesDeps, createBugReportRoutes(), json(), submitDeviceLimit (+39 more)
 
 ### Community 52 - "verifier-application.validator.ts"
-Cohesion: 0.09
-Nodes (27): VERIFIER_DIALECT_CODES, AdminVerifierApplicationRoutesDeps, createAdminVerifierApplicationRoutes(), json(), adminListVerifierApplicationsResponseSchema, adminVerifierApplicationDetailResponseSchema, applicationProfileWire, approveVerifierApplicationResponseSchema (+19 more)
+Cohesion: 0.12
+Nodes (20): json(), adminListVerifierApplicationsResponseSchema, adminVerifierApplicationDetailResponseSchema, applicationProfileWire, approveVerifierApplicationResponseSchema, listVerifierApplicationsQuerySchema, myVerifierApplicationResponseSchema, photoWire (+12 more)
 
-### Community 53 - "culinary.repository.impl.ts"
-Cohesion: 0.13
-Nodes (32): imagesToJson(), Cuisine, CuisineDetail, CuisineImage, CuisineSource, CulinaryAuthorRef, CulinaryPlace, ensureOneMainImage() (+24 more)
+### Community 53 - "culinary.controller.ts"
+Cohesion: 0.08
+Nodes (35): imagesToJson(), sourcesToJson(), Cuisine, CuisineDetail, CuisineImage, CuisinePlaceLink, CuisineSource, CulinaryAuthorRef (+27 more)
 
 ### Community 54 - "ga4.provider.ts"
-Cohesion: 0.15
-Nodes (24): Ga4Behavior, Ga4Overview, byMetricDesc(), CHANNEL_ORDER, channelBucket(), dr(), ga4DateToYmd(), Ga4Provider (+16 more)
+Cohesion: 0.14
+Nodes (25): Ga4Behavior, Ga4Overview, Ga4Visitors, byMetricDesc(), CHANNEL_ORDER, channelBucket(), dr(), ga4DateToYmd() (+17 more)
 
 ### Community 55 - "WordSuggestionRepositoryImpl"
-Cohesion: 0.19
-Nodes (6): ChangeHistoryItem, asProposed(), getCurrentWordSnapshot(), getUserPublicLabels(), restoreBaseline(), WordSuggestionRepositoryImpl
+Cohesion: 0.09
+Nodes (22): deleteStagingWordImage(), fetchImageBytes(), PromotedWordImage, promoteWordImageFromStaging(), PromoteWordImageOptions, StagingWordImage, CensoredSuggestion, ShapeIssue (+14 more)
 
 ### Community 56 - "culinary-category.repository.impl.ts"
 Cohesion: 0.08
@@ -560,235 +553,239 @@ Nodes (25): CreateCulinaryCategoryUseCase, DeleteCulinaryCategoryUseCase, GetCul
 
 ### Community 57 - "get-play-analytics.use-case.ts"
 Cohesion: 0.06
-Nodes (39): AnalyticsProviderErrorKind, PlayStatsProvider, CacheEntry, ERROR_SUFFIX, errorMessage(), GetPlayAnalyticsUseCase, isEmpty(), PLAY_STATS_LAG_DAYS (+31 more)
+Nodes (39): AnalyticsProviderError, AnalyticsProviderErrorKind, PlayStatsProvider, CacheEntry, ERROR_SUFFIX, errorMessage(), GetPlayAnalyticsInput, GetPlayAnalyticsUseCase (+31 more)
 
 ### Community 58 - "place.repository.impl.ts"
-Cohesion: 0.15
-Nodes (26): PlaceAuthorRef, PlaceCategory, PlaceImage, PlaceImageAttribution, PlaceRelatedCard, PlaceRelation, PlaceRelationKind, PlaceSource (+18 more)
+Cohesion: 0.10
+Nodes (30): Place, PlaceAuthorRef, PlaceCategory, PlaceImage, PlaceImageAttribution, PlaceRelatedCard, PlaceRelation, PlaceRelationKind (+22 more)
 
-### Community 59 - "CulinaryRepositoryImpl"
-Cohesion: 0.11
-Nodes (5): CuisinePlaceLink, CulinaryPlaceDetail, CulinaryRepositoryImpl, mapLink(), mapPlace()
+### Community 59 - "NotificationPushCooldownRepository"
+Cohesion: 0.07
+Nodes (24): DEFAULT_WORD_COMMENT_PUSH_COOLDOWN_MINUTES, DEFAULT_WORD_MEDIA_PUSH_COOLDOWN_MINUTES, DEFAULT_WORD_VOTE_PUSH_COOLDOWN_MINUTES, WORD_COMMENT_PUSH_COOLDOWN_MINUTES_KEY, WORD_MEDIA_PUSH_COOLDOWN_MINUTES_KEY, WORD_VOTE_PUSH_COOLDOWN_MINUTES_KEY, parseCooldownMinutes(), ReplyPushCooldownChannel (+16 more)
 
-### Community 60 - "dns-email-domain-verifier.ts"
-Cohesion: 0.17
-Nodes (8): DnsEmailDomainVerifier, DohResponse, DohStatus, DohType, RR, unreachable(), AllowAllEmailDomainVerifier, createEmailDomainVerifier()
+### Community 60 - "register-user.use-case.test.ts"
+Cohesion: 0.07
+Nodes (19): EmailDomainVerifierPort, RegisterUserUseCase, ResendOtpUseCase, EmailVerificationOtp, EmailVerificationOtpRepository, NewEmailVerificationOtp, DnsEmailDomainVerifier, DohResponse (+11 more)
 
 ### Community 61 - "word-group.controller.ts"
 Cohesion: 0.09
 Nodes (18): AddWordGroupMemberUseCase, assertName(), CreateWordGroupUseCase, DeleteWordGroupUseCase, GetWordGroupUseCase, ListWordGroupsUseCase, RemoveWordGroupMemberUseCase, UpdateWordGroupUseCase (+10 more)
 
 ### Community 62 - "WordController"
-Cohesion: 0.06
-Nodes (14): AdminListWordsQueryBody, ApplyCommaSplitBody, ListWordsQueryBody, MarkCommaLiteralBody, MergeDuplicateWordsBody, SearchWordsQueryBody, ClaimImportSessionBody, ListImportSessionsQuery (+6 more)
+Cohesion: 0.05
+Nodes (19): mapPublicWordImageUrl(), WordImageUrlFields, BatchContributeWordsBody, AdminListWordsQueryBody, ApplyCommaSplitBody, ListWordsQueryBody, MarkCommaLiteralBody, MergeDuplicateWordsBody (+11 more)
 
 ### Community 63 - "discussion.validator.ts"
-Cohesion: 0.07
-Nodes (47): AdminDiscussionRoutesDeps, createAdminDiscussionRoutes(), json(), createDiscussionRoutes(), json(), replyAudioUserLimit(), replyUserLimit(), submitUserLimit() (+39 more)
+Cohesion: 0.08
+Nodes (41): json(), tokenIpLimit, tokenUserLimit, adminImageWireSchema, attachDiscussionAudioResponseSchema, createDiscussionBodySchema, createDiscussionLemmaLinkBodySchema, createDiscussionReplyBodySchema (+33 more)
 
 ### Community 64 - "id.ts"
-Cohesion: 0.05
-Nodes (59): createActivityRoutes(), createCardShareRoutes(), json(), activityActorSchema, activityItemSchema, activityTargetSchema, listActivityQuerySchema, listActivityResponseSchema (+51 more)
+Cohesion: 0.03
+Nodes (96): authErrors, json(), anonAbuseEventListResponseSchema, anonMuteListResponseSchema, liftAnonMuteBodySchema, liftAnonMuteResponseSchema, liftUserMuteResponseSchema, listAnonAbuseEventsQuerySchema (+88 more)
 
-### Community 65 - "activity.repository.impl.ts"
-Cohesion: 0.12
-Nodes (27): ActivityRepositoryImpl, CONTRIB_BODY, feedSafeUsageLabelsSql(), feedVisibleWordSql(), isFulfilledLemmaSql, keysetBefore(), matchesExcludedLemmaSql, notMyWordVoteSql() (+19 more)
+### Community 65 - "ActivityItem"
+Cohesion: 0.09
+Nodes (29): ActivityItem, ActivityCursor, ActivityRepository, ActivityRepositoryImpl, feedSafeUsageLabelsSql(), feedVisibleWordSql(), keysetBefore(), notMyWordVoteSql() (+21 more)
 
-### Community 66 - "update-pantun-reply.use-case.ts"
-Cohesion: 0.17
-Nodes (19): CreatePantunReplyCommand, CreatePantunReplyWithAudioCommand, CreatePantunCommand, CreatePantunWithAudioCommand, pantunLinesEqual(), UpdatePantunReplyCommand, resolveRhymeScheme(), AUTO_ORDER (+11 more)
-
-### Community 67 - "pantun-report.repository.impl.ts"
+### Community 66 - "create-pantun-with-audio.use-case.ts"
 Cohesion: 0.08
-Nodes (29): TakedownPantunReplyUseCase, TakedownPantunUseCase, ListPantunReportsUseCase, ResolvePantunReportCommand, ResolvePantunReportUseCase, SubmitPantunReportCommand, SubmitPantunReportUseCase, PANTUN_REPORT_REASON_LABEL (+21 more)
+Nodes (40): buildJinyeAudioPath(), CreatePantunReplyCommand, CreatePantunReplyWithAudioCommand, CreatePantunCommand, CreatePantunWithAudioCommand, UpdatePantunReplyCommand, assertPantunAudioDurationMs(), PANTUN_AUDIO_MAX_MS (+32 more)
+
+### Community 67 - "submit-pantun-report.use-case.ts"
+Cohesion: 0.06
+Nodes (40): TakedownPantunReplyUseCase, TakedownPantunUseCase, ListPantunReportsUseCase, ResolvePantunReportCommand, ResolvePantunReportUseCase, SubmitPantunReportCommand, SubmitPantunReportUseCase, PANTUN_REPORT_REASON_LABEL (+32 more)
 
 ### Community 68 - "bookmark.repository.impl.ts"
 Cohesion: 0.13
 Nodes (14): GetMyBookmarksUseCase, ToggleBookmarkCommand, ToggleBookmarkUseCase, BookmarkItem, BookmarkListOptions, BookmarkListResult, BookmarkRepository, BookmarkWordSummary (+6 more)
 
-### Community 69 - "encyclopedia.repository.impl.ts"
-Cohesion: 0.06
-Nodes (34): ArticleComment, ArticlePayload, ArticleCommentListFilter, ContributionListFilter, NewArticleCommentInput, NewArticleContributionInput, NewRevisionInput, UpdateArticleInput (+26 more)
+### Community 69 - "Article"
+Cohesion: 0.14
+Nodes (5): Article, ArticleListFilter, ftsMatch(), toArticle(), ArticleStatus
 
-### Community 70 - "culinary-contribution.repository.impl.ts"
-Cohesion: 0.13
-Nodes (12): CulinaryContribution, CulinaryContributionWithTarget, CreateCulinaryContributionInput, ListCulinaryContributionsInput, CulinaryContributionRepositoryImpl, mapRow(), Row, withTarget() (+4 more)
+### Community 70 - "culinary-contribution.use-cases.ts"
+Cohesion: 0.08
+Nodes (27): CUISINE_EDIT_FIELDS, decisionCopy(), overlaps(), PLACE_EDIT_FIELDS, SubmitCulinaryChangeInput, SubmitNewCulinaryInput, ArchivePayload, composeCulinaryRejectDisplay() (+19 more)
 
 ### Community 71 - "register-user.use-case.ts"
-Cohesion: 0.07
-Nodes (32): RegisterDto, ForgotPasswordDto, ResetPasswordDto, EmailDomainVerifierPort, MailerPort, OAUTH_PROVIDER_LABEL, RegisterUserUseCase, ResendOtpUseCase (+24 more)
+Cohesion: 0.04
+Nodes (41): RegisterDto, ForgotPasswordDto, ResetPasswordDto, MailerPort, AccountDeletionUseCase, ForgotPasswordUseCase, OAUTH_PROVIDER_LABEL, LogoutUserUseCase (+33 more)
 
-### Community 72 - "ServiceUnavailableError"
+### Community 72 - "github-public-image-storage.service.ts"
+Cohesion: 0.17
+Nodes (7): GitHubPublicImageStorageService, createPublicImageStorage(), buildJsDelivrPublicUrl(), bytesToBase64(), parseGithubRepoUrl(), GitHubPronunciationStorageService, createPronunciationStorage()
+
+### Community 73 - "legal.routes.ts"
 Cohesion: 0.09
-Nodes (19): googleTokenVerifier, googleTokenVerifierHolder, withGoogleVerifier(), createImageStorage(), basicAuth(), hmacSha1Hex(), ImageKitStorageService, randomToken() (+11 more)
-
-### Community 73 - "pantun.repository.impl.ts"
-Cohesion: 0.08
-Nodes (23): PantunReplyEditHistoryResult, PantunReplyEditHistoryRevision, NewPantunReply, PantunReplyRevision, audioInsertValues(), ftsMatch(), PantunRepositoryImpl, PantunRow (+15 more)
+Nodes (27): LegalController, LegalRoutesDeps, mapLegalDocumentAdmin(), AcceptLegalBody, acceptLegalBodySchema, acceptLegalResponseSchema, appSettingItemSchema, appSettingsListResponseSchema (+19 more)
 
 ### Community 74 - "ContributionRepositoryImpl"
 Cohesion: 0.11
-Nodes (7): ApplyChildCorrectionCommand, ChildEntityWithParent, MyContributionListFilter, ReviewCommand, ContributionRepositoryImpl, decisionToStatus(), toContribution()
+Nodes (10): ListMyContributionsQuery, ContributionEntityType, ContributionStatus, ApplyChildCorrectionCommand, ContributionListFilter, MyContributionListFilter, ReviewCommand, ContributionRepositoryImpl (+2 more)
 
 ### Community 75 - "merge-activity.ts"
-Cohesion: 0.13
-Nodes (17): ListActivityInput, ListActivityPage, ListActivityUseCase, ActivityActor, ActivityKind, ActivityTarget, ACTIVITY_DEFAULT_LIMIT, ACTIVITY_MAX_LIMIT (+9 more)
+Cohesion: 0.09
+Nodes (21): ListActivityInput, ListActivityPage, ListActivityUseCase, RecordCardShareUseCase, ActivityActor, ActivityKind, ActivityTarget, ACTIVITY_DEFAULT_LIMIT (+13 more)
 
 ### Community 76 - "admin-user.routes.ts"
-Cohesion: 0.16
-Nodes (18): AdminUserRoutesDeps, createAdminUserRoutes(), createContributionAccessRoutes(), json(), adminUserMutationResponseSchema, adminUsersListResponseSchema, adminUserWireSchema, ALL_ROLES (+10 more)
+Cohesion: 0.19
+Nodes (14): AdminUserRoutesDeps, adminUserMutationResponseSchema, adminUsersListResponseSchema, adminUserWireSchema, ALL_ROLES, ASSIGNABLE_ADMIN_ROLES, listAdminUsersQuerySchema, roleEnum (+6 more)
 
-### Community 77 - "LanguageRepository"
-Cohesion: 0.17
-Nodes (7): ListDialectsUseCase, ListLanguagesUseCase, Dialect, Language, LanguageRepository, LanguageRepositoryImpl, LanguageController
+### Community 77 - "jinye.validator.ts"
+Cohesion: 0.06
+Nodes (33): adminJinyeCommentTakedownParamSchema, adminJinyeItemResponseSchema, adminJinyeOkResponseSchema, createJinyeCommentBodySchema, createJinyeCommentResponseSchema, createJinyeLemmaLinkBodySchema, createJinyeResponseSchema, deleteJinyeCommentResponseSchema (+25 more)
 
 ### Community 78 - "place.use-cases.ts"
-Cohesion: 0.09
-Nodes (13): AppendPlaceImagesUseCase, CreatePlaceUseCase, DeletePlaceUseCase, GetPlaceBySlugUseCase, GetPlaceViewReportUseCase, HidePlaceImageUseCase, ListPlaceImagesUseCase, ListPlacesUseCase (+5 more)
+Cohesion: 0.07
+Nodes (18): AppendPlaceImagesUseCase, assertOurPlaceImage(), CreatePlaceUseCase, DeletePlaceUseCase, GetPlaceBySlugUseCase, GetPlaceViewReportUseCase, HidePlaceImageUseCase, ListPlaceImagesUseCase (+10 more)
 
-### Community 79 - "VoteRepository"
-Cohesion: 0.09
-Nodes (13): DeleteAdminVoteCommand, DeleteAdminVoteResult, DeleteAdminVoteUseCase, GetMyVotesUseCase, ListMyVoteHistoryUseCase, ResetTargetVotesUseCase, ResetVotesByClientUseCase, SkipVoteDeckInput (+5 more)
+### Community 79 - "skip-vote-deck-word.use-case.ts"
+Cohesion: 0.20
+Nodes (4): GetMyVotesUseCase, SkipVoteDeckInput, SkipVoteDeckWordUseCase, makeDeps()
 
-### Community 80 - "achievement.validator.ts"
-Cohesion: 0.10
-Nodes (21): isAchievementSourceKnown(), achievementAdminListResponseSchema, achievementBorderResponseSchema, achievementCodeSchema, achievementCriteriaSchema, achievementGrantResponseSchema, achievementItemResponseSchema, achievementItemSchema (+13 more)
+### Community 80 - "achievement.routes.ts"
+Cohesion: 0.09
+Nodes (27): AchievementController, serializeAchievement(), AchievementRoutesDeps, idParam, achievementAdminListResponseSchema, achievementBorderResponseSchema, achievementCodeSchema, achievementCriteriaSchema (+19 more)
 
 ### Community 81 - "trigger-sqlite-backup.use-case.ts"
 Cohesion: 0.08
 Nodes (22): GithubActionsDispatchPort, WorkflowDispatchInput, ListDatabaseBackupLogsUseCase, BACKUP_STALE_MESSAGE, BACKUP_STALE_MS, resolveGithubToken(), TriggerSqliteBackupInput, TriggerSqliteBackupResult (+14 more)
 
-### Community 82 - "web-import.repository.impl.ts"
-Cohesion: 0.05
-Nodes (50): ApproveWebImportUseCase, GetWebImportUseCase, ListWebImportsUseCase, normalizeType(), PreviewWebImportUseCase, RejectWebImportUseCase, SubmitWebImportInput, SubmitWebImportResult (+42 more)
+### Community 82 - "web-import.use-cases.ts"
+Cohesion: 0.07
+Nodes (27): ApproveWebImportUseCase, GetWebImportUseCase, ListWebImportsUseCase, normalizeType(), PreviewWebImportUseCase, RejectWebImportUseCase, SubmitWebImportInput, SubmitWebImportResult (+19 more)
 
-### Community 83 - "ApiClientRepository"
-Cohesion: 0.16
-Nodes (7): CreateAdminApiClientUseCase, UpdateAdminApiClientUseCase, ResolvedFirstPartyClient, ResolveFirstPartyClientInput, ResolveFirstPartyClientUseCase, FIRST_PARTY_SCOPE_STRING, ApiClientRepository
+### Community 83 - "contribution.entity.ts"
+Cohesion: 0.12
+Nodes (12): GetMyContributionDetailUseCase, ListMyContributionsUseCase, MySubmission, MySubmissionKind, SuggestionDetail, SuggestionReasonCode, SuggestionStatus, SuggestionSummary (+4 more)
 
-### Community 84 - "DiscussionController"
-Cohesion: 0.09
-Nodes (23): isVerifierRole(), DiscussionController, redactDiscussionAudio(), redactReplyAudio(), redactReplyBody(), toAdminImages(), toAdminItem(), toAdminReply() (+15 more)
+### Community 84 - "toAdminItem"
+Cohesion: 0.11
+Nodes (17): isVerifierRole(), redactDiscussionAudio(), redactReplyAudio(), redactReplyBody(), toAdminImages(), toAdminItem(), toAdminReply(), toOwnerImages() (+9 more)
 
-### Community 85 - "JinyeRepository"
-Cohesion: 0.06
-Nodes (17): ArchiveJinyeUseCase, AttachJinyeAudioUseCase, DeleteJinyeCommentUseCase, DeleteJinyeLemmaLinkUseCase, DeleteJinyeUseCase, GetJinyeDetailUseCase, ListArchivedJinyeUseCase, ListJinyeLemmaLinksUseCase (+9 more)
+### Community 85 - "app-error.ts"
+Cohesion: 0.02
+Nodes (84): discussionCreatedPayload(), jinyeFeedPayload(), snippetActivityBody(), ArchiveJinyeUseCase, AttachJinyeAudioCommand, AttachJinyeAudioUseCase, CreateJinyeCommentCommand, CreateJinyeCommentUseCase (+76 more)
 
 ### Community 86 - "culinary-claim.routes.ts"
-Cohesion: 0.23
-Nodes (12): createAdminCulinaryClaimRoutes(), createCulinaryClaimRoutes(), json(), okAdminList, okPublic, okPublicList, adminCulinaryClaimSchema, claimIdParamSchema (+4 more)
+Cohesion: 0.14
+Nodes (13): CulinaryClaimController, serializeAdmin(), serializePublic(), okAdminList, okPublic, okPublicList, adminCulinaryClaimSchema, claimIdParamSchema (+5 more)
 
 ### Community 87 - "event-contribution.use-cases.ts"
 Cohesion: 0.09
-Nodes (18): decisionCopy(), EventContributionUseCases, EventContribution, EventContributionPayload, EventContributionStatus, composeEventRejectDisplay(), EVENT_REJECT_REASON_LABELS, EventRejectReasonCode (+10 more)
+Nodes (17): decisionCopy(), EventContributionUseCases, EventContribution, EventContributionPayload, EventContributionStatus, composeEventRejectDisplay(), EVENT_REJECT_REASON_LABELS, EventRejectReasonCode (+9 more)
 
 ### Community 88 - "system-supabase.controller.ts"
-Cohesion: 0.11
-Nodes (15): ListSupabaseHealthChecksUseCase, projectRefFromUrl(), TriggerSupabaseHealthCheckUseCase, SupabaseHealthCheck, SupabaseHealthCheckFilter, SupabaseHealthCheckPage, SupabaseHealthCheckRepository, SupabaseHealthEnv (+7 more)
+Cohesion: 0.12
+Nodes (14): ListSupabaseHealthChecksUseCase, projectRefFromUrl(), TriggerSupabaseHealthCheckUseCase, SupabaseHealthCheck, SupabaseHealthCheckFilter, SupabaseHealthCheckPage, SupabaseHealthCheckRepository, SupabaseHealthEnv (+6 more)
 
-### Community 89 - "event.controller.ts"
+### Community 89 - "event.routes.ts"
 Cohesion: 0.07
-Nodes (32): EVENT_REJECT_REASON_CODES, rejectEventContributionBodySchema, requestRevisionBodySchema, resubmitEventContributionBodySchema, sambasLat, sambasLng, CreateBody, UpdateBody (+24 more)
+Nodes (33): EVENT_REJECT_REASON_CODES, idParam, okItem, okList, rejectEventContributionBodySchema, requestRevisionBodySchema, resubmitEventContributionBodySchema, sambasLat (+25 more)
 
 ### Community 90 - "RegionRepository"
-Cohesion: 0.08
+Cohesion: 0.09
 Nodes (18): assertSlug(), CreateRegionUseCase, DeleteRegionUseCase, GetRegionByIdUseCase, ListRegionsUseCase, UpdateRegionUseCase, Region, RegionStatus (+10 more)
 
 ### Community 91 - "vote.repository.ts"
-Cohesion: 0.12
-Nodes (16): GetVoteDeckQuery, GetVoteDeckUseCase, AdminVoteListItem, decodeVoteDeckCursor(), encodeVoteDeckCursor(), Vote, VoteDeckCursor, VoteDeckListOptions (+8 more)
+Cohesion: 0.11
+Nodes (17): GetVoteDeckQuery, GetVoteDeckUseCase, ListMyVoteHistoryUseCase, AdminVoteListItem, decodeVoteDeckCursor(), encodeVoteDeckCursor(), Vote, VoteDeckCursor (+9 more)
+
+### Community 92 - "AchievementRepository"
+Cohesion: 0.07
+Nodes (12): CreateAchievementUseCase, DeleteAchievementUseCase, GrantAchievementUseCase, PreviewAchievementUseCase, RevokeUserAchievementUseCase, SetActiveBorderUseCase, ListActiveAchievementsUseCase, ListMyAchievementsUseCase (+4 more)
 
 ### Community 93 - "logger.ts"
-Cohesion: 0.40
-Nodes (5): emit(), Level, LEVELS, REDACT_KEYS, serialize()
+Cohesion: 0.13
+Nodes (17): AuthenticatedFileBytes, createImageStorage(), buildImageKitSignedUrl(), hmacSha1Hex(), imageKitPathAfterEndpoint(), basicAuth(), hmacSha1Hex(), ImageKitStorageService (+9 more)
 
 ### Community 94 - "place-contribution.use-cases.ts"
-Cohesion: 0.10
-Nodes (11): assertOurPlaceImage(), decisionCopy(), PlaceContributionUseCases, composePlaceRejectDisplay(), PLACE_REJECT_REASON_CODES, PLACE_REJECT_REASON_LABELS, PlaceRejectReasonCode, ContributionPayload (+3 more)
+Cohesion: 0.07
+Nodes (15): assertCategory(), recordPlacePublished(), decisionCopy(), PlaceContributionUseCases, composePlaceRejectDisplay(), PLACE_REJECT_REASON_CODES, PLACE_REJECT_REASON_LABELS, PlaceRejectReasonCode (+7 more)
 
-### Community 95 - "word.entity.ts"
-Cohesion: 0.06
-Nodes (38): softDeleteMeaning, SetWordImageContentWarningsUseCase, CloseOpenWordReports, TakedownWordCommand, TakedownWordUseCase, RelatedWordRef, TAKEDOWN_REASON_CODES, TakedownReasonCode (+30 more)
+### Community 95 - "WordReport"
+Cohesion: 0.22
+Nodes (7): ListWordReportsUseCase, NewWordReport, WordReport, WordReportListFilter, WordReportStatus, WordReportTarget, WordReportRepository
 
-### Community 96 - "admin-comment-blocklist.routes.ts"
-Cohesion: 0.16
-Nodes (14): AdminCommentBlocklistRoutesDeps, createAdminCommentBlocklistRoutes(), json(), CommentBlocklistController, BulkCreateBlocklistBody, bulkCreateBlocklistBodySchema, bulkCreateBlocklistResponseSchema, createBlocklistResponseSchema (+6 more)
+### Community 96 - "comment-blocklist.validator.ts"
+Cohesion: 0.12
+Nodes (15): BLOCKLIST_BULK_MAX, BLOCKLIST_WORD_MAX_LENGTH, normalizeBlocklistWords(), NormalizedBlocklistBatch, CommentBlocklistController, BulkCreateBlocklistBody, bulkCreateBlocklistBodySchema, bulkCreateBlocklistResponseSchema (+7 more)
 
 ### Community 97 - "create-word.validator.ts"
-Cohesion: 0.06
-Nodes (48): adminListWordsQuerySchema, applyCommaSplitBodySchema, applyCommaSplitResponseSchema, applyLemmaSplitBodySchema, commaSplitCandidatesResponseSchema, createWordBodySchema, createWordResponseSchema, createWordSchema (+40 more)
+Cohesion: 0.04
+Nodes (76): WORDS_BULK_MAX, bulkItemFailureSchema, bulkItemSuccessSchema, bulkWordsActionSchema, BulkWordsBody, bulkWordsBodySchema, bulkWordsResponseSchema, adminListWordsQuerySchema (+68 more)
 
 ### Community 98 - "UserConsentRepository"
-Cohesion: 0.12
-Nodes (14): FacebookLoginDto, GithubLoginDto, GoogleLoginDto, ACTIVE, makeDeps(), assertConsentsMatchActiveVersions(), ConsentDocumentType, ConsentSource (+6 more)
+Cohesion: 0.09
+Nodes (22): FacebookLoginDto, GithubLoginDto, GoogleLoginDto, ACTIVE, makeDeps(), AcceptLegalUseCase, assertConsentsMatchActiveVersions(), ConsentDocumentType (+14 more)
 
-### Community 99 - "hono"
-Cohesion: 0.03
-Nodes (75): hono, BookmarkController, BookmarkRoutesDeps, createBookmarkRoutes(), json(), bookmarkDataSchema, cursorMetaSchema, MyBookmarksQuery (+67 more)
+### Community 99 - "notification.routes.ts"
+Cohesion: 0.15
+Nodes (15): NotificationController, createNotificationRoutes(), json(), NotificationRoutesDeps, inboxNotificationTypeSchema, ListNotificationsQuery, listNotificationsQuerySchema, listNotificationsResponseSchema (+7 more)
 
-### Community 100 - "public-image-path.ts"
-Cohesion: 0.18
-Nodes (23): pathForPurpose(), PublicImagePurpose, UploadPublicImageResult, buildAvatarImagePath(), buildCampaignImagePath(), buildCommentImagePath(), buildCulinaryImagePath(), buildDiscussionImagePath() (+15 more)
+### Community 100 - "PublicImageStoragePort"
+Cohesion: 0.09
+Nodes (29): PublicImageStoragePort, pathForPurpose(), PublicImagePurpose, UploadPublicImageResult, UploadPublicImageUseCase, buildAvatarImagePath(), buildBalehoImagePath(), buildCampaignImagePath() (+21 more)
 
 ### Community 101 - "user.routes.ts"
-Cohesion: 0.19
-Nodes (16): createMeAvatarRoutes(), createMeProfileRoutes(), createPublicUserRoutes(), getCachedSuggest(), json(), setCachedSuggest(), suggestCache, SuggestCacheEntry (+8 more)
+Cohesion: 0.15
+Nodes (18): createPublicUserRoutes(), getCachedSuggest(), setCachedSuggest(), suggestCache, SuggestCacheEntry, avatarUploadResponseSchema, mentionSuggestItemSchema, mentionSuggestQuerySchema (+10 more)
 
 ### Community 103 - "usaha.use-cases.ts"
 Cohesion: 0.06
-Nodes (24): AppendUsahaImagesUseCase, assertCategory(), assertLatLng(), AssertManagerUseCase, assertOurUsahaImage(), CreateUsahaUseCase, DeleteUsahaUseCase, FindUsahaDuplicatesUseCase (+16 more)
+Nodes (23): AppendUsahaImagesUseCase, assertCategory(), assertLatLng(), AssertManagerUseCase, assertOurUsahaImage(), CreateUsahaUseCase, DeleteUsahaUseCase, FindUsahaDuplicatesUseCase (+15 more)
 
 ### Community 104 - "usaha-category.repository.impl.ts"
-Cohesion: 0.11
-Nodes (15): CreateUsahaCategoryUseCase, DeleteUsahaCategoryUseCase, GetUsahaCategoryUseCase, ListUsahaCategoriesUseCase, UpdateUsahaCategoryUseCase, UsahaCategoryRecord, UsahaCategoryStatus, CreateUsahaCategoryInput (+7 more)
+Cohesion: 0.08
+Nodes (25): CreateUsahaCategoryUseCase, DeleteUsahaCategoryUseCase, GetUsahaCategoryUseCase, ListUsahaCategoriesUseCase, UpdateUsahaCategoryUseCase, UsahaCategoryRecord, UsahaCategoryStatus, CreateUsahaCategoryInput (+17 more)
 
-### Community 105 - "Sponsorship"
-Cohesion: 0.19
-Nodes (4): Sponsorship, AboutRepositoryImpl, todayIsoDate(), toSponsorship()
+### Community 105 - "layanan.controller.ts"
+Cohesion: 0.13
+Nodes (16): LAYANAN_PHONES_MIN, fieldsFrom(), LayananController, phonesFrom(), phoneWire(), requireUserId(), toContributionWire(), toLayananWire() (+8 more)
 
-### Community 106 - "api-client.validator.ts"
-Cohesion: 0.14
-Nodes (15): AdminApiClientController, AdminCtx, apiClientAdminListResponseSchema, apiClientAdminResponseSchema, apiClientAdminSchema, apiClientIdParamsSchema, channelEnum, CreateAdminApiClientBody (+7 more)
+### Community 106 - "admin-api-client.routes.ts"
+Cohesion: 0.15
+Nodes (17): AdminApiClientController, AdminCtx, AdminApiClientRoutesDeps, json(), apiClientAdminListResponseSchema, apiClientAdminResponseSchema, apiClientAdminSchema, apiClientIdParamsSchema (+9 more)
 
 ### Community 107 - "PushSenderPort"
 Cohesion: 0.23
 Nodes (11): PushMessage, PushSenderPort, PushSendResult, FcmPushSender, getFcmAccessToken(), NoopPushSender, pushOne(), pushTopic() (+3 more)
 
-### Community 108 - "validate-audio-file.ts"
-Cohesion: 0.36
-Nodes (8): ALLOWED_AUDIO_MIMES, looksLikeM4a(), looksLikeMp3(), looksLikeOgg(), looksLikeWav(), looksLikeWebm(), magicOk(), ValidatedAudioFile
+### Community 108 - "DiscussionController"
+Cohesion: 0.14
+Nodes (10): DiscussionController, toLemmaLinkWire(), DiscussionRoutesDeps, CreateDiscussionBody, CreateDiscussionLemmaLinkBody, CreateDiscussionReplyBody, ProposeDiscussionLemmaCorrectionBody, ResolveDiscussionLemmaCorrectionBody (+2 more)
 
-### Community 109 - "ActivityEventFeedRepositoryImpl"
+### Community 109 - "record-activity-event.use-case.ts"
 Cohesion: 0.14
 Nodes (9): RecordActivityEventCommand, ActivityEventKind, ActivityEventFeedRepositoryImpl, cursorFromEventId(), jinyeCopyFromRow(), jinyeImageCount(), profileCategoryOf(), quoted() (+1 more)
 
-### Community 110 - "zod"
-Cohesion: 0.04
-Nodes (78): zod, AuthRoutesDeps, createAuthRoutes(), accountDeletionMessageSchema, ConfirmAccountDeletionBody, confirmAccountDeletionSchema, DeleteOwnAccountBody, deleteOwnAccountSchema (+70 more)
+### Community 110 - "UnauthorizedError"
+Cohesion: 0.03
+Nodes (68): invalidFacebookToken(), invalidGithubToken(), invalidGoogleToken(), RefreshResult, AuthController, AuthRoutesDeps, getAllCookieValues(), browserSignalHeaders() (+60 more)
 
-### Community 111 - "usaha-claim.routes.ts"
-Cohesion: 0.12
-Nodes (17): serializeAdmin(), serializePublic(), UsahaClaimController, createAdminUsahaClaimRoutes(), createUsahaClaimRoutes(), json(), okAdminList, okPublic (+9 more)
+### Community 111 - "LoginMeta"
+Cohesion: 0.20
+Nodes (8): LoginMeta, LoginWithFacebookUseCase, LoginWithGithubUseCase, LoginWithGoogleUseCase, issueLoginSession(), LoginResult, syntheticOauthEmail(), ConsentInput
 
 ### Community 112 - "scripts"
 Cohesion: 0.08
 Nodes (26): scripts, cleanup-tokens, dataset:export, db:backfill-activity, db:backfill-consents, db:dedupe-meanings, db:fold-lemma-case, db:migrate (+18 more)
 
 ### Community 113 - "QuotaAwareMailer"
-Cohesion: 0.18
-Nodes (5): EmailLogRepository, EmailUsageRepository, QuotaAwareMailer, makeMailer(), quotaRow()
+Cohesion: 0.16
+Nodes (4): EmailLogRepository, EmailUsageRepository, EmailUsageRepositoryImpl, QuotaAwareMailer
 
-### Community 114 - "import-session.validator.ts"
-Cohesion: 0.25
-Nodes (7): claimImportSessionBodySchema, importSessionItemSchema, importSessionResponseSchema, listImportSessionsQuerySchema, rollbackImportSessionResponseSchema, saveImportSessionBodySchema, supportTypeSchema
+### Community 114 - "kreator.controller.ts"
+Cohesion: 0.12
+Nodes (17): claimAdminWire(), claimPublicWire(), KreatorController, kreatorWire(), requireUserId(), adminClaimsQuerySchema, adminKreatorBodySchema, adminKreatorUpdateSchema (+9 more)
 
 ### Community 115 - "UsahaRepositoryImpl"
-Cohesion: 0.07
-Nodes (23): ListMyUsahaResult, MyUsahaItem, Usaha, UsahaAuthorRef, UsahaCategory, UsahaImage, UsahaImageAttribution, UsahaImageInput (+15 more)
+Cohesion: 0.11
+Nodes (6): UsahaImage, ListUsahasResult, mapUsaha(), mapUsahaImage(), parseAttribution(), UsahaRepositoryImpl
 
-### Community 116 - "UnauthorizedError"
-Cohesion: 0.03
-Nodes (96): ChangePasswordDto, LoginDto, LoginMeta, SetPasswordDto, SetPasswordProvider, FacebookTokenVerifierPort, GithubTokenVerifierPort, GithubUserClaims (+88 more)
+### Community 116 - "UserRepository"
+Cohesion: 0.05
+Nodes (64): LoginDto, SetPasswordDto, SetPasswordProvider, FacebookTokenVerifierPort, GithubTokenVerifierPort, GoogleTokenVerifierPort, PasswordHasherPort, TokenServicePort (+56 more)
 
 ### Community 117 - "wa-admin.routes.ts"
 Cohesion: 0.12
@@ -800,23 +797,23 @@ Nodes (17): description, engines, node, license, name, private, type, version (+
 
 ### Community 119 - "SmtpMailerService"
 Cohesion: 0.15
-Nodes (14): 1. Verifikasi file sudah benar (RED evidence dulu), 2. Verifikasi GREEN lokal, 3. Commit TERBATAS satu file (butuh go-ahead Tuan dulu), 4. Push staging + pantau CI (butuh go-ahead Tuan dulu), Architecture / pendekatan, Current context / asumsi, Fix: 29 suite e2e CI gagal — Cannot find module './smtp-mailer.service', Goal (+6 more)
+Nodes (13): 1. Verifikasi file sudah benar (RED evidence dulu), 2. Verifikasi GREEN lokal, 3. Commit TERBATAS satu file (butuh go-ahead Tuan dulu), 4. Push staging + pantau CI (butuh go-ahead Tuan dulu), Architecture / pendekatan, Current context / asumsi, Fix: 29 suite e2e CI gagal — Cannot find module './smtp-mailer.service', Goal (+5 more)
 
 ### Community 120 - "encyclopedia.routes.ts"
 Cohesion: 0.08
-Nodes (41): createAdminEncyclopediaRoutes(), createEncyclopediaRoutes(), json(), ok, okResponse(), userKey(), adminCreateArticleBodySchema, adminUpdateArticleBodySchema (+33 more)
+Nodes (42): AdminEncyclopediaRoutesDeps, createAdminEncyclopediaRoutes(), createEncyclopediaRoutes(), EncyclopediaRoutesDeps, json(), ok, okResponse(), userKey() (+34 more)
 
-### Community 121 - "usaha.validator.ts"
+### Community 121 - "usaha.controller.ts"
 Cohesion: 0.09
-Nodes (20): createUsahaBodySchema, duplicateQuerySchema, itemFields, listUsahasResponseSchema, restrictUsahaBodySchema, sambasLat, sambasLng, updateUsahaBodySchema (+12 more)
+Nodes (22): CreateBody, UpdateBody, createUsahaBodySchema, duplicateQuerySchema, itemFields, listUsahasResponseSchema, restrictUsahaBodySchema, sambasLat (+14 more)
 
 ### Community 122 - "DeviceTokenRepository"
-Cohesion: 0.19
-Nodes (3): RegisterDeviceTokenUseCase, RevokeDeviceTokenUseCase, DeviceTokenRepository
+Cohesion: 0.11
+Nodes (6): RegisterDeviceTokenUseCase, RevokeDeviceTokenUseCase, DeviceTokenRecord, DeviceTokenRepository, DeviceTokenRepositoryImpl, toRecord()
 
-### Community 123 - "admin-vote.controller.ts"
-Cohesion: 0.10
-Nodes (21): AdminCtx, AdminVotesController, adminTopTargetWireSchema, AdminVoteTargetType, adminVoteWireSchema, DeleteAdminVoteParams, deleteAdminVoteParamsSchema, deleteAdminVoteResponseSchema (+13 more)
+### Community 123 - "admin-vote.routes.ts"
+Cohesion: 0.11
+Nodes (22): AdminVotesController, AdminVoteRoutesDeps, json(), adminTopTargetWireSchema, AdminVoteTargetType, adminVoteWireSchema, DeleteAdminVoteParams, deleteAdminVoteParamsSchema (+14 more)
 
 ### Community 124 - "vote.routes.ts"
 Cohesion: 0.11
@@ -826,589 +823,569 @@ Nodes (23): MAX_VOTE_TARGETS, myVotesResponseSchema, SkipVoteDeckBody, skipVoteD
 Cohesion: 0.11
 Nodes (18): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, lib, module, moduleResolution, noEmit, noFallthroughCasesInSwitch (+10 more)
 
-### Community 126 - "culinary-claim.repository.impl.ts"
-Cohesion: 0.08
-Nodes (18): CulinaryClaimUseCases, composeCulinaryClaimRejectDisplay(), CULINARY_CLAIM_REJECT_DISPLAY, CulinaryClaim, CulinaryClaimWithPlace, CulinaryClaimRepository, CulinaryClaimRepositoryImpl, mapRow() (+10 more)
+### Community 126 - "CulinaryClaim"
+Cohesion: 0.14
+Nodes (7): CULINARY_CLAIM_REJECT_DISPLAY, CulinaryClaim, CulinaryClaimWithPlace, CulinaryClaimRepository, CulinaryClaimRepositoryImpl, mapRow(), CulinaryClaimStatus
 
 ### Community 127 - "usaha-contribution.use-cases.ts"
-Cohesion: 0.10
-Nodes (26): decisionCopy(), PROFILE_MANAGED_FIELDS, SubmitManagerChangeInput, SubmitNewUsahaInput, SubmitSuggestEditInput, composeUsahaRejectDisplay(), NewUsahaPayload, ProfilePayload (+18 more)
+Cohesion: 0.11
+Nodes (25): canonicalFields(), PROFILE_MANAGED_FIELDS, SubmitManagerChangeInput, SubmitNewUsahaInput, SubmitSuggestEditInput, NewUsahaPayload, ProfilePayload, USAHA_CONTRIBUTION_KIND_LABEL (+17 more)
 
 ### Community 128 - "search-miss.routes.ts"
-Cohesion: 0.18
-Nodes (16): createAdminSearchMissRoutes(), createSearchMissRoutes(), json(), SearchMissRoutesDeps, adminSearchMissQuerySchema, bulkDismissItemFailureSchema, bulkDismissItemSuccessSchema, bulkDismissSearchMissBodySchema (+8 more)
+Cohesion: 0.11
+Nodes (21): SearchMissController, toApi(), SearchMissRoutesDeps, AdminSearchMissQueryBody, adminSearchMissQuerySchema, bulkDismissItemFailureSchema, bulkDismissItemSuccessSchema, BulkDismissSearchMissBody (+13 more)
 
 ### Community 129 - "achievement-registry.ts"
 Cohesion: 0.10
-Nodes (20): ACHIEVEMENT_CONTRIBUTION_STATUSES, ACHIEVEMENT_SELECTABLE_SOURCES, ACHIEVEMENT_SOURCE_REGISTRY, AchievementAggregateFact, AchievementEvaluatorKind, AchievementFilterField, aggregateFactBaseWhere(), articlesPublishedSource (+12 more)
+Nodes (21): ACHIEVEMENT_CONTRIBUTION_STATUSES, ACHIEVEMENT_SELECTABLE_SOURCES, ACHIEVEMENT_SOURCE_REGISTRY, AchievementAggregateFact, AchievementEvaluatorKind, AchievementFilterField, aggregateFactBaseWhere(), articlesPublishedSource (+13 more)
 
 ### Community 130 - "VerifierApplication"
-Cohesion: 0.05
-Nodes (39): assertEnoughContributions(), ApproveVerifierApplicationUseCase, CreateVerifierApplicationCommand, CreateVerifierApplicationUseCase, GetMyVerifierApplicationUseCase, GetVerifierApplicationDetailUseCase, ListVerifierApplicationsUseCase, RejectVerifierApplicationUseCase (+31 more)
+Cohesion: 0.16
+Nodes (5): assertEnoughContributions(), GetMyVerifierApplicationUseCase, GetVerifierApplicationDetailUseCase, VerifierApplication, VerifierApplicationRepository
 
 ### Community 131 - "AppVariables"
 Cohesion: 0.03
-Nodes (49): AchievementController, serializeAchievement(), AchievementRoutesDeps, grantAchievementBodySchema, listAchievementsQuerySchema, updateAchievementBodySchema, EncyclopediaController, publicName() (+41 more)
+Nodes (70): BalehoController, CreateBody, EventBody, MarkPaidBody, PAYMENT_PROOF_ROLES, RejectBody, serializeBoard(), idParam (+62 more)
 
-### Community 132 - "review-category-suggestion.use-case.ts"
-Cohesion: 0.21
-Nodes (7): ProposeCategorySuggestionCommand, RejectCategorySuggestionCommand, ReviewCategorySuggestionCommand, CategorySuggestion, CategorySuggestionStatus, normalizeCategoryName(), CategorySuggestionRepository
+### Community 132 - "propose-category-suggestion.use-case.ts"
+Cohesion: 0.23
+Nodes (5): ProposeCategorySuggestionCommand, CategorySuggestion, CategorySuggestionStatus, normalizeCategoryName(), CreateCategorySuggestionInput
 
 ### Community 133 - "usaha-claim.repository.impl.ts"
-Cohesion: 0.08
-Nodes (19): UsahaClaimUseCases, composeClaimRejectDisplay(), parseEvidenceImages(), USAHA_CLAIM_REJECT_DISPLAY, UsahaClaim, UsahaClaimEvidenceImage, UsahaClaimWithUsaha, UsahaClaimRepository (+11 more)
+Cohesion: 0.14
+Nodes (10): parseEvidenceImages(), USAHA_CLAIM_REJECT_DISPLAY, UsahaClaim, UsahaClaimEvidenceImage, UsahaClaimWithUsaha, UsahaClaimRepository, mapRow(), Row (+2 more)
 
-### Community 134 - "pantun.controller.ts"
-Cohesion: 0.06
-Nodes (34): CreatePantunReplyUseCase, CreatePantunReplyWithAudioUseCase, CreatePantunUseCase, CreatePantunWithAudioUseCase, DeletePantunReplyUseCase, DeletePantunUseCase, GetPantunDetailResult, GetPantunDetailUseCase (+26 more)
+### Community 134 - "CursorPage"
+Cohesion: 0.04
+Nodes (53): CreatePantunReplyUseCase, CreatePantunReplyWithAudioUseCase, CreatePantunUseCase, CreatePantunWithAudioUseCase, DeletePantunReplyUseCase, DeletePantunUseCase, GetPantunDetailResult, GetPantunDetailUseCase (+45 more)
 
 ### Community 135 - "WordReportController"
 Cohesion: 0.38
 Nodes (3): ResolveWordReportBody, toWordReportItem(), WordReportController
 
-### Community 137 - "CommentBlocklistWord"
-Cohesion: 0.21
-Nodes (3): CommentBlocklistWord, CommentBlocklistRepositoryImpl, wordContains()
+### Community 136 - "jinye-report.routes.ts"
+Cohesion: 0.14
+Nodes (20): JinyeReportController, toJinyeReportItem(), truncateBody(), AdminJinyeReportRoutesDeps, JinyeReportRoutesDeps, createJinyeReportResponseSchema, jinyeReportIdParamSchema, jinyeReportItemResponseSchema (+12 more)
+
+### Community 137 - "comment-blocklist.controller.ts"
+Cohesion: 0.08
+Nodes (10): BulkCreateBlocklistResult, BulkCreateBlocklistWordsUseCase, CreateBlocklistWordUseCase, DeleteBlocklistWordUseCase, ListBlocklistWordsUseCase, CommentBlocklistWord, CursorPage, CommentBlocklistRepositoryImpl (+2 more)
 
 ### Community 138 - "dependencies"
 Cohesion: 0.14
 Nodes (14): dependencies, dotenv, drizzle-orm, hono, @hono/node-server, @hono/zod-openapi, jose, @libsql/client (+6 more)
 
-### Community 139 - "word.controller.ts"
+### Community 139 - "word.repository.ts"
 Cohesion: 0.04
-Nodes (79): CorrectContributionCommand, CorrectContributionUseCase, SyncLiveWordContributionsUseCase, PublicProfile, CreateWordDto, AddExampleDto, AddExampleUseCase, AddMeaningDto (+71 more)
+Nodes (58): RelationType, AddMeaningUseCase, AddPronunciationUseCase, AddWordImageUseCase, ApplyCommaSplitUseCase, GetWordByIdUseCase, GetWordByLemmaUseCase, GetWordOfDayUseCase (+50 more)
 
 ### Community 140 - "SambasKu-API"
 Cohesion: 0.10
 Nodes (19): Akses Database, Alur record (DB + asset), Alur record (DB + asset), Audio pelafalan (GitHub asset repo), Cloudflare Workers (deploy), Command Sehari-hari, Database (tanpa Docker), Database test (integration & e2e) (+11 more)
 
 ### Community 141 - "AchievementRepositoryImpl"
-Cohesion: 0.10
-Nodes (6): AchievementSourceDefinition, findAchievementSource(), AchievementCandidate, AchievementCriteria, AchievementRepositoryImpl, mapMatchedAt()
-
-### Community 142 - "jinye.repository.impl.ts"
-Cohesion: 0.08
-Nodes (21): AttachJinyeAudioCommand, ListAdminJinyeUseCase, ListJinyeCommentsUseCase, ListPublishedJinyeUseCase, PromoteJinyeExampleUseCase, JinyeComment, JinyeListFilter, JinyePromoteExampleResult (+13 more)
-
-### Community 143 - "search-miss.controller.ts"
 Cohesion: 0.13
-Nodes (10): DismissSearchMissCommand, DismissSearchMissUseCase, ResolveSearchMissUseCase, SearchMissController, toApi(), AdminSearchMissQueryBody, BulkDismissSearchMissBody, PublicSearchMissQueryBody (+2 more)
+Nodes (5): AchievementSourceDefinition, findAchievementSource(), AchievementCriteria, AchievementRepositoryImpl, mapMatchedAt()
+
+### Community 142 - "get-mobile-analytics.use-case.ts"
+Cohesion: 0.11
+Nodes (20): MobileAnalyticsProviderErrorKind, CacheEntry, ERROR_SUFFIX, errorMessage(), GetMobileAnalyticsInput, GetMobileAnalyticsUseCase, isEmpty(), MOBILE_ANALYTICS_SECTIONS (+12 more)
+
+### Community 143 - "word-group.routes.ts"
+Cohesion: 0.14
+Nodes (16): addWordGroupMemberBodySchema, createWordGroupBodySchema, listWordGroupsQuerySchema, removeWordGroupMemberQuerySchema, statusSchema, updateWordGroupBodySchema, wordGroupDataSchema, wordGroupIdQuerySchema (+8 more)
 
 ### Community 144 - "UsahaContributionUseCases"
 Cohesion: 0.12
-Nodes (6): resolveVillage(), canonicalFields(), overlaps(), payloadName(), UsahaContributionUseCases, UsahaContributionRepository
+Nodes (6): decisionCopy(), overlaps(), payloadName(), UsahaContributionUseCases, composeUsahaRejectDisplay(), UsahaContributionRepository
 
 ### Community 145 - "fts-word-search-index.ts"
 Cohesion: 0.36
 Nodes (3): SearchIndexHit, WordSearchIndex, FtsWordSearchIndex
 
-### Community 146 - "event.entity.ts"
-Cohesion: 0.09
-Nodes (14): EventAuthorRef, EventCategory, EventOccurrenceStatus, occurrenceStatus(), assertMarkable(), ListEventGoingsUseCase, MarkEventGoingUseCase, UnmarkEventGoingUseCase (+6 more)
+### Community 146 - "event-going.use-cases.ts"
+Cohesion: 0.12
+Nodes (11): occurrenceStatus(), assertMarkable(), ListEventGoingsUseCase, MarkEventGoingUseCase, UnmarkEventGoingUseCase, EventGoingMarkResult, EventGoingRepository, EventGoingTarget (+3 more)
 
 ### Community 147 - "devDependencies"
 Cohesion: 0.29
 Nodes (7): devDependencies, drizzle-kit, @types/node, @types/nodemailer, typescript, vitest, wrangler
 
-### Community 148 - "ContributionRepository"
-Cohesion: 0.08
-Nodes (24): CorrectContributionInput, ContributionDetail, GetMyContributionDetailUseCase, ListContributionsUseCase, ListMyContributionsQuery, ListMyContributionsUseCase, ReopenContributionOutcome, Contribution (+16 more)
+### Community 148 - "contribution.use-case.test.ts"
+Cohesion: 0.06
+Nodes (36): CorrectContributionCommand, CorrectContributionInput, CorrectContributionUseCase, ContributionDetail, GetContributionDetailUseCase, ListContributionsUseCase, ReopenContributionCommand, ReopenContributionOutcome (+28 more)
 
 ### Community 149 - "mobile-release.controller.ts"
 Cohesion: 0.09
 Nodes (24): GetLatestMobileReleaseUseCase, ListMobileReleasesUseCase, UpsertMobileReleaseUseCase, MobileRelease, MobileReleasePlatform, MobileReleaseRepository, UpsertMobileReleaseInput, MobileReleaseRepositoryImpl (+16 more)
 
-### Community 150 - "culinary-contribution.controller.ts"
-Cohesion: 0.09
-Nodes (25): CulinaryContributionController, ImageIn, normalizeChangePayload(), parseApproveCulinaryBody(), serialize(), toNewCuisine(), toNewPlace(), approveCulinaryContributionBodySchema (+17 more)
+### Community 150 - "culinary-contribution.routes.ts"
+Cohesion: 0.08
+Nodes (27): CulinaryContributionController, normalizeChangePayload(), parseApproveCulinaryBody(), serialize(), toNewCuisine(), toNewPlace(), idParam, okItem (+19 more)
 
-### Community 151 - "pantun.routes.ts"
+### Community 151 - "pantun.controller.ts"
 Cohesion: 0.06
-Nodes (40): audioBodyLimit, createReplyRoute, createReplyWithAudioRoute, createRouteDef, createWithAudioRoute, deletePantunRoute, deleteReplyRoute, detailRoute (+32 more)
+Nodes (45): audioWire(), PantunController, parseOptionalLinesField(), toItem(), toReplyItem(), audioBodyLimit, createReplyRoute, createReplyWithAudioRoute (+37 more)
 
-### Community 152 - "run-due-achievement-scan.use-case.ts"
-Cohesion: 0.29
-Nodes (5): ACHIEVEMENT_SCAN_BATCH_LIMIT, ACHIEVEMENT_SCAN_INTERVAL_MS, ACHIEVEMENTS_LAST_SCAN_KEY, RunDueAchievementScanResult, RunDueAchievementScanUseCase
+### Community 152 - "web-import.controller.ts"
+Cohesion: 0.16
+Nodes (18): approveWebImportBodySchema, getWebImportResponseSchema, listWebImportsQuerySchema, listWebImportsResponseSchema, previewWebImportQuerySchema, previewWebImportResponseSchema, rejectWebImportBodySchema, submitWebImportBodySchema (+10 more)
 
-### Community 153 - "UsahaReport"
-Cohesion: 0.14
-Nodes (9): UsahaReportUseCases, USAHA_REPORT_REASON_LABEL, UsahaReport, UsahaReportWithUsaha, UsahaReportRepository, mapRow(), UsahaReportRepositoryImpl, UsahaReportReason (+1 more)
+### Community 153 - "usaha-report.use-cases.ts"
+Cohesion: 0.10
+Nodes (16): UsahaReportUseCases, VALID_REASONS, USAHA_REPORT_REASON_LABEL, UsahaReport, UsahaReportWithUsaha, UsahaReportRepository, mapRow(), Row (+8 more)
 
 ### Community 154 - "SearchMissRepository"
-Cohesion: 0.13
-Nodes (15): ListSearchMissesUseCase, ResolveSearchMissAction, ResolveSearchMissCommand, ResolveSearchMissResult, SkipSearchMissCommand, SkipSearchMissUseCase, SearchMiss, SearchMissDirection (+7 more)
+Cohesion: 0.07
+Nodes (26): BulkDismissSearchMissCommand, BulkDismissSearchMissItemFailure, BulkDismissSearchMissItemResult, BulkDismissSearchMissItemSuccess, BulkDismissSearchMissResult, BulkDismissSearchMissUseCase, SEARCH_MISS_BULK_DISMISS_MAX, ListSearchMissesUseCase (+18 more)
 
 ### Community 155 - "leveling.ts"
-Cohesion: 0.15
-Nodes (21): buildLeveling(), ContributionEntityTypeForPoints, IMPORT_POINT_FACTOR, LEVEL_THRESHOLDS, levelForPoints(), LevelingScoreInput, LevelingWire, MAX_LEVEL (+13 more)
+Cohesion: 0.16
+Nodes (20): buildLeveling(), ContributionEntityTypeForPoints, IMPORT_POINT_FACTOR, LEVEL_THRESHOLDS, levelForPoints(), LevelingScoreInput, LevelingWire, MAX_LEVEL (+12 more)
 
-### Community 156 - "jinye.controller.ts"
-Cohesion: 0.10
-Nodes (16): JinyeCommentImageWire, JinyeCommentWire, JinyeController, requireUser(), toCommentWire(), toLemmaLinkWire(), toWire(), CreateJinyeBody (+8 more)
+### Community 156 - "JinyeController"
+Cohesion: 0.12
+Nodes (9): JinyeController, requireUser(), toWire(), JinyeRoutesDeps, CreateJinyeBody, ListAdminJinyeQuery, ListJinyeQuery, PromoteJinyeExampleBody (+1 more)
 
 ### Community 157 - "UserRepositoryImpl"
-Cohesion: 0.13
-Nodes (4): adminUsersController, loadRolesByUserIds(), toEntity(), UserRepositoryImpl
+Cohesion: 0.11
+Nodes (8): adminUsersController, CreateAdminUserCommand, UpdateUserRoleCommand, UserRole, insertRoles(), loadRolesByUserIds(), toEntity(), UserRepositoryImpl
 
 ### Community 158 - "update-my-profile.use-case.ts"
-Cohesion: 0.05
-Nodes (31): AccountDeletionUseCase, AccountDeletionTokenRepository, AccountErasureArtifacts, AccountErasureRepository, AccountErasureRepositoryImpl, makeDeps(), ImageStoragePort, UploadCredentials (+23 more)
+Cohesion: 0.07
+Nodes (16): SpeakerStatus, UpdateMyProfileDto, GetMyProfileUseCase, resolveLocation(), toMyProfile(), UpdateMyProfileUseCase, UsernameAvailabilityResult, addDays() (+8 more)
 
-### Community 159 - "mailer.factory.ts"
-Cohesion: 0.24
-Nodes (6): CreateMailerEmailDeps, EmailSenderPort, EmailSendPayload, EmailSendResult, EmailRoutingEntry, ResendEmailSender
-
-### Community 160 - "achievement.controller.ts"
+### Community 159 - "quota-aware-mailer.ts"
 Cohesion: 0.18
-Nodes (17): CreateAchievementUseCase, DeleteAchievementUseCase, GrantAchievementUseCase, PreviewAchievementUseCase, RevokeUserAchievementUseCase, SetActiveBorderUseCase, UpdateAchievementUseCase, ListActiveAchievementsUseCase (+9 more)
+Nodes (10): CreateMailerEmailDeps, EmailSenderPort, EmailSendPayload, EmailSendResult, EMAIL_LOGO, EmailRoutingEntry, EmailSendOutcome, ResendEmailSender (+2 more)
+
+### Community 160 - "Achievement"
+Cohesion: 0.10
+Nodes (18): UpdateAchievementUseCase, ACHIEVEMENT_SCAN_BATCH_LIMIT, ACHIEVEMENT_SCAN_INTERVAL_MS, ACHIEVEMENTS_LAST_SCAN_KEY, RunDueAchievementScanResult, RunDueAchievementScanUseCase, ScanAchievementResult, ScanAchievementUseCase (+10 more)
 
 ### Community 161 - "Translation"
-Cohesion: 0.10
-Nodes (15): CreateTranslationUseCase, isAllowedReff(), ListTranslationsUseCase, ResolveTranslationAction, ResolveTranslationUseCase, Translation, TranslationStatus, CreateTranslationInput (+7 more)
+Cohesion: 0.13
+Nodes (11): isAllowedReff(), ListTranslationsUseCase, Translation, TranslationStatus, CreateTranslationInput, ListTranslationsFilter, TranslationRepository, Db (+3 more)
 
 ### Community 162 - "category-suggestion.controller.ts"
-Cohesion: 0.15
-Nodes (17): ListCategorySuggestionsUseCase, ProposeCategorySuggestionUseCase, ApproveCategorySuggestionUseCase, RejectCategorySuggestionUseCase, createCategorySuggestionModule(), CategorySuggestionController, toApi(), ListCategorySuggestionsQuery (+9 more)
+Cohesion: 0.23
+Nodes (13): ListCategorySuggestionsUseCase, ProposeCategorySuggestionUseCase, ApproveCategorySuggestionUseCase, RejectCategorySuggestionCommand, RejectCategorySuggestionUseCase, ReviewCategorySuggestionCommand, createCategorySuggestionModule(), CategorySuggestionController (+5 more)
 
-### Community 163 - "Jinye"
-Cohesion: 0.08
-Nodes (4): Jinye, JinyeAudio, audioInsertValues(), JinyeRepositoryImpl
+### Community 163 - "event.use-cases.ts"
+Cohesion: 0.13
+Nodes (15): Event, EventAuthorRef, EventCategory, EventImage, EventImageAttribution, EventOccurrenceStatus, EventPlaceRef, EventSourceType (+7 more)
 
 ### Community 164 - "comment.validator.ts"
-Cohesion: 0.07
-Nodes (42): AdminCommentRoutesDeps, createAdminCommentRoutes(), json(), CommentRoutesDeps, createCommentRoutes(), createWordCommentRoutes(), json(), ulid26 (+34 more)
+Cohesion: 0.09
+Nodes (31): AdminCommentRoutesDeps, json(), ulid26, adminCommentImageSchema, adminListCommentsResponseSchema, approveCommentImageBodySchema, approveCommentImageResponseSchema, attachCommentImageBodySchema (+23 more)
 
 ### Community 165 - "CategoryRepository"
-Cohesion: 0.14
+Cohesion: 0.17
 Nodes (8): CreateCategoryCommand, CreateCategoryUseCase, DeleteCategoryUseCase, UpdateCategoryCommand, UpdateCategoryUseCase, ListCategoriesUseCase, Category, CategoryRepository
 
 ### Community 166 - "KaryaUseCases"
 Cohesion: 0.12
-Nodes (6): KaryaUseCases, Karya, KaryaCredit, KaryaRepositoryImpl, serializeFields(), KaryaPublishStatus
+Nodes (8): KaryaUseCases, Karya, KaryaCredit, KaryaFields, serializeRelatedJson(), serializeFields(), toCredits(), toExcerpt()
 
-### Community 167 - "comment.repository.impl.ts"
-Cohesion: 0.12
-Nodes (13): CommentImage, CommentStatus, COMMENT_REVISION_CAP, parseContentWarnings(), PUBLIC_STATUSES, toCommentImage(), ADMIN, AUTHOR (+5 more)
+### Community 167 - "discussion.repository.impl.ts"
+Cohesion: 0.06
+Nodes (33): CommentImage, CommentStatus, COMMENT_REVISION_CAP, parseContentWarnings(), PUBLIC_STATUSES, toCommentImage(), ADMIN, AUTHOR (+25 more)
 
 ### Community 168 - "jwt-token.service.ts"
-Cohesion: 0.18
-Nodes (10): jose, authenticate, optionalAuthenticate, softAuthenticate, AccessTokenPayload, JwtTokenService, JwtTokenServiceOptions, normalizeRoleClaims() (+2 more)
+Cohesion: 0.21
+Nodes (8): jose, authenticate, optionalAuthenticate, softAuthenticate, AccessTokenPayload, JwtTokenService, JwtTokenServiceOptions, normalizeRoleClaims()
 
 ### Community 169 - "VoteRepositoryImpl"
-Cohesion: 0.13
-Nodes (10): MyVoteItem, VoteCountItem, ToggleVoteWireResult, ToggleVoteResult, VoteCounts, VoteDeckMeaning, VoteHistoryWord, VoteTarget (+2 more)
+Cohesion: 0.16
+Nodes (6): MyVoteItem, VoteDeckMeaning, VoteHistoryWord, VoteTarget, VoteRepositoryImpl, voteTargetKey()
 
-### Community 170 - "app-error.ts"
+### Community 170 - "ForbiddenError"
 Cohesion: 0.03
-Nodes (91): RecordActivityEventUseCase, ActivityEventRepository, AuditLogRepository, ApproveCommentImageCommand, ApproveCommentImageUseCase, AttachCommentImageCommand, AttachCommentImageUseCase, COMMENT_IMAGE_MODERATOR_ROLES (+83 more)
+Nodes (87): ActivityEventRepository, AttachCommentImageCommand, COMMENT_IMAGE_MODERATOR_ROLES, CreateCommentAudioCommand, truncateSnippet(), wordCommentBody(), CreateCommentCommand, truncateSnippet() (+79 more)
 
 ### Community 171 - "karya.validator.ts"
-Cohesion: 0.08
-Nodes (35): accessLinkSchema, assertExcerptRights(), countLines(), creditRoleAllowed(), creditsHaveRequiredRole(), exceedsFairQuoteLimit(), excerptPayloadSchema, isFullTextRights() (+27 more)
+Cohesion: 0.07
+Nodes (41): ExcerptBody, NewKaryaBody, slugifyKarya(), accessLinkSchema, assertExcerptRights(), countLines(), creditRoleAllowed(), creditsHaveRequiredRole() (+33 more)
 
-### Community 172 - "seed-reference.ts"
-Cohesion: 0.06
-Nodes (45): @hono/node-server, app, server, shutdown(), derive(), encoder, fromB64(), Pbkdf2PasswordService (+37 more)
+### Community 172 - "AppDatabase"
+Cohesion: 0.03
+Nodes (57): @hono/node-server, ulid, app, server, shutdown(), ActivityEventRepositoryImpl, parseSpeakerStatus(), filterAvailableUsernames() (+49 more)
 
 ### Community 173 - "get-web-analytics.use-case.ts"
-Cohesion: 0.08
-Nodes (34): MOBILE_ANALYTICS_SECTIONS, dateRangeSchema, mobileAnalyticsParamsSchema, mobileAnalyticsQuerySchema, mobileAnalyticsResponseSchema, mobileResultSchema, AnalyticsProviderErrorKind, CacheEntry (+26 more)
+Cohesion: 0.14
+Nodes (23): AnalyticsProviderErrorKind, CacheEntry, ERROR_SUFFIX, errorMessage(), GetWebAnalyticsInput, isGa4Empty(), isSearchEmpty(), PROVIDER_COPY (+15 more)
 
-### Community 174 - "scan-achievement.test.ts"
-Cohesion: 0.27
-Nodes (3): AwardTarget, achievement, FakeRepo
-
-### Community 175 - "culinary-report.use-cases.ts"
-Cohesion: 0.10
-Nodes (19): CulinaryReportUseCases, SubmitCulinaryReportInput, CULINARY_REPORT_REASON_LABEL, CulinaryReport, CulinaryReportWithTarget, CulinaryReportRepository, CulinaryReportRepositoryImpl, mapRow() (+11 more)
+### Community 175 - "CulinaryReport"
+Cohesion: 0.13
+Nodes (10): CulinaryReportUseCases, CULINARY_REPORT_REASON_LABEL, CulinaryReport, CulinaryReportWithTarget, CulinaryReportRepository, CulinaryReportRepositoryImpl, mapRow(), CulinaryReportReason (+2 more)
 
 ### Community 176 - "openwa-wa.sender.ts"
-Cohesion: 0.23
-Nodes (8): WaSendCommand, WaSenderPort, WaChannel, OpenWaGatewayConfig, readyOpenWaConfig(), sendOpenWaText(), OpenWaSender, CONFIG
+Cohesion: 0.24
+Nodes (7): WaSendCommand, WaSenderPort, WaChannel, OpenWaGatewayConfig, readyOpenWaConfig(), OpenWaSender, CONFIG
 
-### Community 177 - "usaha-report.routes.ts"
-Cohesion: 0.19
-Nodes (13): serialize(), UsahaReportController, createAdminUsahaReportRoutes(), createUsahaReportRoutes(), json(), okItem, okList, listReportsQuerySchema (+5 more)
+### Community 177 - "EventController"
+Cohesion: 0.13
+Nodes (5): EventController, requireUser(), serialize(), toCommentWire(), listEventsQuerySchema
 
-### Community 178 - "contribution.controller.ts"
-Cohesion: 0.22
-Nodes (7): CensoredImageFile, ContributionController, decisionResponse(), parseApprovePayload(), serializeEntity(), CorrectContributionBody, ListContributionsQueryBody
+### Community 178 - "ContributionController"
+Cohesion: 0.30
+Nodes (3): ContributionController, decisionResponse(), serializeEntity()
 
-### Community 179 - "about.controller.ts"
-Cohesion: 0.20
-Nodes (6): AboutController, toSponsorshipWire(), ContributorsListQuery, CreateSponsorshipBody, ListAdminSponsorshipsQuery, UpdateSponsorshipBody
+### Community 179 - "verifier-application.repository.impl.ts"
+Cohesion: 0.15
+Nodes (11): NewVerifierApplication, VerifierApplicationWriteInput, asDialect(), asLinks(), asPhoto(), asStatus(), reviewers, Row (+3 more)
 
 ### Community 180 - "CommentController"
-Cohesion: 0.19
-Nodes (7): CommentController, redactPublicAudio(), redactPublicBody(), redactPublicImage(), toAdminImage(), toPublicCommentFields(), ListAdminCommentsQueryBody
+Cohesion: 0.12
+Nodes (15): CommentController, redactPublicAudio(), redactPublicBody(), redactPublicImage(), toAdminImage(), toPublicCommentFields(), CommentRoutesDeps, ApproveCommentImageBody (+7 more)
 
-### Community 181 - "usage-labels.ts"
-Cohesion: 0.06
-Nodes (17): wibDateString(), WordOfDayResult, wordOfDaySettingKey(), ExampleUpdateResult, UpdateExampleDto, UpdateExampleUseCase, WIB_NOW, OWNER (+9 more)
+### Community 181 - "verifier-application.repository.ts"
+Cohesion: 0.22
+Nodes (13): CreateVerifierApplicationCommand, ListVerifierApplicationsUseCase, ResubmitVerifierApplicationCommand, UpdateVerifierScreenshotCommand, MIN_APPROVED_CONTRIBUTIONS, SocialLink, SocialPlatform, SocialScreenshot (+5 more)
 
-### Community 182 - "google-token-verifier.ts"
-Cohesion: 0.36
-Nodes (4): GoogleIdTokenClaims, GOOGLE_ISSUERS, GoogleTokenVerifier, invalidToken()
+### Community 182 - "layanan.repository.impl.ts"
+Cohesion: 0.13
+Nodes (12): LAYANAN_CATEGORIES, LAYANAN_PHONES_MAX, LayananAuthorRef, LayananCategory, LayananContribution, LayananPhone, parsePhonesJson(), slugifyLayanan() (+4 more)
 
 ### Community 183 - "usaha.repository.impl.ts"
-Cohesion: 0.11
-Nodes (19): authorUsers, kecamatanRegions, managerUsers, UsahaJoinedRow, UsahaRow, usahaSelect, villageRegions, Row (+11 more)
+Cohesion: 0.08
+Nodes (22): AuditLogRepositoryImpl, { parsed }, USER_A, USER_B, WORD_1, authorUsers, kecamatanRegions, managerUsers (+14 more)
 
 ### Community 184 - "encyclopedia.controller.ts"
-Cohesion: 0.13
-Nodes (31): CreateArticleInput, CreateArticleUseCase, GetArticleBySlugUseCase, ListArticleRevisionsUseCase, ListArticlesUseCase, ListEncyclopediaCategoriesUseCase, MergeTagUseCase, RestoreArticleRevisionUseCase (+23 more)
+Cohesion: 0.08
+Nodes (22): GetArticleBySlugUseCase, ListArticleRevisionsUseCase, ListArticlesUseCase, ListEncyclopediaCategoriesUseCase, SearchArticlesUseCase, CreateArticleCommentUseCase, CreateCommentInput, DeleteArticleCommentUseCase (+14 more)
 
 ### Community 185 - "karya.controller.ts"
 Cohesion: 0.10
-Nodes (16): isExcerptContributionPayload(), accessWire(), creditWire(), excerptWire(), fieldsFrom(), KaryaController, requireUserId(), sambasWire() (+8 more)
+Nodes (18): isExcerptContributionPayload(), accessWire(), creditWire(), excerptWire(), fieldsFrom(), KaryaController, relatedRefsWire(), relatedResolvedWire() (+10 more)
 
 ### Community 186 - "activity-event-feed.repository.impl.ts"
-Cohesion: 0.04
-Nodes (45): AchievementRow, newAchievementId, FeedRow, jinyeForComment, KIND_BODY, KIND_TO_WIRE, MERGED_PROFILE_KINDS, parentPantuns (+37 more)
+Cohesion: 0.03
+Nodes (56): FeedRow, jinyeForComment, KIND_BODY, KIND_TO_WIRE, MERGED_PROFILE_KINDS, parentPantuns, PROFILE_KIND_SETS, ProfileCategory (+48 more)
 
-### Community 188 - "send-wa-message.use-case.test.ts"
-Cohesion: 0.14
-Nodes (11): isValidWaPhone(), renderWaBody(), SendWaMessageUseCase, toPositionalParams(), WaMessageLogRepository, WaUsageRepository, currentPeriodStart(), WaAdminRoutesDeps (+3 more)
+### Community 187 - "ArticleRepository"
+Cohesion: 0.09
+Nodes (4): MergeTagUseCase, RestoreArticleRevisionUseCase, EncyclopediaTag, ArticleRepository
 
-### Community 193 - "JinyeLemmaLink"
-Cohesion: 0.11
-Nodes (12): CreateJinyeLemmaLinkUseCase, ProposeJinyeLemmaCorrectionUseCase, ResolveJinyeLemmaCorrectionUseCase, JinyeLemmaLink, mapLemmaLink(), audit, makeJinye(), makeLink() (+4 more)
+### Community 188 - "send-wa-message.use-case.ts"
+Cohesion: 0.24
+Nodes (10): isValidWaPhone(), renderWaBody(), SendWaMessageUseCase, toPositionalParams(), WaSenderPortWithConfigured, WaSendGatewayEntry, currentPeriodStart(), makeDeps() (+2 more)
 
-### Community 194 - "usaha-contribution.validator.ts"
-Cohesion: 0.10
-Nodes (16): serialize(), toNewPayload(), UsahaContributionController, CONTRIBUTION_KINDS, httpsUrl, itemPayloadSchema, listUsahaContributionsQuerySchema, profileFieldSchema (+8 more)
+### Community 193 - "RecordActivityEventUseCase"
+Cohesion: 0.13
+Nodes (11): RecordActivityEventUseCase, CreateArticleInput, CreateArticleUseCase, SetArticleStatusUseCase, uniqueSlug(), UpdateArticleInput, UpdateArticleUseCase, ALLOWED_IMAGE_HOSTS (+3 more)
+
+### Community 194 - "karya-lemma-link.routes.ts"
+Cohesion: 0.17
+Nodes (14): KaryaLemmaLinkController, requireUser(), toKaryaLemmaLinkWire(), json, listJson, ok, wireJson, createKaryaLemmaLinkBodySchema (+6 more)
 
 ### Community 195 - "system-database.routes.ts"
-Cohesion: 0.18
-Nodes (14): AdminCtx, iso(), SystemDatabaseController, toWire(), createSystemDatabaseRoutes(), json(), SystemDatabaseRoutesDeps, backupLogItemSchema (+6 more)
+Cohesion: 0.19
+Nodes (13): AdminCtx, iso(), SystemDatabaseController, toWire(), json(), SystemDatabaseRoutesDeps, backupLogItemSchema, ListBackupLogsQuery (+5 more)
 
 ### Community 196 - "service-account-token.ts"
 Cohesion: 0.12
-Nodes (22): MobileAnalyticsProviderError, kindForStatus(), postGoogleJson(), toError(), MobileAnalyticsConfig, AnalyticsProviderError, Ga4Config, kindForStatus() (+14 more)
+Nodes (20): MobileAnalyticsConfig, AnalyticsProviderError, Ga4Config, kindForStatus(), postGoogleJson(), SearchConsoleConfig, ga4(), gsc() (+12 more)
 
 ### Community 197 - "NotFoundError"
-Cohesion: 0.04
-Nodes (39): announcementDedupeKey(), fetchImageBytes(), normalizeContentWarnings(), applyBlocklistFilter(), fetchImageBytes(), normalizeApproveImageContentWarnings(), CreateDiscussionLemmaLinkUseCase, normalizeLinkUrl() (+31 more)
+Cohesion: 0.03
+Nodes (25): CulinaryClaimUseCases, composeCulinaryClaimRejectDisplay(), SubmitCulinaryReportInput, validateArticlePayload(), stripMarkdown(), assertOurEventImage(), assertDeepLink(), UpdateNotificationTemplateUseCase (+17 more)
 
 ### Community 198 - "openwa-exploration-group.notifier.ts"
-Cohesion: 0.30
-Nodes (6): ExplorationGroupNotice, formatExplorationGroupMessage(), EXPLORATION_GROUP_EVENT_KEY, openWaConfigFromEnv(), OpenWaExplorationGroupNotifier, CONFIG
-
-### Community 199 - "ugc-anon-abuse.repository.ts"
-Cohesion: 0.12
-Nodes (8): ugcAnonMutes, ANON_ABUSE_WEIGHTS, AnonAbuseEvent, AnonAbuseSubjectKind, AnonMute, parseMeta(), RecordAnonAbuseEventInput, UgcAnonAbuseRepositoryImpl
+Cohesion: 0.24
+Nodes (7): ExplorationGroupNotice, ExplorationGroupNotifier, formatExplorationGroupMessage(), EXPLORATION_GROUP_EVENT_KEY, openWaConfigFromEnv(), OpenWaExplorationGroupNotifier, sendOpenWaText()
 
 ### Community 200 - "list-audit-logs.use-case.ts"
-Cohesion: 0.18
-Nodes (8): ListAuditLogsResult, ListAuditLogsUseCase, AuditLog, AuditLogFilter, AuditLogPage, NewAuditLog, AuditLogRepositoryImpl, toEntity()
+Cohesion: 0.24
+Nodes (6): ListAuditLogsResult, ListAuditLogsUseCase, AuditLog, AuditLogFilter, AuditLogPage, toEntity()
 
-### Community 201 - "about.repository.impl.ts"
-Cohesion: 0.23
-Nodes (8): UpdateSponsorshipUseCase, ContributorListItem, NewSponsorship, TeamMember, UpdateSponsorship, VerifierListItem, ListContributorsPage, Db
+### Community 201 - "split-comma-words.ts"
+Cohesion: 0.16
+Nodes (11): normalizeSplitParts(), splitCommaParts(), throwDuplicateMeaningConflict(), CommaSplitCandidates, CommaSplitTranslationCandidate, LemmaSplitMeaningOverride, LemmaSplitResult, alignLemmaOverrides() (+3 more)
 
 ### Community 202 - "karya.ts"
-Cohesion: 0.11
-Nodes (25): ExcerptBody, NewKaryaBody, AccessLink, AccessLinkKind, ExcerptContributionPayload, KARYA_ACCESS_LINK_KINDS, KARYA_SAMBAS_CONNECTION_TYPES, KaryaAuthorRef (+17 more)
-
-### Community 203 - "admin-user.controller.ts"
 Cohesion: 0.08
-Nodes (16): LiftAbuseMuteUseCase, AdminVerifyEmailUseCase, ListAdminUsersUseCase, ListUserAbuseEventsUseCase, SetCanContributeUseCase, SetUserActiveUseCase, AdminCtx, makeDeps() (+8 more)
+Nodes (25): AccessLink, AccessLinkKind, ExcerptContributionPayload, KARYA_ACCESS_LINK_KINDS, KARYA_RELATED_KINDS, KARYA_SAMBAS_CONNECTION_TYPES, KaryaAuthorRef, KaryaContribution (+17 more)
 
-### Community 204 - "PlaceRepositoryImpl"
-Cohesion: 0.12
-Nodes (7): assertCategory(), recordPlacePublished(), Place, dayOffset(), normalizeImages(), PlaceRepositoryImpl, searchDayWib()
+### Community 203 - "UgcAnonAbuseRepository"
+Cohesion: 0.18
+Nodes (6): wordController, assertAnonWriteAllowed(), RecordAnonAbuseSignalUseCase, subjectsFrom(), AnonAbuseSubject, UgcAnonAbuseRepository
+
+### Community 204 - "usaha.entity.ts"
+Cohesion: 0.19
+Nodes (16): ListMyUsahaResult, MyUsahaItem, Usaha, UsahaAuthorRef, UsahaCategory, UsahaImageAttribution, UsahaImageInput, UsahaItem (+8 more)
 
 ### Community 205 - ".findById"
-Cohesion: 0.05
-Nodes (14): truncateSnippet(), wordCommentBody(), wordCommentBody(), log(), replyNotifyBody(), truncateSnippet(), replyNotifyBody(), truncateSnippet() (+6 more)
+Cohesion: 0.07
+Nodes (14): ChangePasswordDto, LogoutAllDevicesUseCase, AuthIdentity, NewAuthIdentity, CreateUserWithGoogleIdentityResult, NewGoogleIdentity, AuthIdentityRepositoryImpl, errHaystack() (+6 more)
 
 ### Community 206 - "about.routes.ts"
-Cohesion: 0.16
-Nodes (19): createAdminSponsorshipRoutes(), createPublicAboutRoutes(), createPublicAboutUserListRoutes(), json(), adminSponsorshipListResponseSchema, contributorsListQuerySchema, contributorsListResponseSchema, createSponsorshipBodySchema (+11 more)
+Cohesion: 0.19
+Nodes (15): adminSponsorshipListResponseSchema, contributorsListQuerySchema, contributorsListResponseSchema, createSponsorshipBodySchema, listAdminSponsorshipsQuerySchema, SetUserSponsorBody, setUserSponsorBodySchema, SetUserTeamBody (+7 more)
 
-### Community 208 - "CategorySuggestionRepositoryImpl"
-Cohesion: 0.27
-Nodes (3): CreateCategorySuggestionInput, CategorySuggestionRepositoryImpl, mapRow()
+### Community 207 - "WaUsageRepository"
+Cohesion: 0.36
+Nodes (3): WaUsage, WaUsageRepository, WaUsageRepositoryImpl
 
 ### Community 215 - "WaMessageTemplate"
-Cohesion: 0.30
+Cohesion: 0.28
 Nodes (4): WaMessageTemplate, WaTemplateRepository, toTemplate(), WaTemplateRepositoryImpl
 
 ### Community 216 - "PublicUserRepositoryImpl"
-Cohesion: 0.18
-Nodes (4): achievementController, PublicActivityPage, PublicUserRepositoryImpl, toPage()
-
-### Community 217 - "bulk-dismiss-search-miss.use-case.ts"
-Cohesion: 0.24
-Nodes (8): BulkDismissSearchMissCommand, BulkDismissSearchMissItemFailure, BulkDismissSearchMissItemResult, BulkDismissSearchMissItemSuccess, BulkDismissSearchMissResult, BulkDismissSearchMissUseCase, SEARCH_MISS_BULK_DISMISS_MAX, makeUseCase()
-
-### Community 218 - "create-jinye.use-case.ts"
-Cohesion: 0.19
-Nodes (12): discussionCreatedPayload(), jinyeFeedPayload(), snippetActivityBody(), CreateJinyeCommentCommand, CreateJinyeCommand, CreateJinyeUseCase, QuoteJinyeUseCase, isJinyeCreateQuotaEnforced() (+4 more)
-
-### Community 219 - "announcement.routes.ts"
 Cohesion: 0.22
-Nodes (11): AnnouncementRoutesDeps, createAdminAnnouncementRoutes(), createPublicAnnouncementRoutes(), json(), announcementItemResponseSchema, announcementItemSchema, announcementListResponseSchema, bodyTypeSchema (+3 more)
+Nodes (4): PublicProfileStatsBundle, parseStreakDayKeys(), PublicUserRepositoryImpl, toPage()
 
-### Community 220 - "list-admin-votes.use-case.ts"
+### Community 217 - "bookmark.routes.ts"
+Cohesion: 0.19
+Nodes (12): BookmarkController, BookmarkRoutesDeps, createBookmarkRoutes(), json(), bookmarkDataSchema, cursorMetaSchema, MyBookmarksQuery, myBookmarksQuerySchema (+4 more)
+
+### Community 218 - "verifier-application.use-case.test.ts"
 Cohesion: 0.13
-Nodes (13): ListAdminVotesCommand, ListAdminVotesUseCase, ListWordVotersCommand, ListWordVotersUseCase, AdminVoteCursor, AdminVoteListFilter, AdminVoteListResult, decodeAdminCursor() (+5 more)
+Nodes (9): ApproveVerifierApplicationUseCase, CreateVerifierApplicationUseCase, RejectVerifierApplicationUseCase, ResubmitVerifierApplicationUseCase, makeUseCase(), links, makeApp(), makeAppRepo() (+1 more)
 
-### Community 221 - "username-slug.ts"
-Cohesion: 0.24
-Nodes (16): isReservedHandle(), RESERVED_HANDLES, buildUsernameCandidates(), ensureNotReservedHandle(), fitCandidate(), isSyntheticOauthEmail(), normalizeUsernameSlug(), pickBaseHandle() (+8 more)
+### Community 219 - "word-report.validator.ts"
+Cohesion: 0.12
+Nodes (16): CreateWordReportBody, createWordReportBodySchema, createWordReportResponseSchema, ListWordReportsQuery, listWordReportsQuerySchema, noteSchema, resolveWordReportBodySchema, takedownReasonCodeSchema (+8 more)
 
-### Community 222 - "AuthController"
-Cohesion: 0.06
-Nodes (23): AuthController, getAllCookieValues(), browserSignalHeaders(), isBrowserClient(), clearRefreshCookieVariants(), currentRefreshCookieScope(), REFRESH_COOKIE_PATH, REFRESH_TOKEN_COOKIE (+15 more)
+### Community 220 - "VoteRepository"
+Cohesion: 0.10
+Nodes (17): ListAdminVotesCommand, ListAdminVotesUseCase, ListWordVotersCommand, ListWordVotersUseCase, ToggleVoteUseCase, AdminVoteCursor, AdminVoteListFilter, AdminVoteListResult (+9 more)
 
-### Community 223 - "notification-campaign.controller.ts"
-Cohesion: 0.16
-Nodes (10): mapCampaign(), mapTemplate(), AdminCtx, NotificationCampaignController, CreateCampaignBody, CreateTemplateBody, EstimateAudienceBody, ListCampaignsQuery (+2 more)
+### Community 221 - "migrate.ts"
+Cohesion: 0.11
+Nodes (33): ASSIGNABLE_ADMIN_ROLES, AssignableAdminRole, isReservedHandle(), RESERVED_HANDLES, buildUsernameCandidates(), ensureNotReservedHandle(), fitCandidate(), isSyntheticOauthEmail() (+25 more)
 
-### Community 224 - "word-media.routes.ts"
-Cohesion: 0.13
-Nodes (23): AddExampleBody, addExampleResponseSchema, addExampleSchema, AddMeaningBody, addMeaningResponseSchema, addMeaningSchema, AddPronunciationBody, addPronunciationResponseSchema (+15 more)
+### Community 222 - "EventListItem"
+Cohesion: 0.20
+Nodes (6): assertCategoryPublished(), assertPlaces(), CreateEventUseCase, recordEventPublished(), resolveVillage(), EventListItem
+
+### Community 223 - "resolve-word-report.use-case.ts"
+Cohesion: 0.14
+Nodes (12): SetWordImageContentWarningsUseCase, SoftDeleteMeaningUseCase, TakedownWordCommand, TakedownReasonCode, FlagViolentImageReportCommand, FlagViolentImageReportUseCase, RemoveMeaningWordReportCommand, RemoveMeaningWordReportUseCase (+4 more)
+
+### Community 224 - "share.routes.ts"
+Cohesion: 0.17
+Nodes (12): SHARE_MEDIA_KINDS, SHARE_ORIENTATIONS, buildUnsplashSearchUrl(), ShareController, createShareRoutes(), json(), backgroundItemSchema, listShareBackgroundProvidersResponseSchema (+4 more)
 
 ### Community 225 - "merge-duplicate-meanings.ts"
-Cohesion: 0.11
-Nodes (25): applySafeMeaningMerges(), backfillDedupeKeys(), chunks(), closeDuplicateSuggestions(), identityOf(), loadMergeMeaningRows(), loadRowsByIds(), MeaningVoteRef (+17 more)
+Cohesion: 0.05
+Nodes (59): clipPreview(), firstPantunLine(), meaningVotePreview(), applySafeMeaningMerges(), backfillDedupeKeys(), chunks(), closeDuplicateSuggestions(), identityOf() (+51 more)
 
-### Community 226 - "assert-ugc-text-quality.ts"
-Cohesion: 0.14
-Nodes (16): CreateWordUseCase, CensoredSuggestion, ShapeIssue, ADMIN, CONTRIBUTOR, makeDeps(), makeDepsWithEvents(), makeWord() (+8 more)
+### Community 226 - "device.routes.ts"
+Cohesion: 0.25
+Nodes (9): DeviceController, createDeviceRoutes(), DeviceRoutesDeps, json(), deviceTokenMutationResponseSchema, RegisterDeviceTokenBody, registerDeviceTokenSchema, RevokeDeviceTokenBody (+1 more)
 
 ### Community 227 - "lookup-lemma-definition.validator.ts"
 Cohesion: 0.25
 Nodes (7): KBBI_PROVIDER_IDS, KbbiProviderId, entrySchema, lookupLemmaDefinitionQuerySchema, lookupLemmaDefinitionResponseSchema, senseSchema, suggestionSchema
 
 ### Community 228 - "resolve-maps-url.use-case.ts"
-Cohesion: 0.08
-Nodes (37): buildPlaceGeocodeCandidates(), cleanCanonicalMapsUrl(), extractCoordsFromMapsUrl(), extractHttpsUrl(), extractMapsFeatureId(), extractPlaceNameFromMapsUrl(), extractPlusCodeFromMapsUrl(), extractPlusCodeFromText() (+29 more)
+Cohesion: 0.12
+Nodes (25): buildPlaceGeocodeCandidates(), cleanCanonicalMapsUrl(), extractCoordsFromMapsUrl(), extractHttpsUrl(), extractMapsFeatureId(), extractPlaceNameFromMapsUrl(), extractPlusCodeFromMapsUrl(), extractPlusCodeFromText() (+17 more)
 
 ### Community 229 - "culinary-report.routes.ts"
-Cohesion: 0.27
-Nodes (10): createAdminCulinaryReportRoutes(), createCulinaryReportRoutes(), json(), okItem, okList, culinaryReportSchema, reportIdParamSchema, reportSlugParamSchema (+2 more)
+Cohesion: 0.21
+Nodes (11): CulinaryReportController, serialize(), okItem, okList, culinaryReportSchema, listReportsQuerySchema, reportIdParamSchema, reportSlugParamSchema (+3 more)
 
-### Community 230 - "ActivityItem"
-Cohesion: 0.17
-Nodes (7): RecordCardShareUseCase, ActivityItem, ActivityCursor, ActivityRepository, ActivityController, toWire(), ListActivityQuery
+### Community 230 - "WordSummary"
+Cohesion: 0.23
+Nodes (6): WordSummary, SearchParams, browseSafeUsageLabelsSql(), escapeLike(), searchTerms(), toUsageLabels()
 
 ### Community 231 - "translation.routes.ts"
-Cohesion: 0.16
-Nodes (17): requireUser(), toWire(), TranslationController, createTranslationRoutes(), json(), TranslationRoutesDeps, CreateTranslationBody, createTranslationBodySchema (+9 more)
+Cohesion: 0.17
+Nodes (16): requireUser(), toWire(), TranslationController, json(), TranslationRoutesDeps, CreateTranslationBody, createTranslationBodySchema, ListTranslationsQuery (+8 more)
 
-### Community 232 - "bulk-words-action.use-case.ts"
-Cohesion: 0.11
-Nodes (15): BulkWordsAction, BulkWordsActionResult, BulkWordsActionUseCase, BulkWordsItemFailure, BulkWordsItemResult, BulkWordsItemSuccess, PUBLISH_ROLES, PublishWordCommand (+7 more)
+### Community 232 - "UgcAbuseEventRepository"
+Cohesion: 0.19
+Nodes (3): LiftAbuseMuteUseCase, ListUserAbuseEventsUseCase, UgcAbuseEventRepository
 
-### Community 233 - "jinye-edit-repost.use-case.test.ts"
-Cohesion: 0.12
-Nodes (9): GetJinyeEditHistoryUseCase, JinyeEditHistoryResult, RepostJinyeUseCase, UnrepostJinyeUseCase, UpdateJinyeUseCase, audit, blocklist, makeJinye() (+1 more)
+### Community 233 - "PublicUserRepository"
+Cohesion: 0.28
+Nodes (5): MENTION_SUGGEST_LIMIT, SuggestMentionUsersUseCase, MentionUserRow, PublicActivityPage, PublicUserRepository
 
-### Community 234 - "PantunController"
+### Community 234 - "authenticate.middleware.ts"
 Cohesion: 0.23
-Nodes (5): audioWire(), PantunController, parseOptionalLinesField(), toItem(), toReplyItem()
-
-### Community 235 - "github-oauth-code-exchanger.ts"
-Cohesion: 0.36
-Nodes (3): GithubOauthCodeExchangerPort, GithubOauthCodeExchanger, messageForGithubOauthError()
+Nodes (13): onAuthenticated(), touchLastSeen, AccessTokenPayload, applyUser(), createAuthenticateMiddleware(), createOptionalAuthenticateMiddleware(), createSoftAuthenticateMiddleware(), notifyAuthenticated() (+5 more)
 
 ### Community 236 - "smoke.sh"
 Cohesion: 0.83
 Nodes (3): fail(), ok(), smoke.sh script
 
-### Community 238 - "usaha-category.routes.ts"
-Cohesion: 0.19
-Nodes (13): serialize(), UsahaCategoryController, createAdminUsahaCategoryRoutes(), createPublicUsahaCategoryRoutes(), json(), createUsahaCategoryBodySchema, idSchema, listUsahaCategoriesQuerySchema (+5 more)
+### Community 237 - "rememberOtp"
+Cohesion: 0.27
+Nodes (5): accountDeletionEmailHtml(), accountDeletionEmailText(), rememberOtp(), ResendMailerService, { envState }
+
+### Community 238 - "ResolveKaryaRelated"
+Cohesion: 0.36
+Nodes (4): keysForKind(), ResolvedKaryaRelatedWire, ResolveKaryaRelated, KaryaRelatedRef
 
 ### Community 239 - "UsahaController"
-Cohesion: 0.13
-Nodes (4): ListMyUsahaUseCase, serialize(), UsahaController, listUsahasQuerySchema
-
-### Community 240 - "pantun-report.validator.ts"
-Cohesion: 0.14
-Nodes (14): PantunReportController, toPantunReportItem(), createPantunReportResponseSchema, ListPantunReportsQuery, listPantunReportsQuerySchema, pantunReportIdParamSchema, pantunReportItemResponseSchema, pantunReportItemSchema (+6 more)
-
-### Community 243 - "place-contribution.routes.ts"
 Cohesion: 0.15
-Nodes (12): PlaceContributionController, serialize(), toPayload(), createAdminPlaceContributionRoutes(), createPlaceContributionRoutes(), idParam, json(), okItem (+4 more)
+Nodes (3): serialize(), UsahaController, listUsahasQuerySchema
 
-### Community 244 - "branded-email.ts"
-Cohesion: 0.76
-Nodes (6): brandedCodeEmailHtml(), brandedMessageEmailHtml(), documentShell(), emailActionHref(), escapeEmailHtml(), eyebrowRow()
+### Community 240 - "get-public-profile.use-case.ts"
+Cohesion: 0.18
+Nodes (5): achievementController, GetPublicProfileUseCase, PublicProfile, PublicUserRow, JOINED
+
+### Community 243 - "place.validator.ts"
+Cohesion: 0.11
+Nodes (16): mapImages(), mapSources(), attributionSchema, createPlaceBodySchema, imageSchema, placeCategorySchema, placeImageResponseSchema, placeItemResponseSchema (+8 more)
+
+### Community 244 - "WordReportRepositoryImpl"
+Cohesion: 0.26
+Nodes (4): softDeleteMeaning, alreadyOpenMessage(), toEntity(), WordReportRepositoryImpl
 
 ### Community 246 - "event-going.routes.ts"
+Cohesion: 0.27
+Nodes (8): Ctx, EventGoingController, EventGoingParams, eventGoingParamsSchema, eventGoingStateSchema, ListEventGoingsQuery, listEventGoingsQuerySchema, listEventGoingsResponseSchema
+
+### Community 247 - "WaMessageLogRepository"
+Cohesion: 0.21
+Nodes (5): WaMessageLog, WaLogListQuery, WaMessageLogRepository, WaMessageLogRepositoryImpl, WaAdminRoutesDeps
+
+### Community 248 - "verifier-application.controller.ts"
+Cohesion: 0.21
+Nodes (9): AdminVerifierApplicationRoutesDeps, ListVerifierApplicationsQuery, RejectVerifierApplicationBody, SubmitVerifierApplicationBody, UpdateVerifierScreenshotBody, profileWire(), toAdmin(), toMine() (+1 more)
+
+### Community 249 - "admin-vote.controller.ts"
+Cohesion: 0.09
+Nodes (16): DeleteAdminVoteCommand, DeleteAdminVoteResult, DeleteAdminVoteUseCase, GetTopTargetVotesCommand, GetTopTargetVotesUseCase, ResetTargetVotesCommand, ResetTargetVotesResult, ResetTargetVotesUseCase (+8 more)
+
+### Community 250 - "create-word-report.use-case.ts"
+Cohesion: 0.21
+Nodes (7): TAKEDOWN_REASON_CODES, WORD_REPORT_REASON_CODES, WordReportReasonCode, CreateWordReportCommand, mockAuditRepo, mockReportRepo, mockWordRepo
+
+### Community 251 - "update-word.use-case.ts"
+Cohesion: 0.09
+Nodes (24): CreateWordDto, UpdateWordDto, UpdateWordRelatedDto, UpdateWordUseCase, DUPLICATE_LEMMA_MERGED_NOW, DUPLICATE_LEMMA_PENDING_MERGE, DUPLICATE_LEMMA_USE_TAB, MissingReferences (+16 more)
+
+### Community 253 - "RefreshTokenUseCase"
 Cohesion: 0.22
-Nodes (11): Ctx, EventGoingController, createAdminEventGoingRoutes(), createEventGoingRoutes(), json(), EventGoingParams, eventGoingParamsSchema, eventGoingStateSchema (+3 more)
+Nodes (4): RefreshTokenUseCase, withinRotationGrace(), make(), user()
 
-### Community 247 - "bulk-words.validator.ts"
-Cohesion: 0.25
-Nodes (7): WORDS_BULK_MAX, bulkItemFailureSchema, bulkItemSuccessSchema, bulkWordsActionSchema, BulkWordsBody, bulkWordsBodySchema, bulkWordsResponseSchema
-
-### Community 248 - "VerifierApplicationController"
-Cohesion: 0.20
-Nodes (8): ListVerifierApplicationsQuery, RejectVerifierApplicationBody, SubmitVerifierApplicationBody, UpdateVerifierScreenshotBody, profileWire(), toAdmin(), toMine(), VerifierApplicationController
-
-### Community 249 - "VoteTargetType"
-Cohesion: 0.15
-Nodes (10): GetTopTargetVotesCommand, GetTopTargetVotesUseCase, ResetTargetVotesCommand, ResetTargetVotesResult, ToggleVoteCommand, AdminTopVoteTarget, VoteTargetType, clipPreview() (+2 more)
-
-### Community 250 - "map-word-image-url.ts"
-Cohesion: 0.60
-Nodes (3): mapPublicWordImageUrl(), WordImageUrlFields, PENDING_WORD_IMAGE_PLACEHOLDER_URL
-
-### Community 251 - "update-word.use-case.test.ts"
-Cohesion: 0.16
-Nodes (12): UpdateWordDto, UpdateWordRelatedDto, UpdateWordUseCase, ADMIN, makeDeps(), makeDetail(), NO_MISSING, ADMIN (+4 more)
-
-### Community 253 - "import-words.validator.ts"
-Cohesion: 0.33
-Nodes (4): importMeaningSchema, ImportWordsBody, importWordsBodySchema, importWordsResponseSchema
-
-### Community 254 - ".execute"
-Cohesion: 0.15
-Nodes (6): assertChannels(), assertScopes(), assertStatus(), GetAdminApiClientUseCase, ListAdminApiClientsUseCase, mapAdmin()
-
-### Community 255 - "migrate.ts"
-Cohesion: 0.19
-Nodes (15): backfillUsernameHandles(), client, db, ensureMigrationsTable(), httpStatusOf(), isFile, migrationsFolder, repairLastSeenDrift() (+7 more)
+### Community 254 - "admin-api-client.use-cases.ts"
+Cohesion: 0.08
+Nodes (30): ALLOWED_SCOPES, assertChannels(), assertScopes(), assertStatus(), CHANNELS, CreateAdminApiClientUseCase, GetAdminApiClientUseCase, ListAdminApiClientsUseCase (+22 more)
 
 ### Community 256 - "ugc-abuse-event.repository.ts"
 Cohesion: 0.16
 Nodes (8): parseMeta(), RecordUgcAbuseEventInput, toEntity(), UGC_ABUSE_WEIGHTS, UgcAbuseEvent, UgcAbuseEventRepositoryImpl, UgcAbuseEventWithUser, UgcAbuseSignal
 
-### Community 257 - "Achievement"
-Cohesion: 0.21
-Nodes (6): Achievement, CreateAchievementInput, parseCriteria(), toDomain(), AchievementCategory, RewardType
+### Community 257 - "word-report.use-case.test.ts"
+Cohesion: 0.25
+Nodes (6): TakedownWordUseCase, CreateWordReportUseCase, ResolveWordReportUseCase, TakedownWordReportUseCase, make(), publishedWord()
 
-### Community 258 - "promote-word-image-staging.ts"
-Cohesion: 0.22
-Nodes (13): deleteStagingWordImage(), fetchImageBytes(), PromotedWordImage, promoteWordImageFromStaging(), PromoteWordImageOptions, StagingWordImage, CensoredSuggestionFile, deleteProposedStagingImages() (+5 more)
+### Community 258 - "ugc-anon-abuse.repository.ts"
+Cohesion: 0.24
+Nodes (7): RecordAnonAbuseSignalCommand, ANON_ABUSE_WEIGHTS, AnonAbuseEvent, AnonAbuseSignal, AnonAbuseSubjectKind, AnonMute, RecordAnonAbuseEventInput
 
-### Community 259 - "admin-api-client.use-cases.ts"
-Cohesion: 0.28
-Nodes (11): ALLOWED_SCOPES, CHANNELS, STATUSES, ApiClientChannel, ApiClientStatus, FIRST_PARTY_SCOPES, FirstPartyScope, ApiClientListFilter (+3 more)
+### Community 259 - "admin-discussion.routes.ts"
+Cohesion: 0.20
+Nodes (9): AdminDiscussionRoutesDeps, json(), discussionAdminDetailResponseSchema, discussionAdminItemResponseSchema, discussionAdminListResponseSchema, discussionReplyPublicSchema, listAdminDiscussionsQuerySchema, pinDiscussionReplyBodySchema (+1 more)
 
-### Community 260 - "create-word.validator.test.ts"
-Cohesion: 0.31
-Nodes (7): build(), FORM_A, FORM_B, ULID(), build(), buildMeaning(), ULID()
+### Community 260 - "toLemmaLinkWire"
+Cohesion: 0.25
+Nodes (4): toLemmaLinkWire(), CreateJinyeLemmaLinkBody, ProposeJinyeLemmaCorrectionBody, ResolveJinyeLemmaCorrectionBody
+
+### Community 261 - "ArticleContribution"
+Cohesion: 0.19
+Nodes (7): ResubmitArticleContributionUseCase, ReviewArticleContributionUseCase, ArticleContribution, ContributionListFilter, toContribution(), toPayload(), toTags()
 
 ### Community 262 - "production-up.sh"
 Cohesion: 0.50
 Nodes (3): API_IMAGE, PULL_POLICY, production-up.sh script
 
-### Community 263 - "karya.repository.impl.ts"
-Cohesion: 0.17
-Nodes (8): parseAccessLinksJson(), parseSambasConnectionsJson(), KaryaRow, parsePayload(), toCredits(), toExcerpt(), toKaryaBase(), karyaContributions
+### Community 263 - "kreator.repository.impl.ts"
+Cohesion: 0.09
+Nodes (15): KreatorUseCases, KaryaSummaryForKreator, Kreator, KreatorClaim, KreatorClaimWithMeta, KreatorLink, KreatorWithKaryas, parseKreatorLinksJson() (+7 more)
 
 ### Community 264 - "ListAchievementsFilter"
-Cohesion: 0.22
-Nodes (4): criteriaProgressSignature(), ListAchievementsFilter, ListAchievementsResult, toOwnership()
+Cohesion: 0.17
+Nodes (5): AchievementWithOwnership, ListAchievementsFilter, parseCriteria(), toDomain(), toOwnership()
 
-### Community 265 - "word-voters.routes.ts"
-Cohesion: 0.24
-Nodes (11): ListWordVotersParams, listWordVotersParamsSchema, ListWordVotersQuery, listWordVotersQuerySchema, listWordVotersResponseSchema, wordVoterWireSchema, AdminCtx, WordVotersController (+3 more)
+### Community 265 - "category-suggestion.dtos.ts"
+Cohesion: 0.29
+Nodes (6): ListCategorySuggestionsQueryDTO, ListCategorySuggestionsQuerySchema, ProposeCategorySuggestionDTO, ProposeCategorySuggestionSchema, ReviewCategorySuggestionDTO, ReviewCategorySuggestionSchema
 
 ### Community 267 - "AdminUsersController"
 Cohesion: 0.18
 Nodes (4): AdminUsersController, CreateAdminUserBody, ListAdminUsersQuery, UpdateUserRoleBody
 
-### Community 268 - "bookmark.repository.impl.test.ts"
-Cohesion: 0.14
-Nodes (11): BM_BARU, BM_DEP, BM_LAMA, { parsed }, SMB, USER_A, USER_B, WORD_1 (+3 more)
+### Community 268 - "pantun.routes.test.ts"
+Cohesion: 0.33
+Nodes (6): createPantunRoutes(), pantunAudioUserLimit(), pantunUserLimit(), ugcRateLimitedHook(), body, jsonHeaders
 
-### Community 269 - "event-comment.use-cases.ts"
-Cohesion: 0.23
-Nodes (8): CreateEventCommentUseCase, DeleteEventCommentUseCase, ListEventCommentsUseCase, TakedownEventCommentUseCase, UpdateEventCommentUseCase, EventCommentControllerDeps, baseComment, MockFn
+### Community 269 - "worker.ts"
+Cohesion: 0.43
+Nodes (6): AppModule, bootstrap(), Env, fetch(), loadApp(), scheduled()
 
 ### Community 270 - "UserSkipRepository"
-Cohesion: 0.23
+Cohesion: 0.29
 Nodes (3): SkipContributionUseCase, makeDeps(), UserSkipRepository
 
 ### Community 271 - "article-report.use-cases.ts"
-Cohesion: 0.24
-Nodes (6): ArticleReport, ArticleReportUseCases, SubmitReportInput, ArticleReportReason, articleReports, ArticleReportTarget
+Cohesion: 0.36
+Nodes (5): ArticleReport, ArticleReportUseCases, SubmitReportInput, ArticleReportReason, ArticleReportTarget
 
-### Community 272 - "audit.routes.ts"
-Cohesion: 0.31
-Nodes (7): AuditController, createAuditRoutes(), json(), auditLogItemSchema, auditLogListResponseSchema, ListAuditLogsQuery, listAuditLogsQuerySchema
+### Community 272 - "baleho-payment-email.ts"
+Cohesion: 0.53
+Nodes (3): balehoPaymentEmailHtml(), balehoPaymentEmailText(), escapeHtml()
 
-### Community 273 - "ApiClient"
-Cohesion: 0.35
-Nodes (5): ApiClient, ApiClientListResult, ApiClientRepositoryImpl, parseJsonArray(), toEntity()
+### Community 273 - "toCommentWire"
+Cohesion: 0.33
+Nodes (3): toCommentWire(), CreateJinyeCommentBody, UpdateJinyeCommentBody
 
 ### Community 274 - "usaha-contribution.use-case.test.ts"
 Cohesion: 0.20
 Nodes (6): UniqueUsahaSlugUseCase, build(), Mock, newPayload, NOW, regions
 
-### Community 275 - "create-jinye-comment.use-case.test.ts"
-Cohesion: 0.27
-Nodes (4): CreateJinyeCommentUseCase, emptyRepo(), makeComment(), makeJinye()
-
-### Community 276 - "add-meaning.use-case.test.ts"
-Cohesion: 0.27
-Nodes (7): AddMeaningUseCase, Meaning, MeaningDetail, WordClassSummary, ACTOR, DTO, makeDeps()
+### Community 276 - "update-verifier-application-screenshot.use-case.test.ts"
+Cohesion: 0.40
+Nodes (3): UpdateVerifierApplicationScreenshotUseCase, makeUseCase(), screenshot
 
 ### Community 277 - "culinary-contribution.use-case.test.ts"
-Cohesion: 0.25
-Nodes (5): UniqueCulinarySlugUseCase, build(), EARLIER, Mock, NOW
+Cohesion: 0.22
+Nodes (6): UniqueCulinarySlugUseCase, canonicalCulinaryFields(), build(), EARLIER, Mock, NOW
 
-### Community 278 - "update-my-profile.validator.ts"
-Cohesion: 0.25
-Nodes (6): myProfileResponseSchema, UpdateMyProfileBody, updateMyProfileSchema, usernameAvailabilityQuerySchema, usernameAvailabilityResponseSchema, usernameHistoryResponseSchema
+### Community 278 - "user.controller.ts"
+Cohesion: 0.13
+Nodes (10): levelingToWire(), TitleCode, MyProfileResult, UploadAvatarUseCase, PublicProfileLeveling, toLevelingWire(), toMyProfileWire(), UserController (+2 more)
 
-### Community 279 - "fold-lemma-case.ts"
-Cohesion: 0.25
-Nodes (6): LemmaCaseGroup, LemmaCaseRow, planLemmaCaseMerges(), apply, groups, rows
+### Community 281 - "get-vote-counts.use-case.ts"
+Cohesion: 0.19
+Nodes (9): GetVoteCountsUseCase, VoteCountItem, ToggleVoteWireResult, ToggleVoteResult, VoteCounts, makeDeps(), MEANING, PRON (+1 more)
 
-### Community 281 - "get-vote-counts.use-case.test.ts"
-Cohesion: 0.29
-Nodes (5): GetVoteCountsUseCase, makeDeps(), MEANING, PRON, WORD
-
-### Community 282 - "send-wa-message.use-case.ts"
-Cohesion: 0.36
-Nodes (5): SendVerifierWaCommand, SendWaMessageCommand, SendWaMessageResult, WaSenderPortWithConfigured, WaSendGatewayEntry
+### Community 282 - "send-verifier-wa.use-case.ts"
+Cohesion: 0.47
+Nodes (4): SendVerifierWaCommand, SendVerifierWaNotificationUseCase, SendWaMessageCommand, SendWaMessageResult
 
 ### Community 285 - "update-pantun-reply.use-case.test.ts"
 Cohesion: 0.33
 Nodes (6): audit, blocklist, LINES, makeReply(), makeRepo(), NEW_LINES
-
-### Community 286 - "require-approved-client.middleware.ts"
-Cohesion: 0.38
-Nodes (6): createRequireApprovedClientMiddleware(), deny(), hasScope(), JsonStatus, RequireApprovedClientOptions, makeApp()
-
-### Community 288 - "ref_node_crypto"
-Cohesion: 0.40
-Nodes (3): ulid, REGION_SEED_TIME, regionSeedId()
-
-### Community 289 - "reset-votes-by-client.use-case.ts"
-Cohesion: 0.40
-Nodes (4): FIRST_PARTY_CLIENT_IDS, FIRST_PARTY_SET, ResetVotesByClientCommand, ResetVotesByClientResult
 
 ### Community 291 - "share-query-denylist.ts"
 Cohesion: 0.60
 Nodes (3): BLOCKED_TERMS, isBlockedShareQuery(), normalizeQuery()
 
 ## Knowledge Gaps
-- **1723 isolated node(s):** `imports`, `name`, `version`, `description`, `license` (+1718 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2327 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **28 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **1768 isolated node(s):** `imports`, `name`, `version`, `description`, `license` (+1763 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2399 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **25 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `vitest` connect `vitest` to `DiscussionRepository`, `word.repository.impl.ts`, `facebook-token-verifier.ts`, `createOpenApiApp`, `run-streak-reminder.use-case.ts`, `batch-contribute-words.use-case.ts`, `Comment`, `fcm-analytics.provider.ts`, `ResolvedRange`, `web-analytics.entity.ts`, `AppDatabase`, `jinye-report.repository.impl.ts`, `bug-report.use-case.test.ts`, `AppSettingsRepository`, `PublicUserRepository`, `notification-campaign.repository.impl.ts`, `play-stats.provider.ts`, `list-share-backgrounds.use-case.ts`, `word.repository.ts`, `dashboard.repository.impl.ts`, `campaign.validator.ts`, `EventRepository`, `lemma-definition.mapper.ts`, `suggestion.validator.ts`, `legal.controller.ts`, `map-create-word.ts`, `WordRepository`, `quota-aware-mailer.ts`, `verifier-application.validator.ts`, `culinary.repository.impl.ts`, `get-play-analytics.use-case.ts`, `dns-email-domain-verifier.ts`, `id.ts`, `update-pantun-reply.use-case.ts`, `pantun-report.repository.impl.ts`, `bookmark.repository.impl.ts`, `register-user.use-case.ts`, `ServiceUnavailableError`, `merge-activity.ts`, `VoteRepository`, `achievement.validator.ts`, `trigger-sqlite-backup.use-case.ts`, `web-import.repository.impl.ts`, `ApiClientRepository`, `JinyeRepository`, `event-contribution.use-cases.ts`, `system-supabase.controller.ts`, `RegionRepository`, `vote.repository.ts`, `word.entity.ts`, `create-word.validator.ts`, `UserConsentRepository`, `hono`, `zod`, `QuotaAwareMailer`, `UnauthorizedError`, `package.json`, `DeviceTokenRepository`, `achievement-registry.ts`, `VerifierApplication`, `usaha-claim.repository.impl.ts`, `pantun.controller.ts`, `word.controller.ts`, `jinye.repository.impl.ts`, `event.entity.ts`, `mobile-release.controller.ts`, `SearchMissRepository`, `leveling.ts`, `update-my-profile.use-case.ts`, `Translation`, `comment.validator.ts`, `comment.repository.impl.ts`, `jwt-token.service.ts`, `app-error.ts`, `karya.validator.ts`, `seed-reference.ts`, `get-web-analytics.use-case.ts`, `scan-achievement.test.ts`, `openwa-wa.sender.ts`, `usage-labels.ts`, `google-token-verifier.ts`, `send-wa-message.use-case.test.ts`, `JinyeLemmaLink`, `service-account-token.ts`, `NotFoundError`, `openwa-exploration-group.notifier.ts`, `admin-user.controller.ts`, `bulk-dismiss-search-miss.use-case.ts`, `create-jinye.use-case.ts`, `list-admin-votes.use-case.ts`, `username-slug.ts`, `AuthController`, `merge-duplicate-meanings.ts`, `assert-ugc-text-quality.ts`, `resolve-maps-url.use-case.ts`, `bulk-words-action.use-case.ts`, `jinye-edit-repost.use-case.test.ts`, `ResendMailerService`, `VoteTargetType`, `map-word-image-url.ts`, `update-word.use-case.test.ts`, `promote-word-image-staging.ts`, `create-word.validator.test.ts`, `bookmark.repository.impl.test.ts`, `event-comment.use-cases.ts`, `UserSkipRepository`, `usaha-contribution.use-case.test.ts`, `create-jinye-comment.use-case.test.ts`, `add-meaning.use-case.test.ts`, `culinary-contribution.use-case.test.ts`, `update-my-profile.validator.ts`, `fold-lemma-case.ts`, `get-vote-counts.use-case.test.ts`, `update-pantun-reply.use-case.test.ts`, `submit-article-contribution.use-case.test.ts`, `share-query-denylist.ts`?**
-  _High betweenness centrality (0.065) - this node is a cross-community bridge._
-- **Why does `zod` connect `zod` to `app.ts`, `createOpenApiApp`, `culinary.validator.ts`, `layanan.controller.ts`, `CulinaryRepository`, `fcm-analytics.provider.ts`, `region.controller.ts`, `web-analytics.entity.ts`, `jinye-report.repository.impl.ts`, `place-category.routes.ts`, `list-share-backgrounds.use-case.ts`, `campaign.validator.ts`, `abuse.routes.ts`, `suggestion.validator.ts`, `map-create-word.ts`, `jinye.routes.ts`, `rate-limit.middleware.ts`, `verifier-application.validator.ts`, `culinary-category.repository.impl.ts`, `get-play-analytics.use-case.ts`, `word-group.controller.ts`, `discussion.validator.ts`, `id.ts`, `ServiceUnavailableError`, `admin-user.routes.ts`, `place.use-cases.ts`, `achievement.validator.ts`, `web-import.repository.impl.ts`, `culinary-claim.routes.ts`, `event-contribution.use-cases.ts`, `event.controller.ts`, `admin-comment-blocklist.routes.ts`, `create-word.validator.ts`, `hono`, `user.routes.ts`, `usaha.use-cases.ts`, `api-client.validator.ts`, `usaha-claim.routes.ts`, `import-session.validator.ts`, `wa-admin.routes.ts`, `package.json`, `encyclopedia.routes.ts`, `usaha.validator.ts`, `admin-vote.controller.ts`, `vote.routes.ts`, `culinary-claim.repository.impl.ts`, `usaha-contribution.use-cases.ts`, `search-miss.routes.ts`, `AppVariables`, `culinary-contribution.controller.ts`, `pantun.routes.ts`, `achievement.controller.ts`, `category-suggestion.controller.ts`, `comment.validator.ts`, `karya.validator.ts`, `get-web-analytics.use-case.ts`, `culinary-report.use-cases.ts`, `usaha-report.routes.ts`, `karya.controller.ts`, `usaha-contribution.validator.ts`, `NotFoundError`, `karya.ts`, `about.routes.ts`, `announcement.routes.ts`, `word-media.routes.ts`, `lookup-lemma-definition.validator.ts`, `resolve-maps-url.use-case.ts`, `culinary-report.routes.ts`, `translation.routes.ts`, `usaha-category.routes.ts`, `pantun-report.validator.ts`, `place-contribution.routes.ts`, `event-going.routes.ts`, `bulk-words.validator.ts`, `import-words.validator.ts`, `word-voters.routes.ts`, `audit.routes.ts`, `update-my-profile.validator.ts`?**
-  _High betweenness centrality (0.042) - this node is a cross-community bridge._
-- **Why does `NotFoundError` connect `NotFoundError` to `DiscussionRepository`, `word.repository.impl.ts`, `search-miss.repository.impl.ts`, `layanan.controller.ts`, `batch-contribute-words.use-case.ts`, `Comment`, `CulinaryRepository`, `wa-message.repository.impl.ts`, `AppDatabase`, `jinye-report.repository.impl.ts`, `culinary-contribution.use-cases.ts`, `AboutRepository`, `bug-report.use-case.test.ts`, `PublicUserRepository`, `word-suggestion.entity.ts`, `notification-campaign.repository.impl.ts`, `word.repository.ts`, `announcement.controller.ts`, `place-category.repository.impl.ts`, `EncyclopediaRepositoryImpl`, `EventRepository`, `NotificationRepository`, `NotificationCampaignRepository`, `legal.controller.ts`, `WordRepository`, `culinary.repository.impl.ts`, `WordSuggestionRepositoryImpl`, `culinary-category.repository.impl.ts`, `CulinaryRepositoryImpl`, `word-group.controller.ts`, `update-pantun-reply.use-case.ts`, `pantun-report.repository.impl.ts`, `bookmark.repository.impl.ts`, `pantun.repository.impl.ts`, `ContributionRepositoryImpl`, `place.use-cases.ts`, `VoteRepository`, `web-import.repository.impl.ts`, `JinyeRepository`, `event-contribution.use-cases.ts`, `RegionRepository`, `AchievementRepository`, `place-contribution.use-cases.ts`, `word.entity.ts`, `.processSelectedAudience`, `usaha.use-cases.ts`, `usaha-category.repository.impl.ts`, `UsahaRepositoryImpl`, `UnauthorizedError`, `wa-admin.routes.ts`, `culinary-claim.repository.impl.ts`, `usaha-contribution.use-cases.ts`, `VerifierApplication`, `review-category-suggestion.use-case.ts`, `usaha-claim.repository.impl.ts`, `pantun.controller.ts`, `word.controller.ts`, `AchievementRepositoryImpl`, `jinye.repository.impl.ts`, `search-miss.controller.ts`, `UsahaContributionUseCases`, `event.entity.ts`, `ContributionRepository`, `UsahaReport`, `SearchMissRepository`, `UserRepositoryImpl`, `update-my-profile.use-case.ts`, `achievement.controller.ts`, `Translation`, `Jinye`, `CategoryRepository`, `KaryaUseCases`, `VoteRepositoryImpl`, `app-error.ts`, `culinary-report.use-cases.ts`, `usage-labels.ts`, `encyclopedia.controller.ts`, `ArticleRepository`, `JinyeLemmaLink`, `about.repository.impl.ts`, `karya.ts`, `admin-user.controller.ts`, `PlaceRepositoryImpl`, `.findById`, `WaUsage`, `WaMessageTemplate`, `create-jinye.use-case.ts`, `list-admin-votes.use-case.ts`, `ActivityItem`, `bulk-words-action.use-case.ts`, `jinye-edit-repost.use-case.test.ts`, `UsahaController`, `.execute`, `Achievement`, `admin-api-client.use-cases.ts`, `ArticleContribution`, `karya.repository.impl.ts`, `event-comment.use-cases.ts`, `UserSkipRepository`, `article-report.use-cases.ts`, `ApiClient`, `create-jinye-comment.use-case.test.ts`, `update-pantun-reply.use-case.test.ts`, `.safeHidePlacePhoto`?**
-  _High betweenness centrality (0.042) - this node is a cross-community bridge._
+- **Why does `zod` connect `zod` to `search-miss.routes.ts`, `AppVariables`, `app.ts`, `admin-discussion.routes.ts`, `ValidationError`, `culinary.routes.ts`, `jinye-report.routes.ts`, `category-suggestion.dtos.ts`, `batch-contribute-words.use-case.ts`, `fcm-analytics.provider.ts`, `get-mobile-analytics.use-case.ts`, `word-group.routes.ts`, `region.routes.ts`, `web-analytics.entity.ts`, `culinary-contribution.routes.ts`, `pantun.controller.ts`, `web-import.controller.ts`, `usaha-report.use-cases.ts`, `comment.validator.ts`, `campaign.validator.ts`, `EventRepository`, `karya.validator.ts`, `suggestion.validator.ts`, `create-word.dto.ts`, `jinye.routes.ts`, `AuthUser`, `verifier-application.validator.ts`, `culinary.controller.ts`, `culinary-category.repository.impl.ts`, `karya.controller.ts`, `get-play-analytics.use-case.ts`, `word-group.controller.ts`, `discussion.validator.ts`, `id.ts`, `karya-lemma-link.routes.ts`, `submit-pantun-report.use-case.ts`, `NotFoundError`, `culinary-contribution.use-cases.ts`, `legal.routes.ts`, `admin-user.routes.ts`, `jinye.validator.ts`, `about.routes.ts`, `place.use-cases.ts`, `achievement.routes.ts`, `culinary-claim.routes.ts`, `bookmark.routes.ts`, `event.routes.ts`, `word-report.validator.ts`, `logger.ts`, `comment-blocklist.validator.ts`, `share.routes.ts`, `device.routes.ts`, `lookup-lemma-definition.validator.ts`, `notification.routes.ts`, `culinary-report.routes.ts`, `user.routes.ts`, `translation.routes.ts`, `usaha-category.repository.impl.ts`, `layanan.controller.ts`, `admin-api-client.routes.ts`, `create-word.validator.ts`, `UnauthorizedError`, `kreator.controller.ts`, `place.validator.ts`, `wa-admin.routes.ts`, `package.json`, `event-going.routes.ts`, `encyclopedia.routes.ts`, `usaha.controller.ts`, `admin-vote.routes.ts`, `vote.routes.ts`, `usaha-contribution.use-cases.ts`?**
+  _High betweenness centrality (0.045) - this node is a cross-community bridge._
+- **Why does `vitest` connect `vitest` to `discussion.controller.ts`, `word-suggestion.repository.impl.ts`, `ServiceUnavailableError`, `ValidationError`, `zod`, `run-streak-reminder.use-case.ts`, `batch-contribute-words.use-case.ts`, `comment.controller.ts`, `fcm-analytics.provider.ts`, `ResolvedRange`, `web-analytics.entity.ts`, `test-utils.ts`, `JinyeReportRepository`, `baleho.use-cases.ts`, `bug-report.use-case.test.ts`, `AppSettingsRepository`, `public-profile.entity.ts`, `word-import-session.use-cases.ts`, `play-stats.provider.ts`, `list-share-backgrounds.use-case.ts`, `word.repository.impl.ts`, `dashboard.repository.impl.ts`, `campaign.validator.ts`, `EventRepository`, `lemma-definition.mapper.ts`, `NotificationRepository`, `suggestion.validator.ts`, `legal.controller.ts`, `create-word.dto.ts`, `AuditLogRepository`, `resend-mailer.service.ts`, `AuthUser`, `verifier-application.validator.ts`, `culinary.controller.ts`, `WordSuggestionRepositoryImpl`, `get-play-analytics.use-case.ts`, `NotificationPushCooldownRepository`, `register-user.use-case.test.ts`, `WordController`, `id.ts`, `create-pantun-with-audio.use-case.ts`, `submit-pantun-report.use-case.ts`, `bookmark.repository.impl.ts`, `register-user.use-case.ts`, `github-public-image-storage.service.ts`, `merge-activity.ts`, `skip-vote-deck-word.use-case.ts`, `achievement.routes.ts`, `trigger-sqlite-backup.use-case.ts`, `web-import.use-cases.ts`, `app-error.ts`, `event-contribution.use-cases.ts`, `system-supabase.controller.ts`, `vote.repository.ts`, `logger.ts`, `comment-blocklist.validator.ts`, `create-word.validator.ts`, `UserConsentRepository`, `PublicImageStoragePort`, `user.routes.ts`, `UnauthorizedError`, `UserRepository`, `package.json`, `DeviceTokenRepository`, `search-miss.routes.ts`, `achievement-registry.ts`, `CursorPage`, `comment-blocklist.controller.ts`, `word.repository.ts`, `event-going.use-cases.ts`, `contribution.use-case.test.ts`, `mobile-release.controller.ts`, `culinary-contribution.routes.ts`, `SearchMissRepository`, `leveling.ts`, `update-my-profile.use-case.ts`, `quota-aware-mailer.ts`, `Achievement`, `comment.validator.ts`, `discussion.repository.impl.ts`, `jwt-token.service.ts`, `ForbiddenError`, `karya.validator.ts`, `AppDatabase`, `get-web-analytics.use-case.ts`, `openwa-wa.sender.ts`, `usaha.repository.impl.ts`, `encyclopedia.controller.ts`, `send-wa-message.use-case.ts`, `service-account-token.ts`, `NotFoundError`, `split-comma-words.ts`, `karya.ts`, `UgcAnonAbuseRepository`, `verifier-application.use-case.test.ts`, `VoteRepository`, `migrate.ts`, `resolve-word-report.use-case.ts`, `share.routes.ts`, `merge-duplicate-meanings.ts`, `resolve-maps-url.use-case.ts`, `UgcAbuseEventRepository`, `PublicUserRepository`, `rememberOtp`, `get-public-profile.use-case.ts`, `create-word-report.use-case.ts`, `update-word.use-case.ts`, `admin-api-client.use-cases.ts`, `word-report.use-case.test.ts`, `kreator.repository.impl.ts`, `pantun.routes.test.ts`, `UserSkipRepository`, `usaha-contribution.use-case.test.ts`, `update-verifier-application-screenshot.use-case.test.ts`, `culinary-contribution.use-case.test.ts`, `get-vote-counts.use-case.ts`, `update-pantun-reply.use-case.test.ts`, `share-query-denylist.ts`?**
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
+- **Why does `UnauthorizedError` connect `UnauthorizedError` to `vitest`, `discussion.controller.ts`, `search-miss.routes.ts`, `ServiceUnavailableError`, `app.ts`, `AppVariables`, `zod`, `ValidationError`, `jinye-report.routes.ts`, `comment-blocklist.controller.ts`, `WordReportController`, `word.repository.ts`, `comment.controller.ts`, `word-group.routes.ts`, `test-utils.ts`, `contribution.use-case.test.ts`, `mobile-release.controller.ts`, `user.controller.ts`, `pantun.controller.ts`, `JinyeController`, `update-my-profile.use-case.ts`, `category-suggestion.controller.ts`, `event.use-cases.ts`, `campaign.validator.ts`, `EventRepository`, `jwt-token.service.ts`, `legal.controller.ts`, `create-word.dto.ts`, `EventController`, `ContributionController`, `AuthUser`, `CommentController`, `encyclopedia.controller.ts`, `karya.controller.ts`, `word-group.controller.ts`, `WordController`, `id.ts`, `karya-lemma-link.routes.ts`, `submit-pantun-report.use-case.ts`, `system-database.routes.ts`, `NotFoundError`, `register-user.use-case.ts`, `legal.routes.ts`, `.findById`, `place.use-cases.ts`, `contribution.entity.ts`, `app-error.ts`, `system-supabase.controller.ts`, `bookmark.routes.ts`, `word-report.validator.ts`, `comment-blocklist.validator.ts`, `device.routes.ts`, `notification.routes.ts`, `translation.routes.ts`, `usaha.use-cases.ts`, `layanan.controller.ts`, `admin-api-client.routes.ts`, `DiscussionController`, `LoginMeta`, `kreator.controller.ts`, `UserRepository`, `wa-admin.routes.ts`, `event-going.routes.ts`, `verifier-application.controller.ts`, `vote.routes.ts`, `RefreshTokenUseCase`?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
 - **What connects `imports`, `name`, `version` to the rest of the system?**
-  _1723 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1768 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `vitest` be split into smaller, more focused modules?**
-  _Cohesion score 0.01745819397993311 - nodes in this community are weakly interconnected._
-- **Should `DiscussionRepository` be split into smaller, more focused modules?**
-  _Cohesion score 0.025210084033613446 - nodes in this community are weakly interconnected._
-- **Should `word.repository.impl.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.03034825870646766 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.01785371011149558 - nodes in this community are weakly interconnected._
+- **Should `discussion.controller.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.02182419213384605 - nodes in this community are weakly interconnected._
+- **Should `word-suggestion.repository.impl.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.0334841628959276 - nodes in this community are weakly interconnected._

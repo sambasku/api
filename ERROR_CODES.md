@@ -112,6 +112,8 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `IMAGE_UPLOAD_UNAVAILABLE` | 503 | Provider penyimpanan gambar belum dikonfigurasi (env `IMAGEKIT_*`) |
 | `IMAGE_PROXY_UNAVAILABLE` | 503 | Proxy bukti gambar gagal (URL di luar endpoint / fetch ImageKit gagal) |
 | `BALEHO_PAYMENT_PROOF_NOT_FOUND` | 404 | Placement belum punya bukti bayar |
+| `LEADERBOARD_WEEK_NOT_FOUND` | 404 | `week_id` tidak valid, minggu belum ada, atau snapshot minggu lalu belum difinalisasi |
+| `LEADERBOARD_STORAGE_UNAVAILABLE` | 503 | Repo/token leaderboard GitHub belum dikonfigurasi atau publish ditolak |
 | `PUBLIC_IMAGE_UPLOAD_UNAVAILABLE` | 503 | Provider gambar publik belum dikonfigurasi / token GitHub invalid (`PUBLIC_IMAGE_GITHUB_*`) |
 | `PUBLIC_IMAGE_UPLOAD_FAILED` | 502 | Upload gambar publik ke GitHub Contents API gagal |
 | `IMAGE_TOO_LARGE` | 400 | File gambar melebihi 5 MB |

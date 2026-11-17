@@ -182,6 +182,62 @@ const SEED_ACHIEVEMENTS: Array<{
     family: 'penyambung',
     level: 1,
   },
+  {
+    code: 'peringkat-juara',
+    title: 'Juara Mingguan',
+    description: 'Pernah juara papan peringkat minggu (rank 1)',
+    category: 'momen',
+    rewardType: 'badge',
+    badgeUrl: `${CDN}/peringkat-juara.png`,
+    criteria: {
+      source: 'leaderboard_top',
+      filters: { rank_min: '1', rank_max: '1' },
+    },
+    family: 'peringkat-mingguan',
+    level: 4,
+  },
+  {
+    code: 'peringkat-tiga-besar',
+    title: 'Tiga Besar Mingguan',
+    description: 'Pernah rank 2 atau 3 di papan peringkat minggu',
+    category: 'momen',
+    rewardType: 'badge',
+    badgeUrl: `${CDN}/peringkat-tiga-besar.png`,
+    criteria: {
+      source: 'leaderboard_top',
+      filters: { rank_min: '2', rank_max: '3' },
+    },
+    family: 'peringkat-mingguan',
+    level: 3,
+  },
+  {
+    code: 'peringkat-sepuluh',
+    title: 'Sepuluh Besar Mingguan',
+    description: 'Pernah rank 4 sampai 10 di papan peringkat minggu',
+    category: 'momen',
+    rewardType: 'badge',
+    badgeUrl: `${CDN}/peringkat-sepuluh.png`,
+    criteria: {
+      source: 'leaderboard_top',
+      filters: { rank_min: '4', rank_max: '10' },
+    },
+    family: 'peringkat-mingguan',
+    level: 2,
+  },
+  {
+    code: 'peringkat-papan',
+    title: 'Masuk Papan Mingguan',
+    description: 'Pernah rank 11 sampai 30 di papan peringkat minggu',
+    category: 'momen',
+    rewardType: 'badge',
+    badgeUrl: `${CDN}/peringkat-papan.png`,
+    criteria: {
+      source: 'leaderboard_top',
+      filters: { rank_min: '11', rank_max: '30' },
+    },
+    family: 'peringkat-mingguan',
+    level: 1,
+  },
 ];
 
 export async function seedAchievements() {

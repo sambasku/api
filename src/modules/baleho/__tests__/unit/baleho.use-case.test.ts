@@ -44,6 +44,7 @@ function mockRepo(partial: Partial<BalehoRepository> = {}): BalehoRepository {
     hasActiveFingerprint: vi.fn().mockResolvedValue(false),
     findUserIdByUsername: vi.fn().mockResolvedValue(null),
     getCreativeForOwner: vi.fn(),
+    countFrames: vi.fn().mockResolvedValue(1),
     listApprovedCreatives: vi.fn().mockResolvedValue([]),
     getLatestReferralForCreative: vi.fn().mockResolvedValue(null),
     createPlacement: vi.fn().mockResolvedValue({
@@ -226,7 +227,7 @@ describe('BalehoUseCases.getPricing', () => {
 });
 
 describe('BalehoUseCases.createPlacement quote', () => {
-  it('snapshot quoted_amount = w*h*days*tarif', async () => {
+  it('snapshot quoted_amount = w*h*days*tarif*slides', async () => {
     const create = vi.fn().mockResolvedValue({
       placementId: '01PLACEMENT00000000000009',
       creativeId: '01CREATIVE000000000000009',
@@ -238,12 +239,43 @@ describe('BalehoUseCases.createPlacement quote', () => {
       w: 2,
       h: 1,
       days: 7,
+      frames: [frameInput(), frameInput({ mediaUrl: 'https://cdn.example.com/b.jpg' })],
     }));
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         days: 7,
         pricePerCellPerDay: 3000,
-        quotedAmount: 2 * 1 * 7 * 3000,
+        quotedAmount: 2 * 1 * 7 * 3000 * 2,
+      }),
+    );
+  });
+
+  it('reaktivasi: quote × jumlah frame creative lama', async () => {
+    const create = vi.fn().mockResolvedValue({
+      placementId: '01PLACEMENT00000000000010',
+      creativeId: '01CREATIVE000000000000010',
+    });
+    const repo = mockRepo({
+      createPlacement: create,
+      getCreativeForOwner: vi.fn().mockResolvedValue({
+        id: '01CREATIVE000000000000010',
+        ownerUserId: '01USER000000000000000010',
+        fingerprint: 'fp-react',
+        moderationStatus: 'approved',
+      }),
+      countFrames: vi.fn().mockResolvedValue(3),
+      getLatestReferralForCreative: vi.fn().mockResolvedValue(null),
+    });
+    const settingsRepo = { getValue: vi.fn().mockResolvedValue('3000') };
+    const uc = new BalehoUseCases(repo, {}, settingsRepo as never);
+    await uc.createPlacement('01USER000000000000000010', {
+      ...placementInput({ w: 1, h: 1, days: 10 }),
+      creativeId: '01CREATIVE000000000000010',
+      frames: [],
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quotedAmount: 1 * 1 * 10 * 3000 * 3,
       }),
     );
   });

@@ -61,6 +61,10 @@ const envSchema = z.object({
   PUBLIC_IMAGE_GITHUB_TOKEN: z.string().optional(),
   PUBLIC_IMAGE_GITHUB_URL: z.url().optional(),
 
+  // Leaderboard mingguan (CDN GitHub). Kosong = DB-only, publikasi dilewati.
+  LEADERBOARD_GITHUB_URL: z.string().url().optional(),
+  LEADERBOARD_GITHUB_TOKEN: z.string().optional(),
+
   // Audio pronunciation storage - pola sama IMAGE_PROVIDER.
   // Tanpa kredensial: endpoint upload audio balas 503
   // PRONUNCIACION_UPLOAD_UNAVAILABLE.

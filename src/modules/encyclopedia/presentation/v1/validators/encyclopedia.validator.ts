@@ -13,18 +13,25 @@ const categoryIdSchema = z
   .max(64, 'Kategori artikel tidak valid')
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Kategori artikel tidak valid');
 
-/** Tag: slug lowercase-hyphen, maks 40 karakter, maks 8 per artikel. */
-const tagSchema = z
-  .string({ error: 'Tag tidak valid' })
-  .trim()
-  .min(1, 'Tag tidak valid')
-  .max(40, 'Tag maksimal 40 karakter')
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Tag hanya huruf kecil, angka, hyphen');
+/**
+ * Tag: slug lowercase-hyphen, maks 40 karakter, maks 8 per artikel.
+ * Huruf besar dari klien di-lowercase dulu (bukan error) supaya form mobile
+ * yang kirim "Sejarah" tetap lolos.
+ */
+const tagSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+  z
+    .string({ error: 'Tag tidak valid' })
+    .min(1, 'Tag tidak valid')
+    .max(40, 'Tag maksimal 40 karakter')
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Tag hanya huruf kecil, angka, hyphen'),
+);
 
 const tagsSchema = z
   .array(tagSchema)
   .max(8, 'Tag maksimal 8 per artikel')
-  .default([]);
+  .default([])
+  .transform((tags) => [...new Set(tags)]);
 
 const BODY_MD_MAX = 50_000;
 

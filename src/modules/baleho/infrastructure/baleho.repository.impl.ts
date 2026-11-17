@@ -207,6 +207,14 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     };
   }
 
+  async countFrames(creativeId: string): Promise<number> {
+    const rows = await this.db
+      .select({ n: sql<number>`count(*)` })
+      .from(balehoFrames)
+      .where(eq(balehoFrames.creativeId, creativeId));
+    return Number(rows[0]?.n ?? 0);
+  }
+
   async listApprovedCreatives(ownerUserId: string) {
     const creatives = await this.db
       .select({
@@ -240,7 +248,9 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       string,
       { title: string | null; mediaUrl: string | null }
     >();
+    const frameCount = new Map<string, number>();
     for (const f of frames) {
+      frameCount.set(f.creativeId, (frameCount.get(f.creativeId) ?? 0) + 1);
       if (firstFrame.has(f.creativeId)) continue;
       firstFrame.set(f.creativeId, {
         title: f.title,
@@ -283,6 +293,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         fingerprint: c.fingerprint,
         title: frame?.title ?? null,
         mediaUrl: frame?.mediaUrl ?? null,
+        frameCount: frameCount.get(c.id) ?? 0,
         lastReferralUsername: ref?.referralUsername ?? null,
         lastReferrerUserId: ref?.referrerUserId ?? null,
       };

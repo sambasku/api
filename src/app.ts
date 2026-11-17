@@ -284,6 +284,17 @@ import {
   createPublicAchievementRoutes,
   createPublicUserAchievementsRoutes,
 } from "@/modules/achievement/presentation/v1/achievement.routes";
+import { LeaderboardRepositoryImpl } from "@/modules/leaderboard/infrastructure/leaderboard.repository.impl";
+import { createLeaderboardStorage } from "@/modules/leaderboard/infrastructure/leaderboard-storage.factory";
+import { ComputeLiveLeaderboardUseCase } from "@/modules/leaderboard/application/use-cases/compute-live-leaderboard.use-case";
+import { FinalizeLeaderboardWeekUseCase } from "@/modules/leaderboard/application/use-cases/finalize-leaderboard-week.use-case";
+import { RunDueLeaderboardJobsUseCase } from "@/modules/leaderboard/application/use-cases/run-due-leaderboard-jobs.use-case";
+import { GetLeaderboardUseCase } from "@/modules/leaderboard/application/use-cases/get-leaderboard.use-case";
+import { LeaderboardController } from "@/modules/leaderboard/presentation/v1/leaderboard.controller";
+import {
+  createAdminLeaderboardRoutes,
+  createPublicLeaderboardRoutes,
+} from "@/modules/leaderboard/presentation/v1/leaderboard.routes";
 import { PlaceRepositoryImpl } from "@/modules/place/infrastructure/place.repository.impl";
 import {
   AppendPlaceImagesUseCase,
@@ -1979,6 +1990,39 @@ const runDueAchievementScanUseCase = new RunDueAchievementScanUseCase(
   appSettingsRepo,
   auditRepo,
 );
+
+const leaderboardRepo = new LeaderboardRepositoryImpl(db);
+const leaderboardStorage = createLeaderboardStorage();
+const computeLiveLeaderboardUseCase = new ComputeLiveLeaderboardUseCase(
+  leaderboardRepo,
+  leaderboardStorage,
+);
+const finalizeLeaderboardWeekUseCase = new FinalizeLeaderboardWeekUseCase(
+  leaderboardRepo,
+  leaderboardStorage,
+  computeLiveLeaderboardUseCase,
+  auditRepo,
+  async () => {
+    // Award lencana leaderboard_top dari snapshot yang baru dibekukan.
+    await runDueAchievementScanUseCase.execute(new Date(), { force: true });
+  },
+);
+const runDueLeaderboardJobsUseCase = new RunDueLeaderboardJobsUseCase(
+  leaderboardRepo,
+  finalizeLeaderboardWeekUseCase,
+  computeLiveLeaderboardUseCase,
+);
+const getLeaderboardUseCase = new GetLeaderboardUseCase(
+  leaderboardRepo,
+  leaderboardStorage,
+  computeLiveLeaderboardUseCase,
+);
+const leaderboardController = new LeaderboardController({
+  getLeaderboard: getLeaderboardUseCase,
+  computeLive: computeLiveLeaderboardUseCase,
+  finalizeWeek: finalizeLeaderboardWeekUseCase,
+});
+
 const runStreakReminderUseCase = new RunStreakReminderUseCase(
   db,
   appSettingsRepo,
@@ -2583,6 +2627,17 @@ app.route(
   "/api/v1/admin/achievements",
   createAdminAchievementRoutes({
     controller: achievementController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/leaderboard",
+  createPublicLeaderboardRoutes({ controller: leaderboardController }),
+);
+app.route(
+  "/api/v1/admin/leaderboard",
+  createAdminLeaderboardRoutes({
+    controller: leaderboardController,
     authenticate,
   }),
 );
@@ -3804,6 +3859,17 @@ export async function runDueAchievementScan(): Promise<{
   ran: boolean;
 }> {
   return runDueAchievementScanUseCase.execute();
+}
+
+/**
+ * Cron leaderboard: finalize minggu due + refresh current.json (interval 6 jam).
+ */
+export async function runDueLeaderboardJobs(): Promise<{
+  refreshed: boolean;
+  finalized: boolean;
+  finalizedWeekIds: string[];
+}> {
+  return runDueLeaderboardJobsUseCase.execute();
 }
 
 export async function runDueStreakReminder(): Promise<{
