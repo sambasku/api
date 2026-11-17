@@ -48,6 +48,9 @@ export type BalehoRepository = {
     startsAt: Date | null;
     endsAt: Date | null;
     awaitingPaymentAt: Date | null;
+    days: number;
+    pricePerCellPerDay: number;
+    quotedAmount: number;
   }): Promise<{ placementId: string; creativeId: string }>;
   listAdmin(limit: number): Promise<
     Array<{
@@ -62,6 +65,9 @@ export type BalehoRepository = {
       advertiserUsername: string | null;
       referralUsername: string | null;
       paymentProofUrl: string | null;
+      quotedAmount: number | null;
+      pricePerCellPerDay: number | null;
+      days: number | null;
       createdAt: Date;
       impressions: number;
       taps: number;

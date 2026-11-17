@@ -54,6 +54,17 @@ export class BalehoController {
     return c.json({ success: true as const, data: serializeBoard(board) });
   }
 
+  async getPricing(c: Context<{ Variables: AppVariables }>) {
+    const pricing = await this.uc.getPricing();
+    return c.json({
+      success: true as const,
+      data: {
+        price_per_cell_per_day: pricing.pricePerCellPerDay,
+        currency: 'IDR',
+      },
+    });
+  }
+
   async createPlacement(
     c: Context<{ Variables: AppVariables }>,
     body: CreateBody,
@@ -164,6 +175,9 @@ export class BalehoController {
           advertiser_username: r.advertiserUsername,
           referral_username: r.referralUsername,
           payment_proof_url: r.paymentProofUrl,
+          quoted_amount: r.quotedAmount,
+          price_per_cell_per_day: r.pricePerCellPerDay,
+          days: r.days,
           created_at: r.createdAt.toISOString(),
           impressions,
           taps,

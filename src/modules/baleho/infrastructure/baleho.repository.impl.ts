@@ -316,6 +316,9 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     startsAt: Date | null;
     endsAt: Date | null;
     awaitingPaymentAt: Date | null;
+    days: number;
+    pricePerCellPerDay: number;
+    quotedAmount: number;
   }): Promise<{ placementId: string; creativeId: string }> {
     const { input } = args;
     const now = new Date();
@@ -368,6 +371,9 @@ export class BalehoRepositoryImpl implements BalehoRepository {
           entityId: input.entityId ?? null,
           startsAt: args.startsAt,
           endsAt: args.endsAt,
+          days: args.days,
+          pricePerCellPerDay: args.pricePerCellPerDay,
+          quotedAmount: args.quotedAmount,
           awaitingPaymentAt: args.awaitingPaymentAt,
           createdAt: now,
         });
@@ -410,6 +416,9 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         advertiserUsername: users.username,
         referralUsername: balehoPlacements.referralUsername,
         paymentProofUrl: balehoPlacements.paymentProofUrl,
+        quotedAmount: balehoPlacements.quotedAmount,
+        pricePerCellPerDay: balehoPlacements.pricePerCellPerDay,
+        days: balehoPlacements.days,
         createdAt: balehoPlacements.createdAt,
       })
       .from(balehoPlacements)
@@ -445,6 +454,9 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         ...r,
         advertiserUsername: r.advertiserUsername ?? null,
         paymentProofUrl: r.paymentProofUrl ?? null,
+        quotedAmount: r.quotedAmount ?? null,
+        pricePerCellPerDay: r.pricePerCellPerDay ?? null,
+        days: r.days ?? null,
         createdAt: r.createdAt,
         impressions: c.impressions,
         taps: c.taps,

@@ -43,6 +43,21 @@ export function createPublicBalehoRoutes(deps: {
 
   routes.openapi(
     createRoute({
+      method: 'get',
+      path: '/pricing',
+      tags: ['Baleho'],
+      responses: {
+        200: {
+          description: 'Tarif per sel 1x1 per hari',
+          content: json,
+        },
+      },
+    }),
+    (c) => deps.controller.getPricing(c) as never,
+  );
+
+  routes.openapi(
+    createRoute({
       method: 'post',
       path: '/events',
       tags: ['Baleho'],

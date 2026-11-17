@@ -143,6 +143,12 @@ export const balehoPlacements = sqliteTable(
     entityId: text('entity_id'),
     startsAt: integer('starts_at', { mode: 'timestamp' }),
     endsAt: integer('ends_at', { mode: 'timestamp' }),
+    /** Lama booking (hari) saat pesan. */
+    days: integer('days'),
+    /** Snapshot tarif IDR per sel 1x1 per hari saat pesan. */
+    pricePerCellPerDay: integer('price_per_cell_per_day'),
+    /** Snapshot total = w * h * days * price_per_cell_per_day. */
+    quotedAmount: integer('quoted_amount'),
     awaitingPaymentAt: integer('awaiting_payment_at', { mode: 'timestamp' }),
     paidAt: integer('paid_at', { mode: 'timestamp' }),
     /** URL bukti transfer di ImageKit (wajib saat mark-paid). */

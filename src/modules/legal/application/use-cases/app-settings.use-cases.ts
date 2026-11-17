@@ -2,6 +2,7 @@ import { BadRequestError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import {
   APP_SETTING_KEYS,
+  BALEHO_PRICE_PER_CELL_PER_DAY_KEY,
   LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY,
   type AppSettingKey,
   type AppSettingType,
@@ -114,6 +115,21 @@ export class UpdateAppSettingsUseCase {
             'VALIDATION_ERROR',
             'wa.group_cta_url harus URL http/https yang valid',
             [{ field: 'settings', message: 'Nilai wa.group_cta_url tidak valid' }],
+          );
+        }
+      }
+      if (s.key === BALEHO_PRICE_PER_CELL_PER_DAY_KEY) {
+        const n = Number(s.value);
+        if (!Number.isInteger(n) || n < 0 || n > 100_000_000) {
+          throw new BadRequestError(
+            'VALIDATION_ERROR',
+            'baleho.price_per_cell_per_day harus bilangan 0-100000000',
+            [
+              {
+                field: 'settings',
+                message: 'Nilai tarif Baleho tidak valid',
+              },
+            ],
           );
         }
       }

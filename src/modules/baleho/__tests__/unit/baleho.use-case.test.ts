@@ -206,6 +206,48 @@ describe('BalehoUseCases.approve notify', () => {
   });
 });
 
+describe('BalehoUseCases.getPricing', () => {
+  it('default 3000 bila settings kosong', async () => {
+    const settingsRepo = { getValue: vi.fn().mockResolvedValue(null) };
+    const uc = new BalehoUseCases(mockRepo(), {}, settingsRepo as never);
+    await expect(uc.getPricing()).resolves.toEqual({
+      pricePerCellPerDay: 3000,
+    });
+  });
+
+  it('baca nilai dari app_settings', async () => {
+    const settingsRepo = { getValue: vi.fn().mockResolvedValue('4500') };
+    const uc = new BalehoUseCases(mockRepo(), {}, settingsRepo as never);
+    await expect(uc.getPricing()).resolves.toEqual({
+      pricePerCellPerDay: 4500,
+    });
+  });
+});
+
+describe('BalehoUseCases.createPlacement quote', () => {
+  it('snapshot quoted_amount = w*h*days*tarif', async () => {
+    const create = vi.fn().mockResolvedValue({
+      placementId: '01PLACEMENT00000000000009',
+      creativeId: '01CREATIVE000000000000009',
+    });
+    const repo = mockRepo({ createPlacement: create });
+    const settingsRepo = { getValue: vi.fn().mockResolvedValue('3000') };
+    const uc = new BalehoUseCases(repo, {}, settingsRepo as never);
+    await uc.createPlacement('01USER000000000000000009', placementInput({
+      w: 2,
+      h: 1,
+      days: 7,
+    }));
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        days: 7,
+        pricePerCellPerDay: 3000,
+        quotedAmount: 2 * 1 * 7 * 3000,
+      }),
+    );
+  });
+});
+
 describe('BalehoUseCases.markPaid', () => {
   it('tolak tanpa bukti pembayaran', async () => {
     const uc = new BalehoUseCases(mockRepo());

@@ -1593,6 +1593,7 @@ const balehoNotify: {
 const balehoUseCases = new BalehoUseCases(
   new BalehoRepositoryImpl(db),
   balehoNotify,
+  appSettingsRepo,
 );
 const balehoController = new BalehoController(balehoUseCases);
 const usahaClaimUseCases = new UsahaClaimUseCases(

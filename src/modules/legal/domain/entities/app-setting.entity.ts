@@ -14,6 +14,8 @@ export const APP_SETTING_KEYS = [
   'wa.group_cta_url',
   /** Kill switch pengingat aktivitas (leveling/streak). Default off sampai dry-run. */
   'streak_reminder_enabled',
+  /** Tarif Baleho: rupiah per sel 1x1 per hari. */
+  'baleho.price_per_cell_per_day',
 ] as const;
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];
@@ -58,6 +60,12 @@ export const DEFAULT_WORD_VOTE_PUSH_COOLDOWN_MINUTES = 3;
 
 /** Default jeda push media anak kata (#133, mode Skip). */
 export const DEFAULT_WORD_MEDIA_PUSH_COOLDOWN_MINUTES = 3;
+
+export const BALEHO_PRICE_PER_CELL_PER_DAY_KEY =
+  'baleho.price_per_cell_per_day' as const;
+
+/** Default tarif Baleho (IDR): 1x1 / hari. */
+export const DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY = 3000;
 
 export type AppSettingType = 'string' | 'boolean' | 'number' | 'url';
 

@@ -1051,6 +1051,13 @@
       "when": 1801648000000,
       "tag": "0149_baleho_payment_proof",
       "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "6",
+      "when": 1801649000000,
+      "tag": "0150_baleho_pricing",
+      "breakpoints": true
     }
   ]
 }

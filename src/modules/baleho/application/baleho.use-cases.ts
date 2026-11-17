@@ -16,6 +16,11 @@ import {
 import type { MailerPort } from '@/modules/auth/application/ports/mailer.port';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import {
+  BALEHO_PRICE_PER_CELL_PER_DAY_KEY,
+  DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY,
+} from '@/modules/legal/domain/entities/app-setting.entity';
+import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import { inboxCopyFor } from '@/modules/notification/domain/entities/notification.entity';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { SendWaMessageUseCase } from '@/modules/wa/application/use-cases/send-wa-message.use-case';
@@ -115,6 +120,7 @@ export class BalehoUseCases {
   constructor(
     private readonly repo: BalehoRepository,
     private readonly notify: BalehoNotifyDeps = {},
+    private readonly settingsRepo?: AppSettingsRepository,
   ) {}
 
   getBoard(slide: number, viewerUserId: string | null) {
@@ -122,6 +128,12 @@ export class BalehoUseCases {
       throw new BadRequestError('BALEHO_BAD_SLIDE', 'Slide hanya 1 atau 2');
     }
     return this.repo.getBoard(slide, viewerUserId);
+  }
+
+  /** Tarif publik: IDR per sel 1x1 per hari (dari app_settings, default 3000). */
+  async getPricing(): Promise<{ pricePerCellPerDay: number }> {
+    const pricePerCellPerDay = await this.readPricePerCellPerDay();
+    return { pricePerCellPerDay };
   }
 
   async createPlacement(advertiserUserId: string, input: CreateBalehoPlacementInput) {
@@ -136,6 +148,8 @@ export class BalehoUseCases {
     }
 
     const days = Math.min(Math.max(input.days ?? BALEHO_MAX_DAYS, 1), BALEHO_MAX_DAYS);
+    const pricePerCellPerDay = await this.readPricePerCellPerDay();
+    const quotedAmount = input.w * input.h * days * pricePerCellPerDay;
 
     // Reaktivasi creative approved → skip review, awaiting_payment.
     if (input.creativeId) {
@@ -176,6 +190,9 @@ export class BalehoUseCases {
         startsAt: null,
         endsAt,
         awaitingPaymentAt: new Date(),
+        days,
+        pricePerCellPerDay,
+        quotedAmount,
       });
     }
 
@@ -217,6 +234,9 @@ export class BalehoUseCases {
       startsAt: null,
       endsAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
       awaitingPaymentAt: null,
+      days,
+      pricePerCellPerDay,
+      quotedAmount,
     });
   }
 
@@ -354,6 +374,16 @@ export class BalehoUseCases {
   /** Cron: timeout bayar 48 jam + expire live lewat ends_at. Idempotent. */
   releaseDue(now: Date = new Date()) {
     return this.repo.releaseDue(now);
+  }
+
+  private async readPricePerCellPerDay(): Promise<number> {
+    const raw = await this.settingsRepo?.getValue(BALEHO_PRICE_PER_CELL_PER_DAY_KEY);
+    if (raw == null || raw.trim() === '') {
+      return DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY;
+    }
+    const n = Number(raw);
+    if (Number.isInteger(n) && n >= 0) return n;
+    return DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY;
   }
 
   /**
