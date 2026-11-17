@@ -130,6 +130,50 @@ export class BalehoUseCases {
       );
     }
 
+    const days = Math.min(Math.max(input.days ?? BALEHO_MAX_DAYS, 1), BALEHO_MAX_DAYS);
+
+    // Reaktivasi creative approved → skip review, awaiting_payment.
+    if (input.creativeId) {
+      const creative = await this.repo.getCreativeForOwner(
+        input.creativeId,
+        advertiserUserId,
+      );
+      if (!creative) {
+        throw new NotFoundError('BALEHO_CREATIVE_NOT_FOUND', 'Creative tidak ditemukan');
+      }
+      if (creative.moderationStatus !== 'approved') {
+        throw new BadRequestError(
+          'BALEHO_CREATIVE_NOT_APPROVED',
+          'Creative belum lolos moderasi',
+        );
+      }
+      // Anti-dominasi: creative sama tidak boleh dobel live/aktif.
+      const dup = await this.repo.hasActiveFingerprint(
+        advertiserUserId,
+        creative.fingerprint,
+      );
+      if (dup) {
+        throw new ConflictError(
+          'BALEHO_FINGERPRINT_DUP',
+          'Konten ini masih aktif. Tunggu selesai atau dibatalkan dulu ya.',
+        );
+      }
+      // Spec: reaktivasi ikut referrer lama (abaikan ref baru dari form).
+      const lastRef = await this.repo.getLatestReferralForCreative(input.creativeId);
+      const endsAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      return this.repo.createPlacement({
+        advertiserUserId,
+        input: { ...input, frames: [] },
+        fingerprint: creative.fingerprint,
+        referrerUserId: lastRef?.referrerUserId ?? null,
+        referralUsername: lastRef?.referralUsername ?? null,
+        status: 'awaiting_payment',
+        startsAt: null,
+        endsAt,
+        awaitingPaymentAt: new Date(),
+      });
+    }
+
     let referrerUserId: string | null = null;
     let referralUsername: string | null = null;
     const rawRef = input.referralUsername?.trim();
@@ -149,52 +193,13 @@ export class BalehoUseCases {
       referralUsername = ref.username;
     }
 
-    const days = Math.min(Math.max(input.days ?? BALEHO_MAX_DAYS, 1), BALEHO_MAX_DAYS);
     const fp = fingerprintOf(input);
-
-    // Anti-seragam: konten+action sama tidak boleh dobel di pesanan aktif
-    // (kecuali reaktivasi creativeId - fingerprint sengaja sama).
-    if (!input.creativeId) {
-      const dup = await this.repo.hasActiveFingerprint(advertiserUserId, fp);
-      if (dup) {
-        throw new ConflictError(
-          'BALEHO_FINGERPRINT_DUP',
-          'Konten dan aksi ini sama dengan pesanan aktifmu. Ubah dulu ya.',
-        );
-      }
-    }
-
-    // Reaktivasi creative approved → skip review, awaiting_payment.
-    if (input.creativeId) {
-      const creative = await this.repo.getCreativeForOwner(
-        input.creativeId,
-        advertiserUserId,
+    const dup = await this.repo.hasActiveFingerprint(advertiserUserId, fp);
+    if (dup) {
+      throw new ConflictError(
+        'BALEHO_FINGERPRINT_DUP',
+        'Konten dan aksi ini sama dengan pesanan aktifmu. Ubah dulu ya.',
       );
-      if (!creative) {
-        throw new NotFoundError('BALEHO_CREATIVE_NOT_FOUND', 'Creative tidak ditemukan');
-      }
-      if (creative.moderationStatus !== 'approved') {
-        throw new BadRequestError(
-          'BALEHO_CREATIVE_NOT_APPROVED',
-          'Creative belum lolos moderasi',
-        );
-      }
-      // Ikuti referrer lama: isi referral dari caller boleh diabaikan di fase ini
-      // (placement baru tetap bisa bawa ref baru hanya jika creativeId kosong).
-      // Spec: reaktivasi ikut referrer lama - caller harus kirim ref yang sama
-      // atau kita biarkan null di sini dan admin/salin dari placement lama nanti.
-      const endsAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-      return this.repo.createPlacement({
-        advertiserUserId,
-        input: { ...input, frames: [] },
-        fingerprint: creative.fingerprint,
-        referrerUserId,
-        referralUsername,
-        status: 'awaiting_payment',
-        startsAt: null,
-        endsAt,
-        awaitingPaymentAt: new Date(),
-      });
     }
 
     return this.repo.createPlacement({
@@ -208,6 +213,10 @@ export class BalehoUseCases {
       endsAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
       awaitingPaymentAt: null,
     });
+  }
+
+  listMyCreatives(ownerUserId: string) {
+    return this.repo.listApprovedCreatives(ownerUserId);
   }
 
   listAdmin(limit = 50) {
@@ -229,6 +238,7 @@ export class BalehoUseCases {
       placementId,
       status: 'awaiting_payment',
       awaitingPaymentAt: new Date(),
+      approveCreative: true,
     });
     if (!ok) {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');

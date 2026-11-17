@@ -22,6 +22,22 @@ export type BalehoRepository = {
     creativeId: string,
     ownerUserId: string,
   ): Promise<BalehoCreativeMeta | null>;
+  /** Creative approved milik user (untuk reaktivasi). */
+  listApprovedCreatives(ownerUserId: string): Promise<
+    Array<{
+      id: string;
+      fingerprint: string;
+      title: string | null;
+      mediaUrl: string | null;
+      lastReferralUsername: string | null;
+      lastReferrerUserId: string | null;
+    }>
+  >;
+  /** Referral snapshot dari placement terakhir creative ini. */
+  getLatestReferralForCreative(creativeId: string): Promise<{
+    referrerUserId: string | null;
+    referralUsername: string | null;
+  } | null>;
   createPlacement(args: {
     advertiserUserId: string;
     input: CreateBalehoPlacementInput;
@@ -69,6 +85,8 @@ export type BalehoRepository = {
     startsAt?: Date | null;
     endsAt?: Date | null;
     clearOccupancy?: boolean;
+    /** Saat approve: set creative → approved. */
+    approveCreative?: boolean;
   }): Promise<boolean>;
   /**
    * Timeout bayar (awaiting_payment > 48 jam) → cancelled + lepas slot.

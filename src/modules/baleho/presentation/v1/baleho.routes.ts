@@ -83,6 +83,21 @@ export function createAuthBalehoRoutes(deps: {
       deps.controller.createPlacement(c, c.req.valid('json')) as never,
   );
 
+  routes.openapi(
+    createRoute({
+      method: 'get',
+      path: '/creatives',
+      tags: ['Baleho'],
+      responses: {
+        200: {
+          description: 'Creative approved milik user (reaktivasi)',
+          content: json,
+        },
+      },
+    }),
+    (c) => deps.controller.listMyCreatives(c) as never,
+  );
+
   return routes;
 }
 

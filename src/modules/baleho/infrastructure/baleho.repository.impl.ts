@@ -206,6 +206,106 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     };
   }
 
+  async listApprovedCreatives(ownerUserId: string) {
+    const creatives = await this.db
+      .select({
+        id: balehoCreatives.id,
+        fingerprint: balehoCreatives.fingerprint,
+      })
+      .from(balehoCreatives)
+      .where(
+        and(
+          eq(balehoCreatives.ownerUserId, ownerUserId),
+          eq(balehoCreatives.moderationStatus, 'approved'),
+          isNull(balehoCreatives.deletedAt),
+        ),
+      )
+      .orderBy(desc(balehoCreatives.createdAt))
+      .limit(50);
+    if (creatives.length === 0) return [];
+
+    const ids = creatives.map((c) => c.id);
+    const frames = await this.db
+      .select({
+        creativeId: balehoFrames.creativeId,
+        sortOrder: balehoFrames.sortOrder,
+        title: balehoFrames.title,
+        mediaUrl: balehoFrames.mediaUrl,
+      })
+      .from(balehoFrames)
+      .where(inArray(balehoFrames.creativeId, ids))
+      .orderBy(asc(balehoFrames.sortOrder));
+    const firstFrame = new Map<
+      string,
+      { title: string | null; mediaUrl: string | null }
+    >();
+    for (const f of frames) {
+      if (firstFrame.has(f.creativeId)) continue;
+      firstFrame.set(f.creativeId, {
+        title: f.title,
+        mediaUrl: f.mediaUrl,
+      });
+    }
+
+    const placements = await this.db
+      .select({
+        creativeId: balehoPlacements.creativeId,
+        referrerUserId: balehoPlacements.referrerUserId,
+        referralUsername: balehoPlacements.referralUsername,
+        createdAt: balehoPlacements.createdAt,
+      })
+      .from(balehoPlacements)
+      .where(
+        and(
+          inArray(balehoPlacements.creativeId, ids),
+          isNull(balehoPlacements.deletedAt),
+        ),
+      )
+      .orderBy(desc(balehoPlacements.createdAt));
+    const lastRef = new Map<
+      string,
+      { referrerUserId: string | null; referralUsername: string | null }
+    >();
+    for (const p of placements) {
+      if (lastRef.has(p.creativeId)) continue;
+      lastRef.set(p.creativeId, {
+        referrerUserId: p.referrerUserId,
+        referralUsername: p.referralUsername,
+      });
+    }
+
+    return creatives.map((c) => {
+      const frame = firstFrame.get(c.id);
+      const ref = lastRef.get(c.id);
+      return {
+        id: c.id,
+        fingerprint: c.fingerprint,
+        title: frame?.title ?? null,
+        mediaUrl: frame?.mediaUrl ?? null,
+        lastReferralUsername: ref?.referralUsername ?? null,
+        lastReferrerUserId: ref?.referrerUserId ?? null,
+      };
+    });
+  }
+
+  async getLatestReferralForCreative(creativeId: string) {
+    const rows = await this.db
+      .select({
+        referrerUserId: balehoPlacements.referrerUserId,
+        referralUsername: balehoPlacements.referralUsername,
+      })
+      .from(balehoPlacements)
+      .where(
+        and(
+          eq(balehoPlacements.creativeId, creativeId),
+          isNull(balehoPlacements.deletedAt),
+        ),
+      )
+      .orderBy(desc(balehoPlacements.createdAt))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
   async createPlacement(args: {
     advertiserUserId: string;
     input: CreateBalehoPlacementInput;
@@ -382,6 +482,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     startsAt?: Date | null;
     endsAt?: Date | null;
     clearOccupancy?: boolean;
+    approveCreative?: boolean;
   }): Promise<boolean> {
     const now = new Date();
     return this.db.transaction(async (tx) => {
@@ -398,9 +499,22 @@ export class BalehoRepositoryImpl implements BalehoRepository {
           updatedAt: now,
         })
         .where(eq(balehoPlacements.id, args.placementId))
-        .returning({ id: balehoPlacements.id });
+        .returning({
+          id: balehoPlacements.id,
+          creativeId: balehoPlacements.creativeId,
+        });
 
       if (updated.length === 0) return false;
+
+      if (args.approveCreative) {
+        await tx
+          .update(balehoCreatives)
+          .set({
+            moderationStatus: 'approved',
+            updatedAt: now,
+          })
+          .where(eq(balehoCreatives.id, updated[0]!.creativeId));
+      }
 
       if (args.clearOccupancy) {
         await tx

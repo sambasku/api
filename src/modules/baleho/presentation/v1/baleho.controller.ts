@@ -101,6 +101,23 @@ export class BalehoController {
     return c.json({ success: true as const, data: { ok: true } });
   }
 
+  async listMyCreatives(c: Context<{ Variables: AppVariables }>) {
+    const userId = c.get('user')!.user_id;
+    const rows = await this.uc.listMyCreatives(userId);
+    return c.json({
+      success: true as const,
+      data: {
+        items: rows.map((r) => ({
+          id: r.id,
+          fingerprint: r.fingerprint,
+          title: r.title,
+          media_url: r.mediaUrl,
+          last_referral_username: r.lastReferralUsername,
+        })),
+      },
+    });
+  }
+
   async adminList(c: Context<{ Variables: AppVariables }>) {
     const rows = await this.uc.listAdmin(100);
     return c.json({

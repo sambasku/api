@@ -44,6 +44,8 @@ function mockRepo(partial: Partial<BalehoRepository> = {}): BalehoRepository {
     hasActiveFingerprint: vi.fn().mockResolvedValue(false),
     findUserIdByUsername: vi.fn().mockResolvedValue(null),
     getCreativeForOwner: vi.fn(),
+    listApprovedCreatives: vi.fn().mockResolvedValue([]),
+    getLatestReferralForCreative: vi.fn().mockResolvedValue(null),
     createPlacement: vi.fn().mockResolvedValue({
       placementId: '01PLACEMENT00000000000001',
       creativeId: '01CREATIVE000000000000001',
@@ -109,6 +111,36 @@ describe('BalehoUseCases.createPlacement', () => {
         advertiserUserId: '01USER000000000000000001',
         status: 'pending_review',
         awaitingPaymentAt: null,
+      }),
+    );
+  });
+
+  it('reaktivasi: skip review, salin referrer lama', async () => {
+    const repo = mockRepo({
+      getCreativeForOwner: vi.fn().mockResolvedValue({
+        id: '01CREATIVE000000000000001',
+        ownerUserId: '01USER000000000000000001',
+        fingerprint: 'fp-old',
+        moderationStatus: 'approved',
+      }),
+      getLatestReferralForCreative: vi.fn().mockResolvedValue({
+        referrerUserId: '01REF0000000000000000001',
+        referralUsername: 'temanlama',
+      }),
+    });
+    const uc = new BalehoUseCases(repo);
+    await uc.createPlacement('01USER000000000000000001', {
+      ...placementInput(),
+      creativeId: '01CREATIVE000000000000001',
+      frames: [],
+      referralUsername: 'abaikan',
+    });
+    expect(repo.createPlacement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fingerprint: 'fp-old',
+        status: 'awaiting_payment',
+        referrerUserId: '01REF0000000000000000001',
+        referralUsername: 'temanlama',
       }),
     );
   });
