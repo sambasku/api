@@ -57,16 +57,24 @@ function assertRect(input: CreateBalehoPlacementInput) {
     ]);
   }
   if (input.creativeId) return;
-  const videoCount = input.frames.filter((f) => f.mediaType === 'video').length;
-  if (videoCount > 0 && !(w === 4 && h === 2)) {
-    throw new ValidationError([
-      { field: 'frames', message: 'Video hanya untuk ukuran 4x2' },
-    ]);
-  }
-  if (videoCount > 1) {
-    throw new ValidationError([
-      { field: 'frames', message: 'Maksimal satu video per pesanan' },
-    ]);
+  // v1: slide pesan hanya gambar (text_cta / video menyusul).
+  for (const [i, f] of input.frames.entries()) {
+    if (f.mediaType !== 'image') {
+      throw new ValidationError([
+        {
+          field: `frames.${i}.media_type`,
+          message: 'Versi ini hanya menerima gambar',
+        },
+      ]);
+    }
+    if (!f.mediaUrl?.trim()) {
+      throw new ValidationError([
+        {
+          field: `frames.${i}.media_url`,
+          message: 'Gambar wajib diunggah',
+        },
+      ]);
+    }
   }
   for (const [i, f] of input.frames.entries()) {
     if (!f.actionPayload.trim()) {
