@@ -10,6 +10,7 @@ if (parsed?.DATABASE_URL) process.env.DATABASE_URL = parsed?.DATABASE_URL;
  * Budget subrequest Cloudflare (#103): GET /words/lemma/:lemma dulunya 4
  * round-trip Turso (resolusi id → word+join → meanings → children batch).
  * Fuse ke findPublishedDetailByLemma = 2 (word+meanings batch, children batch).
+ * G5 Karya menambah 1 query `appears_in_karya` (JOIN lemma links) → budget 3.
  * Spy menempel di client libsql yang dipakai APP (singleton client.ts) -
  * execute() dan batch() masing-masing = 1 request HTTP Hrana.
  */
@@ -54,11 +55,11 @@ describe.skipIf(!hasTestDb)('Subrequest budget - GET /words/lemma/:lemma', () =>
     app = appModule.app;
   });
 
-  it('detail by lemma <= 2 request Hrana', async () => {
+  it('detail by lemma <= 3 request Hrana (2 detail + 1 appears_in_karya)', async () => {
     const res = await app.request('/api/v1/words/lemma/jabbong');
     expect(res.status).toBe(200);
     // Guard anti false-positive: spy harus benar-benar terpanggil.
     expect(requestCount).toBeGreaterThan(0);
-    expect(requestCount).toBeLessThanOrEqual(2);
+    expect(requestCount).toBeLessThanOrEqual(3);
   });
 });

@@ -7,6 +7,7 @@ import {
   karyaExcerpts,
   karyaLemmaLinks,
   karyas,
+  kreators,
 } from '@/shared/database/drizzle/schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
 import { words } from '@/shared/database/drizzle/schema/words.schema';
@@ -137,26 +138,28 @@ export class KaryaRepositoryImpl {
   private async loadCreditsMap(karyaIds: string[]): Promise<Map<string, KaryaCredit[]>> {
     const map = new Map<string, KaryaCredit[]>();
     if (karyaIds.length === 0) return map;
+    // Satu query: credits + slug kreator (hindari N+1 / query ke-3 di listPublic).
     const rows = await this.db
-      .select()
+      .select({
+        credit: karyaCredits,
+        kreatorSlug: kreators.slug,
+      })
       .from(karyaCredits)
+      .leftJoin(kreators, eq(kreators.id, karyaCredits.kreatorId))
       .where(inArray(karyaCredits.karyaId, karyaIds))
       .orderBy(asc(karyaCredits.sortOrder), asc(karyaCredits.createdAt));
-    const kreatorIds = [
-      ...new Set(rows.map((r) => r.kreatorId).filter((id): id is string => !!id)),
-    ];
-    const slugMap = await this.kreators.slugsByIds(kreatorIds);
     for (const row of rows) {
-      const list = map.get(row.karyaId) ?? [];
+      const c = row.credit;
+      const list = map.get(c.karyaId) ?? [];
       list.push({
-        id: row.id,
-        role: row.role,
-        nameText: row.nameText,
-        kreatorId: row.kreatorId,
-        kreatorSlug: row.kreatorId ? (slugMap.get(row.kreatorId) ?? null) : null,
-        sortOrder: row.sortOrder,
+        id: c.id,
+        role: c.role,
+        nameText: c.nameText,
+        kreatorId: c.kreatorId,
+        kreatorSlug: row.kreatorSlug ?? null,
+        sortOrder: c.sortOrder,
       });
-      map.set(row.karyaId, list);
+      map.set(c.karyaId, list);
     }
     return map;
   }
