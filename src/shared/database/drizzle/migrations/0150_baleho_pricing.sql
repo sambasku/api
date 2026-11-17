@@ -1,4 +1,6 @@
--- Migration 0150: tarif Baleho (app_settings) + snapshot harga di placement
+-- Migration 0150: seed tarif Baleho di app_settings.
+-- Versi awal tanpa breakpoint hanya menjalankan INSERT ini.
+-- Kolom snapshot harga di placement dilengkapi di 0152.
 
 INSERT OR IGNORE INTO `app_settings` (`key`, `value`, `type`, `description`, `updated_at`)
 VALUES (
@@ -8,7 +10,3 @@ VALUES (
   'Tarif Baleho: rupiah per sel 1x1 per hari',
   unixepoch() * 1000
 );
-
-ALTER TABLE `baleho_placements` ADD `days` integer;
-ALTER TABLE `baleho_placements` ADD `price_per_cell_per_day` integer;
-ALTER TABLE `baleho_placements` ADD `quoted_amount` integer;

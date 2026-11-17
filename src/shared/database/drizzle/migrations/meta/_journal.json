@@ -1065,6 +1065,20 @@
       "when": 1801650000000,
       "tag": "0151_kreator_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "6",
+      "when": 1801651000000,
+      "tag": "0152_baleho_columns_repair",
+      "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "6",
+      "when": 1801652000000,
+      "tag": "0153_karya_lemma_links",
+      "breakpoints": true
     }
   ]
 }
