@@ -41,6 +41,8 @@ export type BalehoRepository = {
       advertiserUsername: string | null;
       referralUsername: string | null;
       createdAt: Date;
+      impressions: number;
+      taps: number;
     }>
   >;
   getPlacementNotify(placementId: string): Promise<{
@@ -51,6 +53,7 @@ export type BalehoRepository = {
     h: number;
     status: BalehoPlacementStatus;
     advertiserUserId: string;
+    referrerUserId: string | null;
   } | null>;
   updatePlacementStatus(args: {
     placementId: string;
@@ -62,6 +65,10 @@ export type BalehoRepository = {
     endsAt?: Date | null;
     clearOccupancy?: boolean;
   }): Promise<boolean>;
+  createCommissionUnclaimed(args: {
+    placementId: string;
+    referrerUserId: string;
+  }): Promise<void>;
   recordEvent(args: {
     placementId: string;
     frameId: string | null;

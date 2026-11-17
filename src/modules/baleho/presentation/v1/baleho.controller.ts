@@ -105,19 +105,28 @@ export class BalehoController {
     const rows = await this.uc.listAdmin(100);
     return c.json({
       success: true as const,
-      data: rows.map((r) => ({
-        id: r.id,
-        slide: r.slide,
-        col: r.col,
-        row: r.row,
-        w: r.w,
-        h: r.h,
-        status: r.status,
-        advertiser_user_id: r.advertiserUserId,
-        advertiser_username: r.advertiserUsername,
-        referral_username: r.referralUsername,
-        created_at: r.createdAt.toISOString(),
-      })),
+      data: rows.map((r) => {
+        const impressions = r.impressions;
+        const taps = r.taps;
+        const ctr =
+          impressions > 0 ? Math.round((taps / impressions) * 1000) / 10 : 0;
+        return {
+          id: r.id,
+          slide: r.slide,
+          col: r.col,
+          row: r.row,
+          w: r.w,
+          h: r.h,
+          status: r.status,
+          advertiser_user_id: r.advertiserUserId,
+          advertiser_username: r.advertiserUsername,
+          referral_username: r.referralUsername,
+          created_at: r.createdAt.toISOString(),
+          impressions,
+          taps,
+          ctr_percent: ctr,
+        };
+      }),
     });
   }
 

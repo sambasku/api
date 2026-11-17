@@ -4,7 +4,9 @@ import {
   BALEHO_COLS,
   BALEHO_LOCKING_STATUSES,
   BALEHO_ROWS,
+  balehoCommissions,
   balehoCreatives,
+  balehoEvents,
   balehoFrames,
   balehoOccupancy,
   balehoPlacements,
@@ -22,7 +24,6 @@ import type {
   CreateBalehoPlacementInput,
 } from '../domain/baleho';
 import type { BalehoRepository } from '../domain/repositories/baleho.repository';
-import { balehoEvents } from '@/shared/database/drizzle/schema/baleho.schema';
 
 function cellsFor(col: number, row: number, w: number, h: number) {
   const cells: Array<{ col: number; row: number }> = [];
@@ -288,11 +289,38 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       .where(isNull(balehoPlacements.deletedAt))
       .orderBy(desc(balehoPlacements.createdAt))
       .limit(limit);
-    return rows.map((r) => ({
-      ...r,
-      advertiserUsername: r.advertiserUsername ?? null,
-      createdAt: r.createdAt,
-    }));
+
+    const ids = rows.map((r) => r.id);
+    const counts = new Map<string, { impressions: number; taps: number }>();
+    if (ids.length > 0) {
+      const stats = await this.db
+        .select({
+          placementId: balehoEvents.placementId,
+          eventType: balehoEvents.eventType,
+          n: sql<number>`count(*)`,
+        })
+        .from(balehoEvents)
+        .where(inArray(balehoEvents.placementId, ids))
+        .groupBy(balehoEvents.placementId, balehoEvents.eventType);
+      for (const s of stats) {
+        const cur = counts.get(s.placementId) ?? { impressions: 0, taps: 0 };
+        const n = Number(s.n ?? 0);
+        if (s.eventType === 'impression') cur.impressions = n;
+        if (s.eventType === 'tap') cur.taps = n;
+        counts.set(s.placementId, cur);
+      }
+    }
+
+    return rows.map((r) => {
+      const c = counts.get(r.id) ?? { impressions: 0, taps: 0 };
+      return {
+        ...r,
+        advertiserUsername: r.advertiserUsername ?? null,
+        createdAt: r.createdAt,
+        impressions: c.impressions,
+        taps: c.taps,
+      };
+    });
   }
 
   async getPlacementNotify(placementId: string) {
@@ -305,6 +333,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         h: balehoPlacements.h,
         status: balehoPlacements.status,
         advertiserUserId: balehoPlacements.advertiserUserId,
+        referrerUserId: balehoPlacements.referrerUserId,
       })
       .from(balehoPlacements)
       .where(
@@ -353,6 +382,28 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       }
       return true;
     });
+  }
+
+  async createCommissionUnclaimed(args: {
+    placementId: string;
+    referrerUserId: string;
+  }): Promise<void> {
+    const now = new Date();
+    try {
+      await this.db.insert(balehoCommissions).values({
+        id: generateId(),
+        placementId: args.placementId,
+        referrerUserId: args.referrerUserId,
+        amount: 0,
+        currency: 'IDR',
+        status: 'unclaimed',
+        createdAt: now,
+      });
+    } catch (err) {
+      // Satu komisi per placement - mark-paid ulang tidak boleh 500.
+      if (isUniqueViolation(err)) return;
+      throw err;
+    }
   }
 
   async recordEvent(args: {

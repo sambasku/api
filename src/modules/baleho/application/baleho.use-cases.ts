@@ -257,6 +257,13 @@ export class BalehoUseCases {
     if (!ok) {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
     }
+    // P3: ledger apresiasi referral (amount 0 dulu - rumus rate menyusul).
+    if (row.referrerUserId) {
+      await this.repo.createCommissionUnclaimed({
+        placementId,
+        referrerUserId: row.referrerUserId,
+      });
+    }
   }
 
   /** Pause/takedown live atau awaiting - lepaskan slot. */
