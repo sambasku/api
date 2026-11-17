@@ -1,5 +1,6 @@
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
+import { collectMessages } from '@/shared/errors/error-chain';
 import type {
   InboxNotificationType,
   NotificationActionKind,
@@ -68,12 +69,14 @@ export class RecordInboxNotificationUseCase {
         await this.notificationRepo.create(input);
       }
     } catch (err) {
+      // Drizzle bungkus driver error jadi "Failed query: ..."; sebab SQLite
+      // (FK / ON CONFLICT mismatch / BLOCKED) ada di rantai cause.
       logError(
         {
           user_id: cmd.userId,
           type: cmd.type,
           target_id: cmd.targetId,
-          error: err instanceof Error ? err.message : String(err),
+          error: collectMessages(err).join(' | '),
         },
         'inbox notification insert failed',
       );
@@ -117,7 +120,7 @@ export class RecordInboxNotificationUseCase {
       logError(
         {
           count: inputs.length,
-          error: err instanceof Error ? err.message : String(err),
+          error: collectMessages(err).join(' | '),
         },
         'inbox notification batch insert failed',
       );
