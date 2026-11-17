@@ -279,7 +279,20 @@ export class BalehoUseCases {
     await this.notifyDecision(row, 'rejected');
   }
 
-  async markPaid(placementId: string) {
+  async markPaid(
+    placementId: string,
+    proof: { paymentProofUrl: string; paymentProofFileId: string },
+  ) {
+    const url = proof.paymentProofUrl.trim();
+    const fileId = proof.paymentProofFileId.trim();
+    if (!url || !fileId) {
+      throw new ValidationError([
+        {
+          field: 'payment_proof_url',
+          message: 'Bukti pembayaran wajib diunggah',
+        },
+      ]);
+    }
     const row = await this.repo.getPlacementNotify(placementId);
     if (!row) {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
@@ -296,6 +309,8 @@ export class BalehoUseCases {
       status: 'live',
       paidAt: now,
       startsAt: now,
+      paymentProofUrl: url,
+      paymentProofFileId: fileId,
     });
     if (!ok) {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');

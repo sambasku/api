@@ -206,6 +206,50 @@ describe('BalehoUseCases.approve notify', () => {
   });
 });
 
+describe('BalehoUseCases.markPaid', () => {
+  it('tolak tanpa bukti pembayaran', async () => {
+    const uc = new BalehoUseCases(mockRepo());
+    await expect(
+      uc.markPaid('01PLACEMENT00000000000001', {
+        paymentProofUrl: '',
+        paymentProofFileId: '',
+      }),
+    ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
+  });
+
+  it('simpan bukti lalu live', async () => {
+    const placement = {
+      id: '01PLACEMENT00000000000003',
+      col: 0,
+      row: 0,
+      w: 1,
+      h: 1,
+      advertiserUserId: '01USER000000000000000003',
+      status: 'awaiting_payment',
+      referrerUserId: null as string | null,
+    };
+    const update = vi.fn().mockResolvedValue(true);
+    const repo = mockRepo({
+      getPlacementNotify: vi.fn().mockResolvedValue(placement),
+      updatePlacementStatus: update,
+    });
+    const uc = new BalehoUseCases(repo);
+    await uc.markPaid(placement.id, {
+      paymentProofUrl: 'https://ik.imagekit.io/x/baleho/payment-proofs/a.jpg',
+      paymentProofFileId: 'file_abc',
+    });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        placementId: placement.id,
+        status: 'live',
+        paymentProofUrl:
+          'https://ik.imagekit.io/x/baleho/payment-proofs/a.jpg',
+        paymentProofFileId: 'file_abc',
+      }),
+    );
+  });
+});
+
 describe('BalehoUseCases.reject notify', () => {
   it('kirim inbox + FCM setelah ditolak', async () => {
     const placement = {

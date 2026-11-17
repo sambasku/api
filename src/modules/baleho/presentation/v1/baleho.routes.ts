@@ -9,6 +9,7 @@ import type { BalehoController } from './baleho.controller';
 import {
   balehoEventBodySchema,
   createBalehoPlacementBodySchema,
+  markPaidBalehoBodySchema,
   rejectBalehoBodySchema,
 } from './validators/baleho.validator';
 
@@ -172,11 +173,27 @@ export function createAdminBalehoRoutes(deps: {
       method: 'post',
       path: '/placements/{id}/mark-paid',
       tags: ['Baleho'],
-      request: { params: idParam },
-      responses: { 200: { description: 'Live setelah bayar', content: json } },
+      request: {
+        params: idParam,
+        body: {
+          content: {
+            'application/json': { schema: markPaidBalehoBodySchema },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Live setelah bayar + bukti ImageKit',
+          content: json,
+        },
+      },
     }),
     (c) =>
-      deps.controller.adminMarkPaid(c, c.req.valid('param').id) as never,
+      deps.controller.adminMarkPaid(
+        c,
+        c.req.valid('param').id,
+        c.req.valid('json'),
+      ) as never,
   );
 
   routes.openapi(

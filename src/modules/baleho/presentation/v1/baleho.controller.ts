@@ -5,12 +5,14 @@ import type { BalehoUseCases } from '../../application/baleho.use-cases';
 import type {
   balehoEventBodySchema,
   createBalehoPlacementBodySchema,
+  markPaidBalehoBodySchema,
   rejectBalehoBodySchema,
 } from './validators/baleho.validator';
 
 type CreateBody = z.infer<typeof createBalehoPlacementBodySchema>;
 type EventBody = z.infer<typeof balehoEventBodySchema>;
 type RejectBody = z.infer<typeof rejectBalehoBodySchema>;
+type MarkPaidBody = z.infer<typeof markPaidBalehoBodySchema>;
 
 function serializeBoard(board: Awaited<ReturnType<BalehoUseCases['getBoard']>>) {
   return {
@@ -161,6 +163,7 @@ export class BalehoController {
           advertiser_user_id: r.advertiserUserId,
           advertiser_username: r.advertiserUsername,
           referral_username: r.referralUsername,
+          payment_proof_url: r.paymentProofUrl,
           created_at: r.createdAt.toISOString(),
           impressions,
           taps,
@@ -190,8 +193,12 @@ export class BalehoController {
   async adminMarkPaid(
     c: Context<{ Variables: AppVariables }>,
     placementId: string,
+    body: MarkPaidBody,
   ) {
-    await this.uc.markPaid(placementId);
+    await this.uc.markPaid(placementId, {
+      paymentProofUrl: body.payment_proof_url,
+      paymentProofFileId: body.payment_proof_file_id,
+    });
     return c.json({ success: true as const, data: { id: placementId } });
   }
 

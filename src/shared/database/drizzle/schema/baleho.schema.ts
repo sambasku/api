@@ -145,6 +145,10 @@ export const balehoPlacements = sqliteTable(
     endsAt: integer('ends_at', { mode: 'timestamp' }),
     awaitingPaymentAt: integer('awaiting_payment_at', { mode: 'timestamp' }),
     paidAt: integer('paid_at', { mode: 'timestamp' }),
+    /** URL bukti transfer di ImageKit (wajib saat mark-paid). */
+    paymentProofUrl: text('payment_proof_url'),
+    /** File id ImageKit untuk bukti (hapus/audit). */
+    paymentProofFileId: text('payment_proof_file_id'),
     rejectedAt: integer('rejected_at', { mode: 'timestamp' }),
     rejectReason: text('reject_reason'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),

@@ -48,3 +48,8 @@ export const balehoEventBodySchema = z.object({
 export const rejectBalehoBodySchema = z.object({
   reason: z.string().max(500).optional(),
 });
+
+export const markPaidBalehoBodySchema = z.object({
+  payment_proof_url: z.string().url().max(2000),
+  payment_proof_file_id: z.string().min(1).max(200),
+});

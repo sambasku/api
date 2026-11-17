@@ -61,6 +61,7 @@ export type BalehoRepository = {
       advertiserUserId: string;
       advertiserUsername: string | null;
       referralUsername: string | null;
+      paymentProofUrl: string | null;
       createdAt: Date;
       impressions: number;
       taps: number;
@@ -102,6 +103,8 @@ export type BalehoRepository = {
     paidAt?: Date | null;
     startsAt?: Date | null;
     endsAt?: Date | null;
+    paymentProofUrl?: string | null;
+    paymentProofFileId?: string | null;
     clearOccupancy?: boolean;
     /** Saat approve: set creative → approved. */
     approveCreative?: boolean;

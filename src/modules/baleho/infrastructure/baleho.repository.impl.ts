@@ -409,6 +409,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         advertiserUserId: balehoPlacements.advertiserUserId,
         advertiserUsername: users.username,
         referralUsername: balehoPlacements.referralUsername,
+        paymentProofUrl: balehoPlacements.paymentProofUrl,
         createdAt: balehoPlacements.createdAt,
       })
       .from(balehoPlacements)
@@ -443,6 +444,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       return {
         ...r,
         advertiserUsername: r.advertiserUsername ?? null,
+        paymentProofUrl: r.paymentProofUrl ?? null,
         createdAt: r.createdAt,
         impressions: c.impressions,
         taps: c.taps,
@@ -548,6 +550,8 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     paidAt?: Date | null;
     startsAt?: Date | null;
     endsAt?: Date | null;
+    paymentProofUrl?: string | null;
+    paymentProofFileId?: string | null;
     clearOccupancy?: boolean;
     approveCreative?: boolean;
   }): Promise<boolean> {
@@ -563,6 +567,8 @@ export class BalehoRepositoryImpl implements BalehoRepository {
           paidAt: args.paidAt ?? undefined,
           startsAt: args.startsAt ?? undefined,
           endsAt: args.endsAt ?? undefined,
+          paymentProofUrl: args.paymentProofUrl ?? undefined,
+          paymentProofFileId: args.paymentProofFileId ?? undefined,
           updatedAt: now,
         })
         .where(eq(balehoPlacements.id, args.placementId))
