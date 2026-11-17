@@ -11,6 +11,7 @@ export const uploadPublicImageQuerySchema = z.object({
       'culinary',
       'encyclopedia',
       'layanan',
+      'baleho',
     ])
     .default('word'),
 });

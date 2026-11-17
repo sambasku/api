@@ -65,3 +65,8 @@ export function buildCommentImagePath(mimeType: string): string {
 export function buildEncyclopediaImagePath(mimeType: string): string {
   return `assets/encyclopedia/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path media Baleho: assets/baleho/<ulid>.<ext> */
+export function buildBalehoImagePath(mimeType: string): string {
+  return `assets/baleho/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

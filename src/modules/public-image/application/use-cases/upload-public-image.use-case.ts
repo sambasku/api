@@ -4,6 +4,7 @@ import {
   buildCulinaryImagePath,
   buildEncyclopediaImagePath,
   buildEventImagePath,
+  buildBalehoImagePath,
   buildLayananImagePath,
   buildPlaceImagePath,
   buildUsahaImagePath,
@@ -19,7 +20,8 @@ export type PublicImagePurpose =
   | 'usaha'
   | 'culinary'
   | 'encyclopedia'
-  | 'layanan';
+  | 'layanan'
+  | 'baleho';
 
 export interface UploadPublicImageResult {
   url: string;
@@ -44,6 +46,8 @@ function pathForPurpose(purpose: PublicImagePurpose, mimeType: string): string {
       return buildEncyclopediaImagePath(mimeType);
     case 'layanan':
       return buildLayananImagePath(mimeType);
+    case 'baleho':
+      return buildBalehoImagePath(mimeType);
     case 'word':
     default:
       return buildWordImagePath(mimeType);

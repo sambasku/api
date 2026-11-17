@@ -418,6 +418,14 @@ import {
   createKaryaContributionRoutes,
   createPublicKaryaRoutes,
 } from "@/modules/karya/presentation/v1/karya.routes";
+import { BalehoRepositoryImpl } from "@/modules/baleho/infrastructure/baleho.repository.impl";
+import { BalehoUseCases } from "@/modules/baleho/application/baleho.use-cases";
+import { BalehoController } from "@/modules/baleho/presentation/v1/baleho.controller";
+import {
+  createAdminBalehoRoutes,
+  createAuthBalehoRoutes,
+  createPublicBalehoRoutes,
+} from "@/modules/baleho/presentation/v1/baleho.routes";
 import { UsahaClaimRepositoryImpl } from "@/modules/usaha-claim/infrastructure/usaha-claim.repository.impl";
 import { UsahaClaimUseCases } from "@/modules/usaha-claim/application/usaha-claim.use-cases";
 import { UsahaClaimController } from "@/modules/usaha-claim/presentation/v1/usaha-claim.controller";
@@ -1573,6 +1581,9 @@ const layananController = new LayananController(
 );
 const karyaController = new KaryaController(
   new KaryaUseCases(new KaryaRepositoryImpl(db), activityEvents),
+);
+const balehoController = new BalehoController(
+  new BalehoUseCases(new BalehoRepositoryImpl(db)),
 );
 const usahaClaimUseCases = new UsahaClaimUseCases(
   usahaClaimRepo,
@@ -2739,6 +2750,27 @@ app.route(
 app.route(
   "/api/v1/karya",
   createPublicKaryaRoutes({ controller: karyaController }),
+);
+app.route(
+  "/api/v1/baleho",
+  createPublicBalehoRoutes({
+    controller: balehoController,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/baleho",
+  createAuthBalehoRoutes({
+    controller: balehoController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/baleho",
+  createAdminBalehoRoutes({
+    controller: balehoController,
+    authenticate,
+  }),
 );
 // PRD relasi-lemma: kelompok makna - publik GET + auth tulis.
 // Fitur Kuliner - jelajah kuliner & tempat makan (PRD kuliner).

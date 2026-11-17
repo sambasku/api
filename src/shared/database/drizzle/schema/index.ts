@@ -103,3 +103,4 @@ export * from "./kreators.schema";
 export * from "./karyas.schema";
 export * from "./karya-excerpts.schema";
 export * from "./karya-contributions.schema";
+export * from "./baleho.schema";
