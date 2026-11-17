@@ -52,6 +52,7 @@ export interface KaryaCredit {
   role: string;
   nameText: string;
   kreatorId: string | null;
+  kreatorSlug?: string | null;
   sortOrder: number;
 }
 

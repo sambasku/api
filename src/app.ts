@@ -418,6 +418,17 @@ import {
   createKaryaContributionRoutes,
   createPublicKaryaRoutes,
 } from "@/modules/karya/presentation/v1/karya.routes";
+import { KreatorRepositoryImpl } from "@/modules/kreator/infrastructure/kreator.repository.impl";
+import { KreatorUseCases } from "@/modules/kreator/application/kreator.use-cases";
+import { KreatorController } from "@/modules/kreator/presentation/v1/kreator.controller";
+import {
+  createAdminKaryaCreditLinkRoutes,
+  createAdminKreatorClaimRoutes,
+  createAdminKreatorRoutes,
+  createAuthKreatorClaimRoutes,
+  createMineKreatorClaimRoutes,
+  createPublicKreatorRoutes,
+} from "@/modules/kreator/presentation/v1/kreator.routes";
 import { BalehoRepositoryImpl } from "@/modules/baleho/infrastructure/baleho.repository.impl";
 import { BalehoUseCases } from "@/modules/baleho/application/baleho.use-cases";
 import { BalehoController } from "@/modules/baleho/presentation/v1/baleho.controller";
@@ -1581,6 +1592,9 @@ const layananController = new LayananController(
 );
 const karyaController = new KaryaController(
   new KaryaUseCases(new KaryaRepositoryImpl(db), activityEvents),
+);
+const kreatorController = new KreatorController(
+  new KreatorUseCases(new KreatorRepositoryImpl(db), activityEvents),
 );
 /** Diisi `sendWa` setelah OpenWA di-wire (lihat bawah). */
 const balehoNotify: {
@@ -2761,6 +2775,36 @@ app.route(
 app.route(
   "/api/v1/karya",
   createPublicKaryaRoutes({ controller: karyaController }),
+);
+app.route(
+  "/api/v1/kreators",
+  createPublicKreatorRoutes({ controller: kreatorController }),
+);
+app.route(
+  "/api/v1/kreators",
+  createAuthKreatorClaimRoutes({
+    controller: kreatorController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/kreator-claims",
+  createMineKreatorClaimRoutes({
+    controller: kreatorController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/kreators",
+  createAdminKreatorRoutes({ controller: kreatorController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/karya-credits",
+  createAdminKaryaCreditLinkRoutes({ controller: kreatorController, authenticate }),
+);
+app.route(
+  "/api/v1/admin/kreator-claims",
+  createAdminKreatorClaimRoutes({ controller: kreatorController, authenticate }),
 );
 app.route(
   "/api/v1/baleho",

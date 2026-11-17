@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, articles, contributions, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, articles, contributions, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
@@ -58,6 +58,7 @@ vote_meaning: 'vote',
   usaha_published: 'usaha',
   layanan_published: 'layanan',
   karya_published: 'karya',
+  kreator_claimed: 'karya',
   cuisine_published: 'culinary',
   place_published: 'place_listing',
   event_published: 'event',
@@ -100,6 +101,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   usaha_published: 'Menambahkan usaha',
   layanan_published: 'Menambahkan layanan publik',
   karya_published: 'Menambahkan karya',
+  kreator_claimed: 'Mengklaim profil kreator',
   cuisine_published: 'Menambahkan kuliner',
   place_published: 'Menambahkan wisata',
   event_published: 'Menambahkan acara',
@@ -174,6 +176,7 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'usaha_published',
     'layanan_published',
     'karya_published',
+    'kreator_claimed',
     'cuisine_published',
     'place_published',
     'event_published',
@@ -270,6 +273,8 @@ interface FeedRow {
   layananName: string | null;
   karyaSlug: string | null;
   karyaTitle: string | null;
+  kreatorSlug: string | null;
+  kreatorDisplayName: string | null;
   /** Pantun pembuka untuk pantun_reply_created (LEFT JOIN, published saja). */
   replyParentId: string | null;
   /** Jinye induk untuk jinye_comment_created. */
@@ -456,6 +461,8 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menambahkan layanan publik';
     case 'karya_published':
       return 'Menambahkan karya';
+    case 'kreator_claimed':
+      return 'Mengklaim profil kreator';
     case 'place_published':
       return 'Menambahkan wisata';
     case 'event_published':
@@ -590,6 +597,8 @@ export class ActivityEventFeedRepositoryImpl {
       layananName: layanans.name,
       karyaSlug: karyas.slug,
       karyaTitle: karyas.title,
+      kreatorSlug: kreators.slug,
+      kreatorDisplayName: kreators.displayName,
       // pantun_reply_created: link ke pantun pembuka (balasan takedown →
       // baris feed ikut sembunyi; induk takedown → sembunyi juga).
       replyParentId: parentPantuns.id,
@@ -653,6 +662,14 @@ articleTitle: articles.title,
         eq(karyas.id, activityEvents.targetId),
         eq(karyas.publishStatus, 'published'),
         sql`${karyas.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      kreators,
+      and(
+        eq(activityEvents.kind, 'kreator_claimed'),
+        eq(kreators.id, activityEvents.targetId),
+        sql`${kreators.deletedAt} is null`,
       ),
     )
     .leftJoin(
@@ -831,6 +848,7 @@ articleTitle: articles.title,
         sql`(${activityEvents.kind} <> 'usaha_published' or ${usahas.id} is not null)`,
         sql`(${activityEvents.kind} <> 'layanan_published' or ${layanans.id} is not null)`,
         sql`(${activityEvents.kind} <> 'karya_published' or ${karyas.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'kreator_claimed' or ${kreators.id} is not null)`,
         sql`(${activityEvents.kind} <> 'usaha_photo_added' or ${usahas.id} is not null)`,
 // Kuliner/tempat kuliner hanya tayang selama masih published.
 sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null or ${culinaryPlaces.id} is not null)`,
@@ -958,6 +976,8 @@ kind === 'place_photo_added' || kind === 'place_published'
 ? row.layananName
 : kind === 'karya_published'
 ? row.karyaTitle
+: kind === 'kreator_claimed'
+? row.kreatorDisplayName
 : kind === 'event_published'
 ? row.eventName
 : kind === 'article_published' || kind === 'article_comment_created'
@@ -1078,6 +1098,7 @@ kind === 'place_photo_added' || kind === 'place_published'
 case 'usaha_published':
 case 'layanan_published':
 case 'karya_published':
+case 'kreator_claimed':
 case 'cuisine_published':
 case 'place_published':
 case 'event_published':
@@ -1143,6 +1164,7 @@ return KIND_BODY[kind];
       usahaSlug?: string | null;
       layananSlug?: string | null;
       karyaSlug?: string | null;
+      kreatorSlug?: string | null;
       eventSlug?: string | null;
 cuisineSlug?: string | null;
 culinaryPlaceSlug?: string | null;
@@ -1198,6 +1220,8 @@ articleSlug?: string | null;
         return row.layananSlug ? { type: 'layanan', id: row.layananSlug } : null;
       case 'karya_published':
         return row.karyaSlug ? { type: 'karya', id: row.karyaSlug } : null;
+      case 'kreator_claimed':
+        return row.kreatorSlug ? { type: 'kreator', id: row.kreatorSlug } : null;
       case 'place_published':
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'event_published':

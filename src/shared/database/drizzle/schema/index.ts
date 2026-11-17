@@ -100,6 +100,7 @@ export * from "./jinye-lemma-links.schema";
 export * from "./discussion-lemma-links.schema";
 export * from "./translations.schema";
 export * from "./kreators.schema";
+export * from "./kreator-claims.schema";
 export * from "./karyas.schema";
 export * from "./karya-excerpts.schema";
 export * from "./karya-contributions.schema";

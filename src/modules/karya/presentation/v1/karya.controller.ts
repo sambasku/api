@@ -80,6 +80,7 @@ function creditWire(rows: KaryaCredit[]) {
     role: r.role,
     name_text: r.nameText,
     kreator_id: r.kreatorId,
+    kreator_slug: r.kreatorSlug ?? null,
     sort_order: r.sortOrder,
   }));
 }

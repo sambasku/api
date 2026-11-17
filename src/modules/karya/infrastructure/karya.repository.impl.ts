@@ -18,6 +18,7 @@ import type {
   KaryaFields,
 } from '../domain/karya';
 import { parseAccessLinksJson, parseSambasConnectionsJson } from '../domain/karya';
+import { KreatorRepositoryImpl } from '@/modules/kreator/infrastructure/kreator.repository.impl';
 
 type KaryaRow = typeof karyas.$inferSelect;
 
@@ -95,7 +96,22 @@ function parsePayload(raw: string): KaryaContributionPayload {
 }
 
 export class KaryaRepositoryImpl {
-  constructor(private readonly db: AppDatabase) {}
+  private readonly kreators: KreatorRepositoryImpl;
+
+  constructor(private readonly db: AppDatabase) {
+    this.kreators = new KreatorRepositoryImpl(db);
+  }
+
+  private async attachKreatorSlugs(credits: KaryaCredit[]): Promise<KaryaCredit[]> {
+    const ids = [
+      ...new Set(credits.map((c) => c.kreatorId).filter((id): id is string => !!id)),
+    ];
+    const slugMap = await this.kreators.slugsByIds(ids);
+    return credits.map((c) => ({
+      ...c,
+      kreatorSlug: c.kreatorId ? (slugMap.get(c.kreatorId) ?? null) : null,
+    }));
+  }
 
   private async loadCreditsMap(karyaIds: string[]): Promise<Map<string, KaryaCredit[]>> {
     const map = new Map<string, KaryaCredit[]>();
@@ -105,6 +121,10 @@ export class KaryaRepositoryImpl {
       .from(karyaCredits)
       .where(inArray(karyaCredits.karyaId, karyaIds))
       .orderBy(asc(karyaCredits.sortOrder), asc(karyaCredits.createdAt));
+    const kreatorIds = [
+      ...new Set(rows.map((r) => r.kreatorId).filter((id): id is string => !!id)),
+    ];
+    const slugMap = await this.kreators.slugsByIds(kreatorIds);
     for (const row of rows) {
       const list = map.get(row.karyaId) ?? [];
       list.push({
@@ -112,6 +132,7 @@ export class KaryaRepositoryImpl {
         role: row.role,
         nameText: row.nameText,
         kreatorId: row.kreatorId,
+        kreatorSlug: row.kreatorId ? (slugMap.get(row.kreatorId) ?? null) : null,
         sortOrder: row.sortOrder,
       });
       map.set(row.karyaId, list);
@@ -192,7 +213,8 @@ export class KaryaRepositoryImpl {
         )
         .orderBy(asc(karyaExcerpts.createdAt)),
     ]);
-    const item = toKaryaBase(row, toCredits(credits), excerptRows.map(toExcerpt));
+    const creditRows = await this.attachKreatorSlugs(toCredits(credits));
+    const item = toKaryaBase(row, creditRows, excerptRows.map(toExcerpt));
     item.author = await resolvePublicAuthor(this.db, item.authorId);
     return item;
   }
@@ -209,7 +231,8 @@ export class KaryaRepositoryImpl {
       .from(karyaCredits)
       .where(eq(karyaCredits.karyaId, id))
       .orderBy(asc(karyaCredits.sortOrder));
-    return toKaryaBase(row, toCredits(credits));
+    const creditRows = await this.attachKreatorSlugs(toCredits(credits));
+    return toKaryaBase(row, creditRows);
   }
 
   async existingSlugs(candidates: string[]): Promise<Set<string>> {
@@ -272,9 +295,10 @@ export class KaryaRepositoryImpl {
   private async replaceCredits(karyaId: string, credits: KaryaCredit[]): Promise<void> {
     await this.db.delete(karyaCredits).where(eq(karyaCredits.karyaId, karyaId));
     if (credits.length === 0) return;
+    const linked = await this.kreators.resolveCreditsKreatorIds(credits);
     const now = new Date();
     await this.db.insert(karyaCredits).values(
-      credits.map((c, i) => ({
+      linked.map((c, i) => ({
         karyaId,
         role: c.role,
         nameText: c.nameText,
