@@ -28,7 +28,13 @@ import type {
   KaryaLemmaLink,
 } from '../domain/karya';
 import type { KaryaExcerptLemmaContext } from '../application/utils/assert-excerpt-lemma-eligible';
-import { parseAccessLinksJson, parseSambasConnectionsJson } from '../domain/karya';
+import {
+  parseAccessLinksJson,
+  parseRelatedJson,
+  parseSambasConnectionsJson,
+  serializeRelatedJson,
+  type SambasConnectionType,
+} from '../domain/karya';
 import { KreatorRepositoryImpl } from '@/modules/kreator/infrastructure/kreator.repository.impl';
 
 type KaryaRow = typeof karyas.$inferSelect;
@@ -77,6 +83,7 @@ function toKaryaBase(row: KaryaRow, credits: KaryaCredit[], excerpts?: KaryaExce
     musicIsCover: row.musicIsCover,
     filmType: row.filmType,
     filmRuntimeMin: row.filmRuntimeMin,
+    related: parseRelatedJson(row.relatedJson),
     publishStatus: row.publishStatus,
     authorId: row.authorId,
     author: null,
@@ -101,6 +108,7 @@ function serializeFields(fields: KaryaFields) {
     musicIsCover: fields.musicIsCover,
     filmType: fields.filmType,
     filmRuntimeMin: fields.filmRuntimeMin,
+    relatedJson: serializeRelatedJson(fields.related ?? []),
   };
 }
 
@@ -157,6 +165,8 @@ export class KaryaRepositoryImpl {
     kind?: Karya['kind'];
     year?: number;
     q?: string;
+    language?: string;
+    sambasType?: SambasConnectionType;
   }): Promise<Karya[]> {
     const conds = [
       eq(karyas.publishStatus, 'published'),
@@ -164,6 +174,7 @@ export class KaryaRepositoryImpl {
     ];
     if (input.kind) conds.push(eq(karyas.kind, input.kind));
     if (input.year) conds.push(eq(karyas.year, input.year));
+    if (input.language) conds.push(eq(karyas.language, input.language));
     if (input.q && input.q.trim()) {
       conds.push(like(karyas.title, `%${input.q.trim()}%`));
     }
@@ -174,7 +185,13 @@ export class KaryaRepositoryImpl {
       .orderBy(desc(karyas.year), asc(karyas.title))
       .limit(200);
     const creditMap = await this.loadCreditsMap(rows.map((r) => r.id));
-    return rows.map((r) => toKaryaBase(r, creditMap.get(r.id) ?? []));
+    let items = rows.map((r) => toKaryaBase(r, creditMap.get(r.id) ?? []));
+    if (input.sambasType) {
+      items = items.filter((row) =>
+        row.sambasConnections.some((c) => c.type === input.sambasType),
+      );
+    }
+    return items;
   }
 
   async listManage(): Promise<(Karya & { authorName: string | null })[]> {
@@ -272,7 +289,7 @@ export class KaryaRepositoryImpl {
         slug: input.slug,
         ...serializeFields(input),
         sourcesJson: '[]',
-        relatedJson: '[]',
+        relatedJson: serializeRelatedJson(input.related ?? []),
         publishStatus: 'published',
         authorId: input.authorId,
         publishedAt: now,

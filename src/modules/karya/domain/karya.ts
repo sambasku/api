@@ -22,6 +22,23 @@ export const KARYA_SAMBAS_CONNECTION_TYPES = [
 ] as const;
 export type SambasConnectionType = (typeof KARYA_SAMBAS_CONNECTION_TYPES)[number];
 
+export const KARYA_RELATED_KINDS = [
+  'place',
+  'word',
+  'article',
+  'event',
+  'usaha',
+  'kreator',
+  'karya',
+] as const;
+export type KaryaRelatedKind = (typeof KARYA_RELATED_KINDS)[number];
+
+export interface KaryaRelatedRef {
+  kind: KaryaRelatedKind;
+  slug?: string;
+  id?: string;
+}
+
 export const KARYA_ACCESS_LINK_KINDS = [
   'listen',
   'watch',
@@ -116,6 +133,7 @@ export interface KaryaFields {
   musicIsCover: boolean;
   filmType: KaryaFilmType | null;
   filmRuntimeMin: number | null;
+  related: KaryaRelatedRef[];
 }
 
 export interface Karya extends KaryaFields {
@@ -198,6 +216,40 @@ export function parseSambasConnectionsJson(raw: string): SambasConnection[] {
   } catch {
     return [];
   }
+}
+
+export function parseRelatedJson(raw: string): KaryaRelatedRef[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null;
+        const row = item as Record<string, unknown>;
+        const kind = typeof row.kind === 'string' ? row.kind : '';
+        if (!(KARYA_RELATED_KINDS as readonly string[]).includes(kind)) return null;
+        const slug = typeof row.slug === 'string' ? row.slug.trim() : '';
+        const id = typeof row.id === 'string' ? row.id.trim() : '';
+        if (!slug && !id) return null;
+        const ref: KaryaRelatedRef = { kind: kind as KaryaRelatedKind };
+        if (slug) ref.slug = slug;
+        if (id) ref.id = id;
+        return ref;
+      })
+      .filter((x): x is KaryaRelatedRef => x != null);
+  } catch {
+    return [];
+  }
+}
+
+export function serializeRelatedJson(refs: KaryaRelatedRef[]): string {
+  return JSON.stringify(
+    refs.map((r) => ({
+      kind: r.kind,
+      ...(r.slug ? { slug: r.slug } : {}),
+      ...(r.id ? { id: r.id } : {}),
+    })),
+  );
 }
 
 export function parseAccessLinksJson(raw: string): AccessLink[] {

@@ -8,6 +8,8 @@ import type {
 } from '../domain/karya';
 import { isExcerptContributionPayload, slugifyKarya } from '../domain/karya';
 import type { KaryaRepositoryImpl } from '../infrastructure/karya.repository.impl';
+import { ResolveKaryaRelated } from './resolve-karya-related';
+import type { SambasConnectionType } from '../domain/karya';
 import {
   assertExcerptRights,
   excerptPayloadSchema,
@@ -24,9 +26,16 @@ export class KaryaUseCases {
   constructor(
     private readonly repo: KaryaRepositoryImpl,
     private readonly activity: RecordActivityEventUseCase,
+    private readonly relatedResolver: ResolveKaryaRelated,
   ) {}
 
-  listPublic(input: { kind?: Karya['kind']; year?: number; q?: string }) {
+  listPublic(input: {
+    kind?: Karya['kind'];
+    year?: number;
+    q?: string;
+    language?: string;
+    sambasType?: SambasConnectionType;
+  }) {
     return this.repo.listPublic(input);
   }
 
@@ -38,6 +47,10 @@ export class KaryaUseCases {
     const row = await this.repo.findPublishedBySlug(slug);
     if (!row) throw new NotFoundError('KARYA_NOT_FOUND', 'Karya tidak ditemukan');
     return row;
+  }
+
+  async resolveRelatedForKarya(row: Karya) {
+    return this.relatedResolver.resolve(row.related);
   }
 
   async adminCreate(fields: KaryaFields, authorId: string): Promise<Karya> {
@@ -257,6 +270,11 @@ export class KaryaUseCases {
       musicIsCover: body.music_is_cover === true,
       filmType: body.film_type ?? null,
       filmRuntimeMin: body.film_runtime_min ?? null,
+      related: (body.related ?? []).map((r) => ({
+        kind: r.kind,
+        slug: r.slug,
+        id: r.id,
+      })),
     };
   }
 
@@ -303,6 +321,11 @@ export class KaryaUseCases {
       language: fields.language?.trim() || null,
       description: fields.description?.trim() || null,
       coverUrl,
+      related: (fields.related ?? []).map((r) => ({
+        kind: r.kind,
+        ...(r.slug ? { slug: r.slug.trim() } : {}),
+        ...(r.id ? { id: r.id.trim() } : {}),
+      })),
       credits: fields.credits.map((c, i) => ({
         ...c,
         role: c.role.trim(),

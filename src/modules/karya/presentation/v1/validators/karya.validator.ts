@@ -35,6 +35,32 @@ export const KARYA_ACCESS_LINK_KINDS = [
 
 const nonEmpty = z.string().trim().min(1);
 
+export const KARYA_RELATED_KINDS = [
+  'place',
+  'word',
+  'article',
+  'event',
+  'usaha',
+  'kreator',
+  'karya',
+] as const;
+
+export const karyaRelatedRefSchema = z
+  .object({
+    kind: z.enum(KARYA_RELATED_KINDS),
+    slug: z.string().trim().min(1).max(120).optional(),
+    id: z.string().trim().min(1).max(40).optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (!data.slug && !data.id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'related wajib punya slug atau id',
+      });
+    }
+  });
+
 export const sambasConnectionSchema = z
   .object({
     type: z.enum(KARYA_SAMBAS_CONNECTION_TYPES),
@@ -160,6 +186,7 @@ const newKaryaPayloadBase = {
   music_is_cover: z.boolean().optional(),
   film_type: z.enum(KARYA_FILM_TYPES).optional().nullable(),
   film_runtime_min: z.number().int().min(1).max(1000).optional().nullable(),
+  related: z.array(karyaRelatedRefSchema).max(20).optional().default([]),
 };
 
 /** Payload usulan kind=new (min field KARYA.md #6). */
@@ -266,6 +293,8 @@ export const listKaryaQuerySchema = z.object({
   kind: z.enum(KARYA_KINDS).optional(),
   year: z.coerce.number().int().min(1800).max(2100).optional(),
   q: z.string().trim().max(100).optional(),
+  language: z.string().trim().min(2).max(16).optional(),
+  sambas_type: z.enum(KARYA_SAMBAS_CONNECTION_TYPES).optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 });

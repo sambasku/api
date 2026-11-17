@@ -10,8 +10,10 @@ import type {
   KaryaExcerpt,
   KaryaFields,
   KaryaLemmaLink,
+  KaryaRelatedRef,
   SambasConnection,
 } from '../../domain/karya';
+import type { ResolvedKaryaRelatedWire } from '../../application/resolve-karya-related';
 import { toKaryaLemmaLinkWire } from './karya-lemma-link.controller';
 import { isExcerptContributionPayload } from '../../domain/karya';
 import type { KaryaUseCases } from '../../application/karya.use-cases';
@@ -60,6 +62,11 @@ function fieldsFrom(body: z.infer<typeof karyaFieldsSchema>): KaryaFields {
     musicIsCover: body.music_is_cover === true,
     filmType: body.film_type ?? null,
     filmRuntimeMin: body.film_runtime_min ?? null,
+    related: (body.related ?? []).map((r) => ({
+      kind: r.kind,
+      slug: r.slug,
+      id: r.id,
+    })),
   };
 }
 
@@ -103,7 +110,29 @@ function excerptWire(rows: KaryaExcerpt[]) {
   }));
 }
 
-function toKaryaWire(row: Karya & { authorName?: string | null }, admin: boolean) {
+function relatedRefsWire(rows: KaryaRelatedRef[]) {
+  return rows.map((r) => ({
+    kind: r.kind,
+    slug: r.slug ?? null,
+    id: r.id ?? null,
+  }));
+}
+
+function relatedResolvedWire(rows: ResolvedKaryaRelatedWire[]) {
+  return rows.map((r) => ({
+    kind: r.kind,
+    slug: r.slug,
+    id: r.id,
+    title: r.title,
+    href_kind: r.href_kind,
+  }));
+}
+
+function toKaryaWire(
+  row: Karya & { authorName?: string | null },
+  admin: boolean,
+  options?: { relatedResolved?: ResolvedKaryaRelatedWire[] },
+) {
   return {
     id: row.id,
     slug: row.slug,
@@ -122,6 +151,10 @@ function toKaryaWire(row: Karya & { authorName?: string | null }, admin: boolean
     film_type: row.filmType,
     film_runtime_min: row.filmRuntimeMin,
     excerpts: excerptWire(row.excerpts ?? []),
+    ...(options?.relatedResolved
+      ? { related: relatedResolvedWire(options.relatedResolved) }
+      : {}),
+    ...(admin ? { related_refs: relatedRefsWire(row.related) } : {}),
     updated_at: (row.updatedAt ?? row.createdAt).toISOString(),
     author: row.author
       ? {
@@ -170,6 +203,7 @@ function toContributionWire(row: KaryaContribution) {
       music_is_cover: row.payload.musicIsCover,
       film_type: row.payload.filmType,
       film_runtime_min: row.payload.filmRuntimeMin,
+      related: relatedRefsWire(row.payload.related ?? []),
     };
   }
   return {
@@ -193,6 +227,8 @@ export class KaryaController {
       kind: query.kind,
       year: query.year,
       q: query.q,
+      language: query.language,
+      sambasType: query.sambas_type,
     });
     return c.json({
       success: true as const,
@@ -202,7 +238,11 @@ export class KaryaController {
 
   async getPublic(c: Context, slug: string) {
     const row = await this.uc.getPublished(slug);
-    return c.json({ success: true as const, data: toKaryaWire(row, false) });
+    const related = await this.uc.resolveRelatedForKarya(row);
+    return c.json({
+      success: true as const,
+      data: toKaryaWire(row, false, { relatedResolved: related }),
+    });
   }
 
   async adminList(c: Context) {

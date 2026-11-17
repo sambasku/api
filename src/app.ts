@@ -405,6 +405,7 @@ import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases
 import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
 import { KaryaRepositoryImpl } from "@/modules/karya/infrastructure/karya.repository.impl";
 import { KaryaUseCases } from "@/modules/karya/application/karya.use-cases";
+import { ResolveKaryaRelated } from "@/modules/karya/application/resolve-karya-related";
 import { KaryaController } from "@/modules/karya/presentation/v1/karya.controller";
 import {
   createAdminLayananContributionRoutes,
@@ -1613,7 +1614,7 @@ const karyaLemmaLinkController = new KaryaLemmaLinkController({
   deleteLink: new DeleteKaryaLemmaLinkUseCase(karyaRepo, auditRepo),
 });
 const karyaController = new KaryaController(
-  new KaryaUseCases(karyaRepo, activityEvents),
+  new KaryaUseCases(karyaRepo, activityEvents, new ResolveKaryaRelated(db)),
 );
 const kreatorController = new KreatorController(
   new KreatorUseCases(new KreatorRepositoryImpl(db), activityEvents),
