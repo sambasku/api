@@ -79,7 +79,16 @@ export function validateImageFile(input: {
     ]);
   }
 
-  const mime = normalizeMime(input.mimeType);
+  // Client sering kirim tanpa Content-Type part (Dio MultipartFile tanpa
+  // contentType → application/octet-stream / kosong). Sniff magic dulu.
+  let mime = normalizeMime(input.mimeType);
+  if (!mime || mime === 'application/octet-stream' || !ALLOWED_IMAGE_MIMES.has(mime)) {
+    if (looksLikeJpeg(input.bytes)) mime = 'image/jpeg';
+    else if (looksLikePng(input.bytes)) mime = 'image/png';
+    else if (looksLikeWebp(input.bytes)) mime = 'image/webp';
+    else mime = null;
+  }
+
   if (!mime || !ALLOWED_IMAGE_MIMES.has(mime)) {
     throw new BadRequestError('VALIDATION_ERROR', 'Format gambar tidak didukung', [
       { field: 'file', message: 'Hanya jpg, png, atau webp' },
