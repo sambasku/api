@@ -45,6 +45,8 @@ export type InboxNotificationType =
   | 'culinary_contribution_needs_revision'
   | 'culinary_claim_approved'
   | 'culinary_claim_rejected'
+  | 'baleho_placement_approved'
+  | 'baleho_placement_rejected'
   | 'achievement_awarded'
   | 'pantun_reply'
   | 'pantun_mention'
@@ -65,6 +67,7 @@ export type NotificationTargetKind =
   | 'usaha_claim'
   | 'culinary_contribution'
   | 'culinary_claim'
+  | 'baleho_placement'
   | 'achievement'
   | 'pantun'
   | 'jinye'
@@ -83,6 +86,7 @@ export type NotificationActionKind =
 | 'usaha_claim'
 | 'culinary_contribution'
 | 'culinary_claim'
+| 'baleho_placement'
 | 'pantun'
 | 'jinye';
 
@@ -367,6 +371,18 @@ bodyType: 'plain',
     return {
       title: 'Klaim tempat ditolak',
       body: 'Klaim belum bisa disetujui. Buka daftar klaim untuk lihat alasannya.',
+      bodyType: 'plain',
+    };
+  case 'baleho_placement_approved':
+    return {
+      title: 'Pesanan Baleho disetujui',
+      body: 'Pesananmu lolos cek. Cek riwayat untuk langkah bayar (48 jam).',
+      bodyType: 'plain',
+    };
+  case 'baleho_placement_rejected':
+    return {
+      title: 'Pesanan Baleho ditolak',
+      body: 'Pesananmu belum lolos tinjauan. Buka riwayat Baleho untuk detailnya.',
       bodyType: 'plain',
     };
   case 'streak_reminder':

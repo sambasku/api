@@ -15,6 +15,9 @@ import {
 } from '@/shared/errors/app-error';
 import type { MailerPort } from '@/modules/auth/application/ports/mailer.port';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import { inboxCopyFor } from '@/modules/notification/domain/entities/notification.entity';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { SendWaMessageUseCase } from '@/modules/wa/application/use-cases/send-wa-message.use-case';
 import { logger } from '@/shared/logging/logger';
 import type { CreateBalehoPlacementInput } from '../domain/baleho';
@@ -104,6 +107,8 @@ export type BalehoNotifyDeps = {
   mailer?: MailerPort;
   sendWa?: SendWaMessageUseCase;
   userRepo?: UserRepository;
+  recordInbox?: RecordInboxNotificationUseCase;
+  notifyUser?: NotifyUserUseCase;
 };
 
 export class BalehoUseCases {
@@ -248,9 +253,20 @@ export class BalehoUseCases {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
     }
     await this.notifyPayment(row);
+    await this.notifyDecision(row, 'approved');
   }
 
   async reject(placementId: string, reason?: string) {
+    const row = await this.repo.getPlacementNotify(placementId);
+    if (!row) {
+      throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
+    }
+    if (row.status !== 'pending_review') {
+      throw new BadRequestError(
+        'BALEHO_BAD_STATUS',
+        'Hanya pesanan pending_review yang bisa ditolak',
+      );
+    }
     const ok = await this.repo.updatePlacementStatus({
       placementId,
       status: 'rejected',
@@ -260,6 +276,7 @@ export class BalehoUseCases {
     if (!ok) {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
     }
+    await this.notifyDecision(row, 'rejected');
   }
 
   async markPaid(placementId: string) {
@@ -322,6 +339,54 @@ export class BalehoUseCases {
   /** Cron: timeout bayar 48 jam + expire live lewat ends_at. Idempotent. */
   releaseDue(now: Date = new Date()) {
     return this.repo.releaseDue(now);
+  }
+
+  /**
+   * Inbox + FCM ke pengiklan. Best-effort: gagal tidak batalkan approve/reject.
+   */
+  private async notifyDecision(
+    row: { id: string; advertiserUserId: string },
+    kind: 'approved' | 'rejected',
+  ): Promise<void> {
+    const { recordInbox, notifyUser } = this.notify;
+    if (!recordInbox && !notifyUser) return;
+    const type =
+      kind === 'approved' ? 'baleho_placement_approved' : 'baleho_placement_rejected';
+    const copy = inboxCopyFor(type);
+    const data = {
+      type,
+      target_kind: 'baleho_placement',
+      target_id: row.id,
+      action_kind: 'baleho_placement',
+      action_value: row.id,
+    };
+    try {
+      await recordInbox?.execute({
+        userId: row.advertiserUserId,
+        type,
+        targetKind: 'baleho_placement',
+        targetId: row.id,
+        title: copy.title,
+        body: copy.body,
+        actionKind: 'baleho_placement',
+        actionValue: row.id,
+      });
+      await notifyUser?.execute({
+        userId: row.advertiserUserId,
+        title: copy.title,
+        body: copy.body,
+        data,
+      });
+    } catch (err) {
+      logger.warn(
+        {
+          err: err instanceof Error ? err.message : String(err),
+          placementId: row.id,
+          kind,
+        },
+        'baleho notifikasi keputusan gagal',
+      );
+    }
   }
 
   private async notifyPayment(row: {

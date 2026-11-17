@@ -161,3 +161,84 @@ describe('BalehoUseCases.releaseDue', () => {
     expect(repo.releaseDue).toHaveBeenCalledWith(now);
   });
 });
+
+describe('BalehoUseCases.approve notify', () => {
+  it('kirim inbox + FCM setelah status awaiting_payment', async () => {
+    const placement = {
+      id: '01PLACEMENT00000000000001',
+      col: 0,
+      row: 0,
+      w: 1,
+      h: 1,
+      advertiserUserId: '01USER000000000000000001',
+      status: 'pending_review',
+      referrerUserId: null as string | null,
+    };
+    const repo = mockRepo({
+      getPlacementNotify: vi.fn().mockResolvedValue(placement),
+      updatePlacementStatus: vi.fn().mockResolvedValue(true),
+    });
+    const recordInbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const uc = new BalehoUseCases(repo, {
+      recordInbox: recordInbox as never,
+      notifyUser: notifyUser as never,
+    });
+    await uc.approve(placement.id);
+    expect(recordInbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: placement.advertiserUserId,
+        type: 'baleho_placement_approved',
+        targetKind: 'baleho_placement',
+        targetId: placement.id,
+        actionKind: 'baleho_placement',
+      }),
+    );
+    expect(notifyUser.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: placement.advertiserUserId,
+        data: expect.objectContaining({
+          type: 'baleho_placement_approved',
+          target_kind: 'baleho_placement',
+        }),
+      }),
+    );
+  });
+});
+
+describe('BalehoUseCases.reject notify', () => {
+  it('kirim inbox + FCM setelah ditolak', async () => {
+    const placement = {
+      id: '01PLACEMENT00000000000002',
+      col: 0,
+      row: 0,
+      w: 1,
+      h: 1,
+      advertiserUserId: '01USER000000000000000002',
+      status: 'pending_review',
+      referrerUserId: null as string | null,
+    };
+    const repo = mockRepo({
+      getPlacementNotify: vi.fn().mockResolvedValue(placement),
+      updatePlacementStatus: vi.fn().mockResolvedValue(true),
+    });
+    const recordInbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const uc = new BalehoUseCases(repo, {
+      recordInbox: recordInbox as never,
+      notifyUser: notifyUser as never,
+    });
+    await uc.reject(placement.id, 'konten tidak sesuai');
+    expect(recordInbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'baleho_placement_rejected',
+        userId: placement.advertiserUserId,
+      }),
+    );
+    expect(notifyUser.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ type: 'baleho_placement_rejected' }),
+      }),
+    );
+  });
+});

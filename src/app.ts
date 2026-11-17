@@ -1586,8 +1586,10 @@ const karyaController = new KaryaController(
 const balehoNotify: {
   mailer: typeof mailer;
   userRepo: typeof userRepo;
+  recordInbox: typeof recordInbox;
+  notifyUser: typeof notifyUser;
   sendWa?: import('@/modules/wa/application/use-cases/send-wa-message.use-case').SendWaMessageUseCase;
-} = { mailer, userRepo };
+} = { mailer, userRepo, recordInbox, notifyUser };
 const balehoUseCases = new BalehoUseCases(
   new BalehoRepositoryImpl(db),
   balehoNotify,

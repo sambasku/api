@@ -29,6 +29,8 @@ export const inboxNotificationTypeSchema = z.enum([
   'verifier_application_rejected',
   'streak_reminder',
   'level_up',
+  'baleho_placement_approved',
+  'baleho_placement_rejected',
 ]);
 
 export const notificationTargetKindSchema = z.enum([
@@ -42,6 +44,7 @@ export const notificationTargetKindSchema = z.enum([
   'jinye',
   'day',
   'level',
+  'baleho_placement',
 ]);
 
 export const notificationActionKindSchema = z.enum([
@@ -52,6 +55,7 @@ export const notificationActionKindSchema = z.enum([
   'pantun',
   'jinye',
   'url',
+  'baleho_placement',
 ]);
 
 export const listNotificationsQuerySchema = z.object({
