@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   BALEHO_COLS,
   BALEHO_LOCKING_STATUSES,
+  BALEHO_PAYMENT_TIMEOUT_MS,
   BALEHO_ROWS,
   balehoCommissions,
   balehoCreatives,
@@ -139,6 +140,32 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         ),
       );
     return Number(rows[0]?.n ?? 0);
+  }
+
+  async hasActiveFingerprint(
+    advertiserUserId: string,
+    fingerprint: string,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: balehoPlacements.id })
+      .from(balehoPlacements)
+      .innerJoin(
+        balehoCreatives,
+        eq(balehoCreatives.id, balehoPlacements.creativeId),
+      )
+      .where(
+        and(
+          eq(balehoPlacements.advertiserUserId, advertiserUserId),
+          isNull(balehoPlacements.deletedAt),
+          inArray(
+            balehoPlacements.status,
+            BALEHO_LOCKING_STATUSES as BalehoPlacementStatus[],
+          ),
+          eq(balehoCreatives.fingerprint, fingerprint),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 
   async findUserIdByUsername(username: string) {
@@ -382,6 +409,67 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       }
       return true;
     });
+  }
+
+  async releaseDue(now: Date): Promise<{ cancelled: number; expired: number }> {
+    const paymentCutoff = new Date(now.getTime() - BALEHO_PAYMENT_TIMEOUT_MS);
+
+    const timedOut = await this.db
+      .select({ id: balehoPlacements.id })
+      .from(balehoPlacements)
+      .where(
+        and(
+          eq(balehoPlacements.status, 'awaiting_payment'),
+          isNull(balehoPlacements.deletedAt),
+          lte(balehoPlacements.awaitingPaymentAt, paymentCutoff),
+        ),
+      );
+    const expiredLive = await this.db
+      .select({ id: balehoPlacements.id })
+      .from(balehoPlacements)
+      .where(
+        and(
+          eq(balehoPlacements.status, 'live'),
+          isNull(balehoPlacements.deletedAt),
+          lte(balehoPlacements.endsAt, now),
+        ),
+      );
+
+    const cancelIds = timedOut.map((r) => r.id);
+    const expireIds = expiredLive.map((r) => r.id);
+    if (cancelIds.length === 0 && expireIds.length === 0) {
+      return { cancelled: 0, expired: 0 };
+    }
+
+    await this.db.transaction(async (tx) => {
+      if (cancelIds.length > 0) {
+        await tx
+          .update(balehoPlacements)
+          .set({
+            status: 'cancelled',
+            rejectReason: 'payment_timeout',
+            updatedAt: now,
+          })
+          .where(inArray(balehoPlacements.id, cancelIds));
+        await tx
+          .delete(balehoOccupancy)
+          .where(inArray(balehoOccupancy.placementId, cancelIds));
+      }
+      if (expireIds.length > 0) {
+        await tx
+          .update(balehoPlacements)
+          .set({
+            status: 'expired',
+            updatedAt: now,
+          })
+          .where(inArray(balehoPlacements.id, expireIds));
+        await tx
+          .delete(balehoOccupancy)
+          .where(inArray(balehoOccupancy.placementId, expireIds));
+      }
+    });
+
+    return { cancelled: cancelIds.length, expired: expireIds.length };
   }
 
   async createCommissionUnclaimed(args: {

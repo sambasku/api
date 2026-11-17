@@ -113,6 +113,12 @@ discussions,
   meaningVoteCounts,
   meanings,
   words,
+  balehoEvents,
+  balehoCommissions,
+  balehoOccupancy,
+  balehoPlacements,
+  balehoFrames,
+  balehoCreatives,
 } from "./schema";
 import { FIRST_PARTY_SCOPE_STRING } from "@/modules/developer-oauth/domain/entities/api-client.entity";
 
@@ -524,6 +530,13 @@ pantunReplies,
 pantuns,
       // Event feed publik (FK actor_id) - sebelum users
       activityEvents,
+    // Baleho (anak dulu: events/commissions/occupancy → placements → frames → creatives)
+    balehoEvents,
+    balehoCommissions,
+    balehoOccupancy,
+    balehoPlacements,
+    balehoFrames,
+    balehoCreatives,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,

@@ -152,6 +152,18 @@ export class BalehoUseCases {
     const days = Math.min(Math.max(input.days ?? BALEHO_MAX_DAYS, 1), BALEHO_MAX_DAYS);
     const fp = fingerprintOf(input);
 
+    // Anti-seragam: konten+action sama tidak boleh dobel di pesanan aktif
+    // (kecuali reaktivasi creativeId - fingerprint sengaja sama).
+    if (!input.creativeId) {
+      const dup = await this.repo.hasActiveFingerprint(advertiserUserId, fp);
+      if (dup) {
+        throw new ConflictError(
+          'BALEHO_FINGERPRINT_DUP',
+          'Konten dan aksi ini sama dengan pesanan aktifmu. Ubah dulu ya.',
+        );
+      }
+    }
+
     // Reaktivasi creative approved → skip review, awaiting_payment.
     if (input.creativeId) {
       const creative = await this.repo.getCreativeForOwner(
@@ -291,6 +303,11 @@ export class BalehoUseCases {
 
   recordEvent(placementId: string, frameId: string | null, eventType: string) {
     return this.repo.recordEvent({ placementId, frameId, eventType });
+  }
+
+  /** Cron: timeout bayar 48 jam + expire live lewat ends_at. Idempotent. */
+  releaseDue(now: Date = new Date()) {
+    return this.repo.releaseDue(now);
   }
 
   private async notifyPayment(row: {

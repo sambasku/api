@@ -122,6 +122,26 @@ export default {
         }),
       );
     }
+
+    try {
+      const result = await m.runDueBalehoRelease();
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          msg: 'baleho release cron done',
+          cancelled: result.cancelled,
+          expired: result.expired,
+        }),
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'baleho release cron failed',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
   },
 };
 

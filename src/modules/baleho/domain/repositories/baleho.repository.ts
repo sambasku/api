@@ -8,6 +8,11 @@ import type { BalehoPlacementStatus } from '@/shared/database/drizzle/schema/bal
 export type BalehoRepository = {
   getBoard(slide: number, viewerUserId: string | null): Promise<BalehoBoard>;
   countActiveForUser(userId: string): Promise<number>;
+  /** True jika pengiklan sudah punya pesanan locking dengan fingerprint sama. */
+  hasActiveFingerprint(
+    advertiserUserId: string,
+    fingerprint: string,
+  ): Promise<boolean>;
   findUserIdByUsername(username: string): Promise<{
     id: string;
     username: string;
@@ -65,6 +70,11 @@ export type BalehoRepository = {
     endsAt?: Date | null;
     clearOccupancy?: boolean;
   }): Promise<boolean>;
+  /**
+   * Timeout bayar (awaiting_payment > 48 jam) → cancelled + lepas slot.
+   * Expire live (ends_at lewat) → expired + lepas slot.
+   */
+  releaseDue(now: Date): Promise<{ cancelled: number; expired: number }>;
   createCommissionUnclaimed(args: {
     placementId: string;
     referrerUserId: string;

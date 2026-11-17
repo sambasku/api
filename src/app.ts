@@ -1588,9 +1588,11 @@ const balehoNotify: {
   userRepo: typeof userRepo;
   sendWa?: import('@/modules/wa/application/use-cases/send-wa-message.use-case').SendWaMessageUseCase;
 } = { mailer, userRepo };
-const balehoController = new BalehoController(
-  new BalehoUseCases(new BalehoRepositoryImpl(db), balehoNotify),
+const balehoUseCases = new BalehoUseCases(
+  new BalehoRepositoryImpl(db),
+  balehoNotify,
 );
+const balehoController = new BalehoController(balehoUseCases);
 const usahaClaimUseCases = new UsahaClaimUseCases(
   usahaClaimRepo,
   usahaRepo,
@@ -3722,6 +3724,17 @@ export async function runDueStreakReminder(): Promise<{
   reason?: string;
 }> {
   return runStreakReminderUseCase.execute();
+}
+
+/**
+ * Cron Baleho: timeout bayar 48 jam → cancelled; live lewat ends_at → expired.
+ * Idempotent - tick berulang aman.
+ */
+export async function runDueBalehoRelease(): Promise<{
+  cancelled: number;
+  expired: number;
+}> {
+  return balehoUseCases.releaseDue();
 }
 
 /**
