@@ -1457,6 +1457,7 @@ memberLemma: string;
       })(),
     relatedWords: relatedRows,
     appearsIn: appearsRows,
+    appearsInKarya: [],
     // PRD relasi-lemma: kelompok makna published (array kosong saat tak ada).
     meaningGroups: groupRows
       .map((g) => ({

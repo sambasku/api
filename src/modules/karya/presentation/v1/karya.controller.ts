@@ -9,8 +9,10 @@ import type {
   KaryaCredit,
   KaryaExcerpt,
   KaryaFields,
+  KaryaLemmaLink,
   SambasConnection,
 } from '../../domain/karya';
+import { toKaryaLemmaLinkWire } from './karya-lemma-link.controller';
 import { isExcerptContributionPayload } from '../../domain/karya';
 import type { KaryaUseCases } from '../../application/karya.use-cases';
 import type {
@@ -95,6 +97,9 @@ function excerptWire(rows: KaryaExcerpt[]) {
     end_label: r.endLabel,
     rights_status: r.rightsStatus,
     source_url: r.sourceUrl,
+    lemma_links: (r.lemmaLinks ?? []).map((link: KaryaLemmaLink) =>
+      toKaryaLemmaLinkWire(link),
+    ),
   }));
 }
 

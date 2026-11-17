@@ -159,6 +159,16 @@ export interface WordDetail extends Word {
   relatedWords: RelatedWordRef[];
   /** relasi masuk (mis. komponen → "muncul dalam" peribahasa) - derived, tak disimpan */
   appearsIn: RelatedWordRef[];
+  /** Cuplikan karya dengan tautan lemma aktif ke kata ini (derived). */
+  appearsInKarya?: {
+    karyaSlug: string;
+    karyaTitle: string;
+    excerptId: string;
+    excerptKind: string;
+    start: number;
+    end: number;
+    snippet: string;
+  }[];
   /**
    * PRD relasi-lemma: kelompok makna published. Hanya berisi anggota LAIN
    * (kata ini sendiri tidak diulang). Array kosong = tidak ada kelompok.

@@ -9,6 +9,10 @@ import type {
   KaryaExcerptKind,
   KaryaExcerptRightsStatus,
 } from '@/shared/database/drizzle/schema/karya-excerpts.schema';
+import type {
+  KaryaLemmaLinkSource,
+  KaryaLemmaLinkStatus,
+} from '@/shared/database/drizzle/schema/karya-lemma-links.schema';
 export const KARYA_SAMBAS_CONNECTION_TYPES = [
   'creator_origin',
   'language',
@@ -56,6 +60,24 @@ export interface KaryaCredit {
   sortOrder: number;
 }
 
+export interface KaryaLemmaLink {
+  id: string;
+  excerptId: string;
+  start: number;
+  end: number;
+  wordId: string;
+  lemma: string | null;
+  status: KaryaLemmaLinkStatus;
+  source: KaryaLemmaLinkSource;
+  proposedWordId: string | null;
+  proposedLemma: string | null;
+  proposedBy: string | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date | null;
+}
+
 export interface KaryaExcerpt {
   id: string;
   kind: KaryaExcerptKind;
@@ -66,6 +88,17 @@ export interface KaryaExcerpt {
   rightsStatus: KaryaExcerptRightsStatus;
   rightsNote?: string | null;
   sourceUrl: string | null;
+  lemmaLinks?: KaryaLemmaLink[];
+}
+
+export interface KaryaLemmaAppearance {
+  karyaSlug: string;
+  karyaTitle: string;
+  excerptId: string;
+  excerptKind: KaryaExcerptKind;
+  start: number;
+  end: number;
+  snippet: string;
 }
 
 export interface KaryaFields {

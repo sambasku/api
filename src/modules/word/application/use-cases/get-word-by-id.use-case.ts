@@ -1,10 +1,14 @@
+import type { KaryaRepositoryImpl } from '@/modules/karya/infrastructure/karya.repository.impl';
 import { NotFoundError } from '@/shared/errors/app-error';
 import type { WordDetail } from '../../domain/entities/word.entity';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import { publicReadGate } from '../utils/resolve-publication';
 
 export class GetWordByIdUseCase {
-  constructor(private readonly wordRepo: WordRepository) {}
+  constructor(
+    private readonly wordRepo: WordRepository,
+    private readonly karyaRepo?: Pick<KaryaRepositoryImpl, 'listLemmaAppearancesByWordId'>,
+  ) {}
 
   async execute(
     id: string,
@@ -24,6 +28,9 @@ export class GetWordByIdUseCase {
     if (!detail) {
       throw new NotFoundError('WORD_NOT_FOUND', 'Kata dengan id tersebut tidak ditemukan');
     }
+    detail.appearsInKarya = this.karyaRepo
+      ? await this.karyaRepo.listLemmaAppearancesByWordId(detail.id)
+      : [];
     return detail;
   }
 }

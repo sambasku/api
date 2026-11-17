@@ -418,6 +418,16 @@ import {
   createKaryaContributionRoutes,
   createPublicKaryaRoutes,
 } from "@/modules/karya/presentation/v1/karya.routes";
+import { CreateKaryaLemmaLinkUseCase } from "@/modules/karya/application/use-cases/create-karya-lemma-link.use-case";
+import { DeleteKaryaLemmaLinkUseCase } from "@/modules/karya/application/use-cases/delete-karya-lemma-link.use-case";
+import { ListKaryaExcerptLemmaLinksUseCase } from "@/modules/karya/application/use-cases/list-karya-excerpt-lemma-links.use-case";
+import { ProposeKaryaLemmaCorrectionUseCase } from "@/modules/karya/application/use-cases/propose-karya-lemma-correction.use-case";
+import { ResolveKaryaLemmaCorrectionUseCase } from "@/modules/karya/application/use-cases/resolve-karya-lemma-correction.use-case";
+import { KaryaLemmaLinkController } from "@/modules/karya/presentation/v1/karya-lemma-link.controller";
+import {
+  createKaryaExcerptLemmaLinkRoutes,
+  createKaryaLemmaLinkDeleteRoutes,
+} from "@/modules/karya/presentation/v1/karya-lemma-link.routes";
 import { KreatorRepositoryImpl } from "@/modules/kreator/infrastructure/kreator.repository.impl";
 import { KreatorUseCases } from "@/modules/kreator/application/kreator.use-cases";
 import { KreatorController } from "@/modules/kreator/presentation/v1/kreator.controller";
@@ -1202,6 +1212,7 @@ const requireProfileWriteClient = createRequireApprovedClientMiddleware(
 // Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
 // Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
 const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
+const karyaRepo = new KaryaRepositoryImpl(db);
 // #133: notif pemilik kata saat contoh kalimat / audio pelafalan tayang.
 const wordMediaPushCooldown = new WordMediaPushCooldownGate(
   appSettingsRepo,
@@ -1286,8 +1297,8 @@ const wordController = new WordController({
     syncLiveWordContributions,
   ),
   update: new UpdateWordUseCase(wordRepo, auditRepo, syncLiveWordContributions),
-  getById: new GetWordByIdUseCase(wordRepo),
-  getByLemma: new GetWordByLemmaUseCase(wordRepo),
+  getById: new GetWordByIdUseCase(wordRepo, karyaRepo),
+  getByLemma: new GetWordByLemmaUseCase(wordRepo, karyaRepo),
   wordOfDay: new GetWordOfDayUseCase(wordRepo, appSettingsRepo),
   search: new SearchWordsUseCase(wordRepo, searchMissRepo),
   listAdmin: new ListAdminWordsUseCase(wordRepo),
@@ -1590,8 +1601,19 @@ const usahaContributionController = new UsahaContributionController(
 const layananController = new LayananController(
   new LayananUseCases(new LayananRepositoryImpl(db), regionRepo, activityEvents),
 );
+const karyaLemmaLinkController = new KaryaLemmaLinkController({
+  listByExcerpt: new ListKaryaExcerptLemmaLinksUseCase(karyaRepo),
+  create: new CreateKaryaLemmaLinkUseCase(karyaRepo, wordRepo, auditRepo),
+  proposeCorrection: new ProposeKaryaLemmaCorrectionUseCase(
+    karyaRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  resolveCorrection: new ResolveKaryaLemmaCorrectionUseCase(karyaRepo, auditRepo),
+  deleteLink: new DeleteKaryaLemmaLinkUseCase(karyaRepo, auditRepo),
+});
 const karyaController = new KaryaController(
-  new KaryaUseCases(new KaryaRepositoryImpl(db), activityEvents),
+  new KaryaUseCases(karyaRepo, activityEvents),
 );
 const kreatorController = new KreatorController(
   new KreatorUseCases(new KreatorRepositoryImpl(db), activityEvents),
@@ -2775,6 +2797,24 @@ app.route(
 app.route(
   "/api/v1/karya",
   createPublicKaryaRoutes({ controller: karyaController }),
+);
+app.route(
+  "/api/v1/karya-excerpts",
+  createKaryaExcerptLemmaLinkRoutes({
+    controller: karyaLemmaLinkController,
+    authenticate,
+    requireApprovedClient: requireContributeWriteClient,
+    requireLegalConsent,
+  }),
+);
+app.route(
+  "/api/v1/karya-lemma-links",
+  createKaryaLemmaLinkDeleteRoutes({
+    controller: karyaLemmaLinkController,
+    authenticate,
+    requireApprovedClient: requireContributeWriteClient,
+    requireLegalConsent,
+  }),
 );
 app.route(
   "/api/v1/kreators",

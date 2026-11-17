@@ -1,12 +1,20 @@
-import { and, asc, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, like, ne, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   karyaContributions,
   karyaCredits,
   karyaExcerpts,
+  karyaLemmaLinks,
   karyas,
 } from '@/shared/database/drizzle/schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
+import { words } from '@/shared/database/drizzle/schema/words.schema';
+import {
+  KARYA_EXCERPT_LEMMA_LINK_RIGHTS,
+  type KaryaLemmaLinkSource,
+  type KaryaLemmaLinkStatus,
+} from '@/shared/database/drizzle/schema/karya-lemma-links.schema';
 import { resolvePublicAuthor } from '@/shared/utils/resolve-public-author';
 import type {
   Karya,
@@ -16,11 +24,16 @@ import type {
   KaryaExcerpt,
   KaryaExcerptFields,
   KaryaFields,
+  KaryaLemmaAppearance,
+  KaryaLemmaLink,
 } from '../domain/karya';
+import type { KaryaExcerptLemmaContext } from '../application/utils/assert-excerpt-lemma-eligible';
 import { parseAccessLinksJson, parseSambasConnectionsJson } from '../domain/karya';
 import { KreatorRepositoryImpl } from '@/modules/kreator/infrastructure/kreator.repository.impl';
 
 type KaryaRow = typeof karyas.$inferSelect;
+
+const proposedWords = alias(words, 'proposed_words');
 
 function toCredits(rows: (typeof karyaCredits.$inferSelect)[]): KaryaCredit[] {
   return rows.map((r) => ({
@@ -214,7 +227,12 @@ export class KaryaRepositoryImpl {
         .orderBy(asc(karyaExcerpts.createdAt)),
     ]);
     const creditRows = await this.attachKreatorSlugs(toCredits(credits));
-    const item = toKaryaBase(row, creditRows, excerptRows.map(toExcerpt));
+    const excerpts = excerptRows.map(toExcerpt);
+    const linkMap = await this.listLemmaLinksByExcerptIds(excerpts.map((e) => e.id));
+    for (const ex of excerpts) {
+      ex.lemmaLinks = linkMap.get(ex.id) ?? [];
+    }
+    const item = toKaryaBase(row, creditRows, excerpts);
     item.author = await resolvePublicAuthor(this.db, item.authorId);
     return item;
   }
@@ -424,6 +442,199 @@ export class KaryaRepositoryImpl {
     await this.db.delete(karyaContributions).where(eq(karyaContributions.id, id));
   }
 
+  async findExcerptLemmaContext(
+    excerptId: string,
+  ): Promise<KaryaExcerptLemmaContext | null> {
+    const [row] = await this.db
+      .select({
+        excerpt: karyaExcerpts,
+        karyaPublishStatus: karyas.publishStatus,
+        karyaDeletedAt: karyas.deletedAt,
+      })
+      .from(karyaExcerpts)
+      .innerJoin(karyas, eq(karyas.id, karyaExcerpts.karyaId))
+      .where(eq(karyaExcerpts.id, excerptId))
+      .limit(1);
+    if (!row) return null;
+    return {
+      id: row.excerpt.id,
+      text: row.excerpt.text,
+      publishStatus: row.excerpt.publishStatus,
+      deletedAt: row.excerpt.deletedAt,
+      rightsStatus: row.excerpt.rightsStatus,
+      authorId: row.excerpt.authorId,
+      karyaId: row.excerpt.karyaId,
+      karyaPublishStatus: row.karyaPublishStatus,
+      karyaDeletedAt: row.karyaDeletedAt,
+    };
+  }
+
+  async listActiveLemmaLinksForExcerpt(excerptId: string): Promise<KaryaLemmaLink[]> {
+    return this.listLemmaLinksForExcerpt(excerptId, true);
+  }
+
+  async listLemmaLinksForExcerpt(
+    excerptId: string,
+    activeOnly: boolean,
+  ): Promise<KaryaLemmaLink[]> {
+    const conds = [eq(karyaLemmaLinks.excerptId, excerptId)];
+    if (activeOnly) {
+      conds.push(
+        sql`${karyaLemmaLinks.status} in ('active', 'pending_correction')`,
+      );
+    }
+    const rows = await this.db
+      .select({
+        link: karyaLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(karyaLemmaLinks)
+      .leftJoin(words, eq(words.id, karyaLemmaLinks.wordId))
+      .leftJoin(proposedWords, eq(proposedWords.id, karyaLemmaLinks.proposedWordId))
+      .where(and(...conds))
+      .orderBy(asc(karyaLemmaLinks.start), asc(karyaLemmaLinks.id));
+    return rows.map(mapKaryaLemmaLinkRow);
+  }
+
+  async listLemmaLinksByExcerptIds(
+    excerptIds: string[],
+  ): Promise<Map<string, KaryaLemmaLink[]>> {
+    const map = new Map<string, KaryaLemmaLink[]>();
+    if (excerptIds.length === 0) return map;
+    const rows = await this.db
+      .select({
+        link: karyaLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(karyaLemmaLinks)
+      .leftJoin(words, eq(words.id, karyaLemmaLinks.wordId))
+      .leftJoin(proposedWords, eq(proposedWords.id, karyaLemmaLinks.proposedWordId))
+      .where(
+        and(
+          inArray(karyaLemmaLinks.excerptId, excerptIds),
+          sql`${karyaLemmaLinks.status} in ('active', 'pending_correction')`,
+        ),
+      )
+      .orderBy(asc(karyaLemmaLinks.start), asc(karyaLemmaLinks.id));
+    for (const row of rows) {
+      const link = mapKaryaLemmaLinkRow(row);
+      const list = map.get(link.excerptId) ?? [];
+      list.push(link);
+      map.set(link.excerptId, list);
+    }
+    return map;
+  }
+
+  async createLemmaLink(input: {
+    excerptId: string;
+    start: number;
+    end: number;
+    wordId: string;
+    source: KaryaLemmaLinkSource;
+    status?: KaryaLemmaLinkStatus;
+  }): Promise<KaryaLemmaLink> {
+    const [row] = await this.db
+      .insert(karyaLemmaLinks)
+      .values({
+        excerptId: input.excerptId,
+        start: input.start,
+        end: input.end,
+        wordId: input.wordId,
+        source: input.source,
+        status: input.status ?? 'active',
+        createdAt: new Date(),
+      })
+      .returning({ id: karyaLemmaLinks.id });
+    const created = await this.findLemmaLinkById(row!.id);
+    return created!;
+  }
+
+  async findLemmaLinkById(id: string): Promise<KaryaLemmaLink | null> {
+    const [row] = await this.db
+      .select({
+        link: karyaLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(karyaLemmaLinks)
+      .leftJoin(words, eq(words.id, karyaLemmaLinks.wordId))
+      .leftJoin(proposedWords, eq(proposedWords.id, karyaLemmaLinks.proposedWordId))
+      .where(eq(karyaLemmaLinks.id, id))
+      .limit(1);
+    return row ? mapKaryaLemmaLinkRow(row) : null;
+  }
+
+  async updateLemmaLink(
+    id: string,
+    patch: {
+      wordId?: string;
+      status?: KaryaLemmaLinkStatus;
+      source?: KaryaLemmaLinkSource;
+      proposedWordId?: string | null;
+      proposedBy?: string | null;
+      reviewedBy?: string | null;
+      reviewedAt?: Date | null;
+    },
+  ): Promise<KaryaLemmaLink | null> {
+    await this.db
+      .update(karyaLemmaLinks)
+      .set({
+        ...patch,
+        updatedAt: new Date(),
+      })
+      .where(eq(karyaLemmaLinks.id, id));
+    return this.findLemmaLinkById(id);
+  }
+
+  async deleteLemmaLink(id: string): Promise<boolean> {
+    const rows = await this.db
+      .delete(karyaLemmaLinks)
+      .where(eq(karyaLemmaLinks.id, id))
+      .returning({ id: karyaLemmaLinks.id });
+    return rows.length > 0;
+  }
+
+  async listLemmaAppearancesByWordId(wordId: string): Promise<KaryaLemmaAppearance[]> {
+    const rows = await this.db
+      .select({
+        karyaSlug: karyas.slug,
+        karyaTitle: karyas.title,
+        excerptId: karyaExcerpts.id,
+        excerptKind: karyaExcerpts.kind,
+        text: karyaExcerpts.text,
+        start: karyaLemmaLinks.start,
+        end: karyaLemmaLinks.end,
+      })
+      .from(karyaLemmaLinks)
+      .innerJoin(karyaExcerpts, eq(karyaExcerpts.id, karyaLemmaLinks.excerptId))
+      .innerJoin(karyas, eq(karyas.id, karyaExcerpts.karyaId))
+      .where(
+        and(
+          eq(karyaLemmaLinks.wordId, wordId),
+          eq(karyaLemmaLinks.status, 'active'),
+          eq(karyaExcerpts.publishStatus, 'published'),
+          isNull(karyaExcerpts.deletedAt),
+          ne(karyaExcerpts.rightsStatus, 'unknown'),
+          inArray(karyaExcerpts.rightsStatus, [...KARYA_EXCERPT_LEMMA_LINK_RIGHTS]),
+          eq(karyas.publishStatus, 'published'),
+          isNull(karyas.deletedAt),
+        ),
+      )
+      .orderBy(asc(karyas.title), asc(karyaExcerpts.createdAt), asc(karyaLemmaLinks.start))
+      .limit(50);
+    return rows.map((r) => ({
+      karyaSlug: r.karyaSlug,
+      karyaTitle: r.karyaTitle,
+      excerptId: r.excerptId,
+      excerptKind: r.excerptKind as KaryaLemmaAppearance['excerptKind'],
+      start: r.start,
+      end: r.end,
+      snippet: r.text.slice(r.start, r.end),
+    }));
+  }
+
   private toContribution(
     row: typeof karyaContributions.$inferSelect,
     username: string | null,
@@ -446,4 +657,28 @@ export class KaryaRepositoryImpl {
       updatedAt: row.updatedAt,
     };
   }
+}
+
+function mapKaryaLemmaLinkRow(row: {
+  link: typeof karyaLemmaLinks.$inferSelect;
+  lemma: string | null;
+  proposedLemma: string | null;
+}): KaryaLemmaLink {
+  return {
+    id: row.link.id,
+    excerptId: row.link.excerptId,
+    start: row.link.start,
+    end: row.link.end,
+    wordId: row.link.wordId,
+    lemma: row.lemma,
+    status: row.link.status as KaryaLemmaLinkStatus,
+    source: row.link.source as KaryaLemmaLinkSource,
+    proposedWordId: row.link.proposedWordId,
+    proposedLemma: row.proposedLemma,
+    proposedBy: row.link.proposedBy,
+    reviewedBy: row.link.reviewedBy,
+    reviewedAt: row.link.reviewedAt,
+    createdAt: row.link.createdAt,
+    updatedAt: row.link.updatedAt,
+  };
 }

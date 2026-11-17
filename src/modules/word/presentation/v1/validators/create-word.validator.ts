@@ -591,6 +591,19 @@ export const wordDetailResponseSchema = z.object({
         relation_type: z.string(),
       }),
     ),
+    appears_in_karya: z
+      .array(
+        z.object({
+          karya_slug: z.string(),
+          karya_title: z.string(),
+          excerpt_id: z.string(),
+          excerpt_kind: z.string(),
+          start: z.number(),
+          end: z.number(),
+          snippet: z.string(),
+        }),
+      )
+      .optional(),
     // PRD relasi-lemma: kelompok makna published (kosong bila tak ada)
     meaning_groups: z
       .array(

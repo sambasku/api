@@ -594,6 +594,15 @@ export class WordController {
       lemma: rel.lemma,
       relation_type: rel.relationType,
     })),
+    appears_in_karya: (word.appearsInKarya ?? []).map((row) => ({
+      karya_slug: row.karyaSlug,
+      karya_title: row.karyaTitle,
+      excerpt_id: row.excerptId,
+      excerpt_kind: row.excerptKind,
+      start: row.start,
+      end: row.end,
+      snippet: row.snippet,
+    })),
     // PRD relasi-lemma: kelompok makna published (label UX "Makna terkait")
     meaning_groups: (word.meaningGroups ?? []).map((g) => ({
       group_id: g.groupId,

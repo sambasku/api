@@ -103,5 +103,6 @@ export * from "./kreators.schema";
 export * from "./kreator-claims.schema";
 export * from "./karyas.schema";
 export * from "./karya-excerpts.schema";
+export * from "./karya-lemma-links.schema";
 export * from "./karya-contributions.schema";
 export * from "./baleho.schema";
