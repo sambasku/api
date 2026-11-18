@@ -321,6 +321,7 @@ import {
   TakedownPlaceCommentUseCase,
   UpdatePlaceCommentUseCase,
 } from "@/modules/place/application/use-cases/place-comment.use-cases";
+import { CreatePlaceCommentAudioUseCase } from "@/modules/place/application/use-cases/place-comment-audio.use-case";
 import {
   createAdminPlaceCommentRoutes,
   createPublicPlaceCommentRoutes,
@@ -360,6 +361,7 @@ import {
   TakedownEventCommentUseCase,
   UpdateEventCommentUseCase,
 } from "@/modules/event/application/use-cases/event-comment.use-cases";
+import { CreateEventCommentAudioUseCase } from "@/modules/event/application/use-cases/event-comment-audio.use-case";
 import { EventContributionRepositoryImpl } from "@/modules/event-contribution/infrastructure/event-contribution.repository.impl";
 import { EventContributionUseCases } from "@/modules/event-contribution/application/event-contribution.use-cases";
 import { EventContributionController } from "@/modules/event-contribution/presentation/v1/event-contribution.controller";
@@ -443,6 +445,7 @@ import {
   TakedownUsahaCommentUseCase,
   UpdateUsahaCommentUseCase,
 } from "@/modules/usaha/application/use-cases/usaha-comment.use-cases";
+import { CreateUsahaCommentAudioUseCase } from "@/modules/usaha/application/use-cases/usaha-comment-audio.use-case";
 import {
   createAdminUsahaCommentRoutes,
   createPublicUsahaCommentRoutes,
@@ -557,6 +560,7 @@ import {
   TakedownCuisineCommentUseCase,
   UpdateCuisineCommentUseCase,
 } from "@/modules/culinary/application/use-cases/cuisine-comment.use-cases";
+import { CreateCuisineCommentAudioUseCase } from "@/modules/culinary/application/use-cases/cuisine-comment-audio.use-case";
 import {
   createAdminCuisineCommentRoutes,
   createPublicCuisineCommentRoutes,
@@ -781,6 +785,7 @@ import {
   UpdateArticleCommentUseCase,
 } from "@/modules/encyclopedia/application/use-cases/encyclopedia-contribution.use-cases";
 import { ArticleReportUseCases } from "@/modules/encyclopedia/application/use-cases/article-report.use-cases";
+import { CreateArticleCommentAudioUseCase } from "@/modules/encyclopedia/application/use-cases/article-comment-audio.use-case";
 import { EncyclopediaController } from "@/modules/encyclopedia/presentation/v1/encyclopedia.controller";
 import {
   createAdminEncyclopediaRoutes,
@@ -1392,6 +1397,7 @@ const syncLiveWordContributions = new SyncLiveWordContributionsUseCase(
 const publishWord = new PublishWordUseCase(wordRepo, auditRepo, syncLiveWordContributions);
 const softDeleteWord = new SoftDeleteWordUseCase(wordRepo, auditRepo);
 const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
+const stickerRepo = new StickerRepositoryImpl(db);
 const contentLinkRepo = new ContentLinkRepositoryImpl(db);
 const resolveContentLinks = new ResolveContentLinks(db);
 const listRelatedContent = new ListRelatedContentUseCase(
@@ -1601,6 +1607,15 @@ const placeController = new PlaceController(
       commentBlocklistRepo,
       recordAbuseSignal,
       activityEvents,
+      stickerRepo,
+    ),
+    createCommentAudio: new CreatePlaceCommentAudioUseCase(
+      placeRepo,
+      pronunciationStorage,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
     ),
     updateComment: new UpdatePlaceCommentUseCase(
       placeRepo,
@@ -1671,6 +1686,15 @@ const eventController = new EventController(
       commentBlocklistRepo,
       recordAbuseSignal,
       activityEvents,
+      stickerRepo,
+    ),
+    createCommentAudio: new CreateEventCommentAudioUseCase(
+      eventRepo,
+      pronunciationStorage,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
     ),
     updateComment: new UpdateEventCommentUseCase(
       eventRepo,
@@ -1737,6 +1761,15 @@ const usahaController = new UsahaController(
     listComments: new ListUsahaCommentsUseCase(usahaRepo),
     createComment: new CreateUsahaCommentUseCase(
       usahaRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
+      stickerRepo,
+    ),
+    createCommentAudio: new CreateUsahaCommentAudioUseCase(
+      usahaRepo,
+      pronunciationStorage,
       auditRepo,
       commentBlocklistRepo,
       recordAbuseSignal,
@@ -1860,6 +1893,15 @@ const culinaryController = new CulinaryController(
     listComments: new ListCuisineCommentsUseCase(culinaryRepo),
     createComment: new CreateCuisineCommentUseCase(
       culinaryRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
+      stickerRepo,
+    ),
+    createCommentAudio: new CreateCuisineCommentAudioUseCase(
+      culinaryRepo,
+      pronunciationStorage,
       auditRepo,
       commentBlocklistRepo,
       recordAbuseSignal,
@@ -2014,9 +2056,7 @@ const mobileAnalyticsController = new MobileAnalyticsController({
   }),
 });
 
-// Katalog stiker (chat + komentar) - repo dipakai CreateCommentUseCase.
-// Route di-register setelah `app` dibuat (lihat blok sticker di bawah).
-const stickerRepo = new StickerRepositoryImpl(db);
+// Katalog stiker (chat + komentar) - repo di atas (CreateComment + komentar entitas).
 const stickerController = new StickerController({
   listActive: new ListActiveStickersUseCase(stickerRepo),
   getActive: new GetActiveStickerUseCase(stickerRepo),
@@ -3865,6 +3905,14 @@ const encyclopediaController = new EncyclopediaController({
     recordAbuseSignal,
     activityEvents,
     stickerRepo,
+  ),
+  createCommentAudio: new CreateArticleCommentAudioUseCase(
+    encyclopediaRepo,
+    pronunciationStorage,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
   ),
   updateComment: new UpdateArticleCommentUseCase(
     encyclopediaRepo,

@@ -1,3 +1,4 @@
+import type { CommentAudio, CommentImage } from '@/modules/comment/domain/entities/comment.entity';
 import type { EventCommentStatus } from '@/shared/database/drizzle/schema/event-comments.schema';
 
 /** Id slug di tabel `event_categories`. */
@@ -117,6 +118,9 @@ export interface EventComment {
   userRole: string | null;
   authorDeletedAt: Date | null;
   body: string;
+  stickerId: string | null;
+  audio: CommentAudio | null;
+  image: CommentImage | null;
   status: EventCommentStatus;
   isEdited: boolean;
   createdAt: Date;

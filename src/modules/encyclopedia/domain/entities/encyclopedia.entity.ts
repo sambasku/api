@@ -1,3 +1,4 @@
+import type { CommentAudio } from '@/modules/comment/domain/entities/comment.entity';
 import type {
   ArticleCommentStatus,
   ArticleContributionKind,
@@ -121,6 +122,7 @@ export interface ArticleComment {
   imageUrl: string | null;
   /** Slug katalog stickers; null = bukan komentar stiker. */
   stickerId: string | null;
+  audio: CommentAudio | null;
   status: ArticleCommentStatus;
   isEdited: boolean;
   createdAt: Date;

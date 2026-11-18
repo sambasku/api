@@ -2,8 +2,12 @@ import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
-import { UnauthorizedError } from '@/shared/errors/app-error';
+import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
+import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
+import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
+import type { CreateUsahaCommentAudioUseCase } from '../../application/use-cases/usaha-comment-audio.use-case';
 import type {
   UsahaComment,
   UsahaDetail,
@@ -58,7 +62,13 @@ function toCommentWire(c: UsahaComment) {
       avatar_url: deleted ? null : c.avatarUrl,
       is_verifier: !deleted && isVerifierRole(c.userRole ?? ''),
     },
-    body: c.body,
+    ...entityCommentMediaWireFields({
+      status: c.status,
+      body: c.body,
+      stickerId: c.stickerId,
+      audio: c.audio,
+      image: c.image,
+    }),
     status: c.status,
     is_edited: c.isEdited,
     created_at: c.createdAt.toISOString(),
@@ -69,6 +79,7 @@ function toCommentWire(c: UsahaComment) {
 export interface UsahaCommentControllerDeps {
   listComments: ListUsahaCommentsUseCase;
   createComment: CreateUsahaCommentUseCase;
+  createCommentAudio: CreateUsahaCommentAudioUseCase;
   updateComment: UpdateUsahaCommentUseCase;
   deleteComment: DeleteUsahaCommentUseCase;
   takedownComment: TakedownUsahaCommentUseCase;
@@ -442,11 +453,46 @@ export class UsahaController {
   async createComment(c: Context<{ Variables: AppVariables }>) {
     const user = requireUser(c);
     const { id } = c.req.valid('param' as never) as { id: string };
-    const body = c.req.valid('json' as never) as { body: string };
+    const body = c.req.valid('json' as never) as EntityCommentBody;
     const comment = await this.comments.createComment.execute({
       usahaId: id,
       userId: user.user_id,
-      body: body.body,
+      body: body.body ?? '',
+      stickerId: body.sticker_id ?? null,
+      image: body.image
+        ? { url: body.image.url, providerFileId: body.image.provider_file_id }
+        : null,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async createCommentAudio(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const comment = await this.comments.createCommentAudio.execute({
+      usahaId: id,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: typeof body['body'] === 'string' ? body['body'] : null,
+      durationMs: body['duration_ms'],
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toCommentWire(comment) }, 201);

@@ -31,6 +31,22 @@ export const usahaComments = sqliteTable(
     body: text('body').notNull(),
     /** Teks asli sebelum blocklist; null jika tidak disensor. */
     bodyOriginal: text('body_original'),
+    stickerId: text('sticker_id'),
+    audioUrl: text('audio_url'),
+    audioMimeType: text('audio_mime_type'),
+    audioFileSize: integer('audio_file_size'),
+    audioDurationMs: integer('audio_duration_ms'),
+    audioProvider: text('audio_provider'),
+    audioProviderFileId: text('audio_provider_file_id'),
+    audioSha: text('audio_sha'),
+    imageUrl: text('image_url'),
+    imageProvider: text('image_provider'),
+    imageProviderFileId: text('image_provider_file_id'),
+    imagePublicUrl: text('image_public_url'),
+    imageStatus: text('image_status'),
+    imageContentWarnings: text('image_content_warnings'),
+    imageReviewedBy: text('image_reviewed_by').references(() => users.id),
+    imageReviewedAt: integer('image_reviewed_at', { mode: 'timestamp' }),
     status: text('status', { enum: USAHA_COMMENT_STATUSES })
       .notNull()
       .default('published'),
@@ -45,6 +61,7 @@ export const usahaComments = sqliteTable(
   (t) => [
     index('usaha_comments_usaha_status_idx').on(t.usahaId, t.status, t.id),
     index('usaha_comments_user_status_idx').on(t.userId, t.status, t.id),
+    index('usaha_comments_image_status_idx').on(t.imageStatus, t.id),
   ],
 );
 

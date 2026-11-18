@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
@@ -100,11 +101,37 @@ export function createPublicUsahaCommentRoutes(deps: {
     },
   });
 
+  const createAudioRoute = createRoute({
+    method: 'post',
+    path: '/:id/comments/audio',
+    tags: ['Usaha Comments'],
+    summary: 'Komentar usaha dengan rekaman suara (multipart; publish langsung)',
+    request: { params: idParam },
+    responses: {
+      201: { description: 'Komentar dibuat', content: json(commentItemSchema) },
+      401: { description: 'Tidak terautentikasi', content: json(errorResponseSchema) },
+      404: { description: 'Usaha tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
   routes.use('/:id/comments', deps.optionalAuthenticate);
+  routes.use('/:id/comments/audio', deps.authenticate, bodyLimit({
+    maxSize: 6 * 1024 * 1024,
+    onError: (c) =>
+      c.json(
+        {
+          success: false as const,
+          error_code: 'AUDIO_TOO_LARGE',
+          message: 'File audio terlalu besar (maks 5 MB)',
+        },
+        400,
+      ),
+  }));
   routes.use('/comments/:id', deps.authenticate);
 
   routes.openapi(listRoute, (c) => deps.controller.listComments(c) as never);
   routes.openapi(createRoute_, (c) => deps.controller.createComment(c) as never);
+  routes.openapi(createAudioRoute, (c) => deps.controller.createCommentAudio(c) as never);
   routes.openapi(updateRoute_, (c) => deps.controller.updateComment(c) as never);
   routes.openapi(deleteRoute_, (c) => deps.controller.deleteComment(c) as never);
   return routes;

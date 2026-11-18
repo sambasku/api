@@ -2,7 +2,11 @@ import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
-import { NotFoundError, UnauthorizedError } from '@/shared/errors/app-error';
+import { BadRequestError, NotFoundError, UnauthorizedError } from '@/shared/errors/app-error';
+import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
+import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
+import type { CreateCuisineCommentAudioUseCase } from '../../application/use-cases/cuisine-comment-audio.use-case';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type {
   Cuisine,
@@ -72,7 +76,13 @@ function toCuisineCommentWire(c: CuisineComment) {
       avatar_url: deleted ? null : c.avatarUrl,
       is_verifier: !deleted && isVerifierRole(c.userRole ?? ''),
     },
-    body: c.body,
+    ...entityCommentMediaWireFields({
+      status: c.status,
+      body: c.body,
+      stickerId: c.stickerId,
+      audio: c.audio,
+      image: c.image,
+    }),
     status: c.status,
     is_edited: c.isEdited,
     created_at: c.createdAt.toISOString(),
@@ -83,6 +93,7 @@ function toCuisineCommentWire(c: CuisineComment) {
 export interface CuisineCommentControllerDeps {
   listComments: ListCuisineCommentsUseCase;
   createComment: CreateCuisineCommentUseCase;
+  createCommentAudio: CreateCuisineCommentAudioUseCase;
   updateComment: UpdateCuisineCommentUseCase;
   deleteComment: DeleteCuisineCommentUseCase;
   takedownComment: TakedownCuisineCommentUseCase;
@@ -611,11 +622,46 @@ export class CulinaryController {
   async createCuisineComment(c: Context<{ Variables: AppVariables }>) {
     const user = requireUser(c);
     const { id } = c.req.valid('param' as never) as { id: string };
-    const body = c.req.valid('json' as never) as { body: string };
+    const body = c.req.valid('json' as never) as EntityCommentBody;
     const comment = await this.cuisineComments.createComment.execute({
       cuisineId: id,
       userId: user.user_id,
-      body: body.body,
+      body: body.body ?? '',
+      stickerId: body.sticker_id ?? null,
+      image: body.image
+        ? { url: body.image.url, providerFileId: body.image.provider_file_id }
+        : null,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCuisineCommentWire(comment) }, 201);
+  }
+
+  async createCuisineCommentAudio(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const comment = await this.cuisineComments.createCommentAudio.execute({
+      cuisineId: id,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: typeof body['body'] === 'string' ? body['body'] : null,
+      durationMs: body['duration_ms'],
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toCuisineCommentWire(comment) }, 201);

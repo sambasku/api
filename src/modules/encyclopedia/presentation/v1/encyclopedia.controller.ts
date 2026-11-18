@@ -1,5 +1,8 @@
 import type { Context } from 'hono';
-import { UnauthorizedError } from '@/shared/errors/app-error';
+import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
+import { redactEntityCommentAudio } from '@/shared/comment/entity-comment-wire';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
+import type { CreateArticleCommentAudioUseCase } from '../../application/use-cases/article-comment-audio.use-case';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type {
@@ -147,6 +150,7 @@ function toCommentWire(c: ArticleComment) {
     body: c.body,
     image_url: c.imageUrl,
     sticker_id: c.stickerId ?? null,
+    ...redactEntityCommentAudio({ status: c.status, audio: c.audio }),
     status: c.status,
     is_edited: c.isEdited,
     created_at: c.createdAt.toISOString(),
@@ -214,6 +218,7 @@ export interface EncyclopediaControllerDeps {
   mergeTag: MergeTagUseCase;
   listComments: ListArticleCommentsUseCase;
   createComment: CreateArticleCommentUseCase;
+  createCommentAudio: CreateArticleCommentAudioUseCase;
   updateComment: UpdateArticleCommentUseCase;
   deleteComment: DeleteArticleCommentUseCase;
   takedownComment: TakedownArticleCommentUseCase;
@@ -345,6 +350,37 @@ export class EncyclopediaController {
       body: body.body ?? '',
       imageUrl: body.image_url ?? null,
       stickerId: body.sticker_id ?? null,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async createCommentAudio(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const comment = await this.deps.createCommentAudio.execute({
+      articleId: id,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: typeof body['body'] === 'string' ? body['body'] : null,
+      durationMs: body['duration_ms'],
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toCommentWire(comment) }, 201);

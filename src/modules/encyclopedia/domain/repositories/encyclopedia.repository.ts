@@ -1,3 +1,4 @@
+import type { NewEntityCommentAudioInput } from '@/shared/comment/entity-comment-media';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
   Article,
@@ -69,6 +70,7 @@ export interface NewArticleCommentInput {
   bodyOriginal: string | null;
   imageUrl?: string | null;
   stickerId?: string | null;
+  audio?: NewEntityCommentAudioInput | null;
 }
 
 export interface NewArticleContributionInput {

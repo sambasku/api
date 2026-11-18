@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { entityCommentWireSchema } from '@/shared/comment/entity-comment-response.schema';
 import {
   SAMBAS_LAT_MAX,
   SAMBAS_LAT_MIN,
@@ -265,13 +266,7 @@ export const eventCommentsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
-export const createEventCommentBodySchema = z.object({
-  body: z
-    .string({ error: 'Komentar wajib diisi' })
-    .trim()
-    .min(1, 'Komentar wajib diisi')
-    .max(1000, 'Komentar maksimal 1000 karakter'),
-});
+export { entityCommentBodySchema as createEventCommentBodySchema } from '@/shared/comment/entity-comment-body.schema';
 
 export const updateEventCommentBodySchema = z.object({
   body: z
@@ -281,19 +276,7 @@ export const updateEventCommentBodySchema = z.object({
     .max(1000, 'Komentar maksimal 1000 karakter'),
 });
 
-export const eventCommentResponseSchema = z.object({
+export const eventCommentResponseSchema = entityCommentWireSchema.extend({
   id: opaqueId,
   event_id: z.string(),
-  user: z.object({
-    user_id: z.string(),
-    username: z.string().nullable(),
-    display_name: z.string().nullable(),
-    avatar_url: z.string().nullable(),
-    is_verifier: z.boolean(),
-  }),
-  body: z.string(),
-  status: z.enum(['published', 'taken_down', 'deleted_by_author']),
-  is_edited: z.boolean(),
-  created_at: z.string(),
-  updated_at: z.string().nullable(),
 });

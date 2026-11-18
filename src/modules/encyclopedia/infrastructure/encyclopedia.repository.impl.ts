@@ -14,6 +14,10 @@ import {
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
+import {
+  entityCommentAudioInsertValues,
+  toEntityCommentAudio,
+} from '@/shared/comment/entity-comment-media';
 import type {
   ArticleCommentStatus,
   ArticleContributionKind,
@@ -135,6 +139,7 @@ function toComment(
     body: row.body,
     imageUrl: row.imageUrl,
     stickerId: row.stickerId ?? null,
+    audio: toEntityCommentAudio(row),
     status: row.status as ArticleCommentStatus,
     isEdited: profile.isEdited,
     createdAt: row.createdAt,
@@ -695,6 +700,7 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         bodyOriginal: input.bodyOriginal,
         imageUrl: input.imageUrl ?? null,
         stickerId: input.stickerId ?? null,
+        ...entityCommentAudioInsertValues(input.audio),
         createdAt: new Date(),
       })
       .returning();

@@ -1,3 +1,4 @@
+import type { CommentAudio, CommentImage } from '@/modules/comment/domain/entities/comment.entity';
 import type {
   CuisinePublishStatus,
 } from '@/shared/database/drizzle/schema/cuisines.schema';
@@ -24,6 +25,9 @@ export interface CuisineComment {
   userRole: string | null;
   authorDeletedAt: Date | null;
   body: string;
+  stickerId: string | null;
+  audio: CommentAudio | null;
+  image: CommentImage | null;
   status: CuisineCommentStatus;
   isEdited: boolean;
   createdAt: Date;

@@ -48,6 +48,12 @@ import type {
   NewPlaceCommentInput,
   PlaceCommentListFilter,
 } from "../domain/repositories/place.repository";
+import {
+  entityCommentAudioInsertValues,
+  entityCommentImageInsertValues,
+  toEntityCommentAudio,
+  toEntityCommentImage,
+} from '@/shared/comment/entity-comment-media';
 import type { PlaceComment } from "../domain/entities/place.entity";
 import type { CursorPage } from "@/modules/word/domain/repositories/word.repository";
 import { resolvePublicAuthor } from "@/shared/utils/resolve-public-author";
@@ -80,6 +86,9 @@ function toPlaceComment(
     userRole: meta.authorDeletedAt ? null : meta.userRole,
     authorDeletedAt: meta.authorDeletedAt,
     body: row.body,
+    stickerId: row.stickerId ?? null,
+    audio: toEntityCommentAudio(row),
+    image: toEntityCommentImage(row),
     status: row.status,
     isEdited: meta.isEdited,
     createdAt: row.createdAt,
@@ -791,6 +800,9 @@ export class PlaceRepositoryImpl implements PlaceRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
+        stickerId: input.stickerId ?? null,
+        ...entityCommentImageInsertValues(input.image),
+        ...entityCommentAudioInsertValues(input.audio),
         createdAt: new Date(),
       })
       .returning();

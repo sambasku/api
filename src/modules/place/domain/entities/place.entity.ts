@@ -1,3 +1,4 @@
+import type { CommentAudio, CommentImage } from '@/modules/comment/domain/entities/comment.entity';
 import type { PlaceCommentStatus } from '@/shared/database/drizzle/schema/place-comments.schema';
 
 /** Id slug di tabel `place_categories`. */
@@ -98,6 +99,9 @@ export interface PlaceComment {
   userRole: string | null;
   authorDeletedAt: Date | null;
   body: string;
+  stickerId: string | null;
+  audio: CommentAudio | null;
+  image: CommentImage | null;
   status: PlaceCommentStatus;
   isEdited: boolean;
   createdAt: Date;

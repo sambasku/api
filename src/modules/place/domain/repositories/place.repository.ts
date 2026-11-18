@@ -1,3 +1,7 @@
+import type {
+  NewEntityCommentAudioInput,
+  NewEntityCommentImageInput,
+} from '@/shared/comment/entity-comment-media';
 import type { CursorPage } from "@/modules/word/domain/repositories/word.repository";
 import type {
   Place,
@@ -17,6 +21,9 @@ export interface NewPlaceCommentInput {
   userId: string;
   body: string;
   bodyOriginal: string | null;
+  stickerId?: string | null;
+  image?: NewEntityCommentImageInput | null;
+  audio?: NewEntityCommentAudioInput | null;
 }
 
 export interface PlaceCommentListFilter {

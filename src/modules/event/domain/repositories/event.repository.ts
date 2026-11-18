@@ -1,4 +1,8 @@
 import type {
+  NewEntityCommentAudioInput,
+  NewEntityCommentImageInput,
+} from '@/shared/comment/entity-comment-media';
+import type {
 EventCategoryRef,
 EventComment,
 EventImage,
@@ -16,6 +20,9 @@ export interface NewEventCommentInput {
   userId: string;
   body: string;
   bodyOriginal: string | null;
+  stickerId?: string | null;
+  image?: NewEntityCommentImageInput | null;
+  audio?: NewEntityCommentAudioInput | null;
 }
 
 export interface EventCommentListFilter {

@@ -3,6 +3,8 @@ import { CreatePlaceCommentUseCase } from '../../application/use-cases/place-com
 import type { PlaceRepository } from '../../domain/repositories/place.repository';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
+import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
+import { ValidationError } from '@/shared/errors/app-error';
 
 const PLACE_ID = '01PLACE000000000000000001';
 const USER_ID = '01USER000000000000000001';
@@ -18,6 +20,9 @@ const baseComment = {
   userRole: null,
   authorDeletedAt: null,
   body: 'Wisata bagus!',
+  stickerId: null,
+  audio: null,
+  image: null,
   status: 'published' as const,
   isEdited: false,
   createdAt: new Date('2026-11-01T10:00:00Z'),
@@ -82,5 +87,58 @@ describe('CreatePlaceCommentUseCase', () => {
         targetId: COMMENT_ID,
       }),
     );
+  });
+
+  it('stiker aktif lolos tanpa body', async () => {
+    const repo = makeRepo({
+      createComment: vi.fn().mockResolvedValue({
+        ...baseComment,
+        body: '',
+        stickerId: 'cheer',
+      }),
+    });
+    const audit = { record: vi.fn() } as unknown as AuditLogRepository;
+    const blocklist = {
+      listAllActiveWords: vi.fn().mockResolvedValue([]),
+    } as unknown as CommentBlocklistRepository;
+    const stickerRepo = {
+      findActiveById: vi.fn().mockResolvedValue({ id: 'cheer' }),
+    } as unknown as StickerRepository;
+    const uc = new CreatePlaceCommentUseCase(
+      repo,
+      audit,
+      blocklist,
+      undefined,
+      undefined,
+      stickerRepo,
+    );
+    const result = await uc.execute({
+      placeId: PLACE_ID,
+      userId: USER_ID,
+      body: '',
+      stickerId: 'cheer',
+    });
+    expect(result.stickerId).toBe('cheer');
+    expect(repo.createComment).toHaveBeenCalledWith(
+      expect.objectContaining({ stickerId: 'cheer', body: '' }),
+    );
+  });
+
+  it('stiker tidak dikenal ditolak', async () => {
+    const repo = makeRepo();
+    const stickerRepo = {
+      findActiveById: vi.fn().mockResolvedValue(null),
+    } as unknown as StickerRepository;
+    const uc = new CreatePlaceCommentUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn().mockResolvedValue([]) } as never,
+      undefined,
+      undefined,
+      stickerRepo,
+    );
+    await expect(
+      uc.execute({ placeId: PLACE_ID, userId: USER_ID, stickerId: 'ghost' }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 });

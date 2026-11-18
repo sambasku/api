@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
@@ -87,6 +88,19 @@ export function createPublicCuisineCommentRoutes(deps: {
     },
   });
 
+  const createAudioRoute = createRoute({
+    method: 'post',
+    path: '/cuisines/:id/comments/audio',
+    tags: ['Cuisine Comments'],
+    summary: 'Komentar kuliner dengan rekaman suara (multipart; publish langsung)',
+    request: { params: idParam },
+    responses: {
+      201: { description: 'Komentar dibuat', content: json(commentItemSchema) },
+      401: { description: 'Tidak terautentikasi', content: json(errorResponseSchema) },
+      404: { description: 'Kuliner tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
   const deleteRoute_ = createRoute({
     method: 'delete',
     path: '/comments/:id',
@@ -101,10 +115,23 @@ export function createPublicCuisineCommentRoutes(deps: {
   });
 
   routes.use('/cuisines/:id/comments', deps.optionalAuthenticate);
+  routes.use('/cuisines/:id/comments/audio', deps.authenticate, bodyLimit({
+    maxSize: 6 * 1024 * 1024,
+    onError: (c) =>
+      c.json(
+        {
+          success: false as const,
+          error_code: 'AUDIO_TOO_LARGE',
+          message: 'File audio terlalu besar (maks 5 MB)',
+        },
+        400,
+      ),
+  }));
   routes.use('/comments/:id', deps.authenticate);
 
   routes.openapi(listRoute, (c) => deps.controller.listCuisineComments(c) as never);
   routes.openapi(createRoute_, (c) => deps.controller.createCuisineComment(c) as never);
+  routes.openapi(createAudioRoute, (c) => deps.controller.createCuisineCommentAudio(c) as never);
   routes.openapi(updateRoute_, (c) => deps.controller.updateCuisineComment(c) as never);
   routes.openapi(deleteRoute_, (c) => deps.controller.deleteCuisineComment(c) as never);
   return routes;

@@ -40,6 +40,12 @@ import type {
 } from '../domain/repositories/culinary.repository';
 import type { CuisineComment } from '../domain/entities/culinary.entity';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
+import {
+  entityCommentAudioInsertValues,
+  entityCommentImageInsertValues,
+  toEntityCommentAudio,
+  toEntityCommentImage,
+} from '@/shared/comment/entity-comment-media';
 
 type CuisineRow = typeof cuisines.$inferSelect;
 type PlaceRow = typeof culinaryPlaces.$inferSelect;
@@ -69,6 +75,9 @@ function toCuisineComment(
     userRole: meta.authorDeletedAt ? null : meta.userRole,
     authorDeletedAt: meta.authorDeletedAt,
     body: row.body,
+    stickerId: row.stickerId ?? null,
+    audio: toEntityCommentAudio(row),
+    image: toEntityCommentImage(row),
     status: row.status,
     isEdited: meta.isEdited,
     createdAt: row.createdAt,
@@ -784,6 +793,9 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
+        stickerId: input.stickerId ?? null,
+        ...entityCommentImageInsertValues(input.image),
+        ...entityCommentAudioInsertValues(input.audio),
         createdAt: new Date(),
       })
       .returning();

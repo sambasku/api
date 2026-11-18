@@ -1,3 +1,4 @@
+import type { CommentAudio, CommentImage } from '@/modules/comment/domain/entities/comment.entity';
 import type {
   UsahaKind,
   UsahaOperationalStatus,
@@ -120,6 +121,9 @@ export interface UsahaComment {
   userRole: string | null;
   authorDeletedAt: Date | null;
   body: string;
+  stickerId: string | null;
+  audio: CommentAudio | null;
+  image: CommentImage | null;
   status: UsahaCommentStatus;
   isEdited: boolean;
   createdAt: Date;

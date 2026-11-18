@@ -133,6 +133,7 @@ describe('SubmitArticleContributionUseCase', () => {
     await uc.execute({
       userId: '01USERULID000000000000001',
       kind: 'new',
+      articleId: null,
       payload: {
         title: 'Sejarah Istana',
         excerpt: 'Ringkas.',

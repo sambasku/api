@@ -6,10 +6,12 @@ import {
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import { prepareEntityCommentCreate } from '@/shared/comment/prepare-entity-comment-create';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type { PlaceComment } from '../../domain/entities/place.entity';
 import type { PlaceRepository } from '../../domain/repositories/place.repository';
@@ -36,12 +38,15 @@ export class CreatePlaceCommentUseCase {
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly stickerRepo?: StickerRepository,
   ) {}
 
   async execute(input: {
     placeId: string;
     userId: string;
-    body: string;
+    body?: string;
+    stickerId?: string | null;
+    image?: { url: string; providerFileId: string } | null;
     requestId?: string | null;
   }): Promise<PlaceComment> {
     await assertCanContribute(input.userId);
@@ -52,32 +57,35 @@ export class CreatePlaceCommentUseCase {
         'Wisata tidak ditemukan atau sudah tidak tayang',
       );
     }
-    const body = input.body.trim();
-    if (body.length === 0 || body.length > 1000) {
-      throw new BadRequestError('VALIDATION_ERROR', 'Komentar 1-1000 karakter', [
-        { field: 'body', message: 'Komentar antara 1 sampai 1000 karakter' },
-      ]);
-    }
-    await assertUgcTextQualityWithStrike(body, {
+    const prepared = await prepareEntityCommentCreate({
       userId: input.userId,
-      abuse: this.abuse,
-      entityType: 'place_comment',
       requestId: input.requestId,
+      entityType: 'place_comment',
+      body: input.body,
+      stickerId: input.stickerId,
+      image: input.image,
+      stickerRepo: this.stickerRepo,
+      blocklistRepo: this.blocklistRepo,
+      abuse: this.abuse,
     });
-    const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filtered = applyBlocklistFilter(body, blocked);
     const created = await this.repo.createComment({
       placeId: input.placeId,
       userId: input.userId,
-      body: filtered,
-      bodyOriginal: filtered !== body ? body : null,
+      body: prepared.body,
+      bodyOriginal: prepared.bodyOriginal,
+      stickerId: prepared.stickerId,
+      image: prepared.image,
     });
     await this.auditRepo.record({
       userId: input.userId,
       action: 'create',
       entityType: 'place_comment',
       entityId: created.id,
-      newData: { place_id: input.placeId },
+      newData: {
+        place_id: input.placeId,
+        sticker_id: prepared.stickerId,
+        image_status: created.image?.status ?? null,
+      },
       requestId: input.requestId ?? null,
     });
     await this.activityEvents?.safe({

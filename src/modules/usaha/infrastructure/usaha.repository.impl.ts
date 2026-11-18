@@ -50,6 +50,12 @@ import type {
 } from '../domain/repositories/usaha.repository';
 import type { UsahaComment } from '../domain/entities/usaha.entity';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
+import {
+  entityCommentAudioInsertValues,
+  entityCommentImageInsertValues,
+  toEntityCommentAudio,
+  toEntityCommentImage,
+} from '@/shared/comment/entity-comment-media';
 
 function parseAttribution(raw: string | null): UsahaImageAttribution | null {
   if (!raw) return null;
@@ -104,6 +110,9 @@ function toUsahaComment(
     userRole: meta.authorDeletedAt ? null : meta.userRole,
     authorDeletedAt: meta.authorDeletedAt,
     body: row.body,
+    stickerId: row.stickerId ?? null,
+    audio: toEntityCommentAudio(row),
+    image: toEntityCommentImage(row),
     status: row.status,
     isEdited: meta.isEdited,
     createdAt: row.createdAt,
@@ -719,6 +728,9 @@ export class UsahaRepositoryImpl implements UsahaRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
+        stickerId: input.stickerId ?? null,
+        ...entityCommentImageInsertValues(input.image),
+        ...entityCommentAudioInsertValues(input.audio),
         createdAt: new Date(),
       })
       .returning();
