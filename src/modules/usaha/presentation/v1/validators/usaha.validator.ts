@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { opaqueId } from '@/shared/validation/id';
 
 export const usahaCategorySchema = z
   .string()
@@ -149,6 +150,8 @@ export const usahaResponseSchema = z.object({
   author: usahaAuthorRefSchema.nullable(),
   manager: usahaAuthorRefSchema.nullable().optional(),
   published_at: z.string().nullable(),
+  visit_count: z.number().int().nonnegative(),
+  viewer_visited: z.boolean(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
   items: z.array(usahaItemResponseSchema).optional(),
@@ -174,4 +177,44 @@ export const restrictUsahaBodySchema = z
 
 export const duplicateQuerySchema = z.object({
   usaha_id: z.string().min(1).max(64).optional(),
+});
+
+// ---------------------------------------------------------------- komentar
+
+export const usahaCommentsQuerySchema = z.object({
+  cursor: opaqueId.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export const createUsahaCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Komentar wajib diisi' })
+    .trim()
+    .min(1, 'Komentar wajib diisi')
+    .max(1000, 'Komentar maksimal 1000 karakter'),
+});
+
+export const updateUsahaCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Komentar wajib diisi' })
+    .trim()
+    .min(1, 'Komentar wajib diisi')
+    .max(1000, 'Komentar maksimal 1000 karakter'),
+});
+
+export const usahaCommentResponseSchema = z.object({
+  id: opaqueId,
+  usaha_id: z.string(),
+  user: z.object({
+    user_id: z.string(),
+    username: z.string().nullable(),
+    display_name: z.string().nullable(),
+    avatar_url: z.string().nullable(),
+    is_verifier: z.boolean(),
+  }),
+  body: z.string(),
+  status: z.enum(['published', 'taken_down', 'deleted_by_author']),
+  is_edited: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string().nullable(),
 });

@@ -114,4 +114,78 @@ describe('SubmitArticleContributionUseCase', () => {
       expect.objectContaining({ articleId: article.id }),
     );
   });
+
+  it('submit new: kirim kabar WA grup Ensiklopedia', async () => {
+    const repo = makeRepo();
+    const audit = makeAudit();
+    const groupNotifier = { notify: vi.fn().mockResolvedValue(undefined) };
+    const uc = new SubmitArticleContributionUseCase(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      repo as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      audit as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+      undefined,
+      groupNotifier,
+    );
+
+    await uc.execute({
+      userId: '01USERULID000000000000001',
+      kind: 'new',
+      payload: {
+        title: 'Sejarah Istana',
+        excerpt: 'Ringkas.',
+        body_md: 'Isi artikel cukup.',
+        category_id: 'sejarah',
+        tags: [],
+      },
+    });
+
+    expect(groupNotifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jenis: 'Ensiklopedia',
+        name: 'Sejarah Istana',
+        userId: '01USERULID000000000000001',
+      }),
+    );
+  });
+
+  it('submit edit: jenis WA Ensiklopedia (perbaikan)', async () => {
+    const repo = makeRepo({
+      findById: vi.fn().mockResolvedValue(article),
+    });
+    const audit = makeAudit();
+    const groupNotifier = { notify: vi.fn().mockResolvedValue(undefined) };
+    const uc = new SubmitArticleContributionUseCase(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      repo as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      audit as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+      undefined,
+      groupNotifier,
+    );
+
+    await uc.execute({
+      userId: '01USERULID000000000000001',
+      kind: 'edit',
+      articleId: article.id,
+      payload: {
+        title: 'Sejarah Istana Diedit',
+        excerpt: 'Ringkas.',
+        body_md: 'Isi.',
+        category_id: 'sejarah',
+        tags: [],
+      },
+    });
+
+    expect(groupNotifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jenis: 'Ensiklopedia (perbaikan)',
+        name: 'Sejarah Istana Diedit',
+      }),
+    );
+  });
 });

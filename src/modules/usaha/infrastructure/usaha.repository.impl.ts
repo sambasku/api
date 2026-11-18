@@ -24,6 +24,11 @@ import {
 import { usahaCategories } from '@/shared/database/drizzle/schema/usaha-categories.schema';
 import { regions } from '@/shared/database/drizzle/schema/regions.schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
+import {
+  usahaComments,
+  usahaCommentRevisions,
+} from '@/shared/database/drizzle/schema/usaha-comments.schema';
+import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { generateId } from '@/shared/utils/ulid';
 import { ConflictError } from '@/shared/errors/app-error';
@@ -40,7 +45,11 @@ import type {
   ListUsahasResult,
   UpdateUsahaInput,
   UsahaRepository,
+  NewUsahaCommentInput,
+  UsahaCommentListFilter,
 } from '../domain/repositories/usaha.repository';
+import type { UsahaComment } from '../domain/entities/usaha.entity';
+import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 
 function parseAttribution(raw: string | null): UsahaImageAttribution | null {
   if (!raw) return null;
@@ -69,6 +78,38 @@ function mapUsahaImage(row: typeof usahaImages.$inferSelect): UsahaImage {
 }
 
 type UsahaRow = typeof usahas.$inferSelect;
+
+const COMMENT_REVISION_CAP = 50;
+
+type UsahaCommentRow = typeof usahaComments.$inferSelect;
+
+function toUsahaComment(
+  row: UsahaCommentRow,
+  meta: {
+    username: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+    userRole: string | null;
+    authorDeletedAt: Date | null;
+    isEdited: boolean;
+  },
+): UsahaComment {
+  return {
+    id: row.id,
+    usahaId: row.usahaId,
+    userId: row.userId,
+    username: meta.authorDeletedAt ? null : meta.username,
+    displayName: meta.authorDeletedAt ? null : meta.displayName,
+    avatarUrl: meta.authorDeletedAt ? null : meta.avatarUrl,
+    userRole: meta.authorDeletedAt ? null : meta.userRole,
+    authorDeletedAt: meta.authorDeletedAt,
+    body: row.body,
+    status: row.status,
+    isEdited: meta.isEdited,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt ?? null,
+  };
+}
 
 /** Desa vs kecamatan butuh dua alias ke tabel `regions` yang sama. */
 const villageRegions = alias(regions, 'usaha_villages');
@@ -666,5 +707,187 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .returning();
     const row = rows[0];
     return row ? mapUsahaImage(row) : null;
+  }
+
+  // ---------------------------------------------------------------- komentar
+
+  async createComment(input: NewUsahaCommentInput): Promise<UsahaComment> {
+    const [row] = await this.db
+      .insert(usahaComments)
+      .values({
+        usahaId: input.usahaId,
+        userId: input.userId,
+        body: input.body,
+        bodyOriginal: input.bodyOriginal,
+        createdAt: new Date(),
+      })
+      .returning();
+    if (!row) throw new Error('gagal menyimpan komentar usaha');
+    const comment = await this.findCommentById(row.id);
+    if (!comment) throw new Error('komentar usaha tidak ditemukan setelah dibuat');
+    return comment;
+  }
+
+  async findCommentById(id: string): Promise<UsahaComment | null> {
+    const [row] = await this.db
+      .select({
+        c: usahaComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${usahaCommentRevisions}
+          WHERE ${usahaCommentRevisions.commentId} = ${usahaComments.id}
+        )`,
+      })
+      .from(usahaComments)
+      .leftJoin(users, eq(users.id, usahaComments.userId))
+      .where(eq(usahaComments.id, id))
+      .limit(1);
+    if (!row) return null;
+    return toUsahaComment(row.c, {
+      username: row.username,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+      userRole: row.userRole,
+      authorDeletedAt: row.authorDeletedAt,
+      isEdited: Boolean(row.isEdited),
+    });
+  }
+
+  async listComments(
+    usahaId: string,
+    filter: UsahaCommentListFilter,
+  ): Promise<CursorPage<UsahaComment>> {
+    const limit = filter.limit;
+    const conditions = [eq(usahaComments.usahaId, usahaId)];
+    if (filter.status) conditions.push(eq(usahaComments.status, filter.status));
+    if (filter.cursor) conditions.push(lt(usahaComments.id, filter.cursor));
+
+    const rows = await this.db
+      .select({
+        c: usahaComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${usahaCommentRevisions}
+          WHERE ${usahaCommentRevisions.commentId} = ${usahaComments.id}
+        )`,
+      })
+      .from(usahaComments)
+      .leftJoin(users, eq(users.id, usahaComments.userId))
+      .where(and(...conditions))
+      .orderBy(desc(usahaComments.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      items: page.map((row) =>
+        toUsahaComment(row.c, {
+          username: row.username,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          userRole: row.userRole,
+          authorDeletedAt: row.authorDeletedAt,
+          isEdited: Boolean(row.isEdited),
+        }),
+      ),
+      nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
+      hasMore,
+    };
+  }
+
+  async updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<UsahaComment | null> {
+    const now = new Date();
+    const updated = await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ body: usahaComments.body })
+        .from(usahaComments)
+        .where(eq(usahaComments.id, input.commentId))
+        .limit(1);
+      if (!current) return null;
+
+      await tx.insert(usahaCommentRevisions).values({
+        commentId: input.commentId,
+        editorId: input.editorId,
+        body: current.body,
+        createdAt: now,
+      });
+      const excess = await tx
+        .select({ id: usahaCommentRevisions.id })
+        .from(usahaCommentRevisions)
+        .where(eq(usahaCommentRevisions.commentId, input.commentId))
+        .orderBy(desc(usahaCommentRevisions.createdAt))
+        .offset(COMMENT_REVISION_CAP);
+      if (excess.length > 0) {
+        await tx
+          .delete(usahaCommentRevisions)
+          .where(inArray(usahaCommentRevisions.id, excess.map((r) => r.id)));
+      }
+
+      const [row] = await tx
+        .update(usahaComments)
+        .set({ body: input.body, updatedAt: now })
+        .where(
+          and(
+            eq(usahaComments.id, input.commentId),
+            eq(usahaComments.status, 'published'),
+            eq(usahaComments.userId, input.editorId),
+          ),
+        )
+        .returning({ id: usahaComments.id });
+      return row?.id ?? null;
+    });
+    if (!updated) return null;
+    return this.findCommentById(updated);
+  }
+
+  async markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(usahaComments)
+      .set({ status: 'deleted_by_author', deletedAt: new Date() })
+      .where(
+        and(
+          eq(usahaComments.id, id),
+          eq(usahaComments.userId, actorId),
+          eq(usahaComments.status, 'published'),
+        ),
+      )
+      .returning({ id: usahaComments.id });
+    return Boolean(row);
+  }
+
+  async takedownComment(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(usahaComments)
+      .set({ status: 'taken_down', reviewedBy: actorId, reviewedAt: new Date() })
+      .where(and(eq(usahaComments.id, id), eq(usahaComments.status, 'published')))
+      .returning({ id: usahaComments.id });
+    return Boolean(row);
+  }
+
+  async usahaTargetExists(id: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: usahas.id })
+      .from(usahas)
+      .where(
+        and(
+          eq(usahas.id, id),
+          eq(usahas.publishStatus, 'published'),
+          isNull(usahas.deletedAt),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
   }
 }

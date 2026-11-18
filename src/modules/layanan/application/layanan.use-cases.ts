@@ -1,5 +1,6 @@
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
+import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { Layanan, LayananFields, LayananPhone } from '../domain/layanan';
 import { LAYANAN_PHONES_MAX, LAYANAN_PHONES_MIN, slugifyLayanan } from '../domain/layanan';
@@ -12,7 +13,26 @@ export class LayananUseCases {
     private readonly repo: LayananRepositoryImpl,
     private readonly regions: RegionRepository,
     private readonly activity: RecordActivityEventUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
+
+  private async notifyGroup(
+    userId: string,
+    kind: 'new' | 'edit',
+    name: string,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis: kind === 'edit' ? 'Layanan (perbaikan)' : 'Layanan',
+        name: name.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
+  }
 
   listPublic(input: { regionRef?: string; category?: Layanan['category']; q?: string }) {
     return this.repo.listPublic(input);
@@ -65,6 +85,7 @@ export class LayananUseCases {
       layananId: kind === 'edit' ? layananId! : null,
       payload: normalized,
     });
+    await this.notifyGroup(userId, kind, normalized.name);
     return (await this.repo.findContribution(id))!;
   }
 
@@ -89,6 +110,7 @@ export class LayananUseCases {
       status: 'pending',
       revisionNote: null,
     });
+    await this.notifyGroup(userId, row.kind, normalized.name, true);
     return (await this.repo.findContribution(id))!;
   }
 

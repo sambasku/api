@@ -1,6 +1,8 @@
+import type { CursorPage } from "@/modules/word/domain/repositories/word.repository";
 import type {
   Place,
   PlaceCategory,
+  PlaceComment,
   PlaceImage,
   PlaceImageAttribution,
   PlaceRelatedCard,
@@ -9,6 +11,19 @@ import type {
   PlaceStatus,
   PlaceType,
 } from "../entities/place.entity";
+
+export interface NewPlaceCommentInput {
+  placeId: string;
+  userId: string;
+  body: string;
+  bodyOriginal: string | null;
+}
+
+export interface PlaceCommentListFilter {
+  status?: "published";
+  cursor?: string;
+  limit: number;
+}
 
 export interface PlaceImageInput {
   url: string;
@@ -131,4 +146,20 @@ export interface PlaceRepository {
   viewTotals(days: number | null): Promise<Map<string, number>>;
   /** Tren harian + total per place (published) untuk halaman analitik console. */
   viewReport(days: number): Promise<PlaceViewReport>;
+
+  // --- komentar ---
+  createComment(input: NewPlaceCommentInput): Promise<PlaceComment>;
+  findCommentById(id: string): Promise<PlaceComment | null>;
+  listComments(
+    placeId: string,
+    filter: PlaceCommentListFilter,
+  ): Promise<CursorPage<PlaceComment>>;
+  updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<PlaceComment | null>;
+  markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  takedownComment(id: string, actorId: string): Promise<boolean>;
+  placeTargetExists(id: string): Promise<boolean>;
 }

@@ -3,6 +3,7 @@ import type {
   UsahaOperationalStatus,
   UsahaPublishStatus,
 } from '@/shared/database/drizzle/schema/usahas.schema';
+import type { UsahaCommentStatus } from '@/shared/database/drizzle/schema/usaha-comments.schema';
 
 /** Id slug di tabel `usaha_categories`. */
 export type UsahaCategory = string;
@@ -107,4 +108,20 @@ export interface UsahaImageInput {
   url: string;
   isMain?: boolean;
   attribution?: UsahaImageAttribution | null;
+}
+
+export interface UsahaComment {
+  id: string;
+  usahaId: string;
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  userRole: string | null;
+  authorDeletedAt: Date | null;
+  body: string;
+  status: UsahaCommentStatus;
+  isEdited: boolean;
+  createdAt: Date;
+  updatedAt: Date | null;
 }

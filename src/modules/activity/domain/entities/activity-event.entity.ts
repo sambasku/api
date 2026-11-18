@@ -36,13 +36,18 @@ export const ACTIVITY_EVENT_KINDS = [
   'kreator_claimed',
   'cuisine_published',
  'place_published',
- 'event_published',
+  'event_published',
   'event_going',
+  'place_visited',
+  'usaha_visited',
   'pantun_created',
   'pantun_reply_created',
   'article_published',
   'article_comment_created',
   'event_comment_created',
+  'place_comment_created',
+  'usaha_comment_created',
+  'cuisine_comment_created',
   'announcement',
   'jinye_created',
   'jinye_comment_created',
@@ -97,6 +102,8 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'card_shared':
       return 'card_share';
     case 'usaha_published':
+    case 'usaha_visited':
+    case 'usaha_comment_created':
       return 'usaha';
     case 'layanan_published':
       return 'layanan';
@@ -104,8 +111,11 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'kreator_claimed':
       return 'karya';
     case 'cuisine_published':
+    case 'cuisine_comment_created':
       return 'culinary';
     case 'place_published':
+    case 'place_visited':
+    case 'place_comment_created':
       return 'place_listing';
 case 'event_published':
 case 'event_going':

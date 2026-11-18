@@ -6,6 +6,7 @@ import {
   isAllowedStockImageUrl,
   isStockWordImageProvider,
 } from '@/modules/word/domain/word-image-provider';
+import { wordImageAttributionSchema } from '@/modules/word/presentation/v1/validators/word-image-input';
 import type {
   ProposedChanges,
   SuggestionReasonCode,
@@ -155,6 +156,8 @@ const imageChangeSchema = z
     provider_file_id: z.string().trim().min(1).max(255).optional(),
     alt_text: z.string().trim().max(500).nullish(),
     is_primary: z.boolean().optional(),
+    /** Kredit Media Explorer; hanya dipakai action=add stock. */
+    attribution: wordImageAttributionSchema.optional(),
   })
   .superRefine((img, ctx) => {
     if (img.action === 'add') {
@@ -341,6 +344,7 @@ export function mapProposedChanges(
       providerFileId: i.provider_file_id,
       altText: i.alt_text ?? undefined,
       isPrimary: i.is_primary,
+      attribution: i.attribution,
     })),
   };
 }

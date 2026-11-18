@@ -16,6 +16,12 @@ import {
   placeImages,
   places,
 } from "@/shared/database/drizzle/schema/places.schema";
+import {
+  placeComments,
+  placeCommentRevisions,
+} from "@/shared/database/drizzle/schema/place-comments.schema";
+import { users } from "@/shared/database/drizzle/schema/users.schema";
+import { highestUserRoleSql } from "@/shared/database/highest-user-role-sql";
 import { placeViews } from "@/shared/database/drizzle/schema/place-views.schema";
 import { usahas } from "@/shared/database/drizzle/schema/usahas.schema";
 import { usahaCategories } from "@/shared/database/drizzle/schema/usaha-categories.schema";
@@ -39,11 +45,47 @@ import type {
   PlaceRepository,
   PlaceViewReport,
   UpdatePlaceInput,
+  NewPlaceCommentInput,
+  PlaceCommentListFilter,
 } from "../domain/repositories/place.repository";
+import type { PlaceComment } from "../domain/entities/place.entity";
+import type { CursorPage } from "@/modules/word/domain/repositories/word.repository";
 import { resolvePublicAuthor } from "@/shared/utils/resolve-public-author";
 
 type PlaceRow = typeof places.$inferSelect;
 type ImageRow = typeof placeImages.$inferSelect;
+
+const COMMENT_REVISION_CAP = 50;
+
+type PlaceCommentRow = typeof placeComments.$inferSelect;
+
+function toPlaceComment(
+  row: PlaceCommentRow,
+  meta: {
+    username: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+    userRole: string | null;
+    authorDeletedAt: Date | null;
+    isEdited: boolean;
+  },
+): PlaceComment {
+  return {
+    id: row.id,
+    placeId: row.placeId,
+    userId: row.userId,
+    username: meta.authorDeletedAt ? null : meta.username,
+    displayName: meta.authorDeletedAt ? null : meta.displayName,
+    avatarUrl: meta.authorDeletedAt ? null : meta.avatarUrl,
+    userRole: meta.authorDeletedAt ? null : meta.userRole,
+    authorDeletedAt: meta.authorDeletedAt,
+    body: row.body,
+    status: row.status,
+    isEdited: meta.isEdited,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt ?? null,
+  };
+}
 
 function parseSources(raw: string): PlaceSource[] {
   try {
@@ -737,6 +779,184 @@ export class PlaceRepositoryImpl implements PlaceRepository {
         lastViewed: r.lastViewed ?? null,
       })),
     };
+  }
+
+  // ---------------------------------------------------------------- komentar
+
+  async createComment(input: NewPlaceCommentInput): Promise<PlaceComment> {
+    const [row] = await this.db
+      .insert(placeComments)
+      .values({
+        placeId: input.placeId,
+        userId: input.userId,
+        body: input.body,
+        bodyOriginal: input.bodyOriginal,
+        createdAt: new Date(),
+      })
+      .returning();
+    if (!row) throw new Error("gagal menyimpan komentar wisata");
+    const comment = await this.findCommentById(row.id);
+    if (!comment) throw new Error("komentar wisata tidak ditemukan setelah dibuat");
+    return comment;
+  }
+
+  async findCommentById(id: string): Promise<PlaceComment | null> {
+    const [row] = await this.db
+      .select({
+        c: placeComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${placeCommentRevisions}
+          WHERE ${placeCommentRevisions.commentId} = ${placeComments.id}
+        )`,
+      })
+      .from(placeComments)
+      .leftJoin(users, eq(users.id, placeComments.userId))
+      .where(eq(placeComments.id, id))
+      .limit(1);
+    if (!row) return null;
+    return toPlaceComment(row.c, {
+      username: row.username,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+      userRole: row.userRole,
+      authorDeletedAt: row.authorDeletedAt,
+      isEdited: Boolean(row.isEdited),
+    });
+  }
+
+  async listComments(
+    placeId: string,
+    filter: PlaceCommentListFilter,
+  ): Promise<CursorPage<PlaceComment>> {
+    const limit = filter.limit;
+    const conditions = [eq(placeComments.placeId, placeId)];
+    if (filter.status) conditions.push(eq(placeComments.status, filter.status));
+    if (filter.cursor) conditions.push(lt(placeComments.id, filter.cursor));
+
+    const rows = await this.db
+      .select({
+        c: placeComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${placeCommentRevisions}
+          WHERE ${placeCommentRevisions.commentId} = ${placeComments.id}
+        )`,
+      })
+      .from(placeComments)
+      .leftJoin(users, eq(users.id, placeComments.userId))
+      .where(and(...conditions))
+      .orderBy(desc(placeComments.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      items: page.map((row) =>
+        toPlaceComment(row.c, {
+          username: row.username,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          userRole: row.userRole,
+          authorDeletedAt: row.authorDeletedAt,
+          isEdited: Boolean(row.isEdited),
+        }),
+      ),
+      nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
+      hasMore,
+    };
+  }
+
+  async updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<PlaceComment | null> {
+    const now = new Date();
+    const updated = await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ body: placeComments.body })
+        .from(placeComments)
+        .where(eq(placeComments.id, input.commentId))
+        .limit(1);
+      if (!current) return null;
+
+      await tx.insert(placeCommentRevisions).values({
+        commentId: input.commentId,
+        editorId: input.editorId,
+        body: current.body,
+        createdAt: now,
+      });
+      const excess = await tx
+        .select({ id: placeCommentRevisions.id })
+        .from(placeCommentRevisions)
+        .where(eq(placeCommentRevisions.commentId, input.commentId))
+        .orderBy(desc(placeCommentRevisions.createdAt))
+        .offset(COMMENT_REVISION_CAP);
+      if (excess.length > 0) {
+        await tx
+          .delete(placeCommentRevisions)
+          .where(inArray(placeCommentRevisions.id, excess.map((r) => r.id)));
+      }
+
+      const [row] = await tx
+        .update(placeComments)
+        .set({ body: input.body, updatedAt: now })
+        .where(
+          and(
+            eq(placeComments.id, input.commentId),
+            eq(placeComments.status, "published"),
+            eq(placeComments.userId, input.editorId),
+          ),
+        )
+        .returning({ id: placeComments.id });
+      return row?.id ?? null;
+    });
+    if (!updated) return null;
+    return this.findCommentById(updated);
+  }
+
+  async markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(placeComments)
+      .set({ status: "deleted_by_author", deletedAt: new Date() })
+      .where(
+        and(
+          eq(placeComments.id, id),
+          eq(placeComments.userId, actorId),
+          eq(placeComments.status, "published"),
+        ),
+      )
+      .returning({ id: placeComments.id });
+    return Boolean(row);
+  }
+
+  async takedownComment(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(placeComments)
+      .set({ status: "taken_down", reviewedBy: actorId, reviewedAt: new Date() })
+      .where(and(eq(placeComments.id, id), eq(placeComments.status, "published")))
+      .returning({ id: placeComments.id });
+    return Boolean(row);
+  }
+
+  async placeTargetExists(id: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: places.id })
+      .from(places)
+      .where(
+        and(eq(places.id, id), eq(places.status, "published"), isNull(places.deletedAt)),
+      )
+      .limit(1);
+    return Boolean(row);
   }
 }
 

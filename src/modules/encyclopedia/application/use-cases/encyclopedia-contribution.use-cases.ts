@@ -22,6 +22,7 @@ import type {
   NewArticleContributionInput,
 } from '../../domain/repositories/encyclopedia.repository';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
+import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import { validateArticlePayload } from './article.use-cases';
 
 // ---------------------------------------------------------------- komentar
@@ -271,8 +272,27 @@ export class SubmitArticleContributionUseCase {
     // di-keep untuk simetri DI dengan use case komentar.
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {
     void this.blocklistRepo;
+  }
+
+  private async notifyGroup(
+    userId: string,
+    kind: 'new' | 'edit',
+    title: string,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis: kind === 'edit' ? 'Ensiklopedia (perbaikan)' : 'Ensiklopedia',
+        name: title.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
   }
 
   async execute(input: SubmitContributionInput): Promise<ArticleContribution> {
@@ -351,6 +371,7 @@ export class SubmitArticleContributionUseCase {
       newData: { kind: input.kind, article_id: resolvedArticleId },
       requestId: input.requestId ?? null,
     });
+    await this.notifyGroup(input.userId, input.kind, input.payload.title);
     return created;
   }
 }
@@ -366,9 +387,28 @@ export class UpdateArticleContributionUseCase {
     private readonly auditRepo: AuditLogRepository,
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {
     void this.blocklistRepo;
     void this.abuse;
+  }
+
+  private async notifyGroup(
+    userId: string,
+    kind: 'new' | 'edit',
+    title: string,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis: kind === 'edit' ? 'Ensiklopedia (perbaikan)' : 'Ensiklopedia',
+        name: title.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
   }
 
   async execute(input: {
@@ -390,10 +430,11 @@ export class UpdateArticleContributionUseCase {
     }
     validateArticlePayload(input.payload);
 
+    const wasNeedsRevision = existing.status === 'needs_revision';
     const updated = await this.repo.updateContributionPayload({
       id: existing.id,
       payload: input.payload,
-      resetToPending: existing.status === 'needs_revision',
+      resetToPending: wasNeedsRevision,
     });
     if (!updated) {
       throw new NotFoundError('CONTRIBUTION_NOT_FOUND', 'Usulan tidak ditemukan');
@@ -408,6 +449,15 @@ export class UpdateArticleContributionUseCase {
       newData: { status: updated.status },
       requestId: input.requestId ?? null,
     });
+    // WA hanya saat kirim ulang dari revisi - edit pending biasa tidak spam grup.
+    if (wasNeedsRevision) {
+      await this.notifyGroup(
+        input.userId,
+        existing.kind,
+        input.payload.title,
+        true,
+      );
+    }
     return updated;
   }
 }

@@ -1,5 +1,6 @@
 // Entitas domain - murni TypeScript, tidak tahu Drizzle/HTTP
 
+import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
 
 export type SuggestionStatus = 'pending' | 'approved' | 'rejected' | 'corrected';
 export type ChangeAction = 'update' | 'add' | 'delete';
@@ -211,6 +212,8 @@ export interface ImageChange {
   providerFileId?: string;
   altText?: string;
   isPrimary?: boolean;
+  /** Kredit foto stock (Unsplash/Openverse/Pixabay); dibuang saat apply jika bukan stock. */
+  attribution?: WordImageAttribution;
 }
 
 export interface SuggestionSummary {

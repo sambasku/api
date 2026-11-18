@@ -1,6 +1,7 @@
 import type {
   CuisinePublishStatus,
 } from '@/shared/database/drizzle/schema/cuisines.schema';
+import type { CuisineCommentStatus } from '@/shared/database/drizzle/schema/cuisine-comments.schema';
 import type {
   CulinaryOperationalStatus,
   CulinaryPlaceType,
@@ -11,6 +12,22 @@ import type { CulinaryAvailability } from '@/shared/database/drizzle/schema/culi
 export interface CulinaryCategoryRef {
   id: string;
   name: string;
+}
+
+export interface CuisineComment {
+  id: string;
+  cuisineId: string;
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  userRole: string | null;
+  authorDeletedAt: Date | null;
+  body: string;
+  status: CuisineCommentStatus;
+  isEdited: boolean;
+  createdAt: Date;
+  updatedAt: Date | null;
 }
 
 /** Atribusi gambar - disimpan verbatim (PRD kuliner 13). */

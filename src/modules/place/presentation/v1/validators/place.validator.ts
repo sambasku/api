@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { opaqueId } from "@/shared/validation/id";
 import {
   SAMBAS_LAT_MAX,
   SAMBAS_LAT_MIN,
@@ -185,6 +186,8 @@ export const placeItemResponseSchema = z.object({
     ),
     image_count: z.number(),
     images: z.array(placeImageResponseSchema),
+    visit_count: z.number().int().nonnegative(),
+    viewer_visited: z.boolean(),
     status: placeStatusSchema,
     created_at: z.number(),
     updated_at: z.number().nullable(),
@@ -197,4 +200,44 @@ export const placeListResponseSchema = z.object({
     items: z.array(placeItemResponseSchema.shape.data),
     next_cursor: z.string().nullable(),
   }),
+});
+
+// ---------------------------------------------------------------- komentar
+
+export const placeCommentsQuerySchema = z.object({
+  cursor: opaqueId.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export const createPlaceCommentBodySchema = z.object({
+  body: z
+    .string({ error: "Komentar wajib diisi" })
+    .trim()
+    .min(1, "Komentar wajib diisi")
+    .max(1000, "Komentar maksimal 1000 karakter"),
+});
+
+export const updatePlaceCommentBodySchema = z.object({
+  body: z
+    .string({ error: "Komentar wajib diisi" })
+    .trim()
+    .min(1, "Komentar wajib diisi")
+    .max(1000, "Komentar maksimal 1000 karakter"),
+});
+
+export const placeCommentResponseSchema = z.object({
+  id: opaqueId,
+  place_id: z.string(),
+  user: z.object({
+    user_id: z.string(),
+    username: z.string().nullable(),
+    display_name: z.string().nullable(),
+    avatar_url: z.string().nullable(),
+    is_verifier: z.boolean(),
+  }),
+  body: z.string(),
+  status: z.enum(["published", "taken_down", "deleted_by_author"]),
+  is_edited: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string().nullable(),
 });

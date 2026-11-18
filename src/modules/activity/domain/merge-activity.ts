@@ -48,6 +48,8 @@ explore: [
 'cuisine_published',
 'event_published',
 'event_going',
+'place_visited',
+'usaha_visited',
 'pantun_created',
 'pantun_reply_created',
 'article_published',

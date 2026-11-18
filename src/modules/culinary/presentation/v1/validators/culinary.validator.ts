@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { opaqueId } from '@/shared/validation/id';
 
 const httpsUrl = z.string().url().startsWith('https://');
 
@@ -310,4 +311,44 @@ export const duplicateCandidateListSchema = z.object({
       z.object({ id: z.string(), slug: z.string(), name: z.string() }),
     ),
   }),
+});
+
+// ---------------------------------------------------------------- komentar kuliner
+
+export const cuisineCommentsQuerySchema = z.object({
+  cursor: opaqueId.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export const createCuisineCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Komentar wajib diisi' })
+    .trim()
+    .min(1, 'Komentar wajib diisi')
+    .max(1000, 'Komentar maksimal 1000 karakter'),
+});
+
+export const updateCuisineCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Komentar wajib diisi' })
+    .trim()
+    .min(1, 'Komentar wajib diisi')
+    .max(1000, 'Komentar maksimal 1000 karakter'),
+});
+
+export const cuisineCommentResponseSchema = z.object({
+  id: opaqueId,
+  cuisine_id: z.string(),
+  user: z.object({
+    user_id: z.string(),
+    username: z.string().nullable(),
+    display_name: z.string().nullable(),
+    avatar_url: z.string().nullable(),
+    is_verifier: z.boolean(),
+  }),
+  body: z.string(),
+  status: z.enum(['published', 'taken_down', 'deleted_by_author']),
+  is_edited: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string().nullable(),
 });

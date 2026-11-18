@@ -1,6 +1,12 @@
 import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { cuisines } from '@/shared/database/drizzle/schema/cuisines.schema';
+import {
+  cuisineComments,
+  cuisineCommentRevisions,
+} from '@/shared/database/drizzle/schema/cuisine-comments.schema';
+import { users } from '@/shared/database/drizzle/schema/users.schema';
+import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { culinaryCategories } from '@/shared/database/drizzle/schema/culinary-categories.schema';
 import { culinaryPlaces } from '@/shared/database/drizzle/schema/culinary-places.schema';
 import { culinaryPlaceCuisines } from '@/shared/database/drizzle/schema/culinary-place-cuisines.schema';
@@ -29,10 +35,46 @@ import type {
   UpdateCuisineInput,
   UpdateLinkInput,
   UpdatePlaceInput,
+  NewCuisineCommentInput,
+  CuisineCommentListFilter,
 } from '../domain/repositories/culinary.repository';
+import type { CuisineComment } from '../domain/entities/culinary.entity';
+import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 
 type CuisineRow = typeof cuisines.$inferSelect;
 type PlaceRow = typeof culinaryPlaces.$inferSelect;
+
+const COMMENT_REVISION_CAP = 50;
+
+type CuisineCommentRow = typeof cuisineComments.$inferSelect;
+
+function toCuisineComment(
+  row: CuisineCommentRow,
+  meta: {
+    username: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+    userRole: string | null;
+    authorDeletedAt: Date | null;
+    isEdited: boolean;
+  },
+): CuisineComment {
+  return {
+    id: row.id,
+    cuisineId: row.cuisineId,
+    userId: row.userId,
+    username: meta.authorDeletedAt ? null : meta.username,
+    displayName: meta.authorDeletedAt ? null : meta.displayName,
+    avatarUrl: meta.authorDeletedAt ? null : meta.avatarUrl,
+    userRole: meta.authorDeletedAt ? null : meta.userRole,
+    authorDeletedAt: meta.authorDeletedAt,
+    body: row.body,
+    status: row.status,
+    isEdited: meta.isEdited,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt ?? null,
+  };
+}
 
 const cuisineSelect = {
   ...getTableColumns(cuisines),
@@ -730,5 +772,187 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .from(culinaryCategories)
       .where(and(...conds))
       .orderBy(culinaryCategories.sortOrder, culinaryCategories.name);
+  }
+
+  // ---------------------------------------------------------------- komentar
+
+  async createComment(input: NewCuisineCommentInput): Promise<CuisineComment> {
+    const [row] = await this.db
+      .insert(cuisineComments)
+      .values({
+        cuisineId: input.cuisineId,
+        userId: input.userId,
+        body: input.body,
+        bodyOriginal: input.bodyOriginal,
+        createdAt: new Date(),
+      })
+      .returning();
+    if (!row) throw new Error('gagal menyimpan komentar kuliner');
+    const comment = await this.findCommentById(row.id);
+    if (!comment) throw new Error('komentar kuliner tidak ditemukan setelah dibuat');
+    return comment;
+  }
+
+  async findCommentById(id: string): Promise<CuisineComment | null> {
+    const [row] = await this.db
+      .select({
+        c: cuisineComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${cuisineCommentRevisions}
+          WHERE ${cuisineCommentRevisions.commentId} = ${cuisineComments.id}
+        )`,
+      })
+      .from(cuisineComments)
+      .leftJoin(users, eq(users.id, cuisineComments.userId))
+      .where(eq(cuisineComments.id, id))
+      .limit(1);
+    if (!row) return null;
+    return toCuisineComment(row.c, {
+      username: row.username,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+      userRole: row.userRole,
+      authorDeletedAt: row.authorDeletedAt,
+      isEdited: Boolean(row.isEdited),
+    });
+  }
+
+  async listComments(
+    cuisineId: string,
+    filter: CuisineCommentListFilter,
+  ): Promise<CursorPage<CuisineComment>> {
+    const limit = filter.limit;
+    const conditions = [eq(cuisineComments.cuisineId, cuisineId)];
+    if (filter.status) conditions.push(eq(cuisineComments.status, filter.status));
+    if (filter.cursor) conditions.push(lt(cuisineComments.id, filter.cursor));
+
+    const rows = await this.db
+      .select({
+        c: cuisineComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${cuisineCommentRevisions}
+          WHERE ${cuisineCommentRevisions.commentId} = ${cuisineComments.id}
+        )`,
+      })
+      .from(cuisineComments)
+      .leftJoin(users, eq(users.id, cuisineComments.userId))
+      .where(and(...conditions))
+      .orderBy(desc(cuisineComments.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      items: page.map((row) =>
+        toCuisineComment(row.c, {
+          username: row.username,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          userRole: row.userRole,
+          authorDeletedAt: row.authorDeletedAt,
+          isEdited: Boolean(row.isEdited),
+        }),
+      ),
+      nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
+      hasMore,
+    };
+  }
+
+  async updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<CuisineComment | null> {
+    const now = new Date();
+    const updated = await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ body: cuisineComments.body })
+        .from(cuisineComments)
+        .where(eq(cuisineComments.id, input.commentId))
+        .limit(1);
+      if (!current) return null;
+
+      await tx.insert(cuisineCommentRevisions).values({
+        commentId: input.commentId,
+        editorId: input.editorId,
+        body: current.body,
+        createdAt: now,
+      });
+      const excess = await tx
+        .select({ id: cuisineCommentRevisions.id })
+        .from(cuisineCommentRevisions)
+        .where(eq(cuisineCommentRevisions.commentId, input.commentId))
+        .orderBy(desc(cuisineCommentRevisions.createdAt))
+        .offset(COMMENT_REVISION_CAP);
+      if (excess.length > 0) {
+        await tx
+          .delete(cuisineCommentRevisions)
+          .where(inArray(cuisineCommentRevisions.id, excess.map((r) => r.id)));
+      }
+
+      const [row] = await tx
+        .update(cuisineComments)
+        .set({ body: input.body, updatedAt: now })
+        .where(
+          and(
+            eq(cuisineComments.id, input.commentId),
+            eq(cuisineComments.status, 'published'),
+            eq(cuisineComments.userId, input.editorId),
+          ),
+        )
+        .returning({ id: cuisineComments.id });
+      return row?.id ?? null;
+    });
+    if (!updated) return null;
+    return this.findCommentById(updated);
+  }
+
+  async markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(cuisineComments)
+      .set({ status: 'deleted_by_author', deletedAt: new Date() })
+      .where(
+        and(
+          eq(cuisineComments.id, id),
+          eq(cuisineComments.userId, actorId),
+          eq(cuisineComments.status, 'published'),
+        ),
+      )
+      .returning({ id: cuisineComments.id });
+    return Boolean(row);
+  }
+
+  async takedownComment(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(cuisineComments)
+      .set({ status: 'taken_down', reviewedBy: actorId, reviewedAt: new Date() })
+      .where(and(eq(cuisineComments.id, id), eq(cuisineComments.status, 'published')))
+      .returning({ id: cuisineComments.id });
+    return Boolean(row);
+  }
+
+  async cuisineTargetExists(id: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: cuisines.id })
+      .from(cuisines)
+      .where(
+        and(
+          eq(cuisines.id, id),
+          eq(cuisines.publishStatus, 'published'),
+          isNull(cuisines.deletedAt),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
   }
 }

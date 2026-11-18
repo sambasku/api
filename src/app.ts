@@ -314,6 +314,17 @@ import {
   createAdminPlaceRoutes,
   createPublicPlaceRoutes,
 } from "@/modules/place/presentation/v1/place.routes";
+import {
+  CreatePlaceCommentUseCase,
+  DeletePlaceCommentUseCase,
+  ListPlaceCommentsUseCase,
+  TakedownPlaceCommentUseCase,
+  UpdatePlaceCommentUseCase,
+} from "@/modules/place/application/use-cases/place-comment.use-cases";
+import {
+  createAdminPlaceCommentRoutes,
+  createPublicPlaceCommentRoutes,
+} from "@/modules/place/presentation/v1/place-comment.routes";
 import { PlaceContributionRepositoryImpl } from "@/modules/place-contribution/infrastructure/place-contribution.repository.impl";
 import { PlaceContributionUseCases } from "@/modules/place-contribution/application/place-contribution.use-cases";
 import { PlaceContributionController } from "@/modules/place-contribution/presentation/v1/place-contribution.controller";
@@ -367,6 +378,28 @@ import {
   createAdminEventGoingRoutes,
   createEventGoingRoutes,
 } from "@/modules/event-going/presentation/v1/event-going.routes";
+import { PlaceVisitRepositoryImpl } from "@/modules/place-visit/infrastructure/place-visit.repository.impl";
+import {
+  ListPlaceVisitsUseCase,
+  MarkPlaceVisitUseCase,
+  UnmarkPlaceVisitUseCase,
+} from "@/modules/place-visit/application/use-cases/place-visit.use-cases";
+import { PlaceVisitController } from "@/modules/place-visit/presentation/v1/place-visit.controller";
+import {
+  createAdminPlaceVisitRoutes,
+  createPlaceVisitRoutes,
+} from "@/modules/place-visit/presentation/v1/place-visit.routes";
+import { UsahaVisitRepositoryImpl } from "@/modules/usaha-visit/infrastructure/usaha-visit.repository.impl";
+import {
+  ListUsahaVisitsUseCase,
+  MarkUsahaVisitUseCase,
+  UnmarkUsahaVisitUseCase,
+} from "@/modules/usaha-visit/application/use-cases/usaha-visit.use-cases";
+import { UsahaVisitController } from "@/modules/usaha-visit/presentation/v1/usaha-visit.controller";
+import {
+  createAdminUsahaVisitRoutes,
+  createUsahaVisitRoutes,
+} from "@/modules/usaha-visit/presentation/v1/usaha-visit.routes";
 // Fitur Usaha (PRD usaha): direktori usaha + usulan + klaim + laporan.
 import { UsahaCategoryRepositoryImpl } from "@/modules/usaha-category/infrastructure/usaha-category.repository.impl";
 import {
@@ -403,6 +436,17 @@ import {
   createAdminUsahaRoutes,
   createPublicUsahaRoutes,
 } from "@/modules/usaha/presentation/v1/usaha.routes";
+import {
+  CreateUsahaCommentUseCase,
+  DeleteUsahaCommentUseCase,
+  ListUsahaCommentsUseCase,
+  TakedownUsahaCommentUseCase,
+  UpdateUsahaCommentUseCase,
+} from "@/modules/usaha/application/use-cases/usaha-comment.use-cases";
+import {
+  createAdminUsahaCommentRoutes,
+  createPublicUsahaCommentRoutes,
+} from "@/modules/usaha/presentation/v1/usaha-comment.routes";
 import { createUsahaMineRoutes } from "@/modules/usaha/presentation/v1/usaha-mine.routes";
 import { UsahaContributionRepositoryImpl } from "@/modules/usaha-contribution/infrastructure/usaha-contribution.repository.impl";
 import { UsahaContributionUseCases } from "@/modules/usaha-contribution/application/usaha-contribution.use-cases";
@@ -506,6 +550,17 @@ import {
   createAdminCulinaryRoutes,
   createPublicCulinaryRoutes,
 } from "@/modules/culinary/presentation/v1/culinary.routes";
+import {
+  CreateCuisineCommentUseCase,
+  DeleteCuisineCommentUseCase,
+  ListCuisineCommentsUseCase,
+  TakedownCuisineCommentUseCase,
+  UpdateCuisineCommentUseCase,
+} from "@/modules/culinary/application/use-cases/cuisine-comment.use-cases";
+import {
+  createAdminCuisineCommentRoutes,
+  createPublicCuisineCommentRoutes,
+} from "@/modules/culinary/presentation/v1/cuisine-comment.routes";
 import { CulinaryContributionRepositoryImpl } from "@/modules/culinary-contribution/infrastructure/culinary-contribution.repository.impl";
 import { CulinaryContributionUseCases } from "@/modules/culinary-contribution/application/culinary-contribution.use-cases";
 import { CulinaryContributionController } from "@/modules/culinary-contribution/presentation/v1/culinary-contribution.controller";
@@ -1516,6 +1571,12 @@ const announcementController = new AnnouncementController(
 );
 
 const placeRepo = new PlaceRepositoryImpl(db);
+const placeVisitRepo = new PlaceVisitRepositoryImpl(db);
+const placeVisitController = new PlaceVisitController({
+  mark: new MarkPlaceVisitUseCase(placeVisitRepo, activityEvents),
+  unmark: new UnmarkPlaceVisitUseCase(placeVisitRepo, activityEvents),
+  list: new ListPlaceVisitsUseCase(placeVisitRepo),
+});
 const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
 const placeController = new PlaceController(
   new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
@@ -1531,6 +1592,25 @@ const placeController = new PlaceController(
   new HidePlaceImageUseCase(placeRepo, activityEvents),
   listRelatedContent,
   replaceContentLinks,
+  placeVisitRepo,
+  {
+    listComments: new ListPlaceCommentsUseCase(placeRepo),
+    createComment: new CreatePlaceCommentUseCase(
+      placeRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
+    ),
+    updateComment: new UpdatePlaceCommentUseCase(
+      placeRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+    ),
+    deleteComment: new DeletePlaceCommentUseCase(placeRepo),
+    takedownComment: new TakedownPlaceCommentUseCase(placeRepo, auditRepo),
+  },
 );
 const placeCategoryController = new PlaceCategoryController(
   new CreatePlaceCategoryUseCase(placeCategoryRepo),
@@ -1623,6 +1703,12 @@ const eventContributionController = new EventContributionController(
 
 // ---- Fitur Usaha (PRD usaha) - direktori usaha & jasa lokal ----
 const usahaRepo = new UsahaRepositoryImpl(db);
+const usahaVisitRepo = new UsahaVisitRepositoryImpl(db);
+const usahaVisitController = new UsahaVisitController({
+  mark: new MarkUsahaVisitUseCase(usahaVisitRepo, activityEvents),
+  unmark: new UnmarkUsahaVisitUseCase(usahaVisitRepo, activityEvents),
+  list: new ListUsahaVisitsUseCase(usahaVisitRepo),
+});
 const usahaCategoryRepo = new UsahaCategoryRepositoryImpl(db);
 const usahaCategoryController = new UsahaCategoryController(
   new CreateUsahaCategoryUseCase(usahaCategoryRepo),
@@ -1646,6 +1732,25 @@ const usahaController = new UsahaController(
   new AppendUsahaImagesUseCase(usahaRepo, userRepo, activityEvents),
   new HideUsahaImageUseCase(usahaRepo),
   listRelatedContent,
+  usahaVisitRepo,
+  {
+    listComments: new ListUsahaCommentsUseCase(usahaRepo),
+    createComment: new CreateUsahaCommentUseCase(
+      usahaRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
+    ),
+    updateComment: new UpdateUsahaCommentUseCase(
+      usahaRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+    ),
+    deleteComment: new DeleteUsahaCommentUseCase(usahaRepo),
+    takedownComment: new TakedownUsahaCommentUseCase(usahaRepo, auditRepo),
+  },
 );
 const usahaContributionRepo = new UsahaContributionRepositoryImpl(db);
 const usahaClaimRepo = new UsahaClaimRepositoryImpl(db);
@@ -1665,7 +1770,12 @@ const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
 );
 const layananController = new LayananController(
-  new LayananUseCases(new LayananRepositoryImpl(db), regionRepo, activityEvents),
+  new LayananUseCases(
+    new LayananRepositoryImpl(db),
+    regionRepo,
+    activityEvents,
+    explorationGroupNotifier,
+  ),
   listRelatedContent,
 );
 const karyaLemmaLinkController = new KaryaLemmaLinkController({
@@ -1746,6 +1856,24 @@ const culinaryController = new CulinaryController(
   new DeleteCulinaryUseCase(culinaryRepo, 'place'),
   new AppendCuisineImagesUseCase(culinaryRepo, userRepo, activityEvents),
   listRelatedContent,
+  {
+    listComments: new ListCuisineCommentsUseCase(culinaryRepo),
+    createComment: new CreateCuisineCommentUseCase(
+      culinaryRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+      activityEvents,
+    ),
+    updateComment: new UpdateCuisineCommentUseCase(
+      culinaryRepo,
+      auditRepo,
+      commentBlocklistRepo,
+      recordAbuseSignal,
+    ),
+    deleteComment: new DeleteCuisineCommentUseCase(culinaryRepo),
+    takedownComment: new TakedownCuisineCommentUseCase(culinaryRepo, auditRepo),
+  },
 );
 const culinaryContributionRepo = new CulinaryContributionRepositoryImpl(db);
 const culinaryClaimRepo = new CulinaryClaimRepositoryImpl(db);
@@ -2735,11 +2863,37 @@ app.route(
   createAdminPlaceRoutes({ controller: placeController, authenticate }),
 );
 app.route(
+  "/api/v1/admin/places",
+  createAdminPlaceCommentRoutes({ controller: placeController, authenticate }),
+);
+app.route(
   "/api/v1/places",
   createPublicPlaceRoutes({
     controller: placeController,
     optionalAuthenticate,
     softAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/places",
+  createPlaceVisitRoutes({
+    controller: placeVisitController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/places",
+  createPublicPlaceCommentRoutes({
+    controller: placeController,
+    authenticate,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/places",
+  createAdminPlaceVisitRoutes({
+    controller: placeVisitController,
+    authenticate,
   }),
 );
 app.route(
@@ -2842,6 +2996,10 @@ app.route(
   createAdminUsahaRoutes({ controller: usahaController, authenticate }),
 );
 app.route(
+  "/api/v1/admin/usaha",
+  createAdminUsahaCommentRoutes({ controller: usahaController, authenticate }),
+);
+app.route(
   "/api/v1/admin/usaha-categories",
   createAdminUsahaCategoryRoutes({
     controller: usahaCategoryController,
@@ -2896,6 +3054,28 @@ app.route(
 app.route(
   "/api/v1/usaha",
   createPublicUsahaRoutes({ controller: usahaController, optionalAuthenticate }),
+);
+app.route(
+  "/api/v1/usaha",
+  createPublicUsahaCommentRoutes({
+    controller: usahaController,
+    authenticate,
+    optionalAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/usaha",
+  createUsahaVisitRoutes({
+    controller: usahaVisitController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/usaha",
+  createAdminUsahaVisitRoutes({
+    controller: usahaVisitController,
+    authenticate,
+  }),
 );
 app.route(
   "/api/v1/admin/layanan",
@@ -3019,6 +3199,10 @@ app.route(
   createAdminCulinaryRoutes({ controller: culinaryController, authenticate }),
 );
 app.route(
+  "/api/v1/admin/culinary",
+  createAdminCuisineCommentRoutes({ controller: culinaryController, authenticate }),
+);
+app.route(
   "/api/v1/admin/culinary-categories",
   createAdminCulinaryCategoryRoutes({
     controller: culinaryCategoryController,
@@ -3077,6 +3261,14 @@ app.route(
 app.route(
   "/api/v1/culinary",
   createPublicCulinaryRoutes({ controller: culinaryController, optionalAuthenticate }),
+);
+app.route(
+  "/api/v1/culinary",
+  createPublicCuisineCommentRoutes({
+    controller: culinaryController,
+    authenticate,
+    optionalAuthenticate,
+  }),
 );
 app.route(
   "/api/v1/word-groups",
@@ -3688,12 +3880,14 @@ const encyclopediaController = new EncyclopediaController({
     auditRepo,
     commentBlocklistRepo,
     recordAbuseSignal,
+    explorationGroupNotifier,
   ),
   resubmitContribution: new ResubmitArticleContributionUseCase(
     encyclopediaRepo,
     auditRepo,
     commentBlocklistRepo,
     recordAbuseSignal,
+    explorationGroupNotifier,
   ),
   listMyContributions: new ListMyArticleContributionsUseCase(encyclopediaRepo),
   listContributions: new ListArticleContributionsUseCase(encyclopediaRepo),

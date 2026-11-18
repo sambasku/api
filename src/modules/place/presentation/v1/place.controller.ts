@@ -1,12 +1,22 @@
 import type { Context } from "hono";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
+import { UnauthorizedError } from "@/shared/errors/app-error";
 import type { AppVariables } from "@/shared/types";
+import { isVerifierRole } from "@/modules/word/application/utils/resolve-publication";
 import { clientIpKey, normalizedDeviceId } from "@/shared/middlewares/rate-limit.middleware";
 import type {
   Place,
+  PlaceComment,
   PlaceImage,
   PlaceRelatedCard,
 } from "../../domain/entities/place.entity";
+import type {
+  CreatePlaceCommentUseCase,
+  DeletePlaceCommentUseCase,
+  ListPlaceCommentsUseCase,
+  TakedownPlaceCommentUseCase,
+  UpdatePlaceCommentUseCase,
+} from "../../application/use-cases/place-comment.use-cases";
 import type {
   AppendPlaceImagesUseCase,
   CreatePlaceUseCase,
@@ -21,6 +31,7 @@ import type {
   UpdatePlaceUseCase,
 } from "../../application/use-cases/place.use-cases";
 import type { z } from "zod";
+import type { PlaceVisitRepository } from "@/modules/place-visit/domain/repositories/place-visit.repository";
 import type {
   createPlaceBodySchema,
   listPlacesQuerySchema,
@@ -31,7 +42,41 @@ import type {
  * Identitas pembaca untuk dedupe view harian: user login > device id > IP.
  * Prefiks mencegah tabrakan antar ruang nama (user vs device vs ip).
  */
-export function viewerKey(c: Context<{ Variables: AppVariables }>): string {
+export function requireUser(c: Context<{ Variables: AppVariables }>) {
+  const user = c.get("user");
+  if (!user) throw new UnauthorizedError();
+  return user;
+}
+
+function toCommentWire(c: PlaceComment) {
+  const deleted = c.authorDeletedAt !== null;
+  return {
+    id: c.id,
+    place_id: c.placeId,
+    user: {
+      user_id: c.userId,
+      username: deleted ? null : c.username,
+      display_name: deleted ? null : c.displayName,
+      avatar_url: deleted ? null : c.avatarUrl,
+      is_verifier: !deleted && isVerifierRole(c.userRole ?? ""),
+    },
+    body: c.body,
+    status: c.status,
+    is_edited: c.isEdited,
+    created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt?.toISOString() ?? null,
+  };
+}
+
+export interface PlaceCommentControllerDeps {
+  listComments: ListPlaceCommentsUseCase;
+  createComment: CreatePlaceCommentUseCase;
+  updateComment: UpdatePlaceCommentUseCase;
+  deleteComment: DeletePlaceCommentUseCase;
+  takedownComment: TakedownPlaceCommentUseCase;
+}
+
+function viewerKey(c: Context<{ Variables: AppVariables }>): string {
   const userId = c.get("user")?.user_id;
   if (userId) return `u:${userId}`;
   const deviceId = normalizedDeviceId(c);
@@ -41,7 +86,12 @@ export function viewerKey(c: Context<{ Variables: AppVariables }>): string {
 
 function serialize(
   p: Place,
-  extra?: { imageCount?: number; relatedCards?: PlaceRelatedCard[] },
+  extra?: {
+    imageCount?: number;
+    relatedCards?: PlaceRelatedCard[];
+    visitCount?: number;
+    viewerVisited?: boolean;
+  },
 ) {
   const related = (
     extra?.relatedCards ??
@@ -110,6 +160,8 @@ function serialize(
         : null,
     })),
     status: p.status,
+    visit_count: extra?.visitCount ?? 0,
+    viewer_visited: extra?.viewerVisited ?? false,
     created_at: Math.floor(p.createdAt.getTime() / 1000),
     updated_at: p.updatedAt ? Math.floor(p.updatedAt.getTime() / 1000) : null,
   };
@@ -201,37 +253,66 @@ export class PlaceController {
     private readonly hideImageUc: HidePlaceImageUseCase,
     private readonly listRelated?: ListRelatedFn,
     private readonly replaceRelated?: ReplaceRelatedFn,
+    private readonly visitRepo?: PlaceVisitRepository,
+    private readonly commentDeps?: PlaceCommentControllerDeps,
   ) {}
 
-  listPublic(
+  private get comments(): PlaceCommentControllerDeps {
+    if (!this.commentDeps) throw new Error("comment deps not wired");
+    return this.commentDeps;
+  }
+
+  /** Batch count + viewer visited - 0-2 query, tanpa N+1. */
+  private async visitExtras(
+    placeIds: string[],
+    userId: string | undefined,
+  ): Promise<{ counts: Map<string, number>; viewer: Set<string> }> {
+    if (!this.visitRepo || placeIds.length === 0) {
+      return { counts: new Map(), viewer: new Set() };
+    }
+    const counts = await this.visitRepo.countByPlaceIds(placeIds);
+    const viewer = userId
+      ? await this.visitRepo.viewerVisitedByPlaceIds(userId, placeIds)
+      : new Set<string>();
+    return { counts, viewer };
+  }
+
+  async listPublic(
     c: Context<{ Variables: AppVariables }>,
     query: z.infer<typeof listPlacesQuerySchema>,
   ) {
-    return this.listUc
-      .execute({
-        limit: query.limit,
-        before: query.before,
-        category: query.category,
-        type: query.type,
-        regionId: query.region_id,
-        villageId: query.village_id,
-        villageUnset: query.village_unset === "1",
-        q: query.q,
-        publicOnly: true,
-      })
-      .then((r) =>
-        c.json({
-          success: true as const,
-          data: {
-            items: r.items.map((item) => serialize(item)),
-            next_cursor: r.nextCursor,
-          },
-        }),
-      );
+    const r = await this.listUc.execute({
+      limit: query.limit,
+      before: query.before,
+      category: query.category,
+      type: query.type,
+      regionId: query.region_id,
+      villageId: query.village_id,
+      villageUnset: query.village_unset === "1",
+      q: query.q,
+      publicOnly: true,
+    });
+    const visits = await this.visitExtras(
+      r.items.map((item) => item.id),
+      c.get("user")?.user_id,
+    );
+    return c.json({
+      success: true as const,
+      data: {
+        items: r.items.map((item) =>
+          serialize(item, {
+            visitCount: visits.counts.get(item.id) ?? 0,
+            viewerVisited: visits.viewer.has(item.id),
+          }),
+        ),
+        next_cursor: r.nextCursor,
+      },
+    });
   }
 
   async getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
     const p = await this.getBySlugUc.execute(slug, true);
+    const visits = await this.visitExtras([p.id], c.get("user")?.user_id);
     const fromLinks = this.listRelated
       ? await this.listRelated.execute('place', p.id)
       : [];
@@ -240,6 +321,8 @@ export class PlaceController {
     const base = serialize(p, {
       imageCount: p.imageCount,
       relatedCards: p.relatedCards,
+      visitCount: visits.counts.get(p.id) ?? 0,
+      viewerVisited: visits.viewer.has(p.id),
     });
     if (fromLinks.length === 0) {
       return c.json({ success: true as const, data: base });
@@ -435,5 +518,59 @@ export class PlaceController {
     return this.viewReportUc
       .execute(days)
       .then((report) => c.json({ success: true as const, data: report }));
+  }
+
+  async listComments(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const q = c.req.valid("query" as never) as { cursor?: string; limit: number };
+    const page = await this.comments.listComments.execute(id, q.cursor, q.limit);
+    return c.json({
+      success: true as const,
+      data: {
+        items: page.items.map(toCommentWire),
+        next_cursor: page.nextCursor,
+        has_more: page.hasMore,
+      },
+    });
+  }
+
+  async createComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const body = c.req.valid("json" as never) as { body: string };
+    const comment = await this.comments.createComment.execute({
+      placeId: id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get("requestId") ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async updateComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const body = c.req.valid("json" as never) as { body: string };
+    const updated = await this.comments.updateComment.execute({
+      commentId: id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get("requestId") ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(updated) });
+  }
+
+  async deleteComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid("param" as never) as { id: string };
+    await this.comments.deleteComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
+  }
+
+  async takedownComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid("param" as never) as { id: string };
+    await this.comments.takedownComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
   }
 }

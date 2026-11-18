@@ -5,14 +5,29 @@ import type {
 } from '@/shared/database/drizzle/schema/culinary-places.schema';
 import type { CulinaryAvailability } from '@/shared/database/drizzle/schema/culinary-place-cuisines.schema';
 import type { CuisinePublishStatus } from '@/shared/database/drizzle/schema/cuisines.schema';
+import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
   Cuisine,
+  CuisineComment,
   CuisineDetail,
   CuisinePlaceLink,
   CulinaryCategoryRef,
   CulinaryPlace,
   CulinaryPlaceDetail,
 } from '../entities/culinary.entity';
+
+export interface NewCuisineCommentInput {
+  cuisineId: string;
+  userId: string;
+  body: string;
+  bodyOriginal: string | null;
+}
+
+export interface CuisineCommentListFilter {
+  status?: 'published';
+  cursor?: string;
+  limit: number;
+}
 
 export interface CreateCuisineInput {
   id?: string;
@@ -187,4 +202,20 @@ export interface CulinaryRepository {
   // -- kategori --
   categoryRef(categoryId: string): Promise<CulinaryCategoryRef | null>;
   listCategories(publicOnly: boolean): Promise<CulinaryCategoryRef[]>;
+
+  // --- komentar kuliner ---
+  createComment(input: NewCuisineCommentInput): Promise<CuisineComment>;
+  findCommentById(id: string): Promise<CuisineComment | null>;
+  listComments(
+    cuisineId: string,
+    filter: CuisineCommentListFilter,
+  ): Promise<CursorPage<CuisineComment>>;
+  updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<CuisineComment | null>;
+  markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  takedownComment(id: string, actorId: string): Promise<boolean>;
+  cuisineTargetExists(id: string): Promise<boolean>;
 }

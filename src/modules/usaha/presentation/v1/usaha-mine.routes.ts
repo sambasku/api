@@ -96,6 +96,8 @@ export function createUsahaMineRoutes(deps: {
                 }
               : null,
             published_at: u.publishedAt ? u.publishedAt.toISOString() : null,
+            visit_count: 0,
+            viewer_visited: false,
             created_at: u.createdAt.toISOString(),
             updated_at: u.updatedAt ? u.updatedAt.toISOString() : null,
             pending_changes: u.pending_changes,

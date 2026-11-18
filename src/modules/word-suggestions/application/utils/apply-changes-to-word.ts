@@ -1,6 +1,9 @@
 import type { ProposedChanges } from '../../domain/entities/word-suggestion.entity';
 import { NotFoundError, ConflictError, BadRequestError } from '@/shared/errors/app-error';
-import { resolveWordImageProvider } from '@/modules/word/domain/word-image-provider';
+import {
+  resolveWordImageProvider,
+  stockImageAttribution,
+} from '@/modules/word/domain/word-image-provider';
 import { db } from '@/shared/database/drizzle/client';
 import {
   wordEditSuggestions,
@@ -952,6 +955,7 @@ const groupAudit: {
             providerFileId: img.providerFileId,
             altText: img.altText ?? null,
             isPrimary: img.isPrimary ?? false,
+            attribution: stockImageAttribution(provider, img.attribution),
             createdBy: reviewerId,
             status: 'published',
             isVerified,

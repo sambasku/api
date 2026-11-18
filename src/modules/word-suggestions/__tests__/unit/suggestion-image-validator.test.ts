@@ -54,4 +54,49 @@ describe('createSuggestionSchema images', () => {
     });
     expect(parsed.success).toBe(true);
   });
+
+  it('menerima attribution stock Unsplash pada action=add', () => {
+    const parsed = createSuggestionSchema.safeParse({
+      reason_code: 'add_photo',
+      proposed_changes: {
+        images: [
+          {
+            action: 'add',
+            url: 'https://images.unsplash.com/photo-1',
+            provider: 'unsplash',
+            provider_file_id: 'unsplash-1',
+            attribution: {
+              name: 'Ada',
+              url: 'https://unsplash.com/@ada',
+              license: 'Unsplash License',
+              license_url: 'https://unsplash.com/license',
+              source: 'unsplash',
+            },
+          },
+        ],
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('menolak attribution.url non-https', () => {
+    const parsed = createSuggestionSchema.safeParse({
+      reason_code: 'add_photo',
+      proposed_changes: {
+        images: [
+          {
+            action: 'add',
+            url: 'https://images.unsplash.com/photo-1',
+            provider: 'unsplash',
+            provider_file_id: 'unsplash-1',
+            attribution: {
+              name: 'Ada',
+              url: 'http://unsplash.com/@ada',
+            },
+          },
+        ],
+      },
+    });
+    expect(parsed.success).toBe(false);
+  });
 });

@@ -1,0 +1,135 @@
+import type { MiddlewareHandler } from 'hono';
+import { createRoute } from '@hono/zod-openapi';
+import { z } from 'zod';
+import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
+import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
+import { createOpenApiApp } from '@/shared/openapi/openapi-app';
+import {
+  errorResponseSchema,
+  okNullResponseSchema,
+} from '@/shared/openapi/error-response.schema';
+import type { AppVariables } from '@/shared/types';
+import type { CulinaryController } from './culinary.controller';
+import {
+  createCuisineCommentBodySchema,
+  cuisineCommentResponseSchema,
+  cuisineCommentsQuerySchema,
+  updateCuisineCommentBodySchema,
+} from './validators/culinary.validator';
+
+const json = <T extends z.ZodType>(schema: T) => ({
+  'application/json': { schema },
+});
+
+const idParam = z.object({ id: z.string().min(1).max(64) });
+const commentIdParam = z.object({ id: z.string().min(1).max(64) });
+const commentListSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    items: z.array(cuisineCommentResponseSchema),
+    next_cursor: z.string().nullable(),
+    has_more: z.boolean(),
+  }),
+});
+const commentItemSchema = z.object({
+  success: z.literal(true),
+  data: cuisineCommentResponseSchema,
+});
+
+export function createPublicCuisineCommentRoutes(deps: {
+  controller: CulinaryController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  optionalAuthenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}) {
+  const routes = createOpenApiApp();
+  routes.use('*', rateLimit({ points: 120, duration: 60 }));
+
+  const listRoute = createRoute({
+    method: 'get',
+    path: '/cuisines/:id/comments',
+    tags: ['Cuisine Comments'],
+    summary: 'List komentar kuliner (publik)',
+    request: { params: idParam, query: cuisineCommentsQuerySchema },
+    responses: {
+      200: { description: 'Daftar komentar', content: json(commentListSchema) },
+    },
+  });
+
+  const createRoute_ = createRoute({
+    method: 'post',
+    path: '/cuisines/:id/comments',
+    tags: ['Cuisine Comments'],
+    summary: 'Tambah komentar kuliner (login)',
+    request: {
+      params: idParam,
+      body: { content: json(createCuisineCommentBodySchema) },
+    },
+    responses: {
+      201: { description: 'Komentar dibuat', content: json(commentItemSchema) },
+      401: { description: 'Tidak terautentikasi', content: json(errorResponseSchema) },
+      404: { description: 'Kuliner tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const updateRoute_ = createRoute({
+    method: 'patch',
+    path: '/comments/:id',
+    tags: ['Cuisine Comments'],
+    summary: 'Edit komentar (penulis sendiri)',
+    request: {
+      params: commentIdParam,
+      body: { content: json(updateCuisineCommentBodySchema) },
+    },
+    responses: {
+      200: { description: 'Komentar diperbarui', content: json(commentItemSchema) },
+      401: { description: 'Tidak terautentikasi', content: json(errorResponseSchema) },
+      404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const deleteRoute_ = createRoute({
+    method: 'delete',
+    path: '/comments/:id',
+    tags: ['Cuisine Comments'],
+    summary: 'Hapus komentar (penulis sendiri)',
+    request: { params: commentIdParam },
+    responses: {
+      200: { description: 'Terhapus', content: json(okNullResponseSchema) },
+      401: { description: 'Tidak terautentikasi', content: json(errorResponseSchema) },
+      404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.use('/cuisines/:id/comments', deps.optionalAuthenticate);
+  routes.use('/comments/:id', deps.authenticate);
+
+  routes.openapi(listRoute, (c) => deps.controller.listCuisineComments(c) as never);
+  routes.openapi(createRoute_, (c) => deps.controller.createCuisineComment(c) as never);
+  routes.openapi(updateRoute_, (c) => deps.controller.updateCuisineComment(c) as never);
+  routes.openapi(deleteRoute_, (c) => deps.controller.deleteCuisineComment(c) as never);
+  return routes;
+}
+
+export function createAdminCuisineCommentRoutes(deps: {
+  controller: CulinaryController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}) {
+  const routes = createOpenApiApp();
+  routes.use('*', rateLimit({ points: 60, duration: 60 }));
+  routes.use('*', deps.authenticate, authorizeRole('root', 'admin', 'reviewer'));
+
+  const takedownRoute = createRoute({
+    method: 'post',
+    path: '/comments/:id/takedown',
+    tags: ['Admin Cuisine Comments'],
+    summary: 'Takedown komentar kuliner (admin)',
+    request: { params: commentIdParam },
+    responses: {
+      200: { description: 'Takedown berhasil', content: json(okNullResponseSchema) },
+      404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(takedownRoute, (c) => deps.controller.takedownCuisineComment(c) as never);
+  return routes;
+}

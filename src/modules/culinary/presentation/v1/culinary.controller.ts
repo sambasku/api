@@ -2,14 +2,23 @@ import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
-import { NotFoundError } from '@/shared/errors/app-error';
+import { NotFoundError, UnauthorizedError } from '@/shared/errors/app-error';
+import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type {
   Cuisine,
+  CuisineComment,
   CuisineDetail,
   CuisinePlaceLink,
   CulinaryPlace,
   CulinaryPlaceDetail,
 } from '../../domain/entities/culinary.entity';
+import type {
+  CreateCuisineCommentUseCase,
+  DeleteCuisineCommentUseCase,
+  ListCuisineCommentsUseCase,
+  TakedownCuisineCommentUseCase,
+  UpdateCuisineCommentUseCase,
+} from '../../application/use-cases/cuisine-comment.use-cases';
 import type {
   CulinaryRepository,
   CreateCuisineInput,
@@ -44,6 +53,40 @@ import type {
 
 type ListCuisinesQuery = z.infer<typeof listCuisinesQuerySchema>;
 type ListPlacesQuery = z.infer<typeof listPlacesQuerySchema>;
+
+function requireUser(c: Context<{ Variables: AppVariables }>) {
+  const user = c.get('user');
+  if (!user) throw new UnauthorizedError();
+  return user;
+}
+
+function toCuisineCommentWire(c: CuisineComment) {
+  const deleted = c.authorDeletedAt !== null;
+  return {
+    id: c.id,
+    cuisine_id: c.cuisineId,
+    user: {
+      user_id: c.userId,
+      username: deleted ? null : c.username,
+      display_name: deleted ? null : c.displayName,
+      avatar_url: deleted ? null : c.avatarUrl,
+      is_verifier: !deleted && isVerifierRole(c.userRole ?? ''),
+    },
+    body: c.body,
+    status: c.status,
+    is_edited: c.isEdited,
+    created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt?.toISOString() ?? null,
+  };
+}
+
+export interface CuisineCommentControllerDeps {
+  listComments: ListCuisineCommentsUseCase;
+  createComment: CreateCuisineCommentUseCase;
+  updateComment: UpdateCuisineCommentUseCase;
+  deleteComment: DeleteCuisineCommentUseCase;
+  takedownComment: TakedownCuisineCommentUseCase;
+}
 
 export function serializeLink(l: CuisinePlaceLink) {
   return {
@@ -174,7 +217,13 @@ export class CulinaryController {
     private readonly deletePlaceUc: DeleteCulinaryUseCase,
     private readonly appendImagesUc: AppendCuisineImagesUseCase,
     private readonly listRelated?: ListRelatedFn,
+    private readonly commentDeps?: CuisineCommentControllerDeps,
   ) {}
+
+  private get cuisineComments(): CuisineCommentControllerDeps {
+    if (!this.commentDeps) throw new Error('comment deps not wired');
+    return this.commentDeps;
+  }
 
   // ------------------------------------------------------------- publik --
 
@@ -543,5 +592,59 @@ export class CulinaryController {
       }
       return c.json({ success: true as const, data: null });
     });
+  }
+
+  async listCuisineComments(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const q = c.req.valid('query' as never) as { cursor?: string; limit: number };
+    const page = await this.cuisineComments.listComments.execute(id, q.cursor, q.limit);
+    return c.json({
+      success: true as const,
+      data: {
+        items: page.items.map(toCuisineCommentWire),
+        next_cursor: page.nextCursor,
+        has_more: page.hasMore,
+      },
+    });
+  }
+
+  async createCuisineComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as { body: string };
+    const comment = await this.cuisineComments.createComment.execute({
+      cuisineId: id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCuisineCommentWire(comment) }, 201);
+  }
+
+  async updateCuisineComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as { body: string };
+    const updated = await this.cuisineComments.updateComment.execute({
+      commentId: id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCuisineCommentWire(updated) });
+  }
+
+  async deleteCuisineComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    await this.cuisineComments.deleteComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
+  }
+
+  async takedownCuisineComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    await this.cuisineComments.takedownComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
   }
 }
