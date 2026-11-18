@@ -4,16 +4,24 @@ import type { Sticker } from '../../domain/entities/sticker.entity';
 import type {
   CreateStickerUseCase,
   DeleteStickerUseCase,
+  GetActiveStickerUseCase,
   ListActiveStickersUseCase,
   ListAdminStickersUseCase,
   UpdateStickerUseCase,
 } from '../../application/use-cases/sticker.use-cases';
 
-function toWire(s: Sticker) {
+function toPublicWire(s: Sticker) {
   return {
     id: s.id,
     image_url: s.imageUrl,
     play_once: s.playOnce,
+    category_slug: s.categorySlug,
+  };
+}
+
+function toAdminWire(s: Sticker) {
+  return {
+    ...toPublicWire(s),
     sort_order: s.sortOrder,
     is_active: s.isActive,
   };
@@ -23,6 +31,7 @@ export class StickerController {
   constructor(
     private readonly deps: {
       listActive: ListActiveStickersUseCase;
+      getActive: GetActiveStickerUseCase;
       listAdmin: ListAdminStickersUseCase;
       create: CreateStickerUseCase;
       update: UpdateStickerUseCase;
@@ -30,21 +39,39 @@ export class StickerController {
     },
   ) {}
 
-  async listPublic(c: Context<{ Variables: AppVariables }>) {
-    const items = await this.deps.listActive.execute();
+  async listPublic(
+    c: Context<{ Variables: AppVariables }>,
+    query: {
+      q?: string;
+      category_slug?: string;
+      limit?: number;
+      cursor?: string;
+    },
+  ) {
+    const page = await this.deps.listActive.execute({
+      q: query.q,
+      categorySlug: query.category_slug,
+      limit: query.limit,
+      cursor: query.cursor,
+    });
     return c.json({
       success: true as const,
-      data: items.map((s) => ({
-        id: s.id,
-        image_url: s.imageUrl,
-        play_once: s.playOnce,
-      })),
+      data: page.items.map(toPublicWire),
+      meta: {
+        next_cursor: page.nextCursor,
+        categories: page.categories,
+      },
     });
+  }
+
+  async getPublic(c: Context<{ Variables: AppVariables }>, id: string) {
+    const item = await this.deps.getActive.execute(id);
+    return c.json({ success: true as const, data: toPublicWire(item) });
   }
 
   async listAdmin(c: Context<{ Variables: AppVariables }>) {
     const items = await this.deps.listAdmin.execute();
-    return c.json({ success: true as const, data: items.map(toWire) });
+    return c.json({ success: true as const, data: items.map(toAdminWire) });
   }
 
   async create(
@@ -55,6 +82,7 @@ export class StickerController {
       play_once?: boolean;
       sort_order?: number;
       is_active?: boolean;
+      category_slug?: string | null;
     },
   ) {
     const user = c.get('user');
@@ -64,10 +92,11 @@ export class StickerController {
       playOnce: body.play_once,
       sortOrder: body.sort_order,
       isActive: body.is_active,
+      categorySlug: body.category_slug,
       actorId: user!.user_id,
       requestId: c.get('requestId'),
     });
-    return c.json({ success: true as const, data: toWire(created) }, 201);
+    return c.json({ success: true as const, data: toAdminWire(created) }, 201);
   }
 
   async update(
@@ -78,6 +107,7 @@ export class StickerController {
       play_once?: boolean;
       sort_order?: number;
       is_active?: boolean;
+      category_slug?: string | null;
     },
   ) {
     const user = c.get('user');
@@ -87,10 +117,11 @@ export class StickerController {
       playOnce: body.play_once,
       sortOrder: body.sort_order,
       isActive: body.is_active,
+      categorySlug: body.category_slug,
       actorId: user!.user_id,
       requestId: c.get('requestId'),
     });
-    return c.json({ success: true as const, data: toWire(updated) });
+    return c.json({ success: true as const, data: toAdminWire(updated) });
   }
 
   async remove(c: Context<{ Variables: AppVariables }>, id: string) {

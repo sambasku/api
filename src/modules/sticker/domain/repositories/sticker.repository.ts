@@ -1,4 +1,4 @@
-import type { Sticker } from '../entities/sticker.entity';
+import type { Sticker, StickerListPage } from '../entities/sticker.entity';
 
 export interface CreateStickerInput {
   id: string;
@@ -6,6 +6,7 @@ export interface CreateStickerInput {
   playOnce?: boolean;
   sortOrder?: number;
   isActive?: boolean;
+  categorySlug?: string | null;
 }
 
 export interface UpdateStickerInput {
@@ -13,10 +14,19 @@ export interface UpdateStickerInput {
   playOnce?: boolean;
   sortOrder?: number;
   isActive?: boolean;
+  /** `undefined` = tidak diubah; `null` = clear kategori. */
+  categorySlug?: string | null;
+}
+
+export interface ListActiveStickersQuery {
+  q?: string | null;
+  categorySlug?: string | null;
+  limit?: number;
+  cursor?: string | null;
 }
 
 export interface StickerRepository {
-  listActive(): Promise<Sticker[]>;
+  listActivePage(query: ListActiveStickersQuery): Promise<StickerListPage>;
   listAll(): Promise<Sticker[]>;
   findActiveById(id: string): Promise<Sticker | null>;
   findById(id: string): Promise<Sticker | null>;

@@ -667,6 +667,7 @@ import { StickerRepositoryImpl } from "@/modules/sticker/infrastructure/sticker.
 import {
   CreateStickerUseCase,
   DeleteStickerUseCase,
+  GetActiveStickerUseCase,
   ListActiveStickersUseCase,
   ListAdminStickersUseCase,
   UpdateStickerUseCase,
@@ -1890,6 +1891,7 @@ const mobileAnalyticsController = new MobileAnalyticsController({
 const stickerRepo = new StickerRepositoryImpl(db);
 const stickerController = new StickerController({
   listActive: new ListActiveStickersUseCase(stickerRepo),
+  getActive: new GetActiveStickerUseCase(stickerRepo),
   listAdmin: new ListAdminStickersUseCase(stickerRepo),
   create: new CreateStickerUseCase(stickerRepo, auditRepo),
   update: new UpdateStickerUseCase(stickerRepo, auditRepo),

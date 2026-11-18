@@ -1135,6 +1135,13 @@
       "when": 1801660000000,
       "tag": "0161_stickers",
       "breakpoints": true
+    },
+    {
+      "idx": 162,
+      "version": "6",
+      "when": 1801661000000,
+      "tag": "0162_stickers_category_slug",
+      "breakpoints": true
     }
   ]
 }

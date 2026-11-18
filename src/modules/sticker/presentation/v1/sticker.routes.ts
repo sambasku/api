@@ -19,6 +19,7 @@ const publicItemSchema = z.object({
   id: z.string(),
   image_url: z.string(),
   play_once: z.boolean(),
+  category_slug: z.string().nullable(),
 });
 
 const adminItemSchema = publicItemSchema.extend({
@@ -32,6 +33,7 @@ const createBodySchema = z.object({
   play_once: z.boolean().optional(),
   sort_order: z.number().int().min(0).max(9999).optional(),
   is_active: z.boolean().optional(),
+  category_slug: z.string().max(64).nullable().optional(),
 });
 
 const updateBodySchema = z.object({
@@ -39,6 +41,14 @@ const updateBodySchema = z.object({
   play_once: z.boolean().optional(),
   sort_order: z.number().int().min(0).max(9999).optional(),
   is_active: z.boolean().optional(),
+  category_slug: z.string().max(64).nullable().optional(),
+});
+
+const listQuerySchema = z.object({
+  q: z.string().max(64).optional(),
+  category_slug: z.string().max(64).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  cursor: z.string().max(128).optional(),
 });
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
@@ -57,20 +67,47 @@ export function createPublicStickerRoutes(deps: StickerRoutesDeps) {
     path: '/',
     tags: ['Stickers'],
     summary: 'Daftar stiker aktif (chat + komentar)',
+    request: { query: listQuerySchema },
     responses: {
       200: {
-        description: 'Katalog aktif',
+        description: 'Katalog aktif + meta kategori',
         content: json(
           z.object({
             success: z.literal(true),
             data: z.array(publicItemSchema),
+            meta: z.object({
+              next_cursor: z.string().nullable(),
+              categories: z.array(z.string()),
+            }),
           }),
         ),
       },
     },
   });
 
-  routes.openapi(listRoute, (c) => deps.controller.listPublic(c) as never);
+  const getRoute = createRoute({
+    method: 'get',
+    path: '/{id}',
+    tags: ['Stickers'],
+    summary: 'Detail stiker aktif by id',
+    request: { params: idParam },
+    responses: {
+      200: {
+        description: 'Satu stiker',
+        content: json(
+          z.object({ success: z.literal(true), data: publicItemSchema }),
+        ),
+      },
+      404: { description: 'Tidak ada', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(listRoute, (c) =>
+    deps.controller.listPublic(c, c.req.valid('query')) as never,
+  );
+  routes.openapi(getRoute, (c) =>
+    deps.controller.getPublic(c, c.req.valid('param').id) as never,
+  );
   return routes;
 }
 
