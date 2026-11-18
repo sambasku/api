@@ -663,6 +663,9 @@ import {
 } from "@/modules/chat/application/use-cases/chat.use-cases";
 import { ChatController } from "@/modules/chat/presentation/v1/chat.controller";
 import { createChatRoutes } from "@/modules/chat/presentation/v1/chat.routes";
+import { MintVoiceTokenUseCase } from "@/modules/voice/application/mint-voice-token.use-case";
+import { VoiceController } from "@/modules/voice/presentation/v1/voice.controller";
+import { createVoiceRoutes } from "@/modules/voice/presentation/v1/voice.routes";
 import { PantunRepositoryImpl } from "@/modules/pantun/infrastructure/pantun.repository.impl";
 import { PantunReportRepositoryImpl } from "@/modules/pantun-report/infrastructure/pantun-report.repository.impl";
 import { SubmitPantunReportUseCase } from "@/modules/pantun-report/application/use-cases/submit-pantun-report.use-case";
@@ -3291,6 +3294,20 @@ app.route(
     requireApprovedClient: requireDiscussionWriteClient,
     requireLegalConsent,
     onUgcRateLimited,
+  }),
+);
+
+// Voice room LiveKit (experimental): mint JWT pendek untuk mobile.
+const voiceController = new VoiceController(
+  new MintVoiceTokenUseCase(appSettingsRepo, userRepo),
+);
+app.route(
+  "/api/v1/voice",
+  createVoiceRoutes({
+    controller: voiceController,
+    authenticate,
+    requireApprovedClient: requireDiscussionWriteClient,
+    requireLegalConsent,
   }),
 );
 
