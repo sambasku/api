@@ -15,8 +15,13 @@ export class VoiceController {
     if (!user?.user_id) {
       throw new UnauthorizedError();
     }
+    // Header yang sudah disisip interceptor mobile (rate-limit device id).
+    const deviceId =
+      c.req.header('X-Device-Id')?.trim() ||
+      c.req.header('x-device-id')?.trim() ||
+      '';
     return this.mintToken
-      .execute(user.user_id)
+      .execute(user.user_id, deviceId)
       .then((data) => c.json({ success: true as const, data }, 200));
   }
 

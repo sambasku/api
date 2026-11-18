@@ -29,8 +29,28 @@ export interface MintLivekitTokenInput {
   room: string;
   apiKey: string;
   apiSecret: string;
+  /** X-Device-Id - dibaca gate anti multi-device. */
+  deviceId: string;
   /** Default 1 jam. */
   ttlSec?: number;
+}
+
+/** Metadata participant LiveKit - kunci pendek hemat wire. */
+export function voiceDeviceMetadata(deviceId: string): string {
+  return JSON.stringify({ d: deviceId });
+}
+
+export function parseVoiceDeviceMetadata(
+  metadata: string | undefined | null,
+): string | null {
+  if (!metadata?.trim()) return null;
+  try {
+    const json = JSON.parse(metadata) as { d?: unknown; deviceId?: unknown };
+    const raw = json.d ?? json.deviceId;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 async function signHs256(
@@ -57,6 +77,7 @@ export async function mintLivekitAccessToken(
   return signHs256(input.apiKey, input.apiSecret, {
     sub: input.identity,
     name: input.name,
+    metadata: voiceDeviceMetadata(input.deviceId),
     video: {
       room: input.room,
       roomJoin: true,

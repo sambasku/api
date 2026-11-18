@@ -74,7 +74,12 @@ export function createVoiceRoutes(deps: VoiceRoutesDeps) {
         content: json(errorResponseSchema),
       },
       409: {
-        description: 'Voice room penuh (max 15)',
+        description:
+          'VOICE_ROOM_FULL atau VOICE_ALREADY_JOINED (akun sudah di device lain)',
+        content: json(errorResponseSchema),
+      },
+      400: {
+        description: 'DEVICE_ID_REQUIRED (header X-Device-Id hilang/invalid)',
         content: json(errorResponseSchema),
       },
       503: {

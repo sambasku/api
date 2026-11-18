@@ -1,4 +1,5 @@
 import {
+  BadRequestError,
   ForbiddenError,
   ServiceUnavailableError,
 } from '@/shared/errors/app-error';
@@ -29,7 +30,17 @@ export class MintVoiceTokenUseCase {
     private readonly roomGate: VoiceRoomGate = assertVoiceRoomJoinAllowed,
   ) {}
 
-  async execute(userId: string): Promise<MintVoiceTokenResult> {
+  async execute(
+    userId: string,
+    deviceId: string,
+  ): Promise<MintVoiceTokenResult> {
+    const trimmedDevice = deviceId.trim();
+    if (!trimmedDevice || trimmedDevice.length > 64) {
+      throw new BadRequestError(
+        'DEVICE_ID_REQUIRED',
+        'Device id wajib untuk gabung voice.',
+      );
+    }
     const rows = await this.settingsRepo.getByKeys([VOICE_ROOM_ENABLED_KEY]);
     const raw = rows.find((r) => r.key === VOICE_ROOM_ENABLED_KEY)?.value;
     if (raw !== 'true') {
@@ -51,13 +62,14 @@ export class MintVoiceTokenUseCase {
       );
     }
 
-    // Wajib: health + kapasitas sebelum mint. Homelab mati → 503, bukan JWT mati.
+    // Wajib: health + kapasitas + anti multi-device sebelum mint.
     await this.roomGate({
       wsUrl: url,
       apiKey,
       apiSecret,
       room,
       identity: userId,
+      deviceId: trimmedDevice,
       maxParticipants: VOICE_ROOM_MAX_PARTICIPANTS,
     });
 
@@ -75,6 +87,7 @@ export class MintVoiceTokenUseCase {
       room,
       apiKey,
       apiSecret,
+      deviceId: trimmedDevice,
       ttlSec: 30 * 60,
     });
 

@@ -15,6 +15,7 @@ describe('mintLivekitAccessToken', () => {
       room: 'lobby',
       apiKey,
       apiSecret,
+      deviceId: 'dev-xyz',
       ttlSec: 3600,
     });
 
@@ -55,6 +56,23 @@ describe('mintLivekitAccessToken', () => {
     expect(claims.video.canSubscribe).toBe(true);
     expect(claims.video.canPublishData).toBe(true);
     expect(claims.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+  });
+
+  it('embeds device id in LiveKit metadata', async () => {
+    const token = await mintLivekitAccessToken({
+      identity: 'user-1',
+      name: 'Tester',
+      room: 'lobby',
+      apiKey: 'APItest',
+      apiSecret: 'test-secret-do-not-use',
+      deviceId: 'dev-xyz',
+      ttlSec: 60,
+    });
+    const payload = token.split('.')[1];
+    const claims = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    ) as { metadata: string };
+    expect(JSON.parse(claims.metadata)).toEqual({ d: 'dev-xyz' });
   });
 });
 

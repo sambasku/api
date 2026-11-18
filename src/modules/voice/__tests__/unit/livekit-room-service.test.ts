@@ -21,6 +21,7 @@ describe('assertVoiceRoomJoinAllowed', () => {
     apiSecret: 'secret',
     room: 'lobby',
     identity: 'u-new',
+    deviceId: 'device-a',
   };
 
   afterEach(() => {
@@ -69,7 +70,7 @@ describe('assertVoiceRoomJoinAllowed', () => {
     });
   });
 
-  it('allows remint when identity already in full room', async () => {
+  it('allows remint when same device already in full room', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
@@ -82,6 +83,7 @@ describe('assertVoiceRoomJoinAllowed', () => {
               { length: VOICE_ROOM_MAX_PARTICIPANTS },
               (_, i) => ({
                 identity: i === 0 ? 'u-new' : `u${i}`,
+                metadata: i === 0 ? JSON.stringify({ d: 'device-a' }) : undefined,
               }),
             ),
           }),
@@ -90,6 +92,31 @@ describe('assertVoiceRoomJoinAllowed', () => {
       }),
     );
     await expect(assertVoiceRoomJoinAllowed(input)).resolves.toBeUndefined();
+  });
+
+  it('rejects when identity already seated on another device', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('CreateRoom')) {
+          return new Response('{}', { status: 200 });
+        }
+        return new Response(
+          JSON.stringify({
+            participants: [
+              {
+                identity: 'u-new',
+                metadata: JSON.stringify({ d: 'device-b' }),
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+    await expect(assertVoiceRoomJoinAllowed(input)).rejects.toMatchObject({
+      errorCode: 'VOICE_ALREADY_JOINED',
+    });
   });
 
   it('throws VOICE_UNAVAILABLE when LiveKit times out / unreachable', async () => {

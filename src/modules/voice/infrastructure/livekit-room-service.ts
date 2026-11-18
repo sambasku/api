@@ -8,7 +8,10 @@ import {
   ConflictError,
   ServiceUnavailableError,
 } from '@/shared/errors/app-error';
-import { mintLivekitServerToken } from './livekit-token';
+import {
+  mintLivekitServerToken,
+  parseVoiceDeviceMetadata,
+} from './livekit-token';
 
 /** Soft + CreateRoom hard ceiling. Jangan naikkan tanpa kapasitas SFU. */
 export const VOICE_ROOM_MAX_PARTICIPANTS = 15;
@@ -22,6 +25,8 @@ export interface LivekitRoomGateInput {
   apiSecret: string;
   room: string;
   identity: string;
+  /** X-Device-Id - tolak mint bila identity sudah di room dari device lain. */
+  deviceId: string;
   maxParticipants?: number;
 }
 
@@ -101,7 +106,7 @@ async function twirp<T>(
 }
 
 interface ListParticipantsResponse {
-  participants?: Array<{ identity?: string }>;
+  participants?: Array<{ identity?: string; metadata?: string }>;
 }
 
 /**
@@ -139,7 +144,7 @@ export async function assertVoiceRoomJoinAllowed(
     if (e instanceof ServiceUnavailableError) throw e;
   }
 
-  let participants: Array<{ identity?: string }> = [];
+  let participants: Array<{ identity?: string; metadata?: string }> = [];
   try {
     const listed = await twirp<ListParticipantsResponse>(
       base,
@@ -161,8 +166,19 @@ export async function assertVoiceRoomJoinAllowed(
     }
   }
 
-  const alreadyIn = participants.some((p) => p.identity === input.identity);
-  if (!alreadyIn && participants.length >= max) {
+  const existing = participants.find((p) => p.identity === input.identity);
+  if (existing) {
+    const seatedDevice = parseVoiceDeviceMetadata(existing.metadata);
+    // Legacy (tanpa metadata): izinkan remint sekali supaya device aktif
+    // bisa menstempel deviceId. Setelah itu device lain ditolak.
+    if (seatedDevice && seatedDevice !== input.deviceId) {
+      throw new ConflictError(
+        'VOICE_ALREADY_JOINED',
+        'Akun ini sudah gabung voice di device lain. Keluar dulu di device itu ya.',
+        { deviceId: seatedDevice },
+      );
+    }
+  } else if (participants.length >= max) {
     throw new ConflictError(
       'VOICE_ROOM_FULL',
       `Voice room penuh (maks ${max} orang). Coba lagi nanti ya.`,

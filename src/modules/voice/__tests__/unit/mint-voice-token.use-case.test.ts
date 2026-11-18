@@ -38,7 +38,9 @@ describe('MintVoiceTokenUseCase', () => {
       userRepo as never,
       roomGate,
     );
-    await expect(uc.execute('u1')).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(uc.execute('u1', 'dev-a')).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
     expect(roomGate).not.toHaveBeenCalled();
   });
 
@@ -55,7 +57,7 @@ describe('MintVoiceTokenUseCase', () => {
       userRepo as never,
       roomGate,
     );
-    const result = await uc.execute('u1');
+    const result = await uc.execute('u1', 'dev-a');
     expect(result.url).toBe('wss://voice.example.com');
     expect(result.room).toBe('sambasku-global');
     expect(result.maxParticipants).toBe(15);
@@ -63,10 +65,26 @@ describe('MintVoiceTokenUseCase', () => {
     expect(roomGate).toHaveBeenCalledWith(
       expect.objectContaining({
         identity: 'u1',
+        deviceId: 'dev-a',
         room: 'sambasku-global',
         maxParticipants: 15,
       }),
     );
+  });
+
+  it('rejects when device id missing', async () => {
+    settingsRepo.getByKeys.mockResolvedValue([
+      { key: 'voice.room_enabled', value: 'true' },
+    ]);
+    const uc = new MintVoiceTokenUseCase(
+      settingsRepo as never,
+      userRepo as never,
+      roomGate,
+    );
+    await expect(uc.execute('u1', '  ')).rejects.toMatchObject({
+      errorCode: 'DEVICE_ID_REQUIRED',
+    });
+    expect(roomGate).not.toHaveBeenCalled();
   });
 
   it('propagates VOICE_ROOM_FULL from room gate', async () => {
@@ -81,7 +99,7 @@ describe('MintVoiceTokenUseCase', () => {
       userRepo as never,
       roomGate,
     );
-    await expect(uc.execute('u1')).rejects.toMatchObject({
+    await expect(uc.execute('u1', 'dev-a')).rejects.toMatchObject({
       errorCode: 'VOICE_ROOM_FULL',
     });
   });
@@ -101,7 +119,7 @@ describe('MintVoiceTokenUseCase', () => {
       userRepo as never,
       roomGate,
     );
-    await expect(uc.execute('u1')).rejects.toBeInstanceOf(
+    await expect(uc.execute('u1', 'dev-a')).rejects.toBeInstanceOf(
       ServiceUnavailableError,
     );
   });
