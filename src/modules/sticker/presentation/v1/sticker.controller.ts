@@ -64,7 +64,7 @@ export class StickerController {
       playOnce: body.play_once,
       sortOrder: body.sort_order,
       isActive: body.is_active,
-      actorId: user!.id,
+      actorId: user!.user_id,
       requestId: c.get('requestId'),
     });
     return c.json({ success: true as const, data: toWire(created) }, 201);
@@ -87,7 +87,7 @@ export class StickerController {
       playOnce: body.play_once,
       sortOrder: body.sort_order,
       isActive: body.is_active,
-      actorId: user!.id,
+      actorId: user!.user_id,
       requestId: c.get('requestId'),
     });
     return c.json({ success: true as const, data: toWire(updated) });
@@ -97,7 +97,7 @@ export class StickerController {
     const user = c.get('user');
     await this.deps.remove.execute({
       id,
-      actorId: user!.id,
+      actorId: user!.user_id,
       requestId: c.get('requestId'),
     });
     return c.json({ success: true as const, data: null });

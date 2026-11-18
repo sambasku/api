@@ -1886,6 +1886,7 @@ const mobileAnalyticsController = new MobileAnalyticsController({
 });
 
 // Katalog stiker (chat + komentar) - repo dipakai CreateCommentUseCase.
+// Route di-register setelah `app` dibuat (lihat blok sticker di bawah).
 const stickerRepo = new StickerRepositoryImpl(db);
 const stickerController = new StickerController({
   listActive: new ListActiveStickersUseCase(stickerRepo),
@@ -1894,20 +1895,6 @@ const stickerController = new StickerController({
   update: new UpdateStickerUseCase(stickerRepo, auditRepo),
   remove: new DeleteStickerUseCase(stickerRepo, auditRepo),
 });
-app.route(
-  "/api/v1/stickers",
-  createPublicStickerRoutes({
-    controller: stickerController,
-    authenticate,
-  }),
-);
-app.route(
-  "/api/v1/admin/stickers",
-  createAdminStickerRoutes({
-    controller: stickerController,
-    authenticate,
-  }),
-);
 
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----
 const commentRepo = new CommentRepositoryImpl(db);
@@ -2281,6 +2268,21 @@ const accountDeletion = new AccountDeletionUseCase(
 app.route(
   "/api/v1/auth",
   createAuthRoutes({ controller, authenticate, accountDeletion }),
+);
+
+app.route(
+  "/api/v1/stickers",
+  createPublicStickerRoutes({
+    controller: stickerController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/stickers",
+  createAdminStickerRoutes({
+    controller: stickerController,
+    authenticate,
+  }),
 );
 
 const legalController = new LegalController({
