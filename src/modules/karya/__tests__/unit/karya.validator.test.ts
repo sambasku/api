@@ -21,12 +21,25 @@ describe('newKaryaPayloadSchema', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('menolak tanpa sambas_connections', () => {
+  it('menerima usulan cepat tanpa year dan sambas', () => {
+    const parsed = newKaryaPayloadSchema.safeParse({
+      title: 'Lagu Baru',
+      kind: 'music',
+      credits: [{ role: 'vocal', name_text: 'Ahmad' }],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.sambas_connections).toEqual([]);
+      expect(parsed.data.year ?? null).toBeNull();
+    }
+  });
+
+  it('menerima sambas_connections kosong di usulan new', () => {
     const parsed = newKaryaPayloadSchema.safeParse({
       ...baseMusic,
       sambas_connections: [],
     });
-    expect(parsed.success).toBe(false);
+    expect(parsed.success).toBe(true);
   });
 
   it('menolak musik tanpa credit vocal', () => {

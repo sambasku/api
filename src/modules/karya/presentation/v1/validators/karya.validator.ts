@@ -171,14 +171,38 @@ function creditRoleAllowed(
   return (KARYA_FILM_CREDIT_ROLES as readonly string[]).includes(role);
 }
 
-const newKaryaPayloadBase = {
+function refineKaryaCredits(
+  data: { kind: (typeof KARYA_KINDS)[number]; credits: { role: string }[] },
+  ctx: z.RefinementCtx,
+): void {
+  if (!creditsHaveRequiredRole(data.kind, data.credits)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['credits'],
+      message:
+        data.kind === 'music'
+          ? 'Musik wajib punya minimal satu credit role vocal'
+          : 'Film wajib punya minimal satu credit role director atau cast',
+    });
+  }
+  for (let i = 0; i < data.credits.length; i++) {
+    if (!creditRoleAllowed(data.kind, data.credits[i]!.role)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['credits', i, 'role'],
+        message: `Role tidak valid untuk kind ${data.kind}`,
+      });
+    }
+  }
+}
+
+/** Field bersama; year + sambas opsional di usulan cepat (wajib saat publish). */
+const karyaPayloadShared = {
   title: nonEmpty.max(300),
-  year: z.number().int().min(1800).max(2100),
   kind: z.enum(KARYA_KINDS),
   language: z.string().trim().min(2).max(16).optional().nullable(),
   description: z.string().trim().max(5000).optional().nullable(),
   cover_url: z.string().url().max(2000).optional().nullable(),
-  sambas_connections: z.array(sambasConnectionSchema).min(1).max(10),
   access_links: z.array(accessLinkSchema).max(20).optional().default([]),
   credits: z.array(karyaCreditInputSchema).min(1).max(50),
   music_release_type: z.enum(KARYA_MUSIC_RELEASE_TYPES).optional().nullable(),
@@ -189,31 +213,32 @@ const newKaryaPayloadBase = {
   related: z.array(karyaRelatedRefSchema).max(20).optional().default([]),
 };
 
-/** Payload usulan kind=new (min field KARYA.md #6). */
+/**
+ * Payload usulan kind=new (form cepat: judul + credit).
+ * `year` dan `sambas_connections` opsional; gate publish di approve/admin.
+ */
 export const newKaryaPayloadSchema = z
-  .object(newKaryaPayloadBase)
+  .object({
+    ...karyaPayloadShared,
+    year: z.number().int().min(1800).max(2100).optional().nullable(),
+    sambas_connections: z
+      .array(sambasConnectionSchema)
+      .max(10)
+      .optional()
+      .default([]),
+  })
   .strict()
-  .superRefine((data, ctx) => {
-    if (!creditsHaveRequiredRole(data.kind, data.credits)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['credits'],
-        message:
-          data.kind === 'music'
-            ? 'Musik wajib punya minimal satu credit role vocal'
-            : 'Film wajib punya minimal satu credit role director atau cast',
-      });
-    }
-    for (let i = 0; i < data.credits.length; i++) {
-      if (!creditRoleAllowed(data.kind, data.credits[i]!.role)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['credits', i, 'role'],
-          message: `Role tidak valid untuk kind ${data.kind}`,
-        });
-      }
-    }
-  });
+  .superRefine(refineKaryaCredits);
+
+/** Body admin create/update + usulan edit: wajib year + ≥1 sambas. */
+export const karyaFieldsSchema = z
+  .object({
+    ...karyaPayloadShared,
+    year: z.number().int().min(1800).max(2100),
+    sambas_connections: z.array(sambasConnectionSchema).min(1).max(10),
+  })
+  .strict()
+  .superRefine(refineKaryaCredits);
 
 export const excerptPayloadSchema = z
   .object({
@@ -276,6 +301,18 @@ export const submitKaryaContributionBodySchema = z
         message: 'karya_id wajib untuk kind edit/excerpt',
       });
     }
+    if (data.kind === 'edit') {
+      const parsed = karyaFieldsSchema.safeParse(data.payload);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({
+            ...issue,
+            path: ['payload', ...issue.path],
+          });
+        }
+      }
+      return;
+    }
     if (data.kind === 'excerpt') {
       const parsed = excerptPayloadSchema.safeParse(data.payload);
       if (!parsed.success) {
@@ -298,9 +335,6 @@ export const listKaryaQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 });
-
-/** Body admin create/update (sama min field usulan baru). */
-export const karyaFieldsSchema = newKaryaPayloadSchema;
 
 export const rejectKaryaSchema = z.object({
   reason_code: z.enum([

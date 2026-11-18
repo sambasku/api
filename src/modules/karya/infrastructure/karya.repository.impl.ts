@@ -94,7 +94,7 @@ function toKaryaBase(row: KaryaRow, credits: KaryaCredit[], excerpts?: KaryaExce
   };
 }
 
-function serializeFields(fields: KaryaFields) {
+function serializeFields(fields: KaryaFields & { year: number }) {
   return {
     title: fields.title,
     kind: fields.kind,
@@ -283,7 +283,7 @@ export class KaryaRepositoryImpl {
   }
 
   async insert(
-    input: KaryaFields & { slug: string; authorId: string | null },
+    input: KaryaFields & { year: number; slug: string; authorId: string | null },
   ): Promise<Karya> {
     const now = new Date();
     const [row] = await this.db
@@ -305,7 +305,7 @@ export class KaryaRepositoryImpl {
     return found!;
   }
 
-  async update(id: string, fields: KaryaFields): Promise<void> {
+  async update(id: string, fields: KaryaFields & { year: number }): Promise<void> {
     await this.db
       .update(karyas)
       .set({

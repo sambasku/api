@@ -19,13 +19,12 @@ import { isExcerptContributionPayload } from '../../domain/karya';
 import type { KaryaUseCases } from '../../application/karya.use-cases';
 import type {
   contributionListQuerySchema,
-  karyaFieldsSchema,
   listKaryaQuerySchema,
   rejectKaryaSchema,
   revisionNoteSchema,
   submitKaryaContributionBodySchema,
 } from './validators/karya.validator';
-import { newKaryaPayloadSchema } from './validators/karya.validator';
+import { karyaFieldsSchema } from './validators/karya.validator';
 
 function requireUserId(c: Context<{ Variables: AppVariables }>): string {
   const user = c.get('user');
@@ -375,7 +374,7 @@ export class KaryaController {
   }
 }
 
-/** Helper for routes that accept flat admin body. */
+/** Helper for routes that accept flat admin body (publish-ready). */
 export function parseAdminKaryaBody(body: unknown) {
-  return newKaryaPayloadSchema.parse(body);
+  return karyaFieldsSchema.parse(body);
 }

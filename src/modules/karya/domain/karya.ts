@@ -120,7 +120,8 @@ export interface KaryaLemmaAppearance {
 
 export interface KaryaFields {
   title: string;
-  year: number;
+  /** Null hanya di usulan pending (form cepat); wajib sebelum publish. */
+  year: number | null;
   kind: KaryaKind;
   language: string | null;
   description: string | null;
