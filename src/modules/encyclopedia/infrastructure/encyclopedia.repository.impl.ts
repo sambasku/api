@@ -81,6 +81,7 @@ function toPayload(raw: string): ArticlePayload {
     cover_url: parsed.cover_url ?? null,
     source_url: parsed.source_url ?? null,
     references_md: parsed.references_md ?? null,
+    related: Array.isArray(parsed.related) ? parsed.related : undefined,
   };
 }
 

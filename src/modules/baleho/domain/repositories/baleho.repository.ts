@@ -128,6 +128,13 @@ export type BalehoRepository = {
    * Expire live (ends_at lewat) → expired + lepas slot.
    */
   releaseDue(now: Date): Promise<{ cancelled: number; expired: number }>;
+  /** Live, ends_at dalam (now, until], belum pernah notif H-1. */
+  listEndingSoon(
+    now: Date,
+    until: Date,
+  ): Promise<Array<{ id: string; advertiserUserId: string }>>;
+  /** Tandai sudah notif H-1 (1x). */
+  markEndingSoonNotified(ids: string[], at: Date): Promise<void>;
   createCommissionUnclaimed(args: {
     placementId: string;
     referrerUserId: string;

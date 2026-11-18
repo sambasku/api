@@ -214,6 +214,7 @@ export interface SubmitContributionInput {
     cover_url?: string | null;
     source_url?: string | null;
     references_md?: string | null;
+    related?: import('../../domain/entities/encyclopedia.entity').ArticleRelatedRef[];
   };
   requestId?: string | null;
 }
@@ -381,12 +382,34 @@ export class ListMyArticleContributionsUseCase {
   }
 }
 
+type ReplaceArticleRelated = {
+  execute(input: {
+    anchor: { kind: 'article'; id: string };
+    related: import('../../domain/entities/encyclopedia.entity').ArticleRelatedRef[];
+    createdBy: string | null;
+  }): Promise<unknown>;
+};
+
 export class ReviewArticleContributionUseCase {
   constructor(
     private readonly repo: ArticleRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly replaceRelated?: ReplaceArticleRelated,
   ) {}
+
+  private async syncRelated(
+    articleId: string,
+    related: SubmitContributionInput['payload']['related'],
+    createdBy: string,
+  ): Promise<void> {
+    if (!this.replaceRelated) return;
+    await this.replaceRelated.execute({
+      anchor: { kind: 'article', id: articleId },
+      related: related ?? [],
+      createdBy,
+    });
+  }
 
   async execute(input: {
     contributionId: string;
@@ -470,6 +493,11 @@ export class ReviewArticleContributionUseCase {
       status: 'approved',
       resultArticleId: article.id,
     });
+    await this.syncRelated(
+      article.id,
+      contribution.payload.related,
+      contribution.userId,
+    );
     await this.auditRepo.record({
       userId: input.reviewerId,
       action: 'review:approve',
@@ -531,6 +559,11 @@ export class ReviewArticleContributionUseCase {
       status: 'approved',
       resultArticleId: article.id,
     });
+    await this.syncRelated(
+      article.id,
+      contribution.payload.related,
+      contribution.userId,
+    );
     await this.auditRepo.record({
       userId: input.reviewerId,
       action: 'review:approve',

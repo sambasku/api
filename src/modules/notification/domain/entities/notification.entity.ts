@@ -47,6 +47,7 @@ export type InboxNotificationType =
   | 'culinary_claim_rejected'
   | 'baleho_placement_approved'
   | 'baleho_placement_rejected'
+  | 'baleho_placement_ending_soon'
   | 'achievement_awarded'
   | 'pantun_reply'
   | 'pantun_mention'
@@ -383,6 +384,12 @@ bodyType: 'plain',
     return {
       title: 'Pesanan Baleho ditolak',
       body: 'Pesananmu belum lolos tinjauan. Buka riwayat Baleho untuk detailnya.',
+      bodyType: 'plain',
+    };
+  case 'baleho_placement_ending_soon':
+    return {
+      title: 'Baleho hampir berakhir',
+      body: 'Area tayanganmu berakhir dalam 24 jam. Setelah selesai, kamu bisa pesan lagi dari Riwayat.',
       bodyType: 'plain',
     };
   case 'streak_reminder':

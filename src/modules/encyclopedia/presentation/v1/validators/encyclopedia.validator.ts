@@ -61,6 +61,30 @@ const articlePayloadFields = {
     .max(10_000, 'Referensi maksimal 10.000 karakter')
     .nullable()
     .optional(),
+  related: z
+    .array(
+      z
+        .object({
+          kind: z.enum([
+            'word',
+            'article',
+            'place',
+            'event',
+            'usaha',
+            'karya',
+            'kreator',
+            'cuisine',
+            'layanan',
+          ]),
+          id: z.string().trim().min(1).max(26).optional(),
+          slug: z.string().trim().min(1).max(120).optional(),
+        })
+        .refine((d) => Boolean(d.id || d.slug), {
+          message: 'Setiap tautan butuh id atau slug',
+        }),
+    )
+    .max(12, 'Maksimal 12 tautan terkait')
+    .optional(),
 };
 
 export const submitContributionBodySchema = z.object({

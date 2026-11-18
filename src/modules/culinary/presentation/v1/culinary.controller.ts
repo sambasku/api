@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { NotFoundError } from '@/shared/errors/app-error';
 import type {
   Cuisine,
@@ -17,6 +18,7 @@ import type {
   UpdatePlaceInput,
 } from '../../domain/repositories/culinary.repository';
 import {
+  AppendCuisineImagesUseCase,
   FindCulinaryDuplicatesUseCase,
   GetCuisineBySlugUseCase,
   GetCulinaryPlaceBySlugUseCase,
@@ -139,6 +141,21 @@ export function serializePlace(p: CulinaryPlace | CulinaryPlaceDetail) {
   };
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: 'cuisine',
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
 export class CulinaryController {
   constructor(
     private readonly repo: CulinaryRepository,
@@ -155,6 +172,8 @@ export class CulinaryController {
     private readonly restrictPlaceUc: RestrictCulinaryUseCase,
     private readonly restorePlaceUc: RestoreCulinaryUseCase,
     private readonly deletePlaceUc: DeleteCulinaryUseCase,
+    private readonly appendImagesUc: AppendCuisineImagesUseCase,
+    private readonly listRelated?: ListRelatedFn,
   ) {}
 
   // ------------------------------------------------------------- publik --
@@ -182,10 +201,35 @@ export class CulinaryController {
       );
   }
 
-  getCuisine(c: Context<{ Variables: AppVariables }>, slug: string) {
-    return this.getCuisineUc
-      .execute(slug, true)
-      .then((cuisine) => c.json({ success: true as const, data: serializeCuisine(cuisine as Cuisine) }));
+  async getCuisine(c: Context<{ Variables: AppVariables }>, slug: string) {
+    const cuisine = await this.getCuisineUc.execute(slug, true);
+    const related = this.listRelated
+      ? await this.listRelated.execute('cuisine', cuisine.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...serializeCuisine(cuisine as Cuisine),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
+  }
+
+  /** #281: tambah foto ke kuliner published (wajib login). */
+  appendImages(
+    c: Context<{ Variables: AppVariables }>,
+    slug: string,
+    urls: string[],
+  ) {
+    return this.appendImagesUc
+      .execute(slug, c.get('user')?.user_id ?? ANONIM_USER_ID, urls)
+      .then(() => c.json({ success: true as const, data: null }));
   }
 
   listPlaces(

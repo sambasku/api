@@ -31,6 +31,7 @@ export const inboxNotificationTypeSchema = z.enum([
   'level_up',
   'baleho_placement_approved',
   'baleho_placement_rejected',
+  'baleho_placement_ending_soon',
 ]);
 
 export const notificationTargetKindSchema = z.enum([

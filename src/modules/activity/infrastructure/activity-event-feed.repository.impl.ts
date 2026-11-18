@@ -42,6 +42,7 @@ const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   contribution_example: 'example',
   place_photo_added: 'place_photo',
   usaha_photo_added: 'usaha_photo',
+  cuisine_photo_added: 'culinary',
   event_photo_added: 'event',
   comment_created: 'comment',
 vote_word: 'vote',
@@ -85,6 +86,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   contribution_example: 'Menambah contoh kalimat',
   place_photo_added: 'Menambah foto wisata',
   usaha_photo_added: 'Menambah foto usaha',
+  cuisine_photo_added: 'Menambah foto kuliner',
   event_photo_added: 'Menambah foto acara',
   comment_created: '',
   vote_word: '',
@@ -173,6 +175,7 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'contribution_submitted',
     'place_photo_added',
     'usaha_photo_added',
+    'cuisine_photo_added',
     'usaha_published',
     'layanan_published',
     'karya_published',
@@ -455,6 +458,8 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menambahkan foto wisata';
     case 'usaha_photo_added':
       return 'Menambahkan foto usaha';
+    case 'cuisine_photo_added':
+      return 'Menambahkan foto kuliner';
     case 'usaha_published':
       return 'Menambahkan usaha';
     case 'layanan_published':
@@ -675,7 +680,7 @@ articleTitle: articles.title,
     .leftJoin(
       cuisines,
       and(
-        eq(activityEvents.kind, 'cuisine_published'),
+        sql`${activityEvents.kind} in ('cuisine_published', 'cuisine_photo_added')`,
         eq(cuisines.id, activityEvents.targetId),
         eq(cuisines.publishStatus, 'published'),
         sql`${cuisines.deletedAt} is null`,
@@ -852,6 +857,7 @@ articleTitle: articles.title,
         sql`(${activityEvents.kind} <> 'usaha_photo_added' or ${usahas.id} is not null)`,
 // Kuliner/tempat kuliner hanya tayang selama masih published.
 sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null or ${culinaryPlaces.id} is not null)`,
+sql`(${activityEvents.kind} <> 'cuisine_photo_added' or ${cuisines.id} is not null)`,
 // Artikel hanya tayang selama published (arsip = sembunyi).
 sql`(${activityEvents.kind} <> 'article_published' or ${articles.id} is not null)`,
 // Komentar artikel: komentar & artikelnya harus published.
@@ -968,7 +974,7 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
 const subtitle =
 kind === 'place_photo_added' || kind === 'place_published'
 ? row.placeName
-: kind === 'cuisine_published'
+: kind === 'cuisine_published' || kind === 'cuisine_photo_added'
 ? (row.cuisineName ?? row.culinaryPlaceName)
 : kind === 'usaha_published' || kind === 'usaha_photo_added'
 ? row.usahaName
@@ -1100,6 +1106,7 @@ case 'layanan_published':
 case 'karya_published':
 case 'kreator_claimed':
 case 'cuisine_published':
+case 'cuisine_photo_added':
 case 'place_published':
 case 'event_published':
 case 'event_going':
@@ -1246,6 +1253,7 @@ articleSlug?: string | null;
         ? { type: 'pantun', id: row.replyParentId }
         : null;
       case 'cuisine_published':
+      case 'cuisine_photo_added':
         if (row.cuisineSlug) return { type: 'culinary', id: row.cuisineSlug };
         return row.culinaryPlaceSlug
           ? { type: 'culinary_place', id: row.culinaryPlaceSlug }

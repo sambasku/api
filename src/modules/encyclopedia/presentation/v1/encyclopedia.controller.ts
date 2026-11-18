@@ -53,7 +53,37 @@ function publicName(username: string | null, displayName: string | null): string
   return displayName ?? username;
 }
 
-function toArticleWire(a: Article, opts?: { bookmarked?: boolean | null }) {
+function toRelatedWire(
+  items: Array<{
+    kind: string;
+    id: string;
+    slug: string | null;
+    title: string;
+    coverUrl: string | null;
+  }>,
+) {
+  return items.map((r) => ({
+    kind: r.kind,
+    id: r.id,
+    slug: r.slug,
+    title: r.title,
+    cover_url: r.coverUrl,
+  }));
+}
+
+function toArticleWire(
+  a: Article,
+  opts?: {
+    bookmarked?: boolean | null;
+    related?: Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>;
+  },
+) {
   const authorDeleted = a.authorDeletedAt !== null;
   return {
     id: a.id,
@@ -82,6 +112,7 @@ function toArticleWire(a: Article, opts?: { bookmarked?: boolean | null }) {
     updated_at: a.updatedAt?.toISOString() ?? null,
     /** null = tamu / tidak dicek; true/false = status bookmark user login. */
     bookmarked: opts?.bookmarked ?? null,
+    related: toRelatedWire(opts?.related ?? []),
   };
 }
 
@@ -193,6 +224,24 @@ export interface EncyclopediaControllerDeps {
   listContributions: ListArticleContributionsUseCase;
   reviewContribution: ReviewArticleContributionUseCase;
   reports: ArticleReportUseCases;
+  listRelated: {
+    execute(
+      kind: 'article',
+      id: string,
+    ): Promise<
+      Array<{
+        kind: string;
+        id: string;
+        slug: string | null;
+        title: string;
+        coverUrl: string | null;
+      }>
+    >;
+  };
+  replaceRelated: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute(input: any): Promise<unknown>;
+  };
 }
 
 export class EncyclopediaController {
@@ -232,12 +281,15 @@ export class EncyclopediaController {
     const { slug } = c.req.valid('param' as never) as { slug: string };
     const article = await this.deps.getArticle.execute(slug);
     const user = c.get('user');
-    const bookmarked = user
-      ? await this.deps.repo.isBookmarked(user.user_id, article.id)
-      : null;
+    const [bookmarked, related] = await Promise.all([
+      user
+        ? this.deps.repo.isBookmarked(user.user_id, article.id)
+        : Promise.resolve(null),
+      this.deps.listRelated.execute('article', article.id),
+    ]);
     return c.json({
       success: true as const,
-      data: toArticleWire(article, { bookmarked }),
+      data: toArticleWire(article, { bookmarked, related }),
     });
   }
 
@@ -347,6 +399,7 @@ export class EncyclopediaController {
         cover_url: body.cover_url ?? null,
         source_url: body.source_url ?? null,
         references_md: body.references_md ?? null,
+        related: body.related,
       },
       requestId: c.get('requestId') ?? null,
     });
@@ -369,6 +422,7 @@ export class EncyclopediaController {
         cover_url: body.cover_url ?? null,
         source_url: body.source_url ?? null,
         references_md: body.references_md ?? null,
+        related: body.related,
       },
       requestId: c.get('requestId') ?? null,
     });
@@ -456,6 +510,7 @@ export class EncyclopediaController {
       cover_url?: string | null;
       source_url?: string | null;
       references_md?: string | null;
+      related?: Array<{ kind: string; id?: string; slug?: string }>;
       status: 'draft' | 'published';
     };
     const created = await this.deps.createArticle.execute({
@@ -472,7 +527,18 @@ export class EncyclopediaController {
       status: body.status,
       requestId: c.get('requestId') ?? null,
     });
-    return c.json({ success: true as const, data: toArticleWire(created) }, 201);
+    if (body.related) {
+      await this.deps.replaceRelated.execute({
+        anchor: { kind: 'article', id: created.id },
+        related: body.related,
+        createdBy: user.user_id,
+      });
+    }
+    const related = await this.deps.listRelated.execute('article', created.id);
+    return c.json(
+      { success: true as const, data: toArticleWire(created, { related }) },
+      201,
+    );
   }
 
   async adminUpdateArticle(c: Context<{ Variables: AppVariables }>) {
@@ -487,6 +553,7 @@ export class EncyclopediaController {
       cover_url?: string | null;
       source_url?: string | null;
       references_md?: string | null;
+      related?: Array<{ kind: string; id?: string; slug?: string }>;
       status?: 'draft' | 'published' | 'archived';
       change_note?: string | null;
     };
@@ -503,6 +570,13 @@ export class EncyclopediaController {
       changeNote: body.change_note ?? null,
       requestId: c.get('requestId') ?? null,
     });
+    if (body.related) {
+      await this.deps.replaceRelated.execute({
+        anchor: { kind: 'article', id },
+        related: body.related,
+        createdBy: user.user_id,
+      });
+    }
     const final =
       body.status && body.status !== updated.status
         ? await this.deps.setStatus.execute(
@@ -512,7 +586,11 @@ export class EncyclopediaController {
             c.get('requestId') ?? null,
           )
         : updated;
-    return c.json({ success: true as const, data: toArticleWire(final) });
+    const related = await this.deps.listRelated.execute('article', final.id);
+    return c.json({
+      success: true as const,
+      data: toArticleWire(final, { related }),
+    });
   }
 
   async adminDeleteArticle(c: Context<{ Variables: AppVariables }>) {

@@ -57,6 +57,8 @@ function mockRepo(partial: Partial<BalehoRepository> = {}): BalehoRepository {
     getPaymentProof: vi.fn().mockResolvedValue(null),
     updatePlacementStatus: vi.fn(),
     releaseDue: vi.fn().mockResolvedValue({ cancelled: 0, expired: 0 }),
+    listEndingSoon: vi.fn().mockResolvedValue([]),
+    markEndingSoonNotified: vi.fn(),
     createCommissionUnclaimed: vi.fn(),
     recordEvent: vi.fn(),
     ...partial,
@@ -161,6 +163,81 @@ describe('BalehoUseCases.releaseDue', () => {
       expired: 1,
     });
     expect(repo.releaseDue).toHaveBeenCalledWith(now);
+  });
+});
+
+describe('BalehoUseCases.notifyEndingSoon', () => {
+  it('kirim inbox+FCM lalu set flag 1x', async () => {
+    const now = new Date('2026-01-15T12:00:00.000Z');
+    const listEndingSoon = vi.fn().mockResolvedValue([
+      {
+        id: '01PLACEMENT00000000000011',
+        advertiserUserId: '01USER000000000000000011',
+      },
+    ]);
+    const markEndingSoonNotified = vi.fn();
+    const recordInbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const repo = mockRepo({ listEndingSoon, markEndingSoonNotified });
+    const uc = new BalehoUseCases(repo, {
+      recordInbox: recordInbox as never,
+      notifyUser: notifyUser as never,
+    });
+    await expect(uc.notifyEndingSoon(now)).resolves.toEqual({ notified: 1 });
+    expect(listEndingSoon).toHaveBeenCalledWith(
+      now,
+      new Date(now.getTime() + 24 * 60 * 60 * 1000),
+    );
+    expect(recordInbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'baleho_placement_ending_soon',
+        targetId: '01PLACEMENT00000000000011',
+      }),
+    );
+    expect(notifyUser.execute).toHaveBeenCalledOnce();
+    expect(markEndingSoonNotified).toHaveBeenCalledWith(
+      ['01PLACEMENT00000000000011'],
+      now,
+    );
+  });
+
+  it('0 kandidat → tidak mark / tidak kirim', async () => {
+    const recordInbox = { execute: vi.fn() };
+    const markEndingSoonNotified = vi.fn();
+    const repo = mockRepo({
+      listEndingSoon: vi.fn().mockResolvedValue([]),
+      markEndingSoonNotified,
+    });
+    const uc = new BalehoUseCases(repo, {
+      recordInbox: recordInbox as never,
+    });
+    await expect(uc.notifyEndingSoon()).resolves.toEqual({ notified: 0 });
+    expect(recordInbox.execute).not.toHaveBeenCalled();
+    expect(markEndingSoonNotified).not.toHaveBeenCalled();
+  });
+
+  it('FCM gagal tetap set flag (anti-spam 1x)', async () => {
+    const now = new Date('2026-01-15T12:00:00.000Z');
+    const markEndingSoonNotified = vi.fn();
+    const repo = mockRepo({
+      listEndingSoon: vi.fn().mockResolvedValue([
+        {
+          id: '01PLACEMENT00000000000012',
+          advertiserUserId: '01USER000000000000000012',
+        },
+      ]),
+      markEndingSoonNotified,
+    });
+    const uc = new BalehoUseCases(repo, {
+      recordInbox: {
+        execute: vi.fn().mockRejectedValue(new Error('inbox down')),
+      } as never,
+    });
+    await expect(uc.notifyEndingSoon(now)).resolves.toEqual({ notified: 1 });
+    expect(markEndingSoonNotified).toHaveBeenCalledWith(
+      ['01PLACEMENT00000000000012'],
+      now,
+    );
   });
 });
 

@@ -45,6 +45,21 @@ export interface EncyclopediaTag {
 }
 
 /** Payload usulan (versi lengkap yang diusulkan user/admin). */
+export interface ArticleRelatedRef {
+  kind:
+    | 'word'
+    | 'article'
+    | 'place'
+    | 'event'
+    | 'usaha'
+    | 'karya'
+    | 'kreator'
+    | 'cuisine'
+    | 'layanan';
+  id?: string;
+  slug?: string;
+}
+
 export interface ArticlePayload {
   title: string;
   excerpt: string;
@@ -54,6 +69,7 @@ export interface ArticlePayload {
   cover_url?: string | null;
   source_url?: string | null;
   references_md?: string | null;
+  related?: ArticleRelatedRef[];
 }
 
 export interface ArticleContribution {

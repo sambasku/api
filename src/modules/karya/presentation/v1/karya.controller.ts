@@ -219,8 +219,32 @@ function toContributionWire(row: KaryaContribution) {
   };
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: 'karya',
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
+type ReplaceRelatedFn = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  execute(input: any): Promise<unknown>;
+};
+
 export class KaryaController {
-  constructor(private readonly uc: KaryaUseCases) {}
+  constructor(
+    private readonly uc: KaryaUseCases,
+    private readonly listRelated?: ListRelatedFn,
+    private readonly replaceRelated?: ReplaceRelatedFn,
+  ) {}
 
   async listPublic(c: Context, query: z.infer<typeof listKaryaQuerySchema>) {
     const items = await this.uc.listPublic({
@@ -238,7 +262,19 @@ export class KaryaController {
 
   async getPublic(c: Context, slug: string) {
     const row = await this.uc.getPublished(slug);
-    const related = await this.uc.resolveRelatedForKarya(row);
+    const fromLinks = this.listRelated
+      ? await this.listRelated.execute('karya', row.id)
+      : [];
+    const related =
+      fromLinks.length > 0
+        ? fromLinks.map((r) => ({
+            kind: r.kind as ResolvedKaryaRelatedWire['kind'],
+            slug: r.slug,
+            id: r.id,
+            title: r.title,
+            href_kind: r.kind as ResolvedKaryaRelatedWire['kind'],
+          }))
+        : await this.uc.resolveRelatedForKarya(row);
     return c.json({
       success: true as const,
       data: toKaryaWire(row, false, { relatedResolved: related }),
@@ -254,7 +290,15 @@ export class KaryaController {
   }
 
   async adminCreate(c: Context, body: z.infer<typeof karyaFieldsSchema>) {
-    const row = await this.uc.adminCreate(fieldsFrom(body), requireUserId(c));
+    const userId = requireUserId(c);
+    const row = await this.uc.adminCreate(fieldsFrom(body), userId);
+    if (body.related && this.replaceRelated) {
+      await this.replaceRelated.execute({
+        anchor: { kind: 'karya', id: row.id },
+        related: body.related,
+        createdBy: userId,
+      });
+    }
     return c.json({ success: true as const, data: toKaryaWire(row, true) }, 201);
   }
 
@@ -264,6 +308,13 @@ export class KaryaController {
     body: z.infer<typeof karyaFieldsSchema>,
   ) {
     const row = await this.uc.adminUpdate(id, fieldsFrom(body));
+    if (body.related && this.replaceRelated) {
+      await this.replaceRelated.execute({
+        anchor: { kind: 'karya', id: row.id },
+        related: body.related,
+        createdBy: requireUserId(c),
+      });
+    }
     return c.json({ success: true as const, data: toKaryaWire(row, true) });
   }
 

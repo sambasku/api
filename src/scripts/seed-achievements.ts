@@ -243,9 +243,17 @@ const SEED_ACHIEVEMENTS: Array<{
 export async function seedAchievements() {
   let inserted = 0;
   for (const item of SEED_ACHIEVEMENTS) {
-    const rows = await db
-      .insert(achievements)
-      .values({
+    // Select-then-insert: hindari ON CONFLICT(target) Drizzle yang emit
+    // `ON CONFLICT ("achievements"."code")` - LibSQL/SQLite menolak
+    // conflict target berkualifikasi tabel (error: does not match UNIQUE).
+    const existing = await db
+      .select({ id: achievements.id })
+      .from(achievements)
+      .where(eq(achievements.code, item.code))
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(achievements).values({
         code: item.code,
         title: item.title,
         description: item.description,
@@ -256,26 +264,24 @@ export async function seedAchievements() {
         family: item.family ?? null,
         level: item.level ?? null,
         isActive: true,
-      })
-      .onConflictDoNothing({ target: achievements.code })
-      .returning({ id: achievements.id });
-    if (rows.length > 0) inserted += 1;
+      });
+      inserted += 1;
+      continue;
+    }
 
     // Sinkronisasi aset/kriteria bila baris sudah ada (idempotent re-run):
     // update NON-kritis saja supaya re-run tidak menimpa katalog yang sudah
     // dikurasi admin (title/description/is_active dibiarkan).
-    if (rows.length === 0) {
-      await db
-        .update(achievements)
-        .set({
-          badgeUrl: item.badgeUrl,
-          criteria: JSON.stringify(item.criteria),
-          family: item.family ?? null,
-          level: item.level ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(achievements.code, item.code));
-    }
+    await db
+      .update(achievements)
+      .set({
+        badgeUrl: item.badgeUrl,
+        criteria: JSON.stringify(item.criteria),
+        family: item.family ?? null,
+        level: item.level ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(achievements.code, item.code));
   }
   logger.info(`Seed achievements: ${inserted} baru, total katalog ${SEED_ACHIEVEMENTS.length}`);
 }

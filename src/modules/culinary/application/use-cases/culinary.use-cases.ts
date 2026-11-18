@@ -2,7 +2,12 @@ import {
   BadRequestError,
   ConflictError,
   NotFoundError,
+  RateLimitedError,
+  UnauthorizedError,
 } from '@/shared/errors/app-error';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import {
   slugifyUsaha,
 } from '@/modules/usaha/application/use-cases/usaha.use-cases';
@@ -25,6 +30,20 @@ import type {
 } from '../../domain/repositories/culinary.repository';
 
 export { slugifyUsaha };
+
+/** #281: galeri kuliner (images_json) - cap lebih kecil dari wisata. */
+const PHOTO_CAP = 20;
+const PHOTO_DAILY = 5;
+
+/** URL harus hasil unggah SambasKu (`assets/culinary/`). */
+export function assertOurCuisineImage(url: string): void {
+  if (
+    !url.startsWith('https://cdn.jsdelivr.net/') ||
+    !url.includes('/assets/culinary/')
+  ) {
+    throw new BadRequestError('IMAGE_URL', 'Foto harus hasil unggah SambasKu');
+  }
+}
 
 /** Slug unik untuk kuliner/tempat. Satu query IN per kandidat (rule subrequest). */
 export class UniqueCulinarySlugUseCase {
@@ -212,6 +231,89 @@ export function imagesToJson(
       attribution: img.attribution ?? null,
     })),
   );
+}
+
+/**
+ * #281: tambah foto ke kuliner published (mirror wisata/usaha).
+ * Simpan di `images_json` (bukan tabel terpisah). Wajib login; 1 event
+ * `cuisine_photo_added` per batch.
+ */
+export class AppendCuisineImagesUseCase {
+  constructor(
+    private readonly repo: CulinaryRepository,
+    private readonly users: UserRepository,
+    private readonly activityEvents?: RecordActivityEventUseCase,
+  ) {}
+
+  async execute(slug: string, userId: string, urls: string[]): Promise<void> {
+    if (userId === ANONIM_USER_ID) {
+      throw new UnauthorizedError(
+        'UNAUTHORIZED',
+        'Masuk dulu untuk menambah foto kuliner',
+      );
+    }
+    const cuisine = await this.repo.findCuisineBySlug(slug, {
+      publicOnly: true,
+    });
+    if (!cuisine || cuisine.publishStatus !== 'published') {
+      throw new NotFoundError('CUISINE_NOT_FOUND', 'Kuliner tidak ditemukan');
+    }
+    for (const url of urls) assertOurCuisineImage(url);
+    const user = await this.users.findById(userId);
+    if (!user) {
+      throw new NotFoundError('USER_NOT_FOUND', 'User tidak ditemukan');
+    }
+    if (cuisine.images.length + urls.length > PHOTO_CAP) {
+      throw new BadRequestError(
+        'PHOTO_CAP',
+        `Foto kuliner ini sudah penuh (${PHOTO_CAP})`,
+      );
+    }
+    const sinceMs = Date.now() - 24 * 60 * 60 * 1000;
+    const today = cuisine.images.filter((img) => {
+      const attr = img.attribution;
+      if (!attr?.authorId || attr.authorId !== userId) return false;
+      if (!attr.uploadedAt) return false;
+      const t = Date.parse(attr.uploadedAt);
+      return Number.isFinite(t) && t >= sinceMs;
+    }).length;
+    if (today + urls.length > PHOTO_DAILY) {
+      throw new RateLimitedError(
+        'Maksimal 5 foto per kuliner dalam 24 jam',
+      );
+    }
+    const have = new Set(cuisine.images.map((img) => img.url));
+    const fresh = urls.filter((url) => !have.has(url));
+    if (fresh.length === 0) return;
+    const name = user.displayName || user.username;
+    const uploadedAt = new Date().toISOString();
+    const next = [
+      ...cuisine.images,
+      ...fresh.map((url) => ({
+        url,
+        isMain: false,
+        attribution: {
+          name,
+          provider: 'sambasku',
+          license: 'CC BY-SA 4.0',
+          authorId: userId,
+          uploadedAt,
+        },
+      })),
+    ];
+    // Pastikan tetap ada tepat satu isMain (foto baru tidak jadi cover).
+    await this.repo.updateCuisine({
+      id: cuisine.id,
+      imagesJson: imagesToJson(next),
+    });
+    await this.activityEvents?.safe({
+      kind: 'cuisine_photo_added',
+      actorId: userId,
+      targetId: cuisine.id,
+      dedupeKey: `cuisine_photo:${cuisine.id}:${fresh.join('|')}`,
+      payload: `Menambahkan foto kuliner ${cuisine.name}`,
+    });
+  }
 }
 
 export function sourcesToJson(

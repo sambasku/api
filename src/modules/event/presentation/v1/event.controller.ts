@@ -165,6 +165,21 @@ export interface EventImageControllerDeps {
   hideImage: HideEventImageUseCase;
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: "event",
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
 export class EventController {
   constructor(
     private readonly createUc: CreateEventUseCase,
@@ -177,6 +192,7 @@ export class EventController {
     private readonly commentDeps?: EventCommentControllerDeps,
     private readonly imageDeps?: EventImageControllerDeps,
     private readonly goingRepo?: EventGoingRepository,
+    private readonly listRelated?: ListRelatedFn,
   ) {}
 
   /**
@@ -230,14 +246,26 @@ export class EventController {
   async getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
     const event = await this.getBySlugUc.execute(slug, true);
     const going = await this.goingExtras([event.id], c.get("user")?.user_id);
+    const related = this.listRelated
+      ? await this.listRelated.execute("event", event.id)
+      : [];
     return c.json({
       success: true as const,
-      data: serialize(event, {
-        category: event.category,
-        village: event.village,
-        goingCount: going.counts.get(event.id) ?? 0,
-        viewerGoing: going.viewer.has(event.id),
-      }),
+      data: {
+        ...serialize(event, {
+          category: event.category,
+          village: event.village,
+          goingCount: going.counts.get(event.id) ?? 0,
+          viewerGoing: going.viewer.has(event.id),
+        }),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
     });
   }
 

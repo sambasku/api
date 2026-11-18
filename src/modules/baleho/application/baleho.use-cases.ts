@@ -418,6 +418,63 @@ export class BalehoUseCases {
     return this.repo.releaseDue(now);
   }
 
+  /**
+   * Cron H-1: notif 1x ke pengiklan live yang ends_at dalam 24 jam.
+   * Flag ending_soon_notified_at di-set setelah attempt (anti-spam).
+   */
+  async notifyEndingSoon(now: Date = new Date()): Promise<{ notified: number }> {
+    const until = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const rows = await this.repo.listEndingSoon(now, until);
+    if (rows.length === 0) return { notified: 0 };
+
+    const type = 'baleho_placement_ending_soon' as const;
+    const copy = inboxCopyFor(type);
+    const { recordInbox, notifyUser } = this.notify;
+
+    for (const row of rows) {
+      const data = {
+        type,
+        target_kind: 'baleho_placement',
+        target_id: row.id,
+        action_kind: 'baleho_placement',
+        action_value: row.id,
+      };
+      try {
+        await recordInbox?.execute({
+          userId: row.advertiserUserId,
+          type,
+          targetKind: 'baleho_placement',
+          targetId: row.id,
+          title: copy.title,
+          body: copy.body,
+          actionKind: 'baleho_placement',
+          actionValue: row.id,
+        });
+        await notifyUser?.execute({
+          userId: row.advertiserUserId,
+          title: copy.title,
+          body: copy.body,
+          data,
+        });
+      } catch (err) {
+        logger.warn(
+          {
+            err: err instanceof Error ? err.message : String(err),
+            placementId: row.id,
+          },
+          'baleho ending_soon notify failed',
+        );
+      }
+    }
+
+    // 1x only: set flag untuk semua kandidat (meski FCM gagal).
+    await this.repo.markEndingSoonNotified(
+      rows.map((r) => r.id),
+      now,
+    );
+    return { notified: rows.length };
+  }
+
   private async readPricePerCellPerDay(): Promise<number> {
     const raw = await this.settingsRepo?.getValue(BALEHO_PRICE_PER_CELL_PER_DAY_KEY);
     if (raw == null || raw.trim() === '') {

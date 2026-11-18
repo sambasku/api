@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   BALEHO_COLS,
@@ -706,6 +706,38 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     });
 
     return { cancelled: cancelIds.length, expired: expireIds.length };
+  }
+
+  async listEndingSoon(
+    now: Date,
+    until: Date,
+  ): Promise<Array<{ id: string; advertiserUserId: string }>> {
+    return this.db
+      .select({
+        id: balehoPlacements.id,
+        advertiserUserId: balehoPlacements.advertiserUserId,
+      })
+      .from(balehoPlacements)
+      .where(
+        and(
+          eq(balehoPlacements.status, 'live'),
+          isNull(balehoPlacements.deletedAt),
+          isNull(balehoPlacements.endingSoonNotifiedAt),
+          gt(balehoPlacements.endsAt, now),
+          lte(balehoPlacements.endsAt, until),
+        ),
+      );
+  }
+
+  async markEndingSoonNotified(ids: string[], at: Date): Promise<void> {
+    if (ids.length === 0) return;
+    await this.db
+      .update(balehoPlacements)
+      .set({
+        endingSoonNotifiedAt: at,
+        updatedAt: at,
+      })
+      .where(inArray(balehoPlacements.id, ids));
   }
 
   async createCommissionUnclaimed(args: {

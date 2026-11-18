@@ -84,6 +84,32 @@ export function createPublicCulinaryRoutes(deps: {
     },
   });
 
+  /** #281: mirror POST /places/:slug/images - max 5 URL per batch. */
+  const appendCuisineImagesBody = z.object({
+    urls: z.array(z.string().url()).min(1).max(5),
+  });
+  const appendCuisineImagesRoute = createRoute({
+    method: 'post',
+    path: '/cuisines/:slug/images',
+    tags: ['Culinary'],
+    summary: 'Tambah foto ke kuliner yang sudah terbit (#281)',
+    request: {
+      params: slugParam,
+      body: {
+        content: { 'application/json': { schema: appendCuisineImagesBody } },
+      },
+    },
+    responses: {
+      200: {
+        description: 'Foto ditambahkan',
+        content: json(okNullResponseSchema),
+      },
+      400: { description: 'Batas foto / URL invalid', content: json(errorResponseSchema) },
+      401: { description: 'Wajib login', content: json(errorResponseSchema) },
+      404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
   const listPlacesRoute = createRoute({
     method: 'get',
     path: '/places',
@@ -147,6 +173,13 @@ export function createPublicCulinaryRoutes(deps: {
   );
   routes.openapi(getCuisineRoute, (c) =>
     deps.controller.getCuisine(c, c.req.param('slug')) as never,
+  );
+  routes.openapi(appendCuisineImagesRoute, (c) =>
+    deps.controller.appendImages(
+      c,
+      c.req.param('slug'),
+      c.req.valid('json').urls,
+    ) as never,
   );
   routes.openapi(listPlacesRoute, (c) =>
     deps.controller.listPlaces(c, c.req.valid('query')) as never,

@@ -126,6 +126,21 @@ export class WordController {
       imageProviderName: string;
       /** Soft-mute IP/device untuk kontribusi tanpa login. */
       assertAnonWriteAllowed?: (ctx: AnonClientContext) => Promise<void>;
+      /** Kartu content_links untuk lemma (artikel/eksplorasi terkait). */
+      listRelated?: {
+        execute(
+          kind: 'word',
+          id: string,
+        ): Promise<
+          Array<{
+            kind: string;
+            id: string;
+            slug: string | null;
+            title: string;
+            coverUrl: string | null;
+          }>
+        >;
+      };
     },
   ) {}
 
@@ -367,7 +382,22 @@ export class WordController {
     const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
     const word = await this.deps.getById.execute(id, { viewerRoles });
     setPublicWordReadCache(c);
-    return c.json({ success: true as const, data: this.toDetailData(word, { redactStagingImages: true }) });
+    const related = this.deps.listRelated
+      ? await this.deps.listRelated.execute('word', word.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...this.toDetailData(word, { redactStagingImages: true }),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   /** URL publik /words/<lemma> - resolusi homonim di repository. */
@@ -375,7 +405,22 @@ export class WordController {
     const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
     const word = await this.deps.getByLemma.execute(lemma, { viewerRoles });
     setPublicWordReadCache(c);
-    return c.json({ success: true as const, data: this.toDetailData(word, { redactStagingImages: true }) });
+    const related = this.deps.listRelated
+      ? await this.deps.listRelated.execute('word', word.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...this.toDetailData(word, { redactStagingImages: true }),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   /** 28-api-word-of-the-day.md - payload detail + date + is_new_this_week,

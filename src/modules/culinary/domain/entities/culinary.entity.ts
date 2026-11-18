@@ -23,6 +23,10 @@ export interface CuisineImage {
     url?: string;
     license?: string;
     license_url?: string;
+    /** #281: pengunggah foto append (rate-limit harian). */
+    authorId?: string;
+    /** #281: ISO waktu unggah append. */
+    uploadedAt?: string;
   } | null;
 }
 

@@ -105,6 +105,21 @@ function serialize(u: UsahaListItem | UsahaDetail) {
   };
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: 'usaha',
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
 export class UsahaController {
   constructor(
     private readonly createUc: CreateUsahaUseCase,
@@ -119,6 +134,7 @@ export class UsahaController {
     private readonly listImagesUc: ListUsahaImagesUseCase,
     private readonly appendImagesUc: AppendUsahaImagesUseCase,
     private readonly hideImageUc: HideUsahaImageUseCase,
+    private readonly listRelated?: ListRelatedFn,
   ) {}
 
   listCategories(c: Context<{ Variables: AppVariables }>, publicOnly: boolean) {
@@ -154,10 +170,24 @@ export class UsahaController {
       );
   }
 
-  getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
-    return this.getBySlugUc
-      .execute(slug, true)
-      .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
+  async getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
+    const usaha = await this.getBySlugUc.execute(slug, true);
+    const related = this.listRelated
+      ? await this.listRelated.execute('usaha', usaha.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...serialize(usaha),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   listAdmin(

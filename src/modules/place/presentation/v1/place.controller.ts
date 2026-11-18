@@ -166,6 +166,26 @@ function mapSources(
   }));
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: 'place',
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
+type ReplaceRelatedFn = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  execute(input: any): Promise<unknown>;
+};
+
 export class PlaceController {
   constructor(
     private readonly createUc: CreatePlaceUseCase,
@@ -179,6 +199,8 @@ export class PlaceController {
     private readonly listViewsUc: ListPlaceViewsUseCase,
     private readonly viewReportUc: GetPlaceViewReportUseCase,
     private readonly hideImageUc: HidePlaceImageUseCase,
+    private readonly listRelated?: ListRelatedFn,
+    private readonly replaceRelated?: ReplaceRelatedFn,
   ) {}
 
   listPublic(
@@ -208,16 +230,35 @@ export class PlaceController {
       );
   }
 
-  getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
-    return this.getBySlugUc.execute(slug, true).then((p) =>
-      c.json({
-        success: true as const,
-        data: serialize(p, {
-          imageCount: p.imageCount,
-          relatedCards: p.relatedCards,
-        }),
-      }),
-    );
+  async getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
+    const p = await this.getBySlugUc.execute(slug, true);
+    const fromLinks = this.listRelated
+      ? await this.listRelated.execute('place', p.id)
+      : [];
+    // Legacy relatedCards tetap place|usaha; content_links penuh di `content_related`
+    // (dan menimpa `related` bila ada edge supaya klien baru dapat id/title).
+    const base = serialize(p, {
+      imageCount: p.imageCount,
+      relatedCards: p.relatedCards,
+    });
+    if (fromLinks.length === 0) {
+      return c.json({ success: true as const, data: base });
+    }
+    // Jangan timpa `related` legacy (place|usaha "dekat sini");
+    // kartu lintas fitur di field terpisah.
+    return c.json({
+      success: true as const,
+      data: {
+        ...base,
+        content_related: fromLinks.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   listAdmin(
@@ -248,61 +289,79 @@ export class PlaceController {
       );
   }
 
-  create(
+  async create(
     c: Context<{ Variables: AppVariables }>,
     body: z.infer<typeof createPlaceBodySchema>,
   ) {
-    return this.createUc
-      .execute({
-        id: body.id,
-        slug: body.slug,
-        name: body.name,
-        category: body.category,
-        type: body.type ?? null,
-        lat: body.lat ?? null,
-        lng: body.lng ?? null,
-        mapsUrl: body.maps_url ?? null,
-        shortDescription: body.short_description ?? "",
-        regionId: body.region_id ?? null,
-        villageId: body.village_id ?? null,
-        hours: body.hours ?? null,
-        contact: body.contact ?? null,
-        authorId: body.author_id ?? null,
-        sources: mapSources(body.sources),
-        related: body.related,
-        images: mapImages(body.images),
-        status: body.status,
-      })
-      .then((p) => c.json({ success: true as const, data: serialize(p) }));
+    const p = await this.createUc.execute({
+      id: body.id,
+      slug: body.slug,
+      name: body.name,
+      category: body.category,
+      type: body.type ?? null,
+      lat: body.lat ?? null,
+      lng: body.lng ?? null,
+      mapsUrl: body.maps_url ?? null,
+      shortDescription: body.short_description ?? "",
+      regionId: body.region_id ?? null,
+      villageId: body.village_id ?? null,
+      hours: body.hours ?? null,
+      contact: body.contact ?? null,
+      authorId: body.author_id ?? null,
+      sources: mapSources(body.sources),
+      related: body.related,
+      images: mapImages(body.images),
+      status: body.status,
+    });
+    if (body.related && this.replaceRelated) {
+      await this.replaceRelated.execute({
+        anchor: { kind: 'place', id: p.id },
+        related: body.related.map((r) => ({
+          kind: r.kind,
+          slug: r.slug,
+        })),
+        createdBy: c.get('user')?.user_id ?? null,
+      });
+    }
+    return c.json({ success: true as const, data: serialize(p) });
   }
 
-  update(
+  async update(
     c: Context<{ Variables: AppVariables }>,
     id: string,
     body: z.infer<typeof updatePlaceBodySchema>,
   ) {
-    return this.updateUc
-      .execute({
-        id,
-        slug: body.slug,
-        name: body.name,
-        category: body.category,
-        type: body.type,
-        lat: body.lat,
-        lng: body.lng,
-        mapsUrl: body.maps_url,
-        shortDescription: body.short_description,
-        regionId: body.region_id,
-        villageId: body.village_id,
-        hours: body.hours,
-        contact: body.contact,
-        authorId: body.author_id,
-        sources: mapSources(body.sources),
-        related: body.related,
-        images: mapImages(body.images),
-        status: body.status,
-      })
-      .then((p) => c.json({ success: true as const, data: serialize(p) }));
+    const p = await this.updateUc.execute({
+      id,
+      slug: body.slug,
+      name: body.name,
+      category: body.category,
+      type: body.type,
+      lat: body.lat,
+      lng: body.lng,
+      mapsUrl: body.maps_url,
+      shortDescription: body.short_description,
+      regionId: body.region_id,
+      villageId: body.village_id,
+      hours: body.hours,
+      contact: body.contact,
+      authorId: body.author_id,
+      sources: mapSources(body.sources),
+      related: body.related,
+      images: mapImages(body.images),
+      status: body.status,
+    });
+    if (body.related && this.replaceRelated) {
+      await this.replaceRelated.execute({
+        anchor: { kind: 'place', id: p.id },
+        related: body.related.map((r) => ({
+          kind: r.kind,
+          slug: r.slug,
+        })),
+        createdBy: c.get('user')?.user_id ?? null,
+      });
+    }
+    return c.json({ success: true as const, data: serialize(p) });
   }
 
   listImages(

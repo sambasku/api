@@ -119,8 +119,26 @@ function toContributionWire(row: LayananContribution) {
   };
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: 'layanan',
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
 export class LayananController {
-  constructor(private readonly uc: LayananUseCases) {}
+  constructor(
+    private readonly uc: LayananUseCases,
+    private readonly listRelated?: ListRelatedFn,
+  ) {}
 
   async listPublic(c: Context, query: z.infer<typeof listLayananQuerySchema>) {
     const items = await this.uc.listPublic({
@@ -133,7 +151,22 @@ export class LayananController {
 
   async getPublic(c: Context, slug: string) {
     const row = await this.uc.getPublished(slug);
-    return c.json({ success: true as const, data: toLayananWire(row, false) });
+    const related = this.listRelated
+      ? await this.listRelated.execute('layanan', row.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...toLayananWire(row, false),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   async adminList(c: Context) {

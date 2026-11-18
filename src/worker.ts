@@ -152,6 +152,7 @@ export default {
           msg: 'baleho release cron done',
           cancelled: result.cancelled,
           expired: result.expired,
+          endingSoonNotified: result.endingSoonNotified,
         }),
       );
     } catch (error) {

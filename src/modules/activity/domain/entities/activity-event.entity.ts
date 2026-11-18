@@ -16,6 +16,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'contribution_example',
   'place_photo_added',
   'usaha_photo_added',
+  'cuisine_photo_added',
   'event_photo_added',
   'comment_created',
   'vote_word',
@@ -71,6 +72,8 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'place_photo';
     case 'usaha_photo_added':
       return 'usaha_photo';
+    case 'cuisine_photo_added':
+      return 'culinary';
     case 'comment_created':
       return 'comment';
     case 'vote_word':
