@@ -196,6 +196,7 @@ function toReply(
     userRole,
     body: row.body,
     bodyOriginal: row.bodyOriginal,
+    stickerId: row.stickerId ?? null,
     audio: hasAudio
       ? {
           url: row.audioUrl as string,
@@ -644,6 +645,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal ?? null,
+        stickerId: input.stickerId ?? null,
         audioUrl: audio?.url ?? null,
         audioMimeType: audio?.mimeType ?? null,
         audioFileSize: audio?.fileSize ?? null,

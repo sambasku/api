@@ -108,9 +108,11 @@ export interface DiscussionReply {
   avatarUrl: string | null;
   /** Role penulis - dipakai highlight verifikator di render, bukan flag DB. */
   userRole: string | null;
-  /** Caption; string kosong untuk voice-only (wire → null). */
+  /** Caption; string kosong untuk voice-only / stiker-only (wire → null). */
   body: string;
   bodyOriginal: string | null;
+  /** Slug katalog stickers; null = bukan balasan stiker. */
+  stickerId: string | null;
   audio: DiscussionReplyAudio | null;
   status: DiscussionReplyStatus;
   reviewedBy: string | null;
@@ -134,6 +136,7 @@ export interface NewDiscussionReply {
   userId: string;
   body: string;
   bodyOriginal?: string | null;
+  stickerId?: string | null;
   audio?: DiscussionReplyAudio | null;
 }
 

@@ -3215,6 +3215,7 @@ const discussionController = new DiscussionController({
     notifyUser,
     discussionReplyPushCooldown,
     recordAbuseSignal,
+    stickerRepo,
   ),
   createReplyAudio: new CreateDiscussionReplyAudioUseCase(
     discussionRepo,

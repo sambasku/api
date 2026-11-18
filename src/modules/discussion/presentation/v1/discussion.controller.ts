@@ -207,6 +207,7 @@ function toPublicReply(
     display_name: reply.displayName,
     avatar_url: reply.avatarUrl,
     body: redactReplyBody(reply),
+    sticker_id: reply.status === 'published' ? (reply.stickerId ?? null) : null,
     ...redactReplyAudio(reply),
     status: reply.status,
     is_verifier: isVerifierRole(reply.userRole),
@@ -523,7 +524,8 @@ export class DiscussionController {
     const reply = await this.deps.createReply.execute({
       discussionId,
       userId: user.user_id,
-      body: body.body,
+      body: body.body ?? '',
+      stickerId: body.sticker_id ?? null,
       requestId: this.requestId(c),
     });
     const help = await this.deps.getDetail.execute({

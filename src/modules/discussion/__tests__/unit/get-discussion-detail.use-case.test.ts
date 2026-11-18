@@ -54,6 +54,7 @@ function makeReply(
     userRole: 'contributor',
     body: `balasan ${id.slice(-1)}`,
     bodyOriginal: null,
+    stickerId: null,
     audio: null,
     status: 'published',
     reviewedBy: null,

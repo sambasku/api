@@ -66,9 +66,11 @@ export const discussionReplies = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
-    /** Teks caption; string kosong untuk balasan voice-only. */
+    /** Teks caption; string kosong untuk balasan voice-only / stiker-only. */
     body: text('body').notNull(),
     bodyOriginal: text('body_original'),
+    /** Slug katalog stickers; null = bukan balasan stiker. */
+    stickerId: text('sticker_id'),
     audioUrl: text('audio_url'),
     audioMimeType: text('audio_mime_type'),
     audioFileSize: integer('audio_file_size'),

@@ -50,6 +50,7 @@ function makeReply(overrides: Partial<DiscussionReply> = {}): DiscussionReply {
     userRole: 'contributor',
     body: 'Artinya "buka toko pagi-pagi".',
     bodyOriginal: null,
+    stickerId: null,
     audio: null,
     status: 'published',
     reviewedBy: null,
@@ -266,5 +267,51 @@ describe('CreateDiscussionReplyUseCase', () => {
     // Total inbox: 2 reply + 1 mention (non-peserta) = 3, bukan 4.
     expect(inbox.execute).toHaveBeenCalledTimes(3);
     expect(notifyUser.execute).toHaveBeenCalledTimes(3);
+  });
+
+  it('sticker_id aktif lolos; unknown ditolak; stiker-only OK', async () => {
+    const { ValidationError } = await import('@/shared/errors/app-error');
+    const repo = makeRepo({
+      createReply: vi.fn().mockResolvedValue(makeReply({ body: '', stickerId: 'cheer' })),
+      findReplyById: vi.fn().mockResolvedValue(makeReply({ body: '', stickerId: 'cheer' })),
+      listDistinctReplierUserIds: vi.fn().mockResolvedValue([]),
+    });
+    const stickerRepo = {
+      findActiveById: vi.fn().mockImplementation(async (id: string) =>
+        id === 'cheer'
+          ? { id: 'cheer', imageUrl: 'https://cdn.example/cheer.png', playOnce: false }
+          : null,
+      ),
+    };
+    const uc = new CreateDiscussionReplyUseCase(
+      repo,
+      { record: vi.fn() } as unknown as AuditLogRepository,
+      { listAllActiveWords: vi.fn().mockResolvedValue([]) } as unknown as CommentBlocklistRepository,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      stickerRepo as never,
+    );
+
+    await expect(
+      uc.execute({
+        discussionId: DISCUSSION_ID,
+        userId: ACTOR,
+        body: '',
+        stickerId: 'ghost',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    await uc.execute({
+      discussionId: DISCUSSION_ID,
+      userId: ACTOR,
+      body: '',
+      stickerId: 'cheer',
+    });
+    expect(repo.createReply).toHaveBeenCalledWith(
+      expect.objectContaining({ body: '', stickerId: 'cheer' }),
+    );
   });
 });

@@ -115,13 +115,33 @@ export const discussionReplyIdParamSchema = z.object({
   id: opaqueId,
 });
 
-export const createDiscussionReplyBodySchema = z.object({
-  body: z
-    .string({ error: 'Balasan minimal 1 karakter' })
-    .trim()
-    .min(1, 'Balasan minimal 1 karakter')
-    .max(500, 'Balasan maksimal 500 karakter'),
-});
+/** Create: teks dan/atau stiker katalog (bukan voice - itu endpoint /audio). */
+export const createDiscussionReplyBodySchema = z
+  .object({
+    body: z
+      .string({ error: 'Balasan tidak valid' })
+      .trim()
+      .max(500, 'Balasan maksimal 500 karakter')
+      .optional()
+      .default(''),
+    sticker_id: z
+      .string({ error: 'Stiker tidak valid' })
+      .trim()
+      .min(1, 'Stiker tidak valid')
+      .max(64, 'Stiker tidak valid')
+      .nullish(),
+  })
+  .superRefine((val, ctx) => {
+    const hasBody = (val.body?.trim().length ?? 0) > 0;
+    const hasSticker = Boolean(val.sticker_id?.trim());
+    if (!hasBody && !hasSticker) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['body'],
+        message: 'Balasan atau stiker wajib diisi',
+      });
+    }
+  });
 
 export type CreateDiscussionReplyBody = z.infer<typeof createDiscussionReplyBodySchema>;
 
@@ -176,6 +196,7 @@ export const discussionReplyPublicSchema = z.object({
   display_name: z.string().nullable(),
   avatar_url: z.string().nullable(),
   body: z.string().nullable(),
+  sticker_id: z.string().nullable(),
   audio_url: z.string().nullable(),
   audio_mime_type: z.string().nullable(),
   audio_duration_ms: z.number().int().nullable(),

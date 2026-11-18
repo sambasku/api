@@ -57,6 +57,7 @@ function makeReply(overrides: Partial<DiscussionReply> = {}): DiscussionReply {
     userRole: null,
     body: 'Enak sekali',
     bodyOriginal: null,
+    stickerId: null,
     audio: null,
     status: 'published',
     reviewedBy: null,
