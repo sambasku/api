@@ -119,6 +119,8 @@ export interface ArticleComment {
   authorDeletedAt: Date | null;
   body: string;
   imageUrl: string | null;
+  /** Slug katalog stickers; null = bukan komentar stiker. */
+  stickerId: string | null;
   status: ArticleCommentStatus;
   isEdited: boolean;
   createdAt: Date;

@@ -3672,6 +3672,7 @@ const encyclopediaController = new EncyclopediaController({
     commentBlocklistRepo,
     recordAbuseSignal,
     activityEvents,
+    stickerRepo,
   ),
   updateComment: new UpdateArticleCommentUseCase(
     encyclopediaRepo,

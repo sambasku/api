@@ -203,14 +203,41 @@ export const articleCommentsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
-export const createCommentBodySchema = z.object({
-  body: z
-    .string({ error: 'Komentar wajib diisi' })
-    .trim()
-    .min(1, 'Komentar wajib diisi')
-    .max(1000, 'Komentar maksimal 1000 karakter'),
-  image_url: z.string().url().startsWith('https://').nullable().optional(),
-});
+export const createCommentBodySchema = z
+  .object({
+    body: z
+      .string({ error: 'Komentar tidak valid' })
+      .trim()
+      .max(1000, 'Komentar maksimal 1000 karakter')
+      .optional()
+      .default(''),
+    image_url: z.string().url().startsWith('https://').nullable().optional(),
+    sticker_id: z
+      .string({ error: 'Stiker tidak valid' })
+      .trim()
+      .min(1, 'Stiker tidak valid')
+      .max(64, 'Stiker tidak valid')
+      .nullish(),
+  })
+  .superRefine((val, ctx) => {
+    const hasBody = (val.body?.trim().length ?? 0) > 0;
+    const hasImage = Boolean(val.image_url?.trim());
+    const hasSticker = Boolean(val.sticker_id?.trim());
+    if (hasSticker && hasImage) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sticker_id'],
+        message: 'Stiker tidak bisa digabung dengan foto',
+      });
+    }
+    if (!hasBody && !hasImage && !hasSticker) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['body'],
+        message: 'Komentar, foto, atau stiker wajib diisi',
+      });
+    }
+  });
 
 export const updateCommentBodySchema = z.object({
   body: z

@@ -134,6 +134,7 @@ function toComment(
     authorDeletedAt: profile.authorDeletedAt,
     body: row.body,
     imageUrl: row.imageUrl,
+    stickerId: row.stickerId ?? null,
     status: row.status as ArticleCommentStatus,
     isEdited: profile.isEdited,
     createdAt: row.createdAt,
@@ -693,6 +694,7 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         body: input.body,
         bodyOriginal: input.bodyOriginal,
         imageUrl: input.imageUrl ?? null,
+        stickerId: input.stickerId ?? null,
         createdAt: new Date(),
       })
       .returning();

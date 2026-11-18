@@ -243,6 +243,8 @@ export const articleComments = sqliteTable(
     /** Teks asli sebelum blocklist; null jika tidak disensor. */
     bodyOriginal: text('body_original'),
     imageUrl: text('image_url'),
+    /** Slug katalog stickers; null = bukan komentar stiker. */
+    stickerId: text('sticker_id'),
     status: text('status', { enum: ARTICLE_COMMENT_STATUSES })
       .notNull()
       .default('published'),

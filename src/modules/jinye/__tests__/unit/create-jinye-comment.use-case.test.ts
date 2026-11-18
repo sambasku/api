@@ -32,7 +32,6 @@ function makeJinye(): Jinye {
     userRole: 'contributor',
     body: 'halo',
     bodyOriginal: null,
-    stickerId: null,
     images: [],
     audio: null,
     repostOfId: null,

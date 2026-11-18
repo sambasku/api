@@ -3,6 +3,7 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  ValidationError,
 } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
@@ -11,6 +12,7 @@ import { assertCanContribute } from '@/modules/word/application/utils/assert-can
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type {
   ArticleComment,
   ArticleContribution,
@@ -29,6 +31,7 @@ export interface CreateCommentInput {
   userId: string;
   body: string;
   imageUrl?: string | null;
+  stickerId?: string | null;
   requestId?: string | null;
 }
 
@@ -54,6 +57,7 @@ export class CreateArticleCommentUseCase {
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly stickerRepo?: StickerRepository,
   ) {}
 
   async execute(input: CreateCommentInput): Promise<ArticleComment> {
@@ -65,33 +69,73 @@ export class CreateArticleCommentUseCase {
         'Artikel tidak ditemukan atau sudah tidak tayang',
       );
     }
-    const body = input.body.trim();
-    if (body.length === 0 || body.length > 1000) {
-      throw new BadRequestError('VALIDATION_ERROR', 'Komentar 1-1000 karakter', [
-        { field: 'body', message: 'Komentar antara 1 sampai 1000 karakter' },
+
+    const rawBody = input.body?.trim() ?? '';
+    const imageUrl = input.imageUrl?.trim() || null;
+    const rawSticker = input.stickerId?.trim() ?? '';
+    if (rawSticker && imageUrl) {
+      throw new ValidationError([
+        { field: 'sticker_id', message: 'Stiker tidak bisa digabung dengan foto' },
       ]);
     }
-    await assertUgcTextQualityWithStrike(body, {
-      userId: input.userId,
-      abuse: this.abuse,
-      entityType: 'article_comment',
-      requestId: input.requestId,
-    });
-    const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filtered = applyBlocklistFilter(body, blocked);
+    let stickerId: string | null = null;
+    if (rawSticker) {
+      if (!this.stickerRepo) {
+        throw new ValidationError([
+          { field: 'sticker_id', message: 'Stiker tidak tersedia' },
+        ]);
+      }
+      const catalog = await this.stickerRepo.findActiveById(rawSticker);
+      if (!catalog) {
+        throw new ValidationError([
+          {
+            field: 'sticker_id',
+            message: 'Stiker tidak tersedia. Pilih ulang dari daftar.',
+          },
+        ]);
+      }
+      stickerId = catalog.id;
+    }
+    if (rawBody.length === 0 && !imageUrl && !stickerId) {
+      throw new ValidationError([
+        { field: 'body', message: 'Komentar, foto, atau stiker wajib diisi' },
+      ]);
+    }
+    if (rawBody.length > 1000) {
+      throw new BadRequestError('VALIDATION_ERROR', 'Komentar 1-1000 karakter', [
+        { field: 'body', message: 'Komentar maksimal 1000 karakter' },
+      ]);
+    }
+
+    let filtered = '';
+    let bodyOriginal: string | null = null;
+    if (rawBody.length > 0) {
+      const body = await assertUgcTextQualityWithStrike(rawBody, {
+        userId: input.userId,
+        abuse: this.abuse,
+        entityType: 'article_comment',
+        requestId: input.requestId,
+        minMeaningfulChars: 1,
+      });
+      const blocked = await this.blocklistRepo.listAllActiveWords();
+      filtered = applyBlocklistFilter(body, blocked);
+      bodyOriginal = filtered !== body ? body : null;
+    }
+
     const created = await this.repo.createComment({
       articleId: input.articleId,
       userId: input.userId,
       body: filtered,
-      bodyOriginal: filtered !== body ? body : null,
-      imageUrl: input.imageUrl ?? null,
+      bodyOriginal,
+      imageUrl,
+      stickerId,
     });
     await this.auditRepo.record({
       userId: input.userId,
       action: 'create',
       entityType: 'article_comment',
       entityId: created.id,
-      newData: { article_id: article.id },
+      newData: { article_id: article.id, sticker_id: stickerId },
       requestId: input.requestId ?? null,
     });
     await this.activityEvents?.safe({

@@ -146,6 +146,7 @@ function toCommentWire(c: ArticleComment) {
     },
     body: c.body,
     image_url: c.imageUrl,
+    sticker_id: c.stickerId ?? null,
     status: c.status,
     is_edited: c.isEdited,
     created_at: c.createdAt.toISOString(),
@@ -334,14 +335,16 @@ export class EncyclopediaController {
     const user = requireUser(c);
     const { id } = c.req.valid('param' as never) as { id: string };
     const body = c.req.valid('json' as never) as {
-      body: string;
+      body?: string;
       image_url?: string | null;
+      sticker_id?: string | null;
     };
     const comment = await this.deps.createComment.execute({
       articleId: id,
       userId: user.user_id,
-      body: body.body,
+      body: body.body ?? '',
       imageUrl: body.image_url ?? null,
+      stickerId: body.sticker_id ?? null,
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toCommentWire(comment) }, 201);

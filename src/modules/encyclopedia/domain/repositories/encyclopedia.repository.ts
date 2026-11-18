@@ -68,6 +68,7 @@ export interface NewArticleCommentInput {
   /** Body asli; null = tidak disensor. */
   bodyOriginal: string | null;
   imageUrl?: string | null;
+  stickerId?: string | null;
 }
 
 export interface NewArticleContributionInput {

@@ -15,7 +15,6 @@ function makeJinye(overrides: Partial<Jinye> = {}): Jinye {
     userRole: null,
     body: 'aku makatn nasi',
     bodyOriginal: null,
-    stickerId: null,
     images: [],
     audio: null,
     repostOfId: null,
