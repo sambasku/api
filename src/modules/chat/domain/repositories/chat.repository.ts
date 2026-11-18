@@ -14,6 +14,12 @@ export interface CreateChatMessageInput {
   kind: ChatMessageKind;
   body: string | null;
   stickerId: string | null;
+  audioUrl?: string | null;
+  /** Turso-only - untuk best-effort delete GitHub. */
+  audioPath?: string | null;
+  /** Turso-only - untuk best-effort delete GitHub. */
+  audioSha?: string | null;
+  durationMs?: number | null;
   replyToId: string | null;
   replySnippet: string | null;
   replyUsername: string | null;

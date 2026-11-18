@@ -1,11 +1,14 @@
 import type { Context } from 'hono';
+import { BadRequestError } from '@/shared/errors/app-error';
 import type { AppVariables } from '@/shared/types';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type {
   ChatMessage,
   ChatMessageRevision,
 } from '../../domain/entities/chat-message.entity';
 import type {
   CreateChatMessageUseCase,
+  CreateChatVoiceNoteUseCase,
   DeleteChatMessageUseCase,
   EditChatMessageUseCase,
   GetChatCapabilitiesUseCase,
@@ -50,6 +53,7 @@ export class ChatController {
     private readonly capabilities: GetChatCapabilitiesUseCase,
     private readonly listMessages: ListChatMessagesUseCase,
     private readonly createMessage: CreateChatMessageUseCase,
+    private readonly createVoiceNote: CreateChatVoiceNoteUseCase,
     private readonly editMessage: EditChatMessageUseCase,
     private readonly deleteMessage: DeleteChatMessageUseCase,
     private readonly listRevisions: ListChatRevisionsUseCase,
@@ -119,6 +123,52 @@ export class ChatController {
       .then((m) =>
         c.json({ success: true as const, data: serializeMessage(m) }, 201),
       );
+  }
+
+  async createVoice(c: Context<{ Variables: AppVariables }>) {
+    const user = c.get('user')!;
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError(
+        'AUDIO_TOO_LARGE',
+        'File audio terlalu besar (maks 5 MB)',
+        [{ field: 'audio', message: 'Ukuran maksimal 5 MB' }],
+      );
+    }
+
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError(
+        'VALIDATION_ERROR',
+        'File audio wajib diunggah',
+        [
+          {
+            field: 'audio',
+            message: 'Field multipart `audio` wajib berisi file',
+          },
+        ],
+      );
+    }
+
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const replyToRaw = body['reply_to_id'];
+    const replyToId =
+      typeof replyToRaw === 'string' && replyToRaw.trim()
+        ? replyToRaw.trim()
+        : null;
+
+    const m = await this.createVoiceNote.execute({
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      durationMs: body['duration_ms'],
+      replyToId,
+      requestId: c.get('requestId'),
+    });
+    return c.json({ success: true as const, data: serializeMessage(m) }, 201);
   }
 
   edit(

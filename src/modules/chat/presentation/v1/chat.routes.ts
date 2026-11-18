@@ -131,6 +131,52 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
     },
   });
 
+  const createVoiceRoute = createRoute({
+    method: 'post',
+    path: '/messages/voice',
+    tags: ['Chat'],
+    summary: 'Kirim voice note (multipart; 1-60 detik)',
+    request: {
+      body: {
+        content: {
+          'multipart/form-data': {
+            schema: z.object({
+              audio: z.any().openapi({ type: 'string', format: 'binary' }),
+              duration_ms: z.coerce.number().int(),
+              reply_to_id: z.string().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      201: {
+        description: 'Voice note dibuat',
+        content: json(chatMessageResponseSchema),
+      },
+      400: {
+        description: 'File/MIME/durasi tidak valid',
+        content: json(errorResponseSchema),
+      },
+      401: {
+        description: 'Token tidak ada/invalid',
+        content: json(errorResponseSchema),
+      },
+      403: {
+        description: 'Tidak diizinkan / consent',
+        content: json(errorResponseSchema),
+      },
+      429: {
+        description: 'Rate limit',
+        content: json(errorResponseSchema),
+      },
+      503: {
+        description: 'Storage audio belum dikonfigurasi',
+        content: json(errorResponseSchema),
+      },
+    },
+  });
+
   const editRoute = createRoute({
     method: 'patch',
     path: '/messages/{id}',
@@ -212,7 +258,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
     },
   });
 
-  // GET list: optional auth. POST create: auth + client + consent + rate limit.
+  // GET list: optional auth. POST create (+ voice): auth + client + consent + rate limit.
   routes.use('/messages', async (c, next) => {
     if (c.req.method === 'GET') return deps.optionalAuthenticate(c, next);
     if (c.req.method === 'POST') return deps.authenticate(c, next);
@@ -233,6 +279,30 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
     return writeUserLimit(c, next);
   });
   routes.use('/messages', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeIpLimit(c, next);
+  });
+
+  // Voice note: path /messages/voice - pastikan gate sama (Hono path exact).
+  routes.use('/messages/voice', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/messages/voice', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/messages/voice', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/messages/voice', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeUserLimit(c, next);
+  });
+  routes.use('/messages/voice', async (c, next) => {
     if (c.req.method !== 'POST') return next();
     return writeIpLimit(c, next);
   });
@@ -267,6 +337,9 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
   );
   routes.openapi(createRouteDef, (c) =>
     deps.controller.create(c, c.req.valid('json')) as never,
+  );
+  routes.openapi(createVoiceRoute, (c) =>
+    deps.controller.createVoice(c) as never,
   );
   routes.openapi(editRoute, (c) =>
     deps.controller.edit(

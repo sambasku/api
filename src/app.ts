@@ -652,6 +652,7 @@ import { ChatRepositoryImpl } from "@/modules/chat/infrastructure/chat.repositor
 import { ChatSupabaseMirrorService } from "@/modules/chat/infrastructure/chat-supabase-mirror";
 import {
   CreateChatMessageUseCase,
+  CreateChatVoiceNoteUseCase,
   DeleteChatMessageUseCase,
   EditChatMessageUseCase,
   GetChatCapabilitiesUseCase,
@@ -3748,7 +3749,7 @@ const webImportController = new WebImportController(
   new ApproveWebImportUseCase(webImportRepo, auditRepo),
   new RejectWebImportUseCase(webImportRepo, auditRepo),
 );
-// Chat publik F1a (teks/stiker/reply/edit/tombstone). Voice note = F1b.
+// Chat publik F1a + F1b voice note (teks/stiker/VN/reply/edit/tombstone).
 const chatRepo = new ChatRepositoryImpl(db);
 const chatMirror = new ChatSupabaseMirrorService();
 const chatController = new ChatController(
@@ -3761,13 +3762,19 @@ const chatController = new ChatController(
     chatMirror,
     recordAbuseSignal,
   ),
+  new CreateChatVoiceNoteUseCase(
+    chatRepo,
+    userRepo,
+    pronunciationStorage,
+    chatMirror,
+  ),
   new EditChatMessageUseCase(
     chatRepo,
     commentBlocklistRepo,
     chatMirror,
     recordAbuseSignal,
   ),
-  new DeleteChatMessageUseCase(chatRepo, chatMirror),
+  new DeleteChatMessageUseCase(chatRepo, chatMirror, pronunciationStorage),
   new ListChatRevisionsUseCase(chatRepo),
 );
 app.route(

@@ -8,6 +8,8 @@ import type { UserRepository } from '@/modules/auth/domain/repositories/user.rep
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
+import type { PronunciationStoragePort } from '@/modules/word/application/ports/pronunciation-storage.port';
+import { validateAudioFile } from '@/modules/word/application/utils/validate-audio-file';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
@@ -15,6 +17,7 @@ import {
   RecordAbuseSignalUseCase,
   safeRecordAbuseSignal,
 } from '@/shared/moderation/record-abuse-signal.use-case';
+import { generateId } from '@/shared/utils/ulid';
 import {
   buildReplySnippet,
   CHAT_CHANNEL_PUBLIC,
@@ -27,10 +30,50 @@ import type {
   ListChatMessagesResult,
 } from '../../domain/repositories/chat.repository';
 import type { ChatSupabaseMirror } from '../../infrastructure/chat-supabase-mirror';
+import { buildChatVoiceNotePath } from '../utils/chat-voice-note-path';
 
 export const VOICE_ROOM_ENABLED_KEY = 'voice.room_enabled';
 
+/** Durasi voice note chat: 1-60 detik (P22). */
+export const CHAT_VOICE_MIN_MS = 1_000;
+export const CHAT_VOICE_MAX_MS = 60_000;
+
 const BODY_MAX = 1000;
+
+function assertChatVoiceDurationMs(raw: unknown): number {
+  const n =
+    typeof raw === 'number'
+      ? raw
+      : typeof raw === 'string'
+        ? Number(raw)
+        : NaN;
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new ValidationError([
+      {
+        field: 'duration_ms',
+        message: 'Durasi rekaman wajib diisi (1-60 detik)',
+      },
+    ]);
+  }
+  const ms = Math.round(n);
+  if (ms < CHAT_VOICE_MIN_MS) {
+    throw new ValidationError([
+      {
+        field: 'duration_ms',
+        message: 'Rekaman terlalu pendek. Minimal 1 detik ya.',
+      },
+    ]);
+  }
+  if (ms > CHAT_VOICE_MAX_MS) {
+    throw new ValidationError([
+      {
+        field: 'duration_ms',
+        message: 'Rekaman terlalu panjang. Maksimal 60 detik.',
+      },
+    ]);
+  }
+  return ms;
+}
 
 export class GetChatCapabilitiesUseCase {
   constructor(private readonly settingsRepo: AppSettingsRepository) {}
@@ -264,6 +307,12 @@ export class EditChatMessageUseCase {
         'Hanya penulis yang dapat mengedit pesan ini',
       );
     }
+    if (existing.kind === 'voice_note') {
+      throw new BadRequestError(
+        'CHAT_EDIT_VOICE_UNSUPPORTED',
+        'Voice note tidak bisa disunting. Hapus saja kalau mau ganti.',
+      );
+    }
     if (existing.kind !== 'text') {
       throw new BadRequestError(
         'CHAT_EDIT_KIND_UNSUPPORTED',
@@ -323,6 +372,96 @@ export class EditChatMessageUseCase {
   }
 }
 
+export interface CreateChatVoiceNoteCommand {
+  userId: string;
+  bytes: Uint8Array;
+  mimeType: string | null | undefined;
+  filename?: string | null;
+  durationMs: unknown;
+  replyToId?: string | null;
+  requestId?: string | null;
+}
+
+/**
+ * Voice note chat (F1b).
+ * Urutan: generate id → upload GitHub → INSERT Turso → mirror Supabase
+ * (tanpa path/sha). Upload gagal = tidak insert Turso.
+ */
+export class CreateChatVoiceNoteUseCase {
+  constructor(
+    private readonly repo: ChatRepository,
+    private readonly userRepo: UserRepository,
+    private readonly storage: PronunciationStoragePort,
+    private readonly mirror: ChatSupabaseMirror,
+  ) {}
+
+  async execute(cmd: CreateChatVoiceNoteCommand): Promise<ChatMessage> {
+    await assertCanContribute(cmd.userId);
+
+    const file = validateAudioFile({
+      bytes: cmd.bytes,
+      mimeType: cmd.mimeType,
+      filename: cmd.filename,
+    });
+    const durationMs = assertChatVoiceDurationMs(cmd.durationMs);
+
+    let replyToId: string | null = null;
+    let replySnippet: string | null = null;
+    let replyUsername: string | null = null;
+    if (cmd.replyToId) {
+      const parent = await this.repo.findById(cmd.replyToId);
+      if (!parent || parent.channel !== CHAT_CHANNEL_PUBLIC) {
+        throw new NotFoundError(
+          'CHAT_REPLY_NOT_FOUND',
+          'Pesan yang dibalas tidak ditemukan',
+        );
+      }
+      replyToId = parent.id;
+      replySnippet = buildReplySnippet(parent);
+      replyUsername = parent.username ?? parent.displayName ?? null;
+    }
+
+    const user = await this.userRepo.findById(cmd.userId);
+    if (!user) {
+      throw new NotFoundError('USER_NOT_FOUND', 'Akun tidak ditemukan');
+    }
+
+    const messageId = generateId();
+    const path = buildChatVoiceNotePath({
+      messageId,
+      mimeType: file.mimeType,
+    });
+
+    const uploaded = await this.storage.upload({
+      path,
+      content: file.bytes,
+      mimeType: file.mimeType,
+    });
+
+    const created = await this.repo.create({
+      id: messageId,
+      channel: CHAT_CHANNEL_PUBLIC,
+      userId: cmd.userId,
+      username: user.username,
+      displayName: user.displayName || user.username,
+      avatarUrl: user.avatarUrl ?? null,
+      kind: 'voice_note',
+      body: null,
+      stickerId: null,
+      audioUrl: uploaded.url,
+      audioPath: uploaded.path,
+      audioSha: uploaded.sha,
+      durationMs,
+      replyToId,
+      replySnippet,
+      replyUsername,
+    });
+
+    await this.mirror.upsert(created);
+    return created;
+  }
+}
+
 export interface DeleteChatMessageCommand {
   messageId: string;
   actorId: string;
@@ -332,6 +471,7 @@ export class DeleteChatMessageUseCase {
   constructor(
     private readonly repo: ChatRepository,
     private readonly mirror: ChatSupabaseMirror,
+    private readonly storage?: PronunciationStoragePort,
   ) {}
 
   async execute(cmd: DeleteChatMessageCommand): Promise<ChatMessage> {
@@ -352,6 +492,19 @@ export class DeleteChatMessageUseCase {
         'FORBIDDEN',
         'Hanya penulis yang dapat menghapus pesan ini',
       );
+    }
+
+    const audioPath = existing.audioPath;
+    const audioSha = existing.audioSha;
+    const shouldDeleteAudio =
+      existing.kind === 'voice_note' &&
+      Boolean(audioPath) &&
+      Boolean(audioSha) &&
+      Boolean(this.storage);
+
+    // Port storage.delete sudah best-effort (gagal → log, jangan lempar).
+    if (shouldDeleteAudio && this.storage && audioPath && audioSha) {
+      await this.storage.delete(audioPath, audioSha);
     }
 
     const tombstoned = await this.repo.tombstone({
