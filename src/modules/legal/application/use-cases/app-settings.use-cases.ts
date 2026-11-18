@@ -4,6 +4,7 @@ import {
   APP_SETTING_KEYS,
   BALEHO_PRICE_PER_CELL_PER_DAY_KEY,
   LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY,
+  VOICE_ROOM_ENABLED_KEY,
   type AppSettingKey,
   type AppSettingType,
   WA_GROUP_CTA_URL_KEY,
@@ -106,6 +107,21 @@ export class UpdateAppSettingsUseCase {
             'VALIDATION_ERROR',
             'wa.verifier_enabled harus true atau false',
             [{ field: 'settings', message: 'Nilai wa.verifier_enabled tidak valid' }],
+          );
+        }
+      }
+      if (s.key === VOICE_ROOM_ENABLED_KEY) {
+        const v = s.value.toLowerCase();
+        if (v !== 'true' && v !== 'false') {
+          throw new BadRequestError(
+            'VALIDATION_ERROR',
+            'voice.room_enabled harus true atau false',
+            [
+              {
+                field: 'settings',
+                message: 'Nilai voice.room_enabled tidak valid',
+              },
+            ],
           );
         }
       }

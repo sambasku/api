@@ -16,6 +16,8 @@ export const APP_SETTING_KEYS = [
   'streak_reminder_enabled',
   /** Tarif Baleho: rupiah per sel 1x1 per hari. */
   'baleho.price_per_cell_per_day',
+  /** Experimental LiveKit voice room. false = strip mobile disembunyikan. */
+  'voice.room_enabled',
 ] as const;
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];
@@ -63,6 +65,8 @@ export const DEFAULT_WORD_MEDIA_PUSH_COOLDOWN_MINUTES = 3;
 
 export const BALEHO_PRICE_PER_CELL_PER_DAY_KEY =
   'baleho.price_per_cell_per_day' as const;
+
+export const VOICE_ROOM_ENABLED_KEY = 'voice.room_enabled' as const;
 
 /** Default tarif Baleho (IDR): 1x1 / hari. */
 export const DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY = 3000;

@@ -8,6 +8,7 @@ import type { UserRepository } from '@/modules/auth/domain/repositories/user.rep
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
+import { VOICE_ROOM_ENABLED_KEY } from '@/modules/legal/domain/entities/app-setting.entity';
 import type { PronunciationStoragePort } from '@/modules/word/application/ports/pronunciation-storage.port';
 import { validateAudioFile } from '@/modules/word/application/utils/validate-audio-file';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
@@ -32,7 +33,7 @@ import type {
 import type { ChatSupabaseMirror } from '../../infrastructure/chat-supabase-mirror';
 import { buildChatVoiceNotePath } from '../utils/chat-voice-note-path';
 
-export const VOICE_ROOM_ENABLED_KEY = 'voice.room_enabled';
+export { VOICE_ROOM_ENABLED_KEY };
 
 /** Durasi voice note chat: 1-60 detik (P22). */
 export const CHAT_VOICE_MIN_MS = 1_000;
