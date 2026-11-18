@@ -664,6 +664,8 @@ import {
 import { ChatController } from "@/modules/chat/presentation/v1/chat.controller";
 import { createChatRoutes } from "@/modules/chat/presentation/v1/chat.routes";
 import { MintVoiceTokenUseCase } from "@/modules/voice/application/mint-voice-token.use-case";
+import { RecordVoiceRoomEventUseCase } from "@/modules/voice/application/record-voice-room-event.use-case";
+import { VoiceRoomEventsRepository } from "@/modules/voice/infrastructure/voice-room-events.repository";
 import { VoiceController } from "@/modules/voice/presentation/v1/voice.controller";
 import { createVoiceRoutes } from "@/modules/voice/presentation/v1/voice.routes";
 import { PantunRepositoryImpl } from "@/modules/pantun/infrastructure/pantun.repository.impl";
@@ -3298,8 +3300,10 @@ app.route(
 );
 
 // Voice room LiveKit (experimental): mint JWT pendek untuk mobile.
+const voiceRoomEventsRepo = new VoiceRoomEventsRepository(db);
 const voiceController = new VoiceController(
   new MintVoiceTokenUseCase(appSettingsRepo, userRepo),
+  new RecordVoiceRoomEventUseCase(voiceRoomEventsRepo),
 );
 app.route(
   "/api/v1/voice",

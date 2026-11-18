@@ -109,3 +109,4 @@ export * from "./karya-contributions.schema";
 export * from "./baleho.schema";
 export * from "./leaderboard.schema";
 export * from "./chat.schema";
+export * from "./voice-room-events.schema";

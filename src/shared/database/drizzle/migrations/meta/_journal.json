@@ -1121,6 +1121,13 @@
       "when": 1801658000000,
       "tag": "0159_chat-revisions-deletions",
       "breakpoints": true
+    },
+    {
+      "idx": 160,
+      "version": "6",
+      "when": 1801659000000,
+      "tag": "0160_voice_room_events",
+      "breakpoints": true
     }
   ]
 }

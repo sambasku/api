@@ -21,6 +21,21 @@ const voiceTokenResponseSchema = z.object({
   }),
 });
 
+const voiceEventBodySchema = z.object({
+  kind: z.enum(['joined', 'left', 'disconnect', 'join_failed']),
+  room: z.string().max(80).optional(),
+  errorCode: z.string().max(64).optional(),
+  detail: z.string().max(240).optional(),
+  platform: z.string().max(32).optional(),
+});
+
+const voiceEventResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    kind: z.enum(['joined', 'left', 'disconnect', 'join_failed']),
+  }),
+});
+
 export interface VoiceRoutesDeps {
   controller: VoiceController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
@@ -69,7 +84,35 @@ export function createVoiceRoutes(deps: VoiceRoutesDeps) {
     },
   });
 
+  const eventRoute = createRoute({
+    method: 'post',
+    path: '/events',
+    tags: ['Voice'],
+    summary: 'Catat event voice room (analitik internal, bukan feed)',
+    request: {
+      body: {
+        required: true,
+        content: json(voiceEventBodySchema),
+      },
+    },
+    responses: {
+      200: {
+        description: 'Event tersimpan',
+        content: json(voiceEventResponseSchema),
+      },
+      400: {
+        description: 'Body tidak valid',
+        content: json(errorResponseSchema),
+      },
+      401: {
+        description: 'Token tidak ada/invalid',
+        content: json(errorResponseSchema),
+      },
+    },
+  });
+
   routes.openapi(tokenRoute, (c) => deps.controller.mint(c) as never);
+  routes.openapi(eventRoute, (c) => deps.controller.event(c) as never);
 
   return routes;
 }
