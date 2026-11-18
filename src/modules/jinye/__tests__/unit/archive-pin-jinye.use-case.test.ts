@@ -20,6 +20,7 @@ function makeJinye(overrides: Partial<Jinye> = {}): Jinye {
     userRole: null,
     body: 'halo',
     bodyOriginal: null,
+    stickerId: null,
     images: [],
     audio: null,
     repostOfId: null,

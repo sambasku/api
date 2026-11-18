@@ -539,6 +539,7 @@ export class JinyeRepositoryImpl implements JinyeRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal ?? null,
+        stickerId: input.stickerId ?? null,
         images: toImageRows(input.images ?? []),
         status: 'published',
       })
@@ -919,6 +920,7 @@ function mapCommentJoined(row: {
     userRole: deleted ? null : (row.userRole ?? null),
     body: row.comment.body ?? '',
     bodyOriginal: row.comment.bodyOriginal ?? null,
+    stickerId: row.comment.stickerId ?? null,
     images: toJinyeImages(row.comment.images),
     status: row.comment.status as JinyeCommentStatus,
     createdAt: row.comment.createdAt,

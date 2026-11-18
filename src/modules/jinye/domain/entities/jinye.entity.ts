@@ -91,6 +91,8 @@ export interface JinyeComment {
   userRole: string | null;
   body: string;
   bodyOriginal: string | null;
+  /** Slug katalog stickers; null = bukan komentar stiker. */
+  stickerId: string | null;
   images: JinyeImage[];
   status: JinyeCommentStatus;
   createdAt: Date;
@@ -114,6 +116,7 @@ export interface NewJinyeComment {
   userId: string;
   body: string;
   bodyOriginal?: string | null;
+  stickerId?: string | null;
   images?: JinyeImage[];
 }
 

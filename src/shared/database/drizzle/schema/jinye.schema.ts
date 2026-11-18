@@ -115,6 +115,8 @@ export const jinyeComments = sqliteTable(
       .references(() => users.id),
     body: text('body').notNull().default(''),
     bodyOriginal: text('body_original'),
+    /** Slug katalog stickers; null = bukan komentar stiker. */
+    stickerId: text('sticker_id'),
     images: text('images', { mode: 'json' })
       .$type<JinyeImageRow[]>()
       .notNull()

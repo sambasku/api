@@ -150,15 +150,44 @@ export const deleteJinyeResponseSchema = z.object({
   data: z.object({ ok: z.literal(true) }),
 });
 
-export const createJinyeCommentBodySchema = z.object({
-  body: z
-    .string({ error: 'Teks tidak valid' })
-    .max(500, 'Teks maksimal 500 karakter')
-    .optional()
-    .nullable(),
-  parent_id: opaqueId.optional().nullable(),
-  images: z.array(imageInputSchema).max(4, 'Lampiran tidak boleh lebih dari 4 foto').optional(),
-});
+export const createJinyeCommentBodySchema = z
+  .object({
+    body: z
+      .string({ error: 'Teks tidak valid' })
+      .max(500, 'Teks maksimal 500 karakter')
+      .optional()
+      .nullable(),
+    parent_id: opaqueId.optional().nullable(),
+    images: z
+      .array(imageInputSchema)
+      .max(4, 'Lampiran tidak boleh lebih dari 4 foto')
+      .optional(),
+    sticker_id: z
+      .string({ error: 'Stiker tidak valid' })
+      .trim()
+      .min(1, 'Stiker tidak valid')
+      .max(64, 'Stiker tidak valid')
+      .nullish(),
+  })
+  .superRefine((val, ctx) => {
+    const hasBody = (val.body?.trim().length ?? 0) > 0;
+    const hasImages = (val.images?.length ?? 0) > 0;
+    const hasSticker = Boolean(val.sticker_id?.trim());
+    if (hasSticker && hasImages) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sticker_id'],
+        message: 'Stiker tidak bisa digabung dengan foto',
+      });
+    }
+    if (!hasBody && !hasImages && !hasSticker) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['body'],
+        message: 'Isi teks, foto, atau stiker dulu ya.',
+      });
+    }
+  });
 
 export type CreateJinyeCommentBody = z.infer<typeof createJinyeCommentBodySchema>;
 
@@ -184,6 +213,7 @@ const jinyeCommentWireBase = z.object({
   avatar_url: z.string().nullable(),
   is_verifier: z.boolean(),
   body: z.string(),
+  sticker_id: z.string().nullable(),
   images: z.array(jinyeImageWireSchema),
   status: z.string(),
   created_at: z.string(),

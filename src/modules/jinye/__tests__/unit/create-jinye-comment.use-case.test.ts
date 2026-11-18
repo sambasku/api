@@ -32,6 +32,7 @@ function makeJinye(): Jinye {
     userRole: 'contributor',
     body: 'halo',
     bodyOriginal: null,
+    stickerId: null,
     images: [],
     audio: null,
     repostOfId: null,
@@ -56,6 +57,7 @@ function makeComment(overrides: Partial<JinyeComment> = {}): JinyeComment {
     userRole: 'contributor',
     body: 'komen',
     bodyOriginal: null,
+    stickerId: null,
     images: [],
     status: 'published',
     createdAt: new Date(),
@@ -205,6 +207,66 @@ describe('CreateJinyeCommentUseCase', () => {
     );
     expect(notify.execute).toHaveBeenCalledWith(
       expect.objectContaining({ userId: OWNER }),
+    );
+  });
+
+  it('sticker_id aktif lolos; unknown ditolak; tidak boleh bareng images', async () => {
+    const repo = emptyRepo({
+      createComment: vi.fn(async () => makeComment({ body: '', stickerId: 'cheer' })),
+    });
+    const stickerRepo = {
+      findActiveById: vi.fn(async (id: string) =>
+        id === 'cheer'
+          ? { id: 'cheer', imageUrl: 'https://cdn.example/cheer.png', playOnce: false }
+          : null,
+      ),
+    };
+    const uc = new CreateJinyeCommentUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      stickerRepo as never,
+    );
+
+    await expect(
+      uc.execute({
+        jinyeId: JINYE_ID,
+        userId: ACTOR,
+        body: '',
+        stickerId: 'ghost',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    await expect(
+      uc.execute({
+        jinyeId: JINYE_ID,
+        userId: ACTOR,
+        body: '',
+        stickerId: 'cheer',
+        images: [
+          {
+            url: 'https://ik.example/a.jpg',
+            providerFileId: 'file1',
+            publicUrl: null,
+            contentWarnings: [],
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    await uc.execute({
+      jinyeId: JINYE_ID,
+      userId: ACTOR,
+      body: '',
+      stickerId: 'cheer',
+    });
+    expect(repo.createComment).toHaveBeenCalledWith(
+      expect.objectContaining({ body: '', stickerId: 'cheer' }),
     );
   });
 });

@@ -3549,6 +3549,7 @@ const jinyeController = new JinyeController({
     userRepo,
     recordInbox,
     notifyUser,
+    stickerRepo,
   ),
   listComments: new ListJinyeCommentsUseCase(jinyeRepo),
   deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, auditRepo),

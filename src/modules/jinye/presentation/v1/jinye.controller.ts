@@ -129,6 +129,7 @@ type JinyeCommentWire = {
   avatar_url: string | null;
   is_verifier: boolean;
   body: string;
+  sticker_id: string | null;
   images: JinyeCommentImageWire[];
   status: string;
   created_at: string;
@@ -167,6 +168,7 @@ function toCommentWire(
     avatar_url: c.avatarUrl,
     is_verifier: isVerifierRole(c.userRole ?? ''),
     body: c.body,
+    sticker_id: c.stickerId ?? null,
     images,
     status: c.status,
     created_at: c.createdAt.toISOString(),
@@ -432,6 +434,7 @@ export class JinyeController {
       userId: user.user_id,
       body: body.body,
       parentId: body.parent_id,
+      stickerId: body.sticker_id ?? null,
       images: (body.images ?? []).map((i) => ({
         url: i.url,
         providerFileId: i.provider_file_id,

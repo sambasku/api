@@ -1149,6 +1149,13 @@
       "when": 1801662000000,
       "tag": "0163_discussion_reply_sticker",
       "breakpoints": true
+    },
+    {
+      "idx": 164,
+      "version": "6",
+      "when": 1801663000000,
+      "tag": "0164_jinye_comment_sticker",
+      "breakpoints": true
     }
   ]
 }
