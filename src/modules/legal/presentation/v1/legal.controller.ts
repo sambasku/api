@@ -154,8 +154,8 @@ export class LegalController {
           value: s.value,
           type: s.type,
           description: s.description,
-          updated_at: s.updatedAt.toISOString(),
-          updated_by: s.updatedBy,
+          updated_at: s.updatedAt?.toISOString() ?? null,
+          updated_by: s.updatedBy ?? null,
         })),
       },
     });
