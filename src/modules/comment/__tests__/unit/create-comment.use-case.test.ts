@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import { CreateCommentUseCase } from '../../application/use-cases/create-comment.use-case';
 import { DeleteCommentUseCase } from '../../application/use-cases/delete-comment.use-case';
@@ -25,6 +25,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     userRole: 'contributor',
     body: 'halo',
     bodyOriginal: null,
+    stickerId: null,
     audio: null,
     image: null,
     status: 'published',
@@ -83,10 +84,81 @@ describe('CreateCommentUseCase', () => {
       userId: AUTHOR,
       body: 'Ini *** sekali',
       bodyOriginal: 'Ini Bodoh sekali',
+      stickerId: null,
       image: null,
     });
     expect(created.status).toBe('published');
     expect(auditRepo.record).toHaveBeenCalled();
+  });
+
+  it('sticker_id aktif lolos; unknown ditolak; tidak boleh bareng image', async () => {
+    const commentRepo = {
+      create: vi.fn().mockResolvedValue(makeComment({ body: '', stickerId: 'cheer' })),
+      findById: vi.fn(),
+      listDistinctCommenterUserIds: vi.fn().mockResolvedValue([]),
+    };
+    const wordRepo = {
+      findById: vi.fn().mockResolvedValue({
+        id: WORD,
+        status: 'published',
+        lemma: 'makatn',
+        createdBy: null,
+      }),
+    };
+    const auditRepo = { record: vi.fn() };
+    const blocklistRepo = { listAllActiveWords: vi.fn().mockResolvedValue([]) };
+    const stickerRepo = {
+      findActiveById: vi.fn().mockImplementation(async (id: string) =>
+        id === 'cheer'
+          ? { id: 'cheer', imageUrl: 'https://cdn.example/cheer.png', playOnce: false }
+          : null,
+      ),
+    };
+    const uc = new CreateCommentUseCase(
+      commentRepo as never,
+      wordRepo as never,
+      auditRepo as never,
+      blocklistRepo as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      stickerRepo as never,
+    );
+
+    await expect(
+      uc.execute({
+        wordId: WORD,
+        userId: AUTHOR,
+        role: 'contributor',
+        body: '',
+        stickerId: 'ghost',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    await expect(
+      uc.execute({
+        wordId: WORD,
+        userId: AUTHOR,
+        role: 'contributor',
+        body: '',
+        stickerId: 'cheer',
+        image: { url: 'https://ik.example/a.jpg', providerFileId: 'file1' },
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    await uc.execute({
+      wordId: WORD,
+      userId: AUTHOR,
+      role: 'contributor',
+      body: '',
+      stickerId: 'cheer',
+    });
+    expect(commentRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ stickerId: 'cheer', image: null, body: '' }),
+    );
   });
 
   it('notif inbox + push ke prior commenter dan owner (bukan aktor / CSV)', async () => {

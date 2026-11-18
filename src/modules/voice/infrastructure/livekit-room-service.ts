@@ -123,6 +123,7 @@ export async function assertVoiceRoomJoinAllowed(
   const bearer = await mintLivekitServerToken({
     apiKey: input.apiKey,
     apiSecret: input.apiSecret,
+    room: input.room,
     ttlSec: 60,
   });
 

@@ -150,6 +150,23 @@ describe('GetChatCapabilitiesUseCase', () => {
   });
 });
 
+const stickerRepo = {
+  findActiveById: vi.fn(async (id: string) =>
+    id
+      ? {
+          id,
+          imageUrl: `https://cdn.example/${id}.png`,
+          playOnce: false,
+          sortOrder: 0,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: null,
+          deletedAt: null,
+        }
+      : null,
+  ),
+} as never;
+
 describe('CreateChatMessageUseCase', () => {
   it('insert Turso lalu mirror upsert', async () => {
     const repo = emptyRepo();
@@ -159,6 +176,7 @@ describe('CreateChatMessageUseCase', () => {
       userRepo,
       blocklistRepo,
       mirror,
+      stickerRepo,
     );
     const result = await uc.execute({
       userId: ACTOR,
@@ -178,12 +196,35 @@ describe('CreateChatMessageUseCase', () => {
     expect(mirror.upsert).toHaveBeenCalledWith(result);
   });
 
+  it('sensor email di body jadi ***', async () => {
+    const repo = emptyRepo({
+      create: vi.fn(async (input) => makeMessage({ body: input.body ?? null })),
+    });
+    const uc = new CreateChatMessageUseCase(
+      repo,
+      userRepo,
+      blocklistRepo,
+      emptyMirror(),
+      stickerRepo,
+    );
+    const result = await uc.execute({
+      userId: ACTOR,
+      kind: 'text',
+      body: 'hubungi a@b.co ya',
+    });
+    expect(result.body).toBe('hubungi *** ya');
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ body: 'hubungi *** ya' }),
+    );
+  });
+
   it('gagal validasi bila body teks kosong', async () => {
     const uc = new CreateChatMessageUseCase(
       emptyRepo(),
       userRepo,
       blocklistRepo,
       emptyMirror(),
+      stickerRepo,
     );
     await expect(
       uc.execute({ userId: ACTOR, kind: 'text', body: '   ' }),
@@ -196,9 +237,26 @@ describe('CreateChatMessageUseCase', () => {
       userRepo,
       blocklistRepo,
       emptyMirror(),
+      stickerRepo,
     );
     await expect(
       uc.execute({ userId: ACTOR, kind: 'sticker', stickerId: '' }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('gagal validasi sticker id tidak aktif', async () => {
+    const missing = {
+      findActiveById: vi.fn(async () => null),
+    } as never;
+    const uc = new CreateChatMessageUseCase(
+      emptyRepo(),
+      userRepo,
+      blocklistRepo,
+      emptyMirror(),
+      missing,
+    );
+    await expect(
+      uc.execute({ userId: ACTOR, kind: 'sticker', stickerId: 'ghost' }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 });

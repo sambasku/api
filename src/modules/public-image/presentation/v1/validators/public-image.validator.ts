@@ -12,6 +12,7 @@ export const uploadPublicImageQuerySchema = z.object({
       'encyclopedia',
       'layanan',
       'baleho',
+      'sticker',
     ])
     .default('word'),
 });

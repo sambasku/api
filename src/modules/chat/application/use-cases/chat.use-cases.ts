@@ -7,6 +7,7 @@ import {
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import { applyPiiPatternFilter } from '@/shared/moderation/apply-pii-pattern-filter';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import { VOICE_ROOM_ENABLED_KEY } from '@/modules/legal/domain/entities/app-setting.entity';
 import type { PronunciationStoragePort } from '@/modules/word/application/ports/pronunciation-storage.port';
@@ -30,6 +31,7 @@ import type {
   ChatRepository,
   ListChatMessagesResult,
 } from '../../domain/repositories/chat.repository';
+import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type { ChatSupabaseMirror } from '../../infrastructure/chat-supabase-mirror';
 import { buildChatVoiceNotePath } from '../utils/chat-voice-note-path';
 
@@ -39,7 +41,7 @@ export { VOICE_ROOM_ENABLED_KEY };
 export const CHAT_VOICE_MIN_MS = 1_000;
 export const CHAT_VOICE_MAX_MS = 60_000;
 
-const BODY_MAX = 1000;
+const BODY_MAX = 240;
 
 function assertChatVoiceDurationMs(raw: unknown): number {
   const n =
@@ -157,6 +159,7 @@ export class CreateChatMessageUseCase {
     private readonly userRepo: UserRepository,
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly mirror: ChatSupabaseMirror,
+    private readonly stickerRepo: StickerRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
   ) {}
 
@@ -198,7 +201,10 @@ export class CreateChatMessageUseCase {
         requestId: cmd.requestId,
       });
       const blocked = await this.blocklistRepo.listAllActiveWords();
-      const filtered = applyBlocklistFilter(quality, blocked);
+      const filtered = applyBlocklistFilter(
+        applyPiiPatternFilter(quality),
+        blocked,
+      );
       if (isHeavyCensor(quality, filtered)) {
         await safeRecordAbuseSignal(this.abuse, {
           userId: cmd.userId,
@@ -215,7 +221,16 @@ export class CreateChatMessageUseCase {
           { field: 'sticker_id', message: 'Stiker wajib dipilih' },
         ]);
       }
-      stickerId = sid;
+      const catalog = await this.stickerRepo.findActiveById(sid);
+      if (!catalog) {
+        throw new ValidationError([
+          {
+            field: 'sticker_id',
+            message: 'Stiker tidak tersedia. Pilih ulang dari daftar.',
+          },
+        ]);
+      }
+      stickerId = catalog.id;
       const rawBody = (cmd.body ?? '').trim();
       if (rawBody) {
         if (rawBody.length > BODY_MAX) {
@@ -233,7 +248,7 @@ export class CreateChatMessageUseCase {
           requestId: cmd.requestId,
         });
         const blocked = await this.blocklistRepo.listAllActiveWords();
-        body = applyBlocklistFilter(quality, blocked);
+        body = applyBlocklistFilter(applyPiiPatternFilter(quality), blocked);
       }
     }
 
@@ -343,7 +358,10 @@ export class EditChatMessageUseCase {
       requestId: cmd.requestId,
     });
     const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filtered = applyBlocklistFilter(quality, blocked);
+    const filtered = applyBlocklistFilter(
+      applyPiiPatternFilter(quality),
+      blocked,
+    );
     if (isHeavyCensor(quality, filtered)) {
       await safeRecordAbuseSignal(this.abuse, {
         userId: cmd.actorId,

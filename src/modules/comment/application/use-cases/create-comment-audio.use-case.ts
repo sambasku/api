@@ -4,6 +4,7 @@ import type { UserRepository } from '@/modules/auth/domain/repositories/user.rep
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import { applyPiiPatternFilter } from '@/shared/moderation/apply-pii-pattern-filter';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
@@ -110,7 +111,10 @@ export class CreateCommentAudioUseCase {
     let bodyOriginal: string | null = null;
     if (caption.length > 0) {
       const blocked = await this.blocklistRepo.listAllActiveWords();
-      filteredBody = applyBlocklistFilter(caption, blocked);
+      filteredBody = applyBlocklistFilter(
+        applyPiiPatternFilter(caption),
+        blocked,
+      );
       bodyOriginal = filteredBody !== caption ? caption : null;
     }
 

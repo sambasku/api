@@ -102,6 +102,7 @@ function toPublicCommentFields(cm: Comment) {
     avatar_url: cm.avatarUrl,
     is_verifier: isVerifierRole(cm.userRole ?? ''),
     body: redactPublicBody(cm),
+    sticker_id: cm.stickerId,
     ...redactPublicAudio(cm),
     image: redactPublicImage(cm),
     status: cm.status,
@@ -147,6 +148,7 @@ export class CommentController {
       image: body.image
         ? { url: body.image.url, providerFileId: body.image.provider_file_id }
         : null,
+      stickerId: body.sticker_id ?? null,
     });
 
     logger.info({ request_id: this.requestId(c), comment_id: comment.id, word_id: wordId }, 'comment created');
@@ -307,6 +309,7 @@ export class CommentController {
         avatar_url: cm.avatarUrl,
         is_verifier: isVerifierRole(cm.userRole ?? ''),
         body: cm.body,
+        sticker_id: cm.stickerId,
         body_original: cm.bodyOriginal,
         is_censored: cm.bodyOriginal != null,
         image: toAdminImage(cm),

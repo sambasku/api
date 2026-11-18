@@ -19,6 +19,8 @@ export const comments = sqliteTable(
     body: text('body').notNull(),
     /** Teks asli sebelum blocklist; null jika tidak disensor / sudah di-uncensor */
     bodyOriginal: text('body_original'),
+    /** Slug katalog stickers (chat + komentar). Null = bukan pesan stiker. */
+    stickerId: text('sticker_id'),
     audioUrl: text('audio_url'),
     audioMimeType: text('audio_mime_type'),
     audioFileSize: integer('audio_file_size'),

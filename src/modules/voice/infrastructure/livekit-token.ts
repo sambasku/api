@@ -68,15 +68,20 @@ export async function mintLivekitAccessToken(
   });
 }
 
-/** JWT admin singkat untuk RoomService Twirp (CreateRoom / ListParticipants). */
+/**
+ * JWT admin singkat untuk RoomService Twirp (CreateRoom / ListParticipants).
+ * `room` wajib: ListParticipants menolak roomAdmin yang tidak dikunci ke room.
+ */
 export async function mintLivekitServerToken(input: {
   apiKey: string;
   apiSecret: string;
+  room: string;
   ttlSec?: number;
 }): Promise<string> {
   const ttl = input.ttlSec ?? 60;
   return signHs256(input.apiKey, input.apiSecret, {
     video: {
+      room: input.room,
       roomCreate: true,
       roomList: true,
       roomAdmin: true,

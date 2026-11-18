@@ -44,7 +44,7 @@ export const listChatMessagesQuerySchema = z
 export const createChatMessageBodySchema = z
   .object({
     kind: z.enum(['text', 'sticker']).default('text'),
-    body: z.string().max(1000).nullable().optional(),
+    body: z.string().max(240).nullable().optional(),
     sticker_id: z.string().trim().min(1).max(128).nullable().optional(),
     reply_to_id: opaqueId.nullable().optional(),
   })
@@ -76,7 +76,7 @@ export const editChatMessageBodySchema = z.object({
     .string({ error: 'Pesan teks tidak boleh kosong' })
     .trim()
     .min(1, 'Pesan teks tidak boleh kosong')
-    .max(1000, 'Pesan maksimal 1000 karakter'),
+    .max(240, 'Pesan maksimal 240 karakter'),
 });
 
 const isoOrNull = z.string().datetime({ offset: true }).nullable();

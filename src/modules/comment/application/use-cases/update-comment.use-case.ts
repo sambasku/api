@@ -8,6 +8,7 @@ import {
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import { applyPiiPatternFilter } from '@/shared/moderation/apply-pii-pattern-filter';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
@@ -94,7 +95,10 @@ export class UpdateCommentUseCase {
     }
 
     const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filteredBody = applyBlocklistFilter(body, blocked);
+    const filteredBody = applyBlocklistFilter(
+      applyPiiPatternFilter(body),
+      blocked,
+    );
     const wasFiltered = filteredBody !== body;
     const bodyOriginal = wasFiltered ? body : null;
 

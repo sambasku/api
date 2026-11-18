@@ -43,6 +43,8 @@ export interface Comment {
   body: string;
   /** Teks asli sebelum sensor; null jika tidak disensor / sudah di-uncensor */
   bodyOriginal: string | null;
+  /** Slug katalog stickers; null = bukan komentar stiker. */
+  stickerId: string | null;
   audio: CommentAudio | null;
   /** Satu foto opsional; null jika tanpa lampiran gambar. */
   image: CommentImage | null;
@@ -78,6 +80,7 @@ export interface NewComment {
   userId: string;
   body: string;
   bodyOriginal?: string | null;
+  stickerId?: string | null;
   audio?: CommentAudio | null;
   /** Staging ImageKit; status awal selalu pending_review. */
   image?: {

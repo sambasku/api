@@ -3,6 +3,13 @@ import { extensionForImageMime } from './public-image-path';
 
 export const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+export const ALLOWED_STICKER_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export interface ValidatedImageFile {
@@ -42,6 +49,18 @@ function looksLikeWebp(bytes: Uint8Array): boolean {
   return riff && webp;
 }
 
+function looksLikeGif(bytes: Uint8Array): boolean {
+  if (bytes.length < 6) return false;
+  return (
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38 &&
+    (bytes[4] === 0x37 || bytes[4] === 0x39) &&
+    bytes[5] === 0x61
+  );
+}
+
 function magicOk(mime: string, bytes: Uint8Array): boolean {
   switch (mime) {
     case 'image/jpeg':
@@ -50,16 +69,26 @@ function magicOk(mime: string, bytes: Uint8Array): boolean {
       return looksLikePng(bytes);
     case 'image/webp':
       return looksLikeWebp(bytes);
+    case 'image/gif':
+      return looksLikeGif(bytes);
     default:
       return false;
   }
 }
 
-export function validateImageFile(input: {
-  bytes: Uint8Array;
-  mimeType: string | null | undefined;
-  filename?: string | null;
-}): ValidatedImageFile {
+export function validateImageFile(
+  input: {
+    bytes: Uint8Array;
+    mimeType: string | null | undefined;
+    filename?: string | null;
+  },
+  options?: { allowGif?: boolean },
+): ValidatedImageFile {
+  const allowed = options?.allowGif ? ALLOWED_STICKER_MIMES : ALLOWED_IMAGE_MIMES;
+  const formatHint = options?.allowGif
+    ? 'Hanya jpg, png, webp, atau gif'
+    : 'Hanya jpg, png, atau webp';
+
   const filename = input.filename?.trim() || null;
   if (filename && (filename.includes('..') || filename.includes('\0'))) {
     throw new BadRequestError('VALIDATION_ERROR', 'Nama file tidak valid', [
@@ -82,16 +111,17 @@ export function validateImageFile(input: {
   // Client sering kirim tanpa Content-Type part (Dio MultipartFile tanpa
   // contentType → application/octet-stream / kosong). Sniff magic dulu.
   let mime = normalizeMime(input.mimeType);
-  if (!mime || mime === 'application/octet-stream' || !ALLOWED_IMAGE_MIMES.has(mime)) {
+  if (!mime || mime === 'application/octet-stream' || !allowed.has(mime)) {
     if (looksLikeJpeg(input.bytes)) mime = 'image/jpeg';
     else if (looksLikePng(input.bytes)) mime = 'image/png';
     else if (looksLikeWebp(input.bytes)) mime = 'image/webp';
+    else if (options?.allowGif && looksLikeGif(input.bytes)) mime = 'image/gif';
     else mime = null;
   }
 
-  if (!mime || !ALLOWED_IMAGE_MIMES.has(mime)) {
+  if (!mime || !allowed.has(mime)) {
     throw new BadRequestError('VALIDATION_ERROR', 'Format gambar tidak didukung', [
-      { field: 'file', message: 'Hanya jpg, png, atau webp' },
+      { field: 'file', message: formatHint },
     ]);
   }
 
@@ -101,7 +131,6 @@ export function validateImageFile(input: {
     ]);
   }
 
-  // Pastikan ekstensi dari MIME tersedia (path generator)
   void extensionForImageMime(mime);
 
   return {

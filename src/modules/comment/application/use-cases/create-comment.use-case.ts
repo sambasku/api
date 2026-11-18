@@ -4,6 +4,7 @@ import type { UserRepository } from '@/modules/auth/domain/repositories/user.rep
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
+import { applyPiiPatternFilter } from '@/shared/moderation/apply-pii-pattern-filter';
 import { extractMentions } from '../utils/extract-mentions';
 import { findMentionableUsers } from '@/modules/user/application/utils/find-mentionable-users';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
@@ -17,6 +18,7 @@ import {
   RecordAbuseSignalUseCase,
   safeRecordAbuseSignal,
 } from '@/shared/moderation/record-abuse-signal.use-case';
+import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 import { resolveDiscussionNotifyRecipients } from '../utils/resolve-discussion-notify-recipients';
@@ -29,6 +31,7 @@ export interface CreateCommentCommand {
   body: string;
   /** Staging ImageKit (satu foto); status foto = pending_review. */
   image?: { url: string; providerFileId: string } | null;
+  stickerId?: string | null;
 }
 
 const COMMENT_SNIPPET_MAX = 80;
@@ -61,6 +64,7 @@ export class CreateCommentUseCase {
     private readonly pushCooldown?: WordCommentPushCooldownGate,
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly stickerRepo?: StickerRepository,
   ) {}
 
   async execute(cmd: CreateCommentCommand): Promise<Comment> {
@@ -68,9 +72,33 @@ export class CreateCommentUseCase {
 
     const rawBody = cmd.body?.trim() ?? '';
     const hasImage = Boolean(cmd.image?.url && cmd.image?.providerFileId);
-    if (rawBody.length === 0 && !hasImage) {
+    const rawSticker = cmd.stickerId?.trim() ?? '';
+    if (rawSticker && hasImage) {
       throw new ValidationError([
-        { field: 'body', message: 'Komentar atau foto wajib diisi' },
+        { field: 'sticker_id', message: 'Stiker tidak bisa digabung dengan foto' },
+      ]);
+    }
+    let stickerId: string | null = null;
+    if (rawSticker) {
+      if (!this.stickerRepo) {
+        throw new ValidationError([
+          { field: 'sticker_id', message: 'Stiker tidak tersedia' },
+        ]);
+      }
+      const catalog = await this.stickerRepo.findActiveById(rawSticker);
+      if (!catalog) {
+        throw new ValidationError([
+          {
+            field: 'sticker_id',
+            message: 'Stiker tidak tersedia. Pilih ulang dari daftar.',
+          },
+        ]);
+      }
+      stickerId = catalog.id;
+    }
+    if (rawBody.length === 0 && !hasImage && !stickerId) {
+      throw new ValidationError([
+        { field: 'body', message: 'Komentar, foto, atau stiker wajib diisi' },
       ]);
     }
 
@@ -94,7 +122,10 @@ export class CreateCommentUseCase {
     }
 
     const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filteredBody = body.length > 0 ? applyBlocklistFilter(body, blocked) : '';
+    const filteredBody =
+      body.length > 0
+        ? applyBlocklistFilter(applyPiiPatternFilter(body), blocked)
+        : '';
     const wasFiltered = body.length > 0 && filteredBody !== body;
 
     const comment = await this.commentRepo.create({
@@ -102,6 +133,7 @@ export class CreateCommentUseCase {
       userId: cmd.userId,
       body: filteredBody,
       bodyOriginal: wasFiltered ? body : null,
+      stickerId,
       image: hasImage
         ? {
             url: cmd.image!.url,

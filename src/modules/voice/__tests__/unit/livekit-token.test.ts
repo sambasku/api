@@ -1,6 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { mintLivekitAccessToken } from '../../infrastructure/livekit-token';
+import {
+  mintLivekitAccessToken,
+  mintLivekitServerToken,
+} from '../../infrastructure/livekit-token';
 
 describe('mintLivekitAccessToken', () => {
   it('signs HS256 JWT with LiveKit video grants', async () => {
@@ -52,5 +55,31 @@ describe('mintLivekitAccessToken', () => {
     expect(claims.video.canSubscribe).toBe(true);
     expect(claims.video.canPublishData).toBe(true);
     expect(claims.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+  });
+});
+
+describe('mintLivekitServerToken', () => {
+  it('locks roomAdmin to the room so ListParticipants is allowed', async () => {
+    const token = await mintLivekitServerToken({
+      apiKey: 'APItest',
+      apiSecret: 'test-secret-do-not-use',
+      room: 'sambasku-global',
+      ttlSec: 60,
+    });
+    const payload = token.split('.')[1];
+    const claims = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    ) as {
+      video: {
+        room: string;
+        roomCreate: boolean;
+        roomList: boolean;
+        roomAdmin: boolean;
+      };
+    };
+    expect(claims.video.room).toBe('sambasku-global');
+    expect(claims.video.roomAdmin).toBe(true);
+    expect(claims.video.roomCreate).toBe(true);
+    expect(claims.video.roomList).toBe(true);
   });
 });

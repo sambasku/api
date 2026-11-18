@@ -4,6 +4,7 @@ const MIME_TO_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'image/gif': 'gif',
 };
 
 export function extensionForImageMime(mimeType: string): string {
@@ -69,4 +70,9 @@ export function buildEncyclopediaImagePath(mimeType: string): string {
 /** Path media Baleho: assets/baleho/<ulid>.<ext> */
 export function buildBalehoImagePath(mimeType: string): string {
   return `assets/baleho/${generateId()}.${extensionForImageMime(mimeType)}`;
+}
+
+/** Path stiker katalog: assets/stickers/<ulid>.<ext> (png/webp/gif). */
+export function buildStickerImagePath(mimeType: string): string {
+  return `assets/stickers/${generateId()}.${extensionForImageMime(mimeType)}`;
 }

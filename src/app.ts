@@ -663,6 +663,19 @@ import {
 } from "@/modules/chat/application/use-cases/chat.use-cases";
 import { ChatController } from "@/modules/chat/presentation/v1/chat.controller";
 import { createChatRoutes } from "@/modules/chat/presentation/v1/chat.routes";
+import { StickerRepositoryImpl } from "@/modules/sticker/infrastructure/sticker.repository.impl";
+import {
+  CreateStickerUseCase,
+  DeleteStickerUseCase,
+  ListActiveStickersUseCase,
+  ListAdminStickersUseCase,
+  UpdateStickerUseCase,
+} from "@/modules/sticker/application/use-cases/sticker.use-cases";
+import { StickerController } from "@/modules/sticker/presentation/v1/sticker.controller";
+import {
+  createAdminStickerRoutes,
+  createPublicStickerRoutes,
+} from "@/modules/sticker/presentation/v1/sticker.routes";
 import { MintVoiceTokenUseCase } from "@/modules/voice/application/mint-voice-token.use-case";
 import { RecordVoiceRoomEventUseCase } from "@/modules/voice/application/record-voice-room-event.use-case";
 import { VoiceRoomEventsRepository } from "@/modules/voice/infrastructure/voice-room-events.repository";
@@ -1872,6 +1885,30 @@ const mobileAnalyticsController = new MobileAnalyticsController({
   }),
 });
 
+// Katalog stiker (chat + komentar) - repo dipakai CreateCommentUseCase.
+const stickerRepo = new StickerRepositoryImpl(db);
+const stickerController = new StickerController({
+  listActive: new ListActiveStickersUseCase(stickerRepo),
+  listAdmin: new ListAdminStickersUseCase(stickerRepo),
+  create: new CreateStickerUseCase(stickerRepo, auditRepo),
+  update: new UpdateStickerUseCase(stickerRepo, auditRepo),
+  remove: new DeleteStickerUseCase(stickerRepo, auditRepo),
+});
+app.route(
+  "/api/v1/stickers",
+  createPublicStickerRoutes({
+    controller: stickerController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/stickers",
+  createAdminStickerRoutes({
+    controller: stickerController,
+    authenticate,
+  }),
+);
+
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----
 const commentRepo = new CommentRepositoryImpl(db);
 const wordCommentPushCooldown = new WordCommentPushCooldownGate(
@@ -1903,6 +1940,7 @@ const commentController = new CommentController({
     wordCommentPushCooldown,
     recordAbuseSignal,
     activityEvents,
+    stickerRepo,
   ),
   createAudio: new CreateCommentAudioUseCase(
     commentRepo,
@@ -3270,6 +3308,7 @@ const chatController = new ChatController(
     userRepo,
     commentBlocklistRepo,
     chatMirror,
+    stickerRepo,
     recordAbuseSignal,
   ),
   new CreateChatVoiceNoteUseCase(
