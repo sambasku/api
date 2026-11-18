@@ -11,8 +11,34 @@ import {
   leaderboardWeekEntries,
   leaderboardWeeks,
 } from '@/shared/database/drizzle/schema/leaderboard.schema';
-import { users } from '@/shared/database/drizzle/schema/users.schema';
+import { userRoles, users } from '@/shared/database/drizzle/schema/users.schema';
 import type { AchievementCriteria } from './entities/achievement.entity';
+
+/** Role yang boleh dipakai filter `role_in` (wire / junction `user_roles`). */
+export const ACHIEVEMENT_USER_ROLE_OPTIONS = [
+  'contributor',
+  'editor',
+  'reviewer',
+  'admin',
+  'root',
+] as const;
+
+export type AchievementUserRoleOption = (typeof ACHIEVEMENT_USER_ROLE_OPTIONS)[number];
+
+/** Parse `filters.role_in` (pisah koma) → daftar role valid. */
+export function parseRoleInFilter(raw: string | null | undefined): AchievementUserRoleOption[] {
+  if (!raw) return [];
+  const allowed = new Set<string>(ACHIEVEMENT_USER_ROLE_OPTIONS);
+  const out: AchievementUserRoleOption[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(',')) {
+    const role = part.trim();
+    if (!role || !allowed.has(role) || seen.has(role)) continue;
+    seen.add(role);
+    out.push(role as AchievementUserRoleOption);
+  }
+  return out;
+}
 
 /**
  * Registry source achievement - SATU-SATUNYA tempat sumber kriteria
@@ -216,6 +242,40 @@ const discussionRepliesPublishedSource: AchievementSourceDefinition = {
 };
 
 /**
+ * Punya salah satu role di `filters.role_in` (pisah koma, junction `user_roles`).
+ * Tanpa threshold/window - status role saat scan. Contributor saja tidak
+ * masuk kecuali `contributor` eksplisit di daftar.
+ */
+const userRoleSource: AchievementSourceDefinition = {
+  source: 'user_role',
+  label: 'Memiliki role',
+  description:
+    'Pengguna yang punya salah satu role di filters.role_in (pisah koma: reviewer,admin,root, …).',
+  kind: 'user_match',
+  supportsThreshold: false,
+  supportsWindow: false,
+  filterFields: [
+    {
+      key: 'role_in',
+      label: 'Role (pisah koma)',
+    },
+  ],
+  buildMatch(criteria: AchievementCriteria): SQL {
+    const roles = parseRoleInFilter(criteria.filters?.role_in);
+    if (roles.length === 0) return sql`1 = 0`;
+    return sql`exists (
+      select 1
+      from ${userRoles} ur
+      where ur.user_id = ${users.id}
+        and ur.role in (${sql.join(
+          roles.map((r) => sql`${r}`),
+          sql`, `,
+        )})
+    )`;
+  },
+};
+
+/**
  * Pernah masuk rentang rank di snapshot minggu yang sudah finalized.
  * filters.rank_min / rank_max (string angka, inklusif). Threshold tidak dipakai
  * (cukup EXISTS sekali); repeat_count dihitung di list dari COUNT entries.
@@ -263,6 +323,7 @@ const leaderboardTopSource: AchievementSourceDefinition = {
 export const ACHIEVEMENT_SOURCE_REGISTRY: Record<string, AchievementSourceDefinition> = {
   registration: registrationSource,
   manual: manualSource,
+  user_role: userRoleSource,
   contributions_approved: contributionsApprovedSource,
   verifications_done: verificationsDoneSource,
   comments_published: commentsPublishedSource,

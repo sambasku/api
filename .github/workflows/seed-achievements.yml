@@ -1,7 +1,8 @@
 name: Seed Achievements (manual)
-# Seed katalog achievement (angkatan-ke-1, beta-tester, warm-up R1/G3).
-# Insert-if-missing, idempotent. Award TIDAK diberikan di sini - jalankan
-# workflow Scan Achievements setelahnya untuk backfill.
+# Seed katalog achievement (angkatan-ke-1, istana-alwatzikhoebillah,
+# beta-tester, warm-up R1/G3). Insert-if-missing, idempotent. Award TIDAK
+# diberikan di sini - jalankan workflow Scan Achievements setelahnya
+# untuk backfill.
 #
 # CLI: gh workflow run seed-achievements.yml --ref staging -f target=staging
 #      gh workflow run seed-achievements.yml --ref main -f target=production

@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
  *
  * Kohort V1 + warm-up R1/G3 (ACHIEVEMENT_ENHANCEMENT G2):
  * kontribusi kata tier, suara, contoh, verifikasi, komentar, diskusi.
+ * Plus bingkai role staf (`istana-alwatzikhoebillah` = reviewer/admin/root).
  *
  * Award TIDAK diberikan di sini - jalankan Scan di console / cron /
  * `pnpm scan:achievements` untuk backfill.
@@ -38,6 +39,19 @@ const SEED_ACHIEVEMENTS: Array<{
     criteria: {
       source: 'registration',
       window: { from: '2026-01-01T00:00:00+07:00', to: '2027-01-01T00:00:00+07:00' },
+    },
+  },
+  {
+    code: 'istana-alwatzikhoebillah',
+    title: 'Istana Alwatzikhoebillah',
+    description:
+      'Bingkai khusus untuk verifikator, admin, dan root (bukan kontributor saja)',
+    category: 'kualitas',
+    rewardType: 'profile_border',
+    badgeUrl: `${CDN}/istana-alwatzikhoebillah.png`,
+    criteria: {
+      source: 'user_role',
+      filters: { role_in: 'reviewer,admin,root' },
     },
   },
   {

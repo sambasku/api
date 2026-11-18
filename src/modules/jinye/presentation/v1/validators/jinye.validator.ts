@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { opaqueId } from '@/shared/validation/id';
 import { uploadCredentialsResponseSchema } from '@/modules/image/presentation/v1/validators/image.validator';
 import { JINYE_STATUSES } from '@/shared/database/drizzle/schema/jinye.schema';
@@ -223,9 +223,13 @@ const jinyeCommentWireBase = z.object({
   downvotes: z.number().int(),
 });
 
-export const jinyeCommentWireSchema: z.ZodTypeAny = jinyeCommentWireBase.extend({
-  replies: z.array(z.lazy(() => jinyeCommentWireSchema)).optional(),
-});
+// Wajib .openapi('JinyeComment') supaya zod-to-openapi pakai $ref,
+// bukan expand rekursif tanpa batas (RangeError → /openapi.json 500 → Scalar kosong).
+export const jinyeCommentWireSchema: z.ZodTypeAny = jinyeCommentWireBase
+  .extend({
+    replies: z.array(z.lazy(() => jinyeCommentWireSchema)).optional(),
+  })
+  .openapi('JinyeComment');
 
 export const createJinyeCommentResponseSchema = z.object({
   data: jinyeCommentWireSchema,

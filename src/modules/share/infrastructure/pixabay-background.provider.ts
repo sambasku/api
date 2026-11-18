@@ -151,11 +151,12 @@ export function mapPixabayPhoto(raw: unknown): ShareBackgroundItem | null {
   if (!id || !url || !photographer) return null;
   const width = typeof hit.imageWidth === 'number' ? hit.imageWidth : 0;
   const height = typeof hit.imageHeight === 'number' ? hit.imageHeight : 0;
-  const proxyUrl = proxyImageCdnUrl(url);
+  // url kanonik = CDN Pixabay (lolos allowlist submit lemma).
+  // preview_url = wsrv untuk thumbnail grid.
   return {
     id: `pixabay-photo-${id}`,
-    url: proxyUrl,
-    preview_url: proxyUrl,
+    url,
+    preview_url: proxyImageCdnUrl(url),
     photographer,
     username: photographer,
     attribution_url: pageUrl,

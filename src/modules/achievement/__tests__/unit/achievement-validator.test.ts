@@ -37,6 +37,24 @@ describe('achievement criteria schema (Zod registry)', () => {
     expect(parsed.success).toBe(false);
   });
 
+  it('menerima user_role dengan role_in valid', () => {
+    const parsed = achievementCriteriaSchema.safeParse({
+      source: 'user_role',
+      filters: { role_in: 'reviewer,admin,root' },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('menolak user_role tanpa role_in valid', () => {
+    const missing = achievementCriteriaSchema.safeParse({ source: 'user_role' });
+    expect(missing.success).toBe(false);
+    const invalid = achievementCriteriaSchema.safeParse({
+      source: 'user_role',
+      filters: { role_in: 'verifikator' },
+    });
+    expect(invalid.success).toBe(false);
+  });
+
   it('menolak threshold pada registration (supportsThreshold=false)', () => {
     const parsed = achievementCriteriaSchema.safeParse({
       source: 'registration',

@@ -3,6 +3,7 @@ import { ACHIEVEMENT_CATEGORIES, REWARD_TYPES } from '@/shared/database/drizzle/
 import {
   findAchievementSource,
   isAchievementSourceKnown,
+  parseRoleInFilter,
 } from '../../../domain/achievement-registry';
 
 /**
@@ -144,6 +145,18 @@ export const achievementCriteriaSchema = z
           code: 'custom',
           path: ['filters', 'rank_max'],
           message: 'rank_max harus >= rank_min',
+        });
+      }
+    }
+
+    if (c.source === 'user_role') {
+      const roles = parseRoleInFilter(filters?.role_in);
+      if (roles.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['filters', 'role_in'],
+          message:
+            'user_role wajib filters.role_in berisi role valid (pisah koma: contributor,editor,reviewer,admin,root)',
         });
       }
     }

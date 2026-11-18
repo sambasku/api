@@ -60,7 +60,9 @@ describe('mapPixabayPhoto', () => {
       id: 'pixabay-photo-42',
       kind: 'photo',
       provider: 'pixabay',
-      url: 'https://wsrv.nl/?url=cdn.pixabay.com%2Fphoto%2F42.jpg&w=640&h=640&fit=cover&output=webp',
+      url: 'https://cdn.pixabay.com/photo/42.jpg',
+      preview_url:
+        'https://wsrv.nl/?url=cdn.pixabay.com%2Fphoto%2F42.jpg&w=640&h=640&fit=cover&output=webp',
       photographer: 'Ada',
     });
   });
