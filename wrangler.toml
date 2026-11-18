@@ -13,6 +13,9 @@
 #        npx wrangler secret put PRONUNCIACION_GITHUB_TOKEN
 #        npx wrangler secret put PUBLIC_IMAGE_GITHUB_TOKEN
 #        npx wrangler secret put SUPABASE_ANON_KEY
+#        npx wrangler secret put SUPABASE_SECRET_KEY  # chat write (Postgres)
+#        npx wrangler secret put LIVEKIT_API_SECRET   # voice experimental
+#        LIVEKIT_API_KEY / LIVEKIT_URL / LIVEKIT_ROOM_NAME → [vars] (bukan secret)
 #        …
 #   3. npx wrangler deploy
 #
@@ -68,8 +71,12 @@ SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 # Statistik Play Console (export CSV GCS). Isi PLAY_STATS_GCS_BUCKET via
 # `npx wrangler secret put PLAY_STATS_GCS_BUCKET` ATAU langsung di sini.
 PLAY_STATS_GCS_PREFIX = ""
-SUPABASE_URL="https://qqlksojwaqrydxhqpyqd.supabase.co"
-MOBILE_GA4_PROPERTY_ID="555160494"
+SUPABASE_URL = "https://qqlksojwaqrydxhqpyqd.supabase.co"
+# LiveKit voice (experimental). API_KEY di vars; API_SECRET via wrangler secret.
+LIVEKIT_URL = "wss://voice.sambasku.com"
+LIVEKIT_ROOM_NAME = "sambasku-global"
+LIVEKIT_API_KEY = "APItJr9b3pcfr6k"
+MOBILE_GA4_PROPERTY_ID = "555160494"
 # OpenWA: kirim WA. API key lewat secret, bukan di sini.
 OPENWA_BASE_URL="https://wa.iamutaki.com"
 OPENWA_SESSION_ID="38d3dfa7-08c9-47f1-9490-f6ffe0124620"
@@ -147,12 +154,15 @@ GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gservicea
 GA4_PROPERTY_ID="556164988"
 SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 PLAY_STATS_GCS_PREFIX = ""
-SUPABASE_URL="https://wkhlcrxlncflcztptrmg.supabase.co"
-MOBILE_GA4_PROPERTY_ID="555160494"
-OPENWA_BASE_URL="https://wa.iamutaki.com"
-OPENWA_SESSION_ID="38d3dfa7-08c9-47f1-9490-f6ffe0124620"
-OPENWA_GROUP_JID="120363429405087787@g.us"
-GITHUB_CLIENT_ID="Ov23liEGNkEDuPNAhiTj"
+SUPABASE_URL = "https://wkhlcrxlncflcztptrmg.supabase.co"
+LIVEKIT_URL = "wss://voice.sambasku.com"
+LIVEKIT_ROOM_NAME = "sambasku-global"
+LIVEKIT_API_KEY = "APItJr9b3pcfr6k"
+MOBILE_GA4_PROPERTY_ID = "555160494"
+OPENWA_BASE_URL = "https://wa.iamutaki.com"
+OPENWA_SESSION_ID = "38d3dfa7-08c9-47f1-9490-f6ffe0124620"
+OPENWA_GROUP_JID = "120363429405087787@g.us"
+GITHUB_CLIENT_ID = "Ov23liEGNkEDuPNAhiTj"
 
 # [env.staging.limits] DIHAPUS - lihat catatan [limits] di atas (Free plan).
 [env.staging.observability]
@@ -174,8 +184,10 @@ crons = ["* * * * *"]
 #   npx wrangler secret put PIXABAY_API_KEY --env staging
 #   npx wrangler secret put UNSPLASH_ACCESS_KEY --env staging
 #   npx wrangler secret put SUPABASE_ANON_KEY --env staging
+#   npx wrangler secret put SUPABASE_SECRET_KEY --env staging
+#   npx wrangler secret put LIVEKIT_API_SECRET --env staging
 #   npx wrangler secret put GITHUB_CLIENT_SECRET --env staging
 #   npx wrangler secret put OPENWA_API_KEY --env staging
-#   npx wrangler secret put OPENWA_API_KEY
 #   npx wrangler secret put PLAY_STATS_GCS_BUCKET --env staging
-#   … (Resend, ImageKit, OAuth, FCM - sama seperti sebelumnya)
+# Prod (tanpa --env): LIVEKIT_API_SECRET + SUPABASE_SECRET_KEY (+ Resend, ImageKit, OAuth, FCM)
+#   …

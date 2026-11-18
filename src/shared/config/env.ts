@@ -175,6 +175,16 @@ const envSchema = z.object({
   // POST /api/v1/admin/system/supabase/ping → 503 SUPABASE_PING_UNAVAILABLE.
   SUPABASE_URL: z.url().optional(),
   SUPABASE_ANON_KEY: z.string().optional(),
+  // Secret/service key untuk mirror chat ke Supabase (SoT tetap Turso).
+  // Jangan expose ke mobile. Kosong = mirror skip; kirim tetap OK di Turso.
+  SUPABASE_SECRET_KEY: z.string().optional(),
+
+  // LiveKit voice room experimental (homelab voice.sambasku.com).
+  // Acuan: docs/env/livekit.md. Kosong = POST /voice/token → 503.
+  LIVEKIT_URL: z.string().url().optional(),
+  LIVEKIT_API_KEY: z.string().optional(),
+  LIVEKIT_API_SECRET: z.string().optional(),
+  LIVEKIT_ROOM_NAME: z.string().optional(),
 
   // App URL for the API service (Cloudflare Workers custom domain) - sama
   // dengan APP_URL di atas (legacy). Tidak ada definisi kedua.

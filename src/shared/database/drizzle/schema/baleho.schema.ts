@@ -145,6 +145,10 @@ export const balehoPlacements = sqliteTable(
     entityId: text('entity_id'),
     startsAt: integer('starts_at', { mode: 'timestamp' }),
     endsAt: integer('ends_at', { mode: 'timestamp' }),
+    /** Sudah dikirim notif H-1 (1x). Epoch ms. */
+    endingSoonNotifiedAt: integer('ending_soon_notified_at', {
+      mode: 'timestamp',
+    }),
     /** Lama booking (hari) saat pesan. */
     days: integer('days'),
     /** Snapshot tarif IDR per sel 1x1 per hari saat pesan. */
