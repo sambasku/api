@@ -15,7 +15,11 @@ import {
   bugReports,
   categories,
   categorySuggestions,
+  chatMessageDeletions,
+  chatMessageRevisions,
+  chatMessages,
   commentBlocklistWords,
+  contentLinks,
   commentRevisions,
   comments,
   contributionReviews,
@@ -542,6 +546,12 @@ pantuns,
     // Leaderboard (entries sebelum weeks; entries FK users)
     leaderboardWeekEntries,
     leaderboardWeeks,
+    // Chat publik (FK user_id / editor_id / deleted_by) - sebelum users
+    chatMessageRevisions,
+    chatMessageDeletions,
+    chatMessages,
+    // Content links (FK created_by) - sebelum users
+    contentLinks,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,
