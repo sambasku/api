@@ -648,6 +648,18 @@ import { ResolveDiscussionLemmaCorrectionUseCase } from "@/modules/discussion/ap
 import { DeleteDiscussionLemmaLinkUseCase } from "@/modules/discussion/application/use-cases/delete-discussion-lemma-link.use-case";
 import { DiscussionController } from "@/modules/discussion/presentation/v1/discussion.controller";
 import { createDiscussionRoutes } from "@/modules/discussion/presentation/v1/discussion.routes";
+import { ChatRepositoryImpl } from "@/modules/chat/infrastructure/chat.repository.impl";
+import { ChatSupabaseMirrorService } from "@/modules/chat/infrastructure/chat-supabase-mirror";
+import {
+  CreateChatMessageUseCase,
+  DeleteChatMessageUseCase,
+  EditChatMessageUseCase,
+  GetChatCapabilitiesUseCase,
+  ListChatMessagesUseCase,
+  ListChatRevisionsUseCase,
+} from "@/modules/chat/application/use-cases/chat.use-cases";
+import { ChatController } from "@/modules/chat/presentation/v1/chat.controller";
+import { createChatRoutes } from "@/modules/chat/presentation/v1/chat.routes";
 import { createAdminDiscussionRoutes } from "@/modules/discussion/presentation/v1/admin-discussion.routes";
 import { PantunRepositoryImpl } from "@/modules/pantun/infrastructure/pantun.repository.impl";
 import { PantunReportRepositoryImpl } from "@/modules/pantun-report/infrastructure/pantun-report.repository.impl";
@@ -3736,6 +3748,40 @@ const webImportController = new WebImportController(
   new ApproveWebImportUseCase(webImportRepo, auditRepo),
   new RejectWebImportUseCase(webImportRepo, auditRepo),
 );
+// Chat publik F1a (teks/stiker/reply/edit/tombstone). Voice note = F1b.
+const chatRepo = new ChatRepositoryImpl(db);
+const chatMirror = new ChatSupabaseMirrorService();
+const chatController = new ChatController(
+  new GetChatCapabilitiesUseCase(appSettingsRepo),
+  new ListChatMessagesUseCase(chatRepo),
+  new CreateChatMessageUseCase(
+    chatRepo,
+    userRepo,
+    commentBlocklistRepo,
+    chatMirror,
+    recordAbuseSignal,
+  ),
+  new EditChatMessageUseCase(
+    chatRepo,
+    commentBlocklistRepo,
+    chatMirror,
+    recordAbuseSignal,
+  ),
+  new DeleteChatMessageUseCase(chatRepo, chatMirror),
+  new ListChatRevisionsUseCase(chatRepo),
+);
+app.route(
+  "/api/v1/chat",
+  createChatRoutes({
+    controller: chatController,
+    authenticate,
+    optionalAuthenticate,
+    requireApprovedClient: requireDiscussionWriteClient,
+    requireLegalConsent,
+    onUgcRateLimited,
+  }),
+);
+
 app.route(
   "/api/v1/web-imports",
   createPublicWebImportRoutes({ controller: webImportController }),
