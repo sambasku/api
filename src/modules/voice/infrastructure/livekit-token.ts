@@ -33,34 +33,54 @@ export interface MintLivekitTokenInput {
   ttlSec?: number;
 }
 
+async function signHs256(
+  apiKey: string,
+  apiSecret: string,
+  claims: Record<string, unknown>,
+): Promise<string> {
+  const header = b64url(
+    enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })),
+  );
+  const payload = b64url(enc.encode(JSON.stringify({ iss: apiKey, ...claims })));
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    await hmacKey(apiSecret),
+    enc.encode(`${header}.${payload}`),
+  );
+  return `${header}.${payload}.${b64url(sig)}`;
+}
+
 export async function mintLivekitAccessToken(
   input: MintLivekitTokenInput,
 ): Promise<string> {
   const ttl = input.ttlSec ?? 60 * 60;
-  const header = b64url(
-    enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })),
-  );
-  const payload = b64url(
-    enc.encode(
-      JSON.stringify({
-        iss: input.apiKey,
-        sub: input.identity,
-        name: input.name,
-        video: {
-          room: input.room,
-          roomJoin: true,
-          canPublish: true,
-          canSubscribe: true,
-          canPublishData: true,
-        },
-        exp: Math.floor(Date.now() / 1000) + ttl,
-      }),
-    ),
-  );
-  const sig = await crypto.subtle.sign(
-    'HMAC',
-    await hmacKey(input.apiSecret),
-    enc.encode(`${header}.${payload}`),
-  );
-  return `${header}.${payload}.${b64url(sig)}`;
+  return signHs256(input.apiKey, input.apiSecret, {
+    sub: input.identity,
+    name: input.name,
+    video: {
+      room: input.room,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    },
+    exp: Math.floor(Date.now() / 1000) + ttl,
+  });
+}
+
+/** JWT admin singkat untuk RoomService Twirp (CreateRoom / ListParticipants). */
+export async function mintLivekitServerToken(input: {
+  apiKey: string;
+  apiSecret: string;
+  ttlSec?: number;
+}): Promise<string> {
+  const ttl = input.ttlSec ?? 60;
+  return signHs256(input.apiKey, input.apiSecret, {
+    video: {
+      roomCreate: true,
+      roomList: true,
+      roomAdmin: true,
+    },
+    exp: Math.floor(Date.now() / 1000) + ttl,
+  });
 }

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenError } from '@/shared/errors/app-error';
+import {
+  ConflictError,
+  ForbiddenError,
+  ServiceUnavailableError,
+} from '@/shared/errors/app-error';
 import { MintVoiceTokenUseCase } from '../../application/mint-voice-token.use-case';
 
 vi.mock('@/shared/config/env', () => ({
@@ -18,9 +22,11 @@ describe('MintVoiceTokenUseCase', () => {
   const userRepo = {
     findById: vi.fn(),
   };
+  const roomGate = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    roomGate.mockResolvedValue(undefined);
   });
 
   it('throws when voice.room_enabled is off', async () => {
@@ -30,11 +36,13 @@ describe('MintVoiceTokenUseCase', () => {
     const uc = new MintVoiceTokenUseCase(
       settingsRepo as never,
       userRepo as never,
+      roomGate,
     );
     await expect(uc.execute('u1')).rejects.toBeInstanceOf(ForbiddenError);
+    expect(roomGate).not.toHaveBeenCalled();
   });
 
-  it('mints token when flag on and env set', async () => {
+  it('mints token when flag on, env set, and room gate ok', async () => {
     settingsRepo.getByKeys.mockResolvedValue([
       { key: 'voice.room_enabled', value: 'true' },
     ]);
@@ -45,10 +53,56 @@ describe('MintVoiceTokenUseCase', () => {
     const uc = new MintVoiceTokenUseCase(
       settingsRepo as never,
       userRepo as never,
+      roomGate,
     );
     const result = await uc.execute('u1');
     expect(result.url).toBe('wss://voice.example.com');
     expect(result.room).toBe('sambasku-global');
+    expect(result.maxParticipants).toBe(15);
     expect(result.token.split('.')).toHaveLength(3);
+    expect(roomGate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: 'u1',
+        room: 'sambasku-global',
+        maxParticipants: 15,
+      }),
+    );
+  });
+
+  it('propagates VOICE_ROOM_FULL from room gate', async () => {
+    settingsRepo.getByKeys.mockResolvedValue([
+      { key: 'voice.room_enabled', value: 'true' },
+    ]);
+    roomGate.mockRejectedValue(
+      new ConflictError('VOICE_ROOM_FULL', 'penuh', { max: 15, count: 15 }),
+    );
+    const uc = new MintVoiceTokenUseCase(
+      settingsRepo as never,
+      userRepo as never,
+      roomGate,
+    );
+    await expect(uc.execute('u1')).rejects.toMatchObject({
+      errorCode: 'VOICE_ROOM_FULL',
+    });
+  });
+
+  it('propagates VOICE_UNAVAILABLE when homelab unreachable', async () => {
+    settingsRepo.getByKeys.mockResolvedValue([
+      { key: 'voice.room_enabled', value: 'true' },
+    ]);
+    roomGate.mockRejectedValue(
+      new ServiceUnavailableError(
+        'VOICE_UNAVAILABLE',
+        'Voice server tidak terjangkau. Coba lagi nanti ya.',
+      ),
+    );
+    const uc = new MintVoiceTokenUseCase(
+      settingsRepo as never,
+      userRepo as never,
+      roomGate,
+    );
+    await expect(uc.execute('u1')).rejects.toBeInstanceOf(
+      ServiceUnavailableError,
+    );
   });
 });

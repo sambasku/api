@@ -17,6 +17,7 @@ const voiceTokenResponseSchema = z.object({
     token: z.string(),
     url: z.string(),
     room: z.string(),
+    maxParticipants: z.number().int().positive(),
   }),
 });
 
@@ -57,8 +58,12 @@ export function createVoiceRoutes(deps: VoiceRoutesDeps) {
         description: 'Voice room dimatikan / consent',
         content: json(errorResponseSchema),
       },
+      409: {
+        description: 'Voice room penuh (max 15)',
+        content: json(errorResponseSchema),
+      },
       503: {
-        description: 'LiveKit belum dikonfigurasi',
+        description: 'LiveKit belum dikonfigurasi / homelab tidak terjangkau',
         content: json(errorResponseSchema),
       },
     },
