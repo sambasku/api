@@ -74,6 +74,8 @@ export type BalehoRepository = {
       createdAt: Date;
       impressions: number;
       taps: number;
+      /** Klik tombol CTA (`event_type=action`). */
+      actions: number;
     }>
   >;
   listMine(
@@ -92,6 +94,10 @@ export type BalehoRepository = {
       mediaUrl: string | null;
       createdAt: Date;
       endsAt: Date | null;
+      impressions: number;
+      taps: number;
+      /** Klik tombol CTA (`event_type=action`). */
+      actions: number;
     }>
   >;
   getPlacementNotify(placementId: string): Promise<{

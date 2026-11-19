@@ -440,29 +440,10 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       .orderBy(desc(balehoPlacements.createdAt))
       .limit(limit);
 
-    const ids = rows.map((r) => r.id);
-    const counts = new Map<string, { impressions: number; taps: number }>();
-    if (ids.length > 0) {
-      const stats = await this.db
-        .select({
-          placementId: balehoEvents.placementId,
-          eventType: balehoEvents.eventType,
-          n: sql<number>`count(*)`,
-        })
-        .from(balehoEvents)
-        .where(inArray(balehoEvents.placementId, ids))
-        .groupBy(balehoEvents.placementId, balehoEvents.eventType);
-      for (const s of stats) {
-        const cur = counts.get(s.placementId) ?? { impressions: 0, taps: 0 };
-        const n = Number(s.n ?? 0);
-        if (s.eventType === 'impression') cur.impressions = n;
-        if (s.eventType === 'tap') cur.taps = n;
-        counts.set(s.placementId, cur);
-      }
-    }
+    const counts = await this.eventCountsByPlacement(rows.map((r) => r.id));
 
     return rows.map((r) => {
-      const c = counts.get(r.id) ?? { impressions: 0, taps: 0 };
+      const c = counts.get(r.id) ?? { impressions: 0, taps: 0, actions: 0 };
       return {
         ...r,
         advertiserUsername: r.advertiserUsername ?? null,
@@ -473,6 +454,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         createdAt: r.createdAt,
         impressions: c.impressions,
         taps: c.taps,
+        actions: c.actions,
       };
     });
   }
@@ -526,8 +508,11 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       });
     }
 
+    const counts = await this.eventCountsByPlacement(rows.map((r) => r.id));
+
     return rows.map((r) => {
       const frame = firstFrame.get(r.creativeId);
+      const c = counts.get(r.id) ?? { impressions: 0, taps: 0, actions: 0 };
       return {
         id: r.id,
         slide: r.slide,
@@ -540,8 +525,42 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         mediaUrl: frame?.mediaUrl ?? null,
         createdAt: r.createdAt,
         endsAt: r.endsAt,
+        impressions: c.impressions,
+        taps: c.taps,
+        actions: c.actions,
       };
     });
+  }
+
+  /** Satu query GROUP BY untuk agregat event per placement (hemat subrequest). */
+  private async eventCountsByPlacement(ids: string[]) {
+    const counts = new Map<
+      string,
+      { impressions: number; taps: number; actions: number }
+    >();
+    if (ids.length === 0) return counts;
+    const stats = await this.db
+      .select({
+        placementId: balehoEvents.placementId,
+        eventType: balehoEvents.eventType,
+        n: sql<number>`count(*)`,
+      })
+      .from(balehoEvents)
+      .where(inArray(balehoEvents.placementId, ids))
+      .groupBy(balehoEvents.placementId, balehoEvents.eventType);
+    for (const s of stats) {
+      const cur = counts.get(s.placementId) ?? {
+        impressions: 0,
+        taps: 0,
+        actions: 0,
+      };
+      const n = Number(s.n ?? 0);
+      if (s.eventType === 'impression') cur.impressions = n;
+      else if (s.eventType === 'tap') cur.taps = n;
+      else if (s.eventType === 'action') cur.actions = n;
+      counts.set(s.placementId, cur);
+    }
+    return counts;
   }
 
   async getPlacementNotify(placementId: string) {

@@ -147,19 +147,32 @@ export class BalehoController {
     return c.json({
       success: true as const,
       data: {
-        items: rows.map((r) => ({
-          id: r.id,
-          slide: r.slide,
-          col: r.col,
-          row: r.row,
-          w: r.w,
-          h: r.h,
-          status: r.status,
-          title: r.title,
-          media_url: r.mediaUrl,
-          created_at: r.createdAt.toISOString(),
-          ends_at: r.endsAt?.toISOString() ?? null,
-        })),
+        items: rows.map((r) => {
+          const impressions = r.impressions;
+          const taps = r.taps;
+          const actions = r.actions;
+          const ctr =
+            impressions > 0
+              ? Math.round((taps / impressions) * 1000) / 10
+              : 0;
+          return {
+            id: r.id,
+            slide: r.slide,
+            col: r.col,
+            row: r.row,
+            w: r.w,
+            h: r.h,
+            status: r.status,
+            title: r.title,
+            media_url: r.mediaUrl,
+            created_at: r.createdAt.toISOString(),
+            ends_at: r.endsAt?.toISOString() ?? null,
+            impressions,
+            taps,
+            actions,
+            ctr_percent: ctr,
+          };
+        }),
       },
     });
   }
@@ -171,6 +184,7 @@ export class BalehoController {
       data: rows.map((r) => {
         const impressions = r.impressions;
         const taps = r.taps;
+        const actions = r.actions;
         const ctr =
           impressions > 0 ? Math.round((taps / impressions) * 1000) / 10 : 0;
         return {
@@ -192,6 +206,7 @@ export class BalehoController {
           created_at: r.createdAt.toISOString(),
           impressions,
           taps,
+          actions,
           ctr_percent: ctr,
         };
       }),
