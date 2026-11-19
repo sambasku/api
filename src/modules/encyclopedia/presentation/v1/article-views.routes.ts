@@ -67,11 +67,13 @@ export function createPublicArticleViewsRoutes(deps: PublicArticleViewsRoutesDep
 /** GET /api/v1/admin/encyclopedia/views(+ /daily) - root/admin/reviewer. */
 export function createAdminArticleViewsRoutes(deps: AdminArticleViewsRoutesDeps) {
   const routes = createOpenApiApp();
-  routes.use(
-    '*',
+  // Scope ke path views saja - jangan `*` (mount base dipakai CRUD lain).
+  const adminGate = [
     deps.authenticate,
     authorizeRole('root', 'admin', 'reviewer'),
-  );
+  ] as const;
+  routes.use('/views', ...adminGate);
+  routes.use('/views/daily', ...adminGate);
 
   const viewsResponseSchema = z.object({
     success: z.literal(true),

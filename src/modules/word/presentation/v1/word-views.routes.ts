@@ -87,11 +87,15 @@ export function createPublicWordViewsRoutes(deps: PublicWordViewsRoutesDeps) {
 /** GET /api/v1/admin/words/views(+ /daily) - root/admin/reviewer. */
 export function createAdminWordViewsRoutes(deps: AdminWordViewsRoutesDeps) {
   const routes = createOpenApiApp();
-  routes.use(
-    '*',
+  // Jangan `use('*')`: sub-app ini di-mount di `/admin/words` yang sama
+  // dengan create kata (contributor boleh POST /). Middleware `*` ikut
+  // menolak contributor → 403 di seluruh write path (CI create-word e2e).
+  const adminGate = [
     deps.authenticate,
     authorizeRole('root', 'admin', 'reviewer'),
-  );
+  ] as const;
+  routes.use('/views', ...adminGate);
+  routes.use('/views/daily', ...adminGate);
 
   const viewsResponseSchema = z.object({
     success: z.literal(true),
