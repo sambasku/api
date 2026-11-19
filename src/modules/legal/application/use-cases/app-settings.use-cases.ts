@@ -1,21 +1,19 @@
 import { BadRequestError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import {
+  APP_SETTING_BOOLEAN_KEYS,
   APP_SETTING_KEYS,
-  AUTO_VERIFY_BY_VOTE_ENABLED_KEY,
   BALEHO_PRICE_PER_CELL_PER_DAY_KEY,
   LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY,
-  SEARCH_MISS_AUTO_VISIBLE_ENABLED_KEY,
-  VOICE_ROOM_ENABLED_KEY,
-  VOTE_RESET_ON_EDIT_ENABLED_KEY,
+  appSettingTypeForKey,
   type AppSettingKey,
   type AppSettingType,
   WA_GROUP_CTA_URL_KEY,
-  WA_VERIFIER_ENABLED_KEY,
 } from '../../domain/entities/app-setting.entity';
 import type { AppSettingsRepository } from '../../domain/repositories/app-settings.repository';
 
 const ALLOWED = new Set<string>(APP_SETTING_KEYS);
+const BOOLEAN_KEYS = new Set<string>(APP_SETTING_BOOLEAN_KEYS);
 
 export class GetAppSettingsUseCase {
   constructor(private readonly settingsRepo: AppSettingsRepository) {}
@@ -27,7 +25,9 @@ export class GetAppSettingsUseCase {
       return {
         key,
         value: row?.value ?? null,
-        type: row?.type ?? 'string',
+        // Tipe kanonik menang: baris lama / belum ada tidak jatuh ke 'string'
+        // (Console butuh type=boolean agar editor Aktif/Nonaktif).
+        type: appSettingTypeForKey(key),
         description: row?.description ?? null,
         updated_at: row?.updatedAt?.toISOString() ?? null,
         updated_by: row?.updatedBy ?? null,
@@ -103,36 +103,7 @@ export class UpdateAppSettingsUseCase {
           );
         }
       }
-      if (s.key === WA_VERIFIER_ENABLED_KEY) {
-        const v = s.value.toLowerCase();
-        if (v !== 'true' && v !== 'false') {
-          throw new BadRequestError(
-            'VALIDATION_ERROR',
-            'wa.verifier_enabled harus true atau false',
-            [{ field: 'settings', message: 'Nilai wa.verifier_enabled tidak valid' }],
-          );
-        }
-      }
-      if (s.key === VOICE_ROOM_ENABLED_KEY) {
-        const v = s.value.toLowerCase();
-        if (v !== 'true' && v !== 'false') {
-          throw new BadRequestError(
-            'VALIDATION_ERROR',
-            'voice.room_enabled harus true atau false',
-            [
-              {
-                field: 'settings',
-                message: 'Nilai voice.room_enabled tidak valid',
-              },
-            ],
-          );
-        }
-      }
-      if (
-        s.key === AUTO_VERIFY_BY_VOTE_ENABLED_KEY ||
-        s.key === SEARCH_MISS_AUTO_VISIBLE_ENABLED_KEY ||
-        s.key === VOTE_RESET_ON_EDIT_ENABLED_KEY
-      ) {
+      if (BOOLEAN_KEYS.has(s.key)) {
         const v = s.value.toLowerCase();
         if (v !== 'true' && v !== 'false') {
           throw new BadRequestError(
@@ -171,8 +142,9 @@ export class UpdateAppSettingsUseCase {
     const updated = await this.settingsRepo.upsertMany(
       input.settings.map((s) => ({
         key: s.key as AppSettingKey,
-        value: s.value,
-        type: s.type,
+        value: BOOLEAN_KEYS.has(s.key) ? s.value.toLowerCase() : s.value,
+        // Paksa tipe kanonik (termasuk semua *_enabled → boolean).
+        type: appSettingTypeForKey(s.key),
         description: s.description,
       })),
       input.actorId,

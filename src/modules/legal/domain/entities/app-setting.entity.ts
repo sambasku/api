@@ -95,6 +95,45 @@ export const DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY = 3000;
 
 export type AppSettingType = 'string' | 'boolean' | 'number' | 'url';
 
+/**
+ * Tipe kanonik per key (Console System Config pakai ini untuk editor).
+ * Semua `*_enabled` = boolean supaya seragam Switch/Select Aktif-Nonaktif.
+ */
+export const APP_SETTING_KEY_TYPES: Record<AppSettingKey, AppSettingType> = {
+  'oauth.third_party_registration': 'string',
+  'oauth.request_log_retention_days': 'number',
+  'legal.terms_version': 'string',
+  'legal.privacy_version': 'string',
+  'legal.oauth_consent_enforcement': 'string',
+  'notification.review_approve_push_cooldown_minutes': 'number',
+  'notification.review_reject_push_cooldown_minutes': 'number',
+  'notification.word_comment_push_cooldown_minutes': 'number',
+  'notification.word_vote_push_cooldown_minutes': 'number',
+  'notification.word_media_push_cooldown_minutes': 'number',
+  'wa.verifier_enabled': 'boolean',
+  'wa.group_cta_url': 'url',
+  streak_reminder_enabled: 'boolean',
+  'baleho.price_per_cell_per_day': 'number',
+  'voice.room_enabled': 'boolean',
+  auto_verify_by_vote_enabled: 'boolean',
+  search_miss_auto_visible_enabled: 'boolean',
+  vote_reset_on_edit_enabled: 'boolean',
+};
+
+/** Keys kill-switch / flag on-off (validasi value true|false + type boolean). */
+export const APP_SETTING_BOOLEAN_KEYS = (
+  Object.entries(APP_SETTING_KEY_TYPES) as [AppSettingKey, AppSettingType][]
+)
+  .filter(([, t]) => t === 'boolean')
+  .map(([k]) => k);
+
+export function appSettingTypeForKey(key: string): AppSettingType {
+  return (
+    (APP_SETTING_KEY_TYPES as Record<string, AppSettingType | undefined>)[key] ??
+    'string'
+  );
+}
+
 export interface AppSetting {
   key: string;
   value: string;

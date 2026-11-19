@@ -48,3 +48,40 @@ describe('UpdateAppSettingsUseCase - legal.oauth_consent_enforcement', () => {
     expect(settingsRepo.upsertMany).not.toHaveBeenCalled();
   });
 });
+
+describe('UpdateAppSettingsUseCase - *_enabled boolean', () => {
+  it('memaksa type boolean saat upsert kill switch', async () => {
+    const { useCase, settingsRepo } = makeDeps();
+    await useCase.execute({
+      settings: [
+        {
+          key: 'search_miss_auto_visible_enabled',
+          value: 'true',
+          type: 'string',
+        },
+      ],
+      actorId: ACTOR,
+    });
+    expect(settingsRepo.upsertMany).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          key: 'search_miss_auto_visible_enabled',
+          value: 'true',
+          type: 'boolean',
+        }),
+      ],
+      ACTOR,
+    );
+  });
+
+  it('menolak nilai selain true/false', async () => {
+    const { useCase, settingsRepo } = makeDeps();
+    await expect(
+      useCase.execute({
+        settings: [{ key: 'auto_verify_by_vote_enabled', value: '1' }],
+        actorId: ACTOR,
+      }),
+    ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
+    expect(settingsRepo.upsertMany).not.toHaveBeenCalled();
+  });
+});
