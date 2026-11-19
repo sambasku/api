@@ -183,6 +183,18 @@ import { SoftDeleteMeaningUseCase } from "@/modules/word/application/use-cases/s
 import { createPronunciationStorage } from "@/modules/word/infrastructure/pronunciation-storage.factory";
 import { WordController } from "@/modules/word/presentation/v1/word.controller";
 import {
+  GetWordViewReportUseCase,
+  ListWordViewsUseCase,
+  RecordWordViewByIdUseCase,
+  RecordWordViewByLemmaUseCase,
+} from "@/modules/word/application/use-cases/word-views.use-cases";
+import { WordViewsRepositoryImpl } from "@/modules/word/infrastructure/word-views.repository.impl";
+import { WordViewsController } from "@/modules/word/presentation/v1/word-views.controller";
+import {
+  createAdminWordViewsRoutes,
+  createPublicWordViewsRoutes,
+} from "@/modules/word/presentation/v1/word-views.routes";
+import {
   createAdminWordRoutes,
   createPublicWordRoutes,
 } from "@/modules/word/presentation/v1/word.routes";
@@ -1329,6 +1341,13 @@ const requireProfileWriteClient = createRequireApprovedClientMiddleware(
 // Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
 // Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
 const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
+const wordViewsRepo = new WordViewsRepositoryImpl(db);
+const wordViewsController = new WordViewsController(
+  new RecordWordViewByIdUseCase(wordViewsRepo),
+  new RecordWordViewByLemmaUseCase(wordViewsRepo),
+  new ListWordViewsUseCase(wordViewsRepo),
+  new GetWordViewReportUseCase(wordViewsRepo),
+);
 const karyaRepo = new KaryaRepositoryImpl(db);
 // #133: notif pemilik kata saat contoh kalimat / audio pelafalan tayang.
 const wordMediaPushCooldown = new WordMediaPushCooldownGate(
@@ -2577,6 +2596,14 @@ app.route(
 );
 
 // Modul word - admin (write) + publik (read)
+// Views literal /views sebelum /:id di admin word routes.
+app.route(
+  "/api/v1/admin/words",
+  createAdminWordViewsRoutes({
+    controller: wordViewsController,
+    authenticate,
+  }),
+);
 app.route(
   "/api/v1/admin/words",
   createAdminWordRoutes({ controller: wordController, authenticate }),
@@ -2637,6 +2664,14 @@ app.route(
     controller: wordReportController,
     authenticate,
     requireLegalConsent,
+  }),
+);
+// POST .../view sebelum GET /:id publik (path lebih spesifik).
+app.route(
+  "/api/v1/words",
+  createPublicWordViewsRoutes({
+    controller: wordViewsController,
+    softAuthenticate,
   }),
 );
 app.route(
