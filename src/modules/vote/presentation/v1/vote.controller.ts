@@ -7,6 +7,7 @@ import type { GetVoteCountsUseCase } from '../../application/use-cases/get-vote-
 import type { GetMyVotesUseCase } from '../../application/use-cases/get-my-votes.use-case';
 import type { ListMyVoteHistoryUseCase } from '../../application/use-cases/list-my-vote-history.use-case';
 import type { GetVoteDeckUseCase } from '../../application/use-cases/get-vote-deck.use-case';
+import type { GetVoteCheckDeckUseCase } from '../../application/use-cases/get-vote-check-deck.use-case';
 import type { SkipVoteDeckWordUseCase } from '../../application/use-cases/skip-vote-deck-word.use-case';
 import type { VoteTarget } from '../../domain/repositories/vote.repository';
 import type { SkipVoteDeckBody, ToggleVoteBody, VoteDeckQuery, VoteHistoryQuery } from './validators/vote.validator';
@@ -21,6 +22,7 @@ export class VoteController {
       myVotes: GetMyVotesUseCase;
       history: ListMyVoteHistoryUseCase;
       deck: GetVoteDeckUseCase;
+      checkDeck: GetVoteCheckDeckUseCase;
       skipDeck: SkipVoteDeckWordUseCase;
     },
   ) {}
@@ -129,6 +131,42 @@ export class VoteController {
         // Kelas kata milik MAKNA ini, bukan kata induk. null = belum diisi.
         word_class: m.wordClass,
         // Pelafalan kata induk - CTA tulis/rekam di kartu deck (#260).
+        pronunciation_value: m.pronunciationValue,
+        has_audio: m.hasAudio,
+        upvotes: m.upvotes,
+        downvotes: m.downvotes,
+      })),
+      meta: page.meta,
+    });
+  }
+
+
+  /** GET /api/v1/votes/check-deck - antrean makna belum verified (Periksa Kata) */
+  async checkDeck(c: Context, query: VoteDeckQuery) {
+    const user = this.requireUser(c);
+    const page = await this.deps.checkDeck.execute(user.user_id, {
+      limit: query.limit,
+      cursor: query.cursor,
+      randomize: query.randomize,
+    });
+    return c.json({
+      success: true as const,
+      data: page.items.map((m) => ({
+        id: m.id,
+        word_id: m.wordId,
+        lemma: m.lemma,
+        language_id: m.languageId,
+        language_code: m.languageCode,
+        word_type: m.wordType,
+        status: m.status,
+        is_verified: m.isVerified,
+        approved_at: m.approvedAt.toISOString(),
+        definition: m.definition,
+        translation: m.translation,
+        sense: m.sense,
+        order_index: m.orderIndex,
+        meaning_count: m.meaningCount,
+        word_class: m.wordClass,
         pronunciation_value: m.pronunciationValue,
         has_audio: m.hasAudio,
         upvotes: m.upvotes,

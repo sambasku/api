@@ -79,8 +79,11 @@ describe('GetVoteDeckUseCase', () => {
     expect(voteRepo.listDeckMeanings).not.toHaveBeenCalled();
   });
 
-  it('regresi: listDeckMeanings tetap filter isVerified pada words + meanings', () => {
-    expect(DECK_REPO_SRC).toMatch(/eq\(meanings\.isVerified,\s*true\)/);
-    expect(DECK_REPO_SRC).toMatch(/eq\(words\.isVerified,\s*true\)/);
+  it('regresi: listDeckMeanings tetap trust verified (makna + kata)', () => {
+    expect(DECK_REPO_SRC).toMatch(/listDeckMeanings/);
+    expect(DECK_REPO_SRC).toMatch(/meaningVerified:\s*true/);
+    expect(DECK_REPO_SRC).toMatch(/requireWordVerified:\s*true/);
+    expect(DECK_REPO_SRC).toMatch(/eq\(meanings\.isVerified,\s*trust\.meaningVerified\)/);
   });
 });
+

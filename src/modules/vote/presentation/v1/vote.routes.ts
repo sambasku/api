@@ -85,6 +85,19 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
       },
     }),
   );
+  // Check-deck (Periksa Kata): login + 100/menit per user_id
+  routes.use(
+    '/check-deck',
+    deps.authenticate,
+    rateLimit({
+      points: 100,
+      duration: 60,
+      keyFn: (c) => {
+        const user = (c.get('user') as AuthUser | undefined) ?? null;
+        return `vote-check-deck:${user?.user_id ?? 'unknown'}`;
+      },
+    }),
+  );
   // Skip deck: login + azp gate + 60/menit per user (tulis, sama tier toggle)
   const skipGuards = [
     deps.authenticate,
@@ -168,6 +181,23 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
     },
   });
 
+  const checkDeckRoute = createRoute({
+    method: 'get',
+    path: '/check-deck',
+    tags: ['Votes'],
+    summary:
+      'Antrean makna published belum verified yang user belum vote - Periksa Kata (login)',
+    request: {
+      query: voteDeckQuerySchema,
+    },
+    responses: {
+      200: { description: 'Daftar kartu Periksa Kata', content: json(voteDeckResponseSchema) },
+      400: { description: 'Query tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      429: { description: 'Terlalu banyak permintaan (100/menit per user)', content: json(errorResponseSchema) },
+    },
+  });
+
   const skipDeckRoute = createRoute({
     method: 'post',
     path: '/skips',
@@ -220,6 +250,7 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
   routes.openapi(countsRoute, (c) => deps.controller.counts(c, c.req.valid('query')) as never);
   routes.openapi(historyRoute, (c) => deps.controller.history(c, c.req.valid('query')) as never);
   routes.openapi(deckRoute, (c) => deps.controller.deck(c, c.req.valid('query')) as never);
+  routes.openapi(checkDeckRoute, (c) => deps.controller.checkDeck(c, c.req.valid('query')) as never);
   routes.openapi(skipDeckRoute, (c) => deps.controller.skipDeck(c, c.req.valid('json')) as never);
   routes.openapi(unskipDeckRoute, (c) => deps.controller.unskipDeck(c, c.req.valid('param').meaningId) as never);
   routes.openapi(myRoute, (c) => deps.controller.my(c, c.req.valid('query')) as never);

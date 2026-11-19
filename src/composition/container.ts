@@ -462,6 +462,7 @@ import { GetVoteCountsUseCase } from "@/modules/vote/application/use-cases/get-v
 import { GetMyVotesUseCase } from "@/modules/vote/application/use-cases/get-my-votes.use-case";
 import { ListMyVoteHistoryUseCase } from "@/modules/vote/application/use-cases/list-my-vote-history.use-case";
 import { GetVoteDeckUseCase } from "@/modules/vote/application/use-cases/get-vote-deck.use-case";
+import { GetVoteCheckDeckUseCase } from "@/modules/vote/application/use-cases/get-vote-check-deck.use-case";
 import { SkipVoteDeckWordUseCase } from "@/modules/vote/application/use-cases/skip-vote-deck-word.use-case";
 import { VoteController } from "@/modules/vote/presentation/v1/vote.controller";
 import { AdminVotesController } from "@/modules/vote/presentation/v1/admin-vote.controller";
@@ -1527,6 +1528,7 @@ export const voteController = new VoteController({
   myVotes: new GetMyVotesUseCase(voteRepo),
   history: new ListMyVoteHistoryUseCase(voteRepo),
   deck: new GetVoteDeckUseCase(voteRepo),
+  checkDeck: new GetVoteCheckDeckUseCase(voteRepo),
   skipDeck: new SkipVoteDeckWordUseCase(voteRepo, userSkipRepo),
 });
 

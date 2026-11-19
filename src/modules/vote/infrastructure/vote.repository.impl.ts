@@ -1269,6 +1269,31 @@ if (articleCommentIds.length > 0) {
    * dan belum skip. Urut totalVotes ASC, approvedAt ASC, meaningId ASC.
    */
   async listDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult> {
+    return this.listDeckMeaningsInternal(userId, opts, {
+      meaningVerified: true,
+      requireWordVerified: true,
+    });
+  }
+
+  async listCheckDeckMeanings(
+    userId: string,
+    opts: VoteDeckListOptions,
+  ): Promise<VoteDeckListResult> {
+    return this.listDeckMeaningsInternal(userId, opts, {
+      meaningVerified: false,
+      requireWordVerified: false,
+    });
+  }
+
+  /**
+   * Inti query deck / check-deck. Beda hanya filter `is_verified`.
+   * Check-deck: makna belum verified (Periksa Kata); deck: sudah verified.
+   */
+  private async listDeckMeaningsInternal(
+    userId: string,
+    opts: VoteDeckListOptions,
+    trust: { meaningVerified: boolean; requireWordVerified: boolean },
+  ): Promise<VoteDeckListResult> {
     const approvedAtExpr = sql`COALESCE(${words.verifiedAt}, ${words.createdAt})`;
     // 0101: total dari tabel ringkasan makna - bukan COUNT(*) correlated.
     const totalVotesExpr = sql<number>`coalesce(${meaningVoteCounts.total}, 0)`.mapWith(Number);
@@ -1349,7 +1374,8 @@ if (articleCommentIds.length > 0) {
         languageCode: languages.code,
         wordType: words.wordType,
         usageLabels: words.usageLabels,
-        isVerified: words.isVerified,
+        // Trust per makna (bukan rollup lemma) - check-deck butuh false.
+        isVerified: meanings.isVerified,
         status: words.status,
         verifiedAt: words.verifiedAt,
         createdAt: words.createdAt,
@@ -1390,10 +1416,10 @@ if (articleCommentIds.length > 0) {
         and(
           isNull(meanings.deletedAt),
           eq(meanings.status, 'published'),
-          eq(meanings.isVerified, true),
+          eq(meanings.isVerified, trust.meaningVerified),
           isNull(words.deletedAt),
           eq(words.status, 'published'),
-          eq(words.isVerified, true),
+          trust.requireWordVerified ? eq(words.isVerified, true) : undefined,
           feedSafe,
           userNotVoted,
           userNotSkipped,

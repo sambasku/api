@@ -310,8 +310,15 @@ export interface VoteRepository {
    * Antrean MAKNA published yang user belum vote dan belum skip
    * (34-api-vote-deck.md; 0101: deck per makna, bukan per kata).
    * Urut total vote Asc, lalu approved_at Asc, id Asc. LIMIT+1 has_more.
+   * Filter trust: makna + kata **sudah** `is_verified`.
    */
   listDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;
+
+  /**
+   * Antrean Periksa Kata: makna published **belum** verified, user belum
+   * vote/skip (docs/produk/periksa-kata.md). Shape sama VoteDeckMeaning.
+   */
+  listCheckDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;
 
   /**
    * List vote admin cursor pagination compound (created_at, id) desc.

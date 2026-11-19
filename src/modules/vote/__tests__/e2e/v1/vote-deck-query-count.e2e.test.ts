@@ -68,6 +68,29 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
       })),
     );
     await seedDb.insert(meanings).values(meaningRows);
+
+    // Check-deck seed: 5 kata unverified x 1 makna
+    const checkWords = Array.from({ length: 5 }, (_, i) => ({
+      id: `01DQCUW${String(i).padStart(18, '0')}`,
+      lemma: `cek${i}`,
+      languageId: '01E3LANGQC0000000000000001',
+      status: 'published' as const,
+      isVerified: false,
+      createdBy: 'u_dqc1',
+      wordType: 'word',
+    }));
+    await seedDb.insert(words).values(checkWords);
+    await seedDb.insert(meanings).values(
+      checkWords.map((w, i) => ({
+        id: `01DQCUM${String(i).padStart(19, '0')}`,
+        wordId: w.id,
+        definition: `makna cek ${i}`,
+        isHaveDefinition: true,
+        orderIndex: 0,
+        status: 'published' as const,
+        isVerified: false,
+      })),
+    );
   });
 
   beforeEach(async () => {
@@ -110,5 +133,17 @@ describe.skipIf(!hasTestDb)('Subrequest budget 0101 - query count deck per makna
       expect(item.pronunciationValue).toBeNull();
       expect(item.hasAudio).toBe(false);
     }
+  });
+
+  it('check-deck per makna pakai <= 3 query + hanya unverified', async () => {
+    const { VoteRepositoryImpl } = await import(
+      '@/modules/vote/infrastructure/vote.repository.impl'
+    );
+    queryCount = 0;
+    const repo = new VoteRepositoryImpl(db);
+    const page = await repo.listCheckDeckMeanings('u_dqc1', { limit: 20, randomize: false });
+    expect(page.items.length).toBeGreaterThan(0);
+    expect(page.items.every((m) => m.isVerified === false)).toBe(true);
+    expect(queryCount).toBeLessThanOrEqual(3);
   });
 });
