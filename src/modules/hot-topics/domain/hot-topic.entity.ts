@@ -1,4 +1,4 @@
-export type HotTopicTab = 'searched' | 'proposed' | 'near_threshold';
+export type HotTopicTab = 'searched' | 'proposed' | 'viewed';
 
 export interface HotTopicTabMeta {
   inWindow: number;
@@ -25,20 +25,18 @@ export interface HotProposedItem {
   inWindow: boolean;
 }
 
-export interface HotNearThresholdItem {
-  kind: 'meaning_vote';
-  meaningId: string;
+/** Top lemma by unique viewers (word_views). Window = hari WIB ini. */
+export interface HotViewedItem {
+  kind: 'word_view';
   wordId: string;
   lemma: string;
-  definitionPreview: string | null;
-  net: number;
-  upvotes: number;
-  downvotes: number;
+  viewCount: number;
+  lastViewedDay: string;
   inWindow: boolean;
 }
 
 export interface HotTopicsResult {
   searched: { items: HotSearchedItem[]; meta: HotTopicTabMeta };
   proposed: { items: HotProposedItem[]; meta: HotTopicTabMeta };
-  nearThreshold: { items: HotNearThresholdItem[]; meta: HotTopicTabMeta };
+  viewed: { items: HotViewedItem[]; meta: HotTopicTabMeta };
 }

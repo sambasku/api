@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
+import { searchDayWib } from '@/shared/database/drizzle/schema/search-daily.schema';
 
 const { parsed } = config({ path: '.env.test', quiet: true });
 const hasTestDb = !!parsed?.DATABASE_URL;
@@ -7,7 +8,7 @@ if (parsed?.DATABASE_URL) process.env.DATABASE_URL = parsed.DATABASE_URL;
 
 /**
  * G5: GET /hot-topics = 3 tab paralel → target ≤3 query Turso / request
- * (Promise.all searched + proposed + near_threshold).
+ * (Promise.all searched + proposed + viewed).
  */
 describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
   beforeAll(async () => {
@@ -22,22 +23,13 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
       code: 'sbb',
       name: 'Sambas',
     });
-    await db.insert(schema.users).values([
-      {
-        id: 'u_htqc1',
-        username: 'htqcuser',
-        displayName: 'Hot QC',
-        email: 'htqc@test.com',
-        passwordHash: 'bukan-hash-login',
-      },
-      ...[1, 2, 3].map((i) => ({
-        id: `u_htqc_v${i}`,
-        username: `htqcvoter${i}`,
-        displayName: `Voter ${i}`,
-        email: `htqcv${i}@test.com`,
-        passwordHash: 'bukan-hash-login',
-      })),
-    ]);
+    await db.insert(schema.users).values({
+      id: 'u_htqc1',
+      username: 'htqcuser',
+      displayName: 'Hot QC',
+      email: 'htqc@test.com',
+      passwordHash: 'bukan-hash-login',
+    });
     await db.insert(schema.words).values({
       id: 'w_htqc1',
       lemma: 'makatn',
@@ -46,15 +38,6 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
       isVerified: false,
       createdBy: 'u_htqc1',
       wordType: 'word',
-    });
-    await db.insert(schema.meanings).values({
-      id: 'm_htqc1',
-      wordId: 'w_htqc1',
-      definition: 'makan',
-      status: 'published',
-      isVerified: false,
-      orderIndex: 0,
-      createdBy: 'u_htqc1',
     });
     const now = new Date();
     await db.insert(schema.searchMisses).values({
@@ -75,18 +58,21 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
       status: 'pending',
       createdAt: now,
     });
-    // Net = 3 → masuk near_threshold (2 ≤ abs(net) < 5)
-    await db.insert(schema.votes).values(
-      [1, 2, 3].map((i) => ({
-        id: `v_htqc${i}`,
-        entityType: 'meaning' as const,
-        entityId: 'm_htqc1',
-        userId: `u_htqc_v${i}`,
-        value: 1,
-        createdAt: now,
-        updatedAt: now,
-      })),
-    );
+    // Views hari ini → masuk tab viewed (in_window).
+    await db.insert(schema.wordViews).values([
+      {
+        wordId: 'w_htqc1',
+        day: searchDayWib(now),
+        viewerKey: 'u:u_htqc1',
+        count: 1,
+      },
+      {
+        wordId: 'w_htqc1',
+        day: searchDayWib(now),
+        viewerKey: 'd:device-htqc',
+        count: 1,
+      },
+    ]);
   });
 
   it('listAllTabs <= 3 query (satu per tab, paralel)', async () => {
@@ -110,7 +96,9 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
     const result = await repo.listAllTabs(10);
     expect(result.searched.items.length).toBeGreaterThan(0);
     expect(result.proposed.items.length).toBeGreaterThan(0);
-    expect(result.nearThreshold.items.length).toBeGreaterThan(0);
+    expect(result.viewed.items.length).toBeGreaterThan(0);
+    expect(result.viewed.items[0]?.viewCount).toBe(2);
+    expect(result.viewed.items[0]?.inWindow).toBe(true);
     expect(queryCount).toBeLessThanOrEqual(3);
   });
 });

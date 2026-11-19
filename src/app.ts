@@ -1621,7 +1621,7 @@ const searchMissController = new SearchMissController({
 
 const hotTopicsRepo = new HotTopicsRepositoryImpl(db);
 const hotTopicsController = new HotTopicsController({
-  list: new ListHotTopicsUseCase(hotTopicsRepo),
+  list: new ListHotTopicsUseCase(hotTopicsRepo, commentBlocklistRepo),
 });
 
 const languageController = new LanguageController({

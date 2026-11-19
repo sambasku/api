@@ -31,15 +31,12 @@ const proposedItemSchema = z.object({
   in_window: z.boolean(),
 });
 
-const nearThresholdItemSchema = z.object({
-  kind: z.literal('meaning_vote'),
-  meaning_id: z.string(),
+const viewedItemSchema = z.object({
+  kind: z.literal('word_view'),
   word_id: z.string(),
   lemma: z.string(),
-  definition_preview: z.string().nullable(),
-  net: z.number().int(),
-  upvotes: z.number().int(),
-  downvotes: z.number().int(),
+  view_count: z.number().int(),
+  last_viewed_day: z.string(),
   in_window: z.boolean(),
 });
 
@@ -54,8 +51,8 @@ export const hotTopicsResponseSchema = z.object({
       items: z.array(proposedItemSchema),
       meta: tabMetaSchema,
     }),
-    near_threshold: z.object({
-      items: z.array(nearThresholdItemSchema),
+    viewed: z.object({
+      items: z.array(viewedItemSchema),
       meta: tabMetaSchema,
     }),
   }),

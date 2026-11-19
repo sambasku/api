@@ -41,22 +41,19 @@ export class HotTopicsController {
             backfill_used: result.proposed.meta.backfillUsed,
           },
         },
-        near_threshold: {
-          items: result.nearThreshold.items.map((i) => ({
+        viewed: {
+          items: result.viewed.items.map((i) => ({
             kind: i.kind,
-            meaning_id: i.meaningId,
             word_id: i.wordId,
             lemma: i.lemma,
-            definition_preview: i.definitionPreview,
-            net: i.net,
-            upvotes: i.upvotes,
-            downvotes: i.downvotes,
+            view_count: i.viewCount,
+            last_viewed_day: i.lastViewedDay,
             in_window: i.inWindow,
           })),
           meta: {
-            in_window: result.nearThreshold.meta.inWindow,
-            backfilled: result.nearThreshold.meta.backfilled,
-            backfill_used: result.nearThreshold.meta.backfillUsed,
+            in_window: result.viewed.meta.inWindow,
+            backfilled: result.viewed.meta.backfilled,
+            backfill_used: result.viewed.meta.backfillUsed,
           },
         },
       },

@@ -4,26 +4,34 @@ import {
   meaningTranslations,
   meanings,
   searchMisses,
-  votes,
   wordVariants,
+  wordViews,
   words,
 } from '@/shared/database/drizzle/schema';
+import { searchDayWib } from '@/shared/database/drizzle/schema/search-daily.schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import {
-  VOTING_WARGA_NET_THRESHOLD,
-} from '@/shared/constants/voting-warga';
+import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
 import type {
-  HotNearThresholdItem,
   HotProposedItem,
   HotSearchedItem,
   HotTopicTabMeta,
   HotTopicsResult,
+  HotViewedItem,
 } from '../domain/hot-topic.entity';
 import type { HotTopicsRepository } from '../domain/hot-topics.repository';
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 const WINDOW_MS = MS_DAY;
 const BACKFILL_MS = 7 * MS_DAY;
+/** Jumlah hari kalender WIB untuk backfill views (termasuk hari ini). */
+const VIEW_BACKFILL_DAYS = 7;
+
+/** Sembunyikan lemma berlabel seksual / diskriminatif / kasar / tabu. */
+function withoutExcludedUsageLabels() {
+  return FEED_EXCLUDED_USAGE_LABELS.map(
+    (label) => sql`${words.usageLabels} NOT LIKE ${`%\"${label}\"%`}`,
+  );
+}
 
 /** Fulfilment lemma: kata published lemma=term ATAU varian form=term. */
 const lemmaFulfilledSql = sql`(
@@ -77,13 +85,13 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
     const windowStart = new Date(now - WINDOW_MS);
     const backfillStart = new Date(now - BACKFILL_MS);
 
-    const [searched, proposed, nearThreshold] = await Promise.all([
+    const [searched, proposed, viewed] = await Promise.all([
       this.listSearched(limit, windowStart, backfillStart),
       this.listProposed(limit, windowStart, backfillStart),
-      this.listNearThreshold(limit, windowStart, backfillStart),
+      this.listViewed(limit),
     ]);
 
-    return { searched, proposed, nearThreshold };
+    return { searched, proposed, viewed };
   }
 
   private async listSearched(
@@ -137,7 +145,8 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
       else backfillItems.push(item);
     }
 
-    const items = [...windowItems, ...backfillItems].slice(0, limit);
+    // Pool oversized: use case saring blocklist lalu potong ke `limit`.
+    const items = [...windowItems, ...backfillItems];
     const inWindowCount = items.filter((i) => i.inWindow).length;
     return { items, meta: tabMeta(inWindowCount, items.length) };
   }
@@ -163,6 +172,7 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
           isNull(contributions.deletedAt),
           isNull(words.deletedAt),
           gte(contributions.createdAt, backfillStart),
+          ...withoutExcludedUsageLabels(),
         ),
       )
       .orderBy(desc(contributions.createdAt), desc(contributions.id))
@@ -185,92 +195,71 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
       else backfillItems.push(item);
     }
 
-    const items = [...windowItems, ...backfillItems].slice(0, limit);
+    // Pool oversized: use case saring blocklist lalu potong ke `limit`.
+    const items = [...windowItems, ...backfillItems];
     const inWindowCount = items.filter((i) => i.inWindow).length;
     return { items, meta: tabMeta(inWindowCount, items.length) };
   }
 
-  private async listNearThreshold(
+  /**
+   * Top lemma by unique viewers. Jendela = hari WIB ini; kalau kurang dari
+   * limit, isi sisa dari agregat 7 hari kalender WIB (tanpa duplikat).
+   * `word_views` bergranularitas hari, bukan rolling 24 jam wall-clock.
+   */
+  private async listViewed(
     limit: number,
-    windowStart: Date,
-    backfillStart: Date,
-  ): Promise<{ items: HotNearThresholdItem[]; meta: HotTopicTabMeta }> {
-    const netExpr = sql<number>`coalesce(sum(${votes.value}), 0)`.mapWith(Number);
-    const upExpr = sql<number>`coalesce(sum(case when ${votes.value} = 1 then 1 else 0 end), 0)`.mapWith(
+  ): Promise<{ items: HotViewedItem[]; meta: HotTopicTabMeta }> {
+    const today = searchDayWib(new Date());
+    const from = searchDayWib(
+      new Date(Date.now() - (VIEW_BACKFILL_DAYS - 1) * MS_DAY),
+    );
+    const todayViewsExpr = sql<number>`coalesce(sum(case when ${wordViews.day} = ${today} then 1 else 0 end), 0)`.mapWith(
       Number,
     );
-    const downExpr = sql<number>`coalesce(sum(case when ${votes.value} = -1 then 1 else 0 end), 0)`.mapWith(
-      Number,
-    );
-    // Kolom votes.*At = unix detik (drizzle mode timestamp). MAX raw = detik.
-    const lastVoteSecExpr = sql<number>`max(coalesce(${votes.updatedAt}, ${votes.createdAt}))`.mapWith(
-      Number,
-    );
-    const backfillSec = Math.floor(backfillStart.getTime() / 1000);
+    const viewsExpr = sql<number>`count(*)`.mapWith(Number);
+    const lastDayExpr = sql<string>`max(${wordViews.day})`;
 
-    // Net mendekati ambang Voting Warga (±5) tapi belum sampai / belum verified.
-    const threshold = VOTING_WARGA_NET_THRESHOLD;
     const rows = await this.db
       .select({
-        meaningId: votes.entityId,
-        wordId: meanings.wordId,
+        wordId: wordViews.wordId,
         lemma: words.lemma,
-        definition: meanings.definition,
-        net: netExpr,
-        upvotes: upExpr,
-        downvotes: downExpr,
-        lastVoteSec: lastVoteSecExpr,
+        todayViews: todayViewsExpr,
+        views: viewsExpr,
+        lastViewedDay: lastDayExpr,
       })
-      .from(votes)
-      .innerJoin(meanings, eq(meanings.id, votes.entityId))
-      .innerJoin(words, eq(words.id, meanings.wordId))
+      .from(wordViews)
+      .innerJoin(words, eq(words.id, wordViews.wordId))
       .where(
         and(
-          eq(votes.entityType, 'meaning'),
-          eq(meanings.status, 'published'),
-          isNull(meanings.deletedAt),
-          eq(meanings.isVerified, false),
-          isNull(words.deletedAt),
+          gte(wordViews.day, from),
           eq(words.status, 'published'),
+          isNull(words.deletedAt),
+          ...withoutExcludedUsageLabels(),
         ),
       )
-      .groupBy(
-        votes.entityId,
-        meanings.wordId,
-        words.lemma,
-        meanings.definition,
-      )
-      .having(
-        and(
-          sql`abs(${netExpr}) >= 2`,
-          sql`abs(${netExpr}) < ${threshold}`,
-          sql`${lastVoteSecExpr} >= ${backfillSec}`,
-        ),
-      )
-      .orderBy(sql`abs(${netExpr}) desc`, desc(netExpr))
+      .groupBy(wordViews.wordId, words.lemma)
+      .orderBy(sql`${todayViewsExpr} desc`, sql`${viewsExpr} desc`, words.lemma)
       .limit(limit * 3);
 
-    const windowItems: HotNearThresholdItem[] = [];
-    const backfillItems: HotNearThresholdItem[] = [];
+    const windowItems: HotViewedItem[] = [];
+    const backfillItems: HotViewedItem[] = [];
     for (const r of rows) {
-      const last = new Date(r.lastVoteSec * 1000);
-      const inWindow = last.getTime() >= windowStart.getTime();
-      const item: HotNearThresholdItem = {
-        kind: 'meaning_vote',
-        meaningId: r.meaningId,
+      const inWindow = r.todayViews > 0;
+      const item: HotViewedItem = {
+        kind: 'word_view',
         wordId: r.wordId,
         lemma: r.lemma,
-        definitionPreview: r.definition?.trim() ? r.definition.trim().slice(0, 120) : null,
-        net: r.net,
-        upvotes: r.upvotes,
-        downvotes: r.downvotes,
+        // Window: hit hari ini; backfill: total 7 hari.
+        viewCount: inWindow ? r.todayViews : r.views,
+        lastViewedDay: r.lastViewedDay,
         inWindow,
       };
       if (inWindow) windowItems.push(item);
       else backfillItems.push(item);
     }
 
-    const items = [...windowItems, ...backfillItems].slice(0, limit);
+    // Pool oversized: use case saring blocklist lalu potong ke `limit`.
+    const items = [...windowItems, ...backfillItems];
     const inWindowCount = items.filter((i) => i.inWindow).length;
     return { items, meta: tabMeta(inWindowCount, items.length) };
   }
