@@ -873,6 +873,36 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
     });
   });
 
+  it('G3b: lemma ≠ miss + variants form = miss.term → lolos', async () => {
+    const { useCase, searchMissRepo, wordRepo } = makeDeps();
+    searchMissRepo.findById = vi.fn().mockResolvedValue({
+      id: MISS_ID,
+      term: 'kalllak',
+      direction: 'lemma',
+      hitCount: 1,
+      lastSearchedAt: new Date(),
+      isFulfilled: false,
+      isVisible: true,
+      createdAt: new Date(),
+    });
+    const result = await useCase.execute(
+      makeDto({
+        searchMissId: MISS_ID,
+        lemma: 'kalak',
+        variants: [{ form: 'kalllak', variantType: 'alternative' }],
+      }),
+      ADMIN,
+    );
+    expect(result.searchMissId).toBe(MISS_ID);
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        searchMissId: MISS_ID,
+        lemma: 'kalak',
+      }),
+      ADMIN.userId,
+    );
+  });
+
   it('direction=translation: soft-check teks terjemahan pertama', async () => {
     const { useCase, searchMissRepo } = makeDeps();
     searchMissRepo.findById = vi.fn().mockResolvedValue({
@@ -906,6 +936,47 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
         ADMIN,
       ),
     ).rejects.toMatchObject({ errorCode: 'SEARCH_MISS_TERM_MISMATCH' });
+  });
+
+  it('G3b: translation koreksi - padanan benar + typo miss di translations → lolos', async () => {
+    const { useCase, searchMissRepo } = makeDeps();
+    searchMissRepo.findById = vi.fn().mockResolvedValue({
+      id: MISS_ID,
+      term: 'makann',
+      direction: 'translation',
+      hitCount: 1,
+      lastSearchedAt: new Date(),
+      isFulfilled: false,
+      isVisible: true,
+      createdAt: new Date(),
+    });
+    const result = await useCase.execute(
+      makeDto({
+        searchMissId: MISS_ID,
+        lemma: 'makatn',
+        meanings: [
+          {
+            wordClassId: '01WORDCLASSESNOMINA000000',
+            definition: 'Aktivitas memasukkan makanan ke mulut',
+            orderIndex: 1,
+            translations: [
+              {
+                languageId: '01LANGUAGESINDONESIA00000',
+                translationText: 'makan',
+                translationType: 'direct',
+              },
+              {
+                languageId: '01LANGUAGESINDONESIA00000',
+                translationText: 'makann',
+                translationType: 'direct',
+              },
+            ],
+          },
+        ],
+      }),
+      ADMIN,
+    );
+    expect(result.searchMissId).toBe(MISS_ID);
   });
 
   it('tanpa search_miss_id + term lemma cocok → auto-attach (#262)', async () => {

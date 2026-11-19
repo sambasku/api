@@ -25,7 +25,13 @@ export interface SearchWordsQuery {
 }
 
 export interface SearchWordsResult extends CursorPage<WordSummary> {
-  meta: { limit: number; next_cursor: string | null; has_more: boolean };
+  meta: {
+    limit: number;
+    next_cursor: string | null;
+    has_more: boolean;
+    /** G3b: id miss yang baru/di-upsert saat 0 hasil (untuk CTA koreksi). */
+    search_miss_id?: string | null;
+  };
 }
 
 // Searchable dropdown sinonim/antonim di form admin - HANYA kata
@@ -92,6 +98,7 @@ export class SearchWordsUseCase {
       }
     }
 
+    let searchMissId: string | null = null;
     if (items.length === 0 && query.q.trim().length >= 2) {
       // Best-effort: kegagalan pencatatan tidak boleh membatalkan response
       try {
@@ -105,6 +112,7 @@ export class SearchWordsUseCase {
           searcherId: viewerId,
           preferVisible,
         });
+        searchMissId = recorded?.id ?? null;
         // G3: event feed saat pertama kali auto-tayang (dedupe sama PATCH admin).
         if (recorded?.becameVisible) {
           await this.activityEvents?.safe({
@@ -123,7 +131,12 @@ export class SearchWordsUseCase {
       items,
       nextCursor,
       hasMore,
-      meta: { limit: query.limit, next_cursor: nextCursor, has_more: hasMore },
+      meta: {
+        limit: query.limit,
+        next_cursor: nextCursor,
+        has_more: hasMore,
+        ...(searchMissId ? { search_miss_id: searchMissId } : {}),
+      },
     };
   }
 }

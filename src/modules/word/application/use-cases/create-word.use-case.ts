@@ -403,25 +403,41 @@ export class CreateWordUseCase {
       throw new NotFoundError('SEARCH_MISS_NOT_FOUND', 'Search miss tidak ditemukan');
     }
     if (miss.direction === 'lemma') {
-      if (normalizeSearchMissTerm(dto.lemma) !== miss.term) {
+      const lemmaMatches = normalizeSearchMissTerm(dto.lemma) === miss.term;
+      // G3b: lemma ≠ miss.term boleh jika miss.term ada di variants[].form
+      // (koreksi ejaan: lemma kanonik + typo jadi varian).
+      const typoAsVariant = (dto.variants ?? []).some(
+        (v) => normalizeSearchMissTerm(v.form) === miss.term,
+      );
+      if (!lemmaMatches && !typoAsVariant) {
         throw new BadRequestError(
           'SEARCH_MISS_TERM_MISMATCH',
           'Lemma tidak cocok dengan istilah search miss',
-          [{ field: 'lemma', message: `Harus cocok dengan miss term "${miss.term}"` }],
+          [
+            {
+              field: 'lemma',
+              message: `Harus cocok dengan miss term "${miss.term}", atau sertakan term itu di variants[].form`,
+            },
+          ],
         );
       }
       return;
     }
-    // direction=translation → soft-check teks terjemahan pertama
-    const firstText = dto.meanings[0]?.translations[0]?.translationText ?? '';
-    if (normalizeSearchMissTerm(firstText) !== miss.term) {
+    // direction=translation → soft-check: salah satu terjemahan = miss.term
+    // (G3b: padanan benar di urutan pertama + typo miss sebagai terjemahan lain).
+    const anyTranslationMatches = (dto.meanings ?? []).some((m) =>
+      (m.translations ?? []).some(
+        (t) => normalizeSearchMissTerm(t.translationText) === miss.term,
+      ),
+    );
+    if (!anyTranslationMatches) {
       throw new BadRequestError(
         'SEARCH_MISS_TERM_MISMATCH',
         'Terjemahan tidak cocok dengan istilah search miss',
         [
           {
             field: 'meanings.0.translations.0.translation_text',
-            message: `Harus cocok dengan miss term "${miss.term}"`,
+            message: `Salah satu terjemahan harus cocok dengan miss term "${miss.term}"`,
           },
         ],
       );
