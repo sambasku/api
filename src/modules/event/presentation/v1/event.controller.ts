@@ -77,8 +77,8 @@ function serialize(
     name: string;
     description: string;
     categoryId: string;
-    startsAt: Date;
-    endsAt: Date;
+    startsAt: Date | null;
+    endsAt: Date | null;
     locationText: string;
     lat: number | null;
     lng: number | null;
@@ -122,8 +122,8 @@ function serialize(
     description: event.description,
     category_id: event.categoryId,
     category: extra?.category ?? null,
-    starts_at: event.startsAt.toISOString(),
-    ends_at: event.endsAt.toISOString(),
+    starts_at: event.startsAt ? event.startsAt.toISOString() : null,
+    ends_at: event.endsAt ? event.endsAt.toISOString() : null,
     occurrence_status: occurrenceStatus(event),
     location_text: event.locationText,
     lat: event.lat,
@@ -329,9 +329,9 @@ export class EventController {
         name: body.name,
         description: body.description,
         categoryId: body.category_id,
-        startsAt: body.starts_at,
-        endsAt: body.ends_at,
-        locationText: body.location_text,
+        startsAt: body.starts_at ?? null,
+        endsAt: body.ends_at ?? null,
+        locationText: body.location_text ?? "",
         lat: body.lat,
         lng: body.lng,
         mapsUrl: body.maps_url,

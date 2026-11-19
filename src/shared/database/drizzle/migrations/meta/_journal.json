@@ -1247,6 +1247,13 @@
       "when": 1801677000000,
       "tag": "0178_sponsorships_tier_usaha_ends_on",
       "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "6",
+      "when": 1801678000000,
+      "tag": "0179_events_times_nullable",
+      "breakpoints": true
     }
   ]
 }

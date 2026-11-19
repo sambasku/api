@@ -96,7 +96,11 @@ export class CreateEventUseCase {
   ) {}
 
   async execute(input: CreateEventInput): Promise<EventListItem> {
-    if (input.endsAt < input.startsAt) {
+    if (
+      input.startsAt &&
+      input.endsAt &&
+      input.endsAt.getTime() < input.startsAt.getTime()
+    ) {
       throw new BadRequestError(
         "INVALID_SCHEDULE",
         "Waktu selesai tidak boleh sebelum mulai",
@@ -164,9 +168,14 @@ export class UpdateEventUseCase {
     if (!existing) {
       throw new NotFoundError("EVENT_NOT_FOUND", "Event tidak ditemukan");
     }
-    const startsAt = input.startsAt ?? existing.startsAt;
-    const endsAt = input.endsAt ?? existing.endsAt;
-    if (endsAt < startsAt) {
+    const startsAt =
+      input.startsAt !== undefined ? input.startsAt : existing.startsAt;
+    const endsAt = input.endsAt !== undefined ? input.endsAt : existing.endsAt;
+    if (
+      startsAt &&
+      endsAt &&
+      endsAt.getTime() < startsAt.getTime()
+    ) {
       throw new BadRequestError(
         "INVALID_SCHEDULE",
         "Waktu selesai tidak boleh sebelum mulai",

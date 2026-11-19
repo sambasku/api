@@ -17,17 +17,31 @@ function optionalCoord(schema: z.ZodNumber) {
 const sambasLat = optionalCoord(z.number().min(1.0).max(1.8));
 const sambasLng = optionalCoord(z.number().min(108.5).max(110.0));
 
+
+/** Query admin list usulan: periksa (pending) atau riwayat (decided) + cari. */
+export const listEventContributionsQuerySchema = z
+  .object({
+    status: z
+      .enum(["pending", "needs_revision", "approved", "rejected"])
+      .optional(),
+    /** "1" = usulan sudah diputus (approved|rejected|needs_revision). Diabaikan bila status diisi. */
+    decided: z.literal("1").optional(),
+    q: z.string().max(120).optional(),
+  })
+  .strict();
+
 /** Body usulan acara - boleh anonim (pola place-contribution). */
 export const submitEventContributionBodySchema = z
   .object({
     /** Slug dari pengusul diabaikan - slug final dibuat saat approve. */
     slug: z.string().max(120).optional(),
     name: z.string().min(1).max(200),
-    description: z.string().min(1).max(8000),
+    description: z.string().max(8000).default(""),
     category_id: eventCategorySchema,
+    /** Tanggal mulai wajib di usulan. */
     starts_at: z.coerce.date(),
-    ends_at: z.coerce.date(),
-    location_text: z.string().min(1).max(500),
+    ends_at: z.coerce.date().nullable().optional(),
+    location_text: z.string().max(500).default(""),
     lat: sambasLat,
     lng: sambasLng,
     maps_url: z.string().url().startsWith("https://").nullable().optional(),
@@ -47,7 +61,10 @@ export const submitEventContributionBodySchema = z
   })
   .strict()
   .superRefine((v, ctx) => {
-    if (v.ends_at.getTime() < v.starts_at.getTime()) {
+    if (
+      v.ends_at &&
+      v.ends_at.getTime() < v.starts_at.getTime()
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Waktu selesai tidak boleh sebelum waktu mulai",

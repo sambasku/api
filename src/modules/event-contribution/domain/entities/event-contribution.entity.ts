@@ -16,7 +16,7 @@ export interface EventContributionPayload {
   description: string;
   categoryId: string;
   startsAt: string;
-  endsAt: string;
+  endsAt: string | null;
   locationText: string;
   lat: number | null;
   lng: number | null;

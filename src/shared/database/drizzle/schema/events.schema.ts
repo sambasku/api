@@ -37,8 +37,10 @@ export const events = sqliteTable(
     categoryId: text('category_id')
       .notNull()
       .references(() => eventCategories.id),
-    startsAt: integer('starts_at', { mode: 'timestamp' }).notNull(),
-    endsAt: integer('ends_at', { mode: 'timestamp' }).notNull(),
+    /** Null = tanggal belum diketahui (draft / barebone tanpa jadwal). */
+    startsAt: integer('starts_at', { mode: 'timestamp' }),
+    /** Null = tanpa waktu selesai; baca pakai endsAt ?? startsAt. */
+    endsAt: integer('ends_at', { mode: 'timestamp' }),
     locationText: text('location_text').notNull(),
     lat: real('lat'),
     lng: real('lng'),
@@ -80,7 +82,10 @@ export const events = sqliteTable(
     index('events_status_idx').on(t.status),
     index('events_starts_at_idx').on(t.startsAt),
     index('events_status_starts_at_idx').on(t.status, t.startsAt),
-    check('events_ends_after_starts', sql`${t.endsAt} >= ${t.startsAt}`),
+    check(
+      'events_ends_after_starts',
+      sql`${t.endsAt} IS NULL OR ${t.startsAt} IS NULL OR ${t.endsAt} >= ${t.startsAt}`,
+    ),
   ],
 );
 

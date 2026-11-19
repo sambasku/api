@@ -57,11 +57,14 @@ const eventBodyFields = {
       "Slug hanya huruf kecil, angka, hyphen",
     ),
   name: z.string().min(1).max(200),
-  description: z.string().min(1).max(8000),
+  /** Boleh kosong (barebone). */
+  description: z.string().max(8000).default(""),
   category_id: eventCategorySchema,
-  starts_at: z.coerce.date(),
-  ends_at: z.coerce.date(),
-  location_text: z.string().min(1).max(500),
+  /** Tanggal wajib di usulan; admin draft boleh null. */
+  starts_at: z.coerce.date().nullable().optional(),
+  ends_at: z.coerce.date().nullable().optional(),
+  /** Boleh kosong (barebone). */
+  location_text: z.string().max(500).default(""),
   lat: sambasLat,
   lng: sambasLng,
   maps_url: z.string().url().startsWith("https://").nullable().optional(),
@@ -86,7 +89,11 @@ export const createEventBodySchema = z
   .object(eventBodyFields)
   .strict()
   .superRefine((v, ctx) => {
-    if (v.ends_at.getTime() < v.starts_at.getTime()) {
+    if (
+      v.starts_at &&
+      v.ends_at &&
+      v.ends_at.getTime() < v.starts_at.getTime()
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Waktu selesai tidak boleh sebelum waktu mulai",
@@ -206,8 +213,8 @@ export const eventResponseSchema = z.object({
   description: z.string(),
   category_id: z.string(),
   category: eventCategoryRefSchema.nullable(),
-  starts_at: z.string(),
-  ends_at: z.string(),
+  starts_at: z.string().nullable(),
+  ends_at: z.string().nullable(),
   /** Status pelaksanaan - diturunkan read-time, tidak disimpan. */
   occurrence_status: z.enum([
     "upcoming",

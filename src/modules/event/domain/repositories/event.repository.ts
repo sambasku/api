@@ -37,8 +37,8 @@ export interface CreateEventInput {
   name: string;
   description: string;
   categoryId: string;
-  startsAt: Date;
-  endsAt: Date;
+  startsAt: Date | null;
+  endsAt: Date | null;
   locationText: string;
   lat?: number | null;
   lng?: number | null;
@@ -61,8 +61,8 @@ export interface UpdateEventInput {
   name?: string;
   description?: string;
   categoryId?: string;
-  startsAt?: Date;
-  endsAt?: Date;
+  startsAt?: Date | null;
+  endsAt?: Date | null;
   locationText?: string;
   lat?: number | null;
   lng?: number | null;

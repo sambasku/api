@@ -5,7 +5,10 @@ import type { z } from "zod";
 import type { EventContribution } from "../../domain/entities/event-contribution.entity";
 import type { EventContributionUseCases } from "../../application/event-contribution.use-cases";
 import { composeEventRejectDisplay } from "../../domain/event-reject-reason";
-import type { submitEventContributionBodySchema } from "./validators/event-contribution.validator";
+import type {
+  listEventContributionsQuerySchema,
+  submitEventContributionBodySchema,
+} from "./validators/event-contribution.validator";
 
 function serialize(row: EventContribution) {
   const p = row.payload;
@@ -51,7 +54,7 @@ function toPayload(body: z.infer<typeof submitEventContributionBodySchema>) {
     description: body.description,
     categoryId: body.category_id,
     startsAt: body.starts_at.toISOString(),
-    endsAt: body.ends_at.toISOString(),
+    endsAt: body.ends_at ? body.ends_at.toISOString() : null,
     locationText: body.location_text,
     lat: body.lat ?? null,
     lng: body.lng ?? null,
@@ -104,9 +107,16 @@ export class EventContributionController {
       .then((row) => c.json({ success: true as const, data: serialize(row) }));
   }
 
-  listPending(c: Context<{ Variables: AppVariables }>) {
+  listPending(
+    c: Context<{ Variables: AppVariables }>,
+    query: z.infer<typeof listEventContributionsQuerySchema>,
+  ) {
     return this.uc
-      .listPending()
+      .listAdmin({
+        status: query.status,
+        decided: query.decided === "1",
+        q: query.q,
+      })
       .then((rows) =>
         c.json({ success: true as const, data: { items: rows.map(serialize) } }),
       );

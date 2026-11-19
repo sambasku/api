@@ -389,7 +389,17 @@ export class EventRepositoryImpl implements EventRepository {
       const q = `%${input.q.trim()}%`;
       conds.push(or(ilikeCompat(events.name, q), ilikeCompat(events.slug, q))!);
     }
-    if (input.notEnded) conds.push(gte(events.endsAt, new Date()));
+    if (input.notEnded) {
+      // ends_at null → pakai starts_at; keduanya null = belum selesai.
+      const now = new Date();
+      conds.push(
+        or(
+          gte(events.endsAt, now),
+          and(isNull(events.endsAt), gte(events.startsAt, now)),
+          and(isNull(events.endsAt), isNull(events.startsAt)),
+        )!,
+      );
+    }
     if (input.placeId) {
       // Subquery EXISTS - satu query, tanpa N+1.
       const sub = this.db
@@ -402,8 +412,14 @@ export class EventRepositoryImpl implements EventRepository {
     const useStartsOrder =
       input.overlapsFrom != null && input.overlapsTo != null;
     if (useStartsOrder) {
+      // Skip acara tanpa starts_at; ends_at null → efektif = starts_at.
       conds.push(lt(events.startsAt, input.overlapsTo!));
-      conds.push(gte(events.endsAt, input.overlapsFrom!));
+      conds.push(
+        or(
+          gte(events.endsAt, input.overlapsFrom!),
+          and(isNull(events.endsAt), gte(events.startsAt, input.overlapsFrom!)),
+        )!,
+      );
     }
     // Tanpa overlap: urut created_at (entri baru di atas). Dengan overlap:
     // urut starts_at ASC (agenda). Keyset harus cocok dengan kolom sort.

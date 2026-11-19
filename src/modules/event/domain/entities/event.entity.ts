@@ -31,8 +31,8 @@ export interface Event {
   name: string;
   description: string;
   categoryId: EventCategory;
-  startsAt: Date;
-  endsAt: Date;
+  startsAt: Date | null;
+  endsAt: Date | null;
   /** Lokasi aktual acara. Independen dari relasi wisata/desa (PRD 6.3). */
   locationText: string;
   lat: number | null;
@@ -136,7 +136,9 @@ export function occurrenceStatus(
   now: Date = new Date(),
 ): EventOccurrenceStatus {
   if (event.cancelledAt) return "cancelled";
+  if (!event.startsAt) return "upcoming";
+  const endsAt = event.endsAt ?? event.startsAt;
   if (now < event.startsAt) return "upcoming";
-  if (now > event.endsAt) return "completed";
+  if (now > endsAt) return "completed";
   return "ongoing";
 }

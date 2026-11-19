@@ -1,4 +1,4 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/shared/database/drizzle/client";
 import {
   eventContributions,
@@ -69,10 +69,46 @@ export class EventContributionRepositoryImpl {
   async listByStatus(
     status: EventContributionStatus,
   ): Promise<EventContribution[]> {
+    return this.listAdmin({ status });
+  }
+
+  /**
+   * List admin: filter status tunggal, atau decided (non-pending), plus cari
+   * nama/lokasi di payload_json (1 query).
+   */
+  async listAdmin(input: {
+    status?: EventContributionStatus;
+    decided?: boolean;
+    q?: string;
+  }): Promise<EventContribution[]> {
+    const conds = [];
+    if (input.status) {
+      conds.push(eq(eventContributions.status, input.status));
+    } else if (input.decided) {
+      conds.push(
+        inArray(eventContributions.status, [
+          "approved",
+          "rejected",
+          "needs_revision",
+        ]),
+      );
+    } else {
+      conds.push(eq(eventContributions.status, "pending"));
+    }
+    const q = input.q?.trim();
+    if (q) {
+      const pattern = `%${q.toLowerCase()}%`;
+      conds.push(
+        or(
+          sql`lower(json_extract(${eventContributions.payloadJson}, '$.name')) like ${pattern}`,
+          sql`lower(json_extract(${eventContributions.payloadJson}, '$.locationText')) like ${pattern}`,
+        )!,
+      );
+    }
     const rows = await this.db
       .select()
       .from(eventContributions)
-      .where(eq(eventContributions.status, status))
+      .where(and(...conds))
       .orderBy(desc(eventContributions.createdAt))
       .limit(100);
     return rows.map(mapRow);
