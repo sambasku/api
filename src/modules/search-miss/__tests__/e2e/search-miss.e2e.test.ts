@@ -261,15 +261,10 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
     expect(forbidden.status).toBe(403);
   });
 
-  it('query terlalu pendek (<3 karakter) tidak dicatat; tanpa token panel admin → 401', async () => {
+  it('query terlalu pendek (<2 karakter) tidak dicatat; tanpa token panel admin → 401', async () => {
     await get('/api/v1/words/search?q=a');
-    await get('/api/v1/words/search?q=sa');
     const beranda = await get('/api/v1/search-misses');
-    const terms = ((await beranda.json()).data as { term: string }[]).map(
-      (m) => m.term,
-    );
-    expect(terms.includes('a')).toBe(false);
-    expect(terms.includes('sa')).toBe(false);
+    expect((await beranda.json()).data.some((m: { term: string }) => m.term === 'a')).toBe(false);
 
     expect((await get('/api/v1/admin/search-misses')).status).toBe(401);
   });

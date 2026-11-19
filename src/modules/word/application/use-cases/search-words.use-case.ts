@@ -110,9 +110,9 @@ export class SearchWordsUseCase {
     }
 
     let searchMissId: string | null = null;
-    // Min 3 huruf: "sa"/"ab" typo ketik tidak jadi miss; commit tetap
-    // lewat recordMiss (mobile/web).
-    if (recordMiss && items.length === 0 && query.q.trim().length >= 3) {
+    // Min 2: ada lemma Sambas 2 huruf. Fragment ketik dicegah lewat
+    // recordMiss=false (explore), bukan naikkan min length.
+    if (recordMiss && items.length === 0 && query.q.trim().length >= 2) {
       // Best-effort: kegagalan pencatatan tidak boleh membatalkan response.
       // preferVisible dipisah: gagal resolve (settings/blocklist) jangan
       // mencegah INSERT miss - gejala staging G3 (search 0 hasil tanpa baris).

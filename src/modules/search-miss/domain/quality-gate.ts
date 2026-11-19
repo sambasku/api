@@ -3,7 +3,7 @@
  * Dipanggil setelah normalize (trim+lower+collapse, max 255).
  */
 export function passesSearchMissQualityGate(normalizedTerm: string): boolean {
-  if (normalizedTerm.length < 3 || normalizedTerm.length > 255) return false;
+  if (normalizedTerm.length < 2 || normalizedTerm.length > 255) return false;
   if (/https?:\/\//i.test(normalizedTerm) || /\bwww\./i.test(normalizedTerm)) {
     return false;
   }
