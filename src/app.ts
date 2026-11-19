@@ -237,6 +237,10 @@ import {
   createAdminSearchMissRoutes,
   createSearchMissRoutes,
 } from "@/modules/search-miss/presentation/v1/search-miss.routes";
+import { HotTopicsRepositoryImpl } from "@/modules/hot-topics/infrastructure/hot-topics.repository.impl";
+import { ListHotTopicsUseCase } from "@/modules/hot-topics/application/list-hot-topics.use-case";
+import { HotTopicsController } from "@/modules/hot-topics/presentation/v1/hot-topics.controller";
+import { createHotTopicsRoutes } from "@/modules/hot-topics/presentation/v1/hot-topics.routes";
 import {
   createAdminAnnouncementRoutes,
   createPublicAnnouncementRoutes,
@@ -1547,6 +1551,11 @@ const searchMissController = new SearchMissController({
   ),
 });
 
+const hotTopicsRepo = new HotTopicsRepositoryImpl(db);
+const hotTopicsController = new HotTopicsController({
+  list: new ListHotTopicsUseCase(hotTopicsRepo),
+});
+
 const languageController = new LanguageController({
   listLanguages: new ListLanguagesUseCase(languageRepo),
   listDialects: new ListDialectsUseCase(languageRepo),
@@ -2850,6 +2859,11 @@ app.route(
 app.route(
   "/api/v1/search-misses",
   createSearchMissRoutes({ controller: searchMissController, authenticate }),
+);
+// G4: kartu Hot Home (dicari / diusulkan / dekati ambang)
+app.route(
+  "/api/v1/hot-topics",
+  createHotTopicsRoutes({ controller: hotTopicsController }),
 );
 app.route(
   "/api/v1/admin/search-misses",
