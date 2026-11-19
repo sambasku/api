@@ -44,6 +44,7 @@ export * from "./search-miss-searchers.schema";
 export * from "./search-daily.schema";
 export * from "./audit-logs.schema";
 export * from "./votes.schema";
+export * from "./vote-reset-archives.schema";
 export * from "./meaning-vote-counts.schema";
 export * from "./user-skips.schema";
 export * from "./comments.schema";

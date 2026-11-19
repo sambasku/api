@@ -13,6 +13,8 @@ import {
   DUPLICATE_LEMMA_USE_TAB,
 } from '../utils/duplicate-lemma-warning';
 import type { SyncLiveWordContributionsUseCase } from '@/modules/contribution/application/use-cases/sync-live-word-contributions.use-case';
+import { resetMeaningVotesOnContentChange } from '@/modules/vote/application/reset-meaning-votes-on-content-change';
+import { normalizeLemma } from '../utils/normalize-lemma';
 
 export interface UpdateWordResult {
   word: Word;
@@ -167,6 +169,46 @@ export class UpdateWordUseCase {
       } else {
         await this.syncContributions?.closeLive(word.id, actor.userId);
       }
+    }
+
+    // G2b: edit langsung verifikator - archive + reset vote makna lama
+    // (full replace: id makna bisa berganti; pakai snapshot existing).
+    const lemmaChanged =
+      normalizeLemma(existing.lemma) !== normalizeLemma(dto.lemma);
+    const meaningsTouched =
+      lemmaChanged ||
+      existing.meanings.length !== dto.meanings.length ||
+      existing.meanings.some((m, i) => {
+        const next = dto.meanings[i];
+        if (!next) return true;
+        if ((m.definition ?? '') !== (next.definition ?? '')) return true;
+        const oldTr = (m.translations ?? [])
+          .map((t) => `${t.languageId}:${t.translationText}`)
+          .sort()
+          .join('|');
+        const newTr = (next.translations ?? [])
+          .map((t) => `${t.languageId}:${t.translationText}`)
+          .sort()
+          .join('|');
+        return oldTr !== newTr;
+      });
+    if (meaningsTouched && existing.meanings.length > 0) {
+      await resetMeaningVotesOnContentChange({
+        meaningIds: existing.meanings.map((m) => m.id),
+        wordId: existing.id,
+        reason: 'verifier_direct_edit',
+        actorId: actor.userId,
+      }).catch((err) => {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            time: new Date().toISOString(),
+            msg: 'vote reset on verifier edit failed',
+            word_id: existing.id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      });
     }
 
     return { word, warnings };

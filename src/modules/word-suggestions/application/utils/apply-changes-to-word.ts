@@ -31,6 +31,7 @@ import {
   meaningDedupeKey,
 } from '@/modules/word/application/utils/meaning-deduplication';
 import { throwDuplicateMeaningConflict } from '@/modules/word/application/utils/throw-duplicate-meaning-conflict';
+import { resetMeaningVotesOnContentChange } from '@/modules/vote/application/reset-meaning-votes-on-content-change';
 import {
   planMeaningApplies,
   suggestionHasOtherChanges,
@@ -258,6 +259,9 @@ export async function applyChangesToWord(
   let changesApplied = 0;
   const createdWords: { id: string; lemma: string }[] = [];
   const skippedDuplicates: SkippedDuplicateMeaning[] = [];
+  /** Makna yang teks/padanan/kelasnya berubah → reset vote (G2b). */
+  const voteResetMeaningIds = new Set<string>();
+  let lemmaChanged = false;
 
   const word = await db.query.words.findFirst({
     where: and(eq(words.id, suggestion.wordId), isNull(words.deletedAt)),
@@ -331,6 +335,7 @@ export async function applyChangesToWord(
       .set({ lemma: nextLemma, updatedAt: new Date() })
       .where(eq(words.id, word.id));
     changesApplied++;
+    lemmaChanged = true;
   }
 
   if (changes.notes !== undefined && changes.notes !== word.notes) {
@@ -393,12 +398,14 @@ export async function applyChangesToWord(
       } else if (mc.action === 'update' && mc.meaningId) {
         const existing = existingMap.get(mc.meaningId);
         if (existing) {
+          let meaningContentChanged = false;
           if (mc.definition !== undefined && mc.definition !== existing.definition) {
             await db
               .update(meanings)
               .set({ definition: mc.definition, updatedAt: new Date() })
               .where(eq(meanings.id, mc.meaningId));
             changesApplied++;
+            meaningContentChanged = true;
           }
           if (mc.wordClassId !== undefined && mc.wordClassId !== existing.wordClassId) {
             await db
@@ -406,6 +413,7 @@ export async function applyChangesToWord(
               .set({ wordClassId: mc.wordClassId, updatedAt: new Date() })
               .where(eq(meanings.id, mc.meaningId));
             changesApplied++;
+            meaningContentChanged = true;
           }
           if (mc.translations && mc.translations.length > 0) {
             for (const t of mc.translations) {
@@ -464,6 +472,7 @@ export async function applyChangesToWord(
                   .onConflictDoNothing();
               }
               changesApplied++;
+              meaningContentChanged = true;
             }
           }
           const nextKey = meaningPlan.updateKeys.get(mc.meaningId);
@@ -495,8 +504,12 @@ export async function applyChangesToWord(
               });
             }
           }
+          if (meaningContentChanged) {
+            voteResetMeaningIds.add(mc.meaningId);
+          }
         }
       } else if (mc.action === 'delete' && mc.meaningId) {
+        voteResetMeaningIds.add(mc.meaningId);
         await db
           .update(meanings)
           .set({ deletedAt: new Date(), deletedBy: reviewerId })
@@ -1031,6 +1044,44 @@ const groupAudit: {
       sourceContributionId: suggestionId,
     })
     .onConflictDoNothing();
+
+  // G2b: reset vote makna terdampak (archive dulu). Lemma berubah = semua
+  // makna published. Kill switch di dalam helper.
+  if (lemmaChanged) {
+    const published = await db
+      .select({ id: meanings.id })
+      .from(meanings)
+      .where(
+        and(
+          eq(meanings.wordId, word.id),
+          eq(meanings.status, 'published'),
+          isNull(meanings.deletedAt),
+        ),
+      );
+    for (const m of published) voteResetMeaningIds.add(m.id);
+  }
+  if (voteResetMeaningIds.size > 0) {
+    const reason =
+      suggestion.userId === reviewerId ? 'suggestion_selfapply' : 'suggestion_applied';
+    await resetMeaningVotesOnContentChange({
+      meaningIds: [...voteResetMeaningIds],
+      wordId: word.id,
+      reason,
+      actorId: reviewerId,
+      suggestionId,
+    }).catch((err) => {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          time: new Date().toISOString(),
+          msg: 'vote reset on suggestion apply failed',
+          suggestion_id: suggestionId,
+          word_id: word.id,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    });
+  }
 
   return {
     applied: true,
