@@ -22,6 +22,11 @@ export interface SearchWordsQuery {
   viewerId?: string;
   /** Role dari soft auth - gate verifikator (pending_review + published). */
   viewerRoles?: string[];
+  /**
+   * false = explore/typeahead (jangan rekam miss/counter).
+   * true / omit = commit search (boleh rekam miss saat 0 hasil).
+   */
+  recordMiss?: boolean;
 }
 
 export interface SearchWordsResult extends CursorPage<WordSummary> {
@@ -56,9 +61,16 @@ export class SearchWordsUseCase {
   ) {}
 
   async execute(query: SearchWordsQuery): Promise<SearchWordsResult> {
-    // `viewerId` / `viewerRoles` milik soft-auth - dilepas sebelum diteruskan
-    // ke repo (query di sini juga jadi argumen REST).
-    const { viewerId, viewerRoles, isVerified: _ignored, ...wordQuery } = query;
+    // `viewerId` / `viewerRoles` / `recordMiss` milik soft-auth / intent -
+    // dilepas sebelum diteruskan ke repo.
+    const {
+      viewerId,
+      viewerRoles,
+      isVerified: _ignored,
+      recordMiss: recordMissRaw,
+      ...wordQuery
+    } = query;
+    const recordMiss = recordMissRaw !== false;
     const gate = publicReadGate(viewerRoles);
 
     const { items, nextCursor, hasMore } = await this.wordRepo.search({
@@ -68,9 +80,8 @@ export class SearchWordsUseCase {
         : { published: true, isVerified: true }),
     });
 
-    // Counter pencarian harian (hit + miss) untuk chart dashboard.
-    // Best-effort: kegagalan tidak boleh membatalkan response.
-    if (query.q.trim().length > 0) {
+    // Counter + miss hanya saat commit (bukan ketikan typeahead).
+    if (recordMiss && query.q.trim().length > 0) {
       try {
         await this.searchMissRepo.recordSearchDay();
       } catch (err) {
@@ -99,7 +110,7 @@ export class SearchWordsUseCase {
     }
 
     let searchMissId: string | null = null;
-    if (items.length === 0 && query.q.trim().length >= 2) {
+    if (recordMiss && items.length === 0 && query.q.trim().length >= 2) {
       // Best-effort: kegagalan pencatatan tidak boleh membatalkan response.
       // preferVisible dipisah: gagal resolve (settings/blocklist) jangan
       // mencegah INSERT miss - gejala staging G3 (search 0 hasil tanpa baris).

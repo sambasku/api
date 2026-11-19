@@ -707,6 +707,8 @@ export class WordController {
       translationLanguageId: query.translation_language_id,
       wordType: query.word_type,
       isVerified: query.is_verified,
+      // Omit = true (commit). Typeahead kirim record_miss=false.
+      recordMiss: query.record_miss,
       viewerId: user?.user_id,
       viewerRoles: user?.roles,
     });

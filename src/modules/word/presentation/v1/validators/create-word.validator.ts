@@ -703,6 +703,12 @@ export const searchWordsQuerySchema = z.object({
   translation_language_id: z.string().length(26).optional(),
   word_type: z.enum(['word', 'idiom', 'peribahasa', 'ungkapan']).optional(),
   is_verified: queryBooleanSchema,
+  /**
+   * true (default) = boleh rekam search-miss + counter harian saat 0 hasil.
+   * false = explore/typeahead (ketikan) - hasil tetap, tanpa membengkakkan miss.
+   * Client commit (Enter / Cari / blur idle) kirim true atau omit.
+   */
+  record_miss: queryBooleanSchema,
 });
 
 /** GET /api/v1/admin/words - panel Kata (tabs tayang / tidak / semua) */

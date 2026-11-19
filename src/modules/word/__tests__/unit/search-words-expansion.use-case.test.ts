@@ -178,6 +178,18 @@ describe('SearchWordsUseCase - counter pencarian harian', () => {
     expect(searchMissRepo.record).toHaveBeenCalledOnce();
   });
 
+  it('recordMiss=false (explore) → tidak record miss / counter', async () => {
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    const result = await useCase.execute({
+      q: 'xyzzy',
+      limit: 10,
+      recordMiss: false,
+    });
+    expect(searchMissRepo.recordSearchDay).not.toHaveBeenCalled();
+    expect(searchMissRepo.record).not.toHaveBeenCalled();
+    expect(result.meta.search_miss_id).toBeUndefined();
+  });
+
   it('resolvePreferVisible throw → record tetap jalan (preferVisible=false)', async () => {
     resolvePreferVisibleMock.mockRejectedValueOnce(new Error('settings down'));
     const { useCase, searchMissRepo } = makeDeps({ items: [] });
