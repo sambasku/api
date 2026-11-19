@@ -22,6 +22,8 @@ export const inboxNotificationTypeSchema = z.enum([
   'jinye_comment',
   'word_comment',
   'word_vote',
+  'meaning_auto_verified',
+  'meaning_needs_review',
   'word_example',
   'word_audio',
   'campaign',

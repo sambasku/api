@@ -2408,6 +2408,74 @@ memberLemma: string;
     return { wordId: existing.wordId };
   }
 
+  async setMeaningNeedsReview(
+    meaningId: string,
+    needsReview: boolean,
+    actorId: string,
+  ): Promise<{ wordId: string; changed: boolean } | null> {
+    const [existing] = await this.db
+      .select({
+        id: meanings.id,
+        wordId: meanings.wordId,
+        needsReview: meanings.needsReview,
+      })
+      .from(meanings)
+      .where(and(eq(meanings.id, meaningId), isNull(meanings.deletedAt)))
+      .limit(1);
+    if (!existing) return null;
+    if (existing.needsReview === needsReview) {
+      return { wordId: existing.wordId, changed: false };
+    }
+    const now = new Date();
+    await this.db
+      .update(meanings)
+      .set({
+        needsReview,
+        updatedBy: actorId,
+        updatedAt: now,
+      })
+      .where(eq(meanings.id, meaningId));
+    return { wordId: existing.wordId, changed: true };
+  }
+
+  async findMeaningTrustState(meaningId: string): Promise<{
+    meaningId: string;
+    wordId: string;
+    lemma: string;
+    isVerified: boolean;
+    needsReview: boolean;
+    createdBy: string | null;
+  } | null> {
+    const [row] = await this.db
+      .select({
+        meaningId: meanings.id,
+        wordId: meanings.wordId,
+        lemma: words.lemma,
+        isVerified: meanings.isVerified,
+        needsReview: meanings.needsReview,
+        createdBy: meanings.createdBy,
+      })
+      .from(meanings)
+      .innerJoin(words, eq(words.id, meanings.wordId))
+      .where(
+        and(
+          eq(meanings.id, meaningId),
+          isNull(meanings.deletedAt),
+          isNull(words.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    return {
+      meaningId: row.meaningId,
+      wordId: row.wordId,
+      lemma: row.lemma,
+      isVerified: row.isVerified,
+      needsReview: row.needsReview,
+      createdBy: row.createdBy,
+    };
+  }
+
   async rollupWordVerifiedFromMeanings(wordId: string): Promise<void> {
     const rows = await this.db
       .select({

@@ -468,6 +468,26 @@ export interface WordRepository {
     },
   ): Promise<{ wordId: string } | null>;
 
+  /**
+   * Flag needs_review tanpa cabut is_verified (G2: net jelek setelah verified).
+   * Return false kalau makna tidak ada / sudah soft-deleted.
+   */
+  setMeaningNeedsReview(
+    meaningId: string,
+    needsReview: boolean,
+    actorId: string,
+  ): Promise<{ wordId: string; changed: boolean } | null>;
+
+  /** Ringkas trust + pembuat makna untuk hook vote (G2). */
+  findMeaningTrustState(meaningId: string): Promise<{
+    meaningId: string;
+    wordId: string;
+    lemma: string;
+    isVerified: boolean;
+    needsReview: boolean;
+    createdBy: string | null;
+  } | null>;
+
   /** Hitung ulang words.is_verified dari makna published (ikut data lama). */
   rollupWordVerifiedFromMeanings(wordId: string): Promise<void>;
 

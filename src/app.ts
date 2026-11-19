@@ -879,6 +879,7 @@ import { GetMobileAnalyticsUseCase } from "@/modules/mobile-analytics/applicatio
 import { createMobileAnalyticsProvider } from "@/modules/mobile-analytics/infrastructure/mobile-analytics-providers.factory";
 import { VoteRepositoryImpl } from "@/modules/vote/infrastructure/vote.repository.impl";
 import { ToggleVoteUseCase } from "@/modules/vote/application/use-cases/toggle-vote.use-case";
+import { ApplyMeaningVoteTrustUseCase } from "@/modules/vote/application/use-cases/apply-meaning-vote-trust.use-case";
 import { GetVoteCountsUseCase } from "@/modules/vote/application/use-cases/get-vote-counts.use-case";
 import { GetMyVotesUseCase } from "@/modules/vote/application/use-cases/get-my-votes.use-case";
 import { ListMyVoteHistoryUseCase } from "@/modules/vote/application/use-cases/list-my-vote-history.use-case";
@@ -1981,6 +1982,14 @@ const wordVotePushCooldown = new WordVotePushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
 );
+const applyMeaningVoteTrust = new ApplyMeaningVoteTrustUseCase(
+  wordRepo,
+  appSettingsRepo,
+  auditRepo,
+  activityEvents,
+  recordInbox,
+  notifyUser,
+);
 const toggleVoteUseCase = new ToggleVoteUseCase(
   voteRepo,
   userRepo,
@@ -1988,6 +1997,7 @@ const toggleVoteUseCase = new ToggleVoteUseCase(
   notifyUser,
   wordVotePushCooldown,
   activityEvents,
+  applyMeaningVoteTrust,
 );
 const voteController = new VoteController({
   toggle: toggleVoteUseCase,
