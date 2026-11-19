@@ -113,6 +113,7 @@ function serialize(
     website: u.website,
     social_url: u.socialUrl,
     cover_url: u.coverUrl,
+    sponsor_tier: u.sponsorTier,
     publish_status: u.publishStatus,
     operational_status: u.operationalStatus,
     restricted_reason: u.restrictedReason,

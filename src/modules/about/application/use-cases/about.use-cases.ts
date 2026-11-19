@@ -25,6 +25,13 @@ export class ListPublicSponsorshipsUseCase {
   }
 }
 
+export class ListSplashSponsorshipsUseCase {
+  constructor(private readonly repo: AboutRepository) {}
+  execute(): Promise<Sponsorship[]> {
+    return this.repo.listSplashSponsorships();
+  }
+}
+
 export class ListAdminSponsorshipsUseCase {
   constructor(private readonly repo: AboutRepository) {}
   execute(input: { limit: number; cursor?: string }) {

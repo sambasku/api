@@ -51,7 +51,20 @@ export function createPublicAboutRoutes(deps: { controller: AboutController }) {
     },
   });
 
+  const splashSponsorshipsRoute = createRoute({
+    method: 'get',
+    path: '/sponsorships/splash',
+    tags: ['About'],
+    summary: 'Sponsor splash: usaha terhubung + Emas/Intan/Mustika aktif',
+    responses: {
+      200: { description: 'Splash sponsorships', content: json(sponsorshipListResponseSchema) },
+    },
+  });
+
   routes.openapi(teamRoute, (c) => deps.controller.listTeam(c) as never);
+  routes.openapi(splashSponsorshipsRoute, (c) =>
+    deps.controller.listSplashSponsorships(c) as never,
+  );
   routes.openapi(sponsorshipsRoute, (c) =>
     deps.controller.listPublicSponsorships(c) as never,
   );

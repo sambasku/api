@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SPONSORSHIP_TIERS } from '@/shared/database/drizzle/schema/sponsorships.schema';
 import { entityCommentWireSchema } from '@/shared/comment/entity-comment-response.schema';
 import { opaqueId } from '@/shared/validation/id';
 
@@ -142,6 +143,7 @@ export const usahaResponseSchema = z.object({
   website: z.string().nullable(),
   social_url: z.string().nullable(),
   cover_url: z.string().nullable(),
+  sponsor_tier: z.enum(SPONSORSHIP_TIERS).nullable(),
   publish_status: usahaPublishStatusSchema,
   operational_status: usahaOperationalStatusSchema,
   restricted_reason: z.string().nullable(),

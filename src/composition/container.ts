@@ -156,6 +156,7 @@ import {
   ListAdminSponsorshipsUseCase,
   ListContributorsUseCase,
   ListPublicSponsorshipsUseCase,
+  ListSplashSponsorshipsUseCase,
   ListTeamUseCase,
   ListVerifiersUseCase,
   SetUserSponsorUseCase,
@@ -1061,6 +1062,7 @@ export const setUserSponsorUseCase = new SetUserSponsorUseCase(aboutRepo);
 export const aboutController = new AboutController({
   listTeam: new ListTeamUseCase(aboutRepo),
   listPublicSponsorships: new ListPublicSponsorshipsUseCase(aboutRepo),
+  listSplashSponsorships: new ListSplashSponsorshipsUseCase(aboutRepo),
   listAdminSponsorships: new ListAdminSponsorshipsUseCase(aboutRepo),
   createSponsorship: new CreateSponsorshipUseCase(aboutRepo),
   updateSponsorship: new UpdateSponsorshipUseCase(aboutRepo),

@@ -16,6 +16,8 @@ export interface ListContributorsPage {
 export interface AboutRepository {
   listTeam(): Promise<TeamMember[]>;
   listSponsorships(): Promise<Sponsorship[]>;
+  /** Splash: usaha_id set + Emas/Intan/Mustika + jendela aktif. */
+  listSplashSponsorships(): Promise<Sponsorship[]>;
   listSponsorshipsAdmin(limit: number, cursor?: string): Promise<{
     items: Sponsorship[];
     nextCursor: string | null;

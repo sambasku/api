@@ -21,6 +21,8 @@ import {
   usahaItems,
   usahaImages,
 } from '@/shared/database/drizzle/schema/usahas.schema';
+import { sponsorships } from '@/shared/database/drizzle/schema/sponsorships.schema';
+import type { SponsorshipTier } from '@/shared/database/drizzle/schema/sponsorships.schema';
 import { usahaCategories } from '@/shared/database/drizzle/schema/usaha-categories.schema';
 import { regions } from '@/shared/database/drizzle/schema/regions.schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
@@ -139,6 +141,7 @@ type UsahaJoinedRow = UsahaRow & {
   managerUsername: string | null;
   managerDisplayName: string | null;
   managerDeletedAt: Date | null;
+  sponsorTier: SponsorshipTier | null;
 };
 
 const usahaSelect = {
@@ -154,7 +157,18 @@ const usahaSelect = {
   managerUsername: managerUsers.username,
   managerDisplayName: managerUsers.displayName,
   managerDeletedAt: managerUsers.deletedAt,
+  sponsorTier: sponsorships.tier,
 };
+
+function activeSponsorshipJoinOn() {
+  const today = new Date().toISOString().slice(0, 10);
+  return and(
+    eq(sponsorships.usahaId, usahas.id),
+    isNull(sponsorships.deletedAt),
+    sql`${sponsorships.since} <= ${today}`,
+    or(isNull(sponsorships.endsOn), sql`${sponsorships.endsOn} >= ${today}`),
+  );
+}
 
 function mapUsaha(row: UsahaJoinedRow): UsahaListItem {
   const authorAlive =
@@ -231,6 +245,7 @@ function mapUsaha(row: UsahaJoinedRow): UsahaListItem {
             row.managerUsername!,
         }
       : null,
+    sponsorTier: row.sponsorTier ?? null,
   };
 }
 
@@ -360,6 +375,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
       .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
       .leftJoin(managerUsers, eq(managerUsers.id, usahas.managerId))
+      .leftJoin(sponsorships, activeSponsorshipJoinOn())
       .where(and(eq(usahas.id, id), isNull(usahas.deletedAt)))
       .limit(1);
     if (!row) return null;
@@ -381,6 +397,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
       .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
       .leftJoin(managerUsers, eq(managerUsers.id, usahas.managerId))
+      .leftJoin(sponsorships, activeSponsorshipJoinOn())
       .where(and(...conds))
       .limit(1);
     if (!row) return null;
@@ -447,6 +464,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .leftJoin(kecamatanRegions, eq(kecamatanRegions.id, usahas.regionId))
       .leftJoin(authorUsers, eq(authorUsers.id, usahas.authorId))
       .leftJoin(managerUsers, eq(managerUsers.id, usahas.managerId))
+      .leftJoin(sponsorships, activeSponsorshipJoinOn())
       .where(and(...conds))
       .orderBy(desc(usahas.createdAt), desc(usahas.id))
       .limit(input.limit + 1);

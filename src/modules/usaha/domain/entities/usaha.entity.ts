@@ -4,6 +4,7 @@ import type {
   UsahaOperationalStatus,
   UsahaPublishStatus,
 } from '@/shared/database/drizzle/schema/usahas.schema';
+import type { SponsorshipTier } from '@/shared/database/drizzle/schema/sponsorships.schema';
 import type { UsahaCommentStatus } from '@/shared/database/drizzle/schema/usaha-comments.schema';
 
 /** Id slug di tabel `usaha_categories`. */
@@ -81,6 +82,8 @@ export interface UsahaListItem extends Usaha {
   author: UsahaAuthorRef | null;
   /** Pengelola terverifikasi (klaim disetujui admin), JOIN users. */
   manager: UsahaAuthorRef | null;
+  /** Tier sponsorship aktif terhubung usaha; null = bukan sponsor. */
+  sponsorTier: SponsorshipTier | null;
 }
 
 /** Detail + katalog versi publik. */
