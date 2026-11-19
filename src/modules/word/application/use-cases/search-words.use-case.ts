@@ -100,12 +100,19 @@ export class SearchWordsUseCase {
 
     let searchMissId: string | null = null;
     if (items.length === 0 && query.q.trim().length >= 2) {
-      // Best-effort: kegagalan pencatatan tidak boleh membatalkan response
+      // Best-effort: kegagalan pencatatan tidak boleh membatalkan response.
+      // preferVisible dipisah: gagal resolve (settings/blocklist) jangan
+      // mencegah INSERT miss - gejala staging G3 (search 0 hasil tanpa baris).
+      let preferVisible = false;
       try {
-        const preferVisible = await resolveSearchMissPreferVisible({
+        preferVisible = await resolveSearchMissPreferVisible({
           term: query.q,
           blocklist: this.blocklistRepo,
         });
+      } catch (err) {
+        logger.warn({ err, q: query.q }, 'gagal resolve search miss auto-visible');
+      }
+      try {
         const recorded = await this.searchMissRepo.record({
           term: query.q,
           direction: query.searchIn === 'translation' ? 'translation' : 'lemma',

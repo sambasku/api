@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 // Logger transitif import env Zod (butuh DATABASE_URL dll) - unit test
 // tidak butuh logger asli, cukup mock supaya env tidak divalidasi.
@@ -7,8 +7,10 @@ vi.mock('@/shared/logging/logger', () => ({
 }));
 
 // G3: resolvePreferVisible baca app_settings - mock agar unit test tanpa DB.
+const resolvePreferVisibleMock = vi.fn().mockResolvedValue(false);
 vi.mock('@/modules/search-miss/application/resolve-auto-visible', () => ({
-  resolveSearchMissPreferVisible: vi.fn().mockResolvedValue(false),
+  resolveSearchMissPreferVisible: (...args: unknown[]) =>
+    resolvePreferVisibleMock(...args),
 }));
 
 import { SearchWordsUseCase } from '../../application/use-cases/search-words.use-case';
@@ -62,6 +64,11 @@ function makeDeps(opts: {
 }
 
 const QUERY = { q: 'barakat', limit: 10 };
+
+beforeEach(() => {
+  resolvePreferVisibleMock.mockReset();
+  resolvePreferVisibleMock.mockResolvedValue(false);
+});
 
 describe('SearchWordsUseCase - perluasan kelompok makna (PRD relasi-lemma)', () => {
   it('halaman pertama: hasil grup ditempel setelah hasil langsung, match_type=related_group, tanpa duplikat', async () => {
@@ -169,5 +176,15 @@ describe('SearchWordsUseCase - counter pencarian harian', () => {
     await useCase.execute({ q: 'xyzzy', limit: 10 });
     expect(searchMissRepo.recordSearchDay).toHaveBeenCalledOnce();
     expect(searchMissRepo.record).toHaveBeenCalledOnce();
+  });
+
+  it('resolvePreferVisible throw → record tetap jalan (preferVisible=false)', async () => {
+    resolvePreferVisibleMock.mockRejectedValueOnce(new Error('settings down'));
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    const result = await useCase.execute({ q: 'xyzzy', limit: 10 });
+    expect(searchMissRepo.record).toHaveBeenCalledWith(
+      expect.objectContaining({ term: 'xyzzy', preferVisible: false }),
+    );
+    expect(result.meta.search_miss_id).toBe('01MISS');
   });
 });

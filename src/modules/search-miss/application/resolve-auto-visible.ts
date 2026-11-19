@@ -20,18 +20,24 @@ export async function resolveSearchMissPreferVisible(input: {
   term: string;
   blocklist?: Pick<CommentBlocklistRepository, 'findActiveWordSet'>;
 }): Promise<boolean> {
-  if (!(await isSearchMissAutoVisibleEnabled())) return false;
+  try {
+    if (!(await isSearchMissAutoVisibleEnabled())) return false;
 
-  const normalized = normalizeSearchMissTerm(input.term);
-  if (!passesSearchMissQualityGate(normalized)) return false;
+    const normalized = normalizeSearchMissTerm(input.term);
+    if (!passesSearchMissQualityGate(normalized)) return false;
 
-  if (input.blocklist) {
-    const tokens = searchMissBlocklistTokens(normalized);
-    const blocked = await input.blocklist.findActiveWordSet(tokens);
-    if (tokens.some((t) => blocked.has(t))) return false;
+    if (input.blocklist) {
+      const tokens = searchMissBlocklistTokens(normalized);
+      const blocked = await input.blocklist.findActiveWordSet(tokens);
+      if (tokens.some((t) => blocked.has(t))) return false;
+    }
+
+    return true;
+  } catch (err) {
+    // Jangan lempar ke caller: search miss tetap harus tercatat (is_visible=false).
+    console.error('[search-miss-auto-visible] resolve gagal', err);
+    return false;
   }
-
-  return true;
 }
 
 async function isSearchMissAutoVisibleEnabled(): Promise<boolean> {
@@ -41,7 +47,9 @@ async function isSearchMissAutoVisibleEnabled(): Promise<boolean> {
     .where(eq(appSettings.key, SEARCH_MISS_AUTO_VISIBLE_ENABLED_KEY))
     .limit(1);
   if (!row) return DEFAULT_SEARCH_MISS_AUTO_VISIBLE_ENABLED;
-  return row.value === 'true';
+  // Console boolean: wire "true"/"false". Toleransi True/1 dari seed manual.
+  const v = row.value.trim().toLowerCase();
+  return v === 'true' || v === '1';
 }
 
 /** Test hook. */

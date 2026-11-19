@@ -710,7 +710,8 @@ export class WordController {
       viewerId: user?.user_id,
       viewerRoles: user?.roles,
     });
-    setPublicWordReadCache(c);
+    // Jangan cache: search miss/counter = side-effect tulis per request.
+    c.header('Cache-Control', 'private, no-store');
     return c.json({
       success: true as const,
       data: items.map(toListItem),

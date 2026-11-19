@@ -142,7 +142,19 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
       })
       .returning({ id: searchMisses.id });
 
-    const missId = rows[0]?.id;
+    let missId = rows[0]?.id;
+    // Beberapa runtime Turso/libsql kadang mengembalikan [] pada RETURNING
+    // + ON CONFLICT: fallback select supaya hit tetap terhitung di meta klien.
+    if (!missId) {
+      const [fallback] = await this.db
+        .select({ id: searchMisses.id })
+        .from(searchMisses)
+        .where(
+          and(eq(searchMisses.term, term), eq(searchMisses.direction, input.direction)),
+        )
+        .limit(1);
+      missId = fallback?.id;
+    }
     if (!missId) return null;
 
     const searcherId = input.searcherId;
