@@ -79,6 +79,7 @@ export class VoteController {
       targetType: query.target_type,
       value: query.value === '1' ? 1 : query.value === '-1' ? -1 : undefined,
       communityStatus: query.community_status,
+      q: query.q,
     });
     return c.json({
       success: true as const,
@@ -109,6 +110,7 @@ export class VoteController {
       limit: query.limit,
       cursor: query.cursor,
       randomize: query.randomize,
+      q: query.q,
     });
     return c.json({
       success: true as const,
@@ -150,6 +152,7 @@ export class VoteController {
       limit: query.limit,
       cursor: query.cursor,
       randomize: query.randomize,
+      q: query.q,
     });
     return c.json({
       success: true as const,

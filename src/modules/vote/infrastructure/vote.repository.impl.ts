@@ -835,8 +835,9 @@ case 'article_comment': {
   }
 
   async listByUser(userId: string, opts: VoteHistoryListOptions): Promise<VoteHistoryListResult> {
-    // Filter community_status hanya untuk target makna (Periksa Kata).
+    // Filter community_status / q lemma hanya untuk target makna (Periksa Kata).
     const communityStatus = opts.communityStatus;
+    const q = opts.q?.trim() || undefined;
 
     let rows: {
       id: string;
@@ -846,10 +847,11 @@ case 'article_comment': {
       createdAt: Date;
     }[];
 
-    if (communityStatus) {
+    if (communityStatus || q) {
       // JOIN meanings + words; status diturunkan di SQL.
-      const statusClause =
-        communityStatus === 'rejected'
+      const statusClause = !communityStatus
+        ? undefined
+        : communityStatus === 'rejected'
           ? or(eq(meanings.status, 'rejected'), eq(words.status, 'rejected'))
           : communityStatus === 'verified'
             ? and(
@@ -881,6 +883,7 @@ case 'article_comment': {
             opts.value !== undefined ? eq(votes.value, opts.value) : undefined,
             opts.cursor ? lt(votes.id, opts.cursor) : undefined,
             statusClause,
+            q ? ilikeCompat(words.lemma, `%${q}%`) : undefined,
           ),
         )
         .orderBy(desc(votes.id))
@@ -1514,6 +1517,12 @@ if (articleCommentIds.length > 0) {
           userNotVoted,
           userNotSkipped,
           cursorClause,
+          opts.q
+            ? or(
+                ilikeCompat(words.lemma, `%${opts.q}%`),
+                ilikeCompat(meanings.definition, `%${opts.q}%`),
+              )
+            : undefined,
         ),
       )
       .orderBy(asc(totalVotesExpr), asc(approvedAtExpr), asc(meanings.id))

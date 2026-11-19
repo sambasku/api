@@ -181,6 +181,8 @@ export interface VoteHistoryListOptions {
   value?: 1 | -1;
   /** Filter hasil komunitas - hanya baris meaning. */
   communityStatus?: VoteCommunityStatus;
+  /** Cari lemma kata induk (case-insensitive). */
+  q?: string;
 }
 
 export interface VoteHistoryListResult {
@@ -248,6 +250,8 @@ export interface VoteDeckListOptions {
   cursor?: VoteDeckCursor;
   /** true = acak isi halaman per user (deck mobile tidak seragam). */
   randomize?: boolean;
+  /** Cari lemma / definisi (case-insensitive). */
+  q?: string;
 }
 
 export interface VoteDeckListResult {

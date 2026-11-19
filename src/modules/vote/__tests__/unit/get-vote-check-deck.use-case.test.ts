@@ -35,6 +35,7 @@ describe('GetVoteCheckDeckUseCase', () => {
       limit: 10,
       cursor: undefined,
       randomize: undefined,
+      q: undefined,
     });
     expect(result).toMatchObject({
       items: [],
@@ -57,6 +58,7 @@ describe('GetVoteCheckDeckUseCase', () => {
       limit: 5,
       cursor: { totalVotes: 2, approvedAt, id: '01JDMEANINGCHECK00000000A' },
       randomize: undefined,
+      q: undefined,
     });
   });
 
@@ -67,6 +69,7 @@ describe('GetVoteCheckDeckUseCase', () => {
       limit: 10,
       cursor: undefined,
       randomize: false,
+      q: undefined,
     });
   });
 
@@ -78,10 +81,23 @@ describe('GetVoteCheckDeckUseCase', () => {
     expect(voteRepo.listCheckDeckMeanings).not.toHaveBeenCalled();
   });
 
+  it('meneruskan q ke listCheckDeckMeanings', async () => {
+    const { useCase, voteRepo } = makeDeps();
+    await useCase.execute(USER, { limit: 10, q: 'ling', randomize: false });
+    expect(voteRepo.listCheckDeckMeanings).toHaveBeenCalledWith(USER, {
+      limit: 10,
+      cursor: undefined,
+      randomize: false,
+      q: 'ling',
+    });
+  });
+
   it('regresi: check-deck filter makna belum verified; deck verified tetap ada', () => {
     expect(DECK_REPO_SRC).toMatch(/listCheckDeckMeanings/);
     expect(DECK_REPO_SRC).toMatch(/meaningVerified:\s*false/);
     expect(DECK_REPO_SRC).toMatch(/meaningVerified:\s*true/);
     expect(DECK_REPO_SRC).toMatch(/eq\(meanings\.isVerified,\s*trust\.meaningVerified\)/);
+    expect(DECK_REPO_SRC).toMatch(/opts\.q/);
+    expect(DECK_REPO_SRC).toMatch(/ilikeCompat\(words\.lemma/);
   });
 });

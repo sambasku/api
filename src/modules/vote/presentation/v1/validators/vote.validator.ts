@@ -93,6 +93,8 @@ export const voteHistoryQuerySchema = z.object({
   value: z.enum(['1', '-1']).optional(),
   /** Filter hasil komunitas (hanya meaning) - Periksa Kata. */
   community_status: voteCommunityStatusEnum.optional(),
+  /** Cari lemma kata induk (case-insensitive). */
+  q: z.string().trim().min(1).max(100).optional(),
 });
 
 export type VoteHistoryQuery = z.infer<typeof voteHistoryQuerySchema>;
@@ -144,6 +146,8 @@ export const voteDeckQuerySchema = z.object({
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .optional()
     .transform((v) => v === undefined || v === true || v === 'true' || v === '1'),
+  /** Cari lemma / definisi (case-insensitive) - Periksa Kata. */
+  q: z.string().trim().min(1).max(100).optional(),
 });
 
 export type VoteDeckQuery = z.infer<typeof voteDeckQuerySchema>;

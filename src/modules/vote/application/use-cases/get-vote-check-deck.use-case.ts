@@ -10,6 +10,7 @@ export interface GetVoteCheckDeckQuery {
   cursor?: string;
   /** false = kronologis; default true (acak isi halaman per user). */
   randomize?: boolean;
+  q?: string;
 }
 
 /**
@@ -40,6 +41,7 @@ export class GetVoteCheckDeckUseCase {
       limit: query.limit,
       cursor,
       randomize: query.randomize,
+      q: query.q,
     });
 
     return {
