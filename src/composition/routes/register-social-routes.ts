@@ -386,7 +386,12 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
   const voiceRoomEventsRepo = new VoiceRoomEventsRepository(db);
   const voiceController = new VoiceController(
     new MintVoiceTokenUseCase(di.appSettingsRepo, di.userRepo),
-    new RecordVoiceRoomEventUseCase(voiceRoomEventsRepo),
+    new RecordVoiceRoomEventUseCase(
+      voiceRoomEventsRepo,
+      chatRepo,
+      chatMirror,
+      di.userRepo,
+    ),
   );
   app.route(
     "/api/v1/voice",

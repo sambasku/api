@@ -3,6 +3,7 @@ import type { ImageStoragePort } from '@/modules/image/application/ports/image-s
 import { ForbiddenError, ServiceUnavailableError } from '@/shared/errors/app-error';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
+import { deriveBalehoPerfMetrics } from '../../application/baleho-metrics';
 import type { BalehoUseCases } from '../../application/baleho.use-cases';
 import type {
   balehoEventBodySchema,
@@ -148,13 +149,17 @@ export class BalehoController {
       success: true as const,
       data: {
         items: rows.map((r) => {
-          const impressions = r.impressions;
-          const taps = r.taps;
-          const actions = r.actions;
-          const ctr =
-            impressions > 0
-              ? Math.round((taps / impressions) * 1000) / 10
-              : 0;
+          const perf = deriveBalehoPerfMetrics({
+            counts: {
+              impressions: r.impressions,
+              taps: r.taps,
+              actions: r.actions,
+              actionSuccess: r.actionSuccess,
+              actionFail: r.actionFail,
+            },
+            quotedAmount: r.quotedAmount,
+            daily: r.daily,
+          });
           return {
             id: r.id,
             slide: r.slide,
@@ -167,10 +172,7 @@ export class BalehoController {
             media_url: r.mediaUrl,
             created_at: r.createdAt.toISOString(),
             ends_at: r.endsAt?.toISOString() ?? null,
-            impressions,
-            taps,
-            actions,
-            ctr_percent: ctr,
+            ...perf,
           };
         }),
       },
@@ -182,11 +184,17 @@ export class BalehoController {
     return c.json({
       success: true as const,
       data: rows.map((r) => {
-        const impressions = r.impressions;
-        const taps = r.taps;
-        const actions = r.actions;
-        const ctr =
-          impressions > 0 ? Math.round((taps / impressions) * 1000) / 10 : 0;
+        const perf = deriveBalehoPerfMetrics({
+          counts: {
+            impressions: r.impressions,
+            taps: r.taps,
+            actions: r.actions,
+            actionSuccess: r.actionSuccess,
+            actionFail: r.actionFail,
+          },
+          quotedAmount: r.quotedAmount,
+          daily: r.daily,
+        });
         return {
           id: r.id,
           slide: r.slide,
@@ -200,14 +208,10 @@ export class BalehoController {
           referral_username: r.referralUsername,
           // Raw ImageKit URL tidak diekspos - preview lewat GET .../payment-proof.
           has_payment_proof: Boolean(r.paymentProofUrl?.trim()),
-          quoted_amount: r.quotedAmount,
           price_per_cell_per_day: r.pricePerCellPerDay,
           days: r.days,
           created_at: r.createdAt.toISOString(),
-          impressions,
-          taps,
-          actions,
-          ctr_percent: ctr,
+          ...perf,
         };
       }),
     });

@@ -21,6 +21,7 @@ export const chatMessages = sqliteTable(
     displayName: text('display_name'),
     avatarUrl: text('avatar_url'),
     /** text | sticker | voice_note */
+    /** text | sticker | voice_note | system */
     kind: text('kind').notNull().default('text'),
     body: text('body'),
     stickerId: text('sticker_id'),

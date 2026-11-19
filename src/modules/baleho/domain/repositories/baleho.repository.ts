@@ -76,6 +76,14 @@ export type BalehoRepository = {
       taps: number;
       /** Klik tombol CTA (`event_type=action`). */
       actions: number;
+      actionSuccess: number;
+      actionFail: number;
+      daily: Array<{
+        date: string;
+        impressions: number;
+        taps: number;
+        actions: number;
+      }>;
     }>
   >;
   listMine(
@@ -94,10 +102,19 @@ export type BalehoRepository = {
       mediaUrl: string | null;
       createdAt: Date;
       endsAt: Date | null;
+      quotedAmount: number | null;
       impressions: number;
       taps: number;
       /** Klik tombol CTA (`event_type=action`). */
       actions: number;
+      actionSuccess: number;
+      actionFail: number;
+      daily: Array<{
+        date: string;
+        impressions: number;
+        taps: number;
+        actions: number;
+      }>;
     }>
   >;
   getPlacementNotify(placementId: string): Promise<{

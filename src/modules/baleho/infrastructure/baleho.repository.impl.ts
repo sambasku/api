@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   BALEHO_COLS,
@@ -25,6 +25,16 @@ import type {
   CreateBalehoPlacementInput,
 } from '../domain/baleho';
 import type { BalehoRepository } from '../domain/repositories/baleho.repository';
+import {
+  emptyEventCounts,
+  fillDailySeries,
+  startOfWibDayUtc,
+  shiftCalendarDate,
+  wibDateString,
+  type BalehoDailyBucket,
+  type BalehoEventCounts,
+} from '../application/baleho-metrics';
+
 
 function cellsFor(col: number, row: number, w: number, h: number) {
   const cells: Array<{ col: number; row: number }> = [];
@@ -440,10 +450,14 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       .orderBy(desc(balehoPlacements.createdAt))
       .limit(limit);
 
-    const counts = await this.eventCountsByPlacement(rows.map((r) => r.id));
+    const ids = rows.map((r) => r.id);
+    const [counts, daily] = await Promise.all([
+      this.eventCountsByPlacement(ids),
+      this.eventDailyByPlacement(ids),
+    ]);
 
     return rows.map((r) => {
-      const c = counts.get(r.id) ?? { impressions: 0, taps: 0, actions: 0 };
+      const c = counts.get(r.id) ?? emptyEventCounts();
       return {
         ...r,
         advertiserUsername: r.advertiserUsername ?? null,
@@ -455,6 +469,9 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         impressions: c.impressions,
         taps: c.taps,
         actions: c.actions,
+        actionSuccess: c.actionSuccess,
+        actionFail: c.actionFail,
+        daily: daily.get(r.id) ?? [],
       };
     });
   }
@@ -470,6 +487,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         h: balehoPlacements.h,
         status: balehoPlacements.status,
         creativeId: balehoPlacements.creativeId,
+        quotedAmount: balehoPlacements.quotedAmount,
         createdAt: balehoPlacements.createdAt,
         endsAt: balehoPlacements.endsAt,
       })
@@ -508,11 +526,15 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       });
     }
 
-    const counts = await this.eventCountsByPlacement(rows.map((r) => r.id));
+    const ids = rows.map((r) => r.id);
+    const [counts, daily] = await Promise.all([
+      this.eventCountsByPlacement(ids),
+      this.eventDailyByPlacement(ids),
+    ]);
 
     return rows.map((r) => {
       const frame = firstFrame.get(r.creativeId);
-      const c = counts.get(r.id) ?? { impressions: 0, taps: 0, actions: 0 };
+      const c = counts.get(r.id) ?? emptyEventCounts();
       return {
         id: r.id,
         slide: r.slide,
@@ -525,31 +547,94 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         mediaUrl: frame?.mediaUrl ?? null,
         createdAt: r.createdAt,
         endsAt: r.endsAt,
+        quotedAmount: r.quotedAmount ?? null,
         impressions: c.impressions,
         taps: c.taps,
         actions: c.actions,
+        actionSuccess: c.actionSuccess,
+        actionFail: c.actionFail,
+        daily: daily.get(r.id) ?? [],
       };
     });
   }
 
   /** Satu query GROUP BY untuk agregat event per placement (hemat subrequest). */
   private async eventCountsByPlacement(ids: string[]) {
-    const counts = new Map<
-      string,
-      { impressions: number; taps: number; actions: number }
-    >();
+    const counts = new Map<string, BalehoEventCounts>();
     if (ids.length === 0) return counts;
     const stats = await this.db
       .select({
         placementId: balehoEvents.placementId,
         eventType: balehoEvents.eventType,
-        n: sql<number>`count(*)`,
+        n: sql<number>`count(*)`.mapWith(Number),
       })
       .from(balehoEvents)
       .where(inArray(balehoEvents.placementId, ids))
       .groupBy(balehoEvents.placementId, balehoEvents.eventType);
     for (const s of stats) {
-      const cur = counts.get(s.placementId) ?? {
+      const cur = counts.get(s.placementId) ?? emptyEventCounts();
+      const n = Number(s.n ?? 0);
+      if (s.eventType === 'impression') cur.impressions = n;
+      else if (s.eventType === 'tap') cur.taps = n;
+      else if (s.eventType === 'action') cur.actions = n;
+      else if (s.eventType === 'action_success') cur.actionSuccess = n;
+      else if (s.eventType === 'action_fail') cur.actionFail = n;
+      counts.set(s.placementId, cur);
+    }
+    return counts;
+  }
+
+  /**
+   * Tren harian WIB (7 hari) per placement - satu query GROUP BY
+   * placement + hari + event_type.
+   */
+  private async eventDailyByPlacement(
+    ids: string[],
+    days = 7,
+    now: Date = new Date(),
+  ): Promise<Map<string, BalehoDailyBucket[]>> {
+    const out = new Map<string, BalehoDailyBucket[]>();
+    if (ids.length === 0) return out;
+
+    const todayYmd = wibDateString(now);
+    const windowStartYmd = shiftCalendarDate(todayYmd, -(days - 1));
+    const since = startOfWibDayUtc(windowStartYmd);
+    const dayExpr = sql<string>`strftime('%Y-%m-%d', ${balehoEvents.createdAt}, 'unixepoch', '+7 hours')`;
+
+    const stats = await this.db
+      .select({
+        placementId: balehoEvents.placementId,
+        day: dayExpr,
+        eventType: balehoEvents.eventType,
+        n: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(balehoEvents)
+      .where(
+        and(
+          inArray(balehoEvents.placementId, ids),
+          gte(balehoEvents.createdAt, since),
+        ),
+      )
+      .groupBy(balehoEvents.placementId, dayExpr, balehoEvents.eventType);
+
+    const raw = new Map<
+      string,
+      Map<string, { impressions: number; taps: number; actions: number }>
+    >();
+    for (const s of stats) {
+      if (
+        s.eventType !== 'impression' &&
+        s.eventType !== 'tap' &&
+        s.eventType !== 'action'
+      ) {
+        continue;
+      }
+      let byDay = raw.get(s.placementId);
+      if (!byDay) {
+        byDay = new Map();
+        raw.set(s.placementId, byDay);
+      }
+      const cur = byDay.get(s.day) ?? {
         impressions: 0,
         taps: 0,
         actions: 0,
@@ -557,10 +642,21 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       const n = Number(s.n ?? 0);
       if (s.eventType === 'impression') cur.impressions = n;
       else if (s.eventType === 'tap') cur.taps = n;
-      else if (s.eventType === 'action') cur.actions = n;
-      counts.set(s.placementId, cur);
+      else cur.actions = n;
+      byDay.set(s.day, cur);
     }
-    return counts;
+
+    for (const id of ids) {
+      const byDay = raw.get(id);
+      const buckets = byDay
+        ? [...byDay.entries()].map(([date, v]) => ({ date, ...v }))
+        : [];
+      out.set(
+        id,
+        fillDailySeries({ todayYmd, days, raw: buckets }),
+      );
+    }
+    return out;
   }
 
   async getPlacementNotify(placementId: string) {

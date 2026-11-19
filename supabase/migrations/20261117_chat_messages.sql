@@ -1,7 +1,7 @@
 -- Chat publik cermin realtime (Postgres Supabase). Histori penuh di Turso.
 -- Apply: SQL Editor staging lalu production (BELUM di-Run sampai F0).
 -- Acuan: docs/backlogs/CHAT_PUBLIK_VOICE.md
--- kind: text | sticker | voice_note
+-- kind: text | sticker | voice_note | system
 -- Catatan: audio_path / audio_sha TIDAK ada di sini (Turso-only untuk delete GitHub).
 
 create table if not exists public.chat_messages (
@@ -24,7 +24,7 @@ create table if not exists public.chat_messages (
   deleted_by     text,
   created_at     timestamptz not null default now(),
   constraint chat_messages_kind_chk
-    check (kind in ('text', 'sticker', 'voice_note'))
+    check (kind in ('text', 'sticker', 'voice_note', 'system'))
 );
 
 create index if not exists chat_messages_channel_created_id

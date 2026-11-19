@@ -512,6 +512,12 @@ export class DeleteChatMessageUseCase {
         'Hanya penulis yang dapat menghapus pesan ini',
       );
     }
+    if (existing.kind === 'system') {
+      throw new BadRequestError(
+        'CHAT_DELETE_SYSTEM_UNSUPPORTED',
+        'Pesan sistem tidak bisa dihapus',
+      );
+    }
 
     const audioPath = existing.audioPath;
     const audioSha = existing.audioSha;

@@ -5,6 +5,7 @@ import { users } from './users.schema';
 /**
  * Analitik internal voice room (sementara).
  * BUKAN activity feed - jangan tampilkan di beranda/profil.
+ * joined|left juga menulis baris chat `kind=system` (mirror realtime).
  *
  * kind: joined | left | disconnect | join_failed
  */

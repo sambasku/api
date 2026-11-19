@@ -3,8 +3,8 @@ export const CHAT_CHANNEL_PUBLIC = 'public' as const;
 
 export type ChatChannel = typeof CHAT_CHANNEL_PUBLIC;
 
-/** F1a: text | sticker. voice_note = F1b. */
-export type ChatMessageKind = 'text' | 'sticker' | 'voice_note';
+/** text | sticker | voice_note | system (log voice join/leave, dll). */
+export type ChatMessageKind = 'text' | 'sticker' | 'voice_note' | 'system';
 
 /** Baris chat_messages (SoT Turso). audio_path/sha tidak pernah ke wire. */
 export interface ChatMessage {
@@ -46,6 +46,7 @@ export function buildReplySnippet(parent: ChatMessage): string {
   if (parent.deletedAt) return 'Pesan dihapus';
   if (parent.kind === 'sticker') return '[stiker]';
   if (parent.kind === 'voice_note') return '[voice note]';
+  if (parent.kind === 'system') return '[sistem]';
   const raw = (parent.body ?? '').trim().replace(/\s+/g, ' ');
   if (!raw) return 'Pesan dihapus';
   if (raw.length <= 80) return raw;
