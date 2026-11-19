@@ -84,11 +84,15 @@ export const voteCountsResponseSchema = z.object({
   ),
 });
 
+export const voteCommunityStatusEnum = z.enum(['pending', 'verified', 'rejected']);
+
 export const voteHistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: opaqueId.optional(),
   target_type: voteTargetTypeEnum.optional(),
   value: z.enum(['1', '-1']).optional(),
+  /** Filter hasil komunitas (hanya meaning) - Periksa Kata. */
+  community_status: voteCommunityStatusEnum.optional(),
 });
 
 export type VoteHistoryQuery = z.infer<typeof voteHistoryQuerySchema>;
@@ -110,6 +114,7 @@ export const voteHistoryResponseSchema = z.object({
       value: z.union([z.literal(1), z.literal(-1)]),
       voted_at: z.string(),
       word: voteHistoryWordSchema.nullable(),
+      community_status: voteCommunityStatusEnum.nullable(),
     }),
   ),
   meta: z.object({

@@ -157,6 +157,8 @@ export interface VoteHistoryWord {
   isVerified: boolean;
 }
 
+export type VoteCommunityStatus = 'pending' | 'verified' | 'rejected';
+
 export interface VoteHistoryItem {
   id: string;
   entityType: VoteTargetType;
@@ -165,6 +167,11 @@ export interface VoteHistoryItem {
   /** votes.created_at - waktu pasang pertama, bukan ganti arah. */
   votedAt: Date;
   word: VoteHistoryWord | null;
+  /**
+   * Hasil komunitas untuk target makna (Periksa Kata). Null untuk target
+   * non-makna atau makna induk hilang.
+   */
+  communityStatus: VoteCommunityStatus | null;
 }
 
 export interface VoteHistoryListOptions {
@@ -172,6 +179,8 @@ export interface VoteHistoryListOptions {
   cursor?: string;
   targetType?: VoteTargetType;
   value?: 1 | -1;
+  /** Filter hasil komunitas - hanya baris meaning. */
+  communityStatus?: VoteCommunityStatus;
 }
 
 export interface VoteHistoryListResult {

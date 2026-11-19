@@ -27,11 +27,14 @@ export interface ApplyMeaningVoteTrustCommand {
 export type ApplyMeaningVoteTrustResult =
   | { action: 'none' }
   | { action: 'auto_verified'; wordId: string }
+  | { action: 'auto_rejected'; wordId: string; wordRejected: boolean }
   | { action: 'needs_review'; wordId: string };
 
 /**
- * G2: setelah toggle vote makna - auto-verif satu arah (Voting Warga) atau
- * flag needs_review bila net jelek. Tidak mereset vote; tidak cabut centang.
+ * Setelah toggle vote makna:
+ * - belum verified: quorum +5 → auto_verified; quorum -5 → auto_rejected
+ * - sudah verified + net jelek → needs_review (tidak cabut centang)
+ * Kill switch `auto_verify_by_vote_enabled` mematikan verif **dan** tolak.
  */
 export class ApplyMeaningVoteTrustUseCase {
   constructor(
@@ -46,6 +49,8 @@ export class ApplyMeaningVoteTrustUseCase {
   async execute(cmd: ApplyMeaningVoteTrustCommand): Promise<ApplyMeaningVoteTrustResult> {
     const state = await this.wordRepo.findMeaningTrustState(cmd.meaningId);
     if (!state) return { action: 'none' };
+    // Hanya makna tayang yang ikut quorum.
+    if (state.status !== 'published') return { action: 'none' };
 
     const net = cmd.upvotes - cmd.downvotes;
     // Satu baris vote per user → unique voters = up + down.
@@ -53,59 +58,19 @@ export class ApplyMeaningVoteTrustUseCase {
 
     if (!state.isVerified) {
       const enabled = await this.isAutoVerifyEnabled();
-      if (
-        !enabled ||
-        net < VOTING_WARGA_NET_THRESHOLD ||
-        uniqueVoters < VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD
-      ) {
+      if (!enabled || uniqueVoters < VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD) {
         return { action: 'none' };
       }
 
-      const verified = await this.wordRepo.setMeaningVerified(cmd.meaningId, {
-        isVerified: true,
-        verifiedBy: VOTING_WARGA_USER_ID,
-        verifiedAt: new Date(),
-        clearNeedsReview: true,
-      });
-      if (!verified) return { action: 'none' };
+      if (net >= VOTING_WARGA_NET_THRESHOLD) {
+        return this.autoVerify(cmd, state, net, uniqueVoters);
+      }
 
-      await this.auditRepo
-        ?.record({
-          userId: VOTING_WARGA_USER_ID,
-          action: 'verify',
-          entityType: 'meaning',
-          entityId: cmd.meaningId,
-          oldData: { is_verified: false },
-          newData: {
-            is_verified: true,
-            word_id: verified.wordId,
-            net,
-            unique_voters: uniqueVoters,
-            trigger_actor_id: cmd.actorId,
-          },
-          requestId: cmd.requestId ?? null,
-        })
-        .catch(() => undefined);
+      if (net <= VOTING_WARGA_NEEDS_REVIEW_NET) {
+        return this.autoReject(cmd, state, net, uniqueVoters);
+      }
 
-      await this.activityEvents?.safe({
-        kind: 'word_verified',
-        actorId: VOTING_WARGA_USER_ID,
-        targetWordId: verified.wordId,
-        targetId: cmd.meaningId,
-        dedupeKey: `word_verified:${verified.wordId}:meaning:${cmd.meaningId}`,
-        payload: `"${state.lemma}" diverifikasi lewat ${VOTING_WARGA_DISPLAY_NAME}`,
-      });
-
-      await this.notifyMeaningCreator({
-        userId: state.createdBy,
-        wordId: verified.wordId,
-        lemma: state.lemma,
-        type: 'meaning_auto_verified',
-        title: 'Makna terverifikasi warga',
-        body: `Makna di "${state.lemma}" sudah terverifikasi lewat ${VOTING_WARGA_DISPLAY_NAME}.`,
-      });
-
-      return { action: 'auto_verified', wordId: verified.wordId };
+      return { action: 'none' };
     }
 
     // Sudah verified: net jelek → needs_review (sticky sampai tim / reset-edit).
@@ -150,6 +115,118 @@ export class ApplyMeaningVoteTrustUseCase {
     return { action: 'needs_review', wordId: flagged.wordId };
   }
 
+  private async autoVerify(
+    cmd: ApplyMeaningVoteTrustCommand,
+    state: {
+      meaningId: string;
+      wordId: string;
+      lemma: string;
+      createdBy: string | null;
+    },
+    net: number,
+    uniqueVoters: number,
+  ): Promise<ApplyMeaningVoteTrustResult> {
+    const verified = await this.wordRepo.setMeaningVerified(cmd.meaningId, {
+      isVerified: true,
+      verifiedBy: VOTING_WARGA_USER_ID,
+      verifiedAt: new Date(),
+      clearNeedsReview: true,
+    });
+    if (!verified) return { action: 'none' };
+
+    await this.auditRepo
+      ?.record({
+        userId: VOTING_WARGA_USER_ID,
+        action: 'verify',
+        entityType: 'meaning',
+        entityId: cmd.meaningId,
+        oldData: { is_verified: false },
+        newData: {
+          is_verified: true,
+          word_id: verified.wordId,
+          net,
+          unique_voters: uniqueVoters,
+          trigger_actor_id: cmd.actorId,
+        },
+        requestId: cmd.requestId ?? null,
+      })
+      .catch(() => undefined);
+
+    await this.activityEvents?.safe({
+      kind: 'word_verified',
+      actorId: VOTING_WARGA_USER_ID,
+      targetWordId: verified.wordId,
+      targetId: cmd.meaningId,
+      dedupeKey: `word_verified:${verified.wordId}:meaning:${cmd.meaningId}`,
+      payload: `"${state.lemma}" diverifikasi lewat ${VOTING_WARGA_DISPLAY_NAME}`,
+    });
+
+    await this.notifyMeaningCreator({
+      userId: state.createdBy,
+      wordId: verified.wordId,
+      lemma: state.lemma,
+      type: 'meaning_auto_verified',
+      title: 'Makna terverifikasi warga',
+      body: `Makna di "${state.lemma}" sudah terverifikasi lewat ${VOTING_WARGA_DISPLAY_NAME}.`,
+    });
+
+    return { action: 'auto_verified', wordId: verified.wordId };
+  }
+
+  private async autoReject(
+    cmd: ApplyMeaningVoteTrustCommand,
+    state: {
+      meaningId: string;
+      wordId: string;
+      lemma: string;
+      createdBy: string | null;
+    },
+    net: number,
+    uniqueVoters: number,
+  ): Promise<ApplyMeaningVoteTrustResult> {
+    const rejected = await this.wordRepo.rejectMeaningByCommunityVote(
+      cmd.meaningId,
+      VOTING_WARGA_USER_ID,
+    );
+    if (!rejected) return { action: 'none' };
+
+    await this.auditRepo
+      ?.record({
+        userId: VOTING_WARGA_USER_ID,
+        action: 'reject',
+        entityType: 'meaning',
+        entityId: cmd.meaningId,
+        oldData: { status: 'published', is_verified: false },
+        newData: {
+          status: 'rejected',
+          word_id: rejected.wordId,
+          word_rejected: rejected.wordRejected,
+          net,
+          unique_voters: uniqueVoters,
+          trigger_actor_id: cmd.actorId,
+        },
+        requestId: cmd.requestId ?? null,
+      })
+      .catch(() => undefined);
+
+    await this.notifyMeaningCreator({
+      userId: state.createdBy,
+      wordId: rejected.wordId,
+      lemma: state.lemma,
+      type: 'meaning_auto_rejected',
+      title: 'Makna ditolak warga',
+      body: rejected.wordRejected
+        ? `Makna di "${state.lemma}" ditolak lewat ${VOTING_WARGA_DISPLAY_NAME}. Kata ditarik dari tayang.`
+        : `Makna di "${state.lemma}" ditolak lewat ${VOTING_WARGA_DISPLAY_NAME}.`,
+    });
+
+    return {
+      action: 'auto_rejected',
+      wordId: rejected.wordId,
+      wordRejected: rejected.wordRejected,
+    };
+  }
+
   private async isAutoVerifyEnabled(): Promise<boolean> {
     const raw = await this.settingsRepo.getValue(AUTO_VERIFY_BY_VOTE_ENABLED_KEY);
     return raw === 'true';
@@ -159,7 +236,7 @@ export class ApplyMeaningVoteTrustUseCase {
     userId: string | null;
     wordId: string;
     lemma: string;
-    type: 'meaning_auto_verified' | 'meaning_needs_review';
+    type: 'meaning_auto_verified' | 'meaning_needs_review' | 'meaning_auto_rejected';
     title: string;
     body: string;
   }): Promise<void> {

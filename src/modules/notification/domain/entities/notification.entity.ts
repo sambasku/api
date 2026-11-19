@@ -27,6 +27,7 @@ export type InboxNotificationType =
   /** G2: makna auto-verif Voting Warga / needs_review ke pembuat makna. */
   | 'meaning_auto_verified'
   | 'meaning_needs_review'
+  | 'meaning_auto_rejected'
   /** #133: pemilik kata dapat notif saat contoh/pelafalan tayang. */
   | 'word_example'
   | 'word_audio'
@@ -266,6 +267,12 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
     return {
       title: 'Makna perlu ditinjau ulang',
       body: 'Maknamu dapat banyak downvote setelah terverifikasi. Tim kami cek lagi.',
+      bodyType: 'plain',
+    };
+  case 'meaning_auto_rejected':
+    return {
+      title: 'Makna ditolak warga',
+      body: 'Maknamu ditolak lewat Voting Warga.',
       bodyType: 'plain',
     };
   // #133: copy bawaan tanpa nama aktor; caller mengisi body saat tahu namanya.

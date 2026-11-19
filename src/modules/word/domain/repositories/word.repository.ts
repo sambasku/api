@@ -483,15 +483,26 @@ export interface WordRepository {
     actorId: string,
   ): Promise<{ wordId: string; changed: boolean } | null>;
 
-  /** Ringkas trust + pembuat makna untuk hook vote (G2). */
+  /** Ringkas trust + pembuat makna untuk hook vote (G2 / Periksa Kata). */
   findMeaningTrustState(meaningId: string): Promise<{
     meaningId: string;
     wordId: string;
     lemma: string;
+    status: string;
     isVerified: boolean;
     needsReview: boolean;
     createdBy: string | null;
   } | null>;
+
+  /**
+   * Auto-tolak warga: makna published → rejected. Jika tidak ada makna
+   * published tersisa, lemma juga rejected. Return null jika makna hilang /
+   * bukan published.
+   */
+  rejectMeaningByCommunityVote(
+    meaningId: string,
+    actorId: string,
+  ): Promise<{ wordId: string; wordRejected: boolean } | null>;
 
   /** Hitung ulang words.is_verified dari makna published (ikut data lama). */
   rollupWordVerifiedFromMeanings(wordId: string): Promise<void>;

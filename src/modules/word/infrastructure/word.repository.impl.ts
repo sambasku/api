@@ -2286,6 +2286,7 @@ memberLemma: string;
     meaningId: string;
     wordId: string;
     lemma: string;
+    status: string;
     isVerified: boolean;
     needsReview: boolean;
     createdBy: string | null;
@@ -2295,6 +2296,7 @@ memberLemma: string;
         meaningId: meanings.id,
         wordId: meanings.wordId,
         lemma: words.lemma,
+        status: meanings.status,
         isVerified: meanings.isVerified,
         needsReview: meanings.needsReview,
         createdBy: meanings.createdBy,
@@ -2314,10 +2316,76 @@ memberLemma: string;
       meaningId: row.meaningId,
       wordId: row.wordId,
       lemma: row.lemma,
+      status: row.status,
       isVerified: row.isVerified,
       needsReview: row.needsReview,
       createdBy: row.createdBy,
     };
+  }
+
+  async rejectMeaningByCommunityVote(
+    meaningId: string,
+    actorId: string,
+  ): Promise<{ wordId: string; wordRejected: boolean } | null> {
+    const [existing] = await this.db
+      .select({
+        id: meanings.id,
+        wordId: meanings.wordId,
+        status: meanings.status,
+      })
+      .from(meanings)
+      .where(and(eq(meanings.id, meaningId), isNull(meanings.deletedAt)))
+      .limit(1);
+    if (!existing) return null;
+    if (existing.status !== 'published') {
+      return { wordId: existing.wordId, wordRejected: false };
+    }
+
+    const now = new Date();
+    await this.db
+      .update(meanings)
+      .set({
+        status: 'rejected',
+        isVerified: false,
+        verifiedBy: null,
+        verifiedAt: null,
+        needsReview: false,
+        updatedBy: actorId,
+        updatedAt: now,
+      })
+      .where(eq(meanings.id, meaningId));
+
+    const remaining = await this.db
+      .select({ id: meanings.id })
+      .from(meanings)
+      .where(
+        and(
+          eq(meanings.wordId, existing.wordId),
+          eq(meanings.status, 'published'),
+          isNull(meanings.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    let wordRejected = false;
+    if (remaining.length === 0) {
+      await this.db
+        .update(words)
+        .set({
+          status: 'rejected',
+          isVerified: false,
+          verifiedBy: null,
+          verifiedAt: null,
+          updatedBy: actorId,
+          updatedAt: now,
+        })
+        .where(and(eq(words.id, existing.wordId), isNull(words.deletedAt)));
+      wordRejected = true;
+    } else {
+      await this.rollupWordVerifiedFromMeanings(existing.wordId);
+    }
+
+    return { wordId: existing.wordId, wordRejected };
   }
 
   async rollupWordVerifiedFromMeanings(wordId: string): Promise<void> {

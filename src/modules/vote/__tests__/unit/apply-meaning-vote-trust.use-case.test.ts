@@ -14,6 +14,7 @@ const CREATOR = '01JDUSERKONTRIB0000000000A';
 const ACTOR = '01JDUSERVOTER00000000000A';
 
 function makeState(overrides: Partial<{
+  status: string;
   isVerified: boolean;
   needsReview: boolean;
   createdBy: string | null;
@@ -22,6 +23,7 @@ function makeState(overrides: Partial<{
     meaningId: MEANING_ID,
     wordId: WORD_ID,
     lemma: 'makatn',
+    status: 'published',
     isVerified: false,
     needsReview: false,
     createdBy: CREATOR,
@@ -39,6 +41,9 @@ function makeDeps(opts: {
     ),
     setMeaningVerified: vi.fn().mockResolvedValue({ wordId: WORD_ID }),
     setMeaningNeedsReview: vi.fn().mockResolvedValue({ wordId: WORD_ID, changed: true }),
+    rejectMeaningByCommunityVote: vi
+      .fn()
+      .mockResolvedValue({ wordId: WORD_ID, wordRejected: true }),
   } as unknown as WordRepository;
   const settingsRepo = {
     getValue: vi.fn().mockResolvedValue(opts.enabled === false ? 'false' : 'true'),
@@ -169,4 +174,57 @@ describe('ApplyMeaningVoteTrustUseCase', () => {
     expect(result).toEqual({ action: 'none' });
     expect(wordRepo.setMeaningNeedsReview).not.toHaveBeenCalled();
   });
+  it('net <= -5 + unique cukup → auto_rejected Voting Warga', async () => {
+    const { useCase, wordRepo, inbox, auditRepo } = makeDeps({ enabled: true });
+    const result = await useCase.execute({
+      meaningId: MEANING_ID,
+      upvotes: 0,
+      downvotes: 5,
+      actorId: ACTOR,
+    });
+    expect(result).toEqual({
+      action: 'auto_rejected',
+      wordId: WORD_ID,
+      wordRejected: true,
+    });
+    expect(wordRepo.rejectMeaningByCommunityVote).toHaveBeenCalledWith(
+      MEANING_ID,
+      VOTING_WARGA_USER_ID,
+    );
+    expect(wordRepo.setMeaningVerified).not.toHaveBeenCalled();
+    expect(inbox.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'meaning_auto_rejected' }),
+    );
+    expect(auditRepo.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'reject', entityType: 'meaning' }),
+    );
+  });
+
+  it('kill switch off → tidak auto-tolak meski net -5', async () => {
+    const { useCase, wordRepo } = makeDeps({ enabled: false });
+    const result = await useCase.execute({
+      meaningId: MEANING_ID,
+      upvotes: 0,
+      downvotes: 5,
+      actorId: ACTOR,
+    });
+    expect(result).toEqual({ action: 'none' });
+    expect(wordRepo.rejectMeaningByCommunityVote).not.toHaveBeenCalled();
+  });
+
+  it('makna sudah rejected (status) → none', async () => {
+    const { useCase, wordRepo } = makeDeps({
+      enabled: true,
+      state: makeState({ status: 'rejected' }),
+    });
+    const result = await useCase.execute({
+      meaningId: MEANING_ID,
+      upvotes: 0,
+      downvotes: 5,
+      actorId: ACTOR,
+    });
+    expect(result).toEqual({ action: 'none' });
+    expect(wordRepo.rejectMeaningByCommunityVote).not.toHaveBeenCalled();
+  });
+
 });

@@ -78,6 +78,7 @@ export class VoteController {
       cursor: query.cursor,
       targetType: query.target_type,
       value: query.value === '1' ? 1 : query.value === '-1' ? -1 : undefined,
+      communityStatus: query.community_status,
     });
     return c.json({
       success: true as const,
@@ -95,6 +96,7 @@ export class VoteController {
               is_verified: item.word.isVerified,
             }
           : null,
+        community_status: item.communityStatus,
       })),
       meta: { limit: query.limit, next_cursor: page.nextCursor, has_more: page.hasMore },
     });

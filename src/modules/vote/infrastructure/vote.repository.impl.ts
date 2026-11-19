@@ -835,25 +835,77 @@ case 'article_comment': {
   }
 
   async listByUser(userId: string, opts: VoteHistoryListOptions): Promise<VoteHistoryListResult> {
-    const rows = await this.db
-      .select({
-        id: votes.id,
-        entityType: votes.entityType,
-        entityId: votes.entityId,
-        value: votes.value,
-        createdAt: votes.createdAt,
-      })
-      .from(votes)
-      .where(
-        and(
-          eq(votes.userId, userId),
-          opts.targetType ? eq(votes.entityType, opts.targetType) : undefined,
-          opts.value !== undefined ? eq(votes.value, opts.value) : undefined,
-          opts.cursor ? lt(votes.id, opts.cursor) : undefined,
-        ),
-      )
-      .orderBy(desc(votes.id))
-      .limit(opts.limit + 1);
+    // Filter community_status hanya untuk target makna (Periksa Kata).
+    const communityStatus = opts.communityStatus;
+
+    let rows: {
+      id: string;
+      entityType: string;
+      entityId: string;
+      value: number;
+      createdAt: Date;
+    }[];
+
+    if (communityStatus) {
+      // JOIN meanings + words; status diturunkan di SQL.
+      const statusClause =
+        communityStatus === 'rejected'
+          ? or(eq(meanings.status, 'rejected'), eq(words.status, 'rejected'))
+          : communityStatus === 'verified'
+            ? and(
+                eq(meanings.status, 'published'),
+                eq(meanings.isVerified, true),
+                ne(words.status, 'rejected'),
+              )
+            : and(
+                eq(meanings.status, 'published'),
+                eq(meanings.isVerified, false),
+                eq(words.status, 'published'),
+              );
+
+      rows = await this.db
+        .select({
+          id: votes.id,
+          entityType: votes.entityType,
+          entityId: votes.entityId,
+          value: votes.value,
+          createdAt: votes.createdAt,
+        })
+        .from(votes)
+        .innerJoin(meanings, eq(meanings.id, votes.entityId))
+        .innerJoin(words, eq(words.id, meanings.wordId))
+        .where(
+          and(
+            eq(votes.userId, userId),
+            eq(votes.entityType, 'meaning'),
+            opts.value !== undefined ? eq(votes.value, opts.value) : undefined,
+            opts.cursor ? lt(votes.id, opts.cursor) : undefined,
+            statusClause,
+          ),
+        )
+        .orderBy(desc(votes.id))
+        .limit(opts.limit + 1);
+    } else {
+      rows = await this.db
+        .select({
+          id: votes.id,
+          entityType: votes.entityType,
+          entityId: votes.entityId,
+          value: votes.value,
+          createdAt: votes.createdAt,
+        })
+        .from(votes)
+        .where(
+          and(
+            eq(votes.userId, userId),
+            opts.targetType ? eq(votes.entityType, opts.targetType) : undefined,
+            opts.value !== undefined ? eq(votes.value, opts.value) : undefined,
+            opts.cursor ? lt(votes.id, opts.cursor) : undefined,
+          ),
+        )
+        .orderBy(desc(votes.id))
+        .limit(opts.limit + 1);
+    }
 
     const hasMore = rows.length > opts.limit;
     const page = hasMore ? rows.slice(0, opts.limit) : rows;
@@ -864,6 +916,11 @@ case 'article_comment': {
       })),
     );
 
+    const meaningIds = page
+      .filter((row) => row.entityType === 'meaning')
+      .map((row) => row.entityId);
+    const communityMap = await this.resolveMeaningCommunityStatus(meaningIds);
+
     const items: VoteHistoryItem[] = page.map((row) => {
       const target = { entityType: row.entityType as VoteTargetType, entityId: row.entityId };
       return {
@@ -873,6 +930,10 @@ case 'article_comment': {
         value: row.value === 1 ? 1 : -1,
         votedAt: row.createdAt,
         word: wordMap.get(voteTargetKey(target)) ?? null,
+        communityStatus:
+          target.entityType === 'meaning'
+            ? (communityMap.get(target.entityId) ?? null)
+            : null,
       };
     });
 
@@ -882,6 +943,35 @@ case 'article_comment': {
       nextCursor: hasMore && last ? last.id : null,
       hasMore,
     };
+  }
+
+  /** Status komunitas baca-waktu untuk makna (pending / verified / rejected). */
+  private async resolveMeaningCommunityStatus(
+    meaningIds: string[],
+  ): Promise<Map<string, 'pending' | 'verified' | 'rejected'>> {
+    const out = new Map<string, 'pending' | 'verified' | 'rejected'>();
+    const ids = [...new Set(meaningIds)];
+    if (ids.length === 0) return out;
+    const rows = await this.db
+      .select({
+        id: meanings.id,
+        meaningStatus: meanings.status,
+        isVerified: meanings.isVerified,
+        wordStatus: words.status,
+      })
+      .from(meanings)
+      .innerJoin(words, eq(words.id, meanings.wordId))
+      .where(inArray(meanings.id, ids));
+    for (const row of rows) {
+      if (row.meaningStatus === 'rejected' || row.wordStatus === 'rejected') {
+        out.set(row.id, 'rejected');
+      } else if (row.isVerified) {
+        out.set(row.id, 'verified');
+      } else {
+        out.set(row.id, 'pending');
+      }
+    }
+    return out;
   }
 
   /**
