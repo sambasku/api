@@ -177,6 +177,15 @@ describe.skipIf(!hasTestDb)('Word views E2E (G6)', () => {
     );
     expect(dailyBody.data.trend).toBeInstanceOf(Array);
 
+    const series = await get(
+      `/api/v1/admin/words/${wordId}/views?days=7`,
+      adminToken,
+    );
+    expect(series.status).toBe(200);
+    const seriesBody = await series.json();
+    expect(seriesBody.data.total).toBeGreaterThanOrEqual(1);
+    expect(seriesBody.data.trend).toBeInstanceOf(Array);
+
     expect((await get('/api/v1/admin/words/views')).status).toBe(401);
   });
 });

@@ -184,6 +184,7 @@ import { createPronunciationStorage } from "@/modules/word/infrastructure/pronun
 import { WordController } from "@/modules/word/presentation/v1/word.controller";
 import {
   GetWordViewReportUseCase,
+  GetWordViewSeriesUseCase,
   ListWordViewsUseCase,
   RecordWordViewByIdUseCase,
   RecordWordViewByLemmaUseCase,
@@ -1383,6 +1384,7 @@ const wordViewsController = new WordViewsController(
   new RecordWordViewByLemmaUseCase(wordViewsRepo),
   new ListWordViewsUseCase(wordViewsRepo),
   new GetWordViewReportUseCase(wordViewsRepo),
+  new GetWordViewSeriesUseCase(wordViewsRepo),
 );
 const karyaRepo = new KaryaRepositoryImpl(db);
 // #133: notif pemilik kata saat contoh kalimat / audio pelafalan tayang.

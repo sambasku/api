@@ -5,6 +5,7 @@ import { words } from '@/shared/database/drizzle/schema/words.schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
   WordViewReport,
+  WordViewSeries,
   WordViewsRepository,
 } from '../domain/repositories/word-views.repository';
 
@@ -94,6 +95,27 @@ export class WordViewsRepositoryImpl implements WordViewsRepository {
         views: r.views,
         lastViewed: r.lastViewed ?? null,
       })),
+    };
+  }
+
+  async viewSeriesForWord(wordId: string, days: number): Promise<WordViewSeries> {
+    const from = dayOffset(days);
+    const trendRows = await this.db
+      .select({
+        day: wordViews.day,
+        total: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(wordViews)
+      .where(and(eq(wordViews.wordId, wordId), gte(wordViews.day, from)))
+      .groupBy(wordViews.day)
+      .orderBy(wordViews.day);
+    const total = trendRows.reduce((s, r) => s + r.total, 0);
+    const lastViewed =
+      trendRows.length > 0 ? trendRows[trendRows.length - 1]!.day : null;
+    return {
+      total,
+      lastViewed,
+      trend: trendRows.map((r) => ({ day: r.day, total: r.total })),
     };
   }
 }

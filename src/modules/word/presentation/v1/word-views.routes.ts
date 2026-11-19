@@ -96,6 +96,8 @@ export function createAdminWordViewsRoutes(deps: AdminWordViewsRoutesDeps) {
   ] as const;
   routes.use('/views', ...adminGate);
   routes.use('/views/daily', ...adminGate);
+  // Detail satu lemma: /:id/views (bukan * - jangan ganggu POST create).
+  routes.use('/:id/views', ...adminGate);
 
   const viewsResponseSchema = z.object({
     success: z.literal(true),
@@ -144,6 +146,45 @@ export function createAdminWordViewsRoutes(deps: AdminWordViewsRoutesDeps) {
   routes.openapi(viewsDailyRoute, (c) =>
     deps.controller.listDaily(c, c.req.valid('query').days) as never,
   );
+
+  const wordSeriesRoute = createRoute({
+    method: 'get',
+    path: '/:id/views',
+    tags: ['Words', 'Admin'],
+    summary: 'Tren view harian satu lemma (detail Console)',
+    request: {
+      params: z.object({ id: z.string().length(26) }),
+      query: viewPeriodQuery,
+    },
+    responses: {
+      200: {
+        description: 'Tren view lemma',
+        content: json(
+          z.object({
+            success: z.literal(true),
+            data: z.object({
+              total: z.number().int(),
+              last_viewed: z.string().nullable(),
+              trend: z.array(
+                z.object({ day: z.string(), total: z.number().int() }),
+              ),
+            }),
+          }),
+        ),
+      },
+      401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+      403: { description: 'Forbidden', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(wordSeriesRoute, (c) => {
+    const { id } = c.req.valid('param');
+    return deps.controller.seriesForWord(
+      c,
+      id,
+      c.req.valid('query').days,
+    ) as never;
+  });
 
   return routes;
 }

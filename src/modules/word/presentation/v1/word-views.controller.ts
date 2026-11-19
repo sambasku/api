@@ -6,6 +6,7 @@ import {
 } from '@/shared/middlewares/rate-limit.middleware';
 import type {
   GetWordViewReportUseCase,
+  GetWordViewSeriesUseCase,
   ListWordViewsUseCase,
   RecordWordViewByIdUseCase,
   RecordWordViewByLemmaUseCase,
@@ -25,6 +26,7 @@ export class WordViewsController {
     private readonly recordByLemma: RecordWordViewByLemmaUseCase,
     private readonly listViews: ListWordViewsUseCase,
     private readonly viewReport: GetWordViewReportUseCase,
+    private readonly viewSeries: GetWordViewSeriesUseCase,
   ) {}
 
   recordViewById(c: Context<{ Variables: AppVariables }>, wordId: string) {
@@ -62,6 +64,24 @@ export class WordViewsController {
             views: i.views,
             last_viewed: i.lastViewed,
           })),
+        },
+      }),
+    );
+  }
+
+  /** GET /admin/words/:id/views - tren satu lemma (detail Console). */
+  seriesForWord(
+    c: Context<{ Variables: AppVariables }>,
+    wordId: string,
+    days: number,
+  ) {
+    return this.viewSeries.execute(wordId, days).then((series) =>
+      c.json({
+        success: true as const,
+        data: {
+          total: series.total,
+          last_viewed: series.lastViewed,
+          trend: series.trend,
         },
       }),
     );

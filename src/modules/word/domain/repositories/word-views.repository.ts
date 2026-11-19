@@ -9,6 +9,13 @@ export interface WordViewReport {
   }>;
 }
 
+/** Tren harian satu lemma (Console detail kata). */
+export interface WordViewSeries {
+  total: number;
+  lastViewed: string | null;
+  trend: Array<{ day: string; total: number }>;
+}
+
 export interface WordViewsRepository {
   /** Catat 1 view by word id. Id tidak valid / bukan published = no-op. */
   recordViewById(wordId: string, viewerKey: string): Promise<void>;
@@ -16,4 +23,6 @@ export interface WordViewsRepository {
   recordViewByLemma(lemma: string, viewerKey: string): Promise<void>;
   viewTotals(days: number | null): Promise<Map<string, number>>;
   viewReport(days: number): Promise<WordViewReport>;
+  /** Tren pembaca unik per hari untuk satu word_id. */
+  viewSeriesForWord(wordId: string, days: number): Promise<WordViewSeries>;
 }

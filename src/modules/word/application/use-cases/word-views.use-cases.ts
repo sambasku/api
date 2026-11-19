@@ -1,5 +1,6 @@
 import type {
   WordViewReport,
+  WordViewSeries,
   WordViewsRepository,
 } from '../../domain/repositories/word-views.repository';
 
@@ -32,5 +33,13 @@ export class GetWordViewReportUseCase {
 
   execute(days: number): Promise<WordViewReport> {
     return this.repo.viewReport(days);
+  }
+}
+
+export class GetWordViewSeriesUseCase {
+  constructor(private readonly repo: WordViewsRepository) {}
+
+  execute(wordId: string, days: number): Promise<WordViewSeries> {
+    return this.repo.viewSeriesForWord(wordId, days);
   }
 }
