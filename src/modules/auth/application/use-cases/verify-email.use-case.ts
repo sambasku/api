@@ -9,6 +9,7 @@ import { issueLoginSession, type LoginResult } from '../utils/issue-login-sessio
 import { hashOtp, normalizeOtpCode, OTP_MAX_ATTEMPTS } from '../utils/otp';
 
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import { emitUserJoined } from '../utils/emit-user-joined';
 
 export class VerifyEmailUseCase {
   constructor(
@@ -63,14 +64,9 @@ export class VerifyEmailUseCase {
 
     await this.userRepo.markEmailVerified(user.id);
 
-    // Event feed "Bergabung": momen verifikasi email (OAuth verified-saat-daftar
-    // tidak lewat sini; backfill menutup celah itu).
-    await this.activityEvents?.safe({
-      kind: 'user_joined',
-      actorId: user.id,
-      targetId: user.id,
-      dedupeKey: `joined:${user.id}`,
-    });
+    // Event feed "Bergabung": momen verifikasi email. OAuth new-user
+    // emit di login-with-* (lihat #285).
+    await emitUserJoined(this.activityEvents, user.id);
 
     return issueLoginSession(
       { id: user.id, username: user.username, displayName: user.displayName, roles: user.roles, avatarUrl: user.avatarUrl },

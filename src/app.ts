@@ -1207,6 +1207,7 @@ const controller = new AuthController({
     new SocialConsentService(appSettingsRepo, userConsentRepo),
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
+    activityEvents,
   ),
   facebook: new LoginWithFacebookUseCase(
     userRepo,
@@ -1218,6 +1219,7 @@ const controller = new AuthController({
     new SocialConsentService(appSettingsRepo, userConsentRepo),
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
+    activityEvents,
   ),
   github: new LoginWithGithubUseCase(
     userRepo,
@@ -1229,6 +1231,7 @@ const controller = new AuthController({
     new SocialConsentService(appSettingsRepo, userConsentRepo),
     env.JWT_ACCESS_TOKEN_TTL,
     env.JWT_REFRESH_TOKEN_TTL,
+    activityEvents,
   ),
   listProviders: new ListAuthProvidersUseCase(identityRepo, userRepo),
   linkGoogle: new LinkGoogleAccountUseCase(

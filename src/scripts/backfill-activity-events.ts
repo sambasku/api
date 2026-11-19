@@ -341,22 +341,25 @@ async function main() {
   );
   console.log(`[backfill-activity] usulan diterapkan: ${n6}`);
 
-  // 7. Join user (emailVerifiedAt; hanya yang verified)
+  // 7. Join user (verified). #285: OAuth lama sering emailVerified=true
+  // tapi emailVerifiedAt null - pakai createdAt supaya tidak terlewat.
   const joinedRows = await db
-    .select({ id: users.id, emailVerifiedAt: users.emailVerifiedAt })
+    .select({
+      id: users.id,
+      emailVerifiedAt: users.emailVerifiedAt,
+      createdAt: users.createdAt,
+    })
     .from(users)
     .where(and(eq(users.emailVerified, true), isNull(users.deletedAt)));
   const n7 = await insertAll(
-    joinedRows
-      .filter((r) => r.emailVerifiedAt)
-      .map((r) => ({
-        kind: 'user_joined' as const,
-        actorId: r.id,
-        targetWordId: null,
-        targetId: r.id,
-        occurredAt: r.emailVerifiedAt!,
-        dedupeKey: `joined:${r.id}`,
-      })),
+    joinedRows.map((r) => ({
+      kind: 'user_joined' as const,
+      actorId: r.id,
+      targetWordId: null,
+      targetId: r.id,
+      occurredAt: r.emailVerifiedAt ?? r.createdAt,
+      dedupeKey: `joined:${r.id}`,
+    })),
   );
   console.log(`[backfill-activity] join: ${n7}`);
 

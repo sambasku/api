@@ -146,6 +146,10 @@ function makeDeps(opts: {
     insertMany: vi.fn().mockResolvedValue(undefined),
   } as unknown as UserConsentRepository;
 
+  const activityEvents = {
+    safe: vi.fn().mockResolvedValue(undefined),
+  };
+
   const useCase = new LoginWithGoogleUseCase(
     userRepo,
     identityRepo,
@@ -156,9 +160,20 @@ function makeDeps(opts: {
     new SocialConsentService(settingsRepo, consentRepo),
     900,
     2592000,
+    activityEvents as never,
   );
 
-  return { useCase, userRepo, identityRepo, verifier, refreshTokenRepo, auditRepo, settingsRepo, consentRepo };
+  return {
+    useCase,
+    userRepo,
+    identityRepo,
+    verifier,
+    refreshTokenRepo,
+    auditRepo,
+    settingsRepo,
+    consentRepo,
+    activityEvents,
+  };
 }
 
 describe('LoginWithGoogleUseCase', () => {
@@ -205,6 +220,32 @@ describe('LoginWithGoogleUseCase', () => {
         emailAtProvider: 'budi@gmail.com',
       }),
     );
+  });
+
+  it('akun OAuth baru → emit user_joined welcome (#285)', async () => {
+    const { useCase, activityEvents } = makeDeps({ identity: null, userByEmail: null });
+
+    await useCase.execute({ idToken: 'id-token' });
+
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'user_joined',
+        actorId: '01TESTGOOGLEUSER000000001',
+        targetId: '01TESTGOOGLEUSER000000001',
+        dedupeKey: 'joined:01TESTGOOGLEUSER000000001',
+      }),
+    );
+  });
+
+  it('identity ada → tidak emit user_joined ulang', async () => {
+    const { useCase, activityEvents } = makeDeps({
+      identity: makeIdentity(),
+      userById: makeUser(),
+    });
+
+    await useCase.execute({ idToken: 'id-token' });
+
+    expect(activityEvents.safe).not.toHaveBeenCalled();
   });
 
   it('identity tidak ada + email baru → save user passwordHash null + identity + audit via google', async () => {
