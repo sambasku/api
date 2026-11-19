@@ -3,7 +3,7 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import { activityEvents, articleComments, articles, contributions, cuisineComments, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
-import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
+import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
 import {
   publicAccountDisplayName,
   publicAccountName,
@@ -542,12 +542,7 @@ export class ActivityEventFeedRepositoryImpl {
       ${words.deletedAt} is null
       and ${words.status} = 'published'
       and ${words.isVerified} = 1
-      and ${sql.join(
-        FEED_EXCLUDED_USAGE_LABELS.map(
-          (label) => sql`${words.usageLabels} NOT LIKE ${`%\"${label}\"%`}`,
-        ),
-        sql` and `,
-      )}
+      and ${sql.join(feedExcludedUsageLabelClauses(), sql` and `)}
     )`;
   }
 

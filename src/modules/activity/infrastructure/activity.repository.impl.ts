@@ -20,6 +20,7 @@ import {
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
+import { feedSafeUsageLabelsSql } from '@/shared/database/drizzle/usage-label-filters';
 import {
   publicAccountDisplayName,
   publicAccountName,
@@ -101,14 +102,6 @@ const CONTRIB_BODY: Record<string, string> = {
   pronunciation: 'Menambah cara baca',
   example: 'Menambah contoh kalimat',
 };
-
-function feedSafeUsageLabelsSql() {
-  return and(
-    ...FEED_EXCLUDED_USAGE_LABELS.map(
-      (label) => sql`${words.usageLabels} NOT LIKE ${`%"${label}"%`}`,
-    ),
-  );
-}
 
 /** Kata tayang yang boleh disebut di feed (bukan berlabel terlarang). */
 function feedVisibleWordSql() {

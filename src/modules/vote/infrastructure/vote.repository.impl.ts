@@ -25,7 +25,7 @@ import {
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
-import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
+import { feedSafeUsageLabelsSql } from '@/shared/database/drizzle/usage-label-filters';
 import { NotFoundError } from '@/shared/errors/app-error';
 import { seededShuffle } from '@/shared/utils/seeded-shuffle';
 import type {
@@ -1273,11 +1273,7 @@ if (articleCommentIds.length > 0) {
     // 0101: total dari tabel ringkasan makna - bukan COUNT(*) correlated.
     const totalVotesExpr = sql<number>`coalesce(${meaningVoteCounts.total}, 0)`.mapWith(Number);
 
-    const feedSafe = and(
-      ...FEED_EXCLUDED_USAGE_LABELS.map(
-        (label) => sql`${words.usageLabels} NOT LIKE ${`%"${label}"%`}`,
-      ),
-    );
+    const feedSafe = feedSafeUsageLabelsSql();
 
     const userNotVoted = notExists(
       this.db

@@ -10,7 +10,7 @@ import {
 } from '@/shared/database/drizzle/schema';
 import { searchDayWib } from '@/shared/database/drizzle/schema/search-daily.schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
+import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
 import type {
   HotProposedItem,
   HotSearchedItem,
@@ -28,9 +28,7 @@ const VIEW_BACKFILL_DAYS = 7;
 
 /** Sembunyikan lemma berlabel seksual / diskriminatif / kasar / tabu. */
 function withoutExcludedUsageLabels() {
-  return FEED_EXCLUDED_USAGE_LABELS.map(
-    (label) => sql`${words.usageLabels} NOT LIKE ${`%\"${label}\"%`}`,
-  );
+  return feedExcludedUsageLabelClauses();
 }
 
 /** Fulfilment lemma: kata published lemma=term ATAU varian form=term. */
@@ -169,6 +167,9 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
         and(
           eq(contributions.entityType, 'word'),
           eq(contributions.status, 'pending'),
+          // Hanya kata yang sudah tayang (published, boleh belum verified).
+          // pending_review (usulan tamu) tidak ikut - publik GET /words/:id 404.
+          eq(words.status, 'published'),
           isNull(contributions.deletedAt),
           isNull(words.deletedAt),
           gte(contributions.createdAt, backfillStart),

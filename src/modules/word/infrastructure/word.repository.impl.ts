@@ -36,7 +36,7 @@ import {
   words,
   wordImportSessions,
 } from '@/shared/database/drizzle/schema';
-import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
+import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { WordSearchIndex } from '../domain/ports/word-search-index';
 import {
   publicAccountDisplayName,
@@ -85,200 +85,36 @@ import { encodeLatestCursor, encodeListCursor } from '../domain/repositories/wor
 import type { CreateWordRelatedDto } from '../application/dto/create-word.dto';
 import { generateId } from '@/shared/utils/ulid';
 import type { UsageLabel } from '@/shared/constants/usage-labels';
-import {
-  FEED_EXCLUDED_USAGE_LABELS,
-  BROWSE_EXCLUDED_USAGE_LABELS,
-  USAGE_LABEL_SET,
-} from '@/shared/constants/usage-labels';
 import type { ImageContentWarning } from '@/shared/constants/image-content-warnings';
 import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
-import { IMAGE_CONTENT_WARNING_SET } from '@/shared/constants/image-content-warnings';
-
-function toUsageLabels(raw: unknown): UsageLabel[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((x): x is UsageLabel => typeof x === 'string' && USAGE_LABEL_SET.has(x));
-}
-
-function toContentWarnings(raw: unknown): ImageContentWarning[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(
-    (x): x is ImageContentWarning =>
-      typeof x === 'string' && IMAGE_CONTENT_WARNING_SET.has(x),
-  );
-}
-
-/** SQL: sembunyikan kata dengan label feed-excluded (LIKE pada JSON text). */
-function feedSafeUsageLabelsSql() {
-  return and(
-    ...FEED_EXCLUDED_USAGE_LABELS.map(
-      (label) => sql`${words.usageLabels} NOT LIKE ${`%"${label}"%`}`,
-    ),
-  );
-}
-
-/** SQL: sembunyikan kasar/diskriminatif dari browsing A-Z tanpa `q`. */
-function browseSafeUsageLabelsSql() {
-  return and(
-    ...BROWSE_EXCLUDED_USAGE_LABELS.map(
-      (label) => sql`${words.usageLabels} NOT LIKE ${`%"${label}"%`}`,
-    ),
-  );
-}
-
-function verificationCols(isVerified: boolean, actorId: string, at = new Date()) {
-  return isVerified
-    ? { verifiedBy: actorId, verifiedAt: at }
-    : { verifiedBy: null, verifiedAt: null };
-}
-
-// Tipe transaction Drizzle (pg) - dipakai helper yang menerima tx
-type Tx = AppTransaction;
-
-function toWord(row: typeof words.$inferSelect): Word {
-  return {
-    id: row.id,
-    languageId: row.languageId,
-    lemma: row.lemma,
-    lemmaAllowsComma: row.lemmaAllowsComma ?? false,
-    notes: row.notes,
-    wordType: row.wordType as Word['wordType'],
-    usageLabels: toUsageLabels(row.usageLabels),
-    status: row.status as WordStatus,
-    isVerified: row.isVerified,
-    verifiedBy: row.verifiedBy,
-    verifiedAt: row.verifiedAt,
-    isCorrected: row.isCorrected,
-    createdBy: row.createdBy,
-    updatedBy: row.updatedBy,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    deletedAt: row.deletedAt,
-    deletedBy: row.deletedBy,
-    takedownReasonCode: row.takedownReasonCode,
-    takedownNote: row.takedownNote,
-    takenDownBy: row.takenDownBy,
-    takenDownAt: row.takenDownAt,
-    importSessionId: row.importSessionId ?? null,
-  };
-}
-
-function toPronunciation(row: typeof pronunciations.$inferSelect): PronunciationMedia {
-  return {
-    id: row.id,
-    wordId: row.wordId,
-    dialectId: row.dialectId,
-    notation: row.notation,
-    value: row.value,
-    audioUrl: row.audioUrl,
-    speakerName: row.speakerName,
-    notes: row.notes,
-    status: row.status as ChildStatus,
-    isVerified: row.isVerified,
-    isCorrected: row.isCorrected,
-  };
-}
-
-function toWordImage(row: typeof wordImages.$inferSelect): WordImageMedia {
-  return {
-    id: row.id,
-    wordId: row.wordId,
-    provider: row.provider,
-    providerFileId: row.providerFileId,
-    sha: row.sha ?? null,
-    url: row.url,
-    altText: row.altText,
-    isPrimary: row.isPrimary,
-    contentWarnings: toContentWarnings(row.contentWarnings),
-    status: row.status as ChildStatus,
-    isVerified: row.isVerified,
-    isCorrected: row.isCorrected,
-  };
-}
-
-function toWordAudio(row: typeof wordAudios.$inferSelect): WordAudioMedia {
-  return {
-    id: row.id,
-    wordId: row.wordId,
-    exampleId: row.exampleId,
-    dialectId: row.dialectId,
-    provider: row.provider,
-    providerFileId: row.providerFileId,
-    sha: row.sha,
-    url: row.url,
-    mimeType: row.mimeType,
-    fileSize: row.fileSize,
-    durationMs: row.durationMs,
-    speakerName: row.speakerName,
-    speakerConsent: row.speakerConsent,
-    isPrimary: row.isPrimary,
-    status: row.status as ChildStatus,
-    isVerified: row.isVerified,
-    isCorrected: row.isCorrected,
-  };
-}
-
-function toExample(row: typeof examples.$inferSelect): ExampleMedia {
-  return {
-    id: row.id,
-    meaningId: row.meaningId,
-    sourceLanguageId: row.sourceLanguageId,
-    sourceSentence: row.sourceSentence,
-    targetLanguageId: row.targetLanguageId,
-    targetSentence: row.targetSentence,
-    sourceType: row.sourceType,
-    notes: row.notes,
-    status: row.status as ChildStatus,
-    isVerified: row.isVerified,
-    isCorrected: row.isCorrected,
-  };
-}
-
-function escapeLike(q: string): string {
-  return q.replace(/[\\%_]/g, (m) => `\\${m}`);
-}
-
-// Pencarian natural: "paddas aek" = cocok %paddas% ATAU %aek%.
-// Dibatasi 5 kata unik supaya klausa OR tidak meledak dari input panjang.
-// ponytail: OR tanpa skor relevansi, urutan tetap words.id DESC. Upgrade ke
-// FTS5 + bm25() kalau hasil perlu diurutkan (frasa utuh di atas).
-function searchTerms(q: string): string[] {
-  return [...new Set(q.trim().toLowerCase().split(/\s+/).filter(Boolean))].slice(0, 5);
-}
-
-// Anak yang ikut submit kata mengikuti gerbang kata-nya (Section 22 -
-// approval gate): kata pending → anak pending; approve/reject kata ikut
-// memutuskan nasib anak-anaknya (lihat ContributionRepositoryImpl.review).
-function childStatusOf(wordStatus: WordStatus): ChildStatus {
-  return wordStatus === 'published' ? 'published' : 'pending_review';
-}
-
-// Antrean mengikuti "perlu dicek", bukan "belum tayang".
-// pending_review (tamu) dan published yang belum diverifikasi masuk pending.
-// Draft dan publikasi verifikator (published + verified) tidak mengantre.
-function contributionStatusOf(status: string, isVerified: boolean): 'pending' | 'approved' {
-  if (status === 'pending_review') return 'pending';
-  if (status === 'published' && !isVerified) return 'pending';
-  return 'approved';
-}
-
-// Mapping error PostgreSQL untuk insert kontribusi media - jangan bocor 500
-function mapMediaViolation(err: unknown, uniqueField: string): void {
-  if (isForeignKeyViolation(err)) {
-    throw new ValidationError([
-      { field: '', message: 'Referensi data tidak valid (data terkait mungkin sudah dihapus)' },
-    ]);
-  }
-  if (isUniqueViolation(err)) {
-    throw new ValidationError([{ field: uniqueField, message: 'Data duplikat - sudah ada entri yang sama' }]);
-  }
-}
+import {
+  browseSafeUsageLabelsSql,
+  feedSafeUsageLabelsSql,
+} from '@/shared/database/drizzle/usage-label-filters';
+import {
+  toContentWarnings,
+  toExample,
+  toPronunciation,
+  toUsageLabels,
+  toWord,
+  toWordAudio,
+  toWordImage,
+} from './word-row-mappers';
+import {
+  childStatusOf,
+  contributionStatusOf,
+  escapeLike,
+  mapMediaViolation,
+  searchTerms,
+  verificationCols,
+  type Tx,
+} from './word-repo-helpers';
 
 // PRD relasi-lemma: alias self-join kelompok makna (findDetailById) -
 // cari kelompok lain milik kata ini tanpa query tambahan.
 const wgmSelf = alias(wordGroupMembers, 'wgm_self');
 const wgmOther = alias(wordGroupMembers, 'wgm_other');
 const wgmWord = alias(words, 'wgm_word');
-
 export class WordRepositoryImpl implements WordRepository {
   constructor(
     private readonly db: AppDatabase,
@@ -882,7 +718,8 @@ export class WordRepositoryImpl implements WordRepository {
     const includeDeleted = opts?.includeDeleted === true;
     const statuses = opts?.statuses?.length ? opts.statuses : undefined;
     // Verifikator: anak ikut status yang sama (published | pending_review).
-    // Publik makna: published saja (trust per makna - unverified tetap tampil).
+    // Publik: status published saja - is_verified = badge (Menunggu pengecekan),
+    // bukan gate tayang (docs/produk/tayang-belum-verifikasi.md).
     // Admin includeAll: tanpa filter status anak.
     const childStatusFilter = includeAll
       ? undefined
@@ -900,16 +737,16 @@ export class WordRepositoryImpl implements WordRepository {
         ? undefined
         : statuses
           ? inArray(table.status, statuses as ChildStatus[])
-          : and(eq(table.status, 'published'), eq(table.isVerified, true));
+          : eq(table.status, 'published');
     const lemmaWordPickSql = statuses
       ? sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.kind === 'lemma' ? key.lemma.trim() : ''}) AND w2.status IN (${sql.join(
           statuses.map((s) => sql`${s}`),
           sql`, `,
         )}) AND w2.deleted_at IS NULL ORDER BY w2.is_verified DESC, w2.created_at LIMIT 1)`
-      : sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.kind === 'lemma' ? key.lemma.trim() : ''}) AND w2.status = 'published' AND w2.is_verified = 1 AND w2.deleted_at IS NULL ORDER BY w2.created_at LIMIT 1)`;
+      : sql`(SELECT w2.id FROM words w2 WHERE lower(w2.lemma) = lower(${key.kind === 'lemma' ? key.lemma.trim() : ''}) AND w2.status = 'published' AND w2.deleted_at IS NULL ORDER BY w2.is_verified DESC, w2.created_at LIMIT 1)`;
     const wordStatusWhere = statuses
       ? inArray(words.status, statuses)
-      : and(eq(words.status, 'published'), eq(words.isVerified, true));
+      : eq(words.status, 'published');
     const verifierUsers = alias(users, 'word_verifier');
     const creatorUsers = alias(users, 'word_creator');
     const isLemma = key.kind === 'lemma';
@@ -1131,7 +968,6 @@ export class WordRepositoryImpl implements WordRepository {
                 : and(
                     eq(lexicalRelations.status, 'published'),
                     eq(words.status, 'published'),
-                    eq(words.isVerified, true),
                     isNull(words.deletedAt),
                   ),
           ),
@@ -1164,7 +1000,6 @@ export class WordRepositoryImpl implements WordRepository {
                 : and(
                     eq(lexicalRelations.status, 'published'),
                     eq(words.status, 'published'),
-                    eq(words.isVerified, true),
                     isNull(words.deletedAt),
                   ),
           ),
