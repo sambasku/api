@@ -3033,6 +3033,34 @@ memberLemma: string;
     return row ?? null;
   }
 
+  async findExampleById(exampleId: string): Promise<ExampleMedia | null> {
+    const [row] = await this.db
+      .select()
+      .from(examples)
+      .where(and(eq(examples.id, exampleId), isNull(examples.deletedAt)))
+      .limit(1);
+    return row ? toExample(row) : null;
+  }
+
+  async applyExampleTargetSentence(
+    exampleId: string,
+    data: { targetSentence: string; targetLanguageId: string },
+    actorId: string,
+  ): Promise<ExampleMedia | null> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(examples)
+      .set({
+        targetSentence: data.targetSentence,
+        targetLanguageId: data.targetLanguageId,
+        updatedBy: actorId,
+        updatedAt: now,
+      })
+      .where(and(eq(examples.id, exampleId), isNull(examples.deletedAt)))
+      .returning();
+    return row ? toExample(row) : null;
+  }
+
   /** #244: contoh milik actor + status - dasar edit pending. */
   async findExampleForOwner(exampleId: string, actorId: string): Promise<(ExampleMedia & { wordId: string }) | null> {
     const [row] = await this.db

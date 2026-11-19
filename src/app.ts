@@ -886,6 +886,7 @@ import { TranslationRepositoryImpl } from "@/modules/translation/infrastructure/
 import { CreateTranslationUseCase } from "@/modules/translation/application/use-cases/create-translation.use-case";
 import { ListTranslationsUseCase } from "@/modules/translation/application/use-cases/list-translations.use-case";
 import { ResolveTranslationUseCase } from "@/modules/translation/application/use-cases/resolve-translation.use-case";
+import { AutoPromoteLemmaExampleTranslationUseCase } from "@/modules/translation/application/use-cases/auto-promote-lemma-example-translation.use-case";
 import { TranslationController } from "@/modules/translation/presentation/v1/translation.controller";
 import { createTranslationRoutes } from "@/modules/translation/presentation/v1/translation.routes";
 import { GetJinyeEditHistoryUseCase } from "@/modules/jinye/application/use-cases/get-jinye-edit-history.use-case";
@@ -1378,6 +1379,9 @@ const requireProfileWriteClient = createRequireApprovedClientMiddleware(
 // Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
 // Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
 const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
+const translationRepo = new TranslationRepositoryImpl(db);
+const autoPromoteLemmaExampleTranslation =
+  new AutoPromoteLemmaExampleTranslationUseCase(translationRepo);
 const wordViewsRepo = new WordViewsRepositoryImpl(db);
 const wordViewsController = new WordViewsController(
   new RecordWordViewByIdUseCase(wordViewsRepo),
@@ -1513,7 +1517,13 @@ const wordController = new WordController({
     auditRepo,
     publicImageStorage.providerName,
   ),
-  addExample: new AddExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo, notifyWordOwnerMedia),
+  addExample: new AddExampleUseCase(
+    wordRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    notifyWordOwnerMedia,
+    autoPromoteLemmaExampleTranslation,
+  ),
   updateExample: new UpdateExampleUseCase(wordRepo, auditRepo, commentBlocklistRepo),
   addMeaning: new AddMeaningUseCase(wordRepo, auditRepo),
   importWords: new ImportWordsUseCase(wordRepo, languageRepo, userRepo, activityEventRepo),
@@ -1577,6 +1587,7 @@ const contributionController = new ContributionController({
     activityEvents,
     notifyWordOwnerMedia,
     syncLiveWordContributions,
+    autoPromoteLemmaExampleTranslation,
   ),
   correct: new CorrectContributionUseCase(
     contributionRepo,
@@ -3852,15 +3863,15 @@ app.route(
 // ------------------------------------------------------------------
 // Jinye: status singkat (teks / foto / voice). Post-moderation.
 const jinyeRepo = new JinyeRepositoryImpl(db);
-const translationRepo = new TranslationRepositoryImpl(db);
 const translationController = new TranslationController({
   create: new CreateTranslationUseCase(
     translationRepo,
     jinyeRepo,
     auditRepo,
+    wordRepo,
   ),
   list: new ListTranslationsUseCase(translationRepo),
-  resolve: new ResolveTranslationUseCase(translationRepo, auditRepo),
+  resolve: new ResolveTranslationUseCase(translationRepo, auditRepo, wordRepo),
 });
 app.route(
   "/api/v1/translations",

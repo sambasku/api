@@ -1,5 +1,7 @@
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
-import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
+import { LEMMA_EXAMPLE_TRANSLATION_REFF } from '@/shared/database/drizzle/schema';
+import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { Translation } from '../../domain/entities/translation.entity';
 import type { TranslationRepository } from '../../domain/repositories/translation.repository';
 
@@ -9,6 +11,10 @@ export class ResolveTranslationUseCase {
   constructor(
     private readonly translationRepo: TranslationRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly words: Pick<
+      WordRepository,
+      'findExampleById' | 'applyExampleTargetSentence' | 'findLanguageIdByCode'
+    >,
   ) {}
 
   async execute(input: {
@@ -53,6 +59,14 @@ export class ResolveTranslationUseCase {
       input.reviewerId,
     );
 
+    // lemma_example: approve → tulis ke examples.target_sentence.
+    if (
+      input.action === 'approve' &&
+      row.reff === LEMMA_EXAMPLE_TRANSLATION_REFF
+    ) {
+      await this.applyToLemmaExample(row.reffId, row.body, input.reviewerId);
+    }
+
     await this.auditRepo.record({
       userId: input.reviewerId,
       action: 'update',
@@ -63,5 +77,39 @@ export class ResolveTranslationUseCase {
     });
 
     return updated;
+  }
+
+  private async applyToLemmaExample(
+    exampleId: string,
+    targetSentence: string,
+    reviewerId: string,
+  ): Promise<void> {
+    const example = await this.words.findExampleById(exampleId);
+    if (!example) {
+      throw new NotFoundError(
+        'EXAMPLE_NOT_FOUND',
+        'Contoh kalimat tidak ditemukan',
+      );
+    }
+    const targetLanguageId = await this.words.findLanguageIdByCode('id');
+    if (!targetLanguageId) {
+      throw new ValidationError([
+        {
+          field: 'target_sentence',
+          message: 'Bahasa Indonesia belum tersedia di sistem.',
+        },
+      ]);
+    }
+    const applied = await this.words.applyExampleTargetSentence(
+      exampleId,
+      { targetSentence: targetSentence.trim(), targetLanguageId },
+      reviewerId,
+    );
+    if (!applied) {
+      throw new NotFoundError(
+        'EXAMPLE_NOT_FOUND',
+        'Contoh kalimat tidak ditemukan',
+      );
+    }
   }
 }

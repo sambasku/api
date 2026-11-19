@@ -10,12 +10,16 @@ export const TRANSLATION_STATUSES = [
 export type TranslationStatus = (typeof TRANSLATION_STATUSES)[number];
 
 /** Reff yang didukung create/list. Tambah di sini saat sumber baru. */
-export const TRANSLATION_REFFS = ['jinye'] as const;
+export const TRANSLATION_REFFS = ['jinye', 'lemma_example'] as const;
 export type TranslationReff = (typeof TRANSLATION_REFFS)[number];
+
+/** Contoh kalimat lemma (`examples.id`) sebagai sumber terjemahan. */
+export const LEMMA_EXAMPLE_TRANSLATION_REFF = 'lemma_example' as const;
 
 /**
  * Usulan terjemahan generik (multi-sumber).
  * Jinye: reff=`jinye`, reff_id=id Jinye.
+ * Lemma example: reff=`lemma_example`, reff_id=id `examples`.
  * Max satu `accepted` + satu `pending` per translator ditegakkan di use case.
  */
 export const translations = sqliteTable(

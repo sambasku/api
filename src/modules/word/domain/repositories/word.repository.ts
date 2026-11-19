@@ -715,6 +715,19 @@ export interface WordRepository {
     exampleId: string,
   ): Promise<{ id: string; meaningId: string; wordId: string } | null>;
 
+  /** Contoh aktif (non soft-delete) untuk terjemahan reff=lemma_example. */
+  findExampleById(exampleId: string): Promise<ExampleMedia | null>;
+
+  /**
+   * Terapkan terjemahan accepted ke `examples.target_sentence`
+   * (resolve usulan reff=lemma_example).
+   */
+  applyExampleTargetSentence(
+    exampleId: string,
+    data: { targetSentence: string; targetLanguageId: string },
+    actorId: string,
+  ): Promise<ExampleMedia | null>;
+
   /**
    * #244: contoh milik actor (created_by) + status - dasar edit pending.
    * Null kalau tidak ada / soft-delete / bukan milik actor.

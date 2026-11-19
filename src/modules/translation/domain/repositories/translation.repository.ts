@@ -6,6 +6,18 @@ export type CreateTranslationInput = {
   sourceBody: string;
   body: string;
   translatorId: string;
+  /** Default pending. Auto-promote contoh verifikator → accepted. */
+  status?: TranslationStatus;
+  reviewedBy?: string | null;
+};
+
+export type UpsertAcceptedTranslationInput = {
+  reff: string;
+  reffId: string;
+  sourceBody: string;
+  body: string;
+  translatorId: string;
+  reviewerId: string;
 };
 
 export type ListTranslationsFilter = {
@@ -27,6 +39,11 @@ export interface TranslationRepository {
     translatorId: string,
   ): Promise<Translation | null>;
   findAccepted(reff: string, reffId: string): Promise<Translation | null>;
+  /**
+   * Auto-promote: supersede accepted lama (reject) lalu insert accepted baru.
+   * Idempoten untuk body yang sama (kembalikan accepted yang sudah cocok).
+   */
+  upsertAccepted(input: UpsertAcceptedTranslationInput): Promise<Translation>;
   updateStatus(
     id: string,
     status: TranslationStatus,

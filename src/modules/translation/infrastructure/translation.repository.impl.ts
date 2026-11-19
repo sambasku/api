@@ -8,6 +8,7 @@ import type {
   CreateTranslationInput,
   ListTranslationsFilter,
   TranslationRepository,
+  UpsertAcceptedTranslationInput,
 } from '../domain/repositories/translation.repository';
 
 type Db = LibSQLDatabase<typeof schema>;
@@ -34,14 +35,17 @@ export class TranslationRepositoryImpl implements TranslationRepository {
   async create(input: CreateTranslationInput): Promise<Translation> {
     const id = generateId();
     const now = new Date();
+    const status = input.status ?? 'pending';
     await this.db.insert(translations).values({
       id,
       reff: input.reff,
       reffId: input.reffId,
       sourceBody: input.sourceBody,
       body: input.body,
-      status: 'pending',
+      status,
       translatorId: input.translatorId,
+      reviewedBy: status === 'accepted' ? (input.reviewedBy ?? input.translatorId) : null,
+      reviewedAt: status === 'accepted' ? now : null,
       createdAt: now,
     });
     const row = await this.findById(id);
@@ -106,6 +110,29 @@ export class TranslationRepositoryImpl implements TranslationRepository {
       )
       .limit(1);
     return rows[0] ? mapRow(rows[0]) : null;
+  }
+
+  async upsertAccepted(input: UpsertAcceptedTranslationInput): Promise<Translation> {
+    const prev = await this.findAccepted(input.reff, input.reffId);
+    if (
+      prev &&
+      prev.body === input.body &&
+      prev.sourceBody === input.sourceBody
+    ) {
+      return prev;
+    }
+    if (prev) {
+      await this.updateStatus(prev.id, 'rejected', input.reviewerId);
+    }
+    return this.create({
+      reff: input.reff,
+      reffId: input.reffId,
+      sourceBody: input.sourceBody,
+      body: input.body,
+      translatorId: input.translatorId,
+      status: 'accepted',
+      reviewedBy: input.reviewerId,
+    });
   }
 
   async updateStatus(
