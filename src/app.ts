@@ -1425,7 +1425,12 @@ const wordController = new WordController({
   getById: new GetWordByIdUseCase(wordRepo, karyaRepo),
   getByLemma: new GetWordByLemmaUseCase(wordRepo, karyaRepo),
   wordOfDay: new GetWordOfDayUseCase(wordRepo, appSettingsRepo),
-  search: new SearchWordsUseCase(wordRepo, searchMissRepo),
+  search: new SearchWordsUseCase(
+    wordRepo,
+    searchMissRepo,
+    commentBlocklistRepo,
+    activityEvents,
+  ),
   listAdmin: new ListAdminWordsUseCase(wordRepo),
   list: new ListWordsUseCase(wordRepo),
   listLatest: new ListLatestWordsUseCase(wordRepo),

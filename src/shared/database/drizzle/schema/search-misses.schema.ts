@@ -18,7 +18,8 @@ export const searchMisses = sqliteTable(
     direction: text('direction').notNull().default('lemma'),
     hitCount: integer('hit_count').notNull().default(1),
     lastSearchedAt: integer('last_searched_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-    // Gate beranda: false = panel admin saja (14-api-search-miss-moderation.md)
+    // Gate beranda: false = panel admin saja. G3: insert baru boleh true
+    // jika kill switch + quality/blocklist lolos (14-api).
     isVisible: integer('is_visible', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }),

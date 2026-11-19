@@ -1,4 +1,6 @@
 import { logger } from '@/shared/logging/logger';
+import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
+import { resolveSearchMissPreferVisible } from '@/modules/search-miss/application/resolve-auto-visible';
 import type { SearchMissRepository } from '@/modules/search-miss/domain/repositories/search-miss.repository';
 import type { WordSummary } from '../../domain/entities/word.entity';
 import type { CursorPage, WordRepository } from '../../domain/repositories/word.repository';
@@ -36,6 +38,15 @@ export class SearchWordsUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly searchMissRepo: SearchMissRepository,
+    private readonly blocklistRepo?: Pick<CommentBlocklistRepository, 'findActiveWordSet'>,
+    private readonly activityEvents?: {
+      safe: (cmd: {
+        kind: 'search_miss';
+        targetId: string;
+        dedupeKey: string;
+        hidden?: boolean;
+      }) => Promise<void>;
+    },
   ) {}
 
   async execute(query: SearchWordsQuery): Promise<SearchWordsResult> {
@@ -84,11 +95,25 @@ export class SearchWordsUseCase {
     if (items.length === 0 && query.q.trim().length >= 2) {
       // Best-effort: kegagalan pencatatan tidak boleh membatalkan response
       try {
-        await this.searchMissRepo.record({
+        const preferVisible = await resolveSearchMissPreferVisible({
+          term: query.q,
+          blocklist: this.blocklistRepo,
+        });
+        const recorded = await this.searchMissRepo.record({
           term: query.q,
           direction: query.searchIn === 'translation' ? 'translation' : 'lemma',
           searcherId: viewerId,
+          preferVisible,
         });
+        // G3: event feed saat pertama kali auto-tayang (dedupe sama PATCH admin).
+        if (recorded?.becameVisible) {
+          await this.activityEvents?.safe({
+            kind: 'search_miss',
+            targetId: recorded.id,
+            dedupeKey: `search_miss:${recorded.id}`,
+            hidden: false,
+          });
+        }
       } catch (err) {
         logger.warn({ err, q: query.q }, 'gagal mencatat search miss');
       }

@@ -34,12 +34,17 @@ export interface SearchMissRepository {
    * `search_miss_searchers` supaya feed `exclude_self` bisa menyembunyikan
    * miss yang dipicu user tersebut. Tanpa id (tamu) tidak ada yang dicatat:
    * miss tetap muncul untuk semua, seperti sebelumnya.
+   *
+   * `preferVisible` (G3): hanya untuk **insert baru**. Conflict tidak
+   * mengubah `is_visible` (keputusan admin / nilai lama tetap). Return
+   * `becameVisible` true hanya jika baris baru + visible.
    */
   record(input: {
     term: string;
     direction: SearchMissDirection;
     searcherId?: string;
-  }): Promise<void>;
+    preferVisible?: boolean;
+  }): Promise<{ id: string; becameVisible: boolean } | null>;
   /**
    * Counter pencarian harian (hit + miss) untuk chart dashboard.
    * Best-effort; upsert count+1 per hari WIB.

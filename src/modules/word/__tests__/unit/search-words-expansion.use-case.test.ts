@@ -6,6 +6,11 @@ vi.mock('@/shared/logging/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// G3: resolvePreferVisible baca app_settings - mock agar unit test tanpa DB.
+vi.mock('@/modules/search-miss/application/resolve-auto-visible', () => ({
+  resolveSearchMissPreferVisible: vi.fn().mockResolvedValue(false),
+}));
+
 import { SearchWordsUseCase } from '../../application/use-cases/search-words.use-case';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { WordSummary } from '../../domain/entities/word.entity';
@@ -47,7 +52,7 @@ function makeDeps(opts: {
   } as unknown as WordRepository;
   const searchMissRepo = {
     recordSearchDay: vi.fn().mockResolvedValue(undefined),
-    record: vi.fn().mockResolvedValue(undefined),
+    record: vi.fn().mockResolvedValue({ id: '01MISS', becameVisible: false }),
   } as unknown as SearchMissRepository;
   return {
     wordRepo,

@@ -99,16 +99,35 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
     term: string;
     direction: SearchMissDirection;
     searcherId?: string;
-  }): Promise<void> {
+    preferVisible?: boolean;
+  }): Promise<{ id: string; becameVisible: boolean } | null> {
     const term = normalizeTerm(input.term);
-    if (!term) return;
+    if (!term) return null;
+
+    // Ada baris (termasuk soft-deleted) → conflict path; is_visible tidak diubah.
+    const [existing] = await this.db
+      .select({ id: searchMisses.id })
+      .from(searchMisses)
+      .where(
+        and(
+          eq(searchMisses.term, term),
+          eq(searchMisses.direction, input.direction),
+        ),
+      )
+      .limit(1);
+
+    const preferVisible = input.preferVisible === true;
     // `returning` dipakai untuk ambil id baris setelah upsert: baik baris baru
     // maupun baris yang sudah ada (conflict) keduanya mengembalikan id, jadi
     // pencatatan searcher bisa dilakukan tanpa query kedua.
     const rows = await this.db
       .insert(searchMisses)
-      .values({ term, direction: input.direction })
-      // is_visible andalkan DEFAULT false (14-api); jangan set di insert
+      .values({
+        term,
+        direction: input.direction,
+        // G3: insert baru boleh langsung tayang; default tetap false.
+        isVisible: preferVisible,
+      })
       .onConflictDoUpdate({
         target: [searchMisses.term, searchMisses.direction],
         set: {
@@ -118,25 +137,32 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
           // Istilah dicari LAGI setelah di-dismiss → hidupkan kembali
           deletedAt: null,
           deletedBy: null,
-          // JANGAN reset is_visible - keputusan admin tetap (14-api §7)
+          // JANGAN reset is_visible - keputusan admin tetap (14-api §7 / G3)
         },
       })
       .returning({ id: searchMisses.id });
 
-    const searcherId = input.searcherId;
     const missId = rows[0]?.id;
-    if (!searcherId || !missId) return;
+    if (!missId) return null;
 
-    // Baris searcher: satu per (miss, user). Pencarian berulang hanya menyentuh
-    // `created_at`, tidak menambah baris - tanpa ini `exclude_self` bocor begitu
-    // user yang sama mencari istilah sama dua kali.
-    await this.db
-      .insert(searchMissSearchers)
-      .values({ searchMissId: missId, userId: searcherId })
-      .onConflictDoUpdate({
-        target: [searchMissSearchers.searchMissId, searchMissSearchers.userId],
-        set: { createdAt: new Date() },
-      });
+    const searcherId = input.searcherId;
+    if (searcherId) {
+      // Baris searcher: satu per (miss, user). Pencarian berulang hanya menyentuh
+      // `created_at`, tidak menambah baris - tanpa ini `exclude_self` bocor begitu
+      // user yang sama mencari istilah sama dua kali.
+      await this.db
+        .insert(searchMissSearchers)
+        .values({ searchMissId: missId, userId: searcherId })
+        .onConflictDoUpdate({
+          target: [searchMissSearchers.searchMissId, searchMissSearchers.userId],
+          set: { createdAt: new Date() },
+        });
+    }
+
+    return {
+      id: missId,
+      becameVisible: !existing && preferVisible,
+    };
   }
 
   async recordSearchDay(now: Date = new Date()): Promise<void> {
