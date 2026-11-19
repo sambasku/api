@@ -16,6 +16,19 @@ describe('classifyUsernameLocal', () => {
     expect(classifyUsernameLocal('abc').status).toBe('invalid');
   });
 
+  it('separator beruntun / saja → invalid', () => {
+    for (const raw of ['a..bcde', 'a._bcde', '_____', '____9', '......']) {
+      expect(classifyUsernameLocal(raw).status).toBe('invalid');
+    }
+  });
+
+  it('angka saja → available format', () => {
+    expect(classifyUsernameLocal('123456')).toEqual({
+      username: '123456',
+      status: 'available',
+    });
+  });
+
   it('reserved → reserved', () => {
     // 'system' lolos format 6-30 tapi reserved
     expect(classifyUsernameLocal('system').status).toBe('reserved');

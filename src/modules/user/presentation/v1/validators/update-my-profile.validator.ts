@@ -20,7 +20,7 @@ function nullableRegionId(message: string) {
 }
 
 const USERNAME_FORMAT_MESSAGE =
-  'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore).';
+  'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore), tanpa titik/underscore beruntun.';
 
 export const updateMyProfileSchema = z
   .object({

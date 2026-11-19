@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildUsernameCandidates,
   isSyntheticOauthEmail,
+  normalizeUsernameSlug,
   randomUsernameToken,
   slugifyUsername,
   syntheticOauthEmail,
@@ -9,11 +10,52 @@ import {
 } from '../../application/utils/username-slug';
 import { isReservedHandle, RESERVED_HANDLES } from '../../application/utils/reserved-handles';
 
+describe('USERNAME_HANDLE_REGEX', () => {
+  it('menerima handle valid termasuk angka saja', () => {
+    for (const h of ['warga.sambas', 'budi_01', '123456', 'a1b2c3']) {
+      expect(USERNAME_HANDLE_REGEX.test(h)).toBe(true);
+    }
+  });
+
+  it('menolak separator beruntun, ujung separator, dan separator saja', () => {
+    for (const h of [
+      '_____',
+      '......',
+      '____9',
+      'a._bcde',
+      'a_.bcde',
+      'a.....b',
+      'a..bcde',
+      'a__bcde',
+      '_abcde',
+      'abcde_',
+      '.abcde',
+      'abcde.',
+    ]) {
+      expect(USERNAME_HANDLE_REGEX.test(h)).toBe(false);
+    }
+  });
+});
+
+describe('normalizeUsernameSlug', () => {
+  it('tidak collapse separator beruntun (biar validasi menolak)', () => {
+    expect(normalizeUsernameSlug('a..bcde')).toBe('a..bcde');
+    expect(normalizeUsernameSlug('a._bcde')).toBe('a._bcde');
+    expect(normalizeUsernameSlug('Hello__World')).toBe('hello__world');
+  });
+});
+
 describe('slugifyUsername', () => {
   it('menormalisasi nama ke handle underscore (tanpa hyphen)', () => {
     expect(slugifyUsername('Budi Santoso')).toBe('budi_santoso');
     expect(slugifyUsername('Hello_World.99')).toBe('hello_world.99');
     expect(slugifyUsername('budi-santoso')).toBe('budi_santoso');
+  });
+
+  it('collapse separator beruntun saat generate handle', () => {
+    expect(slugifyUsername('Hello..World')).toBe('hello_world');
+    expect(slugifyUsername('a._bcdef')).toBe('a_bcdef');
+    expect(slugifyUsername('_____')).toBe('user00');
   });
 
   it('fallback user00 jika kosong (min 6)', () => {

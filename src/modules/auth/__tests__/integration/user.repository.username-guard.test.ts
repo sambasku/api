@@ -3,7 +3,10 @@ import { config } from 'dotenv';
 import { getTestDb } from '@/shared/database/drizzle/test-client';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
 import { UserRepositoryImpl } from '../../infrastructure/user.repository.impl';
-import { buildUsernameCandidates } from '../../application/utils/username-slug';
+import {
+  buildUsernameCandidates,
+  USERNAME_HANDLE_REGEX,
+} from '../../application/utils/username-slug';
 // Test hanya jalan kalau .env.test ada dengan DATABASE_URL test (api-base-stack.md Section 10)
 const { parsed } = config({ path: '.env.test', quiet: true });
 const hasTestDb = !!parsed?.DATABASE_URL;
@@ -41,7 +44,7 @@ describe.skipIf(!hasTestDb)('UserRepositoryImpl - username handle guard', () => 
     // Kandidat pertama ditolak trigger min 6; kandidat berikutnya (pad/fallback)
     // harus dipakai - bukan melempar 500.
     expect(saved.username).not.toBe('fedi');
-    expect(saved.username).toMatch(/^[a-z0-9._]{6,30}$/);
+    expect(USERNAME_HANDLE_REGEX.test(saved.username)).toBe(true);
   });
 
   it('semua kandidat pendek → USERNAME_ALREADY_EXISTS (409), bukan 500', async () => {

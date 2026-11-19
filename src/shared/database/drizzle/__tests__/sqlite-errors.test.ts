@@ -15,12 +15,16 @@ function prodLikeShape(message: string) {
 
 describe('isUsernameHandleConstraint', () => {
   it('deteksi RAISE(ABORT) trigger guard username di dalam cause-chain', () => {
-    const err = prodLikeShape('username harus handle lowercase a-z0-9._ sepanjang 6-30');
+    const err = prodLikeShape(
+      'username harus handle lowercase a-z0-9._ sepanjang 6-30 tanpa separator beruntun',
+    );
     expect(isUsernameHandleConstraint(err)).toBe(true);
   });
 
   it('bukan unique violation (tidak boleh masuk jalur 409 email/username)', () => {
-    const err = prodLikeShape('username harus handle lowercase a-z0-9._ sepanjang 6-30');
+    const err = prodLikeShape(
+      'username harus handle lowercase a-z0-9._ sepanjang 6-30 tanpa separator beruntun',
+    );
     expect(isUniqueViolation(err)).toBe(false);
   });
 

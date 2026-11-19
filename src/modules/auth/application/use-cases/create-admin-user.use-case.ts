@@ -49,7 +49,7 @@ export class CreateAdminUserUseCase {
         {
           field: 'username',
           message:
-            'Nama pengguna tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore).',
+            'Nama pengguna tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore), tanpa titik/underscore beruntun.',
         },
       ]);
     }
