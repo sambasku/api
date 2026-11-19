@@ -1566,12 +1566,15 @@ memberLemma: string;
     // FTS hanya untuk korpus published publik. Mode verifikator (ada
     // pending_review di statuses) pakai LIKE supaya pending ketemu.
     const verifierBrowse = Boolean(params.statuses?.includes('pending_review'));
+    // needs_review = filter makna: FTS page bisa kosong/tipis → LIKE path.
+    const needsReviewBrowse = params.needsReview !== undefined;
     let ftsOffset = -1;
     if (
       this.searchIndex &&
       terms.length > 0 &&
       params.published === true &&
-      !verifierBrowse
+      !verifierBrowse &&
+      !needsReviewBrowse
     ) {
       if (params.cursor === undefined) ftsOffset = 0;
       else if (/^o:\d+$/.test(params.cursor)) ftsOffset = Number(params.cursor.slice(2));
@@ -1616,6 +1619,12 @@ memberLemma: string;
         : params.hasImage
           ? sql`EXISTS (SELECT 1 FROM ${wordImages} wi WHERE wi.word_id = ${words.id} AND wi.deleted_at IS NULL)`
           : sql`NOT EXISTS (SELECT 1 FROM ${wordImages} wi WHERE wi.word_id = ${words.id} AND wi.deleted_at IS NULL)`,
+      // Admin G5: filter makna needs_review (net jelek setelah verified).
+      params.needsReview === undefined
+        ? undefined
+        : params.needsReview
+          ? sql`EXISTS (SELECT 1 FROM ${meanings} m WHERE m.word_id = ${words.id} AND m.deleted_at IS NULL AND m.needs_review = 1)`
+          : sql`NOT EXISTS (SELECT 1 FROM ${meanings} m WHERE m.word_id = ${words.id} AND m.deleted_at IS NULL AND m.needs_review = 1)`,
       // Cursor LIKE path = plain word id; cursor FTS "o:N" tidak lewat sini.
       params.cursor && ftsOffset < 0 && !/^o:\d+$/.test(params.cursor)
         ? lt(words.id, params.cursor)

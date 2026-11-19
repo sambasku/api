@@ -714,6 +714,8 @@ export const adminListWordsQuerySchema = z.object({
   published: queryBooleanSchema,
   /** true = bergambar, false = tanpa gambar, omit = semua */
   has_image: queryBooleanSchema,
+  /** true = punya makna needs_review, false = tidak, omit = semua */
+  needs_review: queryBooleanSchema,
 });
 
 /** GET /api/v1/words - daftar semua kata A-Z publik (18-api-list-words.md) */

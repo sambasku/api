@@ -202,9 +202,11 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
     const downExpr = sql<number>`coalesce(sum(case when ${votes.value} = -1 then 1 else 0 end), 0)`.mapWith(
       Number,
     );
-    const lastVoteMsExpr = sql<number>`max(coalesce(${votes.updatedAt}, ${votes.createdAt}))`.mapWith(
+    // Kolom votes.*At = unix detik (drizzle mode timestamp). MAX raw = detik.
+    const lastVoteSecExpr = sql<number>`max(coalesce(${votes.updatedAt}, ${votes.createdAt}))`.mapWith(
       Number,
     );
+    const backfillSec = Math.floor(backfillStart.getTime() / 1000);
 
     // Net mendekati ambang Voting Warga (±5) tapi belum sampai / belum verified.
     const threshold = VOTING_WARGA_NET_THRESHOLD;
@@ -217,7 +219,7 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
         net: netExpr,
         upvotes: upExpr,
         downvotes: downExpr,
-        lastVoteMs: lastVoteMsExpr,
+        lastVoteSec: lastVoteSecExpr,
       })
       .from(votes)
       .innerJoin(meanings, eq(meanings.id, votes.entityId))
@@ -242,7 +244,7 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
         and(
           sql`abs(${netExpr}) >= 2`,
           sql`abs(${netExpr}) < ${threshold}`,
-          sql`${lastVoteMsExpr} >= ${backfillStart.getTime()}`,
+          sql`${lastVoteSecExpr} >= ${backfillSec}`,
         ),
       )
       .orderBy(sql`abs(${netExpr}) desc`, desc(netExpr))
@@ -251,7 +253,7 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
     const windowItems: HotNearThresholdItem[] = [];
     const backfillItems: HotNearThresholdItem[] = [];
     for (const r of rows) {
-      const last = new Date(r.lastVoteMs);
+      const last = new Date(r.lastVoteSec * 1000);
       const inWindow = last.getTime() >= windowStart.getTime();
       const item: HotNearThresholdItem = {
         kind: 'meaning_vote',

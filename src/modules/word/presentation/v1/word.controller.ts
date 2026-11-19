@@ -728,6 +728,7 @@ export class WordController {
       isVerified: query.is_verified,
       published: query.published,
       hasImage: query.has_image,
+      needsReview: query.needs_review,
     });
     return c.json({
       success: true as const,

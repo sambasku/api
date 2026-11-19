@@ -220,6 +220,11 @@ export interface SearchParams {
   statuses?: WordStatus[];
   /** Panel admin: true = bergambar, false = tanpa gambar, omit = semua. */
   hasImage?: boolean;
+  /**
+   * Panel admin (G5): true = punya ≥1 makna `needs_review`, false = tidak
+   * ada, omit = semua. Filter EXISTS di meanings, bukan kolom words.
+   */
+  needsReview?: boolean;
 }
 
 export interface CursorPage<T> {
