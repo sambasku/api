@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isSearchMissJunkTerm,
   passesSearchMissQualityGate,
   searchMissBlocklistTokens,
 } from '../../domain/quality-gate';
+
+describe('isSearchMissJunkTerm', () => {
+  it('tolak semuanya angka / non-huruf', () => {
+    expect(isSearchMissJunkTerm('42')).toBe(true);
+    expect(isSearchMissJunkTerm('12 34')).toBe(true);
+    expect(isSearchMissJunkTerm('!!!')).toBe(true);
+    expect(isSearchMissJunkTerm('---')).toBe(true);
+    expect(isSearchMissJunkTerm('@@@')).toBe(true);
+  });
+
+  it('lolos bila ada huruf (termasuk lemma 2 huruf / campur angka)', () => {
+    expect(isSearchMissJunkTerm('sa')).toBe(false);
+    expect(isSearchMissJunkTerm('kat4')).toBe(false);
+    expect(isSearchMissJunkTerm("don't")).toBe(false);
+  });
+});
 
 describe('passesSearchMissQualityGate', () => {
   it('lolos term huruf biasa', () => {

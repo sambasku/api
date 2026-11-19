@@ -1,6 +1,8 @@
 import { logger } from '@/shared/logging/logger';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { resolveSearchMissPreferVisible } from '@/modules/search-miss/application/resolve-auto-visible';
+import { isSearchMissJunkTerm } from '@/modules/search-miss/domain/quality-gate';
+import { normalizeSearchMissTerm } from '@/modules/search-miss/domain/normalize-term';
 import type { SearchMissRepository } from '@/modules/search-miss/domain/repositories/search-miss.repository';
 import type { WordSummary } from '../../domain/entities/word.entity';
 import type { CursorPage, WordRepository } from '../../domain/repositories/word.repository';
@@ -111,8 +113,14 @@ export class SearchWordsUseCase {
 
     let searchMissId: string | null = null;
     // Min 2: ada lemma Sambas 2 huruf. Fragment ketik dicegah lewat
-    // recordMiss=false (explore), bukan naikkan min length.
-    if (recordMiss && items.length === 0 && query.q.trim().length >= 2) {
+    // recordMiss=false (explore). Angka/simbol polos tidak direkam.
+    const normalizedMiss = normalizeSearchMissTerm(query.q);
+    if (
+      recordMiss &&
+      items.length === 0 &&
+      normalizedMiss.length >= 2 &&
+      !isSearchMissJunkTerm(normalizedMiss)
+    ) {
       // Best-effort: kegagalan pencatatan tidak boleh membatalkan response.
       // preferVisible dipisah: gagal resolve (settings/blocklist) jangan
       // mencegah INSERT miss - gejala staging G3 (search 0 hasil tanpa baris).

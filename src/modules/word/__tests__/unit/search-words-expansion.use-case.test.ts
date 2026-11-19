@@ -185,6 +185,14 @@ describe('SearchWordsUseCase - counter pencarian harian', () => {
     expect(searchMissRepo.record).toHaveBeenCalledOnce();
   });
 
+  it('q angka/simbol polos → tidak record miss', async () => {
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    await useCase.execute({ q: '42', limit: 10 });
+    expect(searchMissRepo.record).not.toHaveBeenCalled();
+    await useCase.execute({ q: '!!!', limit: 10 });
+    expect(searchMissRepo.record).not.toHaveBeenCalled();
+  });
+
   it('recordMiss=false (explore) → tidak record miss / counter', async () => {
     const { useCase, searchMissRepo } = makeDeps({ items: [] });
     const result = await useCase.execute({

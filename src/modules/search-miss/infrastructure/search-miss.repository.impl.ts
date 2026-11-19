@@ -15,6 +15,7 @@ import { ConflictError } from '@/shared/errors/app-error';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type { SearchMiss, SearchMissDirection } from '../domain/entities/search-miss.entity';
 import { normalizeSearchMissTerm } from '../domain/normalize-term';
+import { isSearchMissJunkTerm } from '../domain/quality-gate';
 import { searchDayWib } from '@/shared/database/drizzle/schema/search-daily.schema';
 import type {
   SearchMissListFilter,
@@ -103,6 +104,8 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
   }): Promise<{ id: string; becameVisible: boolean } | null> {
     const term = normalizeTerm(input.term);
     if (!term) return null;
+    // Defense in depth: angka/simbol polos tidak masuk tabel miss.
+    if (isSearchMissJunkTerm(term)) return null;
 
     const preferVisible = input.preferVisible === true;
     const now = new Date();
