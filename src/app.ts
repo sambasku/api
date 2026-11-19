@@ -155,6 +155,7 @@ import { ListCommaSplitsUseCase } from "@/modules/word/application/use-cases/lis
 import { ApplyCommaSplitUseCase } from "@/modules/word/application/use-cases/apply-comma-split.use-case";
 import { MarkCommaLiteralUseCase } from "@/modules/word/application/use-cases/mark-comma-literal.use-case";
 import { VerifyWordUseCase } from "@/modules/word/application/use-cases/verify-word.use-case";
+import { VerifyMeaningUseCase } from "@/modules/word/application/use-cases/verify-meaning.use-case";
 import { SyncLiveWordContributionsUseCase } from "@/modules/contribution/application/use-cases/sync-live-word-contributions.use-case";
 import { PublishWordUseCase } from "@/modules/word/application/use-cases/publish-word.use-case";
 import { SoftDeleteWordUseCase } from "@/modules/word/application/use-cases/soft-delete-word.use-case";
@@ -1433,6 +1434,7 @@ const wordController = new WordController({
   applyCommaSplit: new ApplyCommaSplitUseCase(wordRepo, auditRepo),
   markCommaLiteral: new MarkCommaLiteralUseCase(wordRepo, auditRepo),
   verify: new VerifyWordUseCase(wordRepo, auditRepo, syncLiveWordContributions),
+  verifyMeaning: new VerifyMeaningUseCase(wordRepo, auditRepo),
   publish: publishWord,
   deleteWord: softDeleteWord,
   bulkWords: new BulkWordsActionUseCase(softDeleteWord, publishWord),

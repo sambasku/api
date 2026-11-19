@@ -2,9 +2,12 @@ import { BadRequestError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import {
   APP_SETTING_KEYS,
+  AUTO_VERIFY_BY_VOTE_ENABLED_KEY,
   BALEHO_PRICE_PER_CELL_PER_DAY_KEY,
   LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY,
+  SEARCH_MISS_AUTO_VISIBLE_ENABLED_KEY,
   VOICE_ROOM_ENABLED_KEY,
+  VOTE_RESET_ON_EDIT_ENABLED_KEY,
   type AppSettingKey,
   type AppSettingType,
   WA_GROUP_CTA_URL_KEY,
@@ -122,6 +125,20 @@ export class UpdateAppSettingsUseCase {
                 message: 'Nilai voice.room_enabled tidak valid',
               },
             ],
+          );
+        }
+      }
+      if (
+        s.key === AUTO_VERIFY_BY_VOTE_ENABLED_KEY ||
+        s.key === SEARCH_MISS_AUTO_VISIBLE_ENABLED_KEY ||
+        s.key === VOTE_RESET_ON_EDIT_ENABLED_KEY
+      ) {
+        const v = s.value.toLowerCase();
+        if (v !== 'true' && v !== 'false') {
+          throw new BadRequestError(
+            'VALIDATION_ERROR',
+            `${s.key} harus true atau false`,
+            [{ field: 'settings', message: `Nilai ${s.key} tidak valid` }],
           );
         }
       }

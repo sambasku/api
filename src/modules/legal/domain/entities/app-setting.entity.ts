@@ -18,6 +18,13 @@ export const APP_SETTING_KEYS = [
   'baleho.price_per_cell_per_day',
   /** Experimental LiveKit voice room. false = strip mobile disembunyikan. */
   'voice.room_enabled',
+  /**
+   * Trust makna / Hot loop (docs/produk/trust-makna-hot-loop.md).
+   * Default false sampai gelombang terkait live; admin boleh nyalakan per env.
+   */
+  'auto_verify_by_vote_enabled',
+  'search_miss_auto_visible_enabled',
+  'vote_reset_on_edit_enabled',
 ] as const;
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];
@@ -67,6 +74,21 @@ export const BALEHO_PRICE_PER_CELL_PER_DAY_KEY =
   'baleho.price_per_cell_per_day' as const;
 
 export const VOICE_ROOM_ENABLED_KEY = 'voice.room_enabled' as const;
+
+/** Auto-verif makna oleh Voting Warga saat quorum vote tercapai. */
+export const AUTO_VERIFY_BY_VOTE_ENABLED_KEY =
+  'auto_verify_by_vote_enabled' as const;
+/** Search miss baru auto `is_visible` bila lolos blocklist/quality. */
+export const SEARCH_MISS_AUTO_VISIBLE_ENABLED_KEY =
+  'search_miss_auto_visible_enabled' as const;
+/** Reset vote + archive saat usulan/edit verifikator mengubah makna. */
+export const VOTE_RESET_ON_EDIT_ENABLED_KEY =
+  'vote_reset_on_edit_enabled' as const;
+
+/** Default kill switch trust-loop: mati sampai gelombang terkait di-ship. */
+export const DEFAULT_AUTO_VERIFY_BY_VOTE_ENABLED = false;
+export const DEFAULT_SEARCH_MISS_AUTO_VISIBLE_ENABLED = false;
+export const DEFAULT_VOTE_RESET_ON_EDIT_ENABLED = false;
 
 /** Default tarif Baleho (IDR): 1x1 / hari. */
 export const DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY = 3000;

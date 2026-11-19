@@ -20,6 +20,10 @@ export interface Meaning {
 }
 
 export interface MeaningDetail extends Meaning {
+  /** Trust per makna (publik: published boleh belum verified). */
+  isVerified: boolean;
+  needsReview: boolean;
+  verifiedAt: Date | null;
   translations: {
     languageId: string;
     translationText: string;
@@ -54,6 +58,8 @@ export interface MeaningDetail extends Meaning {
   }[];
   /** JOIN users pada meanings.created_by. Null kalau kolom kosong atau user hilang. */
   creator: { username: string; displayName: string; avatarUrl: string | null; role: string } | null;
+  /** JOIN users pada meanings.verified_by bila isVerified. */
+  verifier: { username: string; displayName: string; role: string } | null;
   /**
    * Layar review: makna ini bukan baris milik lemma yang sedang direview,
    * melainkan makna yang sudah tayang di lemma lain (relasi / kelompok).

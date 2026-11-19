@@ -30,6 +30,12 @@ import {
   WEB_IMPORT_USER_ID,
   WEB_IMPORT_USERNAME,
 } from '@/shared/constants/web-importer';
+import {
+  VOTING_WARGA_DISPLAY_NAME,
+  VOTING_WARGA_EMAIL,
+  VOTING_WARGA_USER_ID,
+  VOTING_WARGA_USERNAME,
+} from '@/shared/constants/voting-warga';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { seedAchievements } from './seed-achievements';
@@ -184,8 +190,36 @@ export async function seedReference(): Promise<void> {
     .where(eq(users.id, WEB_IMPORT_USER_ID));
   logger.info(`Seed referensi: user sistem ${WEB_IMPORT_EMAIL}`);
 
+  // User sistem Voting Warga (atribusi auto-verif makna dari quorum vote).
+  await db
+    .insert(users)
+    .values({
+      id: VOTING_WARGA_USER_ID,
+      username: VOTING_WARGA_USERNAME,
+      displayName: VOTING_WARGA_DISPLAY_NAME,
+      email: VOTING_WARGA_EMAIL,
+      passwordHash: await hasher.hash(crypto.randomUUID()),
+      emailVerified: true,
+    })
+    .onConflictDoNothing({ target: users.id });
+  await db
+    .update(users)
+    .set({
+      username: VOTING_WARGA_USERNAME,
+      displayName: VOTING_WARGA_DISPLAY_NAME,
+      email: VOTING_WARGA_EMAIL,
+    })
+    .where(eq(users.id, VOTING_WARGA_USER_ID));
+  logger.info(`Seed referensi: user sistem ${VOTING_WARGA_EMAIL}`);
+
   // Multi role: user sistem pegang role contributor di junction.
-  const systemUserIds = [ANONIM_USER_ID, CSV_IMPORTER_USER_ID, GITHUB_ACTIONS_USER_ID, WEB_IMPORT_USER_ID];
+  const systemUserIds = [
+    ANONIM_USER_ID,
+    CSV_IMPORTER_USER_ID,
+    GITHUB_ACTIONS_USER_ID,
+    WEB_IMPORT_USER_ID,
+    VOTING_WARGA_USER_ID,
+  ];
   await db
     .insert(userRoles)
     .values(systemUserIds.map((userId) => ({ userId, role: 'contributor' })))

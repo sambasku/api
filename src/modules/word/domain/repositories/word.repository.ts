@@ -455,6 +455,23 @@ export interface WordRepository {
   ): Promise<boolean>;
 
   /**
+   * Trust per makna: set/clear is_verified pada satu makna, lalu rollup
+   * words.is_verified. Return false kalau makna tidak ada / soft-deleted.
+   */
+  setMeaningVerified(
+    meaningId: string,
+    data: {
+      isVerified: boolean;
+      verifiedBy: string;
+      verifiedAt: Date;
+      clearNeedsReview?: boolean;
+    },
+  ): Promise<{ wordId: string } | null>;
+
+  /** Hitung ulang words.is_verified dari makna published (ikut data lama). */
+  rollupWordVerifiedFromMeanings(wordId: string): Promise<void>;
+
+  /**
    * Flip status tayang: published ↔ draft. Publish juga set is_verified.
    * Return false kalau kata tidak ditemukan / soft-deleted.
    */

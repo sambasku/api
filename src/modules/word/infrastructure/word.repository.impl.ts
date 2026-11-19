@@ -826,7 +826,11 @@ export class WordRepositoryImpl implements WordRepository {
           meaningSource: (m.meaningSource as 'manual' | 'kbbi' | 'kbbi_edited') ?? 'manual',
           orderIndex: m.orderIndex,
           notes: m.notes,
+          isVerified: m.isVerified === true,
+          needsReview: m.needsReview === true,
+          verifiedAt: m.isVerified && m.verifiedAt ? m.verifiedAt : null,
           creator: null,
+          verifier: null,
           translations: [],
           examples: [],
           sourceLemma: row.sourceLemma,
@@ -878,12 +882,13 @@ export class WordRepositoryImpl implements WordRepository {
     const includeDeleted = opts?.includeDeleted === true;
     const statuses = opts?.statuses?.length ? opts.statuses : undefined;
     // Verifikator: anak ikut status yang sama (published | pending_review).
-    // Publik: published + verified. Admin includeAll: tanpa filter status anak.
+    // Publik makna: published saja (trust per makna - unverified tetap tampil).
+    // Admin includeAll: tanpa filter status anak.
     const childStatusFilter = includeAll
       ? undefined
       : statuses
         ? inArray(meanings.status, statuses as ChildStatus[])
-        : and(eq(meanings.status, 'published'), eq(meanings.isVerified, true));
+        : eq(meanings.status, 'published');
     // ponytail: jangan ikat ke typeof meanings.status - tableName literal
     // (examples/pronunciations/…) beda → TS2345. Kolom status+isVerified
     // cukup via AnyColumn.
@@ -994,6 +999,10 @@ export class WordRepositoryImpl implements WordRepository {
     const meaningCreatorIds = [
       ...new Set(meaningRows.map((m) => m.createdBy).filter((x): x is string => !!x)),
     ];
+    const meaningVerifierIds = [
+      ...new Set(meaningRows.map((m) => m.verifiedBy).filter((x): x is string => !!x)),
+    ];
+    const meaningPersonIds = [...new Set([...meaningCreatorIds, ...meaningVerifierIds])];
 
     // Child SELECTs independen setelah meanings → 1 batch (hemat subrequest Workers).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1004,8 +1013,8 @@ export class WordRepositoryImpl implements WordRepository {
       batchKeys.push('wc');
       batchQueries.push(this.db.select().from(wordClasses).where(inArray(wordClasses.id, wordClassIds)));
     }
-    if (meaningCreatorIds.length > 0) {
-      batchKeys.push('meaningCreators');
+    if (meaningPersonIds.length > 0) {
+      batchKeys.push('meaningPeople');
       batchQueries.push(
         this.db
           .select({
@@ -1017,7 +1026,7 @@ export class WordRepositoryImpl implements WordRepository {
             role: highestUserRoleSql,
           })
           .from(users)
-          .where(inArray(users.id, meaningCreatorIds)),
+          .where(inArray(users.id, meaningPersonIds)),
       );
     }
     if (meaningIds.length > 0) {
@@ -1236,15 +1245,15 @@ isNull(wgmOther.deletedAt),
     }>('wc');
     const wcById = new Map(wcRows.map((wc) => [wc.id, wc]));
 
-    const meaningCreatorRows = pick<{
+    const meaningPeopleRows = pick<{
       id: string;
       username: string;
       displayName: string | null;
       avatarUrl: string | null;
       deletedAt: Date | null;
       role: string | null;
-    }>('meaningCreators');
-    const meaningCreatorById = new Map(meaningCreatorRows.map((u) => [u.id, u]));
+    }>('meaningPeople');
+    const meaningPersonById = new Map(meaningPeopleRows.map((u) => [u.id, u]));
 
     const translationRows = pick<(typeof meaningTranslations.$inferSelect)>('translations');
     const exampleRows = pick<(typeof examples.$inferSelect)>('examples');
@@ -1330,9 +1339,12 @@ memberLemma: string;
         meaningSource: (m.meaningSource as 'manual' | 'kbbi' | 'kbbi_edited') ?? 'manual',
         orderIndex: m.orderIndex,
         notes: m.notes,
+        isVerified: m.isVerified === true,
+        needsReview: m.needsReview === true,
+        verifiedAt: m.isVerified && m.verifiedAt ? m.verifiedAt : null,
         creator: (() => {
           if (!m.createdBy) return null;
-          const person = meaningCreatorById.get(m.createdBy);
+          const person = meaningPersonById.get(m.createdBy);
           if (!person || person.role == null) return null;
           const username = publicAccountName(person.username, person.deletedAt);
           const displayName = publicAccountDisplayName(
@@ -1348,6 +1360,19 @@ memberLemma: string;
             avatarUrl: person.deletedAt ? null : (person.avatarUrl ?? null),
             role: person.role,
           };
+        })(),
+        verifier: (() => {
+          if (!m.isVerified || !m.verifiedBy) return null;
+          const person = meaningPersonById.get(m.verifiedBy);
+          if (!person || person.role == null) return null;
+          const username = publicAccountName(person.username, person.deletedAt);
+          const displayName = publicAccountDisplayName(
+            person.displayName,
+            person.username,
+            person.deletedAt,
+          );
+          if (!username || !displayName) return null;
+          return { username, displayName, role: person.role };
         })(),
         translations: translationRows
           .filter((t) => t.meaningId === m.id)
@@ -2333,6 +2358,101 @@ memberLemma: string;
       .where(and(eq(words.id, id), isNull(words.deletedAt), ne(words.isVerified, data.isVerified)))
       .returning({ id: words.id });
     return updated.length > 0;
+  }
+
+  async setMeaningVerified(
+    meaningId: string,
+    data: {
+      isVerified: boolean;
+      verifiedBy: string;
+      verifiedAt: Date;
+      clearNeedsReview?: boolean;
+    },
+  ): Promise<{ wordId: string } | null> {
+    const [existing] = await this.db
+      .select({ id: meanings.id, wordId: meanings.wordId, isVerified: meanings.isVerified })
+      .from(meanings)
+      .where(and(eq(meanings.id, meaningId), isNull(meanings.deletedAt)))
+      .limit(1);
+    if (!existing) return null;
+    if (existing.isVerified === data.isVerified) {
+      // Idempoten untuk caller yang cek 409 sendiri lewat find dulu.
+      return { wordId: existing.wordId };
+    }
+    if (data.isVerified) {
+      await this.db
+        .update(meanings)
+        .set({
+          isVerified: true,
+          verifiedBy: data.verifiedBy,
+          verifiedAt: data.verifiedAt,
+          needsReview: false,
+          updatedBy: data.verifiedBy,
+          updatedAt: data.verifiedAt,
+        })
+        .where(eq(meanings.id, meaningId));
+    } else {
+      await this.db
+        .update(meanings)
+        .set({
+          isVerified: false,
+          verifiedBy: null,
+          verifiedAt: null,
+          needsReview: false,
+          updatedBy: data.verifiedBy,
+          updatedAt: data.verifiedAt,
+        })
+        .where(eq(meanings.id, meaningId));
+    }
+    await this.rollupWordVerifiedFromMeanings(existing.wordId);
+    return { wordId: existing.wordId };
+  }
+
+  async rollupWordVerifiedFromMeanings(wordId: string): Promise<void> {
+    const rows = await this.db
+      .select({
+        isVerified: meanings.isVerified,
+        verifiedBy: meanings.verifiedBy,
+        verifiedAt: meanings.verifiedAt,
+      })
+      .from(meanings)
+      .where(
+        and(
+          eq(meanings.wordId, wordId),
+          eq(meanings.status, 'published'),
+          isNull(meanings.deletedAt),
+        ),
+      );
+    if (rows.length === 0) {
+      await this.db
+        .update(words)
+        .set({ isVerified: false, verifiedBy: null, verifiedAt: null })
+        .where(and(eq(words.id, wordId), isNull(words.deletedAt)));
+      return;
+    }
+    const allVerified = rows.every((r) => r.isVerified === true);
+    if (!allVerified) {
+      await this.db
+        .update(words)
+        .set({ isVerified: false, verifiedBy: null, verifiedAt: null })
+        .where(and(eq(words.id, wordId), isNull(words.deletedAt)));
+      return;
+    }
+    // Ambil atribusi dari makna dengan verified_at terbaru.
+    let best = rows[0]!;
+    for (const r of rows) {
+      const a = best.verifiedAt?.getTime() ?? 0;
+      const b = r.verifiedAt?.getTime() ?? 0;
+      if (b >= a) best = r;
+    }
+    await this.db
+      .update(words)
+      .set({
+        isVerified: true,
+        verifiedBy: best.verifiedBy,
+        verifiedAt: best.verifiedAt ?? new Date(),
+      })
+      .where(and(eq(words.id, wordId), isNull(words.deletedAt)));
   }
 
   async setPublished(

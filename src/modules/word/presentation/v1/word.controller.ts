@@ -9,6 +9,7 @@ import type { GetWordByLemmaUseCase } from '../../application/use-cases/get-word
 import type { GetWordOfDayUseCase } from '../../application/use-cases/get-word-of-day.use-case';
 import type { SearchWordsUseCase } from '../../application/use-cases/search-words.use-case';
 import type { VerifyWordUseCase } from '../../application/use-cases/verify-word.use-case';
+import type { VerifyMeaningUseCase } from '../../application/use-cases/verify-meaning.use-case';
 import type { PublishWordUseCase } from '../../application/use-cases/publish-word.use-case';
 import type { SoftDeleteWordUseCase } from '../../application/use-cases/soft-delete-word.use-case';
 import type { BulkWordsActionUseCase } from '../../application/use-cases/bulk-words-action.use-case';
@@ -101,6 +102,7 @@ export class WordController {
       applyCommaSplit: ApplyCommaSplitUseCase;
       markCommaLiteral: MarkCommaLiteralUseCase;
       verify: VerifyWordUseCase;
+      verifyMeaning: VerifyMeaningUseCase;
       publish: PublishWordUseCase;
       deleteWord: SoftDeleteWordUseCase;
       bulkWords: BulkWordsActionUseCase;
@@ -545,6 +547,17 @@ export class WordController {
         is_have_translation: m.isHaveTranslation,
         meaning_source: m.meaningSource,
         order_index: m.orderIndex,
+        is_verified: m.isVerified,
+        needs_review: m.needsReview,
+        verified_at: m.isVerified && m.verifiedAt ? m.verifiedAt.toISOString() : null,
+        verified_by:
+          m.isVerified && m.verifier
+            ? {
+                username: m.verifier.username,
+                display_name: m.verifier.displayName,
+                role: m.verifier.role,
+              }
+            : null,
         created_by: m.creator
           ? {
               username: m.creator.username,
@@ -769,6 +782,23 @@ export class WordController {
       requestId,
     });
     return c.json({ success: true as const, data: null });
+  }
+
+  async verifyMeaning(c: Context, meaningId: string, verified: boolean) {
+    const actor = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
+
+    const result = await this.deps.verifyMeaning.execute({
+      meaningId,
+      verified,
+      actorId: actor.user_id,
+      requestId,
+    });
+    return c.json({
+      success: true as const,
+      data: { meaning_id: meaningId, word_id: result.wordId, is_verified: verified },
+    });
   }
 
   async publish(c: Context, id: string, published: boolean) {
