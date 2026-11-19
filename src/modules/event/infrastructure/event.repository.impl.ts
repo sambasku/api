@@ -432,7 +432,8 @@ export class EventRepositoryImpl implements EventRepository {
           .from(events)
           .where(eq(events.id, input.before))
           .limit(1);
-        if (!cursor) {
+        // Overlap filter sudah exclude starts_at NULL; cursor tanpa jadwal = stop.
+        if (!cursor || cursor.startsAt == null) {
           return { items: [], nextCursor: null };
         }
         conds.push(

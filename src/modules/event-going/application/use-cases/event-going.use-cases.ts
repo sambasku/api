@@ -13,8 +13,8 @@ import type {
 function assertMarkable(
   event: {
     cancelledAt: Date | null;
-    startsAt: Date;
-    endsAt: Date;
+    startsAt: Date | null;
+    endsAt: Date | null;
   },
 ): void {
   const status = occurrenceStatus(event);

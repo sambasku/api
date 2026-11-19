@@ -24,7 +24,7 @@ export interface KaryaSummaryForKreator {
   slug: string;
   title: string;
   kind: KaryaKind;
-  year: number;
+  year: number | null;
   role: string;
 }
 

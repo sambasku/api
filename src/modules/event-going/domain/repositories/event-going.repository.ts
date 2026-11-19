@@ -26,8 +26,8 @@ export interface EventGoingTarget {
   slug: string;
   status: string;
   cancelledAt: Date | null;
-  startsAt: Date;
-  endsAt: Date;
+  startsAt: Date | null;
+  endsAt: Date | null;
 }
 
 export interface EventGoingRepository {
