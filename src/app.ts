@@ -456,6 +456,17 @@ import {
   createPublicUsahaRoutes,
 } from "@/modules/usaha/presentation/v1/usaha.routes";
 import {
+  GetUsahaViewReportUseCase,
+  ListUsahaViewsUseCase,
+  RecordUsahaViewBySlugUseCase,
+} from "@/modules/usaha/application/use-cases/usaha-views.use-cases";
+import { UsahaViewsRepositoryImpl } from "@/modules/usaha/infrastructure/usaha-views.repository.impl";
+import { UsahaViewsController } from "@/modules/usaha/presentation/v1/usaha-views.controller";
+import {
+  createAdminUsahaViewsRoutes,
+  createPublicUsahaViewsRoutes,
+} from "@/modules/usaha/presentation/v1/usaha-views.routes";
+import {
   CreateUsahaCommentUseCase,
   DeleteUsahaCommentUseCase,
   ListUsahaCommentsUseCase,
@@ -570,6 +581,17 @@ import {
   createAdminCulinaryRoutes,
   createPublicCulinaryRoutes,
 } from "@/modules/culinary/presentation/v1/culinary.routes";
+import {
+  GetCuisineViewReportUseCase,
+  ListCuisineViewsUseCase,
+  RecordCuisineViewBySlugUseCase,
+} from "@/modules/culinary/application/use-cases/cuisine-views.use-cases";
+import { CuisineViewsRepositoryImpl } from "@/modules/culinary/infrastructure/cuisine-views.repository.impl";
+import { CuisineViewsController } from "@/modules/culinary/presentation/v1/cuisine-views.controller";
+import {
+  createAdminCuisineViewsRoutes,
+  createPublicCuisineViewsRoutes,
+} from "@/modules/culinary/presentation/v1/cuisine-views.routes";
 import {
   CreateCuisineCommentUseCase,
   DeleteCuisineCommentUseCase,
@@ -808,6 +830,17 @@ import {
   createAdminEncyclopediaRoutes,
   createEncyclopediaRoutes,
 } from "@/modules/encyclopedia/presentation/v1/encyclopedia.routes";
+import {
+  GetArticleViewReportUseCase,
+  ListArticleViewsUseCase,
+  RecordArticleViewBySlugUseCase,
+} from "@/modules/encyclopedia/application/use-cases/article-views.use-cases";
+import { ArticleViewsRepositoryImpl } from "@/modules/encyclopedia/infrastructure/article-views.repository.impl";
+import { ArticleViewsController } from "@/modules/encyclopedia/presentation/v1/article-views.controller";
+import {
+  createAdminArticleViewsRoutes,
+  createPublicArticleViewsRoutes,
+} from "@/modules/encyclopedia/presentation/v1/article-views.routes";
 import { CreatePantunUseCase } from "@/modules/pantun/application/use-cases/create-pantun.use-case";
 import { CreatePantunWithAudioUseCase } from "@/modules/pantun/application/use-cases/create-pantun-with-audio.use-case";
 import { CreatePantunReplyUseCase } from "@/modules/pantun/application/use-cases/create-pantun-reply.use-case";
@@ -1824,6 +1857,12 @@ const usahaController = new UsahaController(
     takedownComment: new TakedownUsahaCommentUseCase(usahaRepo, auditRepo),
   },
 );
+const usahaViewsRepo = new UsahaViewsRepositoryImpl(db);
+const usahaViewsController = new UsahaViewsController(
+  new RecordUsahaViewBySlugUseCase(usahaViewsRepo),
+  new ListUsahaViewsUseCase(usahaViewsRepo),
+  new GetUsahaViewReportUseCase(usahaViewsRepo),
+);
 const usahaContributionRepo = new UsahaContributionRepositoryImpl(db);
 const usahaClaimRepo = new UsahaClaimRepositoryImpl(db);
 const usahaContributionUseCases = new UsahaContributionUseCases(
@@ -1955,6 +1994,12 @@ const culinaryController = new CulinaryController(
     deleteComment: new DeleteCuisineCommentUseCase(culinaryRepo),
     takedownComment: new TakedownCuisineCommentUseCase(culinaryRepo, auditRepo),
   },
+);
+const cuisineViewsRepo = new CuisineViewsRepositoryImpl(db);
+const cuisineViewsController = new CuisineViewsController(
+  new RecordCuisineViewBySlugUseCase(cuisineViewsRepo),
+  new ListCuisineViewsUseCase(cuisineViewsRepo),
+  new GetCuisineViewReportUseCase(cuisineViewsRepo),
 );
 const culinaryContributionRepo = new CulinaryContributionRepositoryImpl(db);
 const culinaryClaimRepo = new CulinaryClaimRepositoryImpl(db);
@@ -3102,6 +3147,13 @@ app.route(
 // route publik `/usaha/:slug` supaya segmen statis tidak tertelan param.
 app.route(
   "/api/v1/admin/usaha",
+  createAdminUsahaViewsRoutes({
+    controller: usahaViewsController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/usaha",
   createAdminUsahaRoutes({ controller: usahaController, authenticate }),
 );
 app.route(
@@ -3159,6 +3211,13 @@ app.route(
 app.route(
   "/api/v1/usaha-categories",
   createPublicUsahaCategoryRoutes({ controller: usahaCategoryController }),
+);
+app.route(
+  "/api/v1/usaha",
+  createPublicUsahaViewsRoutes({
+    controller: usahaViewsController,
+    softAuthenticate,
+  }),
 );
 app.route(
   "/api/v1/usaha",
@@ -3305,6 +3364,13 @@ app.route(
 // publik `/culinary/*/:slug` supaya segmen statis tidak tertelan param.
 app.route(
   "/api/v1/admin/culinary",
+  createAdminCuisineViewsRoutes({
+    controller: cuisineViewsController,
+    authenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/culinary",
   createAdminCulinaryRoutes({ controller: culinaryController, authenticate }),
 );
 app.route(
@@ -3366,6 +3432,13 @@ app.route(
 app.route(
   "/api/v1/culinary-categories",
   createPublicCulinaryCategoryRoutes({ controller: culinaryCategoryController }),
+);
+app.route(
+  "/api/v1/culinary",
+  createPublicCuisineViewsRoutes({
+    controller: cuisineViewsController,
+    softAuthenticate,
+  }),
 );
 app.route(
   "/api/v1/culinary",
@@ -4018,6 +4091,26 @@ const encyclopediaController = new EncyclopediaController({
   listRelated: listRelatedContent,
   replaceRelated: replaceContentLinks,
 });
+const articleViewsRepo = new ArticleViewsRepositoryImpl(db);
+const articleViewsController = new ArticleViewsController(
+  new RecordArticleViewBySlugUseCase(articleViewsRepo),
+  new ListArticleViewsUseCase(articleViewsRepo),
+  new GetArticleViewReportUseCase(articleViewsRepo),
+);
+app.route(
+  "/api/v1/encyclopedia",
+  createPublicArticleViewsRoutes({
+    controller: articleViewsController,
+    softAuthenticate,
+  }),
+);
+app.route(
+  "/api/v1/admin/encyclopedia",
+  createAdminArticleViewsRoutes({
+    controller: articleViewsController,
+    authenticate,
+  }),
+);
 app.route(
   "/api/v1/encyclopedia",
   createEncyclopediaRoutes({
