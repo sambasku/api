@@ -54,6 +54,7 @@ const ALLOWED: Record<string, Part[]> = {
   derived_from: ['relations'],
   meaning_group: ['groups'],
   spelling_variant: ['variants'],
+  change_categories: ['categories'],
   lemma_notes: ['lemma', 'notes'],
 };
 

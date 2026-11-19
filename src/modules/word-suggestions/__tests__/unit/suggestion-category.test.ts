@@ -74,6 +74,28 @@ describe('checkSuggestionCategoryShape', () => {
     expect(issues.map((i) => i.field)).toContain('word_type');
   });
 
+  it('change_categories hanya terima category_ids_to_add/remove', () => {
+    expect(
+      checkSuggestionCategoryShape('change_categories', {
+        categoryIdsToAdd: ['01HAAAAAAAAAAAAAAAAAAAAAAAA'],
+      }),
+    ).toEqual([]);
+    expect(
+      checkSuggestionCategoryShape('change_categories', {
+        categoryIdsToRemove: ['01HBBBBBBBBBBBBBBBBBBBBBBBB'],
+      }),
+    ).toEqual([]);
+    expect(
+      checkSuggestionCategoryShape('change_categories', {
+        lemma: 'x',
+        categoryIdsToAdd: ['01HAAAAAAAAAAAAAAAAAAAAAAAA'],
+      }).map((i) => i.field),
+    ).toContain('lemma');
+    expect(
+      checkSuggestionCategoryShape('change_categories', {}).map((i) => i.field),
+    ).toContain('proposed_changes');
+  });
+
   it('change_word_type hanya terima word_type', () => {
     expect(
       checkSuggestionCategoryShape('change_word_type', { wordType: 'idiom' }),

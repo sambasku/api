@@ -70,6 +70,7 @@ const SEED_CATEGORIES = [
   { name: 'Kekerabatan' },
   { name: 'Alam' },
   { name: 'Makanan' },
+  { name: 'Buah-buahan' },
   { name: 'Binatang & Hewan' },
   { name: 'Tumbuhan & Tanaman' },
   { name: 'Tubuh & Kesehatan' },

@@ -93,6 +93,7 @@ function makeReviewDeps() {
     listWordImages: vi.fn().mockResolvedValue([]),
     listStagingWordImages: vi.fn().mockResolvedValue([]),
     findWordImageById: vi.fn().mockResolvedValue(null),
+    findExampleById: vi.fn().mockResolvedValue(null),
     applyPromotedWordImage: vi.fn().mockResolvedValue(undefined),
     softDeleteWordImages: vi.fn().mockResolvedValue(undefined),
   });
