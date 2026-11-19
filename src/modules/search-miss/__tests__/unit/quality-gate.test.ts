@@ -13,6 +13,7 @@ describe('passesSearchMissQualityGate', () => {
 
   it('tolak terlalu pendek / tanpa huruf / url / simbol', () => {
     expect(passesSearchMissQualityGate('a')).toBe(false);
+    expect(passesSearchMissQualityGate('sa')).toBe(false);
     expect(passesSearchMissQualityGate('42')).toBe(false);
     expect(passesSearchMissQualityGate('!!!')).toBe(false);
     expect(passesSearchMissQualityGate('http://spam.example')).toBe(false);

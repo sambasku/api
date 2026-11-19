@@ -171,11 +171,18 @@ describe('SearchWordsUseCase - counter pencarian harian', () => {
     expect(searchMissRepo.recordSearchDay).not.toHaveBeenCalled();
   });
 
-  it('miss (0 hasil, q >= 2) → recordSearchDay + record miss', async () => {
+  it('miss (0 hasil, q >= 3) → recordSearchDay + record miss', async () => {
     const { useCase, searchMissRepo } = makeDeps({ items: [] });
     await useCase.execute({ q: 'xyzzy', limit: 10 });
     expect(searchMissRepo.recordSearchDay).toHaveBeenCalledOnce();
     expect(searchMissRepo.record).toHaveBeenCalledOnce();
+  });
+
+  it('q 2 huruf → counter jalan, miss tidak dicatat', async () => {
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    await useCase.execute({ q: 'sa', limit: 10 });
+    expect(searchMissRepo.recordSearchDay).toHaveBeenCalledOnce();
+    expect(searchMissRepo.record).not.toHaveBeenCalled();
   });
 
   it('recordMiss=false (explore) → tidak record miss / counter', async () => {
