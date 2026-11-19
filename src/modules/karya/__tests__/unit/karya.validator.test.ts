@@ -3,6 +3,7 @@ import {
   assertExcerptRights,
   exceedsFairQuoteLimit,
   excerptPayloadSchema,
+  karyaFieldsSchema,
   newKaryaPayloadSchema,
   submitKaryaContributionBodySchema,
 } from '../../presentation/v1/validators/karya.validator';
@@ -40,6 +41,19 @@ describe('newKaryaPayloadSchema', () => {
       sambas_connections: [],
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it('admin/edit schema menerima tanpa year dan sambas', () => {
+    const parsed = karyaFieldsSchema.safeParse({
+      title: 'Lagu Baru',
+      kind: 'music',
+      credits: [{ role: 'vocal', name_text: 'Ahmad' }],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.sambas_connections).toEqual([]);
+      expect(parsed.data.year ?? null).toBeNull();
+    }
   });
 
   it('menolak musik tanpa credit vocal', () => {

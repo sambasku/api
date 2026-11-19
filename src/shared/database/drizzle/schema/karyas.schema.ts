@@ -76,8 +76,8 @@ export const karyas = sqliteTable(
     slug: text('slug').notNull(),
     title: text('title').notNull(),
     kind: text('kind', { enum: KARYA_KINDS }).notNull(),
-    /** Tahun rilis (Gregorian). */
-    year: integer('year').notNull(),
+    /** Tahun rilis (Gregorian); null = belum diketahui. */
+    year: integer('year'),
     /** Kode bahasa (mis. sbs, id); opsional. */
     language: text('language'),
     description: text('description'),
@@ -87,7 +87,7 @@ export const karyas = sqliteTable(
     /**
      * JSON `[{ type, note }]` - type:
      * creator_origin | language | location | theme | other.
-     * Wajib ≥1 saat publish (gate "berbau Sambas").
+     * Opsional (boleh kosong di usulan dan publish).
      */
     sambasConnectionsJson: text('sambas_connections_json')
       .notNull()

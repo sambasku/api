@@ -198,10 +198,16 @@ function refineKaryaCredits(
   }
 }
 
-/** Field bersama; year + sambas opsional di usulan cepat (wajib saat publish). */
+/** Field bersama; year + sambas opsional di usulan, edit, admin, dan publish. */
 const karyaPayloadShared = {
   title: nonEmpty.max(300),
   kind: z.enum(KARYA_KINDS),
+  year: z.number().int().min(1800).max(2100).optional().nullable(),
+  sambas_connections: z
+    .array(sambasConnectionSchema)
+    .max(10)
+    .optional()
+    .default([]),
   language: z.string().trim().min(2).max(16).optional().nullable(),
   description: z.string().trim().max(5000).optional().nullable(),
   cover_url: z.string().url().max(2000).optional().nullable(),
@@ -217,30 +223,15 @@ const karyaPayloadShared = {
 
 /**
  * Payload usulan kind=new (form cepat: judul + credit).
- * `year` dan `sambas_connections` opsional; gate publish di approve/admin.
+ * `year` dan `sambas_connections` opsional sampai publish.
  */
 export const newKaryaPayloadSchema = z
-  .object({
-    ...karyaPayloadShared,
-    year: z.number().int().min(1800).max(2100).optional().nullable(),
-    sambas_connections: z
-      .array(sambasConnectionSchema)
-      .max(10)
-      .optional()
-      .default([]),
-  })
+  .object(karyaPayloadShared)
   .strict()
   .superRefine(refineKaryaCredits);
 
-/** Body admin create/update + usulan edit: wajib year + ≥1 sambas. */
-export const karyaFieldsSchema = z
-  .object({
-    ...karyaPayloadShared,
-    year: z.number().int().min(1800).max(2100),
-    sambas_connections: z.array(sambasConnectionSchema).min(1).max(10),
-  })
-  .strict()
-  .superRefine(refineKaryaCredits);
+/** Body admin create/update + usulan edit: year + sambas tetap opsional. */
+export const karyaFieldsSchema = newKaryaPayloadSchema;
 
 export const excerptPayloadSchema = z
   .object({

@@ -48,7 +48,7 @@ describe('GetWordByIdUseCase - gate viewer', () => {
 });
 
 describe('GetWordByLemmaUseCase - gate viewer', () => {
-  it('tamu → tanpa statuses (repo default published+verified)', async () => {
+  it('tamu → tanpa statuses (repo default published, verified opsional)', async () => {
     const findPublishedDetailByLemma = vi.fn().mockResolvedValue(DETAIL);
     const uc = new GetWordByLemmaUseCase({
       findPublishedDetailByLemma,

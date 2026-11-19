@@ -35,12 +35,12 @@ function requireUserId(c: Context<{ Variables: AppVariables }>): string {
 function fieldsFrom(body: z.infer<typeof karyaFieldsSchema>): KaryaFields {
   return {
     title: body.title,
-    year: body.year,
+    year: body.year ?? null,
     kind: body.kind,
     language: body.language ?? null,
     description: body.description ?? null,
     coverUrl: body.cover_url ?? null,
-    sambasConnections: body.sambas_connections.map((c) => ({
+    sambasConnections: (body.sambas_connections ?? []).map((c) => ({
       type: c.type,
       note: c.note,
     })),

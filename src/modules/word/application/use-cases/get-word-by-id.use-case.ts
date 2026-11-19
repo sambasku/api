@@ -17,7 +17,7 @@ export class GetWordByIdUseCase {
     // includeAllStatuses (05-api-edit-kata.md): prefill form edit admin -
     // draft/pending_review/rejected juga terbaca.
     // Soft auth roles: verifikator boleh published + pending_review.
-    // Default publik: repository hanya published + is_verified.
+    // Default publik: repository status published (is_verified = badge saja).
     const gate = opts?.includeAllStatuses
       ? undefined
       : publicReadGate(opts?.viewerRoles);

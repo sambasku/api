@@ -58,11 +58,9 @@ export class KaryaUseCases {
 
   async adminCreate(fields: KaryaFields, authorId: string): Promise<Karya> {
     const normalized = this.normalizeFieldsFromDomain(fields);
-    this.assertPublishable(normalized);
     const slug = await this.uniqueSlug(normalized.title);
     const row = await this.repo.insert({
       ...normalized,
-      year: normalized.year!,
       slug,
       authorId,
     });
@@ -73,8 +71,7 @@ export class KaryaUseCases {
   async adminUpdate(id: string, fields: KaryaFields): Promise<Karya> {
     await this.mustKarya(id);
     const normalized = this.normalizeFieldsFromDomain(fields);
-    this.assertPublishable(normalized);
-    await this.repo.update(id, { ...normalized, year: normalized.year! });
+    await this.repo.update(id, normalized);
     return (await this.repo.findById(id))!;
   }
 
@@ -217,11 +214,7 @@ export class KaryaUseCases {
       throw new ConflictError('INVALID_PAYLOAD', 'Payload usulan edit tidak valid');
     }
     await this.mustKarya(row.karyaId);
-    this.assertPublishable(row.payload);
-    await this.repo.update(row.karyaId, {
-      ...row.payload,
-      year: row.payload.year!,
-    });
+    await this.repo.update(row.karyaId, row.payload);
     await this.repo.updateContribution(id, {
       status: 'approved',
       resultKaryaId: row.karyaId,
@@ -231,11 +224,9 @@ export class KaryaUseCases {
     if (isExcerptContributionPayload(row.payload)) {
       throw new ConflictError('INVALID_PAYLOAD', 'Payload usulan karya baru tidak valid');
     }
-    this.assertPublishable(row.payload);
     const slug = await this.uniqueSlug(row.payload.title);
     const created = await this.repo.insert({
       ...row.payload,
-      year: row.payload.year!,
       slug,
       authorId: row.userId,
     });
@@ -258,26 +249,6 @@ export class KaryaUseCases {
   async requestRevision(id: string, note: string) {
     await this.mustPending(id);
     await this.repo.updateContribution(id, { status: 'needs_revision', revisionNote: note });
-  }
-
-  /** Tahun + kaitan Sambas wajib sebelum karya boleh dipublish. */
-  private assertPublishable(fields: KaryaFields): void {
-    const issues: { field: string; message: string }[] = [];
-    if (fields.year == null || fields.year < 1800 || fields.year > 2100) {
-      issues.push({
-        field: 'year',
-        message:
-          'Tahun rilis wajib diisi sebelum karya ditayangkan. Minta revisi ke pengusul atau lengkapi di admin.',
-      });
-    }
-    if (fields.sambasConnections.length < 1) {
-      issues.push({
-        field: 'sambas_connections',
-        message:
-          'Minimal satu kaitan dengan Sambas wajib sebelum karya ditayangkan. Minta revisi ke pengusul atau lengkapi di admin.',
-      });
-    }
-    if (issues.length > 0) throw new ValidationError(issues);
   }
 
   private fieldsFromBody(body: KaryaBody): KaryaFields {
