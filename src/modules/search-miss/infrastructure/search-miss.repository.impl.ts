@@ -104,7 +104,15 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
     const term = normalizeTerm(input.term);
     if (!term) return null;
 
-    // Ada baris (termasuk soft-deleted) → conflict path; is_visible tidak diubah.
+    const preferVisible = input.preferVisible === true;
+    const now = new Date();
+
+    // Upsert manual (select → update|insert), BUKAN onConflictDoUpdate.
+    // Staging sqld pernah kehilangan UNIQUE (term, direction); Drizzle
+    // `ON CONFLICT (term, direction)` lalu gagal total - termasuk insert
+    // pertama - dengan SQLITE_UNKNOWN "ON CONFLICT clause does not match
+    // any PRIMARY KEY or UNIQUE constraint". Error di-swallow di use case
+    // → search 0 hasil tanpa baris miss (log "gagal mencatat search miss").
     const [existing] = await this.db
       .select({ id: searchMisses.id })
       .from(searchMisses)
@@ -116,35 +124,67 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
       )
       .limit(1);
 
-    const preferVisible = input.preferVisible === true;
-    // `returning` dipakai untuk ambil id baris setelah upsert: baik baris baru
-    // maupun baris yang sudah ada (conflict) keduanya mengembalikan id, jadi
-    // pencatatan searcher bisa dilakukan tanpa query kedua.
-    const rows = await this.db
-      .insert(searchMisses)
-      .values({
-        term,
-        direction: input.direction,
-        // G3: insert baru boleh langsung tayang; default tetap false.
-        isVisible: preferVisible,
-      })
-      .onConflictDoUpdate({
-        target: [searchMisses.term, searchMisses.direction],
-        set: {
+    let missId: string | undefined;
+    let becameVisible = false;
+
+    if (existing) {
+      // Conflict path: naikkan hit, hidupkan lagi kalau sempat di-dismiss.
+      // JANGAN reset is_visible (14-api §7 / G3).
+      await this.db
+        .update(searchMisses)
+        .set({
           hitCount: sql`${searchMisses.hitCount} + 1`,
-          lastSearchedAt: new Date(),
-          updatedAt: new Date(),
-          // Istilah dicari LAGI setelah di-dismiss → hidupkan kembali
+          lastSearchedAt: now,
+          updatedAt: now,
           deletedAt: null,
           deletedBy: null,
-          // JANGAN reset is_visible - keputusan admin tetap (14-api §7 / G3)
-        },
-      })
-      .returning({ id: searchMisses.id });
+        })
+        .where(eq(searchMisses.id, existing.id));
+      missId = existing.id;
+    } else {
+      try {
+        const rows = await this.db
+          .insert(searchMisses)
+          .values({
+            term,
+            direction: input.direction,
+            // G3: insert baru boleh langsung tayang; default tetap false.
+            isVisible: preferVisible,
+            lastSearchedAt: now,
+            createdAt: now,
+          })
+          .returning({ id: searchMisses.id });
+        missId = rows[0]?.id;
+        becameVisible = preferVisible;
+      } catch (err) {
+        // Race: request lain insert term yang sama lebih dulu.
+        if (!isUniqueViolation(err)) throw err;
+        const [raced] = await this.db
+          .select({ id: searchMisses.id })
+          .from(searchMisses)
+          .where(
+            and(
+              eq(searchMisses.term, term),
+              eq(searchMisses.direction, input.direction),
+            ),
+          )
+          .limit(1);
+        if (!raced) throw err;
+        await this.db
+          .update(searchMisses)
+          .set({
+            hitCount: sql`${searchMisses.hitCount} + 1`,
+            lastSearchedAt: now,
+            updatedAt: now,
+            deletedAt: null,
+            deletedBy: null,
+          })
+          .where(eq(searchMisses.id, raced.id));
+        missId = raced.id;
+        becameVisible = false;
+      }
+    }
 
-    let missId = rows[0]?.id;
-    // Beberapa runtime Turso/libsql kadang mengembalikan [] pada RETURNING
-    // + ON CONFLICT: fallback select supaya hit tetap terhitung di meta klien.
     if (!missId) {
       const [fallback] = await this.db
         .select({ id: searchMisses.id })
@@ -159,21 +199,48 @@ export class SearchMissRepositoryImpl implements SearchMissRepository {
 
     const searcherId = input.searcherId;
     if (searcherId) {
-      // Baris searcher: satu per (miss, user). Pencarian berulang hanya menyentuh
-      // `created_at`, tidak menambah baris - tanpa ini `exclude_self` bocor begitu
-      // user yang sama mencari istilah sama dua kali.
-      await this.db
-        .insert(searchMissSearchers)
-        .values({ searchMissId: missId, userId: searcherId })
-        .onConflictDoUpdate({
-          target: [searchMissSearchers.searchMissId, searchMissSearchers.userId],
-          set: { createdAt: new Date() },
-        });
+      // Satu baris per (miss, user). Hindari onConflictDoUpdate - index
+      // unik searchers juga bisa hilang di sqld lokal (gejala sama).
+      const [existingSearcher] = await this.db
+        .select({ id: searchMissSearchers.id })
+        .from(searchMissSearchers)
+        .where(
+          and(
+            eq(searchMissSearchers.searchMissId, missId),
+            eq(searchMissSearchers.userId, searcherId),
+          ),
+        )
+        .limit(1);
+      if (existingSearcher) {
+        await this.db
+          .update(searchMissSearchers)
+          .set({ createdAt: now })
+          .where(eq(searchMissSearchers.id, existingSearcher.id));
+      } else {
+        try {
+          await this.db.insert(searchMissSearchers).values({
+            searchMissId: missId,
+            userId: searcherId,
+            createdAt: now,
+          });
+        } catch (err) {
+          if (!isUniqueViolation(err)) throw err;
+          await this.db
+            .update(searchMissSearchers)
+            .set({ createdAt: now })
+            .where(
+              and(
+                eq(searchMissSearchers.searchMissId, missId),
+                eq(searchMissSearchers.userId, searcherId),
+              ),
+            );
+        }
+      }
     }
 
     return {
       id: missId,
-      becameVisible: !existing && preferVisible,
+      becameVisible,
     };
   }
 

@@ -156,9 +156,11 @@ function creditsHaveRequiredRole(
   kind: (typeof KARYA_KINDS)[number],
   credits: { role: string }[],
 ): boolean {
-  const roles = new Set(credits.map((c) => c.role));
-  if (kind === 'music') return roles.has('vocal');
-  return roles.has('director') || roles.has('cast');
+  if (kind === 'music') {
+    return credits.some((c) => c.role === 'vocal');
+  }
+  // Film: cukup ≥1 kredit (channel, rumah produksi, sutradara, dll.).
+  return credits.length > 0;
 }
 
 function creditRoleAllowed(
@@ -182,7 +184,7 @@ function refineKaryaCredits(
       message:
         data.kind === 'music'
           ? 'Musik wajib punya minimal satu credit role vocal'
-          : 'Film wajib punya minimal satu credit role director atau cast',
+          : 'Film wajib punya minimal satu kredit',
     });
   }
   for (let i = 0; i < data.credits.length; i++) {

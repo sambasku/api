@@ -670,6 +670,8 @@ export const wordListResponseSchema = z.object({
     limit: z.number().int(),
     next_cursor: z.string().nullable(),
     has_more: z.boolean(),
+    /** Ada saat search 0 hasil + miss berhasil dicatat (CTA koreksi / usul). */
+    search_miss_id: z.string().nullable().optional(),
   }),
 });
 

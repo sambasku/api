@@ -63,6 +63,19 @@ describe('newKaryaPayloadSchema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('menerima film dengan role other (channel / rumah produksi)', () => {
+    const parsed = newKaryaPayloadSchema.safeParse({
+      title: 'Film Kampung',
+      year: 2019,
+      kind: 'film',
+      sambas_connections: [
+        { type: 'location', note: 'Syuting di Sambas kota' },
+      ],
+      credits: [{ role: 'other', name_text: 'Channel Sambasku' }],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it('menolak role film pada kind music', () => {
     const parsed = newKaryaPayloadSchema.safeParse({
       ...baseMusic,
