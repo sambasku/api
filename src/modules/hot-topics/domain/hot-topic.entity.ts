@@ -25,7 +25,7 @@ export interface HotProposedItem {
   inWindow: boolean;
 }
 
-/** Top lemma by unique viewers (word_views). Window = hari WIB ini. */
+/** Top lemma by unique viewers (word_views). Window ≈ hari ini + kemarin WIB. */
 export interface HotViewedItem {
   kind: 'word_view';
   wordId: string;

@@ -206,18 +206,21 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
   }
 
   /**
-   * Top lemma by unique viewers. Jendela = hari WIB ini; kalau kurang dari
+   * Top lemma by unique viewers.
+   * Jendela ≈ 24 jam: **hari WIB ini + kemarin** (data `word_views` hanya
+   * granularitas hari, bukan rolling wall-clock). Kalau slot kurang dari
    * limit, isi sisa dari agregat 7 hari kalender WIB (tanpa duplikat).
-   * `word_views` bergranularitas hari, bukan rolling 24 jam wall-clock.
    */
   private async listViewed(
     limit: number,
   ): Promise<{ items: HotViewedItem[]; meta: HotTopicTabMeta }> {
     const today = searchDayWib(new Date());
+    const yesterday = searchDayWib(new Date(Date.now() - MS_DAY));
     const from = searchDayWib(
       new Date(Date.now() - (VIEW_BACKFILL_DAYS - 1) * MS_DAY),
     );
-    const todayViewsExpr = sql<number>`coalesce(sum(case when ${wordViews.day} = ${today} then 1 else 0 end), 0)`.mapWith(
+    // Jendela = hari ini + kemarin WIB (perkiraan 24 jam tanpa timestamp).
+    const windowViewsExpr = sql<number>`coalesce(sum(case when ${wordViews.day} in (${today}, ${yesterday}) then 1 else 0 end), 0)`.mapWith(
       Number,
     );
     const viewsExpr = sql<number>`count(*)`.mapWith(Number);
@@ -227,7 +230,7 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
       .select({
         wordId: wordViews.wordId,
         lemma: words.lemma,
-        todayViews: todayViewsExpr,
+        windowViews: windowViewsExpr,
         views: viewsExpr,
         lastViewedDay: lastDayExpr,
       })
@@ -242,19 +245,19 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
         ),
       )
       .groupBy(wordViews.wordId, words.lemma)
-      .orderBy(sql`${todayViewsExpr} desc`, sql`${viewsExpr} desc`, words.lemma)
+      .orderBy(sql`${windowViewsExpr} desc`, sql`${viewsExpr} desc`, words.lemma)
       .limit(limit * 3);
 
     const windowItems: HotViewedItem[] = [];
     const backfillItems: HotViewedItem[] = [];
     for (const r of rows) {
-      const inWindow = r.todayViews > 0;
+      const inWindow = r.windowViews > 0;
       const item: HotViewedItem = {
         kind: 'word_view',
         wordId: r.wordId,
         lemma: r.lemma,
-        // Window: hit hari ini; backfill: total 7 hari.
-        viewCount: inWindow ? r.todayViews : r.views,
+        // Window: total hari ini+kemarin; backfill: total 7 hari.
+        viewCount: inWindow ? r.windowViews : r.views,
         lastViewedDay: r.lastViewedDay,
         inWindow,
       };
