@@ -209,7 +209,7 @@ const skippedOnly =
     const latestReviews = filter.mine
       ? await this.resolveLatestReviews(sliced.map((r) => r.id))
       : null;
-    const items = sliced.map((row) => {
+    const mapped = sliced.map((row) => {
       const latest = latestReviews?.get(row.id);
       return toContribution({
         ...row,
@@ -223,6 +223,16 @@ const skippedOnly =
           : {}),
       });
     });
+    // Antrean tinjau (bukan mine): buang orphan anak tanpa lemma parent -
+    // kartu akan kosong / judul "meaning". Riwayat (mine) tetap lengkap.
+    const items =
+      filter.mine
+        ? mapped
+        : mapped.filter(
+            (item) =>
+              item.entityType === 'word' ||
+              (item.wordLemma != null && item.wordLemma.trim() !== ''),
+          );
     // Acak isi halaman per user (seeded, stabil untuk request identik) supaya
     // antrean verifikator tidak seragam. Cursor tetap dari keyset id desc -
     // diambil SEBELUM acak agar pagination tidak melompat/duplikat.
