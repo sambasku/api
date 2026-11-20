@@ -2,12 +2,14 @@ import type { Context } from 'hono';
 import { UnauthorizedError } from '@/shared/errors/app-error';
 import type { AppVariables } from '@/shared/types';
 import type { MintVoiceTokenUseCase } from '../../application/mint-voice-token.use-case';
+import type { MintTurnCredentialsUseCase } from '../../application/mint-turn-credentials.use-case';
 import type { RecordVoiceRoomEventUseCase } from '../../application/record-voice-room-event.use-case';
 
 export class VoiceController {
   constructor(
     private readonly mintToken: MintVoiceTokenUseCase,
     private readonly recordEvent: RecordVoiceRoomEventUseCase,
+    private readonly mintTurnCreds: MintTurnCredentialsUseCase,
   ) {}
 
   mint(c: Context<{ Variables: AppVariables }>) {
@@ -22,6 +24,17 @@ export class VoiceController {
       '';
     return this.mintToken
       .execute(user.user_id, deviceId)
+      .then((data) => c.json({ success: true as const, data }, 200));
+  }
+
+  /** Kredensial coturn time-limited untuk ICE relay. */
+  turnCreds(c: Context<{ Variables: AppVariables }>) {
+    const user = c.get('user');
+    if (!user?.user_id) {
+      throw new UnauthorizedError();
+    }
+    return this.mintTurnCreds
+      .execute()
       .then((data) => c.json({ success: true as const, data }, 200));
   }
 

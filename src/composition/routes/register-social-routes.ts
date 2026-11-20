@@ -67,6 +67,7 @@ import {
 import { ChatController } from "@/modules/chat/presentation/v1/chat.controller";
 import { createChatRoutes } from "@/modules/chat/presentation/v1/chat.routes";
 import { MintVoiceTokenUseCase } from "@/modules/voice/application/mint-voice-token.use-case";
+import { MintTurnCredentialsUseCase } from "@/modules/voice/application/mint-turn-credentials.use-case";
 import { RecordVoiceRoomEventUseCase } from "@/modules/voice/application/record-voice-room-event.use-case";
 import { VoiceRoomEventsRepository } from "@/modules/voice/infrastructure/voice-room-events.repository";
 import { VoiceController } from "@/modules/voice/presentation/v1/voice.controller";
@@ -398,6 +399,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       chatMirror,
       di.userRepo,
     ),
+    new MintTurnCredentialsUseCase(),
   );
   app.route(
     "/api/v1/voice",

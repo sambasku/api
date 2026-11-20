@@ -21,6 +21,16 @@ const voiceTokenResponseSchema = z.object({
   }),
 });
 
+const turnCredsResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    urls: z.array(z.string()).min(1),
+    username: z.string(),
+    credential: z.string(),
+    ttl: z.number().int().positive(),
+  }),
+});
+
 const voiceEventBodySchema = z.object({
   kind: z.enum(['joined', 'left', 'disconnect', 'join_failed']),
   room: z.string().max(80).optional(),
@@ -89,6 +99,27 @@ export function createVoiceRoutes(deps: VoiceRoutesDeps) {
     },
   });
 
+  const turnCredsRoute = createRoute({
+    method: 'get',
+    path: '/turn-creds',
+    tags: ['Voice'],
+    summary: 'Mint kredensial coturn time-limited untuk ICE relay',
+    responses: {
+      200: {
+        description: 'urls + username + credential + ttl',
+        content: json(turnCredsResponseSchema),
+      },
+      401: {
+        description: 'Token tidak ada/invalid',
+        content: json(errorResponseSchema),
+      },
+      503: {
+        description: 'TURN_SECRET belum dikonfigurasi',
+        content: json(errorResponseSchema),
+      },
+    },
+  });
+
   const eventRoute = createRoute({
     method: 'post',
     path: '/events',
@@ -117,6 +148,7 @@ export function createVoiceRoutes(deps: VoiceRoutesDeps) {
   });
 
   routes.openapi(tokenRoute, (c) => deps.controller.mint(c) as never);
+  routes.openapi(turnCredsRoute, (c) => deps.controller.turnCreds(c) as never);
   routes.openapi(eventRoute, (c) => deps.controller.event(c) as never);
 
   return routes;

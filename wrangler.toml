@@ -15,6 +15,7 @@
 #        npx wrangler secret put SUPABASE_ANON_KEY
 #        npx wrangler secret put SUPABASE_SECRET_KEY  # chat write (Postgres)
 #        npx wrangler secret put LIVEKIT_API_SECRET   # voice experimental
+#        npx wrangler secret put TURN_SECRET   # voice experimental
 #        LIVEKIT_API_KEY / LIVEKIT_URL / LIVEKIT_ROOM_NAME → [vars] (bukan secret)
 #        …
 #   3. npx wrangler deploy
@@ -189,5 +190,6 @@ crons = ["* * * * *"]
 #   npx wrangler secret put GITHUB_CLIENT_SECRET --env staging
 #   npx wrangler secret put OPENWA_API_KEY --env staging
 #   npx wrangler secret put PLAY_STATS_GCS_BUCKET --env staging
+#   npx wrangler secret put TURN_SECRET --env staging
 # Prod (tanpa --env): LIVEKIT_API_SECRET + SUPABASE_SECRET_KEY (+ Resend, ImageKit, OAuth, FCM)
 #   …

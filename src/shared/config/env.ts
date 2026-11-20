@@ -185,6 +185,9 @@ const envSchema = z.object({
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
   LIVEKIT_ROOM_NAME: z.string().optional(),
+  // coturn static-auth-secret (turn.sambasku.com). Kosong = GET /voice/turn-creds → 503.
+  // wrangler secret put TURN_SECRET - jangan commit nilai nyata.
+  TURN_SECRET: z.string().optional(),
 
   // App URL for the API service (Cloudflare Workers custom domain) - sama
   // dengan APP_URL di atas (legacy). Tidak ada definisi kedua.
