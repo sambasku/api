@@ -2,9 +2,8 @@ import {
   BALEHO_COLS,
   BALEHO_MAX_ACTIVE_PER_USER,
   BALEHO_MAX_DAYS,
-  BALEHO_MAX_H,
-  BALEHO_MAX_W,
   BALEHO_ROWS,
+  isValidBalehoSize,
 } from '@/shared/database/drizzle/schema/baleho.schema';
 import {
   BadRequestError,
@@ -61,9 +60,12 @@ function assertRect(input: CreateBalehoPlacementInput) {
       'Hanya slide 1 yang bisa dipesan',
     );
   }
-  if (w < 1 || h < 1 || w > BALEHO_MAX_W || h > BALEHO_MAX_H) {
+  if (!isValidBalehoSize(w, h)) {
     throw new ValidationError([
-      { field: 'size', message: 'Ukuran grid di luar batas (max 4x2)' },
+      {
+        field: 'size',
+        message: 'Ukuran grid di luar batas (max 4x2 atau 2x4)',
+      },
     ]);
   }
   if (col < 0 || row < 0 || col + w > BALEHO_COLS || row + h > BALEHO_ROWS) {
@@ -386,23 +388,72 @@ export class BalehoUseCases {
     }
   }
 
-  /** Pause/takedown live atau awaiting - lepaskan slot. */
+  /**
+   * Pause konten / batalkan awaiting:
+   * - live → paused (slot tetap dikunci; bisa resume selama ends_at belum lewat)
+   * - awaiting_payment → cancelled + lepas slot (batal sebelum bayar)
+   */
   async pause(placementId: string, reason?: string) {
     const row = await this.repo.getPlacementNotify(placementId);
     if (!row) {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
     }
-    if (row.status !== 'live' && row.status !== 'awaiting_payment') {
+    if (row.status === 'awaiting_payment') {
+      const ok = await this.repo.updatePlacementStatus({
+        placementId,
+        status: 'cancelled',
+        rejectReason: reason ?? 'admin_cancel',
+        clearOccupancy: true,
+      });
+      if (!ok) {
+        throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
+      }
+      return;
+    }
+    if (row.status !== 'live') {
       throw new BadRequestError(
         'BALEHO_BAD_STATUS',
-        'Hanya pesanan live atau awaiting_payment yang bisa di-pause',
+        'Hanya pesanan live yang bisa di-pause (atau awaiting_payment untuk dibatalkan)',
       );
     }
     const ok = await this.repo.updatePlacementStatus({
       placementId,
-      status: 'cancelled',
+      status: 'paused',
       rejectReason: reason ?? 'paused',
-      clearOccupancy: true,
+      clearOccupancy: false,
+    });
+    if (!ok) {
+      throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
+    }
+  }
+
+  /**
+   * Tayangkan ulang placement yang di-pause, selama masa berlaku (ends_at) belum lewat.
+   * Slot tetap dipegang selama pause - cukup flip status ke live.
+   */
+  async resume(placementId: string) {
+    const row = await this.repo.getPlacementNotify(placementId);
+    if (!row) {
+      throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');
+    }
+    if (row.status !== 'paused') {
+      throw new BadRequestError(
+        'BALEHO_BAD_STATUS',
+        'Hanya pesanan paused yang bisa ditayangkan ulang',
+      );
+    }
+    const now = new Date();
+    if (!row.endsAt || row.endsAt.getTime() <= now.getTime()) {
+      throw new BadRequestError(
+        'BALEHO_RESUME_EXPIRED',
+        'Masa berlaku sudah habis. Pause ini tidak bisa ditayangkan ulang.',
+      );
+    }
+    const ok = await this.repo.updatePlacementStatus({
+      placementId,
+      status: 'live',
+      rejectReason: null,
+      clearOccupancy: false,
     });
     if (!ok) {
       throw new NotFoundError('BALEHO_PLACEMENT_NOT_FOUND', 'Pesanan tidak ditemukan');

@@ -72,6 +72,7 @@ export type BalehoRepository = {
       pricePerCellPerDay: number | null;
       days: number | null;
       createdAt: Date;
+      endsAt: Date | null;
       impressions: number;
       taps: number;
       /** Klik tombol CTA (`event_type=action`). */
@@ -124,6 +125,7 @@ export type BalehoRepository = {
     w: number;
     h: number;
     status: BalehoPlacementStatus;
+    endsAt: Date | null;
     advertiserUserId: string;
     referrerUserId: string | null;
   } | null>;
@@ -148,7 +150,7 @@ export type BalehoRepository = {
   }): Promise<boolean>;
   /**
    * Timeout bayar (awaiting_payment > 48 jam) → cancelled + lepas slot.
-   * Expire live (ends_at lewat) → expired + lepas slot.
+   * Expire live/paused (ends_at lewat) → expired + lepas slot.
    */
   releaseDue(now: Date): Promise<{ cancelled: number; expired: number }>;
   /** Live, ends_at dalam (now, until], belum pernah notif H-1. */

@@ -443,6 +443,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         pricePerCellPerDay: balehoPlacements.pricePerCellPerDay,
         days: balehoPlacements.days,
         createdAt: balehoPlacements.createdAt,
+        endsAt: balehoPlacements.endsAt,
       })
       .from(balehoPlacements)
       .leftJoin(users, eq(users.id, balehoPlacements.advertiserUserId))
@@ -466,6 +467,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         pricePerCellPerDay: r.pricePerCellPerDay ?? null,
         days: r.days ?? null,
         createdAt: r.createdAt,
+        endsAt: r.endsAt ?? null,
         impressions: c.impressions,
         taps: c.taps,
         actions: c.actions,
@@ -668,6 +670,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         w: balehoPlacements.w,
         h: balehoPlacements.h,
         status: balehoPlacements.status,
+        endsAt: balehoPlacements.endsAt,
         advertiserUserId: balehoPlacements.advertiserUserId,
         referrerUserId: balehoPlacements.referrerUserId,
       })
@@ -725,7 +728,9 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         .update(balehoPlacements)
         .set({
           status: args.status,
-          rejectReason: args.rejectReason ?? undefined,
+          // null = clear alasan; undefined = biarkan kolom lama.
+          rejectReason:
+            args.rejectReason === undefined ? undefined : args.rejectReason,
           rejectedAt: args.status === 'rejected' ? now : undefined,
           awaitingPaymentAt: args.awaitingPaymentAt ?? undefined,
           paidAt: args.paidAt ?? undefined,
@@ -780,7 +785,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       .from(balehoPlacements)
       .where(
         and(
-          eq(balehoPlacements.status, 'live'),
+          inArray(balehoPlacements.status, ['live', 'paused']),
           isNull(balehoPlacements.deletedAt),
           lte(balehoPlacements.endsAt, now),
         ),

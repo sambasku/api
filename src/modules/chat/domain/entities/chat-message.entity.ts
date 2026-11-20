@@ -3,8 +3,13 @@ export const CHAT_CHANNEL_PUBLIC = 'public' as const;
 
 export type ChatChannel = typeof CHAT_CHANNEL_PUBLIC;
 
-/** text | sticker | voice_note | system (log voice join/leave, dll). */
+/** text | sticker | voice_note | system (log voice join/leave + ping). */
 export type ChatMessageKind = 'text' | 'sticker' | 'voice_note' | 'system';
+
+/** Body system untuk jejak ping (render: `{displayName} PING!!!`). */
+export const CHAT_PING_BODY = 'PING!!!';
+/** Cooldown global antar ping di channel public (detik). */
+export const CHAT_PING_COOLDOWN_SECONDS = 300;
 
 /** Baris chat_messages (SoT Turso). audio_path/sha tidak pernah ke wire. */
 export interface ChatMessage {

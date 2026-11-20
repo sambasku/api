@@ -5,10 +5,11 @@ import {
   chatMessageRevisions,
   chatMessages,
 } from '@/shared/database/drizzle/schema/chat.schema';
-import type {
-  ChatMessage,
-  ChatMessageKind,
-  ChatMessageRevision,
+import {
+  CHAT_PING_BODY,
+  type ChatMessage,
+  type ChatMessageKind,
+  type ChatMessageRevision,
 } from '../domain/entities/chat-message.entity';
 import type {
   ChatRepository,
@@ -200,4 +201,22 @@ export class ChatRepositoryImpl implements ChatRepository {
       .orderBy(desc(chatMessageRevisions.createdAt));
     return rows.map(toRevision);
   }
+
+  async findLatestPing(channel: string): Promise<ChatMessage | null> {
+    const [row] = await this.db
+      .select()
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.channel, channel),
+          eq(chatMessages.kind, 'system'),
+          eq(chatMessages.body, CHAT_PING_BODY),
+          sql`${chatMessages.deletedAt} is null`,
+        ),
+      )
+      .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+      .limit(1);
+    return row ? toDomain(row) : null;
+  }
+
 }

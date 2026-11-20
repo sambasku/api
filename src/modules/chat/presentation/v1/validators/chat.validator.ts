@@ -88,7 +88,7 @@ export const chatMessageWireSchema = z.object({
   username: z.string().nullable(),
   display_name: z.string().nullable(),
   avatar_url: z.string().nullable(),
-  kind: z.enum(['text', 'sticker', 'voice_note']),
+  kind: z.enum(['text', 'sticker', 'voice_note', 'system']),
   body: z.string().nullable(),
   sticker_id: z.string().nullable(),
   audio_url: z.string().nullable(),
@@ -132,4 +132,21 @@ export const chatRevisionItemSchema = z.object({
 export const chatRevisionsResponseSchema = z.object({
   success: z.literal(true),
   data: z.array(chatRevisionItemSchema),
+});
+
+export const chatPingStatusWireSchema = z.object({
+  available_at: isoOrNull,
+  cooldown_seconds: z.number().int(),
+  last_ping_at: isoOrNull,
+});
+export const chatPingStatusResponseSchema = z.object({
+  success: z.literal(true),
+  data: chatPingStatusWireSchema,
+});
+export const chatPingResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    message: chatMessageWireSchema,
+    status: chatPingStatusWireSchema,
+  }),
 });

@@ -11,6 +11,8 @@ import {
   chatMessageIdParamSchema,
   chatMessageListResponseSchema,
   chatMessageResponseSchema,
+  chatPingResponseSchema,
+  chatPingStatusResponseSchema,
   chatRevisionsResponseSchema,
   createChatMessageBodySchema,
   editChatMessageBodySchema,
@@ -65,10 +67,37 @@ function chatWriteIpLimit() {
   });
 }
 
+/** Burst anti-spam: max 10 tulis / 60 detik per user. */
+function chatWriteBurstUserLimit(
+  onUgcRateLimited?: (userId: string) => void | Promise<void>,
+) {
+  return rateLimit({
+    points: 10,
+    duration: 60,
+    keyFn: (c) => {
+      const uid = (
+        c as { get: (k: 'user') => { user_id: string } | undefined }
+      ).get('user')?.user_id;
+      return uid ? `chat-write-burst:user:${uid}` : '';
+    },
+    onLimited: ugcRateLimitedHook(onUgcRateLimited),
+  });
+}
+
+function chatPingGlobalLimit() {
+  return rateLimit({
+    points: 1,
+    duration: 300,
+    keyFn: () => 'chat-ping:global',
+  });
+}
+
 export function createChatRoutes(deps: ChatRoutesDeps) {
   const routes = createOpenApiApp();
   const writeUserLimit = chatWriteUserLimit(deps.onUgcRateLimited);
   const writeIpLimit = chatWriteIpLimit();
+  const writeBurstLimit = chatWriteBurstUserLimit(deps.onUgcRateLimited);
+  const pingGlobalLimit = chatPingGlobalLimit();
 
   routes.use('*', rateLimit({ points: 120, duration: 60 }));
 
@@ -258,6 +287,40 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
     },
   });
 
+
+  const pingStatusRoute = createRoute({
+    method: 'get',
+    path: '/ping',
+    tags: ['Chat'],
+    summary: 'Status cooldown ping global (5 menit)',
+    responses: {
+      200: {
+        description: 'Status ping',
+        content: json(chatPingStatusResponseSchema),
+      },
+    },
+  });
+  const pingRoute = createRoute({
+    method: 'post',
+    path: '/ping',
+    tags: ['Chat'],
+    summary: 'Kirim ping (jejak PING!!! + bel; cooldown global 5 menit)',
+    responses: {
+      201: {
+        description: 'Ping tersimpan',
+        content: json(chatPingResponseSchema),
+      },
+      401: {
+        description: 'Token tidak ada/invalid',
+        content: json(errorResponseSchema),
+      },
+      429: {
+        description: 'Cooldown ping global',
+        content: json(errorResponseSchema),
+      },
+    },
+  });
+
   // GET list: optional auth. POST create (+ voice): auth + client + consent + rate limit.
   routes.use('/messages', async (c, next) => {
     if (c.req.method === 'GET') return deps.optionalAuthenticate(c, next);
@@ -281,6 +344,10 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
   routes.use('/messages', async (c, next) => {
     if (c.req.method !== 'POST') return next();
     return writeIpLimit(c, next);
+  });
+  routes.use('/messages', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeBurstLimit(c, next);
   });
 
   // Voice note: path /messages/voice - pastikan gate sama (Hono path exact).
@@ -306,6 +373,10 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
     if (c.req.method !== 'POST') return next();
     return writeIpLimit(c, next);
   });
+  routes.use('/messages/voice', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return writeBurstLimit(c, next);
+  });
 
   // PATCH/DELETE: author write gates.
   routes.use('/messages/:id', async (c, next) => {
@@ -328,6 +399,25 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
   });
 
   routes.use('/messages/:id/revisions', deps.authenticate);
+
+  routes.use('/ping', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/ping', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/ping', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/ping', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return pingGlobalLimit(c, next);
+  });
 
   routes.openapi(capabilitiesRoute, (c) =>
     deps.controller.getCapabilities(c) as never,
@@ -354,6 +444,10 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
   routes.openapi(revisionsRoute, (c) =>
     deps.controller.revisions(c, c.req.valid('param').id) as never,
   );
+  routes.openapi(pingStatusRoute, (c) =>
+    deps.controller.pingStatus(c) as never,
+  );
+  routes.openapi(pingRoute, (c) => deps.controller.ping(c) as never);
 
   return routes;
 }

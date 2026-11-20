@@ -211,6 +211,7 @@ export class BalehoController {
           price_per_cell_per_day: r.pricePerCellPerDay,
           days: r.days,
           created_at: r.createdAt.toISOString(),
+          ends_at: r.endsAt?.toISOString() ?? null,
           ...perf,
         };
       }),
@@ -286,6 +287,14 @@ export class BalehoController {
     body: RejectBody,
   ) {
     await this.uc.pause(placementId, body.reason);
+    return c.json({ success: true as const, data: { id: placementId } });
+  }
+
+  async adminResume(
+    c: Context<{ Variables: AppVariables }>,
+    placementId: string,
+  ) {
+    await this.uc.resume(placementId);
     return c.json({ success: true as const, data: { id: placementId } });
   }
 }

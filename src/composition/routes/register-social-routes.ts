@@ -60,6 +60,10 @@ import {
   ListChatMessagesUseCase,
   ListChatRevisionsUseCase,
 } from "@/modules/chat/application/use-cases/chat.use-cases";
+import {
+  GetChatPingStatusUseCase,
+  SendChatPingUseCase,
+} from "@/modules/chat/application/use-cases/send-chat-ping.use-case";
 import { ChatController } from "@/modules/chat/presentation/v1/chat.controller";
 import { createChatRoutes } from "@/modules/chat/presentation/v1/chat.routes";
 import { MintVoiceTokenUseCase } from "@/modules/voice/application/mint-voice-token.use-case";
@@ -369,6 +373,8 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
     ),
     new DeleteChatMessageUseCase(chatRepo, chatMirror, di.pronunciationStorage),
     new ListChatRevisionsUseCase(chatRepo),
+    new GetChatPingStatusUseCase(chatRepo),
+    new SendChatPingUseCase(chatRepo, di.userRepo, chatMirror),
   );
   app.route(
     "/api/v1/chat",

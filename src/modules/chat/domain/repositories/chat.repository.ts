@@ -60,4 +60,6 @@ export interface ChatRepository {
   editText(input: EditChatMessageInput): Promise<ChatMessage | null>;
   tombstone(input: TombstoneChatMessageInput): Promise<ChatMessage | null>;
   listRevisions(messageId: string): Promise<ChatMessageRevision[]>;
+  /** Ping terakhir (kind=system, body=PING!!!) di channel. */
+  findLatestPing(channel: string): Promise<ChatMessage | null>;
 }

@@ -11,8 +11,21 @@ import { users } from './users.schema';
 
 export const BALEHO_COLS = 4;
 export const BALEHO_ROWS = 6;
-export const BALEHO_MAX_W = 4;
-export const BALEHO_MAX_H = 2;
+/** Sisi panjang max (landscape 4x2 / portrait 2x4). */
+export const BALEHO_MAX_LONG = 4;
+/** Sisi pendek max - salah satu sisi wajib ≤ ini. */
+export const BALEHO_MAX_SHORT = 2;
+/** Alias: loop/clamp per sumbu boleh sampai sisi panjang. */
+export const BALEHO_MAX_W = BALEHO_MAX_LONG;
+export const BALEHO_MAX_H = BALEHO_MAX_LONG;
+
+/** True untuk 1x1..4x2 (landscape) dan 1x3..2x4 (portrait); tolak 3x3+. */
+export function isValidBalehoSize(w: number, h: number): boolean {
+  if (!Number.isInteger(w) || !Number.isInteger(h)) return false;
+  if (w < 1 || h < 1) return false;
+  if (w > BALEHO_MAX_LONG || h > BALEHO_MAX_LONG) return false;
+  return Math.min(w, h) <= BALEHO_MAX_SHORT;
+}
 export const BALEHO_MAX_ACTIVE_PER_USER = 2;
 export const BALEHO_MAX_DAYS = 30;
 export const BALEHO_PAYMENT_TIMEOUT_MS = 48 * 60 * 60 * 1000;
@@ -28,17 +41,19 @@ export const BALEHO_PLACEMENT_STATUSES = [
   'pending_review',
   'awaiting_payment',
   'live',
+  'paused',
   'rejected',
   'cancelled',
   'expired',
 ] as const;
 export type BalehoPlacementStatus = (typeof BALEHO_PLACEMENT_STATUSES)[number];
 
-/** Status yang mengunci sel di occupancy. */
+/** Status yang mengunci sel di occupancy (paused tetap pegang slot). */
 export const BALEHO_LOCKING_STATUSES: readonly BalehoPlacementStatus[] = [
   'pending_review',
   'awaiting_payment',
   'live',
+  'paused',
 ];
 
 export const BALEHO_MEDIA_TYPES = ['image', 'video', 'text_cta'] as const;

@@ -15,6 +15,10 @@ import type {
   ListChatMessagesUseCase,
   ListChatRevisionsUseCase,
 } from '../../application/use-cases/chat.use-cases';
+import type {
+  GetChatPingStatusUseCase,
+  SendChatPingUseCase,
+} from '../../application/use-cases/send-chat-ping.use-case';
 
 function serializeMessage(m: ChatMessage) {
   return {
@@ -57,6 +61,8 @@ export class ChatController {
     private readonly editMessage: EditChatMessageUseCase,
     private readonly deleteMessage: DeleteChatMessageUseCase,
     private readonly listRevisions: ListChatRevisionsUseCase,
+    private readonly getPingStatus: GetChatPingStatusUseCase,
+    private readonly sendPing: SendChatPingUseCase,
   ) {}
 
   getCapabilities(c: Context<{ Variables: AppVariables }>) {
@@ -206,6 +212,41 @@ export class ChatController {
           data: items.map(serializeRevision),
         },
         200,
+      ),
+    );
+  }
+
+  pingStatus(c: Context<{ Variables: AppVariables }>) {
+    return this.getPingStatus.execute().then((s) =>
+      c.json(
+        {
+          success: true as const,
+          data: {
+            available_at: s.availableAt,
+            cooldown_seconds: s.cooldownSeconds,
+            last_ping_at: s.lastPingAt,
+          },
+        },
+        200,
+      ),
+    );
+  }
+  ping(c: Context<{ Variables: AppVariables }>) {
+    const user = c.get('user')!;
+    return this.sendPing.execute(user.user_id).then((r) =>
+      c.json(
+        {
+          success: true as const,
+          data: {
+            message: serializeMessage(r.message),
+            status: {
+              available_at: r.status.availableAt,
+              cooldown_seconds: r.status.cooldownSeconds,
+              last_ping_at: r.status.lastPingAt,
+            },
+          },
+        },
+        201,
       ),
     );
   }

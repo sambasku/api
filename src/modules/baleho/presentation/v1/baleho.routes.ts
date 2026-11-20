@@ -138,7 +138,8 @@ export function createAdminBalehoRoutes(deps: {
 }) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 60, duration: 60 }));
-  routes.use('*', deps.authenticate, authorizeRole('root', 'admin', 'reviewer'));
+  // Mutasi + list Baleho: minimal admin/root (bukan reviewer).
+  routes.use('*', deps.authenticate, authorizeRole('root', 'admin'));
 
   routes.openapi(
     createRoute({
@@ -246,7 +247,13 @@ export function createAdminBalehoRoutes(deps: {
           content: { 'application/json': { schema: rejectBalehoBodySchema } },
         },
       },
-      responses: { 200: { description: 'Pause/takedown', content: json } },
+      responses: {
+        200: {
+          description:
+            'live → paused (slot tetap); awaiting_payment → cancelled',
+          content: json,
+        },
+      },
     }),
     (c) =>
       deps.controller.adminPause(
@@ -254,6 +261,23 @@ export function createAdminBalehoRoutes(deps: {
         c.req.valid('param').id,
         c.req.valid('json'),
       ) as never,
+  );
+
+  routes.openapi(
+    createRoute({
+      method: 'post',
+      path: '/placements/{id}/resume',
+      tags: ['Baleho'],
+      request: { params: idParam },
+      responses: {
+        200: {
+          description: 'paused → live bila ends_at masih berlaku',
+          content: json,
+        },
+      },
+    }),
+    (c) =>
+      deps.controller.adminResume(c, c.req.valid('param').id) as never,
   );
 
   return routes;

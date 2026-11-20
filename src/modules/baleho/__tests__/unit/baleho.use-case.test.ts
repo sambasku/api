@@ -461,3 +461,88 @@ describe('BalehoUseCases.reject notify', () => {
     );
   });
 });
+
+describe('BalehoUseCases.pause/resume', () => {
+  const baseLive = {
+    id: '01PLACEMENT00000000000001',
+    col: 0,
+    row: 0,
+    w: 2,
+    h: 2,
+    status: 'live' as const,
+    endsAt: new Date(Date.now() + 7 * 86400000),
+    advertiserUserId: '01USER000000000000000001',
+    referrerUserId: null,
+  };
+
+  it('pause live → paused tanpa clear occupancy', async () => {
+    const updatePlacementStatus = vi.fn().mockResolvedValue(true);
+    const repo = mockRepo({
+      getPlacementNotify: vi.fn().mockResolvedValue(baseLive),
+      updatePlacementStatus,
+    });
+    const uc = new BalehoUseCases(repo);
+    await uc.pause(baseLive.id, 'paused');
+    expect(updatePlacementStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        placementId: baseLive.id,
+        status: 'paused',
+        clearOccupancy: false,
+      }),
+    );
+  });
+
+  it('pause awaiting_payment → cancelled + lepas slot', async () => {
+    const updatePlacementStatus = vi.fn().mockResolvedValue(true);
+    const repo = mockRepo({
+      getPlacementNotify: vi.fn().mockResolvedValue({
+        ...baseLive,
+        status: 'awaiting_payment',
+        endsAt: null,
+      }),
+      updatePlacementStatus,
+    });
+    const uc = new BalehoUseCases(repo);
+    await uc.pause(baseLive.id, 'admin');
+    expect(updatePlacementStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'cancelled',
+        clearOccupancy: true,
+      }),
+    );
+  });
+
+  it('resume paused masih berlaku → live', async () => {
+    const updatePlacementStatus = vi.fn().mockResolvedValue(true);
+    const repo = mockRepo({
+      getPlacementNotify: vi.fn().mockResolvedValue({
+        ...baseLive,
+        status: 'paused',
+      }),
+      updatePlacementStatus,
+    });
+    const uc = new BalehoUseCases(repo);
+    await uc.resume(baseLive.id);
+    expect(updatePlacementStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'live',
+        clearOccupancy: false,
+      }),
+    );
+  });
+
+  it('resume paused sudah lewat ends_at → BALEHO_RESUME_EXPIRED', async () => {
+    const repo = mockRepo({
+      getPlacementNotify: vi.fn().mockResolvedValue({
+        ...baseLive,
+        status: 'paused',
+        endsAt: new Date(Date.now() - 60_000),
+      }),
+    });
+    const uc = new BalehoUseCases(repo);
+    await expect(uc.resume(baseLive.id)).rejects.toMatchObject({
+      errorCode: 'BALEHO_RESUME_EXPIRED',
+    });
+    expect(repo.updatePlacementStatus).not.toHaveBeenCalled();
+  });
+});
