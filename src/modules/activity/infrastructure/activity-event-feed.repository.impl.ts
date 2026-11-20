@@ -273,6 +273,8 @@ interface FeedRow {
   occurredAt: Date;
   payload: string | null;
   wordStatus: string | null;
+  /** Untuk wire #166: published + belum verified → status pending_review. */
+  wordIsVerified: boolean | null;
   lemma: string | null;
   actorUserId: string | null;
   actorUsername: string | null;
@@ -602,6 +604,7 @@ export class ActivityEventFeedRepositoryImpl {
         payload: activityEvents.payload,
         // status kata untuk keputusan CTA (pending = tanpa target)
         wordStatus: words.status,
+        wordIsVerified: words.isVerified,
         // #103: field dari JOIN - ganti resolveWord/resolveActor per baris.
         lemma: words.lemma,
         actorUserId: users.id,
@@ -1079,18 +1082,20 @@ kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_vi
     if (wire === 'vote') {
       wire = /perlu dicek ulang/.test(body) ? 'vote_down' : 'vote_up';
     }
-    // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
-    // Setelah approve, read-time join published menghidupkan CTA lagi.
-    // Kecuali #166: contribution_submitted (usul kata baru) tetap bawa
-    // target + status wire 'pending_review' (bukan wajib status DB) supaya
-    // verifikator bisa shortcut
-    // ke antrean review dari feed; non-verifikator cukup tahu masih menunggu.
+    // Kata non-published: tampil tanpa CTA (target null), kecuali #166.
+    // #166 contribution_submitted: wire status 'pending_review' supaya
+    // verifikator shortcut ke antrean - berlaku untuk DB pending_review
+    // ATAU published + belum verified (usulan tamu/kontributor).
     let target: ActivityItem['target'];
-    if (row.wordStatus && row.wordStatus !== 'published') {
-      target =
-        kind === 'contribution_submitted' && word
-          ? { type: 'word', id: word.id, status: 'pending_review' }
-          : null;
+    const needsReviewWire =
+      kind === 'contribution_submitted' &&
+      !!word &&
+      (row.wordStatus === 'pending_review' ||
+        (row.wordStatus === 'published' && row.wordIsVerified === false));
+    if (needsReviewWire) {
+      target = { type: 'word', id: word!.id, status: 'pending_review' };
+    } else if (row.wordStatus && row.wordStatus !== 'published') {
+      target = null;
     } else {
       target = this.targetFor(kind, row, word);
     }

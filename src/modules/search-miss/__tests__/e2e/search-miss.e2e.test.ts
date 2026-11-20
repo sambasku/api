@@ -495,13 +495,13 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
       ),
     ).toBe(false);
 
-    // Panel admin tetap melihat miss + pending (belum fulfilled)
+    // Panel admin: kata sudah published → fulfilled; kontribusi masih pending review
     const panelPending = await get('/api/v1/admin/search-misses', adminToken);
     const pending = (await panelPending.json()).data.find(
       (m: { term: string }) => m.term === 'bandong262',
     );
     expect(pending).toMatchObject({
-      is_fulfilled: false,
+      is_fulfilled: true,
       is_visible: true,
       pending_contribution_count: 1,
     });
