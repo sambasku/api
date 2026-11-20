@@ -105,8 +105,10 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const { data: created } = await create.json();
     expect(created.status).toBe('published');
     expect(created.is_verified).toBe(false);
-    // Gate publik: belum verified → 404 sampai approve
-    expect((await get(`/api/v1/words/${created.word_id}`)).status).toBe(404);
+    // Publik: published belum verified tetap tayang (badge) sampai approve
+    const beforeApprove = await get(`/api/v1/words/${created.word_id}`);
+    expect(beforeApprove.status).toBe(200);
+    expect((await beforeApprove.json()).data.is_verified).toBe(false);
 
     // 2. Muncul di antrean admin (status pending)
     const list = await get('/api/v1/admin/contributions?status=pending&entity_type=word', adminToken);
@@ -317,12 +319,13 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const stillPending = await get('/api/v1/admin/contributions?status=pending&entity_type=example', adminToken);
     expect((await stillPending.json()).data.some((c: { id: string }) => c.id === item.id)).toBe(true);
 
-    // contoh belum verified: tidak di detail publik; admin detail simpan koreksi
+    // Koreksi diam: tetap tayang publik, is_verified=false; admin simpan koreksi
     const afterPublic = await get(`/api/v1/words/${data.word_id}`);
     const afterPublicBody = await afterPublic.json();
     expect(afterPublicBody.data.meanings[0].examples.some(
-      (e: { source_sentence: string }) => e.source_sentence === 'Sudah diperbaiki.',
-    )).toBe(false);
+      (e: { source_sentence: string; is_verified?: boolean }) =>
+        e.source_sentence === 'Sudah diperbaiki.' && e.is_verified === false,
+    )).toBe(true);
     const afterAdmin = await get(`/api/v1/admin/words/${data.word_id}`, adminToken);
     const afterBody = await afterAdmin.json();
     expect(afterBody.data.meanings[0].examples.some(

@@ -19,16 +19,18 @@ export function isVerifierRole(role: string | string[]): boolean {
 /** Status yang boleh dilihat verifikator di search/list/detail publik. */
 export const VERIFIER_VISIBLE_STATUSES: WordStatus[] = ['published', 'pending_review'];
 
-/** Gate baca publik vs verifikator (search / list / detail). */
+/** Gate baca publik vs verifikator (search / list / detail).
+ * Publik: published saja - is_verified = badge, bukan gate tayang
+ * (docs/produk/tayang-belum-verifikasi.md).
+ */
 export function publicReadGate(roles?: string | string[]): {
   statuses?: WordStatus[];
   published?: boolean;
-  isVerified?: boolean;
 } {
   if (roles && isVerifierRole(roles)) {
     return { statuses: VERIFIER_VISIBLE_STATUSES };
   }
-  return { published: true, isVerified: true };
+  return { published: true };
 }
 
 export interface PublicationDecision {
