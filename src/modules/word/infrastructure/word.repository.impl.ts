@@ -1252,10 +1252,11 @@ memberLemma: string;
               targetSentence: e.targetSentence,
               sourceType: e.sourceType,
               audios: exampleAudios,
+              // Publik butuh is_verified untuk badge Menunggu pengecekan
+              isVerified: e.isVerified,
               ...(includeAll
                 ? {
                     status: e.status as ChildStatus,
-                    isVerified: e.isVerified,
                     isCorrected: e.isCorrected,
                   }
                 : {}),
@@ -1268,8 +1269,10 @@ memberLemma: string;
         notation: p.notation,
         value: p.value,
         dialectId: p.dialectId,
+        // Publik butuh is_verified untuk badge Menunggu pengecekan
+        isVerified: p.isVerified,
         ...(includeAll
-          ? { status: p.status as ChildStatus, isVerified: p.isVerified, isCorrected: p.isCorrected }
+          ? { status: p.status as ChildStatus, isCorrected: p.isCorrected }
           : {}),
       })),
       images: imageRows.map((i) => ({

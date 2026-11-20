@@ -579,6 +579,7 @@ export class WordController {
           target_language_id: e.targetLanguageId,
           target_sentence: e.targetSentence,
           source_type: e.sourceType,
+          is_verified: e.isVerified ?? false,
           audios: (e.audios ?? []).map((a) => ({
             id: a.id,
             url: a.url,
@@ -597,6 +598,7 @@ export class WordController {
         notation: p.notation,
         value: p.value,
         dialect_id: p.dialectId,
+        is_verified: p.isVerified ?? false,
       })),
       images: word.images.map((img) => {
         const mapped = mapPublicWordImageUrl(

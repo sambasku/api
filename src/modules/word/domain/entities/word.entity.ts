@@ -119,6 +119,7 @@ export interface WordDetail extends Word {
     dialectId: string | null;
     /** terisi saat includeAllStatuses (layar review); publik selalu published */
     status?: ChildStatus;
+    /** selalu diisi agar klien bisa badge Menunggu pengecekan */
     isVerified?: boolean;
     isCorrected?: boolean;
   }[];

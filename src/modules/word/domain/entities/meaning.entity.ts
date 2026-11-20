@@ -53,6 +53,7 @@ export interface MeaningDetail extends Meaning {
     }[];
     /** terisi saat includeAllStatuses (layar review); publik selalu published */
     status?: import('./word.entity').ChildStatus;
+    /** selalu diisi agar klien bisa badge Menunggu pengecekan */
     isVerified?: boolean;
     isCorrected?: boolean;
   }[];
