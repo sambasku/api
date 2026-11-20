@@ -176,7 +176,8 @@ export class CreateJinyeCommentUseCase {
       images: images.map((i) => ({
         url: i.url.trim(),
         providerFileId: i.providerFileId.trim(),
-        publicUrl: null,
+        // Auto-tayang: staging URL langsung jadi public (post-moderation).
+        publicUrl: i.url.trim(),
         contentWarnings: [],
       })),
     });

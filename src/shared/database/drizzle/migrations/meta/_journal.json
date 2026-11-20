@@ -1261,6 +1261,13 @@
       "when": 1795176664660,
       "tag": "0180_user_skips_unique_index",
       "breakpoints": true
+    },
+    {
+      "idx": 180,
+      "version": "6",
+      "when": 1795177664660,
+      "tag": "0181_jinye_images_auto_publish",
+      "breakpoints": true
     }
   ]
 }

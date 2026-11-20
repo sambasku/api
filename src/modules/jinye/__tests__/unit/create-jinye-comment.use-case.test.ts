@@ -268,4 +268,39 @@ describe('CreateJinyeCommentUseCase', () => {
       expect.objectContaining({ body: '', stickerId: 'cheer' }),
     );
   });
+
+  it('foto komen auto-tayang: publicUrl diisi dari url', async () => {
+    const createComment = vi.fn(async () => makeComment());
+    const repo = emptyRepo({ createComment });
+    const uc = new CreateJinyeCommentUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+    );
+    const url = 'https://ik.example.com/jinye/c.jpg';
+    await uc.execute({
+      jinyeId: JINYE_ID,
+      userId: ACTOR,
+      body: 'dengan foto',
+      images: [
+        {
+          url,
+          providerFileId: 'file1',
+          publicUrl: null,
+          contentWarnings: [],
+        },
+      ],
+    });
+    expect(createComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        images: [
+          expect.objectContaining({
+            url,
+            publicUrl: url,
+          }),
+        ],
+      }),
+    );
+  });
+
 });

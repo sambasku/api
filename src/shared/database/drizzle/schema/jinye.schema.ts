@@ -2,7 +2,7 @@ import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 import { users } from './users.schema';
 
-/** Staging/public image row (parity discussions). */
+/** Image row: url staging = public_url (auto-tayang post-moderation). */
 export type JinyeImageRow = {
   url: string;
   provider_file_id: string;

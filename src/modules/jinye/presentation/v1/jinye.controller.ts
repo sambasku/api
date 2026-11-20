@@ -277,7 +277,7 @@ export class JinyeController {
       images: (body.images ?? []).map((i) => ({
         url: i.url,
         providerFileId: i.provider_file_id,
-        publicUrl: null,
+        publicUrl: i.url,
         contentWarnings: [],
       })),
       hasPendingAudio: body.has_pending_audio === true,
@@ -438,7 +438,7 @@ export class JinyeController {
       images: (body.images ?? []).map((i) => ({
         url: i.url,
         providerFileId: i.provider_file_id,
-        publicUrl: null,
+        publicUrl: i.url,
         contentWarnings: [],
       })),
       requestId: c.get('requestId') ?? null,
