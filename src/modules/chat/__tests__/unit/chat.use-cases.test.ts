@@ -105,6 +105,7 @@ function emptyRepo(overrides: Partial<ChatRepository> = {}): ChatRepository {
       }),
     ),
     listRevisions: vi.fn(async () => []),
+    findLatestPing: vi.fn(async () => null),
     ...overrides,
   };
 }
