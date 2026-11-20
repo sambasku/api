@@ -20,8 +20,8 @@ export function isVerifierRole(role: string | string[]): boolean {
 export const VERIFIER_VISIBLE_STATUSES: WordStatus[] = ['published', 'pending_review'];
 
 /** Gate baca publik vs verifikator (search / list / detail).
- * Publik: published saja - is_verified = badge, bukan gate tayang
- * (docs/produk/tayang-belum-verifikasi.md).
+ * Publik: word `status=published`. Makna menunggu disaring di
+ * `filterMeaningsForPublicDetail` (bukan di sini).
  */
 export function publicReadGate(roles?: string | string[]): {
   statuses?: WordStatus[];
@@ -62,4 +62,28 @@ export function resolveChildPublication(
 ): { status: ChildStatus; isVerified: boolean; needsReview: boolean } {
   const p = resolvePublication('published', role, options);
   return { status: p.status as ChildStatus, isVerified: p.isVerified, needsReview: p.needsReview };
+}
+
+/** Makna yang boleh tampil di detail kamus publik.
+ *
+ * Default: hanya `is_verified` (hindari ambiguitas makna menunggu).
+ * Pengecualian:
+ * - verifikator: semua makna (tinjau / badge menunggu)
+ * - includeUnverified: semua (Periksa Kata / review komunitas)
+ * - focusMeaningId: makna fokus ikut meski belum verified
+ */
+export function filterMeaningsForPublicDetail<
+  T extends { id: string; isVerified: boolean },
+>(
+  meanings: T[],
+  opts?: {
+    viewerIsVerifier?: boolean;
+    includeUnverified?: boolean;
+    focusMeaningId?: string;
+  },
+): T[] {
+  if (opts?.viewerIsVerifier || opts?.includeUnverified) return meanings;
+  const focus = opts?.focusMeaningId?.trim();
+  if (focus) return meanings.filter((m) => m.isVerified || m.id === focus);
+  return meanings.filter((m) => m.isVerified);
 }

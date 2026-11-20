@@ -5,6 +5,7 @@ import {
   searchMissBlocklistTokens,
 } from '@/modules/search-miss/domain/quality-gate';
 import type {
+  HotCheckItem,
   HotProposedItem,
   HotSearchedItem,
   HotTopicTabMeta,
@@ -40,7 +41,7 @@ function takeSafe<T extends { inWindow: boolean }>(
 }
 
 /**
- * G4/G6: kartu Sorotan Home - tiga tab dalam satu response.
+ * G4/G6: kartu Sorotan Home - empat tab dalam satu response.
  * Setelah fetch: saring blocklist + quality (term/lemma) supaya
  * seksual / diskriminatif / kata diblokir tidak tampil di kartu.
  */
@@ -61,6 +62,7 @@ export class ListHotTopicsUseCase {
       ...raw.searched.items.map((i) => i.term),
       ...raw.proposed.items.map((i) => i.lemma),
       ...raw.viewed.items.map((i) => i.lemma),
+      ...raw.check.items.map((i) => i.lemma),
     ];
     const tokenSet = new Set<string>();
     for (const text of texts) {
@@ -86,6 +88,7 @@ export class ListHotTopicsUseCase {
       searched: takeSafe(raw.searched.items, limit, (i: HotSearchedItem) => !isBlockedText(i.term)),
       proposed: takeSafe(raw.proposed.items, limit, (i: HotProposedItem) => !isBlockedText(i.lemma)),
       viewed: takeSafe(raw.viewed.items, limit, (i: HotViewedItem) => !isBlockedText(i.lemma)),
+      check: takeSafe(raw.check.items, limit, (i: HotCheckItem) => !isBlockedText(i.lemma)),
     };
   }
 }

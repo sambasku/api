@@ -27,11 +27,11 @@ export function createHotTopicsRoutes(deps: HotTopicsRoutesDeps) {
     method: 'get',
     path: '/',
     tags: ['Hot Topics'],
-    summary: 'Kartu Hot Home: dicari / diusulkan / dekati ambang (24 jam + backfill 7 hari)',
+    summary: 'Kartu Hot Home: Hits / Usulan / Dicari / Cek (24 jam + backfill 7 hari)',
     request: { query: hotTopicsQuerySchema },
     responses: {
       200: {
-        description: 'Tiga tab Hot (maks 10 item/tab)',
+        description: 'Empat tab Hot (maks 10 item/tab)',
         content: json(hotTopicsResponseSchema),
       },
       400: { description: 'Query tidak valid', content: json(errorResponseSchema) },

@@ -117,6 +117,8 @@ export const voteHistoryResponseSchema = z.object({
       voted_at: z.string(),
       word: voteHistoryWordSchema.nullable(),
       community_status: voteCommunityStatusEnum.nullable(),
+      upvotes: z.number().int().nonnegative(),
+      downvotes: z.number().int().nonnegative(),
     }),
   ),
   meta: z.object({

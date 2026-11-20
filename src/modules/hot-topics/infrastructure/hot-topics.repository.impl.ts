@@ -4,6 +4,7 @@ import {
   meaningTranslations,
   meanings,
   searchMisses,
+  votes,
   wordVariants,
   wordViews,
   words,
@@ -12,6 +13,7 @@ import { searchDayWib } from '@/shared/database/drizzle/schema/search-daily.sche
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
 import type {
+  HotCheckItem,
   HotProposedItem,
   HotSearchedItem,
   HotTopicTabMeta,
@@ -83,13 +85,14 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
     const windowStart = new Date(now - WINDOW_MS);
     const backfillStart = new Date(now - BACKFILL_MS);
 
-    const [searched, proposed, viewed] = await Promise.all([
+    const [searched, proposed, viewed, check] = await Promise.all([
       this.listSearched(limit, windowStart, backfillStart),
       this.listProposed(limit, windowStart, backfillStart),
       this.listViewed(limit),
+      this.listCheck(limit, windowStart, backfillStart),
     ]);
 
-    return { searched, proposed, viewed };
+    return { searched, proposed, viewed, check };
   }
 
   private async listSearched(
@@ -260,6 +263,81 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
     }
 
     // Pool oversized: use case saring blocklist lalu potong ke `limit`.
+    const items = [...windowItems, ...backfillItems];
+    const inWindowCount = items.filter((i) => i.inWindow).length;
+    return { items, meta: tabMeta(inWindowCount, items.length) };
+  }
+
+  /**
+   * Chip Cek: makna published dengan downvote aktif (votes.value = -1).
+   * Jendela 24 jam wall-clock + backfill 7 hari (tanpa duplikat).
+   * Kolom votes.*At = unix detik (drizzle mode timestamp).
+   */
+  private async listCheck(
+    limit: number,
+    windowStart: Date,
+    backfillStart: Date,
+  ): Promise<{ items: HotCheckItem[]; meta: HotTopicTabMeta }> {
+    const downExpr = sql<number>`count(*)`.mapWith(Number);
+    const lastDownSecExpr = sql<number>`max(coalesce(${votes.updatedAt}, ${votes.createdAt}))`.mapWith(
+      Number,
+    );
+    const backfillSec = Math.floor(backfillStart.getTime() / 1000);
+
+    const rows = await this.db
+      .select({
+        meaningId: votes.entityId,
+        wordId: meanings.wordId,
+        lemma: words.lemma,
+        definition: meanings.definition,
+        downvotes: downExpr,
+        lastDownSec: lastDownSecExpr,
+      })
+      .from(votes)
+      .innerJoin(meanings, eq(meanings.id, votes.entityId))
+      .innerJoin(words, eq(words.id, meanings.wordId))
+      .where(
+        and(
+          eq(votes.entityType, 'meaning'),
+          eq(votes.value, -1),
+          eq(meanings.status, 'published'),
+          isNull(meanings.deletedAt),
+          eq(words.status, 'published'),
+          isNull(words.deletedAt),
+          ...withoutExcludedUsageLabels(),
+        ),
+      )
+      .groupBy(
+        votes.entityId,
+        meanings.wordId,
+        words.lemma,
+        meanings.definition,
+      )
+      .having(sql`${lastDownSecExpr} >= ${backfillSec}`)
+      .orderBy(sql`${lastDownSecExpr} desc`, sql`${downExpr} desc`)
+      .limit(limit * 3);
+
+    const windowItems: HotCheckItem[] = [];
+    const backfillItems: HotCheckItem[] = [];
+    for (const r of rows) {
+      const last = new Date(r.lastDownSec * 1000);
+      const inWindow = last.getTime() >= windowStart.getTime();
+      const item: HotCheckItem = {
+        kind: 'meaning_downvote',
+        meaningId: r.meaningId,
+        wordId: r.wordId,
+        lemma: r.lemma,
+        definitionPreview: r.definition?.trim()
+          ? r.definition.trim().slice(0, 120)
+          : null,
+        downvotes: r.downvotes,
+        lastDownvotedAt: last,
+        inWindow,
+      };
+      if (inWindow) windowItems.push(item);
+      else backfillItems.push(item);
+    }
+
     const items = [...windowItems, ...backfillItems];
     const inWindowCount = items.filter((i) => i.inWindow).length;
     return { items, meta: tabMeta(inWindowCount, items.length) };

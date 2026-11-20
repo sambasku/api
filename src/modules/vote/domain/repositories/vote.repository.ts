@@ -172,6 +172,9 @@ export interface VoteHistoryItem {
    * non-makna atau makna induk hilang.
    */
   communityStatus: VoteCommunityStatus | null;
+  /** Agregat komunitas untuk target (batch countMany). */
+  upvotes: number;
+  downvotes: number;
 }
 
 export interface VoteHistoryListOptions {

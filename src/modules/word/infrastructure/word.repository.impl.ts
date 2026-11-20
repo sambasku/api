@@ -718,8 +718,8 @@ export class WordRepositoryImpl implements WordRepository {
     const includeDeleted = opts?.includeDeleted === true;
     const statuses = opts?.statuses?.length ? opts.statuses : undefined;
     // Verifikator: anak ikut status yang sama (published | pending_review).
-    // Publik: status published saja - is_verified = badge (Menunggu pengecekan),
-    // bukan gate tayang (docs/produk/tayang-belum-verifikasi.md).
+    // Publik: status published saja. Filter makna verified-only ada di
+    // use-case (docs/produk/tayang-belum-verifikasi.md + periksa-kata.md).
     // Admin includeAll: tanpa filter status anak.
     const childStatusFilter = includeAll
       ? undefined

@@ -98,6 +98,8 @@ export class VoteController {
             }
           : null,
         community_status: item.communityStatus,
+        upvotes: item.upvotes,
+        downvotes: item.downvotes,
       })),
       meta: { limit: query.limit, next_cursor: page.nextCursor, has_more: page.hasMore },
     });

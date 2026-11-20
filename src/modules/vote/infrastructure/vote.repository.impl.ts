@@ -924,8 +924,16 @@ case 'article_comment': {
       .map((row) => row.entityId);
     const communityMap = await this.resolveMeaningCommunityStatus(meaningIds);
 
+    const countMap = await this.countMany(
+      page.map((row) => ({
+        entityType: row.entityType as VoteTargetType,
+        entityId: row.entityId,
+      })),
+    );
+
     const items: VoteHistoryItem[] = page.map((row) => {
       const target = { entityType: row.entityType as VoteTargetType, entityId: row.entityId };
+      const counts = countMap.get(voteTargetKey(target));
       return {
         id: row.id,
         entityType: target.entityType,
@@ -937,6 +945,8 @@ case 'article_comment': {
           target.entityType === 'meaning'
             ? (communityMap.get(target.entityId) ?? null)
             : null,
+        upvotes: counts?.upvotes ?? 0,
+        downvotes: counts?.downvotes ?? 0,
       };
     });
 

@@ -2,6 +2,7 @@ import type { WordDetail } from '../../domain/entities/word.entity';
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import { hasFeedExcludedUsageLabels } from '@/shared/constants/usage-labels';
+import { filterMeaningsForPublicDetail } from '../utils/resolve-publication';
 
 export interface WordOfDayResult {
   /** 'YYYY-MM-DD' WIB yang dipakai seed pemilihan kata */
@@ -65,6 +66,9 @@ export class GetWordOfDayUseCase {
     let word = id ? await this.wordRepo.findDetailById(id) : null;
     if (word && hasFeedExcludedUsageLabels(word.usageLabels)) {
       word = null;
+    }
+    if (word) {
+      word.meanings = filterMeaningsForPublicDetail(word.meanings ?? []);
     }
     const isNewThisWeek = Boolean(
       word?.verifiedAt && now.getTime() - word.verifiedAt.getTime() <= SEVEN_DAYS_MS,

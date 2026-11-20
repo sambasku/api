@@ -827,6 +827,8 @@ const skippedOnly =
     // 17-api-usul-definisi.md: definisi kontribusi pada kata existing -
     // makna + terjemahannya (batch kedua, pola word detail).
     if (entityType === 'meaning') {
+      // Include soft-deleted: antrean review masih menunjuk entity yang baru
+      // dihapus/diganti, jangan kirim entity null (UI kosong + judul "meaning").
       const [row] = await this.db
         .select({
           id: meanings.id,
@@ -842,8 +844,8 @@ const skippedOnly =
           isCorrected: meanings.isCorrected,
         })
         .from(meanings)
-        .innerJoin(words, eq(words.id, meanings.wordId))
-        .where(and(eq(meanings.id, entityId), isNull(meanings.deletedAt)))
+        .leftJoin(words, eq(words.id, meanings.wordId))
+        .where(eq(meanings.id, entityId))
         .limit(1);
       if (!row) return null;
 

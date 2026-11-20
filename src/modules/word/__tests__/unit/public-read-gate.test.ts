@@ -8,7 +8,7 @@ import { GetWordByLemmaUseCase } from '../../application/use-cases/get-word-by-l
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { WordDetail } from '../../domain/entities/word.entity';
 
-const DETAIL = { id: '01WORD', lemma: 'makatn' } as unknown as WordDetail;
+const DETAIL = { id: '01WORD', lemma: 'makatn', meanings: [] } as unknown as WordDetail;
 
 describe('publicReadGate', () => {
   it('tamu / contributor → published (is_verified = badge, bukan gate)', () => {

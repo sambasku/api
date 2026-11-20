@@ -123,11 +123,19 @@ describe.skipIf(!hasTestDb)('Add Meaning E2E v1 - kontribusi definisi (17 doc)',
     expect(body.data.order_index).toBeGreaterThan(1);
     pendingMeaningId = body.data.id;
 
-    // Trust per makna (G1): published belum verified tetap di detail publik
-    // dengan is_verified=false (bukan disembunyikan seperti gate lama).
+    // Detail publik default: makna belum verified disembunyikan.
+    // Fokus ?meaning= / include_unverified=1 menampilkan menunggu (Periksa Kata).
     const detail = await get(`/api/v1/words/${wordId}`);
     const detailBody = await detail.json();
-    const publicMeaning = detailBody.data.meanings.find(
+    expect(
+      detailBody.data.meanings.find(
+        (m: { definition: string }) => m.definition === 'kondisi tidak benar, rusak',
+      ),
+    ).toBeUndefined();
+
+    const focused = await get(`/api/v1/words/${wordId}?meaning=${pendingMeaningId}`);
+    const focusedBody = await focused.json();
+    const publicMeaning = focusedBody.data.meanings.find(
       (m: { definition: string }) => m.definition === 'kondisi tidak benar, rusak',
     );
     expect(publicMeaning).toMatchObject({

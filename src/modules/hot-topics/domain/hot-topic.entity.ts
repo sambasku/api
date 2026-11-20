@@ -1,4 +1,4 @@
-export type HotTopicTab = 'searched' | 'proposed' | 'viewed';
+export type HotTopicTab = 'searched' | 'proposed' | 'viewed' | 'check';
 
 export interface HotTopicTabMeta {
   inWindow: number;
@@ -35,8 +35,21 @@ export interface HotViewedItem {
   inWindow: boolean;
 }
 
+/** Makna published dengan downvote aktif (votes.value = -1). Chip Cek. */
+export interface HotCheckItem {
+  kind: 'meaning_downvote';
+  meaningId: string;
+  wordId: string;
+  lemma: string;
+  definitionPreview: string | null;
+  downvotes: number;
+  lastDownvotedAt: Date;
+  inWindow: boolean;
+}
+
 export interface HotTopicsResult {
   searched: { items: HotSearchedItem[]; meta: HotTopicTabMeta };
   proposed: { items: HotProposedItem[]; meta: HotTopicTabMeta };
   viewed: { items: HotViewedItem[]; meta: HotTopicTabMeta };
+  check: { items: HotCheckItem[]; meta: HotTopicTabMeta };
 }

@@ -8,6 +8,7 @@ const empty: HotTopicsResult = {
   searched: { items: [], meta: emptyMeta },
   proposed: { items: [], meta: emptyMeta },
   viewed: { items: [], meta: emptyMeta },
+  check: { items: [], meta: emptyMeta },
 };
 
 describe('ListHotTopicsUseCase', () => {
@@ -26,7 +27,7 @@ describe('ListHotTopicsUseCase', () => {
     expect(listAllTabs).toHaveBeenCalledWith(3);
   });
 
-  it('menyaring Dicari + Usulan + Banyak dilihat lewat wordlist', async () => {
+  it('menyaring Dicari + Usulan + Hits + Cek lewat wordlist', async () => {
     const listAllTabs = vi.fn().mockResolvedValue({
       searched: {
         items: [
@@ -85,6 +86,31 @@ describe('ListHotTopicsUseCase', () => {
         ],
         meta: emptyMeta,
       },
+      check: {
+        items: [
+          {
+            kind: 'meaning_downvote',
+            meaningId: 'm-spam',
+            wordId: 'w-spam',
+            lemma: 'spam',
+            definitionPreview: 'buruk',
+            downvotes: 2,
+            lastDownvotedAt: new Date(),
+            inWindow: true,
+          },
+          {
+            kind: 'meaning_downvote',
+            meaningId: 'm-ok',
+            wordId: 'w-ok',
+            lemma: 'nganga',
+            definitionPreview: 'terbuka',
+            downvotes: 1,
+            lastDownvotedAt: new Date(),
+            inWindow: true,
+          },
+        ],
+        meta: emptyMeta,
+      },
     } satisfies HotTopicsResult);
     const blocklist = {
       findActiveWordSet: vi.fn().mockResolvedValue(new Set(['spam'])),
@@ -98,6 +124,7 @@ describe('ListHotTopicsUseCase', () => {
     expect(result.searched.items.map((i) => i.term)).toEqual(['makatn']);
     expect(result.proposed.items.map((i) => i.lemma)).toEqual(['nganga']);
     expect(result.viewed.items).toHaveLength(0);
+    expect(result.check.items.map((i) => i.lemma)).toEqual(['nganga']);
     expect(blocklist.findActiveWordSet).toHaveBeenCalled();
   });
 });

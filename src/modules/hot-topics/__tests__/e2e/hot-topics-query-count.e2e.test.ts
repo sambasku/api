@@ -7,8 +7,8 @@ const hasTestDb = !!parsed?.DATABASE_URL;
 if (parsed?.DATABASE_URL) process.env.DATABASE_URL = parsed.DATABASE_URL;
 
 /**
- * G5: GET /hot-topics = 3 tab paralel → target ≤3 query Turso / request
- * (Promise.all searched + proposed + viewed).
+ * G5: GET /hot-topics = 4 tab paralel → target ≤4 query Turso / request
+ * (Promise.all searched + proposed + viewed + check).
  */
 describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
   beforeAll(async () => {
@@ -38,6 +38,14 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
       isVerified: false,
       createdBy: 'u_htqc1',
       wordType: 'word',
+    });
+    await db.insert(schema.meanings).values({
+      id: 'm_htqc1',
+      wordId: 'w_htqc1',
+      definition: 'makan',
+      status: 'published',
+      isVerified: false,
+      orderIndex: 0,
     });
     const now = new Date();
     await db.insert(schema.searchMisses).values({
@@ -73,9 +81,19 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
         count: 1,
       },
     ]);
+    // Downvote aktif → masuk tab check.
+    await db.insert(schema.votes).values({
+      id: 'v_htqc1',
+      userId: 'u_htqc1',
+      entityType: 'meaning',
+      entityId: 'm_htqc1',
+      value: -1,
+      createdAt: now,
+      updatedAt: now,
+    });
   });
 
-  it('listAllTabs <= 3 query (satu per tab, paralel)', async () => {
+  it('listAllTabs <= 4 query (satu per tab, paralel)', async () => {
     const { createClient } = await import('@libsql/client');
     const { drizzle } = await import('drizzle-orm/libsql');
     const schema = await import('@/shared/database/drizzle/schema');
@@ -99,6 +117,9 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
     expect(result.viewed.items.length).toBeGreaterThan(0);
     expect(result.viewed.items[0]?.viewCount).toBe(2);
     expect(result.viewed.items[0]?.inWindow).toBe(true);
-    expect(queryCount).toBeLessThanOrEqual(3);
+    expect(result.check.items.length).toBeGreaterThan(0);
+    expect(result.check.items[0]?.downvotes).toBe(1);
+    expect(result.check.items[0]?.inWindow).toBe(true);
+    expect(queryCount).toBeLessThanOrEqual(4);
   });
 });

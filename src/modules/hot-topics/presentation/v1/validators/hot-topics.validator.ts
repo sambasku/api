@@ -40,6 +40,17 @@ const viewedItemSchema = z.object({
   in_window: z.boolean(),
 });
 
+const checkItemSchema = z.object({
+  kind: z.literal('meaning_downvote'),
+  meaning_id: z.string(),
+  word_id: z.string(),
+  lemma: z.string(),
+  definition_preview: z.string().nullable(),
+  downvotes: z.number().int(),
+  last_downvoted_at: z.string(),
+  in_window: z.boolean(),
+});
+
 export const hotTopicsResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -53,6 +64,10 @@ export const hotTopicsResponseSchema = z.object({
     }),
     viewed: z.object({
       items: z.array(viewedItemSchema),
+      meta: tabMetaSchema,
+    }),
+    check: z.object({
+      items: z.array(checkItemSchema),
       meta: tabMetaSchema,
     }),
   }),

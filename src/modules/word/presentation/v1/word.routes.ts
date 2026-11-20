@@ -784,9 +784,15 @@ export function createPublicWordRoutes(deps: WordRoutesDeps) {
     method: 'get',
     path: '/:id',
     tags: ['Words'],
-    summary: 'Detail kata published (halaman publik)',
+    summary: 'Detail kata published (halaman publik; makna default verified-only)',
     request: {
       params: z.object({ id: z.string().length(26) }),
+      query: z.object({
+        meaning: z.string().trim().min(1).max(26).optional(),
+        include_unverified: z
+          .enum(['0', '1', 'true', 'false', 'yes', 'no'])
+          .optional(),
+      }),
     },
     responses: {
       200: { description: 'Detail kata', content: json(wordDetailResponseSchema) },
@@ -800,9 +806,15 @@ export function createPublicWordRoutes(deps: WordRoutesDeps) {
     method: 'get',
     path: '/lemma/:lemma',
     tags: ['Words'],
-    summary: 'Detail kata published berdasarkan lemma (URL publik web)',
+    summary: 'Detail kata published berdasarkan lemma (makna default verified-only)',
     request: {
       params: z.object({ lemma: z.string().trim().min(1).max(255) }),
+      query: z.object({
+        meaning: z.string().trim().min(1).max(26).optional(),
+        include_unverified: z
+          .enum(['0', '1', 'true', 'false', 'yes', 'no'])
+          .optional(),
+      }),
     },
     responses: {
       200: { description: 'Detail kata', content: json(wordDetailResponseSchema) },

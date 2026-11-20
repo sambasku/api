@@ -2,7 +2,11 @@ import type { KaryaRepositoryImpl } from '@/modules/karya/infrastructure/karya.r
 import { NotFoundError } from '@/shared/errors/app-error';
 import type { WordDetail } from '../../domain/entities/word.entity';
 import type { WordRepository } from '../../domain/repositories/word.repository';
-import { publicReadGate } from '../utils/resolve-publication';
+import {
+  filterMeaningsForPublicDetail,
+  isVerifierRole,
+  publicReadGate,
+} from '../utils/resolve-publication';
 
 /** Detail kata berdasarkan lemma - pendukung URL publik /words/<lemma>. */
 export class GetWordByLemmaUseCase {
@@ -11,9 +15,17 @@ export class GetWordByLemmaUseCase {
     private readonly karyaRepo?: Pick<KaryaRepositoryImpl, 'listLemmaAppearancesByWordId'>,
   ) {}
 
-  async execute(lemma: string, opts?: { viewerRoles?: string[] }): Promise<WordDetail> {
+  async execute(
+    lemma: string,
+    opts?: {
+      viewerRoles?: string[];
+      focusMeaningId?: string;
+      includeUnverified?: boolean;
+    },
+  ): Promise<WordDetail> {
     // Resolusi lemma + detail dalam 2 round-trip Turso. Homonim & gate
-    // published/verified (atau statuses verifikator) ditangani repository.
+    // published (atau statuses verifikator) ditangani repository.
+    // Makna menunggu disaring kecuali focus / includeUnverified / verifikator.
     const gate = publicReadGate(opts?.viewerRoles);
     const detail = await this.wordRepo.findPublishedDetailByLemma(lemma, {
       statuses: gate.statuses,
@@ -21,6 +33,11 @@ export class GetWordByLemmaUseCase {
     if (!detail) {
       throw new NotFoundError('WORD_NOT_FOUND', 'Kata dengan lemma tersebut tidak ditemukan');
     }
+    detail.meanings = filterMeaningsForPublicDetail(detail.meanings ?? [], {
+      viewerIsVerifier: Boolean(opts?.viewerRoles && isVerifierRole(opts.viewerRoles)),
+      includeUnverified: opts?.includeUnverified === true,
+      focusMeaningId: opts?.focusMeaningId,
+    });
     detail.appearsInKarya = this.karyaRepo
       ? await this.karyaRepo.listLemmaAppearancesByWordId(detail.id)
       : [];

@@ -382,8 +382,14 @@ export class WordController {
 
   async detail(c: Context, id: string) {
     const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
-    const word = await this.deps.getById.execute(id, { viewerRoles });
-    setPublicWordReadCache(c);
+    const focusMeaningId = parseFocusMeaningId(c);
+    const includeUnverified = parseIncludeUnverified(c);
+    const word = await this.deps.getById.execute(id, {
+      viewerRoles,
+      focusMeaningId,
+      includeUnverified,
+    });
+    setPublicWordReadCache(c, { privateCache: Boolean(focusMeaningId || includeUnverified) });
     const related = this.deps.listRelated
       ? await this.deps.listRelated.execute('word', word.id)
       : [];
@@ -405,8 +411,14 @@ export class WordController {
   /** URL publik /words/<lemma> - resolusi homonim di repository. */
   async detailByLemma(c: Context, lemma: string) {
     const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
-    const word = await this.deps.getByLemma.execute(lemma, { viewerRoles });
-    setPublicWordReadCache(c);
+    const focusMeaningId = parseFocusMeaningId(c);
+    const includeUnverified = parseIncludeUnverified(c);
+    const word = await this.deps.getByLemma.execute(lemma, {
+      viewerRoles,
+      focusMeaningId,
+      includeUnverified,
+    });
+    setPublicWordReadCache(c, { privateCache: Boolean(focusMeaningId || includeUnverified) });
     const related = this.deps.listRelated
       ? await this.deps.listRelated.execute('word', word.id)
       : [];
@@ -1468,8 +1480,23 @@ export class WordController {
 }
 
 /** Cache pendek untuk GET baca kamus publik (bot & CDN ramah). */
-function setPublicWordReadCache(c: Context) {
+function setPublicWordReadCache(c: Context, opts?: { privateCache?: boolean }) {
+  // Query meaning / include_unverified ubah payload - jangan cache CDN bersama.
+  if (opts?.privateCache) {
+    c.header('Cache-Control', 'private, max-age=60');
+    return;
+  }
   c.header('Cache-Control', 'public, max-age=60, s-maxage=300');
+}
+
+function parseFocusMeaningId(c: Context): string | undefined {
+  const raw = c.req.query('meaning')?.trim();
+  return raw && raw.length > 0 ? raw : undefined;
+}
+
+function parseIncludeUnverified(c: Context): boolean {
+  const raw = (c.req.query('include_unverified') ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
 }
 
 function toListItem(w: {

@@ -2,7 +2,11 @@ import type { KaryaRepositoryImpl } from '@/modules/karya/infrastructure/karya.r
 import { NotFoundError } from '@/shared/errors/app-error';
 import type { WordDetail } from '../../domain/entities/word.entity';
 import type { WordRepository } from '../../domain/repositories/word.repository';
-import { publicReadGate } from '../utils/resolve-publication';
+import {
+  filterMeaningsForPublicDetail,
+  isVerifierRole,
+  publicReadGate,
+} from '../utils/resolve-publication';
 
 export class GetWordByIdUseCase {
   constructor(
@@ -12,12 +16,20 @@ export class GetWordByIdUseCase {
 
   async execute(
     id: string,
-    opts?: { includeAllStatuses?: boolean; viewerRoles?: string[] },
+    opts?: {
+      includeAllStatuses?: boolean;
+      viewerRoles?: string[];
+      /** Periksa Kata / deep-link fokus: ikutkan makna ini meski belum verified. */
+      focusMeaningId?: string;
+      /** Tampilkan semua makna published (termasuk menunggu). */
+      includeUnverified?: boolean;
+    },
   ): Promise<WordDetail> {
     // includeAllStatuses (05-api-edit-kata.md): prefill form edit admin -
     // draft/pending_review/rejected juga terbaca.
     // Soft auth roles: verifikator boleh published + pending_review.
-    // Default publik: repository status published (is_verified = badge saja).
+    // Default publik: repository status published; makna menunggu disaring
+    // kecuali focus / includeUnverified / verifikator.
     const gate = opts?.includeAllStatuses
       ? undefined
       : publicReadGate(opts?.viewerRoles);
@@ -27,6 +39,13 @@ export class GetWordByIdUseCase {
     });
     if (!detail) {
       throw new NotFoundError('WORD_NOT_FOUND', 'Kata dengan id tersebut tidak ditemukan');
+    }
+    if (!opts?.includeAllStatuses) {
+      detail.meanings = filterMeaningsForPublicDetail(detail.meanings ?? [], {
+        viewerIsVerifier: Boolean(opts?.viewerRoles && isVerifierRole(opts.viewerRoles)),
+        includeUnverified: opts?.includeUnverified === true,
+        focusMeaningId: opts?.focusMeaningId,
+      });
     }
     detail.appearsInKarya = this.karyaRepo
       ? await this.karyaRepo.listLemmaAppearancesByWordId(detail.id)
