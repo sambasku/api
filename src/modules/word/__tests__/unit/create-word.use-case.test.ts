@@ -159,7 +159,7 @@ describe('CreateWordUseCase - event feed (AGENTS.md #25)', () => {
   }
 
   it('kontributor login (published belum verified) → event contribution_submitted', async () => {
-    const { useCase, append } = makeDepsWithEvents({ status: 'pending_review' });
+    const { useCase, append } = makeDepsWithEvents({ status: 'published' });
     await useCase.execute(makeDto({ status: 'published' }), {
       ...CONTRIBUTOR,
       userId: '01CONTRIBUTORULID000000000',
@@ -170,7 +170,7 @@ describe('CreateWordUseCase - event feed (AGENTS.md #25)', () => {
   });
 
   it('anonim → event contribution_submitted', async () => {
-    const { useCase, append } = makeDepsWithEvents({ status: 'pending_review' });
+    const { useCase, append } = makeDepsWithEvents({ status: 'published' });
     await useCase.execute(
       makeDto({ status: 'published' }),
       { ...CONTRIBUTOR, userId: ANONIM_USER_ID },
@@ -223,6 +223,20 @@ describe('CreateWordUseCase', () => {
     expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'published', isVerified: false }),
       CONTRIBUTOR.userId,
+    );
+  });
+
+  it('anonim + status published → tayang, belum terverifikasi (Periksa Kata)', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    const result = await useCase.execute(
+      makeDto({ status: 'published' }),
+      { ...CONTRIBUTOR, userId: ANONIM_USER_ID },
+    );
+    expect(result.word.status).toBe('published');
+    expect(result.word.isVerified).toBe(false);
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'published', isVerified: false }),
+      ANONIM_USER_ID,
     );
   });
 

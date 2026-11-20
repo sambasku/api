@@ -454,8 +454,8 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
       (await berandaBefore.json()).data.some((m: { term: string }) => m.term === 'bandong262'),
     ).toBe(true);
 
-    // 2. Usulan tamu (pending_review, belum fulfilled) bertaut miss →
-    //    beranda/feed menutup case via filter pending (#262), bukan is_fulfilled.
+    // 2. Usulan tamu (published + belum verified, contribution pending)
+    //    bertaut miss → beranda/feed menutup case via filter pending (#262).
     const submit = await post('/api/v1/contributions/words', {
       language_id: SMB,
       lemma: 'Bandong262',
@@ -475,7 +475,11 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
       search_miss_id: miss.id,
     });
     expect(submit.status).toBe(201);
-    expect((await submit.json()).data.status).toBe('pending_review');
+    const submitted = (await submit.json()) as {
+      data: { status: string; is_verified: boolean };
+    };
+    expect(submitted.data.status).toBe('published');
+    expect(submitted.data.is_verified).toBe(false);
 
     const berandaPending = await get('/api/v1/search-misses?limit=50');
     expect(

@@ -142,7 +142,7 @@ export function createAnonContributionRoutes(deps: AnonContributionRoutesDeps) {
     },
     responses: {
       201: {
-        description: 'Kontribusi tersimpan (selalu pending_review untuk non-verifier)',
+        description: 'Kontribusi tersimpan (published + belum verified; masuk Periksa Kata)',
         content: json(createWordResponseSchema),
       },
       400: {

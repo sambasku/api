@@ -1127,7 +1127,7 @@ const skippedOnly =
 
   // Koreksi tanpa publish: isi berubah, is_corrected true, kontribusi tetap pending.
   // Kata/media yang sudah tayang tetap tayang (belum diverifikasi). Yang masih
-  // pending_review (usulan tamu) tetap tersembunyi.
+  // pending_review (legacy) tetap tersembunyi.
   private async childStatusAfterQuietCorrection(
     tx: Tx,
     cmd: ApplyChildCorrectionCommand,

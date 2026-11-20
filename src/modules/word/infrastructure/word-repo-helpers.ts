@@ -31,7 +31,7 @@ export function childStatusOf(wordStatus: WordStatus): ChildStatus {
 
 /**
  * Antrean mengikuti "perlu dicek", bukan "belum tayang".
- * pending_review (tamu) dan published belum diverifikasi = pending.
+ * pending_review (legacy) dan published belum diverifikasi = pending.
  */
 export function contributionStatusOf(status: string, isVerified: boolean): 'pending' | 'approved' {
   if (status === 'pending_review') return 'pending';

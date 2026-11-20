@@ -2,8 +2,8 @@ import type { ChildStatus, WordStatus } from '../../domain/entities/word.entity'
 
 // Tayang (`status`) dan dipercaya (`isVerified`) terpisah.
 // Verifikator: published + terverifikasi, tidak masuk antrean.
-// Kontributor login: published + belum diverifikasi, antrean tetap pending.
-// Tamu (anonymous): pending_review, tidak tayang, antrean pending.
+// Kontributor login + tamu (anonymous): published + belum diverifikasi,
+// masuk antrean + Periksa Kata (Voting Warga).
 // Draft: tidak tayang, tidak masuk antrean.
 
 /**
@@ -47,12 +47,10 @@ export function resolvePublication(
   if (requested === 'draft') {
     return { status: 'draft', isVerified: false, needsReview: false };
   }
-  if (options?.anonymous) {
-    return { status: 'pending_review', isVerified: false, needsReview: true };
-  }
-  if (isVerifierRole(role)) {
+  if (isVerifierRole(role) && !options?.anonymous) {
     return { status: 'published', isVerified: true, needsReview: false };
   }
+  // Kontributor login + tamu: tayang, belum verified → Periksa Kata / antrean.
   return { status: 'published', isVerified: false, needsReview: true };
 }
 

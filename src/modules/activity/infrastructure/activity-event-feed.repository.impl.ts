@@ -1082,7 +1082,8 @@ kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_vi
     // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
     // Setelah approve, read-time join published menghidupkan CTA lagi.
     // Kecuali #166: contribution_submitted (usul kata baru) tetap bawa
-    // target + status 'pending_review' supaya verifikator bisa shortcut
+    // target + status wire 'pending_review' (bukan wajib status DB) supaya
+    // verifikator bisa shortcut
     // ke antrean review dari feed; non-verifikator cukup tahu masih menunggu.
     let target: ActivityItem['target'];
     if (row.wordStatus && row.wordStatus !== 'published') {

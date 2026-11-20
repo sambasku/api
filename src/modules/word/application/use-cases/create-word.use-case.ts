@@ -211,8 +211,8 @@ export class CreateWordUseCase {
       });
     }
 
-    // Event feed: (a) usulan kata baru = contribution_submitted (anonim →
-    // pending_review; kontributor login → published tapi belum verified, masuk
+    // Event feed: (a) usulan kata baru = contribution_submitted (anonim +
+    // kontributor login → published tapi belum verified, masuk
     // antrean review); (b) create langsung oleh verifikator = word_created.
     // Draft tidak ber-event. Momen submit, bukan derivasi timestamp (#25).
     if (this.activityEvents && word.status !== 'draft') {

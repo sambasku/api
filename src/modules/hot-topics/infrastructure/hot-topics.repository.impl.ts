@@ -171,7 +171,7 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
           eq(contributions.entityType, 'word'),
           eq(contributions.status, 'pending'),
           // Hanya kata yang sudah tayang (published, boleh belum verified).
-          // pending_review (usulan tamu) tidak ikut - publik GET /words/:id 404.
+          // Usulan tamu sekarang published + unverified - ikut tab Usulan.
           eq(words.status, 'published'),
           isNull(contributions.deletedAt),
           isNull(words.deletedAt),

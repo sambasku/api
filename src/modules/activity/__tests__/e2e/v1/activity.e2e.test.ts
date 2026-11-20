@@ -185,16 +185,16 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
       },
     ]);
 
-    // #166: usulan kata baru (tamu) = pending_review + event
-    // contribution_submitted. Feed harus bawa target word + status
-    // 'pending_review' supaya verifikator bisa shortcut ke antrean review.
+    // #166: usulan kata baru (tamu) = published + belum verified + event
+    // contribution_submitted. Wire target.status tetap 'pending_review'
+    // (label antrean) supaya verifikator bisa shortcut review.
     pendingLemma = `usul166${stamp}`;
     pendingWordId = ulid26(`01E2EUSUL${stamp}`);
     await db.insert(words).values({
       id: pendingWordId,
       lemma: pendingLemma,
       languageId,
-      status: 'pending_review',
+      status: 'published',
       isVerified: false,
       createdBy: ANONIM_USER_ID,
       wordType: 'word',
@@ -317,8 +317,8 @@ let pendingLemma = '';
       expect(welcome!.subtitle).toBe('Selamat datang');
       expect(welcome!.actor?.username).toBeTruthy();
 
-      // #166: usulan kata baru pending → target tetap dikirim + status
-      // pending_review (shortcut verifikator ke antrean review).
+      // #166: usulan → target tetap dikirim + status wire pending_review
+      // (shortcut verifikator ke antrean; DB kata bisa sudah published).
       const usulan = body.data.find((i) => i.kind === 'contribution');
       expect(usulan).toBeTruthy();
       expect(usulan!.body).toBe(`Mengusulkan kata baru · "${pendingLemma}"`);
