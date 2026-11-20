@@ -2,8 +2,9 @@ import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 
 /**
- * Snapshot vote yang dihapus karena konten makna berubah (G2b).
- * reason: suggestion_applied | suggestion_selfapply | verifier_direct_edit
+ * Snapshot vote yang dihapus (commit history).
+ * reason: suggestion_applied | suggestion_selfapply | verifier_direct_edit |
+ * voting_warga_dispute
  */
 export const voteResetArchives = sqliteTable(
   'vote_reset_archives',

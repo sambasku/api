@@ -5,6 +5,7 @@ vi.mock('@/modules/vote/application/reset-meaning-votes-on-content-change', () =
   resetMeaningVotesOnContentChange: vi.fn().mockResolvedValue({
     archived: 0,
     meaningsReset: 0,
+    batchId: null,
   }),
 }));
 

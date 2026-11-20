@@ -931,9 +931,13 @@ case 'article_comment': {
       })),
     );
 
+    const textMap = await this.resolveMeaningCardTexts(meaningIds);
+
     const items: VoteHistoryItem[] = page.map((row) => {
       const target = { entityType: row.entityType as VoteTargetType, entityId: row.entityId };
       const counts = countMap.get(voteTargetKey(target));
+      const texts =
+        target.entityType === 'meaning' ? textMap.get(target.entityId) : undefined;
       return {
         id: row.id,
         entityType: target.entityType,
@@ -947,6 +951,8 @@ case 'article_comment': {
             : null,
         upvotes: counts?.upvotes ?? 0,
         downvotes: counts?.downvotes ?? 0,
+        definition: texts?.definition ?? null,
+        translation: texts?.translation ?? null,
       };
     });
 
@@ -956,6 +962,57 @@ case 'article_comment': {
       nextCursor: hasMore && last ? last.id : null,
       hasMore,
     };
+  }
+
+  /**
+   * Definisi + terjemahan ringkas untuk kartu riwayat Periksa Kata.
+   * Satu query batch (meanings LEFT JOIN translations) - hemat subrequest.
+   */
+  private async resolveMeaningCardTexts(
+    meaningIds: string[],
+  ): Promise<Map<string, { definition: string | null; translation: string | null }>> {
+    const out = new Map<string, { definition: string | null; translation: string | null }>();
+    const ids = [...new Set(meaningIds)];
+    if (ids.length === 0) return out;
+
+    const rows = await this.db
+      .select({
+        id: meanings.id,
+        definition: meanings.definition,
+        isHaveDefinition: meanings.isHaveDefinition,
+        translationText: meaningTranslations.translationText,
+      })
+      .from(meanings)
+      .leftJoin(
+        meaningTranslations,
+        and(
+          eq(meaningTranslations.meaningId, meanings.id),
+          isNull(meaningTranslations.deletedAt),
+          ne(meaningTranslations.translationText, '-'),
+        ),
+      )
+      .where(inArray(meanings.id, ids))
+      .orderBy(asc(meanings.id), asc(meaningTranslations.id));
+
+    for (const r of rows) {
+      const definitionText = r.definition.trim();
+      const definition =
+        r.isHaveDefinition && !isPlaceholderMeaningText(definitionText)
+          ? definitionText
+          : null;
+      const translationText = r.translationText?.trim() ?? '';
+      const translation =
+        translationText && !isPlaceholderMeaningText(translationText)
+          ? translationText
+          : null;
+      const current = out.get(r.id);
+      if (!current) {
+        out.set(r.id, { definition, translation });
+      } else if (!current.translation && translation) {
+        current.translation = translation;
+      }
+    }
+    return out;
   }
 
   /** Status komunitas baca-waktu untuk makna (pending / verified / rejected). */

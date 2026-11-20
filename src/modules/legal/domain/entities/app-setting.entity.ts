@@ -25,6 +25,8 @@ export const APP_SETTING_KEYS = [
   'auto_verify_by_vote_enabled',
   'search_miss_auto_visible_enabled',
   'vote_reset_on_edit_enabled',
+  'voting_warga_net_threshold',
+  'voting_warga_unique_voters_threshold',
 ] as const;
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];
@@ -84,11 +86,20 @@ export const SEARCH_MISS_AUTO_VISIBLE_ENABLED_KEY =
 /** Reset vote + archive saat usulan/edit verifikator mengubah makna. */
 export const VOTE_RESET_ON_EDIT_ENABLED_KEY =
   'vote_reset_on_edit_enabled' as const;
+/** Ambang net vote Voting Warga (auto-verif ≥ N, dispute/tolak ≤ -N). */
+export const VOTING_WARGA_NET_THRESHOLD_KEY =
+  'voting_warga_net_threshold' as const;
+/** Unique voters minimum untuk quorum Voting Warga. */
+export const VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD_KEY =
+  'voting_warga_unique_voters_threshold' as const;
 
 /** Default kill switch trust-loop: mati sampai gelombang terkait di-ship. */
 export const DEFAULT_AUTO_VERIFY_BY_VOTE_ENABLED = false;
 export const DEFAULT_SEARCH_MISS_AUTO_VISIBLE_ENABLED = false;
 export const DEFAULT_VOTE_RESET_ON_EDIT_ENABLED = false;
+/** Default ambang dari konstanta TS (voting-warga.ts) bila baris settings belum ada. */
+export const DEFAULT_VOTING_WARGA_NET_THRESHOLD = 5;
+export const DEFAULT_VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD = 5;
 
 /** Default tarif Baleho (IDR): 1x1 / hari. */
 export const DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY = 3000;
@@ -118,6 +129,8 @@ export const APP_SETTING_KEY_TYPES: Record<AppSettingKey, AppSettingType> = {
   auto_verify_by_vote_enabled: 'boolean',
   search_miss_auto_visible_enabled: 'boolean',
   vote_reset_on_edit_enabled: 'boolean',
+  voting_warga_net_threshold: 'number',
+  voting_warga_unique_voters_threshold: 'number',
 };
 
 /** Keys kill-switch / flag on-off (validasi value true|false + type boolean). */

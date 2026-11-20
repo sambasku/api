@@ -2,18 +2,24 @@ import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import {
   VOTING_WARGA_DISPLAY_NAME,
-  VOTING_WARGA_NEEDS_REVIEW_NET,
   VOTING_WARGA_NET_THRESHOLD,
   VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD,
   VOTING_WARGA_USER_ID,
 } from '@/shared/constants/voting-warga';
-import { AUTO_VERIFY_BY_VOTE_ENABLED_KEY } from '@/modules/legal/domain/entities/app-setting.entity';
+import {
+  AUTO_VERIFY_BY_VOTE_ENABLED_KEY,
+  DEFAULT_VOTING_WARGA_NET_THRESHOLD,
+  DEFAULT_VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD,
+  VOTING_WARGA_NET_THRESHOLD_KEY,
+  VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD_KEY,
+} from '@/modules/legal/domain/entities/app-setting.entity';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
+import { resetMeaningVotesOnContentChange } from '../reset-meaning-votes-on-content-change';
 
 export interface ApplyMeaningVoteTrustCommand {
   meaningId: string;
@@ -28,13 +34,29 @@ export type ApplyMeaningVoteTrustResult =
   | { action: 'none' }
   | { action: 'auto_verified'; wordId: string }
   | { action: 'auto_rejected'; wordId: string; wordRejected: boolean }
-  | { action: 'needs_review'; wordId: string };
+  | {
+      action: 'unverify_reset';
+      wordId: string;
+      batchId: string | null;
+      archived: number;
+    };
+
+type MeaningTrustState = {
+  meaningId: string;
+  wordId: string;
+  lemma: string;
+  status: string;
+  isVerified: boolean;
+  needsReview: boolean;
+  createdBy: string | null;
+};
 
 /**
  * Setelah toggle vote makna:
- * - belum verified: quorum +5 → auto_verified; quorum -5 → auto_rejected
- * - sudah verified + net jelek → needs_review (tidak cabut centang)
- * Kill switch `auto_verify_by_vote_enabled` mematikan verif **dan** tolak.
+ * - belum verified: quorum +N → auto_verified; quorum -N → auto_rejected
+ * - sudah verified + quorum -N → archive+unverify+reset vote (menunggu pengecekan)
+ * Kill switch `auto_verify_by_vote_enabled` mematikan semua aksi di atas.
+ * Ambang N dari app_settings (fallback konstanta TS = 5).
  */
 export class ApplyMeaningVoteTrustUseCase {
   constructor(
@@ -49,55 +71,69 @@ export class ApplyMeaningVoteTrustUseCase {
   async execute(cmd: ApplyMeaningVoteTrustCommand): Promise<ApplyMeaningVoteTrustResult> {
     const state = await this.wordRepo.findMeaningTrustState(cmd.meaningId);
     if (!state) return { action: 'none' };
-    // Hanya makna tayang yang ikut quorum.
     if (state.status !== 'published') return { action: 'none' };
 
+    const enabled = await this.isAutoVerifyEnabled();
+    if (!enabled) return { action: 'none' };
+
+    const { netThreshold, uniqueThreshold } = await this.resolveThresholds();
     const net = cmd.upvotes - cmd.downvotes;
-    // Satu baris vote per user → unique voters = up + down.
     const uniqueVoters = cmd.upvotes + cmd.downvotes;
+    if (uniqueVoters < uniqueThreshold) return { action: 'none' };
 
     if (!state.isVerified) {
-      const enabled = await this.isAutoVerifyEnabled();
-      if (!enabled || uniqueVoters < VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD) {
-        return { action: 'none' };
+      if (net >= netThreshold) {
+        return this.autoVerify(cmd, state, net, uniqueVoters, netThreshold);
       }
-
-      if (net >= VOTING_WARGA_NET_THRESHOLD) {
-        return this.autoVerify(cmd, state, net, uniqueVoters);
+      if (net <= -netThreshold) {
+        return this.autoReject(cmd, state, net, uniqueVoters, netThreshold);
       }
-
-      if (net <= VOTING_WARGA_NEEDS_REVIEW_NET) {
-        return this.autoReject(cmd, state, net, uniqueVoters);
-      }
-
       return { action: 'none' };
     }
 
-    // Sudah verified: net jelek → needs_review (sticky sampai tim / reset-edit).
-    if (net > VOTING_WARGA_NEEDS_REVIEW_NET || state.needsReview) {
-      return { action: 'none' };
-    }
+    // Sudah verified: quorum jelek → commit history + unverify + reset vote.
+    if (net > -netThreshold) return { action: 'none' };
 
-    const flagged = await this.wordRepo.setMeaningNeedsReview(
-      cmd.meaningId,
-      true,
-      VOTING_WARGA_USER_ID,
-    );
-    if (!flagged?.changed) return { action: 'none' };
+    return this.unverifyAndResetVotes(cmd, state, net, uniqueVoters, netThreshold);
+  }
+
+  private async unverifyAndResetVotes(
+    cmd: ApplyMeaningVoteTrustCommand,
+    state: MeaningTrustState,
+    net: number,
+    uniqueVoters: number,
+    netThreshold: number,
+  ): Promise<ApplyMeaningVoteTrustResult> {
+    const reset = await resetMeaningVotesOnContentChange({
+      meaningIds: [cmd.meaningId],
+      wordId: state.wordId,
+      reason: 'voting_warga_dispute',
+      actorId: VOTING_WARGA_USER_ID,
+      skipEditKillSwitch: true,
+    });
+
+    if (reset.meaningsReset === 0) return { action: 'none' };
 
     await this.auditRepo
       ?.record({
         userId: VOTING_WARGA_USER_ID,
-        action: 'flag_needs_review',
+        action: 'unverify_by_vote_quorum',
         entityType: 'meaning',
         entityId: cmd.meaningId,
-        oldData: { needs_review: false },
+        oldData: {
+          is_verified: true,
+          needs_review: state.needsReview,
+        },
         newData: {
-          needs_review: true,
-          word_id: flagged.wordId,
+          is_verified: false,
+          needs_review: false,
+          word_id: state.wordId,
           net,
           unique_voters: uniqueVoters,
+          threshold_n: netThreshold,
           trigger_actor_id: cmd.actorId,
+          batch_id: reset.batchId,
+          archived_votes: reset.archived,
         },
         requestId: cmd.requestId ?? null,
       })
@@ -105,26 +141,27 @@ export class ApplyMeaningVoteTrustUseCase {
 
     await this.notifyMeaningCreator({
       userId: state.createdBy,
-      wordId: flagged.wordId,
+      wordId: state.wordId,
       lemma: state.lemma,
       type: 'meaning_needs_review',
-      title: 'Makna perlu ditinjau ulang',
-      body: `Makna di "${state.lemma}" dapat banyak downvote setelah terverifikasi. Tim kami cek lagi.`,
+      title: 'Makna kembali menunggu pengecekan',
+      body: `Makna di "${state.lemma}" dapat banyak downvote setelah terverifikasi. Centang dicabut, skor vote di-reset - menunggu pengecekan lagi.`,
     });
 
-    return { action: 'needs_review', wordId: flagged.wordId };
+    return {
+      action: 'unverify_reset',
+      wordId: state.wordId,
+      batchId: reset.batchId,
+      archived: reset.archived,
+    };
   }
 
   private async autoVerify(
     cmd: ApplyMeaningVoteTrustCommand,
-    state: {
-      meaningId: string;
-      wordId: string;
-      lemma: string;
-      createdBy: string | null;
-    },
+    state: MeaningTrustState,
     net: number,
     uniqueVoters: number,
+    netThreshold: number,
   ): Promise<ApplyMeaningVoteTrustResult> {
     const verified = await this.wordRepo.setMeaningVerified(cmd.meaningId, {
       isVerified: true,
@@ -146,6 +183,7 @@ export class ApplyMeaningVoteTrustUseCase {
           word_id: verified.wordId,
           net,
           unique_voters: uniqueVoters,
+          threshold_n: netThreshold,
           trigger_actor_id: cmd.actorId,
         },
         requestId: cmd.requestId ?? null,
@@ -175,14 +213,10 @@ export class ApplyMeaningVoteTrustUseCase {
 
   private async autoReject(
     cmd: ApplyMeaningVoteTrustCommand,
-    state: {
-      meaningId: string;
-      wordId: string;
-      lemma: string;
-      createdBy: string | null;
-    },
+    state: MeaningTrustState,
     net: number,
     uniqueVoters: number,
+    netThreshold: number,
   ): Promise<ApplyMeaningVoteTrustResult> {
     const rejected = await this.wordRepo.rejectMeaningByCommunityVote(
       cmd.meaningId,
@@ -203,6 +237,7 @@ export class ApplyMeaningVoteTrustUseCase {
           word_rejected: rejected.wordRejected,
           net,
           unique_voters: uniqueVoters,
+          threshold_n: netThreshold,
           trigger_actor_id: cmd.actorId,
         },
         requestId: cmd.requestId ?? null,
@@ -230,6 +265,27 @@ export class ApplyMeaningVoteTrustUseCase {
   private async isAutoVerifyEnabled(): Promise<boolean> {
     const raw = await this.settingsRepo.getValue(AUTO_VERIFY_BY_VOTE_ENABLED_KEY);
     return raw === 'true';
+  }
+
+  private async resolveThresholds(): Promise<{
+    netThreshold: number;
+    uniqueThreshold: number;
+  }> {
+    const [netRaw, uniqueRaw] = await Promise.all([
+      this.settingsRepo.getValue(VOTING_WARGA_NET_THRESHOLD_KEY),
+      this.settingsRepo.getValue(VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD_KEY),
+    ]);
+    return {
+      netThreshold: parsePositiveInt(
+        netRaw,
+        DEFAULT_VOTING_WARGA_NET_THRESHOLD || VOTING_WARGA_NET_THRESHOLD,
+      ),
+      uniqueThreshold: parsePositiveInt(
+        uniqueRaw,
+        DEFAULT_VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD ||
+          VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD,
+      ),
+    };
   }
 
   private async notifyMeaningCreator(input: {
@@ -278,18 +334,15 @@ export class ApplyMeaningVoteTrustUseCase {
           },
         });
       }
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          time: new Date().toISOString(),
-          msg: 'meaning vote trust notify failed',
-          type: input.type,
-          word_id: input.wordId,
-          user_id: input.userId,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
+    } catch {
+      // Notifikasi gagal tidak boleh gagalkan quorum.
     }
   }
+}
+
+function parsePositiveInt(raw: string | null | undefined, fallback: number): number {
+  if (raw == null || raw.trim() === '') return fallback;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return n;
 }

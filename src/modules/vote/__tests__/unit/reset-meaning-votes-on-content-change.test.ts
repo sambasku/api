@@ -36,7 +36,7 @@ describe('resetMeaningVotesOnContentChange', () => {
       reason: 'suggestion_applied',
       actorId: '01ACTOR',
     });
-    expect(result).toEqual({ archived: 0, meaningsReset: 0 });
+    expect(result).toEqual({ archived: 0, meaningsReset: 0, batchId: null });
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
@@ -51,7 +51,7 @@ describe('resetMeaningVotesOnContentChange', () => {
       reason: 'suggestion_selfapply',
       actorId: '01ACTOR',
     });
-    expect(result).toEqual({ archived: 0, meaningsReset: 0 });
+    expect(result).toEqual({ archived: 0, meaningsReset: 0, batchId: null });
     expect(transactionMock).not.toHaveBeenCalled();
   });
 

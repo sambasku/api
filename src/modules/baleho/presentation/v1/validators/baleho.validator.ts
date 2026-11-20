@@ -1,9 +1,14 @@
 import { z } from 'zod';
 import {
   BALEHO_ACTION_TYPES,
+  BALEHO_COLS,
   BALEHO_ENTITY_TYPES,
   BALEHO_EVENT_TYPES,
+  BALEHO_MAX_H,
+  BALEHO_MAX_W,
   BALEHO_MEDIA_TYPES,
+  BALEHO_ROWS,
+  isValidBalehoSize,
 } from '@/shared/database/drizzle/schema/baleho.schema';
 
 const frameSchema = z.object({
@@ -19,10 +24,10 @@ const frameSchema = z.object({
 export const createBalehoPlacementBodySchema = z
   .object({
     slide: z.literal(1),
-    col: z.number().int().min(0).max(3),
-    row: z.number().int().min(0).max(4),
-    w: z.number().int().min(1).max(4),
-    h: z.number().int().min(1).max(2),
+    col: z.number().int().min(0).max(BALEHO_COLS - 1),
+    row: z.number().int().min(0).max(BALEHO_ROWS - 1),
+    w: z.number().int().min(1).max(BALEHO_MAX_W),
+    h: z.number().int().min(1).max(BALEHO_MAX_H),
     referral_username: z.string().min(1).max(40).nullable().optional(),
     entity_type: z.enum(BALEHO_ENTITY_TYPES).nullable().optional(),
     entity_id: z.string().min(1).max(40).nullable().optional(),
@@ -31,6 +36,20 @@ export const createBalehoPlacementBodySchema = z
     frames: z.array(frameSchema).max(10).default([]),
   })
   .superRefine((val, ctx) => {
+    if (!isValidBalehoSize(val.w, val.h)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['size'],
+        message: 'Ukuran grid di luar batas (max 4x2 atau 2x4)',
+      });
+    }
+    if (val.col + val.w > BALEHO_COLS || val.row + val.h > BALEHO_ROWS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['position'],
+        message: 'Area keluar dari papan 4x6',
+      });
+    }
     if (!val.creative_id && val.frames.length < 1) {
       ctx.addIssue({
         code: 'custom',

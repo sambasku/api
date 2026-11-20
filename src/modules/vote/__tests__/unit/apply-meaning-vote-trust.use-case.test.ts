@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ApplyMeaningVoteTrustUseCase } from '../../application/use-cases/apply-meaning-vote-trust.use-case';
 import {
-  VOTING_WARGA_NEEDS_REVIEW_NET,
   VOTING_WARGA_NET_THRESHOLD,
   VOTING_WARGA_USER_ID,
 } from '@/shared/constants/voting-warga';
+import {
+  AUTO_VERIFY_BY_VOTE_ENABLED_KEY,
+  VOTING_WARGA_NET_THRESHOLD_KEY,
+  VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD_KEY,
+} from '@/modules/legal/domain/entities/app-setting.entity';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 
@@ -12,13 +16,26 @@ const MEANING_ID = '01JDMEANINGMAKATN0000000A';
 const WORD_ID = '01JDWORDMAKATN0000000000A';
 const CREATOR = '01JDUSERKONTRIB0000000000A';
 const ACTOR = '01JDUSERVOTER00000000000A';
+const BATCH_ID = '01JDBATCHDISPUTE000000000A';
 
-function makeState(overrides: Partial<{
-  status: string;
-  isVerified: boolean;
-  needsReview: boolean;
-  createdBy: string | null;
-}> = {}) {
+vi.mock('../../application/reset-meaning-votes-on-content-change', () => ({
+  resetMeaningVotesOnContentChange: vi.fn().mockResolvedValue({
+    archived: 10,
+    meaningsReset: 1,
+    batchId: '01JDBATCHDISPUTE000000000A',
+  }),
+}));
+
+import { resetMeaningVotesOnContentChange } from '../../application/reset-meaning-votes-on-content-change';
+
+function makeState(
+  overrides: Partial<{
+    status: string;
+    isVerified: boolean;
+    needsReview: boolean;
+    createdBy: string | null;
+  }> = {},
+) {
   return {
     meaningId: MEANING_ID,
     wordId: WORD_ID,
@@ -31,23 +48,42 @@ function makeState(overrides: Partial<{
   };
 }
 
-function makeDeps(opts: {
-  enabled?: boolean;
-  state?: ReturnType<typeof makeState> | null;
-} = {}) {
+function makeDeps(
+  opts: {
+    enabled?: boolean;
+    state?: ReturnType<typeof makeState> | null;
+    netThreshold?: string | null;
+    uniqueThreshold?: string | null;
+  } = {},
+) {
   const wordRepo = {
-    findMeaningTrustState: vi.fn().mockResolvedValue(
-      opts.state === undefined ? makeState() : opts.state,
-    ),
+    findMeaningTrustState: vi
+      .fn()
+      .mockResolvedValue(opts.state === undefined ? makeState() : opts.state),
     setMeaningVerified: vi.fn().mockResolvedValue({ wordId: WORD_ID }),
-    setMeaningNeedsReview: vi.fn().mockResolvedValue({ wordId: WORD_ID, changed: true }),
+    setMeaningNeedsReview: vi
+      .fn()
+      .mockResolvedValue({ wordId: WORD_ID, changed: true }),
     rejectMeaningByCommunityVote: vi
       .fn()
       .mockResolvedValue({ wordId: WORD_ID, wordRejected: true }),
   } as unknown as WordRepository;
+
   const settingsRepo = {
-    getValue: vi.fn().mockResolvedValue(opts.enabled === false ? 'false' : 'true'),
+    getValue: vi.fn().mockImplementation(async (key: string) => {
+      if (key === AUTO_VERIFY_BY_VOTE_ENABLED_KEY) {
+        return opts.enabled === false ? 'false' : 'true';
+      }
+      if (key === VOTING_WARGA_NET_THRESHOLD_KEY) {
+        return opts.netThreshold === undefined ? '5' : opts.netThreshold;
+      }
+      if (key === VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD_KEY) {
+        return opts.uniqueThreshold === undefined ? '5' : opts.uniqueThreshold;
+      }
+      return null;
+    }),
   } as unknown as AppSettingsRepository;
+
   const activityEvents = { safe: vi.fn().mockResolvedValue(undefined) };
   const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
   const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
@@ -60,12 +96,25 @@ function makeDeps(opts: {
     inbox as never,
     notifyUser as never,
   );
-  return { useCase, wordRepo, settingsRepo, activityEvents, inbox, notifyUser, auditRepo };
+  return {
+    useCase,
+    wordRepo,
+    settingsRepo,
+    activityEvents,
+    inbox,
+    notifyUser,
+    auditRepo,
+  };
 }
 
 describe('ApplyMeaningVoteTrustUseCase', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(resetMeaningVotesOnContentChange).mockResolvedValue({
+      archived: 10,
+      meaningsReset: 1,
+      batchId: BATCH_ID,
+    });
   });
 
   it('kill switch off → none', async () => {
@@ -81,7 +130,9 @@ describe('ApplyMeaningVoteTrustUseCase', () => {
   });
 
   it('net + unique mencapai ambang → auto_verified Voting Warga', async () => {
-    const { useCase, wordRepo, activityEvents, inbox } = makeDeps({ enabled: true });
+    const { useCase, wordRepo, activityEvents, inbox } = makeDeps({
+      enabled: true,
+    });
     const result = await useCase.execute({
       meaningId: MEANING_ID,
       upvotes: 5,
@@ -134,46 +185,63 @@ describe('ApplyMeaningVoteTrustUseCase', () => {
       actorId: ACTOR,
     });
     expect(result).toEqual({ action: 'none' });
+    expect(resetMeaningVotesOnContentChange).not.toHaveBeenCalled();
     expect(wordRepo.setMeaningNeedsReview).not.toHaveBeenCalled();
   });
 
-  it('sudah verified + net <= -5 → needs_review, centang tidak dicabut', async () => {
-    const { useCase, wordRepo, inbox } = makeDeps({
+  it('sudah verified + net <= -N + unique cukup → unverify + reset vote', async () => {
+    const { useCase, wordRepo, inbox, auditRepo } = makeDeps({
       enabled: true,
       state: makeState({ isVerified: true, needsReview: false }),
     });
     const result = await useCase.execute({
       meaningId: MEANING_ID,
-      upvotes: 5,
-      downvotes: 5 + Math.abs(VOTING_WARGA_NEEDS_REVIEW_NET),
+      upvotes: 0,
+      downvotes: 5,
       actorId: ACTOR,
     });
-    expect(result).toEqual({ action: 'needs_review', wordId: WORD_ID });
-    expect(wordRepo.setMeaningVerified).not.toHaveBeenCalled();
-    expect(wordRepo.setMeaningNeedsReview).toHaveBeenCalledWith(
-      MEANING_ID,
-      true,
-      VOTING_WARGA_USER_ID,
+    expect(result).toEqual({
+      action: 'unverify_reset',
+      wordId: WORD_ID,
+      batchId: BATCH_ID,
+      archived: 10,
+    });
+    expect(resetMeaningVotesOnContentChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meaningIds: [MEANING_ID],
+        wordId: WORD_ID,
+        reason: 'voting_warga_dispute',
+        actorId: VOTING_WARGA_USER_ID,
+        skipEditKillSwitch: true,
+      }),
+    );
+    expect(wordRepo.setMeaningNeedsReview).not.toHaveBeenCalled();
+    expect(auditRepo.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'unverify_by_vote_quorum',
+        entityType: 'meaning',
+      }),
     );
     expect(inbox.execute).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'meaning_needs_review' }),
     );
   });
 
-  it('sudah needs_review → tidak spam flag lagi', async () => {
-    const { useCase, wordRepo } = makeDeps({
+  it('sudah verified + unique < N → none meski net jelek', async () => {
+    const { useCase } = makeDeps({
       enabled: true,
-      state: makeState({ isVerified: true, needsReview: true }),
+      state: makeState({ isVerified: true }),
     });
     const result = await useCase.execute({
       meaningId: MEANING_ID,
       upvotes: 0,
-      downvotes: 10,
+      downvotes: 4,
       actorId: ACTOR,
     });
     expect(result).toEqual({ action: 'none' });
-    expect(wordRepo.setMeaningNeedsReview).not.toHaveBeenCalled();
+    expect(resetMeaningVotesOnContentChange).not.toHaveBeenCalled();
   });
+
   it('net <= -5 + unique cukup → auto_rejected Voting Warga', async () => {
     const { useCase, wordRepo, inbox, auditRepo } = makeDeps({ enabled: true });
     const result = await useCase.execute({
@@ -226,5 +294,4 @@ describe('ApplyMeaningVoteTrustUseCase', () => {
     expect(result).toEqual({ action: 'none' });
     expect(wordRepo.rejectMeaningByCommunityVote).not.toHaveBeenCalled();
   });
-
 });

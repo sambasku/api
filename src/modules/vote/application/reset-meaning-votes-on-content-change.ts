@@ -18,7 +18,8 @@ import {
 export type VoteResetReason =
   | 'suggestion_applied'
   | 'suggestion_selfapply'
-  | 'verifier_direct_edit';
+  | 'verifier_direct_edit'
+  | 'voting_warga_dispute';
 
 export interface ResetMeaningVotesOnContentChangeInput {
   meaningIds: string[];
@@ -26,23 +27,30 @@ export interface ResetMeaningVotesOnContentChangeInput {
   reason: VoteResetReason;
   actorId: string;
   suggestionId?: string | null;
+  /**
+   * true = abaikan `vote_reset_on_edit_enabled` (dipakai quorum dispute
+   * Voting Warga yang digate oleh `auto_verify_by_vote_enabled`).
+   */
+  skipEditKillSwitch?: boolean;
 }
 
 /**
- * G2b: archive vote hidup → hapus → nolkan deck count → unverify makna →
- * hide event vote_meaning → rollup lemma. Hormati kill switch
- * `vote_reset_on_edit_enabled` (default false).
+ * Archive vote hidup → hapus → nolkan deck count → unverify makna →
+ * hide event vote_meaning → rollup lemma.
+ *
+ * Default hormati kill switch `vote_reset_on_edit_enabled`. Quorum dispute
+ * pakai `skipEditKillSwitch: true`.
  */
 export async function resetMeaningVotesOnContentChange(
   input: ResetMeaningVotesOnContentChangeInput,
-): Promise<{ archived: number; meaningsReset: number }> {
+): Promise<{ archived: number; meaningsReset: number; batchId: string | null }> {
   const uniqueMeaningIds = [...new Set(input.meaningIds.filter(Boolean))];
   if (uniqueMeaningIds.length === 0) {
-    return { archived: 0, meaningsReset: 0 };
+    return { archived: 0, meaningsReset: 0, batchId: null };
   }
 
-  if (!(await isVoteResetOnEditEnabled())) {
-    return { archived: 0, meaningsReset: 0 };
+  if (!input.skipEditKillSwitch && !(await isVoteResetOnEditEnabled())) {
+    return { archived: 0, meaningsReset: 0, batchId: null };
   }
 
   const batchId = generateId();
@@ -157,7 +165,7 @@ export async function resetMeaningVotesOnContentChange(
       .where(and(eq(words.id, input.wordId), isNull(words.deletedAt)));
   });
 
-  return { archived, meaningsReset: uniqueMeaningIds.length };
+  return { archived, meaningsReset: uniqueMeaningIds.length, batchId };
 }
 
 async function isVoteResetOnEditEnabled(): Promise<boolean> {

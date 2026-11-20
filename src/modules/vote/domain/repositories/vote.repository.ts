@@ -175,6 +175,9 @@ export interface VoteHistoryItem {
   /** Agregat komunitas untuk target (batch countMany). */
   upvotes: number;
   downvotes: number;
+  /** Cuplikan makna (hanya target meaning). */
+  definition: string | null;
+  translation: string | null;
 }
 
 export interface VoteHistoryListOptions {
