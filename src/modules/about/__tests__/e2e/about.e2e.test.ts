@@ -262,26 +262,22 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     );
     expect(perakSp.status).toBe(200);
 
-    // 4) User saja - admin create dengan user_id (reuse user dari checkbox test lewat email pattern baru via insert langsung)
-    const { users, sponsorships } = await import('@/shared/database/drizzle/schema');
-    const [anyUser] = await db
-      .select({ id: users.id, username: users.username })
+    // 4) User saja - pakai akun checkbox test (sponsor sudah di-off, unik index longgar)
+    const { users } = await import('@/shared/database/drizzle/schema');
+    const sponsorUserName = `spabout${stamp}`;
+    const [sponsorUser] = await db
+      .select({ id: users.id })
       .from(users)
-      .where(eq(users.isActive, true))
+      .where(eq(users.username, sponsorUserName))
       .limit(1);
-    expect(anyUser).toBeTruthy();
-    // Soft-delete sponsorship aktif user ini dulu agar unique index longgar.
-    await db
-      .update(sponsorships)
-      .set({ deletedAt: new Date() })
-      .where(eq(sponsorships.userId, anyUser.id));
+    expect(sponsorUser).toBeTruthy();
     const userOnly = await post(
       '/api/v1/admin/sponsorships',
       {
         name: `User Only ${stamp}`,
         since: today,
         tier: 'intan',
-        user_id: anyUser.id,
+        user_id: sponsorUser.id,
         logo_url: 'https://cdn.example.com/user.png',
       },
       adminToken,
