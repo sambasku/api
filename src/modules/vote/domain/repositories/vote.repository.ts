@@ -178,6 +178,8 @@ export interface VoteHistoryItem {
   /** Cuplikan makna (hanya target meaning). */
   definition: string | null;
   translation: string | null;
+  contributorUsername: string | null;
+  contributorDisplayName: string | null;
 }
 
 export interface VoteHistoryListOptions {
@@ -243,6 +245,9 @@ export interface VoteDeckMeaning {
   downvotes: number;
   /** upvotes + downvotes - kunci cursor + sort */
   totalVotes: number;
+  /** Pembuat makna (`meanings.created_by`), null bila tidak ada / akun hilang. */
+  contributorUsername: string | null;
+  contributorDisplayName: string | null;
 }
 
 export interface VoteDeckCursor {

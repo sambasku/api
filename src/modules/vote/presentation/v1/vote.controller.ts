@@ -102,6 +102,8 @@ export class VoteController {
         downvotes: item.downvotes,
         definition: item.definition,
         translation: item.translation,
+        contributor_username: item.contributorUsername,
+        contributor_display_name: item.contributorDisplayName,
       })),
       meta: { limit: query.limit, next_cursor: page.nextCursor, has_more: page.hasMore },
     });
@@ -143,6 +145,8 @@ export class VoteController {
         has_audio: m.hasAudio,
         upvotes: m.upvotes,
         downvotes: m.downvotes,
+        contributor_username: m.contributorUsername,
+        contributor_display_name: m.contributorDisplayName,
       })),
       meta: page.meta,
     });
@@ -180,6 +184,8 @@ export class VoteController {
         has_audio: m.hasAudio,
         upvotes: m.upvotes,
         downvotes: m.downvotes,
+        contributor_username: m.contributorUsername,
+        contributor_display_name: m.contributorDisplayName,
       })),
       meta: page.meta,
     });

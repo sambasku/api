@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, lt, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   comments,
+  contributions,
   examples,
   languages,
   meanings,
@@ -26,8 +27,10 @@ import {
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { feedSafeUsageLabelsSql } from '@/shared/database/drizzle/usage-label-filters';
+import { publicAccountDisplayName, publicAccountName } from '@/shared/constants/deleted-account';
 import { NotFoundError } from '@/shared/errors/app-error';
 import { seededShuffle } from '@/shared/utils/seeded-shuffle';
+
 import type {
   AdminVoteCursor,
   AdminVoteListFilter,
@@ -88,6 +91,23 @@ function firstPantunLine(lines: unknown): string | null {
   if (!Array.isArray(lines) || lines.length === 0) return null;
   const first = lines.find((l): l is string => typeof l === 'string' && l.trim().length > 0);
   return first ?? null;
+}
+
+
+function mapMeaningProposerFields(row: {
+  proposerGuest: string | null;
+  proposerUsername: string | null;
+  proposerDisplayName: string | null;
+  proposerDeletedAt: Date | null;
+}): { contributorUsername: string | null; contributorDisplayName: string | null } {
+  const guest = row.proposerGuest?.trim() || null;
+  const username = publicAccountName(row.proposerUsername, row.proposerDeletedAt);
+  const displayName =
+    guest || publicAccountDisplayName(row.proposerDisplayName, row.proposerUsername, row.proposerDeletedAt);
+  if (!username && !displayName) {
+    return { contributorUsername: null, contributorDisplayName: null };
+  }
+  return { contributorUsername: username, contributorDisplayName: displayName };
 }
 
 export class VoteRepositoryImpl implements VoteRepository {
@@ -953,6 +973,8 @@ case 'article_comment': {
         downvotes: counts?.downvotes ?? 0,
         definition: texts?.definition ?? null,
         translation: texts?.translation ?? null,
+        contributorUsername: texts?.contributorUsername ?? null,
+        contributorDisplayName: texts?.contributorDisplayName ?? null,
       };
     });
 
@@ -964,14 +986,33 @@ case 'article_comment': {
     };
   }
 
+
   /**
    * Definisi + terjemahan ringkas untuk kartu riwayat Periksa Kata.
    * Satu query batch (meanings LEFT JOIN translations) - hemat subrequest.
    */
   private async resolveMeaningCardTexts(
     meaningIds: string[],
-  ): Promise<Map<string, { definition: string | null; translation: string | null }>> {
-    const out = new Map<string, { definition: string | null; translation: string | null }>();
+  ): Promise<
+    Map<
+      string,
+      {
+        definition: string | null;
+        translation: string | null;
+        contributorUsername: string | null;
+        contributorDisplayName: string | null;
+      }
+    >
+  > {
+    const out = new Map<
+      string,
+      {
+        definition: string | null;
+        translation: string | null;
+        contributorUsername: string | null;
+        contributorDisplayName: string | null;
+      }
+    >();
     const ids = [...new Set(meaningIds)];
     if (ids.length === 0) return out;
 
@@ -981,6 +1022,45 @@ case 'article_comment': {
         definition: meanings.definition,
         isHaveDefinition: meanings.isHaveDefinition,
         translationText: meaningTranslations.translationText,
+        proposerGuest: sql<string | null>`(
+          select ${contributions.guestDisplayName} from ${contributions}
+          where ${contributions.entityType} = 'meaning'
+            and ${contributions.entityId} = ${meanings.id}
+            and ${contributions.action} = 'create'
+            and ${contributions.deletedAt} is null
+          order by ${contributions.createdAt} asc
+          limit 1
+        )`,
+        proposerUsername: sql<string | null>`COALESCE(
+          (select ${users.username} from ${contributions}
+            inner join ${users} on ${users.id} = ${contributions.userId}
+           where ${contributions.entityType} = 'meaning'
+             and ${contributions.entityId} = ${meanings.id}
+             and ${contributions.action} = 'create'
+             and ${contributions.deletedAt} is null
+           order by ${contributions.createdAt} asc limit 1),
+          (select ${users.username} from ${users} where ${users.id} = ${meanings.createdBy})
+        )`,
+        proposerDisplayName: sql<string | null>`COALESCE(
+          (select ${users.displayName} from ${contributions}
+            inner join ${users} on ${users.id} = ${contributions.userId}
+           where ${contributions.entityType} = 'meaning'
+             and ${contributions.entityId} = ${meanings.id}
+             and ${contributions.action} = 'create'
+             and ${contributions.deletedAt} is null
+           order by ${contributions.createdAt} asc limit 1),
+          (select ${users.displayName} from ${users} where ${users.id} = ${meanings.createdBy})
+        )`,
+        proposerDeletedAt: sql<Date | null>`COALESCE(
+          (select ${users.deletedAt} from ${contributions}
+            inner join ${users} on ${users.id} = ${contributions.userId}
+           where ${contributions.entityType} = 'meaning'
+             and ${contributions.entityId} = ${meanings.id}
+             and ${contributions.action} = 'create'
+             and ${contributions.deletedAt} is null
+           order by ${contributions.createdAt} asc limit 1),
+          (select ${users.deletedAt} from ${users} where ${users.id} = ${meanings.createdBy})
+        )`,
       })
       .from(meanings)
       .leftJoin(
@@ -1007,7 +1087,16 @@ case 'article_comment': {
           : null;
       const current = out.get(r.id);
       if (!current) {
-        out.set(r.id, { definition, translation });
+        out.set(r.id, {
+          definition,
+          translation,
+          ...mapMeaningProposerFields({
+            proposerGuest: r.proposerGuest,
+            proposerUsername: r.proposerUsername,
+            proposerDisplayName: r.proposerDisplayName,
+            proposerDeletedAt: r.proposerDeletedAt,
+          }),
+        });
       } else if (!current.translation && translation) {
         current.translation = translation;
       }
@@ -1627,6 +1716,12 @@ if (articleCommentIds.length > 0) {
       upvotes: 0,
       downvotes: 0,
       totalVotes: r.totalVotes,
+      ...mapMeaningProposerFields({
+        proposerGuest: r.proposerGuest,
+        proposerUsername: r.proposerUsername,
+        proposerDisplayName: r.proposerDisplayName,
+        proposerDeletedAt: r.proposerDeletedAt,
+      }),
     }));
 
     // Sense kartu: definisi makna ITU dari row utama (tanpa query tambahan).

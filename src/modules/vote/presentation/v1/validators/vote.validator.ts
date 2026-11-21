@@ -121,6 +121,8 @@ export const voteHistoryResponseSchema = z.object({
       downvotes: z.number().int().nonnegative(),
       definition: z.string().nullable(),
       translation: z.string().nullable(),
+      contributor_username: z.string().nullable(),
+      contributor_display_name: z.string().nullable(),
     }),
   ),
   meta: z.object({
@@ -219,6 +221,8 @@ export const voteDeckResponseSchema = z.object({
         .nullable(),
       upvotes: z.number().int(),
       downvotes: z.number().int(),
+      contributor_username: z.string().nullable().optional(),
+      contributor_display_name: z.string().nullable().optional(),
     }),
   ),
   meta: z.object({
