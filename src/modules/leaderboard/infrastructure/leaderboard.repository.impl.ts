@@ -10,6 +10,7 @@ import {
   userRoles,
   users,
 } from '@/shared/database/drizzle/schema';
+import { isNoSuchTableError } from '@/shared/database/drizzle/sqlite-errors';
 import { SYSTEM_USER_IDS, isSystemUserId } from '@/shared/constants/system-users';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import { TOP_N } from '../domain/utils/iso-week';
@@ -58,13 +59,20 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
   constructor(private readonly db: AppDatabase) {}
 
   async listExcludedUserIds(): Promise<string[]> {
-    const rows = await this.db
-      .select({ userId: leaderboardExcludedUsers.userId })
-      .from(leaderboardExcludedUsers);
-    if (rows.length === 0) {
-      return [...SYSTEM_USER_IDS];
+    try {
+      const rows = await this.db
+        .select({ userId: leaderboardExcludedUsers.userId })
+        .from(leaderboardExcludedUsers);
+      if (rows.length === 0) {
+        return [...SYSTEM_USER_IDS];
+      }
+      return rows.map((r) => r.userId);
+    } catch (err) {
+      if (isNoSuchTableError(err, 'leaderboard_excluded_users')) {
+        return [...SYSTEM_USER_IDS];
+      }
+      throw err;
     }
-    return rows.map((r) => r.userId);
   }
 
   async listExcludedUsers(): Promise<LeaderboardExclusionRow[]> {

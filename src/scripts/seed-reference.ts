@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { eq, isNull } from 'drizzle-orm';
-import { closeDb, db } from '@/shared/database/drizzle/client';
+import { client, closeDb, db } from '@/shared/database/drizzle/client';
 import {
   categories,
   dialects,
@@ -96,6 +96,17 @@ const SEED_CATEGORIES = [
   { name: 'Angka & Ukuran' },
   { name: 'Permainan & Hiburan' },
 ] as const;
+
+/** Selaras `0183_leaderboard_excluded_users.sql` - idempoten bila migrate belum jalan. */
+async function ensureLeaderboardExcludedUsersTable(): Promise<void> {
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS leaderboard_excluded_users (
+      user_id text PRIMARY KEY NOT NULL REFERENCES users(id),
+      note text,
+      created_at integer NOT NULL
+    )
+  `);
+}
 
 /**
  * Seed referensi + user sistem.
@@ -221,6 +232,7 @@ export async function seedReference(): Promise<void> {
     .values(SYSTEM_USER_IDS.map((userId) => ({ userId, role: 'contributor' as const })))
     .onConflictDoNothing();
 
+  await ensureLeaderboardExcludedUsersTable();
   await db
     .insert(leaderboardExcludedUsers)
     .values(SYSTEM_USER_IDS.map((userId) => ({ userId, note: 'Akun sistem bawaan' })))

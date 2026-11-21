@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isNoSuchTableError,
   isUniqueViolation,
   isUniqueViolationOn,
   isUsernameHandleConstraint,
@@ -12,6 +13,20 @@ function prodLikeShape(message: string) {
   });
   return new Error(`Failed query: insert into "users" ... params: fedi`, { cause });
 }
+
+describe('isNoSuchTableError', () => {
+  it('deteksi no such table di cause-chain libSQL', () => {
+    const cause = Object.assign(new Error('SQLite error: no such table: leaderboard_excluded_users'), {
+      code: 'SQLITE_UNKNOWN',
+    });
+    const err = new Error('Failed query: select "user_id" from "leaderboard_excluded_users"', {
+      cause,
+    });
+    expect(isNoSuchTableError(err, 'leaderboard_excluded_users')).toBe(true);
+    expect(isNoSuchTableError(err, 'users')).toBe(false);
+    expect(isNoSuchTableError(err)).toBe(true);
+  });
+});
 
 describe('isUsernameHandleConstraint', () => {
   it('deteksi RAISE(ABORT) trigger guard username di dalam cause-chain', () => {
