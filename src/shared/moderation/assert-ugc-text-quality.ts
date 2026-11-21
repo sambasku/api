@@ -8,6 +8,11 @@ export interface UgcTextQualityOpts {
   recentBodies?: string[];
   /** Nama field untuk details error. Default `body`. */
   field?: string;
+  /**
+   * `chat`: chat publik - tanpa heuristik repeat/smash/duplikat (gaya wkwk/hhhh).
+   * Default: gate penuh untuk komentar/diskusi/dll.
+   */
+  mode?: 'default' | 'chat';
 }
 
 export type UgcTextQualityResult =
@@ -53,6 +58,10 @@ export function assessUgcTextQuality(
 
   if (normalized.length === 0) {
     return { ok: false, reason: `${field} kosong` };
+  }
+
+  if (opts.mode === 'chat') {
+    return { ok: true, normalized };
   }
 
   if (REPEAT_CHAR_RE.test(normalized)) {

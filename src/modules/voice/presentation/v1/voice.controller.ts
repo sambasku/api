@@ -4,13 +4,32 @@ import type { AppVariables } from '@/shared/types';
 import type { MintVoiceTokenUseCase } from '../../application/mint-voice-token.use-case';
 import type { MintTurnCredentialsUseCase } from '../../application/mint-turn-credentials.use-case';
 import type { RecordVoiceRoomEventUseCase } from '../../application/record-voice-room-event.use-case';
+import type { GetVoiceRoomSummaryUseCase } from '../../application/get-voice-room-summary.use-case';
 
 export class VoiceController {
   constructor(
     private readonly mintToken: MintVoiceTokenUseCase,
     private readonly recordEvent: RecordVoiceRoomEventUseCase,
     private readonly mintTurnCreds: MintTurnCredentialsUseCase,
+    private readonly roomSummary: GetVoiceRoomSummaryUseCase,
   ) {}
+
+  /** Jumlah peserta voice room untuk pengamat chat (tanpa join LiveKit). */
+  summary(c: Context<{ Variables: AppVariables }>) {
+    return this.roomSummary.execute().then((data) =>
+      c.json(
+        {
+          success: true as const,
+          data: {
+            room: data.room,
+            participant_count: data.participantCount,
+            voice_room_enabled: data.voiceRoomEnabled,
+          },
+        },
+        200,
+      ),
+    );
+  }
 
   mint(c: Context<{ Variables: AppVariables }>) {
     const user = c.get('user');

@@ -4,8 +4,11 @@ import { ServiceUnavailableError } from '@/shared/errors/app-error';
 import type { GetLeaderboardUseCase } from '../../application/use-cases/get-leaderboard.use-case';
 import type { ComputeLiveLeaderboardUseCase } from '../../application/use-cases/compute-live-leaderboard.use-case';
 import type { FinalizeLeaderboardWeekUseCase } from '../../application/use-cases/finalize-leaderboard-week.use-case';
+import type { ManageLeaderboardExclusionsUseCase } from '../../application/use-cases/manage-leaderboard-exclusions.use-case';
 import { serializeWireEntry } from '../../application/use-cases/leaderboard-payload.utils';
+import type { AppVariables } from '@/shared/types';
 import type {
+  AddLeaderboardExclusionBody,
   FinalizeLeaderboardBody,
   GetLeaderboardQuery,
 } from './validators/leaderboard.validator';
@@ -25,6 +28,7 @@ export class LeaderboardController {
       getLeaderboard: GetLeaderboardUseCase;
       computeLive: ComputeLiveLeaderboardUseCase;
       finalizeWeek: FinalizeLeaderboardWeekUseCase;
+      manageExclusions: ManageLeaderboardExclusionsUseCase;
     },
   ) {}
 
@@ -69,5 +73,36 @@ export class LeaderboardController {
         current_url: result.currentUrl,
       },
     });
+  }
+
+  async listExclusions(c: Context) {
+    const rows = await this.deps.manageExclusions.list();
+    return c.json({
+      success: true as const,
+      data: rows.map((r) => ({
+        user_id: r.userId,
+        username: r.username,
+        display_name: r.displayName,
+        note: r.note,
+        created_at: r.createdAt.toISOString(),
+        is_default_system: r.isDefaultSystem,
+      })),
+    });
+  }
+
+  async addExclusion(c: Context<{ Variables: AppVariables }>, body: AddLeaderboardExclusionBody) {
+    const actorId = c.get('user')!.user_id;
+    const result = await this.deps.manageExclusions.add({
+      userId: body.user_id,
+      note: body.note,
+      actorId,
+    });
+    return c.json({ success: true as const, data: result });
+  }
+
+  async removeExclusion(c: Context<{ Variables: AppVariables }>, userId: string) {
+    const actorId = c.get('user')!.user_id;
+    const result = await this.deps.manageExclusions.remove({ userId, actorId });
+    return c.json({ success: true as const, data: result });
   }
 }

@@ -289,3 +289,7 @@ export const listAdminContributionsQuerySchema = z.object({
   cursor: opaqueId.optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
+
+export const setArticleClapsBodySchema = z.object({
+  count: z.coerce.number().int().min(0).max(50),
+});

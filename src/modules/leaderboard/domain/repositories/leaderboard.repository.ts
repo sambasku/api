@@ -5,6 +5,15 @@ import type {
 
 export type LeaderboardMetric = 'combined' | 'contributions' | 'verifications';
 
+export interface LeaderboardExclusionRow {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  note: string | null;
+  createdAt: Date;
+  isDefaultSystem: boolean;
+}
+
 export interface UpsertLeaderboardWeekInput {
   weekId: string;
   startedAt: Date;
@@ -32,4 +41,15 @@ export interface LeaderboardRepository {
   listUnfinalizedWeeksDue(now: Date): Promise<LeaderboardWeekRecord[]>;
 
   touchWeekUpdatedAt(weekId: string, at: Date): Promise<void>;
+
+  listExcludedUserIds(): Promise<string[]>;
+
+  listExcludedUsers(): Promise<LeaderboardExclusionRow[]>;
+
+  addExclusion(userId: string, note?: string | null): Promise<void>;
+
+  removeExclusion(userId: string): Promise<boolean>;
+
+  /** User aktif (belum soft-delete) untuk validasi POST exclude. */
+  findUserForExclusion(userId: string): Promise<{ id: string } | null>;
 }

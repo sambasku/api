@@ -122,18 +122,17 @@ describe('SearchWordsUseCase - perluasan kelompok makna (PRD relasi-lemma)', () 
 });
 
 describe('SearchWordsUseCase - gate publik vs verifikator', () => {
-  it('tamu / non-verifikator → published saja (is_verified badge, abaikan query klien)', async () => {
+  it('tamu / non-verifikator → published + isVerified (abaikan query klien)', async () => {
     const { useCase, wordRepo } = makeDeps({ items: [] });
     await useCase.execute({ ...QUERY, isVerified: false });
     expect(wordRepo.search).toHaveBeenCalledWith(
-      expect.objectContaining({ published: true }),
+      expect.objectContaining({ published: true, isVerified: true }),
     );
     const args = vi.mocked(wordRepo.search).mock.calls[0]![0] as unknown as Record<
       string,
       unknown
     >;
     expect(args).not.toHaveProperty('statuses');
-    expect(args).not.toHaveProperty('isVerified');
   });
 
   it('verifikator → statuses pending_review+published, tanpa isVerified', async () => {

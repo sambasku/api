@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { activityEvents, articleComments, articles, contributions, cuisineComments, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
@@ -14,7 +14,11 @@ import { isVerifierRole } from '@/modules/word/application/utils/resolve-publica
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
 import { jinyeFeedPayload } from '../application/utils/activity-body-snippet';
-import { FEED_CATEGORY_KINDS, type ActivityCursor } from '../domain/merge-activity';
+import {
+  FEED_CATEGORY_KINDS,
+  HOME_FEED_EXCLUDED_EVENT_KINDS,
+  type ActivityCursor,
+} from '../domain/merge-activity';
 
 const parentPantuns = alias(pantuns, 'parent_pantuns');
 const jinyeForComment = alias(jinye, 'jinye_for_comment');
@@ -49,6 +53,7 @@ vote_word: 'vote',
 vote_comment: 'vote',
 vote_meaning: 'vote',
   discussion_created: 'discussion',
+  chat_ping: 'chat',
   suggestion_applied: 'suggestion',
   suggestion_selfapply: 'suggestion',
   suggestion_created: 'suggestion',
@@ -98,6 +103,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   vote_comment: '',
   vote_meaning: '',
   discussion_created: '',
+  chat_ping: 'Mengirim ping di chat publik',
   suggestion_applied: 'Mengusulkan perubahan',
   suggestion_selfapply: 'Melengkapi kata',
   suggestion_created: 'Mengusulkan perubahan',
@@ -343,12 +349,14 @@ export class ActivityEventFeedRepositoryImpl {
   ): Promise<ActivityItem[]> {
     // #56: event superseded (usulan yang ceritanya sudah jadi verifikasi)
     // tidak tayang di feed home - profil (listByActor) tetap memuatnya.
+    // Vote (Periksa Kata): event vote_* tidak tayang di beranda; lihat timeline profil.
     const rows = await this.selectVisible(
       limit,
       before,
       excludeUserId,
       undefined,
       kinds,
+      true,
       true,
     );
     return this.buildItems(rows);
@@ -570,12 +578,21 @@ export class ActivityEventFeedRepositoryImpl {
     actorId?: string,
     kinds?: ActivityEventKind[] | null,
     excludeSuperseded?: boolean,
+    excludeHomeVoteEvents?: boolean,
   ) {
     const occurredAt = activityEvents.occurredAt;
     const conds = this.baseConditions(excludeUserId, actorId);
     if (excludeSuperseded) {
       // #56: superseded = cerita lama yang sudah digantikan verifikasi.
       conds.push(sql`${activityEvents.supersededAt} is null`);
+    }
+    if (excludeHomeVoteEvents) {
+      conds.push(
+        notInArray(
+          activityEvents.kind,
+          [...HOME_FEED_EXCLUDED_EVENT_KINDS],
+        ),
+      );
     }
     if (kinds && kinds.length > 0) {
       conds.push(inArray(activityEvents.kind, kinds));
@@ -1300,6 +1317,8 @@ articleSlug?: string | null;
         return row.targetWordId ? { type: 'word', id: row.targetWordId! } : null;
       case 'discussion_created':
         return row.targetId ? { type: 'discussion', id: row.targetId! } : null;
+      case 'chat_ping':
+        return { type: 'chat', id: 'public' };
       case 'search_miss':
         return row.targetId
           ? {

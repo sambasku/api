@@ -27,7 +27,8 @@ export type ActivityKind =
 | 'culinary'
 | 'pantun'
 | 'article'
-| 'jinye';
+| 'jinye'
+  | 'chat';
 
 export interface ActivityActor {
   username: string | null;

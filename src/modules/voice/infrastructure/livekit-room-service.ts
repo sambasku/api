@@ -109,6 +109,50 @@ interface ListParticipantsResponse {
   participants?: Array<{ identity?: string; metadata?: string }>;
 }
 
+export type LivekitRoomReadInput = Pick<
+  LivekitRoomGateInput,
+  'wsUrl' | 'apiKey' | 'apiSecret' | 'room'
+>;
+
+/** Hitung peserta di room (read-only, tanpa CreateRoom). */
+export async function listVoiceRoomParticipantCount(
+  input: LivekitRoomReadInput,
+): Promise<number> {
+  const base = livekitHttpBase(input.wsUrl);
+  if (!base.startsWith('http')) {
+    throw new ServiceUnavailableError(
+      'VOICE_UNAVAILABLE',
+      'URL voice server tidak valid.',
+    );
+  }
+
+  const bearer = await mintLivekitServerToken({
+    apiKey: input.apiKey,
+    apiSecret: input.apiSecret,
+    room: input.room,
+    ttlSec: 60,
+  });
+
+  try {
+    const listed = await twirp<ListParticipantsResponse>(
+      base,
+      'ListParticipants',
+      { room: input.room },
+      bearer,
+    );
+    return listed.participants?.length ?? 0;
+  } catch (e) {
+    if (e instanceof Error && (e as { code?: string }).code === 'ROOM_NOT_FOUND') {
+      return 0;
+    }
+    if (e instanceof ServiceUnavailableError) throw e;
+    throw new ServiceUnavailableError(
+      'VOICE_UNAVAILABLE',
+      'Voice server tidak terjangkau. Coba lagi nanti ya.',
+    );
+  }
+}
+
 /**
  * Pastikan room ada (max peserta) + tolak mint jika penuh
  * (kecuali identity sudah di dalam - remint reconnect).

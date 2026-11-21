@@ -8,9 +8,12 @@ import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
 import type { AppVariables } from '@/shared/types';
 import type { LeaderboardController } from './leaderboard.controller';
 import {
+  addLeaderboardExclusionBodySchema,
   finalizeLeaderboardBodySchema,
   getLeaderboardQuerySchema,
   leaderboardAdminActionResponseSchema,
+  leaderboardExclusionListResponseSchema,
+  leaderboardExclusionMutationResponseSchema,
   leaderboardListResponseSchema,
 } from './validators/leaderboard.validator';
 
@@ -76,6 +79,53 @@ export function createAdminLeaderboardRoutes(deps: LeaderboardRoutesDeps) {
   routes.openapi(
     finalizeRoute,
     (c) => deps.controller.adminFinalize(c, c.req.valid('json')) as never,
+  );
+
+  const listExclusionsRoute = createRoute({
+    method: 'get',
+    path: '/exclusions',
+    tags: ['Admin Leaderboard'],
+    summary: 'Daftar user yang dikecualikan dari papan peringkat',
+    responses: {
+      200: { description: 'Daftar exclude', content: json(leaderboardExclusionListResponseSchema) },
+    },
+  });
+
+  const addExclusionRoute = createRoute({
+    method: 'post',
+    path: '/exclusions',
+    tags: ['Admin Leaderboard'],
+    summary: 'Tambah user ke daftar exclude papan peringkat',
+    request: { body: { content: json(addLeaderboardExclusionBodySchema) } },
+    responses: {
+      200: { description: 'Exclude ditambah', content: json(leaderboardExclusionMutationResponseSchema) },
+      404: { description: 'User tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+
+  const removeExclusionRoute = createRoute({
+    method: 'delete',
+    path: '/exclusions/{userId}',
+    tags: ['Admin Leaderboard'],
+    summary: 'Hapus user dari daftar exclude (kecuali akun sistem bawaan)',
+    request: {
+      params: z.object({
+        userId: z.string().min(1).max(26),
+      }),
+    },
+    responses: {
+      200: { description: 'Exclude dihapus', content: json(leaderboardExclusionMutationResponseSchema) },
+      403: { description: 'Akun sistem dilindungi', content: json(errorResponseSchema) },
+      404: { description: 'Tidak di daftar', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(listExclusionsRoute, (c) => deps.controller.listExclusions(c) as never);
+  routes.openapi(addExclusionRoute, (c) =>
+    deps.controller.addExclusion(c, c.req.valid('json')) as never,
+  );
+  routes.openapi(removeExclusionRoute, (c) =>
+    deps.controller.removeExclusion(c, c.req.valid('param').userId) as never,
   );
   return routes;
 }

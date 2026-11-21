@@ -1,28 +1,33 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   contributionReviews,
   contributions,
+  leaderboardExcludedUsers,
   leaderboardWeekEntries,
   leaderboardWeeks,
   userRoles,
   users,
 } from '@/shared/database/drizzle/schema';
-import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { SYSTEM_USER_IDS, isSystemUserId } from '@/shared/constants/system-users';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import { TOP_N } from '../domain/utils/iso-week';
 import type { LeaderboardEntry, LeaderboardWeekRecord } from '../domain/entities/leaderboard-entry.entity';
 import type {
+  LeaderboardExclusionRow,
   LeaderboardMetric,
   LeaderboardRepository,
   UpsertLeaderboardWeekInput,
 } from '../domain/repositories/leaderboard.repository';
 
-const activeUserFilter = and(
-  ne(users.id, ANONIM_USER_ID),
-  eq(users.isActive, true),
-  isNull(users.deletedAt),
-);
+function buildActiveUserFilter(excludedUserIds: string[]): SQL | undefined {
+  const parts: SQL[] = [eq(users.isActive, true), isNull(users.deletedAt)];
+  if (excludedUserIds.length > 0) {
+    parts.push(notInArray(users.id, excludedUserIds));
+  }
+  return and(...parts);
+}
 
 function assignCompetitionRanks(entries: LeaderboardEntry[], metric: LeaderboardMetric): void {
   let pos = 0;
@@ -52,6 +57,62 @@ function sortByMetric(entries: LeaderboardEntry[], metric: LeaderboardMetric): L
 export class LeaderboardRepositoryImpl implements LeaderboardRepository {
   constructor(private readonly db: AppDatabase) {}
 
+  async listExcludedUserIds(): Promise<string[]> {
+    const rows = await this.db
+      .select({ userId: leaderboardExcludedUsers.userId })
+      .from(leaderboardExcludedUsers);
+    if (rows.length === 0) {
+      return [...SYSTEM_USER_IDS];
+    }
+    return rows.map((r) => r.userId);
+  }
+
+  async listExcludedUsers(): Promise<LeaderboardExclusionRow[]> {
+    const rows = await this.db
+      .select({
+        userId: leaderboardExcludedUsers.userId,
+        note: leaderboardExcludedUsers.note,
+        createdAt: leaderboardExcludedUsers.createdAt,
+        username: users.username,
+        displayName: users.displayName,
+      })
+      .from(leaderboardExcludedUsers)
+      .innerJoin(users, eq(users.id, leaderboardExcludedUsers.userId))
+      .orderBy(asc(users.username));
+    return rows.map((r) => ({
+      userId: r.userId,
+      username: r.username,
+      displayName: r.displayName ?? null,
+      note: r.note ?? null,
+      createdAt: r.createdAt,
+      isDefaultSystem: isSystemUserId(r.userId),
+    }));
+  }
+
+  async addExclusion(userId: string, note?: string | null): Promise<void> {
+    await this.db
+      .insert(leaderboardExcludedUsers)
+      .values({ userId, note: note ?? null })
+      .onConflictDoNothing();
+  }
+
+  async removeExclusion(userId: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(leaderboardExcludedUsers)
+      .where(eq(leaderboardExcludedUsers.userId, userId))
+      .returning({ userId: leaderboardExcludedUsers.userId });
+    return deleted.length > 0;
+  }
+
+  async findUserForExclusion(userId: string): Promise<{ id: string } | null> {
+    const [row] = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+      .limit(1);
+    return row ?? null;
+  }
+
   private async loadVerifierFlags(userIds: string[]): Promise<Map<string, boolean>> {
     const map = new Map<string, boolean>();
     if (userIds.length === 0) return map;
@@ -75,6 +136,7 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
   private async aggregateWindow(
     startedAt: Date,
     endedAt: Date,
+    excludedUserIds: string[],
   ): Promise<Map<
     string,
     { userId: string; username: string; avatarUrl: string | null; contributions: number; verifications: number }
@@ -107,7 +169,7 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
         and(
           inArray(contributions.status, ['approved', 'corrected']),
           isNull(contributions.deletedAt),
-          activeUserFilter,
+          buildActiveUserFilter(excludedUserIds),
         ),
       )
       .groupBy(users.id, users.username, users.avatarUrl);
@@ -138,7 +200,7 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
           isNotNull(contributionReviews.reviewerId),
           gte(contributionReviews.createdAt, startedAt),
           lt(contributionReviews.createdAt, endedAt),
-          activeUserFilter,
+          buildActiveUserFilter(excludedUserIds),
         ),
       )
       .groupBy(users.id, users.username, users.avatarUrl);
@@ -162,7 +224,9 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
     return byUser;
   }
 
-  private async aggregateAllTime(): Promise<
+  private async aggregateAllTime(
+    excludedUserIds: string[],
+  ): Promise<
     Map<
       string,
       { userId: string; username: string; avatarUrl: string | null; contributions: number; verifications: number }
@@ -194,7 +258,7 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
         and(
           inArray(contributions.status, ['approved', 'corrected']),
           isNull(contributions.deletedAt),
-          activeUserFilter,
+          buildActiveUserFilter(excludedUserIds),
         ),
       )
       .groupBy(users.id, users.username, users.avatarUrl);
@@ -223,7 +287,7 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
           ne(contributionReviews.status, 'pending'),
           isNull(contributionReviews.deletedAt),
           isNotNull(contributionReviews.reviewerId),
-          activeUserFilter,
+          buildActiveUserFilter(excludedUserIds),
         ),
       )
       .groupBy(users.id, users.username, users.avatarUrl);
@@ -277,7 +341,8 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
   }
 
   async computeScoresForWindow(startedAt: Date, endedAt: Date): Promise<LeaderboardEntry[]> {
-    const byUser = await this.aggregateWindow(startedAt, endedAt);
+    const excludedUserIds = await this.listExcludedUserIds();
+    const byUser = await this.aggregateWindow(startedAt, endedAt, excludedUserIds);
     const sortedDraft = sortByMetric(
       [...byUser.values()].map((row) => ({
         rank: 0,
@@ -300,7 +365,8 @@ export class LeaderboardRepositoryImpl implements LeaderboardRepository {
   }
 
   async computeAllTime(metric: LeaderboardMetric, limit: number): Promise<LeaderboardEntry[]> {
-    const byUser = await this.aggregateAllTime();
+    const excludedUserIds = await this.listExcludedUserIds();
+    const byUser = await this.aggregateAllTime(excludedUserIds);
     const userIds = [...byUser.keys()];
     const verifierFlags = await this.loadVerifierFlags(userIds);
     return this.toEntries(byUser, metric, limit, verifierFlags);

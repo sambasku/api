@@ -290,10 +290,14 @@ let pendingLemma = '';
     expect(commentRow!.target?.type).toBe('word');
     expect(commentRow!.target?.id).toBe(sharedWordId);
 
-    const vote = body.data.find((i) => i.kind === 'vote_up');
-    expect(vote?.actor?.username).toBeTruthy();
-    // #94: payload beku menang atas fallback bodyFor (vote tanpa payload = '')
-    expect(vote!.body).toMatch(/^"lemmaact\d+" sudah pas$/);
+    // Vote tidak tayang di feed beranda (hanya timeline profil + Vote Saya).
+    const voteRows = body.data.filter(
+      (i) =>
+        i.kind === 'vote' ||
+        i.kind === 'vote_up' ||
+        i.kind === 'vote_down',
+    );
+    expect(voteRows).toHaveLength(0);
 
     // #99: word_verified terpisah dari vote di wire
     const verification = body.data.find((i) => i.kind === 'verification');
@@ -302,14 +306,6 @@ let pendingLemma = '';
     // #132: subtitle verifikasi wajib null - 'Verifikasi' duplikat kindLabel
     // mobile sehingga meta dirender "Verifikasi · Verifikasi".
     expect(verification!.subtitle).toBeNull();
-
-    // #99: arah vote terpisah di wire
-    const up = body.data.find((i) => i.kind === 'vote_up');
-    expect(up).toBeTruthy();
-    expect(up!.body).toMatch(/sudah pas$/);
-    const down = body.data.find((i) => i.kind === 'vote_down');
-    expect(down).toBeTruthy();
-    expect(down!.body).toMatch(/perlu dicek ulang$/);
 
       const welcome = body.data.find((i) => i.kind === 'welcome');
       expect(welcome).toBeTruthy();

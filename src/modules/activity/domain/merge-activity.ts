@@ -21,6 +21,13 @@ export type FeedCategory =
   | 'joined'
   | 'jinye';
 
+/** Event vote tidak tayang di `GET /api/v1/activity` (beranda); hanya timeline profil. */
+export const HOME_FEED_EXCLUDED_EVENT_KINDS = [
+  'vote_word',
+  'vote_comment',
+  'vote_meaning',
+] as const satisfies readonly ActivityEventKind[];
+
 export const FEED_CATEGORY_KINDS: Record<
   FeedCategory,
   ActivityEventKind[] | null

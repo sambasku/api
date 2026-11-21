@@ -27,6 +27,8 @@ describe('ListWordsUseCase', () => {
       wordType: undefined,
       category: undefined,
       cursor: { lemma: 'kete', id: 'B'.repeat(26) },
+      published: true,
+      isVerified: true,
     });
     expect(result.meta).toEqual({
       limit: 20,
@@ -58,6 +60,8 @@ describe('ListWordsUseCase', () => {
       wordType: 'peribahasa',
       category: undefined,
       cursor: undefined,
+      published: true,
+      isVerified: true,
     });
   });
 
@@ -73,11 +77,13 @@ describe('ListWordsUseCase', () => {
     expect(listAtoZ.mock.calls[0]![0]).not.toHaveProperty('isVerified');
   });
 
-  it('kontributor non-verifikator → published saja (tanpa force isVerified)', async () => {
+  it('kontributor non-verifikator → published + isVerified (kamus publik)', async () => {
     const listAtoZ = vi.fn().mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
     const uc = new ListWordsUseCase({ listAtoZ } as unknown as WordRepository);
     await uc.execute({ q: '', limit: 10, viewerRoles: ['contributor'] });
-    expect(listAtoZ.mock.calls[0]![0]).not.toHaveProperty('isVerified');
+    expect(listAtoZ).toHaveBeenCalledWith(
+      expect.objectContaining({ published: true, isVerified: true }),
+    );
     expect(listAtoZ.mock.calls[0]![0]).not.toHaveProperty('statuses');
   });
 });

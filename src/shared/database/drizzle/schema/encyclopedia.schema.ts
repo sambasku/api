@@ -293,6 +293,34 @@ export const articleCommentRevisions = sqliteTable(
   ],
 );
 
+/** Clap artikel per user (Medium: 0-50 per user per artikel; baris dihapus saat 0). */
+export const articleClaps = sqliteTable(
+  'article_claps',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    articleId: text('article_id')
+      .notNull()
+      .references(() => articles.id, { onDelete: 'cascade' }),
+    count: integer('count').notNull().default(1),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('article_claps_user_article_uidx').on(t.userId, t.articleId),
+    index('article_claps_article_idx').on(t.articleId),
+    index('article_claps_user_idx').on(t.userId, t.id),
+  ],
+);
+
 /** Bookmark artikel per user (toggle; hard-delete saat batal). */
 export const articleBookmarks = sqliteTable(
   'article_bookmarks',

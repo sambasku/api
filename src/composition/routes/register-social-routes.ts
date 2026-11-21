@@ -70,6 +70,7 @@ import { MintVoiceTokenUseCase } from "@/modules/voice/application/mint-voice-to
 import { MintTurnCredentialsUseCase } from "@/modules/voice/application/mint-turn-credentials.use-case";
 import { RecordVoiceRoomEventUseCase } from "@/modules/voice/application/record-voice-room-event.use-case";
 import { VoiceRoomEventsRepository } from "@/modules/voice/infrastructure/voice-room-events.repository";
+import { GetVoiceRoomSummaryUseCase } from "@/modules/voice/application/get-voice-room-summary.use-case";
 import { VoiceController } from "@/modules/voice/presentation/v1/voice.controller";
 import { createVoiceRoutes } from "@/modules/voice/presentation/v1/voice.routes";
 import { PantunRepositoryImpl } from "@/modules/pantun/infrastructure/pantun.repository.impl";
@@ -375,7 +376,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
     new DeleteChatMessageUseCase(chatRepo, chatMirror, di.pronunciationStorage),
     new ListChatRevisionsUseCase(chatRepo),
     new GetChatPingStatusUseCase(chatRepo),
-    new SendChatPingUseCase(chatRepo, di.userRepo, chatMirror),
+    new SendChatPingUseCase(chatRepo, di.userRepo, chatMirror, di.activityEvents),
   );
   app.route(
     "/api/v1/chat",
@@ -400,6 +401,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.userRepo,
     ),
     new MintTurnCredentialsUseCase(),
+    new GetVoiceRoomSummaryUseCase(di.appSettingsRepo),
   );
   app.route(
     "/api/v1/voice",

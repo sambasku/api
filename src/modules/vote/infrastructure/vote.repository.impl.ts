@@ -1537,17 +1537,23 @@ if (articleCommentIds.length > 0) {
     return this.listDeckMeaningsInternal(userId, opts, {
       meaningVerified: false,
       requireWordVerified: false,
+      orderTotalVotesDesc: true,
     });
   }
 
   /**
-   * Inti query deck / check-deck. Beda hanya filter `is_verified`.
+   * Inti query deck / check-deck. Beda filter `is_verified` dan urutan check-deck.
    * Check-deck: makna belum verified (Periksa Kata); deck: sudah verified.
    */
   private async listDeckMeaningsInternal(
     userId: string,
     opts: VoteDeckListOptions,
-    trust: { meaningVerified: boolean; requireWordVerified: boolean },
+    trust: {
+      meaningVerified: boolean;
+      requireWordVerified: boolean;
+      /** Periksa Kata: makna yang sudah punya voting di depan. */
+      orderTotalVotesDesc?: boolean;
+    },
   ): Promise<VoteDeckListResult> {
     const approvedAtExpr = sql`COALESCE(${words.verifiedAt}, ${words.createdAt})`;
     // 0101: total dari tabel ringkasan makna - bukan COUNT(*) correlated.
@@ -1581,14 +1587,17 @@ if (articleCommentIds.length > 0) {
         ),
     );
 
+    const votesDesc = trust.orderTotalVotesDesc === true;
+
     let cursorClause;
     if (opts.cursor) {
       const epoch = Math.floor(opts.cursor.approvedAt.getTime() / 1000);
+      const cursorOp = votesDesc ? sql`<` : sql`>`;
       cursorClause = sql`(
         ${totalVotesExpr},
         ${approvedAtExpr},
         ${meanings.id}
-      ) > (
+      ) ${cursorOp} (
         ${opts.cursor.totalVotes},
         ${epoch},
         ${opts.cursor.id}
@@ -1688,7 +1697,11 @@ if (articleCommentIds.length > 0) {
             : undefined,
         ),
       )
-      .orderBy(asc(totalVotesExpr), asc(approvedAtExpr), asc(meanings.id))
+      .orderBy(
+        ...(votesDesc
+          ? [desc(totalVotesExpr), desc(approvedAtExpr), desc(meanings.id)]
+          : [asc(totalVotesExpr), asc(approvedAtExpr), asc(meanings.id)]),
+      )
       .limit(opts.limit + 1);
 
     const hasMore = rows.length > opts.limit;

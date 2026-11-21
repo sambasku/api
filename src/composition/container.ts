@@ -188,6 +188,7 @@ import { ComputeLiveLeaderboardUseCase } from "@/modules/leaderboard/application
 import { FinalizeLeaderboardWeekUseCase } from "@/modules/leaderboard/application/use-cases/finalize-leaderboard-week.use-case";
 import { RunDueLeaderboardJobsUseCase } from "@/modules/leaderboard/application/use-cases/run-due-leaderboard-jobs.use-case";
 import { GetLeaderboardUseCase } from "@/modules/leaderboard/application/use-cases/get-leaderboard.use-case";
+import { ManageLeaderboardExclusionsUseCase } from "@/modules/leaderboard/application/use-cases/manage-leaderboard-exclusions.use-case";
 import { LeaderboardController } from "@/modules/leaderboard/presentation/v1/leaderboard.controller";
 import { PlaceRepositoryImpl } from "@/modules/place/infrastructure/place.repository.impl";
 import {
@@ -1793,10 +1794,16 @@ export const getLeaderboardUseCase = new GetLeaderboardUseCase(
   leaderboardStorage,
   computeLiveLeaderboardUseCase,
 );
+export const manageLeaderboardExclusionsUseCase = new ManageLeaderboardExclusionsUseCase(
+  leaderboardRepo,
+  computeLiveLeaderboardUseCase,
+  auditRepo,
+);
 export const leaderboardController = new LeaderboardController({
   getLeaderboard: getLeaderboardUseCase,
   computeLive: computeLiveLeaderboardUseCase,
   finalizeWeek: finalizeLeaderboardWeekUseCase,
+  manageExclusions: manageLeaderboardExclusionsUseCase,
 });
 
 export const runStreakReminderUseCase = new RunStreakReminderUseCase(

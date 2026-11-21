@@ -13,8 +13,10 @@ import { VOICE_ROOM_ENABLED_KEY } from '@/modules/legal/domain/entities/app-sett
 import type { PronunciationStoragePort } from '@/modules/word/application/ports/pronunciation-storage.port';
 import { validateAudioFile } from '@/modules/word/application/utils/validate-audio-file';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
-import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
-import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
+import {
+  assertUgcTextQuality,
+  isHeavyCensor,
+} from '@/shared/moderation/assert-ugc-text-quality';
 import {
   RecordAbuseSignalUseCase,
   safeRecordAbuseSignal,
@@ -22,6 +24,7 @@ import {
 import { generateId } from '@/shared/utils/ulid';
 import {
   buildReplySnippet,
+  CHAT_BODY_MAX,
   CHAT_CHANNEL_PUBLIC,
   type ChatMessage,
   type ChatMessageKind,
@@ -41,7 +44,9 @@ export { VOICE_ROOM_ENABLED_KEY };
 export const CHAT_VOICE_MIN_MS = 1_000;
 export const CHAT_VOICE_MAX_MS = 60_000;
 
-const BODY_MAX = 240;
+const BODY_MAX = CHAT_BODY_MAX;
+
+const CHAT_TEXT_QUALITY = { mode: 'chat' as const };
 
 function assertChatVoiceDurationMs(raw: unknown): number {
   const n =
@@ -194,12 +199,7 @@ export class CreateChatMessageUseCase {
           },
         ]);
       }
-      const quality = await assertUgcTextQualityWithStrike(raw, {
-        userId: cmd.userId,
-        abuse: this.abuse,
-        entityType: 'chat_message',
-        requestId: cmd.requestId,
-      });
+      const quality = assertUgcTextQuality(raw, CHAT_TEXT_QUALITY);
       const blocked = await this.blocklistRepo.listAllActiveWords();
       const filtered = applyBlocklistFilter(
         applyPiiPatternFilter(quality),
@@ -241,12 +241,7 @@ export class CreateChatMessageUseCase {
             },
           ]);
         }
-        const quality = await assertUgcTextQualityWithStrike(rawBody, {
-          userId: cmd.userId,
-          abuse: this.abuse,
-          entityType: 'chat_message',
-          requestId: cmd.requestId,
-        });
+        const quality = assertUgcTextQuality(rawBody, CHAT_TEXT_QUALITY);
         const blocked = await this.blocklistRepo.listAllActiveWords();
         body = applyBlocklistFilter(applyPiiPatternFilter(quality), blocked);
       }
@@ -351,12 +346,7 @@ export class EditChatMessageUseCase {
       ]);
     }
 
-    const quality = await assertUgcTextQualityWithStrike(raw, {
-      userId: cmd.actorId,
-      abuse: this.abuse,
-      entityType: 'chat_message',
-      requestId: cmd.requestId,
-    });
+    const quality = assertUgcTextQuality(raw, CHAT_TEXT_QUALITY);
     const blocked = await this.blocklistRepo.listAllActiveWords();
     const filtered = applyBlocklistFilter(
       applyPiiPatternFilter(quality),

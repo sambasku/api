@@ -151,6 +151,21 @@ export interface ArticleRepository {
   /** True bila user sudah bookmark artikel (read-path detail). */
   isBookmarked(userId: string, articleId: string): Promise<boolean>;
 
+  // --- claps ---
+  /** Jumlah clap user pada artikel (0 bila belum pernah clap). */
+  getUserClapCount(userId: string, articleId: string): Promise<number>;
+  /** Total clap semua user (agregat). */
+  sumClapTotal(articleId: string): Promise<number>;
+  /**
+   * Set jumlah clap user (0..50). `0` = hard-delete baris.
+   * Mengembalikan total artikel setelah tulis.
+   */
+  setClapCount(
+    userId: string,
+    articleId: string,
+    count: number,
+  ): Promise<{ myCount: number; clapTotal: number }>;
+
   // --- kontribusi ---
   createContribution(input: NewArticleContributionInput): Promise<ArticleContribution>;
   findContributionById(id: string): Promise<ArticleContribution | null>;

@@ -64,5 +64,37 @@ export const leaderboardAdminActionResponseSchema = z.object({
   }),
 });
 
+const opaqueUserId = z.string().min(1).max(26);
+
+export const leaderboardExclusionRowSchema = z.object({
+  user_id: z.string(),
+  username: z.string(),
+  display_name: z.string().nullable(),
+  note: z.string().nullable(),
+  created_at: z.string(),
+  is_default_system: z.boolean(),
+});
+
+export const leaderboardExclusionListResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.array(leaderboardExclusionRowSchema),
+});
+
+export const addLeaderboardExclusionBodySchema = z.object({
+  user_id: opaqueUserId,
+  note: z.string().max(500).nullable().optional(),
+});
+
+export const leaderboardExclusionMutationResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    excluded: z.boolean(),
+    refreshed: z.boolean(),
+    current_url: z.string().nullable(),
+    week_id: z.string().nullable(),
+  }),
+});
+
 export type GetLeaderboardQuery = z.infer<typeof getLeaderboardQuerySchema>;
 export type FinalizeLeaderboardBody = z.infer<typeof finalizeLeaderboardBodySchema>;
+export type AddLeaderboardExclusionBody = z.infer<typeof addLeaderboardExclusionBodySchema>;

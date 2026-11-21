@@ -79,7 +79,7 @@ export class SearchWordsUseCase {
       ...wordQuery,
       ...(gate.statuses
         ? { statuses: gate.statuses }
-        : { published: true }),
+        : { published: true, ...(gate.isVerified === true ? { isVerified: true } : {}) }),
     });
 
     // Counter + miss hanya saat commit (bukan ketikan typeahead).

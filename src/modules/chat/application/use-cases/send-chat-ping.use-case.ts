@@ -1,5 +1,6 @@
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import {
   CHAT_CHANNEL_PUBLIC,
   CHAT_PING_BODY,
@@ -58,6 +59,7 @@ export class SendChatPingUseCase {
     private readonly repo: ChatRepository,
     private readonly userRepo: UserRepository,
     private readonly mirror: ChatSupabaseMirror,
+    private readonly activityEvents?: Pick<RecordActivityEventUseCase, 'safe'>,
   ) {}
 
   async execute(userId: string): Promise<{ message: ChatMessage; status: ChatPingStatus }> {
@@ -93,6 +95,13 @@ export class SendChatPingUseCase {
       replyUsername: null,
     });
     await this.mirror.upsert(created);
+
+    await this.activityEvents?.safe({
+      kind: 'chat_ping',
+      actorId: userId,
+      targetId: CHAT_CHANNEL_PUBLIC,
+      occurredAt: created.createdAt,
+    });
 
     const availableAt = new Date(
       created.createdAt.getTime() + CHAT_PING_COOLDOWN_SECONDS * 1000,

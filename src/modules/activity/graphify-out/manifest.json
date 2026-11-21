@@ -1,0 +1,158 @@
+{
+  "__tests__/e2e/v1/activity-category.e2e.test.ts": {
+    "mtime": 1794118025.1774924,
+    "seen": 1795261748.808398,
+    "ast_hash": "e4109e0ddb7a065c6a615f516e9f7aa8",
+    "semantic_hash": ""
+  },
+  "__tests__/e2e/v1/activity-query-count.e2e.test.ts": {
+    "mtime": 1791452857.8368058,
+    "seen": 1795261748.8084,
+    "ast_hash": "a0c4661109a66c64564b56014a43dbed",
+    "semantic_hash": ""
+  },
+  "__tests__/e2e/v1/activity.e2e.test.ts": {
+    "mtime": 1795261737.4582024,
+    "seen": 1795261748.8084009,
+    "ast_hash": "6b44974c95838a268e928e4c9c58a14b",
+    "semantic_hash": ""
+  },
+  "__tests__/e2e/v1/verification-consolidation.e2e.test.ts": {
+    "mtime": 1794118025.1790702,
+    "seen": 1795261748.8084009,
+    "ast_hash": "395bd7985584b45798c14ee4ae4d9d79",
+    "semantic_hash": ""
+  },
+  "__tests__/integration/activity-event-append.integration.test.ts": {
+    "mtime": 1794511212.443274,
+    "seen": 1795261748.8084018,
+    "ast_hash": "203730a4ad752b00a5287e3b0d7da916",
+    "semantic_hash": ""
+  },
+  "__tests__/integration/activity-exclude-self.integration.test.ts": {
+    "mtime": 1791452857.8407085,
+    "seen": 1795261748.8084018,
+    "ast_hash": "7d837668e6d2acec99614a20574f7b9f",
+    "semantic_hash": ""
+  },
+  "__tests__/integration/activity-keyset.integration.test.ts": {
+    "mtime": 1791452857.8414671,
+    "seen": 1795261748.808403,
+    "ast_hash": "4fd580b3b65cd66333ad3af49c15d42c",
+    "semantic_hash": ""
+  },
+  "__tests__/unit/activity-body-snippet.test.ts": {
+    "mtime": 1794511212.4436364,
+    "seen": 1795261748.808408,
+    "ast_hash": "3552cb0b930ea6e9a6968306d91305e8",
+    "semantic_hash": ""
+  },
+  "__tests__/unit/announcement-feed.test.ts": {
+    "mtime": 1791613862.4661384,
+    "seen": 1795261748.808409,
+    "ast_hash": "2ff3b51998d13f3b34db940ced7bc453",
+    "semantic_hash": ""
+  },
+  "__tests__/unit/list-activity.use-case.test.ts": {
+    "mtime": 1794118025.1805217,
+    "seen": 1795261748.8084102,
+    "ast_hash": "d9608acd75c7a0824967aca523756507",
+    "semantic_hash": ""
+  },
+  "__tests__/unit/merge-activity.test.ts": {
+    "mtime": 1793135466.2077093,
+    "seen": 1795261748.8084102,
+    "ast_hash": "c79704622e1ad8f220b97e49cdbe6b31",
+    "semantic_hash": ""
+  },
+  "application/use-cases/list-activity.use-case.ts": {
+    "mtime": 1794118025.1810918,
+    "seen": 1795261748.808411,
+    "ast_hash": "511b482f6c70474a78e5a2b2bb5c8e53",
+    "semantic_hash": ""
+  },
+  "application/use-cases/record-activity-event.use-case.ts": {
+    "mtime": 1794511212.443996,
+    "seen": 1795261748.808411,
+    "ast_hash": "b1685ec6bf7911e5be7e8d634de6aa03",
+    "semantic_hash": ""
+  },
+  "application/use-cases/record-card-share.use-case.ts": {
+    "mtime": 1791452857.8448322,
+    "seen": 1795261748.8084118,
+    "ast_hash": "f5af3284f74d93118d207c9781ba702e",
+    "semantic_hash": ""
+  },
+  "application/utils/activity-body-snippet.ts": {
+    "mtime": 1794511212.4443922,
+    "seen": 1795261748.8084118,
+    "ast_hash": "812dec7d237fb9fe5353c0bda2b7ef51",
+    "semantic_hash": ""
+  },
+  "domain/entities/activity-event.entity.ts": {
+    "mtime": 1795233342.5013604,
+    "seen": 1795261748.8084118,
+    "ast_hash": "2896c6f818600e04797a98760ac5dd25",
+    "semantic_hash": ""
+  },
+  "domain/entities/activity-item.entity.ts": {
+    "mtime": 1795233342.5165892,
+    "seen": 1795261748.808413,
+    "ast_hash": "79ccb38f91cdca31c151dc0d838ee5ce",
+    "semantic_hash": ""
+  },
+  "domain/merge-activity.ts": {
+    "mtime": 1795261722.727436,
+    "seen": 1795261748.808413,
+    "ast_hash": "01b9a6122cecca6098b7990ecc6256f8",
+    "semantic_hash": ""
+  },
+  "domain/repositories/activity-event.repository.ts": {
+    "mtime": 1794118025.1851978,
+    "seen": 1795261748.808414,
+    "ast_hash": "110bed727602ccb09a38b2b0b185b4bc",
+    "semantic_hash": ""
+  },
+  "domain/repositories/activity.repository.ts": {
+    "mtime": 1791452857.850644,
+    "seen": 1795261748.808414,
+    "ast_hash": "b09a88cef6ec1ce834dc25bc539f7fc3",
+    "semantic_hash": ""
+  },
+  "infrastructure/activity-event-feed.repository.impl.ts": {
+    "mtime": 1795261740.5215898,
+    "seen": 1795261748.808414,
+    "ast_hash": "84267bad6f8d3de5d708ac0d48fc6e99",
+    "semantic_hash": ""
+  },
+  "infrastructure/activity-event.repository.impl.ts": {
+    "mtime": 1794511213.056305,
+    "seen": 1795261748.808415,
+    "ast_hash": "01bd3af0ade364ec87ebda9a8a31b6e8",
+    "semantic_hash": ""
+  },
+  "infrastructure/activity.repository.impl.ts": {
+    "mtime": 1795233342.7431087,
+    "seen": 1795261748.808415,
+    "ast_hash": "cbd7f7290d12fb3497f73f89e98b0948",
+    "semantic_hash": ""
+  },
+  "presentation/v1/activity.controller.ts": {
+    "mtime": 1794118025.1871386,
+    "seen": 1795261748.808416,
+    "ast_hash": "f7e48f71b45299c80c11ca5f0e702cb9",
+    "semantic_hash": ""
+  },
+  "presentation/v1/activity.routes.ts": {
+    "mtime": 1795233342.7739086,
+    "seen": 1795261748.808416,
+    "ast_hash": "f7431b7290600be964a11874e267edc9",
+    "semantic_hash": ""
+  },
+  "presentation/v1/validators/activity.validator.ts": {
+    "mtime": 1794511213.0572386,
+    "seen": 1795261748.808417,
+    "ast_hash": "1c092c44e91851dcf9d8fb507b8303d5",
+    "semantic_hash": ""
+  }
+}

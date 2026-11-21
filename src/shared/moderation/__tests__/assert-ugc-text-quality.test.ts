@@ -61,6 +61,22 @@ describe('assessUgcTextQuality', () => {
     expect(r.normalized).toBe('> apa\n\n@budi test reply');
   });
 
+  it('mode chat menerima karakter berulang dan smash keyboard', () => {
+    expect(assessUgcTextQuality('hhhhhhhhhhh', { mode: 'chat' }).ok).toBe(true);
+    expect(
+      assessUgcTextQuality('wkwkwkwkwk hahahaha mengetik..........>', {
+        mode: 'chat',
+      }).ok,
+    ).toBe(true);
+    expect(assessUgcTextQuality('ababababababab', { mode: 'chat' }).ok).toBe(
+      true,
+    );
+  });
+
+  it('mode chat tetap menolak kosong', () => {
+    expect(assessUgcTextQuality('   ', { mode: 'chat' }).ok).toBe(false);
+  });
+
   it('merapikan spasi horizontal tanpa menghapus baris', () => {
     const r = assessUgcTextQuality('  halo   dunia  \n\n\n  kedua  ');
     expect(r.ok).toBe(true);

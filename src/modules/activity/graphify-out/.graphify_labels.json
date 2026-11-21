@@ -1,0 +1,12 @@
+{
+  "0": "activity.routes.ts",
+  "1": "activity-event-feed.repository.impl.ts",
+  "2": "ActivityItem",
+  "3": "verification-consolidation.e2e.test.ts",
+  "4": "activity-event.repository.impl.ts",
+  "5": "ActivityEventFeedRepositoryImpl",
+  "6": "merge-activity.ts",
+  "7": "activity.repository.impl.ts",
+  "8": "activity-body-snippet.ts",
+  "9": "announcement-feed.test.ts"
+}

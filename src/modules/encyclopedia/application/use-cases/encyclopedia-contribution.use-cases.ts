@@ -685,3 +685,21 @@ export class ListArticleContributionsUseCase {
 }
 
 export type { NewArticleContributionInput };
+
+export class SetArticleClapCountUseCase {
+  constructor(private readonly repo: ArticleRepository) {}
+  async execute(
+    userId: string,
+    articleId: string,
+    count: number,
+  ): Promise<{ count: number; clap_total: number }> {
+    const exists = await this.repo.articleTargetExists(articleId);
+    if (!exists) {
+      throw new NotFoundError('ARTICLE_NOT_FOUND', 'Artikel tidak ditemukan');
+    }
+    const safe = Math.min(50, Math.max(0, Math.floor(count)));
+    const result = await this.repo.setClapCount(userId, articleId, safe);
+    return { count: result.myCount, clap_total: result.clapTotal };
+  }
+}
+

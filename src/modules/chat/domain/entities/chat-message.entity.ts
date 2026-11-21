@@ -11,6 +11,9 @@ export const CHAT_PING_BODY = 'PING!!!';
 /** Cooldown global antar ping di channel public (detik). */
 export const CHAT_PING_COOLDOWN_SECONDS = 300;
 
+/** Panjang maks isi pesan teks chat (create/edit). */
+export const CHAT_BODY_MAX = 240;
+
 /** Baris chat_messages (SoT Turso). audio_path/sha tidak pernah ke wire. */
 export interface ChatMessage {
   id: string;

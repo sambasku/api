@@ -46,6 +46,15 @@ const voiceEventResponseSchema = z.object({
   }),
 });
 
+const voiceRoomSummaryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    room: z.string(),
+    participant_count: z.number().int().min(0),
+    voice_room_enabled: z.boolean(),
+  }),
+});
+
 export interface VoiceRoutesDeps {
   controller: VoiceController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
@@ -55,6 +64,22 @@ export interface VoiceRoutesDeps {
 
 export function createVoiceRoutes(deps: VoiceRoutesDeps) {
   const routes = createOpenApiApp();
+
+  const summaryRoute = createRoute({
+    method: 'get',
+    path: '/room/summary',
+    tags: ['Voice'],
+    summary: 'Ringkasan voice room (jumlah peserta, tanpa auth)',
+    responses: {
+      200: {
+        description: 'Ringkasan room',
+        content: json(voiceRoomSummaryResponseSchema),
+      },
+    },
+  });
+
+  routes.use('/room/summary', rateLimit({ points: 30, duration: 60 }));
+  routes.openapi(summaryRoute, (c) => deps.controller.summary(c) as never);
 
   routes.use('*', rateLimit({ points: 30, duration: 60 }));
   routes.use('*', deps.authenticate);

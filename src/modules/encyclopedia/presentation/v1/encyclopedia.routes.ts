@@ -32,6 +32,7 @@ import {
   revisionIdParamSchema,
   searchArticlesQuerySchema,
   submitContributionBodySchema,
+  setArticleClapsBodySchema,
   submitReportBodySchema,
   tagIdParamSchema,
   updateCategoryBodySchema,
@@ -134,6 +135,11 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
     '/articles/:id/bookmark',
     deps.authenticate,
     rateLimit({ points: 120, duration: 3600, keyFn: userKey('article-bookmark') }),
+  );
+  routes.use(
+    '/articles/:id/claps',
+    ...writeBase,
+    rateLimit({ points: 120, duration: 3600, keyFn: userKey('article-clap') }),
   );
   routes.use(
     '/reports',
@@ -263,6 +269,21 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
         404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
       },
     }),
+
+    createRoute({
+      method: 'put',
+      path: '/articles/:id/claps',
+      tags: ['Encyclopedia'],
+      summary: 'Set jumlah clap user pada artikel (0-50)',
+      request: {
+        params: articleIdParamSchema,
+        body: { content: json(setArticleClapsBodySchema) },
+      },
+      responses: {
+        200: okResponse('Clap tersimpan'),
+        404: { description: 'Artikel tidak ditemukan', content: json(errorResponseSchema) },
+      },
+    }),
     createRoute({
       method: 'post',
       path: '/articles/:id/bookmark',
@@ -338,6 +359,7 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
     'patch /comments/:id': (c) => deps.controller.updateComment(c),
     'delete /comments/:id': (c) => deps.controller.deleteComment(c),
     'post /articles/:id/bookmark': (c) => deps.controller.toggleBookmark(c),
+    'put /articles/:id/claps': (c) => deps.controller.setClaps(c),
     'post /contributions': (c) => deps.controller.submitContribution(c),
     'patch /contributions/:id': (c) => deps.controller.resubmitContribution(c),
     'get /me/contributions': (c) => deps.controller.myContributions(c),

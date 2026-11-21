@@ -5,10 +5,12 @@ import {
   categories,
   dialects,
   languages,
+  leaderboardExcludedUsers,
   userRoles,
   users,
   wordClasses,
 } from '@/shared/database/drizzle/schema';
+import { SYSTEM_USER_IDS } from '@/shared/constants/system-users';
 import { Pbkdf2PasswordService } from '@/modules/auth/infrastructure/pbkdf2-password.service';
 import { logger } from '@/shared/logging/logger';
 import { ANONIM_EMAIL, ANONIM_USER_ID, ANONIM_USERNAME } from '@/shared/constants/anonim';
@@ -214,16 +216,14 @@ export async function seedReference(): Promise<void> {
   logger.info(`Seed referensi: user sistem ${VOTING_WARGA_EMAIL}`);
 
   // Multi role: user sistem pegang role contributor di junction.
-  const systemUserIds = [
-    ANONIM_USER_ID,
-    CSV_IMPORTER_USER_ID,
-    GITHUB_ACTIONS_USER_ID,
-    WEB_IMPORT_USER_ID,
-    VOTING_WARGA_USER_ID,
-  ];
   await db
     .insert(userRoles)
-    .values(systemUserIds.map((userId) => ({ userId, role: 'contributor' })))
+    .values(SYSTEM_USER_IDS.map((userId) => ({ userId, role: 'contributor' as const })))
+    .onConflictDoNothing();
+
+  await db
+    .insert(leaderboardExcludedUsers)
+    .values(SYSTEM_USER_IDS.map((userId) => ({ userId, note: 'Akun sistem bawaan' })))
     .onConflictDoNothing();
 
   // Insert-if-missing (bukan ON CONFLICT target kolom): Turso/SQLite sering

@@ -16,9 +16,13 @@ vi.mock('@/modules/word/application/utils/assert-can-contribute', () => ({
   assertCanContribute: vi.fn(async () => undefined),
 }));
 
-vi.mock('@/shared/moderation/assert-ugc-text-quality-with-strike', () => ({
-  assertUgcTextQualityWithStrike: vi.fn(async (text: string) => text),
-}));
+vi.mock('@/shared/moderation/assert-ugc-text-quality', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/moderation/assert-ugc-text-quality')>();
+  return {
+    ...actual,
+    assertUgcTextQuality: vi.fn((text: string) => text),
+  };
+});
 
 vi.mock(
   '@/modules/comment-blocklist/application/utils/apply-blocklist-filter',

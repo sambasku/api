@@ -53,3 +53,17 @@ export const leaderboardWeekEntries = sqliteTable(
     index('leaderboard_week_entries_rank_idx').on(t.weekId, t.rank),
   ],
 );
+
+/** User yang tidak masuk agregat papan peringkat (dikelola admin). */
+export const leaderboardExcludedUsers = sqliteTable(
+  'leaderboard_excluded_users',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => users.id),
+    note: text('note'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+);

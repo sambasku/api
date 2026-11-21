@@ -23,6 +23,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'vote_comment',
   'vote_meaning',
   'discussion_created',
+  'chat_ping',
   'suggestion_applied',
   'suggestion_selfapply',
   'suggestion_created',
@@ -135,6 +136,8 @@ case 'announcement':
     case 'jinye_reposted':
     case 'jinye_quote_created':
       return 'jinye';
+    case 'chat_ping':
+      return 'chat';
   }
 }
 

@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 import {
   articleBookmarks,
+  articleClaps,
   articleCommentRevisions,
   articleComments,
   articleContributions,
@@ -926,6 +927,99 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
       )
       .limit(1);
     return Boolean(row);
+  }
+
+
+  // -------------------------------------------------------------- claps
+
+  async getUserClapCount(userId: string, articleId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: articleClaps.count })
+      .from(articleClaps)
+      .where(
+        and(
+          eq(articleClaps.userId, userId),
+          eq(articleClaps.articleId, articleId),
+        ),
+      )
+      .limit(1);
+    return row?.count ?? 0;
+  }
+
+  async sumClapTotal(articleId: string): Promise<number> {
+    const [row] = await this.db
+      .select({
+        total: sql<number>`coalesce(sum(${articleClaps.count}), 0)`.mapWith(Number),
+      })
+      .from(articleClaps)
+      .where(eq(articleClaps.articleId, articleId));
+    return row?.total ?? 0;
+  }
+
+  async setClapCount(
+    userId: string,
+    articleId: string,
+    count: number,
+  ): Promise<{ myCount: number; clapTotal: number }> {
+    const safe = Math.min(50, Math.max(0, Math.floor(count)));
+    const now = new Date();
+    if (safe === 0) {
+      await this.db
+        .delete(articleClaps)
+        .where(
+          and(
+            eq(articleClaps.userId, userId),
+            eq(articleClaps.articleId, articleId),
+          ),
+        );
+    } else {
+      const existing = await this.db
+        .select({ id: articleClaps.id })
+        .from(articleClaps)
+        .where(
+          and(
+            eq(articleClaps.userId, userId),
+            eq(articleClaps.articleId, articleId),
+          ),
+        )
+        .limit(1);
+      if (existing.length > 0) {
+        await this.db
+          .update(articleClaps)
+          .set({ count: safe, updatedAt: now })
+          .where(eq(articleClaps.id, existing[0]!.id));
+      } else {
+        await this.db
+          .insert(articleClaps)
+          .values({
+            userId,
+            articleId,
+            count: safe,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoNothing();
+        await this.db
+          .update(articleClaps)
+          .set({ count: safe, updatedAt: now })
+          .where(
+            and(
+              eq(articleClaps.userId, userId),
+              eq(articleClaps.articleId, articleId),
+            ),
+          );
+      }
+    }
+    const [totalRow] = await this.db
+      .select({
+        total: sql<number>`coalesce(sum(${articleClaps.count}), 0)`.mapWith(Number),
+      })
+      .from(articleClaps)
+      .where(eq(articleClaps.articleId, articleId));
+    return {
+      myCount: safe,
+      clapTotal: totalRow?.total ?? 0,
+    };
   }
 
   // --------------------------------------------------------- kontribusi

@@ -94,6 +94,7 @@ describe('GetVoteCheckDeckUseCase', () => {
 
   it('regresi: check-deck filter makna belum verified; deck verified tetap ada', () => {
     expect(DECK_REPO_SRC).toMatch(/listCheckDeckMeanings/);
+    expect(DECK_REPO_SRC).toMatch(/orderTotalVotesDesc:\s*true/);
     expect(DECK_REPO_SRC).toMatch(/meaningVerified:\s*false/);
     expect(DECK_REPO_SRC).toMatch(/meaningVerified:\s*true/);
     expect(DECK_REPO_SRC).toMatch(/eq\(meanings\.isVerified,\s*trust\.meaningVerified\)/);

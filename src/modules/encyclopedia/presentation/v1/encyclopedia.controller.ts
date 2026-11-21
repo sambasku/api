@@ -36,6 +36,7 @@ import type {
   UpdateArticleContributionUseCase,
   TakedownArticleCommentUseCase,
   ToggleArticleBookmarkUseCase,
+  SetArticleClapCountUseCase,
   UpdateArticleCommentUseCase,
 } from '../../application/use-cases/encyclopedia-contribution.use-cases';
 import type { ArticleReportUseCases } from '../../application/use-cases/article-report.use-cases';
@@ -78,6 +79,8 @@ function toArticleWire(
   a: Article,
   opts?: {
     bookmarked?: boolean | null;
+    clap_total?: number;
+    my_clap_count?: number | null;
     related?: Array<{
       kind: string;
       id: string;
@@ -115,6 +118,8 @@ function toArticleWire(
     updated_at: a.updatedAt?.toISOString() ?? null,
     /** null = tamu / tidak dicek; true/false = status bookmark user login. */
     bookmarked: opts?.bookmarked ?? null,
+    clap_total: opts?.clap_total ?? 0,
+    my_clap_count: opts?.my_clap_count ?? null,
     related: toRelatedWire(opts?.related ?? []),
   };
 }
@@ -223,6 +228,7 @@ export interface EncyclopediaControllerDeps {
   deleteComment: DeleteArticleCommentUseCase;
   takedownComment: TakedownArticleCommentUseCase;
   toggleBookmark: ToggleArticleBookmarkUseCase;
+  setClapCount: SetArticleClapCountUseCase;
   submitContribution: SubmitArticleContributionUseCase;
   /** Alias runtime: ResubmitArticleContributionUseCase (= UpdateArticleContributionUseCase). */
   resubmitContribution: UpdateArticleContributionUseCase;
@@ -287,15 +293,24 @@ export class EncyclopediaController {
     const { slug } = c.req.valid('param' as never) as { slug: string };
     const article = await this.deps.getArticle.execute(slug);
     const user = c.get('user');
-    const [bookmarked, related] = await Promise.all([
+    const [bookmarked, clapTotal, myClapCount, related] = await Promise.all([
       user
         ? this.deps.repo.isBookmarked(user.user_id, article.id)
+        : Promise.resolve(null),
+      this.deps.repo.sumClapTotal(article.id),
+      user
+        ? this.deps.repo.getUserClapCount(user.user_id, article.id)
         : Promise.resolve(null),
       this.deps.listRelated.execute('article', article.id),
     ]);
     return c.json({
       success: true as const,
-      data: toArticleWire(article, { bookmarked, related }),
+      data: toArticleWire(article, {
+        bookmarked,
+        clap_total: clapTotal,
+        my_clap_count: user ? myClapCount : null,
+        related,
+      }),
     });
   }
 
@@ -418,6 +433,14 @@ export class EncyclopediaController {
     const { id } = c.req.valid('param' as never) as { id: string };
     const bookmarked = await this.deps.toggleBookmark.execute(user.user_id, id);
     return c.json({ success: true as const, data: { bookmarked } });
+  }
+
+  async setClaps(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as { count: number };
+    const data = await this.deps.setClapCount.execute(user.user_id, id, body.count);
+    return c.json({ success: true as const, data });
   }
 
   // ---------------------------------------------------------- kontribusi

@@ -55,8 +55,17 @@ describe('SendChatPingUseCase', () => {
     };
     const userRepo = { findById: vi.fn(async () => USER) };
     const mirror = { upsert: vi.fn(async () => undefined) };
-    const uc = new SendChatPingUseCase(repo as never, userRepo as never, mirror as never);
+    const activity = { safe: vi.fn(async () => undefined) };
+    const uc = new SendChatPingUseCase(
+      repo as never,
+      userRepo as never,
+      mirror as never,
+      activity as never,
+    );
     const result = await uc.execute('u1');
+    expect(activity.safe).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'chat_ping', actorId: 'u1' }),
+    );
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'system', body: CHAT_PING_BODY }),
     );

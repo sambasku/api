@@ -48,6 +48,7 @@ import {
   ReviewArticleContributionUseCase,
   SubmitArticleContributionUseCase,
   TakedownArticleCommentUseCase,
+  SetArticleClapCountUseCase,
   ToggleArticleBookmarkUseCase,
   UpdateArticleCommentUseCase,
 } from "@/modules/encyclopedia/application/use-cases/encyclopedia-contribution.use-cases";
@@ -208,6 +209,7 @@ export function registerCommunityRoutes(app: OpenAPIHono<{ Variables: AppVariabl
     deleteComment: new DeleteArticleCommentUseCase(encyclopediaRepo),
     takedownComment: new TakedownArticleCommentUseCase(encyclopediaRepo, di.auditRepo),
     toggleBookmark: new ToggleArticleBookmarkUseCase(encyclopediaRepo),
+    setClapCount: new SetArticleClapCountUseCase(encyclopediaRepo),
     submitContribution: new SubmitArticleContributionUseCase(
       encyclopediaRepo,
       di.auditRepo,
