@@ -1,6 +1,6 @@
 import { eq, and, desc, isNull, inArray, lt, or } from 'drizzle-orm';
 import { db } from '@/shared/database/drizzle/client';
-import { words, wordEditSuggestions, users, auditLogs, wordImages } from '@/shared/database/drizzle/schema';
+import { words, wordEditSuggestions, users, auditLogs, wordImages, meanings } from '@/shared/database/drizzle/schema';
 import type { WordSuggestionRepository, ChangeHistoryItem, SuggestionSource } from '../domain/repositories/word-suggestion.repository';
 import type { WordEditSuggestion, SuggestionDetail, SuggestionSummary, ProposedChanges, SuggestionStatus, SuggestionReasonCode } from '../domain/entities/word-suggestion.entity';
 import { NotFoundError, BadRequestError, ConflictError } from '@/shared/errors/app-error';
@@ -589,18 +589,30 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         .from(words)
         .where(eq(words.id, row.wordId))
         .limit(1);
-      // Guard preserve (#86): jangan timpa stamp verifikasi yang sudah ada.
-      if (!word?.isVerified) {
-        await db
-          .update(words)
-          .set({
-            isVerified: true,
-            verifiedBy: reviewerId,
-            verifiedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(words.id, row.wordId));
-      }
+      // Guard preserve (#86) + invariant trust-makna: jangan naikkan
+      // words.is_verified tanpa makna verified. Makna published milik kata
+      // diverifikasi reviewer (usulan diterima = reviewer memeriksa isinya),
+      // lalu word mengikuti rollup makna.
+      const now = new Date();
+      await db
+        .update(meanings)
+        .set({
+          isVerified: true,
+          verifiedBy: reviewerId,
+          verifiedAt: now,
+          needsReview: false,
+          updatedBy: reviewerId,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(meanings.wordId, row.wordId),
+            eq(meanings.status, 'published'),
+            eq(meanings.isVerified, false),
+            isNull(meanings.deletedAt),
+          ),
+        );
+      await rollupWordVerifiedFromMeaningsDb(row.wordId);
       // Event feed: pengusul (usulannya diterima) + verifikator.
       await this.emitEvent({
         kind: 'suggestion_applied',
@@ -1144,4 +1156,54 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     }
     return String(val);
   }
+}
+/**
+ * Rollup words.is_verified dari makna published - cermin logika
+ * WordRepositoryImpl.rollupWordVerifiedFromMeanings (word verified iff
+ * SEMUA makna published verified; tanpa makna published = false).
+ * Dipakai approveSuggestion; jangan naikkan word tanpa makna verified.
+ */
+async function rollupWordVerifiedFromMeaningsDb(wordId: string): Promise<void> {
+  const rows = await db
+    .select({
+      isVerified: meanings.isVerified,
+      verifiedBy: meanings.verifiedBy,
+      verifiedAt: meanings.verifiedAt,
+    })
+    .from(meanings)
+    .where(
+      and(
+        eq(meanings.wordId, wordId),
+        eq(meanings.status, 'published'),
+        isNull(meanings.deletedAt),
+      ),
+    );
+  if (rows.length === 0) {
+    await db
+      .update(words)
+      .set({ isVerified: false, verifiedBy: null, verifiedAt: null })
+      .where(and(eq(words.id, wordId), isNull(words.deletedAt)));
+    return;
+  }
+  if (!rows.every((r) => r.isVerified === true)) {
+    await db
+      .update(words)
+      .set({ isVerified: false, verifiedBy: null, verifiedAt: null })
+      .where(and(eq(words.id, wordId), isNull(words.deletedAt)));
+    return;
+  }
+  let best = rows[0]!;
+  for (const r of rows) {
+    const a = best.verifiedAt?.getTime() ?? 0;
+    const b = r.verifiedAt?.getTime() ?? 0;
+    if (b >= a) best = r;
+  }
+  await db
+    .update(words)
+    .set({
+      isVerified: true,
+      verifiedBy: best.verifiedBy,
+      verifiedAt: best.verifiedAt ?? new Date(),
+    })
+    .where(and(eq(words.id, wordId), isNull(words.deletedAt)));
 }

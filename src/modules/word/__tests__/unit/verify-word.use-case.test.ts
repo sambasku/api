@@ -17,7 +17,7 @@ import { VerifyWordUseCase } from '../../application/use-cases/verify-word.use-c
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 
-function makeDeps(setVerifiedResult = true, isVerified = false, found = true) {
+function makeDeps(setVerifiedResult = true, isVerified = false, found = true, meaningsCount = 1) {
   const wordRepo = {
     saveWithRelations: vi.fn(),
     findDuplicate: vi.fn(),
@@ -27,6 +27,8 @@ function makeDeps(setVerifiedResult = true, isVerified = false, found = true) {
     findMissingReferences: vi.fn(),
     listWordClasses: vi.fn(),
     setVerified: vi.fn().mockResolvedValue(setVerifiedResult),
+    countPublishedMeanings: vi.fn().mockResolvedValue(meaningsCount),
+    verifyAllPublishedMeanings: vi.fn().mockResolvedValue(meaningsCount),
   } as unknown as WordRepository;
   const auditRepo = { record: vi.fn().mockResolvedValue(undefined), list: vi.fn() };
   return { wordRepo, auditRepo, useCase: new VerifyWordUseCase(wordRepo, auditRepo as unknown as AuditLogRepository) };
@@ -49,6 +51,20 @@ describe('VerifyWordUseCase', () => {
     expect(auditRepo.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'verify', newData: { is_verified: true }, requestId: 'req-1' }),
     );
+    expect(wordRepo.verifyAllPublishedMeanings).toHaveBeenCalledWith(
+      '01JDWORDMAKATN0000000000A',
+      '01JDUSERADMIN00000000000000A',
+    );
+  });
+
+  it('kata tanpa makna published → WORD_NO_PUBLISHED_MEANINGS 409, tanpa setVerified', async () => {
+    const { useCase, wordRepo, auditRepo } = makeDeps(true, false, true, 0);
+    await expect(
+      useCase.execute({ wordId: '01JDWORDMAKATN0000000000A', verified: true, actorId: '01JDUSERADMIN00000000000000A' }),
+    ).rejects.toMatchObject({ errorCode: 'WORD_NO_PUBLISHED_MEANINGS', statusCode: 409 });
+    expect(wordRepo.setVerified).not.toHaveBeenCalled();
+    expect(wordRepo.verifyAllPublishedMeanings).not.toHaveBeenCalled();
+    expect(auditRepo.record).not.toHaveBeenCalled();
   });
 
   it('unverify → audit action unverify', async () => {
