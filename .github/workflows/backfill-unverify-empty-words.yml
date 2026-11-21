@@ -1,0 +1,68 @@
+name: Backfill Unverify Empty Words
+
+# Sekali jalan (workflow_dispatch): turunkan words.is_verified yang tidak
+# punya makna published verified (lemma tayang kosong). Idempoten - hanya
+# baris is_verified=1 tanpa makna verified yang di-update. Dry run default
+# (DRY_RUN=1); jalankan ulang dengan DRY_RUN=0 untuk eksekusi.
+# Jalankan berurutan: staging dulu, lalu production.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Database target backfill'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      dry_run:
+        description: '1 = dry run (hitung + sampel), 0 = eksekusi'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '0'
+
+concurrency:
+  group: backfill-unverify-empty-words-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Backfill staging
+        if: inputs.target == 'staging'
+        run: pnpm db:backfill-unverify-empty-words
+        env:
+          NODE_ENV: staging
+          DRY_RUN: ${{ inputs.dry_run }}
+          DATABASE_URL: ${{ secrets.DB_STAGING_TURSO_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_STAGING_TURSO_AUTH_TOKEN }}
+          JWT_PRIVATE_KEY: dummy
+          JWT_PUBLIC_KEY: dummy
+          CORS_ALLOWED_ORIGINS: https://console-sambasku-staging.iamutaki.com
+      - name: Backfill production
+        if: inputs.target == 'production'
+        run: pnpm db:backfill-unverify-empty-words
+        env:
+          NODE_ENV: production
+          DRY_RUN: ${{ inputs.dry_run }}
+          DATABASE_URL: ${{ secrets.DB_PRODUCTION_TURSO_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DB_PRODUCTION_TURSO_AUTH_TOKEN }}
+          JWT_PRIVATE_KEY: dummy
+          JWT_PUBLIC_KEY: dummy
+          CORS_ALLOWED_ORIGINS: https://console.sambasku.com

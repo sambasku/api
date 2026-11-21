@@ -508,6 +508,20 @@ export interface WordRepository {
   rollupWordVerifiedFromMeanings(wordId: string): Promise<void>;
 
   /**
+   * Verifikasi SEMUA makna published (belum verified) milik kata sekaligus.
+   * Dipakai VerifyWordUseCase: verifikasi kata = verifikasi maknanya,
+   * supaya lemma tidak pernah tayang kosong tanpa makna. Return jumlah
+   * makna yang baru diflip; 0 berarti tidak ada makna published.
+   */
+  verifyAllPublishedMeanings(
+    wordId: string,
+    actorId: string,
+  ): Promise<number>;
+
+  /** Ada berapa makna published (belum dihapus) milik kata. */
+  countPublishedMeanings(wordId: string): Promise<number>;
+
+  /**
    * Flip status tayang: published ↔ draft. Publish juga set is_verified.
    * Return false kalau kata tidak ditemukan / soft-deleted.
    */

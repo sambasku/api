@@ -2438,6 +2438,48 @@ memberLemma: string;
       .where(and(eq(words.id, wordId), isNull(words.deletedAt)));
   }
 
+  async countPublishedMeanings(wordId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ n: sql<number>`count(*)`.mapWith(Number) })
+      .from(meanings)
+      .where(
+        and(
+          eq(meanings.wordId, wordId),
+          eq(meanings.status, 'published'),
+          isNull(meanings.deletedAt),
+        ),
+      );
+    return row?.n ?? 0;
+  }
+
+  async verifyAllPublishedMeanings(
+    wordId: string,
+    actorId: string,
+  ): Promise<number> {
+    const now = new Date();
+    const updated = await this.db
+      .update(meanings)
+      .set({
+        isVerified: true,
+        verifiedBy: actorId,
+        verifiedAt: now,
+        needsReview: false,
+        updatedBy: actorId,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(meanings.wordId, wordId),
+          eq(meanings.status, 'published'),
+          eq(meanings.isVerified, false),
+          isNull(meanings.deletedAt),
+        ),
+      )
+      .returning({ id: meanings.id });
+    await this.rollupWordVerifiedFromMeanings(wordId);
+    return updated.length;
+  }
+
   async setPublished(
     id: string,
     data: { published: boolean; actorId: string },
@@ -2449,9 +2491,8 @@ memberLemma: string;
         data.published
           ? {
               status: 'published',
-              isVerified: true,
-              verifiedBy: data.actorId,
-              verifiedAt: now,
+              // isVerified mengikuti rollup makna; tidak auto-true agar lemma
+              // tidak tayang tanpa makna verified (invariant trust-makna).
               updatedBy: data.actorId,
               updatedAt: now,
             }
@@ -2466,6 +2507,9 @@ memberLemma: string;
       )
       .where(and(eq(words.id, id), isNull(words.deletedAt)))
       .returning({ id: words.id });
+    if (data.published && updated.length > 0) {
+      await this.rollupWordVerifiedFromMeanings(id);
+    }
     return updated.length > 0;
   }
 

@@ -55,6 +55,14 @@ export class VerifyWordUseCase {
           'Selesaikan usulan yang sudah menimpa kata ini sebelum menandai terverifikasi.',
         );
       }
+      // Verifikasi kata = verifikasi maknanya: jangan sampai lemma tayang
+      // tanpa satu makna verified pun (kata kosong membingungkan pembaca).
+      if ((await this.wordRepo.countPublishedMeanings(cmd.wordId)) === 0) {
+        throw new ConflictError(
+          'WORD_NO_PUBLISHED_MEANINGS',
+          'Kata ini belum punya makna tayang. Tambahkan dan verifikasi makna dulu sebelum verifikasi kata.',
+        );
+      }
     }
     const ok = await this.wordRepo.setVerified(cmd.wordId, {
       isVerified: cmd.verified,
@@ -72,6 +80,10 @@ export class VerifyWordUseCase {
         );
       }
       throw new NotFoundError('WORD_NOT_FOUND', 'Kata dengan id tersebut tidak ditemukan');
+    }
+    if (cmd.verified) {
+      // Rollup makna ikut terverifikasi; word tetap konsisten dengan maknanya.
+      await this.wordRepo.verifyAllPublishedMeanings(cmd.wordId, cmd.actorId);
     }
 
     await this.auditRepo.record({

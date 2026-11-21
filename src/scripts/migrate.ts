@@ -221,6 +221,27 @@ async function repairSkippedMigrations(client: Client): Promise<void> {
   }
 }
 
+/**
+ * Guard: `when` di meta/_journal.json HARUS strictly ascending. Kalau turun,
+ * drizzle migrator skip migrasi itu diam-diam (lastApplied.created_at >
+ * folderMillis) - sudah kejadian 2x (0063/0072/0123, lalu 0180-0183).
+ */
+function assertJournalMonotonic(): void {
+  const journal = JSON.parse(
+    readFileSync(resolve(migrationsFolder, 'meta/_journal.json'), 'utf8'),
+  ) as { entries: Array<{ tag: string; when: number }> };
+  let prev = 0;
+  for (const entry of journal.entries) {
+    if (entry.when <= prev) {
+      fail(
+        `meta/_journal.json tidak ascending: "${entry.tag}" when=${entry.when} <= prev=${prev} ` +
+          '(drizzle akan skip migrasi ini diam-diam). Perbaiki `when` ke nilai di atas entry sebelumnya.',
+      );
+    }
+    prev = entry.when;
+  }
+}
+
 /** Live check: username sudah dipakai user lain (bukan baris yang di-backfill). */
 async function usernameTakenByOther(
   client: Client,
@@ -355,6 +376,7 @@ try {
 const db = drizzle(client, { schema });
 
 try {
+  assertJournalMonotonic();
   await repairLastSeenDrift(client);
   await repairSkippedMigrations(client);
   // Backfill HARUS sebelum migrate: trigger 0091 menolak UPDATE username
