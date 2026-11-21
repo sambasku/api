@@ -11,9 +11,9 @@ import type { WordDetail } from '../../domain/entities/word.entity';
 const DETAIL = { id: '01WORD', lemma: 'makatn', meanings: [] } as unknown as WordDetail;
 
 describe('publicReadGate', () => {
-  it('tamu / contributor → published (is_verified = badge, bukan gate)', () => {
-    expect(publicReadGate(undefined)).toEqual({ published: true });
-    expect(publicReadGate(['contributor'])).toEqual({ published: true });
+  it('tamu / contributor → published + is_verified (gate kamus publik)', () => {
+    expect(publicReadGate(undefined)).toEqual({ published: true, isVerified: true });
+    expect(publicReadGate(['contributor'])).toEqual({ published: true, isVerified: true });
   });
 
   it('verifikator → statuses pending_review + published', () => {

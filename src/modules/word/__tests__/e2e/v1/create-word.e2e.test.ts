@@ -156,13 +156,13 @@ describe.skipIf(!hasTestDb)('Word E2E v1', () => {
     expect(body.data.status).toBe('published');
     expect(body.data.is_verified).toBe(false);
 
-    // Publik: published belum verified tetap tayang (badge Menunggu pengecekan)
+    // Publik: direct link/detail boleh (badge); search hanya verified (ADR).
     const detail = await request(`/api/v1/words/${body.data.word_id}`);
     expect(detail.status).toBe(200);
     expect((await detail.json()).data.is_verified).toBe(false);
     const search = await request('/api/v1/words/search?q=minum');
     const searchBody = await search.json();
-    expect(searchBody.data.some((w: { lemma: string }) => w.lemma === 'minum')).toBe(true);
+    expect(searchBody.data.some((w: { lemma: string }) => w.lemma === 'minum')).toBe(false);
 
     const adminDetail = await request(`/api/v1/admin/words/${body.data.word_id}`, {
       headers: { authorization: `Bearer ${adminToken}` },
