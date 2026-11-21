@@ -206,6 +206,12 @@ describe.skipIf(!hasTestDb)('Vote E2E v1 - toggle + counts + my (08 doc)', () =>
     };
     expect(body.data.every((row) => row.value === -1)).toBe(true);
     expect(body.data[0].word?.lemma).toBe('kata divote');
+    expect(body.data[0] as Record<string, unknown>).toEqual(
+      expect.objectContaining({
+        definition: expect.anything(),
+        translation: expect.anything(),
+      }),
+    );
     expect(body.meta.has_more).toBe(false);
 
     const adminHist = await get('/api/v1/votes/history?value=1&target_type=meaning', adminToken);

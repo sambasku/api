@@ -149,21 +149,37 @@ export class ContributionRepositoryImpl implements ContributionRepository {
         ? or(isNull(contributions.reopenedBy), eq(contributions.reopenedBy, filter.viewerId))
         : undefined;
 
-    const hideSkipped =
-      filter.hideSkipped && filter.viewerId
-        ? notExists(
-            this.db
-              .select({ id: userSkips.id })
-              .from(userSkips)
-              .where(
-                and(
-                  eq(userSkips.userId, filter.viewerId),
-                  eq(userSkips.targetType, 'contribution'),
-                  eq(userSkips.targetId, contributions.id),
-                ),
-              ),
-          )
-        : undefined;
+const hideSkipped =
+  filter.hideSkipped && filter.viewerId
+    ? notExists(
+        this.db
+          .select({ id: userSkips.id })
+          .from(userSkips)
+          .where(
+            and(
+              eq(userSkips.userId, filter.viewerId),
+              eq(userSkips.targetType, 'contribution'),
+              eq(userSkips.targetId, contributions.id),
+            ),
+          ),
+      )
+    : undefined;
+// #259: mode daftar dilewati - kebalikan hideSkipped.
+const skippedOnly =
+  filter.skippedOnly && filter.viewerId
+    ? exists(
+        this.db
+          .select({ id: userSkips.id })
+          .from(userSkips)
+          .where(
+            and(
+              eq(userSkips.userId, filter.viewerId),
+              eq(userSkips.targetType, 'contribution'),
+              eq(userSkips.targetId, contributions.id),
+            ),
+          ),
+      )
+    : undefined;
 
     const rows = await this.db
       .select(contributionColumns)
@@ -181,6 +197,7 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           mineScope,
           reopenVisibility,
           hideSkipped,
+          skippedOnly,
         ),
       )
       .orderBy(desc(contributions.id))
@@ -192,7 +209,7 @@ export class ContributionRepositoryImpl implements ContributionRepository {
     const latestReviews = filter.mine
       ? await this.resolveLatestReviews(sliced.map((r) => r.id))
       : null;
-    const items = sliced.map((row) => {
+    const mapped = sliced.map((row) => {
       const latest = latestReviews?.get(row.id);
       return toContribution({
         ...row,
@@ -206,6 +223,16 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           : {}),
       });
     });
+    // Antrean tinjau (bukan mine): buang orphan anak tanpa lemma parent -
+    // kartu akan kosong / judul "meaning". Riwayat (mine) tetap lengkap.
+    const items =
+      filter.mine
+        ? mapped
+        : mapped.filter(
+            (item) =>
+              item.entityType === 'word' ||
+              (item.wordLemma != null && item.wordLemma.trim() !== ''),
+          );
     // Acak isi halaman per user (seeded, stabil untuk request identik) supaya
     // antrean verifikator tidak seragam. Cursor tetap dari keyset id desc -
     // diambil SEBELUM acak agar pagination tidak melompat/duplikat.
@@ -810,6 +837,8 @@ export class ContributionRepositoryImpl implements ContributionRepository {
     // 17-api-usul-definisi.md: definisi kontribusi pada kata existing -
     // makna + terjemahannya (batch kedua, pola word detail).
     if (entityType === 'meaning') {
+      // Include soft-deleted: antrean review masih menunjuk entity yang baru
+      // dihapus/diganti, jangan kirim entity null (UI kosong + judul "meaning").
       const [row] = await this.db
         .select({
           id: meanings.id,
@@ -825,8 +854,8 @@ export class ContributionRepositoryImpl implements ContributionRepository {
           isCorrected: meanings.isCorrected,
         })
         .from(meanings)
-        .innerJoin(words, eq(words.id, meanings.wordId))
-        .where(and(eq(meanings.id, entityId), isNull(meanings.deletedAt)))
+        .leftJoin(words, eq(words.id, meanings.wordId))
+        .where(eq(meanings.id, entityId))
         .limit(1);
       if (!row) return null;
 
@@ -1098,7 +1127,7 @@ export class ContributionRepositoryImpl implements ContributionRepository {
 
   // Koreksi tanpa publish: isi berubah, is_corrected true, kontribusi tetap pending.
   // Kata/media yang sudah tayang tetap tayang (belum diverifikasi). Yang masih
-  // pending_review (usulan tamu) tetap tersembunyi.
+  // pending_review (legacy) tetap tersembunyi.
   private async childStatusAfterQuietCorrection(
     tx: Tx,
     cmd: ApplyChildCorrectionCommand,

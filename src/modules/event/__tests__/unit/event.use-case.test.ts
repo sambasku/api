@@ -86,6 +86,28 @@ describe("occurrenceStatus", () => {
       ),
     ).toBe("cancelled");
   });
+
+  it("startsAt null → upcoming", () => {
+    expect(
+      occurrenceStatus(
+        { startsAt: null, endsAt: null, cancelledAt: null },
+        NOW,
+      ),
+    ).toBe("upcoming");
+  });
+
+  it("endsAt null → pakai startsAt sebagai selesai", () => {
+    expect(
+      occurrenceStatus(
+        {
+          startsAt: new Date("2026-10-01T09:00:00Z"),
+          endsAt: null,
+          cancelledAt: null,
+        },
+        new Date("2026-10-01T10:00:00Z"),
+      ),
+    ).toBe("completed");
+  });
 });
 
 describe("CreateEventUseCase", () => {

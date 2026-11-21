@@ -164,4 +164,168 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
       body.data.items.some((i: { username: string | null }) => i.username === name),
     ).toBe(false);
   });
+
+
+  it('sponsorships: tier / usaha / splash + sponsor_tier usaha', async () => {
+    const { regions } = await import('@/shared/database/drizzle/schema');
+    const kecId = '01SPONSORE2EKEC00000001';
+    const desaId = '01SPONSORE2EDESA0000001';
+    await db
+      .insert(regions)
+      .values([
+        {
+          id: kecId,
+          slug: `sponsor-kec-${stamp}`,
+          name: 'Sponsor Kec',
+          type: 'kecamatan',
+          status: 'published',
+        },
+        {
+          id: desaId,
+          slug: `sponsor-kec-${stamp}/desa`,
+          name: 'Sponsor Desa',
+          type: 'desa',
+          parentId: kecId,
+          status: 'published',
+        },
+      ])
+      .onConflictDoNothing();
+
+    const usahaBody = (slug: string, name: string) => ({
+      slug,
+      name,
+      description: 'Usaha sponsor e2e',
+      category_id: 'kuliner',
+      kind: 'product',
+      region_id: kecId,
+      village_id: desaId,
+      publish_status: 'published',
+      operational_status: 'open',
+    });
+
+    const uMustika = await post(
+      '/api/v1/admin/usaha',
+      usahaBody(`sponsor-mustika-${stamp}`, `Sponsor Mustika ${stamp}`),
+      adminToken,
+    );
+    expect(uMustika.status).toBe(200);
+    const mustikaUsaha = (await uMustika.json()).data as { id: string; slug: string };
+
+    const uPerak = await post(
+      '/api/v1/admin/usaha',
+      usahaBody(`sponsor-perak-${stamp}`, `Sponsor Perak ${stamp}`),
+      adminToken,
+    );
+    expect(uPerak.status).toBe(200);
+    const perakUsaha = (await uPerak.json()).data as { id: string; slug: string };
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // 1) Tanpa FK
+    const noFk = await post(
+      '/api/v1/admin/sponsorships',
+      {
+        name: `Org NoFK ${stamp}`,
+        since: today,
+        tier: 'emas',
+        logo_url: 'https://cdn.example.com/nofk.png',
+      },
+      adminToken,
+    );
+    expect(noFk.status).toBe(200);
+
+    // 2) Usaha + Mustika → splash + lencana
+    const mustikaSp = await post(
+      '/api/v1/admin/sponsorships',
+      {
+        name: `Usaha Mustika ${stamp}`,
+        since: today,
+        tier: 'mustika',
+        usaha_id: mustikaUsaha.id,
+        logo_url: 'https://cdn.example.com/mustika.png',
+      },
+      adminToken,
+    );
+    expect(mustikaSp.status).toBe(200);
+
+    // 3) Usaha + Perak → lencana, bukan splash
+    const perakSp = await post(
+      '/api/v1/admin/sponsorships',
+      {
+        name: `Usaha Perak ${stamp}`,
+        since: today,
+        tier: 'perak',
+        usaha_id: perakUsaha.id,
+        logo_url: 'https://cdn.example.com/perak.png',
+      },
+      adminToken,
+    );
+    expect(perakSp.status).toBe(200);
+
+    // 4) User saja - admin create dengan user_id (reuse user dari checkbox test lewat email pattern baru via insert langsung)
+    const { users, sponsorships } = await import('@/shared/database/drizzle/schema');
+    const [anyUser] = await db
+      .select({ id: users.id, username: users.username })
+      .from(users)
+      .where(eq(users.isActive, true))
+      .limit(1);
+    expect(anyUser).toBeTruthy();
+    // Soft-delete sponsorship aktif user ini dulu agar unique index longgar.
+    await db
+      .update(sponsorships)
+      .set({ deletedAt: new Date() })
+      .where(eq(sponsorships.userId, anyUser.id));
+    const userOnly = await post(
+      '/api/v1/admin/sponsorships',
+      {
+        name: `User Only ${stamp}`,
+        since: today,
+        tier: 'intan',
+        user_id: anyUser.id,
+        logo_url: 'https://cdn.example.com/user.png',
+      },
+      adminToken,
+    );
+    expect(userOnly.status).toBe(200);
+    expect((await userOnly.json()).data.usaha_id).toBeNull();
+
+    const splash = await get('/api/v1/about/sponsorships/splash');
+    expect(splash.status).toBe(200);
+    const splashItems = (await splash.json()).data.items as Array<{
+      name: string;
+      tier: string;
+      usaha_id: string | null;
+    }>;
+    expect(splashItems.some((i) => i.name === `Usaha Mustika ${stamp}`)).toBe(true);
+    expect(splashItems.some((i) => i.name === `Usaha Perak ${stamp}`)).toBe(false);
+    expect(splashItems.some((i) => i.name === `Org NoFK ${stamp}`)).toBe(false);
+    expect(splashItems.some((i) => i.name === `User Only ${stamp}`)).toBe(false);
+
+    const pub = await get('/api/v1/about/sponsorships');
+    const pubItems = (await pub.json()).data.items as Array<{ name: string }>;
+    expect(pubItems.some((i) => i.name === `Org NoFK ${stamp}`)).toBe(true);
+    expect(pubItems.some((i) => i.name === `User Only ${stamp}`)).toBe(true);
+    expect(pubItems.some((i) => i.name === `Usaha Perak ${stamp}`)).toBe(true);
+
+    const detailMustika = await get(`/api/v1/usaha/${mustikaUsaha.slug}`);
+    expect(detailMustika.status).toBe(200);
+    expect((await detailMustika.json()).data.sponsor_tier).toBe('mustika');
+
+    const detailPerak = await get(`/api/v1/usaha/${perakUsaha.slug}`);
+    expect(detailPerak.status).toBe(200);
+    expect((await detailPerak.json()).data.sponsor_tier).toBe('perak');
+
+    const list = await get('/api/v1/usaha?limit=100');
+    const listItems = (await list.json()).data.items as Array<{
+      slug: string;
+      sponsor_tier: string | null;
+    }>;
+    expect(
+      listItems.find((i) => i.slug === mustikaUsaha.slug)?.sponsor_tier,
+    ).toBe('mustika');
+    expect(listItems.find((i) => i.slug === perakUsaha.slug)?.sponsor_tier).toBe(
+      'perak',
+    );
+  });
+
 });

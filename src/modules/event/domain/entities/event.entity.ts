@@ -1,3 +1,4 @@
+import type { CommentAudio, CommentImage } from '@/modules/comment/domain/entities/comment.entity';
 import type { EventCommentStatus } from '@/shared/database/drizzle/schema/event-comments.schema';
 
 /** Id slug di tabel `event_categories`. */
@@ -30,8 +31,8 @@ export interface Event {
   name: string;
   description: string;
   categoryId: EventCategory;
-  startsAt: Date;
-  endsAt: Date;
+  startsAt: Date | null;
+  endsAt: Date | null;
   /** Lokasi aktual acara. Independen dari relasi wisata/desa (PRD 6.3). */
   locationText: string;
   lat: number | null;
@@ -52,12 +53,15 @@ export interface Event {
   cancelledAt: Date | null;
   publishedAt: Date | null;
   authorId: string | null;
-  /** Pengusul live; diisi di path detail. List boleh null. */
-  author: EventAuthorRef | null;
-  /** Id-nama tempat wisata terkait (dipaket dari JOIN). */
-  places: EventPlaceRef[];
-  createdAt: Date;
-  updatedAt: Date | null;
+/** Pengusul live; diisi di path detail. List boleh null. */
+author: EventAuthorRef | null;
+/** Id-nama tempat wisata terkait (dipaket dari JOIN). */
+places: EventPlaceRef[];
+/** Galeri foto acara (user-generated, pola place_images #187). Hanya
+ * diisi di path detail (3 foto pratinjau); list kosong. */
+images: EventImage[];
+createdAt: Date;
+updatedAt: Date | null;
 }
 
 export interface EventAuthorRef {
@@ -71,6 +75,20 @@ export interface EventPlaceRef {
   slug: string;
   name: string;
   category: string | null;
+}
+
+/** Kredit foto galeri acara (pola PlaceImageAttribution). */
+export interface EventImageAttribution {
+  name: string;
+  provider?: string;
+  authorId?: string | null;
+}
+
+/** Satu foto galeri acara (user-generated, pola place_images #187). */
+export interface EventImage {
+  id: string;
+  url: string;
+  attribution: EventImageAttribution | null;
 }
 
 /** Nama kategori + village/desa yang ikut dipaketkan untuk display. */
@@ -100,6 +118,9 @@ export interface EventComment {
   userRole: string | null;
   authorDeletedAt: Date | null;
   body: string;
+  stickerId: string | null;
+  audio: CommentAudio | null;
+  image: CommentImage | null;
   status: EventCommentStatus;
   isEdited: boolean;
   createdAt: Date;
@@ -115,7 +136,9 @@ export function occurrenceStatus(
   now: Date = new Date(),
 ): EventOccurrenceStatus {
   if (event.cancelledAt) return "cancelled";
+  if (!event.startsAt) return "upcoming";
+  const endsAt = event.endsAt ?? event.startsAt;
   if (now < event.startsAt) return "upcoming";
-  if (now > event.endsAt) return "completed";
+  if (now > endsAt) return "completed";
   return "ongoing";
 }

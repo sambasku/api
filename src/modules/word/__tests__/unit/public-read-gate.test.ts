@@ -8,12 +8,12 @@ import { GetWordByLemmaUseCase } from '../../application/use-cases/get-word-by-l
 import type { WordRepository } from '../../domain/repositories/word.repository';
 import type { WordDetail } from '../../domain/entities/word.entity';
 
-const DETAIL = { id: '01WORD', lemma: 'makatn' } as unknown as WordDetail;
+const DETAIL = { id: '01WORD', lemma: 'makatn', meanings: [] } as unknown as WordDetail;
 
 describe('publicReadGate', () => {
-  it('tamu / contributor → published + isVerified', () => {
-    expect(publicReadGate(undefined)).toEqual({ published: true, isVerified: true });
-    expect(publicReadGate(['contributor'])).toEqual({ published: true, isVerified: true });
+  it('tamu / contributor → published (is_verified = badge, bukan gate)', () => {
+    expect(publicReadGate(undefined)).toEqual({ published: true });
+    expect(publicReadGate(['contributor'])).toEqual({ published: true });
   });
 
   it('verifikator → statuses pending_review + published', () => {
@@ -48,7 +48,7 @@ describe('GetWordByIdUseCase - gate viewer', () => {
 });
 
 describe('GetWordByLemmaUseCase - gate viewer', () => {
-  it('tamu → tanpa statuses (repo default published+verified)', async () => {
+  it('tamu → tanpa statuses (repo default published; is_verified badge)', async () => {
     const findPublishedDetailByLemma = vi.fn().mockResolvedValue(DETAIL);
     const uc = new GetWordByLemmaUseCase({
       findPublishedDetailByLemma,

@@ -54,6 +54,7 @@ const ALLOWED: Record<string, Part[]> = {
   derived_from: ['relations'],
   meaning_group: ['groups'],
   spelling_variant: ['variants'],
+  change_categories: ['categories'],
   lemma_notes: ['lemma', 'notes'],
 };
 
@@ -146,14 +147,18 @@ export function checkSuggestionCategoryShape(
       const seen = new Set<string>();
       (c.examples ?? []).forEach((ex, i) => {
         const at = `examples.${i}`;
-        if (ex.action !== 'update' || !ex.exampleId) {
+        if ((ex.action !== 'update' && ex.action !== 'delete') || !ex.exampleId) {
           issues.push({ field: at, message: 'Pilih contoh yang ingin diubah' });
         } else if (seen.has(ex.exampleId)) {
           issues.push({ field: at, message: 'Contoh yang sama tidak boleh diusulkan dua kali' });
         } else {
           seen.add(ex.exampleId);
         }
-        if (ex.sourceSentence === undefined && ex.targetSentence === undefined) {
+        if (
+          ex.action === 'update' &&
+          ex.sourceSentence === undefined &&
+          ex.targetSentence === undefined
+        ) {
           issues.push({ field: at, message: 'Isi kalimat contoh atau artinya yang baru' });
         }
       });

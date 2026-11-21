@@ -24,6 +24,10 @@ export type InboxNotificationType =
   | 'comment_image_approved'
   | 'comment_image_rejected'
   | 'word_vote'
+  /** G2: makna auto-verif Voting Warga / needs_review ke pembuat makna. */
+  | 'meaning_auto_verified'
+  | 'meaning_needs_review'
+  | 'meaning_auto_rejected'
   /** #133: pemilik kata dapat notif saat contoh/pelafalan tayang. */
   | 'word_example'
   | 'word_audio'
@@ -45,6 +49,9 @@ export type InboxNotificationType =
   | 'culinary_contribution_needs_revision'
   | 'culinary_claim_approved'
   | 'culinary_claim_rejected'
+  | 'baleho_placement_approved'
+  | 'baleho_placement_rejected'
+  | 'baleho_placement_ending_soon'
   | 'achievement_awarded'
   | 'pantun_reply'
   | 'pantun_mention'
@@ -65,6 +72,7 @@ export type NotificationTargetKind =
   | 'usaha_claim'
   | 'culinary_contribution'
   | 'culinary_claim'
+  | 'baleho_placement'
   | 'achievement'
   | 'pantun'
   | 'jinye'
@@ -83,6 +91,7 @@ export type NotificationActionKind =
 | 'usaha_claim'
 | 'culinary_contribution'
 | 'culinary_claim'
+| 'baleho_placement'
 | 'pantun'
 | 'jinye';
 
@@ -248,6 +257,24 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       body: 'Ada penilaian baru pada kosakatamu.',
       bodyType: 'plain',
     };
+  case 'meaning_auto_verified':
+    return {
+      title: 'Makna terverifikasi warga',
+      body: 'Maknamu sudah terverifikasi lewat Voting Warga.',
+      bodyType: 'plain',
+    };
+  case 'meaning_needs_review':
+    return {
+      title: 'Makna perlu ditinjau ulang',
+      body: 'Maknamu dapat banyak downvote setelah terverifikasi. Tim kami cek lagi.',
+      bodyType: 'plain',
+    };
+  case 'meaning_auto_rejected':
+    return {
+      title: 'Makna ditolak warga',
+      body: 'Maknamu ditolak lewat Voting Warga.',
+      bodyType: 'plain',
+    };
   // #133: copy bawaan tanpa nama aktor; caller mengisi body saat tahu namanya.
   case 'word_example':
     return {
@@ -367,6 +394,24 @@ bodyType: 'plain',
     return {
       title: 'Klaim tempat ditolak',
       body: 'Klaim belum bisa disetujui. Buka daftar klaim untuk lihat alasannya.',
+      bodyType: 'plain',
+    };
+  case 'baleho_placement_approved':
+    return {
+      title: 'Pesanan Baleho disetujui',
+      body: 'Pesananmu lolos cek. Cek riwayat untuk langkah bayar (48 jam).',
+      bodyType: 'plain',
+    };
+  case 'baleho_placement_rejected':
+    return {
+      title: 'Pesanan Baleho ditolak',
+      body: 'Pesananmu belum lolos tinjauan. Buka riwayat Baleho untuk detailnya.',
+      bodyType: 'plain',
+    };
+  case 'baleho_placement_ending_soon':
+    return {
+      title: 'Baleho hampir berakhir',
+      body: 'Area tayanganmu berakhir dalam 24 jam. Setelah selesai, kamu bisa pesan lagi dari Riwayat.',
       bodyType: 'plain',
     };
   case 'streak_reminder':

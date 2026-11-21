@@ -10,7 +10,7 @@ export const commentImageInputSchema = z.object({
     .min(1, 'Alamat gambar tidak valid'),
 });
 
-/** Create: teks dan/atau satu foto staging (opsi B). */
+/** Create: teks dan/atau foto staging dan/atau stiker katalog. */
 export const commentBodySchema = z
   .object({
     body: z
@@ -22,14 +22,28 @@ export const commentBodySchema = z
     // nullish: client (mobile freezed) sering kirim "image": null tanpa foto.
     // .optional() saja menolak null → VALIDATION_ERROR.
     image: commentImageInputSchema.nullish(),
+    sticker_id: z
+      .string({ error: 'Stiker tidak valid' })
+      .trim()
+      .min(1, 'Stiker tidak valid')
+      .max(64, 'Stiker tidak valid')
+      .nullish(),
   })
   .superRefine((val, ctx) => {
     const hasBody = (val.body?.trim().length ?? 0) > 0;
-    if (!hasBody && !val.image) {
+    const hasSticker = Boolean(val.sticker_id?.trim());
+    if (hasSticker && val.image) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sticker_id'],
+        message: 'Stiker tidak bisa digabung dengan foto',
+      });
+    }
+    if (!hasBody && !val.image && !hasSticker) {
       ctx.addIssue({
         code: 'custom',
         path: ['body'],
-        message: 'Komentar atau foto wajib diisi',
+        message: 'Komentar, foto, atau stiker wajib diisi',
       });
     }
   });
@@ -89,6 +103,7 @@ const commentDataSchema = z.object({
   avatar_url: z.string().nullable(),
   is_verifier: z.boolean(),
   body: z.string().nullable(),
+  sticker_id: z.string().nullable(),
   audio_url: z.string().nullable(),
   audio_mime_type: z.string().nullable(),
   audio_duration_ms: z.number().int().nullable(),

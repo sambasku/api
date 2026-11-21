@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import {
   accountDeletionTokens,
   authIdentities,
@@ -9,6 +9,7 @@ import {
   notifications,
   passwordResetTokens,
   refreshTokens,
+  usernameChanges,
   users,
   verifierApplications,
   wordReports,
@@ -90,6 +91,18 @@ export class AccountErasureRepositoryImpl implements AccountErasureRepository {
         .update(accountDeletionTokens)
         .set({ isUsed: true })
         .where(eq(accountDeletionTokens.userId, userId));
+
+      // Lepas hold username lama supaya handle tidak terkunci tanpa pemilik (#257).
+      await tx
+        .update(usernameChanges)
+        .set({ releasedAt: now })
+        .where(
+          and(
+            eq(usernameChanges.userId, userId),
+            isNull(usernameChanges.releasedAt),
+            gt(usernameChanges.holdUntil, now),
+          ),
+        );
 
       await tx
         .update(users)

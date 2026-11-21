@@ -5,6 +5,7 @@ import type { MailerPort } from '../application/ports/mailer.port';
 import { rememberOtp } from './otp-capture';
 import { accountDeletionEmailHtml, accountDeletionEmailText } from './account-deletion-email';
 import { verifierApprovedEmailHtml, verifierApprovedEmailText } from './verifier-approved-email';
+import { balehoPaymentEmailHtml, balehoPaymentEmailText } from './baleho-payment-email';
 import { DEFAULT_MAIL_FROM, otpEmailHtml, otpEmailText } from './otp-email';
 import { resetPasswordEmailHtml, resetPasswordEmailText } from './reset-password-email';
 import {
@@ -48,6 +49,24 @@ export class ResendMailerService implements MailerPort {
       subject: 'Selamat menjadi Verifikator - SambasKu',
       text: verifierApprovedEmailText(displayName),
       html: verifierApprovedEmailHtml(displayName),
+      inlineLogo: true,
+    });
+  }
+
+  async sendBalehoPaymentEmail(
+    to: string,
+    input: {
+      displayName: string;
+      placementId: string;
+      sizeLabel: string;
+      positionLabel: string;
+    },
+  ): Promise<void> {
+    await this.send({
+      to,
+      subject: 'Pesanan Baleho siap dibayar - SambasKu',
+      text: balehoPaymentEmailText(input),
+      html: balehoPaymentEmailHtml(input),
       inlineLogo: true,
     });
   }

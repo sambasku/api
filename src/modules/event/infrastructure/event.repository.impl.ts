@@ -1,6 +1,7 @@
-import { and, desc, eq, gt, gte, getTableColumns, inArray, isNull, lt, or, asc, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, getTableColumns, inArray, isNull, lt, or, asc, sql, count } from "drizzle-orm";
 import type { AppDatabase } from "@/shared/database/drizzle/client";
 import { events, eventPlaces } from "@/shared/database/drizzle/schema/events.schema";
+import { eventImages } from "@/shared/database/drizzle/schema/event-images.schema";
 import { eventComments, eventCommentRevisions } from "@/shared/database/drizzle/schema/event-comments.schema";
 import { eventCategories } from "@/shared/database/drizzle/schema/event-categories.schema";
 import { places } from "@/shared/database/drizzle/schema/places.schema";
@@ -11,12 +12,14 @@ import { generateId } from "@/shared/utils/ulid";
 import { ConflictError } from "@/shared/errors/app-error";
 import { highestUserRoleSql } from "@/shared/database/highest-user-role-sql";
 import type {
-  Event,
-  EventCategoryRef,
-  EventComment,
-  EventListItem,
-  EventPlaceRef,
-  EventVillageRef,
+Event,
+EventCategoryRef,
+EventComment,
+EventImage,
+EventImageAttribution,
+EventListItem,
+EventPlaceRef,
+EventVillageRef,
 } from "../domain/entities/event.entity";
 import type {
   CreateEventInput,
@@ -29,6 +32,12 @@ import type {
 } from "../domain/repositories/event.repository";
 import { resolvePublicAuthor } from "@/shared/utils/resolve-public-author";
 import type { CursorPage } from "@/modules/word/domain/repositories/word.repository";
+import {
+  entityCommentAudioInsertValues,
+  entityCommentImageInsertValues,
+  toEntityCommentAudio,
+  toEntityCommentImage,
+} from "@/shared/comment/entity-comment-media";
 
 /** Cap riwayat edit per komentar. */
 const COMMENT_REVISION_CAP = 50;
@@ -56,10 +65,36 @@ function toEventComment(
     userRole: meta.authorDeletedAt ? null : meta.userRole,
     authorDeletedAt: meta.authorDeletedAt,
     body: row.body,
+    stickerId: row.stickerId ?? null,
+    audio: toEntityCommentAudio(row),
+    image: toEntityCommentImage(row),
     status: row.status,
     isEdited: meta.isEdited,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? null,
+  };
+}
+
+type EventImageRow = typeof eventImages.$inferSelect;
+
+function parseEventImageAttribution(
+  raw: string | null,
+): EventImageAttribution | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as EventImageAttribution;
+    if (!v || typeof v.name !== "string") return null;
+    return v;
+  } catch {
+    return null;
+  }
+}
+
+function mapEventImage(row: EventImageRow): EventImage {
+  return {
+    id: row.id,
+    url: row.url,
+    attribution: parseEventImageAttribution(row.attributionJson),
   };
 }
 
@@ -111,6 +146,7 @@ function mapEvent(
     authorId: row.authorId ?? null,
     author: null,
     places: placeRefs,
+    images: [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? null,
   };
@@ -353,7 +389,17 @@ export class EventRepositoryImpl implements EventRepository {
       const q = `%${input.q.trim()}%`;
       conds.push(or(ilikeCompat(events.name, q), ilikeCompat(events.slug, q))!);
     }
-    if (input.notEnded) conds.push(gte(events.endsAt, new Date()));
+    if (input.notEnded) {
+      // ends_at null → pakai starts_at; keduanya null = belum selesai.
+      const now = new Date();
+      conds.push(
+        or(
+          gte(events.endsAt, now),
+          and(isNull(events.endsAt), gte(events.startsAt, now)),
+          and(isNull(events.endsAt), isNull(events.startsAt)),
+        )!,
+      );
+    }
     if (input.placeId) {
       // Subquery EXISTS - satu query, tanpa N+1.
       const sub = this.db
@@ -366,8 +412,14 @@ export class EventRepositoryImpl implements EventRepository {
     const useStartsOrder =
       input.overlapsFrom != null && input.overlapsTo != null;
     if (useStartsOrder) {
+      // Skip acara tanpa starts_at; ends_at null → efektif = starts_at.
       conds.push(lt(events.startsAt, input.overlapsTo!));
-      conds.push(gte(events.endsAt, input.overlapsFrom!));
+      conds.push(
+        or(
+          gte(events.endsAt, input.overlapsFrom!),
+          and(isNull(events.endsAt), gte(events.startsAt, input.overlapsFrom!)),
+        )!,
+      );
     }
     // Tanpa overlap: urut created_at (entri baru di atas). Dengan overlap:
     // urut starts_at ASC (agenda). Keyset harus cocok dengan kolom sort.
@@ -380,7 +432,8 @@ export class EventRepositoryImpl implements EventRepository {
           .from(events)
           .where(eq(events.id, input.before))
           .limit(1);
-        if (!cursor) {
+        // Overlap filter sudah exclude starts_at NULL; cursor tanpa jadwal = stop.
+        if (!cursor || cursor.startsAt == null) {
           return { items: [], nextCursor: null };
         }
         conds.push(
@@ -540,6 +593,9 @@ export class EventRepositoryImpl implements EventRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
+        stickerId: input.stickerId ?? null,
+        ...entityCommentImageInsertValues(input.image),
+        ...entityCommentAudioInsertValues(input.audio),
         createdAt: new Date(),
       })
       .returning();
@@ -706,5 +762,84 @@ export class EventRepositoryImpl implements EventRepository {
       .where(and(eq(events.id, id), eq(events.status, 'published'), isNull(events.deletedAt)))
       .limit(1);
     return Boolean(row);
+  }
+
+  // --- galeri foto acara (pola place_images #187) ---
+
+  async listImages(
+    eventId: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ items: EventImage[]; total: number }> {
+    const visible = and(
+      eq(eventImages.eventId, eventId),
+      isNull(eventImages.hiddenAt),
+    );
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(eventImages)
+      .where(visible);
+    const rows = await this.db
+      .select()
+      .from(eventImages)
+      .where(visible)
+      .orderBy(desc(eventImages.createdAt), desc(eventImages.id))
+      .limit(limit)
+      .offset(offset);
+    return {
+      items: rows.map(mapEventImage),
+      total: totalRow?.total ?? 0,
+    };
+  }
+
+  async appendImages(
+    eventId: string,
+    images: { url: string; attribution: EventImageAttribution | null }[],
+  ): Promise<void> {
+    if (images.length === 0) return;
+    await this.db.insert(eventImages).values(
+      images.map((img) => ({
+        eventId,
+        url: img.url,
+        attributionJson: img.attribution ? JSON.stringify(img.attribution) : null,
+      })),
+    );
+  }
+
+  async countUploadsSince(
+    eventId: string,
+    authorId: string,
+    since: Date,
+  ): Promise<number> {
+    const rows = await this.db
+      .select({ attributionJson: eventImages.attributionJson })
+      .from(eventImages)
+      .where(
+        and(
+          eq(eventImages.eventId, eventId),
+          gte(eventImages.createdAt, since),
+        ),
+      );
+    return rows.filter(
+      (row) => parseEventImageAttribution(row.attributionJson)?.authorId === authorId,
+    ).length;
+  }
+
+  async hideImage(
+    eventId: string,
+    imageId: string,
+  ): Promise<{ url: string } | null> {
+    const rows = await this.db
+      .update(eventImages)
+      .set({ hiddenAt: new Date() })
+      .where(
+        and(
+          eq(eventImages.id, imageId),
+          eq(eventImages.eventId, eventId),
+          isNull(eventImages.hiddenAt),
+        ),
+      )
+      .returning({ url: eventImages.url });
+    return rows[0] ?? null;
   }
 }

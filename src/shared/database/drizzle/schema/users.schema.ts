@@ -14,6 +14,11 @@ export const users = sqliteTable(
     displayName: text('display_name').notNull().default(''),
     // Bio publik opsional (edit profil).
     bio: text('bio'),
+    /**
+     * Self-declare status bahasa (mobile#258).
+     * `native` = penutur asli; `learner` = sedang belajar; null = belum diisi.
+     */
+    speakerStatus: text('speaker_status'),
     /** Id kecamatan (`regions.id`). Null = belum diisi. */
     regionId: text('region_id'),
     /** Id desa (`regions.id`, parent = region_id). Null = belum diisi. */
@@ -58,6 +63,11 @@ export const users = sqliteTable(
      * dengan schema jinye - FK dibuat di migration `0128_jinye_pin.sql`.
      */
     pinnedJinyeId: text('pinned_jinye_id'),
+    /**
+     * Waktu terakhir ganti ke username *baru* (bukan reclaim).
+     * Null = belum pernah ganti; ganti pertama bebas (mobile#257).
+     */
+    usernameChangedAt: integer('username_changed_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
     /** Piggyback presence: di-touch dari request authenticated (throttle 5 mnt). */
@@ -90,6 +100,7 @@ export const users = sqliteTable(
     uniqueIndex('users_phone_unique').on(t.phone).where(sql`phone is not null`),
     index('users_last_seen_at_idx').on(t.lastSeenAt),
     index('users_is_team_idx').on(t.isTeam),
+    index('users_speaker_status_idx').on(t.speakerStatus),
   ],
 );
 

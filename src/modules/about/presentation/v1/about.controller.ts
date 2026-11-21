@@ -5,6 +5,7 @@ import type {
   ListAdminSponsorshipsUseCase,
   ListContributorsUseCase,
   ListPublicSponsorshipsUseCase,
+  ListSplashSponsorshipsUseCase,
   ListTeamUseCase,
   ListVerifiersUseCase,
   SetUserSponsorUseCase,
@@ -22,12 +23,15 @@ function toSponsorshipWire(s: Sponsorship) {
   return {
     id: s.id,
     user_id: s.userId,
+    usaha_id: s.usahaId,
     name: s.name,
     description: s.description,
     logo_url: s.logoUrl,
     url: s.url,
     username: s.username,
+    tier: s.tier,
     since: s.since,
+    ends_on: s.endsOn,
     note: s.note,
     created_at: s.createdAt.toISOString(),
     updated_at: s.updatedAt ? s.updatedAt.toISOString() : null,
@@ -39,6 +43,7 @@ export class AboutController {
     private readonly deps: {
       listTeam: ListTeamUseCase;
       listPublicSponsorships: ListPublicSponsorshipsUseCase;
+      listSplashSponsorships: ListSplashSponsorshipsUseCase;
       listAdminSponsorships: ListAdminSponsorshipsUseCase;
       createSponsorship: CreateSponsorshipUseCase;
       updateSponsorship: UpdateSponsorshipUseCase;
@@ -73,6 +78,14 @@ export class AboutController {
     });
   }
 
+  async listSplashSponsorships(c: Context) {
+    const items = await this.deps.listSplashSponsorships.execute();
+    return c.json({
+      success: true as const,
+      data: { items: items.map(toSponsorshipWire) },
+    });
+  }
+
   async listAdminSponsorships(c: Context, query: ListAdminSponsorshipsQuery) {
     const { items, nextCursor, hasMore } = await this.deps.listAdminSponsorships.execute({
       limit: query.limit,
@@ -96,9 +109,12 @@ export class AboutController {
       logoUrl: body.logo_url ?? null,
       url: body.url ?? null,
       username: body.username ?? null,
+      tier: body.tier,
       since: body.since,
+      endsOn: body.ends_on ?? null,
       note: body.note ?? '',
       userId: body.user_id ?? null,
+      usahaId: body.usaha_id ?? null,
     });
     return c.json({ success: true as const, data: toSponsorshipWire(created) });
   }
@@ -110,8 +126,12 @@ export class AboutController {
       logoUrl: body.logo_url,
       url: body.url,
       username: body.username,
+      tier: body.tier,
       since: body.since,
+      endsOn: body.ends_on,
       note: body.note,
+      userId: body.user_id,
+      usahaId: body.usaha_id,
     });
     return c.json({ success: true as const, data: toSponsorshipWire(updated) });
   }

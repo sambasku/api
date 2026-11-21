@@ -2,7 +2,7 @@ import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 import { users } from './users.schema';
 
-/** Staging/public image row (parity discussions). */
+/** Image row: url staging = public_url (auto-tayang post-moderation). */
 export type JinyeImageRow = {
   url: string;
   provider_file_id: string;
@@ -115,6 +115,8 @@ export const jinyeComments = sqliteTable(
       .references(() => users.id),
     body: text('body').notNull().default(''),
     bodyOriginal: text('body_original'),
+    /** Slug katalog stickers; null = bukan komentar stiker. */
+    stickerId: text('sticker_id'),
     images: text('images', { mode: 'json' })
       .$type<JinyeImageRow[]>()
       .notNull()
@@ -133,5 +135,29 @@ export const jinyeComments = sqliteTable(
     index('jinye_comments_jinye_created_idx').on(t.jinyeId, t.createdAt, t.id),
     index('jinye_comments_parent_created_idx').on(t.parentId, t.createdAt, t.id),
     index('jinye_comments_status_idx').on(t.status, t.id),
+  ],
+);
+
+/** Snapshot body komen tayang sebelum setiap edit (cap 50 di repo). */
+export const jinyeCommentRevisions = sqliteTable(
+  'jinye_comment_revisions',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    commentId: text('comment_id')
+      .notNull()
+      .references(() => jinyeComments.id, { onDelete: 'cascade' }),
+    editorId: text('editor_id')
+      .notNull()
+      .references(() => users.id),
+    /** Body yang ditampilkan sebelum diganti (pasca-blocklist). */
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index('jinye_comment_revisions_comment_idx').on(t.commentId, t.createdAt),
   ],
 );

@@ -40,6 +40,14 @@ export const meanings = sqliteTable(
     // makna kontribusi contributor pada kata existing masuk antrean.
     status: text('status').notNull().default('published'),
     isVerified: integer('is_verified', { mode: 'boolean' }).notNull().default(false),
+    /** Trust per makna: siapa yang mengunci (tim atau Voting Warga). */
+    verifiedBy: text('verified_by').references(() => users.id),
+    verifiedAt: integer('verified_at', { mode: 'timestamp' }),
+    /**
+     * Net vote jelek setelah verified: antrean "dipertanyakan" tanpa cabut
+     * centang (docs/produk/trust-makna-hot-loop.md).
+     */
+    needsReview: integer('needs_review', { mode: 'boolean' }).notNull().default(false),
     isCorrected: integer('is_corrected', { mode: 'boolean' }).notNull().default(false),
     createdBy: text('created_by').references(() => users.id),
     updatedBy: text('updated_by').references(() => users.id),

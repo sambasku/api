@@ -243,6 +243,15 @@ export const articleComments = sqliteTable(
     /** Teks asli sebelum blocklist; null jika tidak disensor. */
     bodyOriginal: text('body_original'),
     imageUrl: text('image_url'),
+    /** Slug katalog stickers; null = bukan komentar stiker. */
+    stickerId: text('sticker_id'),
+    audioUrl: text('audio_url'),
+    audioMimeType: text('audio_mime_type'),
+    audioFileSize: integer('audio_file_size'),
+    audioDurationMs: integer('audio_duration_ms'),
+    audioProvider: text('audio_provider'),
+    audioProviderFileId: text('audio_provider_file_id'),
+    audioSha: text('audio_sha'),
     status: text('status', { enum: ARTICLE_COMMENT_STATUSES })
       .notNull()
       .default('published'),

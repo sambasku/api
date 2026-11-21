@@ -21,6 +21,7 @@ import {
   updateMyProfileSchema,
   usernameAvailabilityQuerySchema,
   usernameAvailabilityResponseSchema,
+  usernameHistoryResponseSchema,
 } from './validators/update-my-profile.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -197,6 +198,20 @@ export function createMeProfileRoutes(deps: {
     },
   });
 
+  const usernameHistoryRoute = createRoute({
+    method: 'get',
+    path: '/username-history',
+    tags: ['Users'],
+    summary: 'Riwayat ganti username (privat pemilik)',
+    responses: {
+      200: {
+        description: 'Daftar perubahan username',
+        content: json(usernameHistoryResponseSchema),
+      },
+      401: { description: 'Token tidak ada', content: json(errorResponseSchema) },
+    },
+  });
+
   const patchRoute = createRoute({
     method: 'patch',
     path: '/',
@@ -207,7 +222,10 @@ export function createMeProfileRoutes(deps: {
       200: { description: 'Profil diperbarui', content: json(myProfileResponseSchema) },
       400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
       401: { description: 'Token tidak ada', content: json(errorResponseSchema) },
-      409: { description: 'Username sudah dipakai', content: json(errorResponseSchema) },
+      409: {
+        description: 'Username sudah dipakai atau cooldown belum selesai',
+        content: json(errorResponseSchema),
+      },
     },
   });
 
@@ -217,6 +235,9 @@ export function createMeProfileRoutes(deps: {
       c,
       c.req.valid('query').username,
     ) as never,
+  );
+  routes.openapi(usernameHistoryRoute, (c) =>
+    deps.controller.getUsernameHistory(c) as never,
   );
   routes.openapi(patchRoute, (c) =>
     deps.controller.updateMyProfile(c, c.req.valid('json')) as never,

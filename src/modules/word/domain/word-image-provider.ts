@@ -31,6 +31,31 @@ export function isStockWordImageProvider(value: string): value is StockWordImage
   return (STOCK_WORD_IMAGE_PROVIDERS as readonly string[]).includes(value);
 }
 
+/** Host proxy thumbnail Media Explorer (`proxyImageCdnUrl`). */
+const WSRV_HOSTS = new Set(['wsrv.nl', 'images.weserv.nl']);
+
+/**
+ * Media Explorer mengembalikan preview lewat wsrv.nl; client kadang submit
+ * URL itu sebagai `images[].url`. Unwrap `?url=` lalu validasi host asal.
+ * Nested tanpa skema (`cdn.pixabay.com/photo/…`) diisi `https://`.
+ */
+function unwrapWsrvOrigin(url: URL): URL | null {
+  const nested = url.searchParams.get('url');
+  if (!nested) return null;
+  const candidate = nested.includes('://') ? nested : `https://${nested}`;
+  try {
+    const origin = new URL(candidate);
+    return origin.protocol === 'https:' ? origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function hostnameAllowed(hostname: string, hosts: readonly string[]): boolean {
+  const host = hostname.toLowerCase();
+  return hosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+}
+
 export function isAllowedStockImageUrl(provider: StockWordImageProvider, url: string): boolean {
   let parsed: URL;
   try {
@@ -44,7 +69,12 @@ export function isAllowedStockImageUrl(provider: StockWordImageProvider, url: st
   if (hosts === 'any-https') return true;
 
   const hostname = parsed.hostname.toLowerCase();
-  return hosts.some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`));
+  if (WSRV_HOSTS.has(hostname)) {
+    const origin = unwrapWsrvOrigin(parsed);
+    return origin != null && hostnameAllowed(origin.hostname, hosts);
+  }
+
+  return hostnameAllowed(hostname, hosts);
 }
 
 /**

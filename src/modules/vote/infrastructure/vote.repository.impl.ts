@@ -25,7 +25,7 @@ import {
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
-import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
+import { feedSafeUsageLabelsSql } from '@/shared/database/drizzle/usage-label-filters';
 import { NotFoundError } from '@/shared/errors/app-error';
 import { seededShuffle } from '@/shared/utils/seeded-shuffle';
 import type {
@@ -835,25 +835,80 @@ case 'article_comment': {
   }
 
   async listByUser(userId: string, opts: VoteHistoryListOptions): Promise<VoteHistoryListResult> {
-    const rows = await this.db
-      .select({
-        id: votes.id,
-        entityType: votes.entityType,
-        entityId: votes.entityId,
-        value: votes.value,
-        createdAt: votes.createdAt,
-      })
-      .from(votes)
-      .where(
-        and(
-          eq(votes.userId, userId),
-          opts.targetType ? eq(votes.entityType, opts.targetType) : undefined,
-          opts.value !== undefined ? eq(votes.value, opts.value) : undefined,
-          opts.cursor ? lt(votes.id, opts.cursor) : undefined,
-        ),
-      )
-      .orderBy(desc(votes.id))
-      .limit(opts.limit + 1);
+    // Filter community_status / q lemma hanya untuk target makna (Periksa Kata).
+    const communityStatus = opts.communityStatus;
+    const q = opts.q?.trim() || undefined;
+
+    let rows: {
+      id: string;
+      entityType: string;
+      entityId: string;
+      value: number;
+      createdAt: Date;
+    }[];
+
+    if (communityStatus || q) {
+      // JOIN meanings + words; status diturunkan di SQL.
+      const statusClause = !communityStatus
+        ? undefined
+        : communityStatus === 'rejected'
+          ? or(eq(meanings.status, 'rejected'), eq(words.status, 'rejected'))
+          : communityStatus === 'verified'
+            ? and(
+                eq(meanings.status, 'published'),
+                eq(meanings.isVerified, true),
+                ne(words.status, 'rejected'),
+              )
+            : and(
+                eq(meanings.status, 'published'),
+                eq(meanings.isVerified, false),
+                eq(words.status, 'published'),
+              );
+
+      rows = await this.db
+        .select({
+          id: votes.id,
+          entityType: votes.entityType,
+          entityId: votes.entityId,
+          value: votes.value,
+          createdAt: votes.createdAt,
+        })
+        .from(votes)
+        .innerJoin(meanings, eq(meanings.id, votes.entityId))
+        .innerJoin(words, eq(words.id, meanings.wordId))
+        .where(
+          and(
+            eq(votes.userId, userId),
+            eq(votes.entityType, 'meaning'),
+            opts.value !== undefined ? eq(votes.value, opts.value) : undefined,
+            opts.cursor ? lt(votes.id, opts.cursor) : undefined,
+            statusClause,
+            q ? ilikeCompat(words.lemma, `%${q}%`) : undefined,
+          ),
+        )
+        .orderBy(desc(votes.id))
+        .limit(opts.limit + 1);
+    } else {
+      rows = await this.db
+        .select({
+          id: votes.id,
+          entityType: votes.entityType,
+          entityId: votes.entityId,
+          value: votes.value,
+          createdAt: votes.createdAt,
+        })
+        .from(votes)
+        .where(
+          and(
+            eq(votes.userId, userId),
+            opts.targetType ? eq(votes.entityType, opts.targetType) : undefined,
+            opts.value !== undefined ? eq(votes.value, opts.value) : undefined,
+            opts.cursor ? lt(votes.id, opts.cursor) : undefined,
+          ),
+        )
+        .orderBy(desc(votes.id))
+        .limit(opts.limit + 1);
+    }
 
     const hasMore = rows.length > opts.limit;
     const page = hasMore ? rows.slice(0, opts.limit) : rows;
@@ -864,8 +919,25 @@ case 'article_comment': {
       })),
     );
 
+    const meaningIds = page
+      .filter((row) => row.entityType === 'meaning')
+      .map((row) => row.entityId);
+    const communityMap = await this.resolveMeaningCommunityStatus(meaningIds);
+
+    const countMap = await this.countMany(
+      page.map((row) => ({
+        entityType: row.entityType as VoteTargetType,
+        entityId: row.entityId,
+      })),
+    );
+
+    const textMap = await this.resolveMeaningCardTexts(meaningIds);
+
     const items: VoteHistoryItem[] = page.map((row) => {
       const target = { entityType: row.entityType as VoteTargetType, entityId: row.entityId };
+      const counts = countMap.get(voteTargetKey(target));
+      const texts =
+        target.entityType === 'meaning' ? textMap.get(target.entityId) : undefined;
       return {
         id: row.id,
         entityType: target.entityType,
@@ -873,6 +945,14 @@ case 'article_comment': {
         value: row.value === 1 ? 1 : -1,
         votedAt: row.createdAt,
         word: wordMap.get(voteTargetKey(target)) ?? null,
+        communityStatus:
+          target.entityType === 'meaning'
+            ? (communityMap.get(target.entityId) ?? null)
+            : null,
+        upvotes: counts?.upvotes ?? 0,
+        downvotes: counts?.downvotes ?? 0,
+        definition: texts?.definition ?? null,
+        translation: texts?.translation ?? null,
       };
     });
 
@@ -882,6 +962,86 @@ case 'article_comment': {
       nextCursor: hasMore && last ? last.id : null,
       hasMore,
     };
+  }
+
+  /**
+   * Definisi + terjemahan ringkas untuk kartu riwayat Periksa Kata.
+   * Satu query batch (meanings LEFT JOIN translations) - hemat subrequest.
+   */
+  private async resolveMeaningCardTexts(
+    meaningIds: string[],
+  ): Promise<Map<string, { definition: string | null; translation: string | null }>> {
+    const out = new Map<string, { definition: string | null; translation: string | null }>();
+    const ids = [...new Set(meaningIds)];
+    if (ids.length === 0) return out;
+
+    const rows = await this.db
+      .select({
+        id: meanings.id,
+        definition: meanings.definition,
+        isHaveDefinition: meanings.isHaveDefinition,
+        translationText: meaningTranslations.translationText,
+      })
+      .from(meanings)
+      .leftJoin(
+        meaningTranslations,
+        and(
+          eq(meaningTranslations.meaningId, meanings.id),
+          isNull(meaningTranslations.deletedAt),
+          ne(meaningTranslations.translationText, '-'),
+        ),
+      )
+      .where(inArray(meanings.id, ids))
+      .orderBy(asc(meanings.id), asc(meaningTranslations.id));
+
+    for (const r of rows) {
+      const definitionText = r.definition.trim();
+      const definition =
+        r.isHaveDefinition && !isPlaceholderMeaningText(definitionText)
+          ? definitionText
+          : null;
+      const translationText = r.translationText?.trim() ?? '';
+      const translation =
+        translationText && !isPlaceholderMeaningText(translationText)
+          ? translationText
+          : null;
+      const current = out.get(r.id);
+      if (!current) {
+        out.set(r.id, { definition, translation });
+      } else if (!current.translation && translation) {
+        current.translation = translation;
+      }
+    }
+    return out;
+  }
+
+  /** Status komunitas baca-waktu untuk makna (pending / verified / rejected). */
+  private async resolveMeaningCommunityStatus(
+    meaningIds: string[],
+  ): Promise<Map<string, 'pending' | 'verified' | 'rejected'>> {
+    const out = new Map<string, 'pending' | 'verified' | 'rejected'>();
+    const ids = [...new Set(meaningIds)];
+    if (ids.length === 0) return out;
+    const rows = await this.db
+      .select({
+        id: meanings.id,
+        meaningStatus: meanings.status,
+        isVerified: meanings.isVerified,
+        wordStatus: words.status,
+      })
+      .from(meanings)
+      .innerJoin(words, eq(words.id, meanings.wordId))
+      .where(inArray(meanings.id, ids));
+    for (const row of rows) {
+      if (row.meaningStatus === 'rejected' || row.wordStatus === 'rejected') {
+        out.set(row.id, 'rejected');
+      } else if (row.isVerified) {
+        out.set(row.id, 'verified');
+      } else {
+        out.set(row.id, 'pending');
+      }
+    }
+    return out;
   }
 
   /**
@@ -1269,15 +1429,36 @@ if (articleCommentIds.length > 0) {
    * dan belum skip. Urut totalVotes ASC, approvedAt ASC, meaningId ASC.
    */
   async listDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult> {
+    return this.listDeckMeaningsInternal(userId, opts, {
+      meaningVerified: true,
+      requireWordVerified: true,
+    });
+  }
+
+  async listCheckDeckMeanings(
+    userId: string,
+    opts: VoteDeckListOptions,
+  ): Promise<VoteDeckListResult> {
+    return this.listDeckMeaningsInternal(userId, opts, {
+      meaningVerified: false,
+      requireWordVerified: false,
+    });
+  }
+
+  /**
+   * Inti query deck / check-deck. Beda hanya filter `is_verified`.
+   * Check-deck: makna belum verified (Periksa Kata); deck: sudah verified.
+   */
+  private async listDeckMeaningsInternal(
+    userId: string,
+    opts: VoteDeckListOptions,
+    trust: { meaningVerified: boolean; requireWordVerified: boolean },
+  ): Promise<VoteDeckListResult> {
     const approvedAtExpr = sql`COALESCE(${words.verifiedAt}, ${words.createdAt})`;
     // 0101: total dari tabel ringkasan makna - bukan COUNT(*) correlated.
     const totalVotesExpr = sql<number>`coalesce(${meaningVoteCounts.total}, 0)`.mapWith(Number);
 
-    const feedSafe = and(
-      ...FEED_EXCLUDED_USAGE_LABELS.map(
-        (label) => sql`${words.usageLabels} NOT LIKE ${`%"${label}"%`}`,
-      ),
-    );
+    const feedSafe = feedSafeUsageLabelsSql();
 
     const userNotVoted = notExists(
       this.db
@@ -1353,7 +1534,8 @@ if (articleCommentIds.length > 0) {
         languageCode: languages.code,
         wordType: words.wordType,
         usageLabels: words.usageLabels,
-        isVerified: words.isVerified,
+        // Trust per makna (bukan rollup lemma) - check-deck butuh false.
+        isVerified: meanings.isVerified,
         status: words.status,
         verifiedAt: words.verifiedAt,
         createdAt: words.createdAt,
@@ -1394,14 +1576,20 @@ if (articleCommentIds.length > 0) {
         and(
           isNull(meanings.deletedAt),
           eq(meanings.status, 'published'),
-          eq(meanings.isVerified, true),
+          eq(meanings.isVerified, trust.meaningVerified),
           isNull(words.deletedAt),
           eq(words.status, 'published'),
-          eq(words.isVerified, true),
+          trust.requireWordVerified ? eq(words.isVerified, true) : undefined,
           feedSafe,
           userNotVoted,
           userNotSkipped,
           cursorClause,
+          opts.q
+            ? or(
+                ilikeCompat(words.lemma, `%${opts.q}%`),
+                ilikeCompat(meanings.definition, `%${opts.q}%`),
+              )
+            : undefined,
         ),
       )
       .orderBy(asc(totalVotesExpr), asc(approvedAtExpr), asc(meanings.id))
@@ -1423,6 +1611,8 @@ if (articleCommentIds.length > 0) {
         : null,
       pronunciationValue: r.pronunciationValue?.trim() || null,
       hasAudio: r.hasAudio === 1,
+      definition: null,
+      translation: null,
       sense: null,
       lemma: r.lemma,
       languageId: r.languageId,
@@ -1440,48 +1630,46 @@ if (articleCommentIds.length > 0) {
     }));
 
     // Sense kartu: definisi makna ITU dari row utama (tanpa query tambahan).
-    const needTranslation: string[] = [];
     const byId = new Map(page.map((p) => [p.id, p]));
     for (const r of pageRows) {
       const item = byId.get(r.id);
       if (!item) continue;
       const definition = r.definition.trim();
-      if (r.isHaveDefinition && definition.length > 0 && definition !== '-') {
-        item.sense = definition;
-      } else {
-        needTranslation.push(r.id);
-      }
+      item.definition =
+        r.isHaveDefinition && !isPlaceholderMeaningText(definition) ? definition : null;
     }
 
-    // Fallback terjemahan pertama (semantik listLatest) - hanya makna tanpa
-    // definisi. Query tambahan bersyarat; deck dengan definisi lengkap
-    // tidak membayarnya.
-    if (needTranslation.length > 0) {
-      const translationRows = await this.db
-        .select({
-          meaningId: meaningTranslations.meaningId,
-          translationText: meaningTranslations.translationText,
-        })
-        .from(meaningTranslations)
-        .where(
-          and(
-            inArray(meaningTranslations.meaningId, needTranslation),
-            isNull(meaningTranslations.deletedAt),
-            ne(meaningTranslations.translationText, '-'),
+    // Terjemahan makna (untuk baris terpisah di kartu). Satu query batch
+    // untuk seluruh halaman - tetap dalam budget 3 subrequest.
+    const translationRows = await this.db
+      .select({
+        meaningId: meaningTranslations.meaningId,
+        translationText: meaningTranslations.translationText,
+      })
+      .from(meaningTranslations)
+      .where(
+        and(
+          inArray(
+            meaningTranslations.meaningId,
+            page.map((p) => p.id),
           ),
-        )
-        .orderBy(asc(meaningTranslations.id));
+          isNull(meaningTranslations.deletedAt),
+          ne(meaningTranslations.translationText, '-'),
+        ),
+      )
+      .orderBy(asc(meaningTranslations.id));
 
-      const textByMeaning = new Map<string, string>();
-      for (const row of translationRows) {
-        const text = row.translationText.trim();
-        if (!text || textByMeaning.has(row.meaningId)) continue;
-        textByMeaning.set(row.meaningId, text);
-      }
-      for (const id of needTranslation) {
-        const item = byId.get(id)!;
-        item.sense = textByMeaning.get(id) ?? null;
-      }
+    const textByMeaning = new Map<string, string>();
+    for (const row of translationRows) {
+      const text = row.translationText.trim();
+      if (!text || textByMeaning.has(row.meaningId)) continue;
+      textByMeaning.set(row.meaningId, text);
+    }
+    for (const item of page) {
+      const translation = textByMeaning.get(item.id) ?? null;
+      item.translation = translation;
+      // Kompat klien lama: sense = definisi, fallback terjemahan.
+      item.sense = item.definition ?? translation;
     }
 
     await this.attachDeckCounts(page);

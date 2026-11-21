@@ -1,9 +1,14 @@
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
+  DiscussionLemmaLinkSource,
+  DiscussionLemmaLinkStatus,
+} from '@/shared/database/drizzle/schema/discussion-lemma-links.schema';
+import type {
   NewDiscussion,
   NewDiscussionReply,
   Discussion,
   DiscussionImage,
+  DiscussionLemmaLink,
   DiscussionListFilter,
   DiscussionReply,
   DiscussionReplyAudio,
@@ -77,4 +82,39 @@ export interface DiscussionRepository {
   }): Promise<Discussion | null>;
 
   listDiscussionRevisions(discussionId: string): Promise<DiscussionRevision[]>;
+
+  /** OP only (reply_id IS NULL): active/pending_correction → stale. */
+  markLemmaLinksStale(discussionId: string): Promise<number>;
+  markReplyLemmaLinksStale(replyId: string): Promise<number>;
+
+  createLemmaLink(input: {
+    discussionId: string;
+    replyId?: string | null;
+    start: number;
+    end: number;
+    wordId: string;
+    source: DiscussionLemmaLinkSource;
+    status?: DiscussionLemmaLinkStatus;
+  }): Promise<DiscussionLemmaLink>;
+  findLemmaLinkById(id: string): Promise<DiscussionLemmaLink | null>;
+  listLemmaLinksByDiscussionId(
+    discussionId: string,
+  ): Promise<DiscussionLemmaLink[]>;
+  listActiveLemmaLinksForTarget(input: {
+    discussionId?: string | null;
+    replyId?: string | null;
+  }): Promise<DiscussionLemmaLink[]>;
+  updateLemmaLink(
+    id: string,
+    patch: {
+      wordId?: string;
+      status?: DiscussionLemmaLinkStatus;
+      source?: DiscussionLemmaLinkSource;
+      proposedWordId?: string | null;
+      proposedBy?: string | null;
+      reviewedBy?: string | null;
+      reviewedAt?: Date | null;
+    },
+  ): Promise<DiscussionLemmaLink | null>;
+  deleteLemmaLink(id: string): Promise<boolean>;
 }

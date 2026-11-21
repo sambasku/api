@@ -18,6 +18,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     userRole: 'contributor',
     body: 'teks sekarang',
     bodyOriginal: null,
+    stickerId: null,
     audio: null,
     image: null,
     status: 'published',

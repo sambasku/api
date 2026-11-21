@@ -4,6 +4,13 @@ export type LayananCategory = (typeof LAYANAN_CATEGORIES)[number];
 export const LAYANAN_PHONES_MIN = 1;
 export const LAYANAN_PHONES_MAX = 5;
 
+/** Pengusul live (pola sama EventAuthorRef). */
+export interface LayananAuthorRef {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
 /** Satu saluran telepon (bisa dengan keterangan shift / konteks). */
 export interface LayananPhone {
   phone: string;
@@ -26,15 +33,17 @@ export interface LayananFields {
 }
 
 export interface Layanan extends LayananFields {
-  id: string;
-  slug: string;
-  regionName: string | null;
-  regionSlug: string | null;
-  villageName: string | null;
-  publishStatus: 'published' | 'unpublished';
-  authorId: string | null;
-  createdAt: Date;
-  updatedAt: Date | null;
+id: string;
+slug: string;
+regionName: string | null;
+regionSlug: string | null;
+villageName: string | null;
+publishStatus: 'published' | 'unpublished';
+authorId: string | null;
+/** Pengusul live; diisi di path detail (resolvePublicAuthor). */
+author: LayananAuthorRef | null;
+createdAt: Date;
+updatedAt: Date | null;
 }
 
 export interface LayananContribution {

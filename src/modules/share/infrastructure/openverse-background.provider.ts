@@ -143,12 +143,11 @@ export function mapOpenversePhoto(raw: unknown): ShareBackgroundItem | null {
     (typeof hit.thumbnail === 'string' && hit.thumbnail) || url;
   const width = typeof hit.width === 'number' ? hit.width : 0;
   const height = typeof hit.height === 'number' ? hit.height : 0;
-  const proxyPreview = proxyImageCdnUrl(preview);
-  const proxyUrl = proxyImageCdnUrl(url);
+  // url kanonik = sumber asli; preview_url = wsrv untuk thumbnail grid.
   return {
     id: `openverse-photo-${id}`,
-    url: proxyUrl,
-    preview_url: proxyPreview,
+    url,
+    preview_url: proxyImageCdnUrl(preview),
     photographer,
     username: photographer,
     attribution_url: pageUrl,

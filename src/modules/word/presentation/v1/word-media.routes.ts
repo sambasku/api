@@ -18,6 +18,7 @@ import {
   addPronunciationSchema,
   addWordImageResponseSchema,
   addWordImageSchema,
+  updateExampleSchema,
   wordAudioResponseSchema,
 } from './validators/word-media.validator';
 
@@ -274,8 +275,91 @@ export function createMeaningExampleRoutes(deps: WordMediaRoutesDeps) {
     },
   });
 
-  routes.openapi(addExampleRoute, (c) =>
-    deps.controller.addExample(c, c.req.param('meaningId'), c.req.valid('json')) as never,
+routes.openapi(addExampleRoute, (c) =>
+deps.controller.addExample(c, c.req.param('meaningId'), c.req.valid('json')) as never,
+);
+
+return routes;
+}
+
+// PATCH /api/v1/examples/:exampleId - #244 edit in-place contoh pending milik sendiri
+export function createExampleSelfRoutes(deps: WordMediaRoutesDeps) {
+const routes = createOpenApiApp();
+routes.use('*', ...mediaMiddleware(deps, 'admin', 'editor', 'contributor', 'root', 'reviewer'));
+const getWordPendingExamplesRoute = createRoute({
+method: 'get',
+path: '/by-word/:wordId',
+tags: ['Words'],
+summary: 'Daftar contoh pending milik sendiri untuk kata (#244)',
+request: {
+params: z.object({ wordId: z.string().length(26) }),
+},
+responses: {
+200: {
+description: 'Daftar contoh pending milik user',
+content: json(
+z.object({
+success: z.literal(true),
+data: z.array(
+z.object({
+id: z.string(),
+meaning_id: z.string(),
+source_language_id: z.string(),
+source_sentence: z.string(),
+target_language_id: z.string().nullable(),
+target_sentence: z.string().nullable(),
+source_type: z.string().nullable(),
+notes: z.string().nullable(),
+status: z.string(),
+is_verified: z.boolean(),
+is_corrected: z.boolean(),
+}),
+),
+}),
+),
+},
+401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+},
+});
+routes.openapi(getWordPendingExamplesRoute, (c) =>
+deps.controller.getMyPendingExamplesForWord(c, c.req.param('wordId')) as never,
+);
+const getExampleRoute = createRoute({
+    method: 'get',
+    path: '/:exampleId',
+    tags: ['Words'],
+    summary: 'Ambil contoh kalimat milik sendiri (prefill edit pending #244)',
+    request: {
+      params: z.object({ exampleId: z.string().length(26) }),
+    },
+    responses: {
+      200: { description: 'Detail contoh milik pemohon', content: json(addExampleResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      404: { description: 'Contoh tidak ditemukan / bukan milik pemohon', content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(getExampleRoute, (c) =>
+    deps.controller.getMyExample(c, c.req.param('exampleId')) as never,
+  );
+  const updateExampleRoute = createRoute({
+    method: 'patch',
+    path: '/:exampleId',
+    tags: ['Words'],
+    summary: 'Edit contoh kalimat pending milik sendiri (sebelum moderasi)',
+    request: {
+      params: z.object({ exampleId: z.string().length(26) }),
+      body: { content: json(updateExampleSchema) },
+    },
+    responses: {
+      200: { description: 'Contoh diperbarui (tetap pending)', content: json(addExampleResponseSchema) },
+      400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      404: { description: 'Contoh tidak ditemukan / bukan milik pemohon', content: json(errorResponseSchema) },
+      409: { description: 'Contoh sudah direview', content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(updateExampleRoute, (c) =>
+    deps.controller.updateExample(c, c.req.param('exampleId'), c.req.valid('json')) as never,
   );
 
   return routes;

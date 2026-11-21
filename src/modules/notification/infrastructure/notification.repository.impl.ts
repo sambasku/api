@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, lt } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { notifications } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type {
@@ -14,11 +14,15 @@ import type {
   NotificationRepository,
 } from '../domain/repositories/notification.repository';
 
-const conflictTarget = [
-  notifications.userId,
-  notifications.type,
-  notifications.targetKind,
-  notifications.targetId,
+// Kolom tanpa kualifikasi tabel. Drizzle default (`notifications.userId`)
+// menghasilkan `on conflict ("notifications"."user_id", ...)` yang di
+// sebagian backend LibSQL/Turso gagal match UNIQUE index
+// (`ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint`).
+const conflictTargetUnqualified = [
+  sql.raw('user_id'),
+  sql.raw('type'),
+  sql.raw('target_kind'),
+  sql.raw('target_id'),
 ] as const;
 
 function toEntity(row: typeof notifications.$inferSelect): InboxNotification {
@@ -58,10 +62,10 @@ export class NotificationRepositoryImpl implements NotificationRepository {
   constructor(private readonly db: AppDatabase) {}
 
   async create(input: CreateInboxNotificationInput): Promise<void> {
-    await this.db
-      .insert(notifications)
-      .values(rowValues(input))
-      .onConflictDoNothing({ target: [...conflictTarget] });
+    // Tanpa target: ON CONFLICT DO NOTHING menangkap UNIQUE manapun
+    // (termasuk index user+type+target). Aman idempotent, tidak bergantung
+    // pada match kolom berkualifikasi tabel.
+    await this.db.insert(notifications).values(rowValues(input)).onConflictDoNothing();
   }
 
   async createMany(inputs: CreateInboxNotificationInput[]): Promise<number> {
@@ -69,7 +73,7 @@ export class NotificationRepositoryImpl implements NotificationRepository {
     const inserted = await this.db
       .insert(notifications)
       .values(inputs.map(rowValues))
-      .onConflictDoNothing({ target: [...conflictTarget] })
+      .onConflictDoNothing()
       .returning({ id: notifications.id });
     return inserted.length;
   }
@@ -83,7 +87,7 @@ export class NotificationRepositoryImpl implements NotificationRepository {
         createdAt: new Date(),
       })
       .onConflictDoUpdate({
-        target: [...conflictTarget],
+        target: [...conflictTargetUnqualified],
         set: {
           title: input.title,
           body: input.body,

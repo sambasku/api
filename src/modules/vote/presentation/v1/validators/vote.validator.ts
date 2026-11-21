@@ -84,11 +84,17 @@ export const voteCountsResponseSchema = z.object({
   ),
 });
 
+export const voteCommunityStatusEnum = z.enum(['pending', 'verified', 'rejected']);
+
 export const voteHistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: opaqueId.optional(),
   target_type: voteTargetTypeEnum.optional(),
   value: z.enum(['1', '-1']).optional(),
+  /** Filter hasil komunitas (hanya meaning) - Periksa Kata. */
+  community_status: voteCommunityStatusEnum.optional(),
+  /** Cari lemma kata induk (case-insensitive). */
+  q: z.string().trim().min(1).max(100).optional(),
 });
 
 export type VoteHistoryQuery = z.infer<typeof voteHistoryQuerySchema>;
@@ -110,6 +116,11 @@ export const voteHistoryResponseSchema = z.object({
       value: z.union([z.literal(1), z.literal(-1)]),
       voted_at: z.string(),
       word: voteHistoryWordSchema.nullable(),
+      community_status: voteCommunityStatusEnum.nullable(),
+      upvotes: z.number().int().nonnegative(),
+      downvotes: z.number().int().nonnegative(),
+      definition: z.string().nullable(),
+      translation: z.string().nullable(),
     }),
   ),
   meta: z.object({
@@ -139,6 +150,8 @@ export const voteDeckQuerySchema = z.object({
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .optional()
     .transform((v) => v === undefined || v === true || v === 'true' || v === '1'),
+  /** Cari lemma / definisi (case-insensitive) - Periksa Kata. */
+  q: z.string().trim().min(1).max(100).optional(),
 });
 
 export type VoteDeckQuery = z.infer<typeof voteDeckQuerySchema>;
@@ -187,8 +200,12 @@ export const voteDeckResponseSchema = z.object({
       word_type: z.string(),
       status: z.string(),
       is_verified: z.boolean(),
-      approved_at: z.string(),
-      sense: z.string().nullable(),
+        approved_at: z.string(),
+        // Definisi dan terjemahan dikirim terpisah; `sense` = definition ??
+        // translation untuk klien lama (mobile <= v0.5.x).
+        definition: z.string().nullable(),
+        translation: z.string().nullable(),
+        sense: z.string().nullable(),
       order_index: z.number().int(),
       meaning_count: z.number().int(),
       // Kelas kata milik MAKNA ini (bukan kata induk); null = belum diisi.

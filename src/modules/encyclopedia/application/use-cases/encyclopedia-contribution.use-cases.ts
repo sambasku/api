@@ -3,6 +3,7 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  ValidationError,
 } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
@@ -11,6 +12,7 @@ import { assertCanContribute } from '@/modules/word/application/utils/assert-can
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type {
   ArticleComment,
   ArticleContribution,
@@ -20,6 +22,7 @@ import type {
   NewArticleContributionInput,
 } from '../../domain/repositories/encyclopedia.repository';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
+import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import { validateArticlePayload } from './article.use-cases';
 
 // ---------------------------------------------------------------- komentar
@@ -29,6 +32,7 @@ export interface CreateCommentInput {
   userId: string;
   body: string;
   imageUrl?: string | null;
+  stickerId?: string | null;
   requestId?: string | null;
 }
 
@@ -54,6 +58,7 @@ export class CreateArticleCommentUseCase {
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly stickerRepo?: StickerRepository,
   ) {}
 
   async execute(input: CreateCommentInput): Promise<ArticleComment> {
@@ -65,33 +70,73 @@ export class CreateArticleCommentUseCase {
         'Artikel tidak ditemukan atau sudah tidak tayang',
       );
     }
-    const body = input.body.trim();
-    if (body.length === 0 || body.length > 1000) {
-      throw new BadRequestError('VALIDATION_ERROR', 'Komentar 1-1000 karakter', [
-        { field: 'body', message: 'Komentar antara 1 sampai 1000 karakter' },
+
+    const rawBody = input.body?.trim() ?? '';
+    const imageUrl = input.imageUrl?.trim() || null;
+    const rawSticker = input.stickerId?.trim() ?? '';
+    if (rawSticker && imageUrl) {
+      throw new ValidationError([
+        { field: 'sticker_id', message: 'Stiker tidak bisa digabung dengan foto' },
       ]);
     }
-    await assertUgcTextQualityWithStrike(body, {
-      userId: input.userId,
-      abuse: this.abuse,
-      entityType: 'article_comment',
-      requestId: input.requestId,
-    });
-    const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filtered = applyBlocklistFilter(body, blocked);
+    let stickerId: string | null = null;
+    if (rawSticker) {
+      if (!this.stickerRepo) {
+        throw new ValidationError([
+          { field: 'sticker_id', message: 'Stiker tidak tersedia' },
+        ]);
+      }
+      const catalog = await this.stickerRepo.findActiveById(rawSticker);
+      if (!catalog) {
+        throw new ValidationError([
+          {
+            field: 'sticker_id',
+            message: 'Stiker tidak tersedia. Pilih ulang dari daftar.',
+          },
+        ]);
+      }
+      stickerId = catalog.id;
+    }
+    if (rawBody.length === 0 && !imageUrl && !stickerId) {
+      throw new ValidationError([
+        { field: 'body', message: 'Komentar, foto, atau stiker wajib diisi' },
+      ]);
+    }
+    if (rawBody.length > 1000) {
+      throw new BadRequestError('VALIDATION_ERROR', 'Komentar 1-1000 karakter', [
+        { field: 'body', message: 'Komentar maksimal 1000 karakter' },
+      ]);
+    }
+
+    let filtered = '';
+    let bodyOriginal: string | null = null;
+    if (rawBody.length > 0) {
+      const body = await assertUgcTextQualityWithStrike(rawBody, {
+        userId: input.userId,
+        abuse: this.abuse,
+        entityType: 'article_comment',
+        requestId: input.requestId,
+        minMeaningfulChars: 1,
+      });
+      const blocked = await this.blocklistRepo.listAllActiveWords();
+      filtered = applyBlocklistFilter(body, blocked);
+      bodyOriginal = filtered !== body ? body : null;
+    }
+
     const created = await this.repo.createComment({
       articleId: input.articleId,
       userId: input.userId,
       body: filtered,
-      bodyOriginal: filtered !== body ? body : null,
-      imageUrl: input.imageUrl ?? null,
+      bodyOriginal,
+      imageUrl,
+      stickerId,
     });
     await this.auditRepo.record({
       userId: input.userId,
       action: 'create',
       entityType: 'article_comment',
       entityId: created.id,
-      newData: { article_id: article.id },
+      newData: { article_id: article.id, sticker_id: stickerId },
       requestId: input.requestId ?? null,
     });
     await this.activityEvents?.safe({
@@ -214,6 +259,7 @@ export interface SubmitContributionInput {
     cover_url?: string | null;
     source_url?: string | null;
     references_md?: string | null;
+    related?: import('../../domain/entities/encyclopedia.entity').ArticleRelatedRef[];
   };
   requestId?: string | null;
 }
@@ -226,8 +272,27 @@ export class SubmitArticleContributionUseCase {
     // di-keep untuk simetri DI dengan use case komentar.
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {
     void this.blocklistRepo;
+  }
+
+  private async notifyGroup(
+    userId: string,
+    kind: 'new' | 'edit',
+    title: string,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis: kind === 'edit' ? 'Ensiklopedia (perbaikan)' : 'Ensiklopedia',
+        name: title.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
   }
 
   async execute(input: SubmitContributionInput): Promise<ArticleContribution> {
@@ -306,19 +371,47 @@ export class SubmitArticleContributionUseCase {
       newData: { kind: input.kind, article_id: resolvedArticleId },
       requestId: input.requestId ?? null,
     });
+    await this.notifyGroup(input.userId, input.kind, input.payload.title);
     return created;
   }
 }
 
-export class ResubmitArticleContributionUseCase {
+/**
+ * Update usulan milik pengusul selama belum diverifikasi
+ * (`pending` atau `needs_revision`) - payload diganti in-place.
+ * Alias historis: ResubmitArticleContributionUseCase (PATCH yang sama).
+ */
+export class UpdateArticleContributionUseCase {
   constructor(
     private readonly repo: ArticleRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
-  ) {}
+    private readonly groupNotifier?: ExplorationGroupNotifier,
+  ) {
+    void this.blocklistRepo;
+    void this.abuse;
+  }
 
-  /** Kirim ulang usulan yang statusnya needs_revision: payload diganti. */  async execute(input: {
+  private async notifyGroup(
+    userId: string,
+    kind: 'new' | 'edit',
+    title: string,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis: kind === 'edit' ? 'Ensiklopedia (perbaikan)' : 'Ensiklopedia',
+        name: title.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
+  }
+
+  async execute(input: {
     contributionId: string;
     userId: string;
     payload: SubmitContributionInput['payload'];
@@ -329,50 +422,48 @@ export class ResubmitArticleContributionUseCase {
     if (!existing || existing.userId !== input.userId) {
       throw new NotFoundError('CONTRIBUTION_NOT_FOUND', 'Usulan tidak ditemukan');
     }
-    if (existing.status !== 'needs_revision') {
+    if (existing.status !== 'pending' && existing.status !== 'needs_revision') {
       throw new ConflictError(
-        'CONTRIBUTION_NOT_RESUBMITTABLE',
-        'Hanya usulan dengan catatan revisi yang bisa dikirim ulang',
+        'CONTRIBUTION_NOT_EDITABLE',
+        'Usulan yang sudah diverifikasi tidak bisa diubah',
       );
     }
     validateArticlePayload(input.payload);
-    // Reuse submit path: payload baru jadi usulan pending (riwayat lama
-    // tetap tercatat di baris lama; statusnya sudah bukan aktif).
-    void this.blocklistRepo;
-    return this.submitNew(input, existing);
-  }
 
-  private async submitNew(
-    input: {
-      contributionId: string;
-      userId: string;
-      payload: SubmitContributionInput['payload'];
-      requestId?: string | null;
-    },
-    previous: ArticleContribution,
-  ): Promise<ArticleContribution> {
-    // Tandai baris lama selesai (rejected tanpa alasan = resubmit path).
-    await this.repo.setContributionStatus({
-      id: previous.id,
-      status: 'rejected',
-      rejectReasonCode: 'resubmitted',
-      rejectReasonText: 'Dikirim ulang sebagai usulan baru',
-    });
-    const submitter = new SubmitArticleContributionUseCase(
-      this.repo,
-      this.auditRepo,
-      this.blocklistRepo,
-      this.abuse,
-    );
-    return submitter.execute({
-      userId: input.userId,
-      kind: previous.kind,
-      articleId: previous.articleId,
+    const wasNeedsRevision = existing.status === 'needs_revision';
+    const updated = await this.repo.updateContributionPayload({
+      id: existing.id,
       payload: input.payload,
-      requestId: input.requestId,
+      resetToPending: wasNeedsRevision,
     });
+    if (!updated) {
+      throw new NotFoundError('CONTRIBUTION_NOT_FOUND', 'Usulan tidak ditemukan');
+    }
+
+    await this.auditRepo.record({
+      userId: input.userId,
+      action: 'update',
+      entityType: 'article_contribution',
+      entityId: updated.id,
+      oldData: { status: existing.status },
+      newData: { status: updated.status },
+      requestId: input.requestId ?? null,
+    });
+    // WA hanya saat kirim ulang dari revisi - edit pending biasa tidak spam grup.
+    if (wasNeedsRevision) {
+      await this.notifyGroup(
+        input.userId,
+        existing.kind,
+        input.payload.title,
+        true,
+      );
+    }
+    return updated;
   }
 }
+
+/** @deprecated Pakai UpdateArticleContributionUseCase - nama lama untuk DI. */
+export const ResubmitArticleContributionUseCase = UpdateArticleContributionUseCase;
 
 export class ListMyArticleContributionsUseCase {
   constructor(private readonly repo: ArticleRepository) {}
@@ -385,12 +476,34 @@ export class ListMyArticleContributionsUseCase {
   }
 }
 
+type ReplaceArticleRelated = {
+  execute(input: {
+    anchor: { kind: 'article'; id: string };
+    related: import('../../domain/entities/encyclopedia.entity').ArticleRelatedRef[];
+    createdBy: string | null;
+  }): Promise<unknown>;
+};
+
 export class ReviewArticleContributionUseCase {
   constructor(
     private readonly repo: ArticleRepository,
     private readonly auditRepo: AuditLogRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly replaceRelated?: ReplaceArticleRelated,
   ) {}
+
+  private async syncRelated(
+    articleId: string,
+    related: SubmitContributionInput['payload']['related'],
+    createdBy: string,
+  ): Promise<void> {
+    if (!this.replaceRelated) return;
+    await this.replaceRelated.execute({
+      anchor: { kind: 'article', id: articleId },
+      related: related ?? [],
+      createdBy,
+    });
+  }
 
   async execute(input: {
     contributionId: string;
@@ -474,6 +587,11 @@ export class ReviewArticleContributionUseCase {
       status: 'approved',
       resultArticleId: article.id,
     });
+    await this.syncRelated(
+      article.id,
+      contribution.payload.related,
+      contribution.userId,
+    );
     await this.auditRepo.record({
       userId: input.reviewerId,
       action: 'review:approve',
@@ -535,6 +653,11 @@ export class ReviewArticleContributionUseCase {
       status: 'approved',
       resultArticleId: article.id,
     });
+    await this.syncRelated(
+      article.id,
+      contribution.payload.related,
+      contribution.userId,
+    );
     await this.auditRepo.record({
       userId: input.reviewerId,
       action: 'review:approve',

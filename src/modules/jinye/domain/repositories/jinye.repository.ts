@@ -3,12 +3,16 @@ import type {
   Jinye,
   JinyeAudio,
   JinyeComment,
+  JinyeCommentRevision,
   JinyeLemmaLink,
   JinyeListFilter,
   JinyeRevision,
   NewJinye,
   NewJinyeComment,
 } from '../entities/jinye.entity';
+
+/** Cap snapshot revisi komen Jinye (sama lemma/event/artikel). */
+export const JINYE_COMMENT_REVISION_CAP = 50;
 import type {
   JinyeLemmaLinkSource,
   JinyeLemmaLinkStatus,
@@ -37,7 +41,10 @@ export interface JinyeRepository {
     bodyOriginal: string | null;
   }): Promise<Jinye | null>;
   listRevisions(jinyeId: string): Promise<JinyeRevision[]>;
+  /** Hanya tautan OP (comment_id IS NULL). */
   markLemmaLinksStale(jinyeId: string): Promise<number>;
+  /** Tautan lemma pada satu komentar (untuk edit komentar di masa depan). */
+  markCommentLemmaLinksStale(commentId: string): Promise<number>;
   findPlainRepostByUser(
     originalId: string,
     userId: string,
@@ -60,6 +67,13 @@ export interface JinyeRepository {
   findCommentById(id: string): Promise<JinyeComment | null>;
   /** Semua published comments untuk satu Jinye (top-level + replies). */
   listCommentsByJinyeId(jinyeId: string): Promise<JinyeComment[]>;
+  updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<JinyeComment | null>;
+  listCommentRevisions(commentId: string): Promise<JinyeCommentRevision[]>;
   markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   /** Admin: published → taken_down. */
   takedownComment(id: string, actorId: string): Promise<boolean>;

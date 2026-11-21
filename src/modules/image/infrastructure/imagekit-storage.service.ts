@@ -1,7 +1,12 @@
 import { env } from '@/shared/config/env';
 import { ServiceUnavailableError } from '@/shared/errors/app-error';
 import { logger } from '@/shared/logging/logger';
-import type { ImageStoragePort, UploadCredentials } from '../application/ports/image-storage.port';
+import type {
+  AuthenticatedFileBytes,
+  ImageStoragePort,
+  UploadCredentials,
+} from '../application/ports/image-storage.port';
+import { buildImageKitSignedUrl } from './imagekit-signed-url';
 
 const UPLOAD_ENDPOINT = 'https://upload.imagekit.io/api/v1/files/upload';
 const TOKEN_TTL_SECONDS = 30 * 60;
@@ -84,5 +89,40 @@ export class ImageKitStorageService implements ImageStoragePort {
     } catch (err) {
       logger.warn({ err, provider_file_id: providerFileId }, 'ImageKit delete error');
     }
+  }
+
+  async fetchAuthenticatedFile(url: string): Promise<AuthenticatedFileBytes> {
+    const { privateKey } = this.assertConfigured();
+    const urlEndpoint = env.IMAGEKIT_URL_ENDPOINT?.trim();
+    if (!urlEndpoint) {
+      throw new ServiceUnavailableError(
+        'IMAGE_UPLOAD_UNAVAILABLE',
+        'Penyimpanan gambar belum dikonfigurasi - isi IMAGEKIT_URL_ENDPOINT di .env',
+      );
+    }
+    let signed: string;
+    try {
+      signed = await buildImageKitSignedUrl({
+        url,
+        urlEndpoint,
+        privateKey,
+        expiresInSeconds: 60,
+      });
+    } catch {
+      throw new ServiceUnavailableError(
+        'IMAGE_PROXY_UNAVAILABLE',
+        'URL bukti tidak valid untuk penyedia gambar yang dikonfigurasi',
+      );
+    }
+    const res = await fetch(signed);
+    if (!res.ok) {
+      logger.warn({ status: res.status, url }, 'ImageKit fetch authenticated gagal');
+      throw new ServiceUnavailableError(
+        'IMAGE_PROXY_UNAVAILABLE',
+        'Gagal mengambil bukti dari penyimpanan gambar',
+      );
+    }
+    const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
+    return { bytes: new Uint8Array(await res.arrayBuffer()), contentType };
   }
 }

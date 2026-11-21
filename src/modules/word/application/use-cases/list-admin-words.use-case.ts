@@ -14,6 +14,8 @@ export interface ListAdminWordsQuery {
   published?: boolean;
   /** true = bergambar, false = tanpa gambar, omit = semua. */
   hasImage?: boolean;
+  /** true = punya makna needs_review, false = tidak, omit = semua. */
+  needsReview?: boolean;
 }
 
 export interface ListAdminWordsResult extends CursorPage<WordSummary> {
@@ -33,6 +35,7 @@ export class ListAdminWordsUseCase {
       isVerified: query.isVerified,
       published: query.published,
       hasImage: query.hasImage,
+      needsReview: query.needsReview,
       // Panel list: selalu arah lemma (bukan reverse lookup publik)
       searchIn: 'lemma',
     });

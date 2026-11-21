@@ -1,5 +1,15 @@
 export type UserRole = 'root' | 'admin' | 'reviewer' | 'editor' | 'contributor';
 
+/** Self-declare status bahasa Sambas (mobile#258). */
+export type SpeakerStatus = 'native' | 'learner';
+
+export const SPEAKER_STATUSES: readonly SpeakerStatus[] = ['native', 'learner'];
+
+export function parseSpeakerStatus(raw: string | null | undefined): SpeakerStatus | null {
+  if (raw === 'native' || raw === 'learner') return raw;
+  return null;
+}
+
 /** Urutan kepentingan role (root tertinggi) - untuk derived field `role` deprecated di wire. */
 export const ROLE_RANK: Record<UserRole, number> = {
   root: 5,
@@ -30,6 +40,8 @@ export interface User {
   displayName: string;
   /** Bio publik opsional. */
   bio: string | null;
+  /** Self-declare: penutur asli / pembelajar. Null = belum diisi. */
+  speakerStatus: SpeakerStatus | null;
   /** Id kecamatan. Null = belum diisi. */
   regionId: string | null;
   /** Id desa. Null = belum diisi. Induknya harus `regionId`. */
@@ -70,6 +82,8 @@ export interface User {
   isTeam: boolean;
   teamAs: string | null;
   teamNote: string | null;
+  /** Waktu terakhir ganti ke username baru (bukan reclaim). Null = belum pernah. */
+  usernameChangedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null; // soft delete - tidak boleh bisa login lagi

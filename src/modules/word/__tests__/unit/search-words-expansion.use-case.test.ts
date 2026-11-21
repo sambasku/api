@@ -1,9 +1,16 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 // Logger transitif import env Zod (butuh DATABASE_URL dll) - unit test
 // tidak butuh logger asli, cukup mock supaya env tidak divalidasi.
 vi.mock('@/shared/logging/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+// G3: resolvePreferVisible baca app_settings - mock agar unit test tanpa DB.
+const resolvePreferVisibleMock = vi.fn().mockResolvedValue(false);
+vi.mock('@/modules/search-miss/application/resolve-auto-visible', () => ({
+  resolveSearchMissPreferVisible: (...args: unknown[]) =>
+    resolvePreferVisibleMock(...args),
 }));
 
 import { SearchWordsUseCase } from '../../application/use-cases/search-words.use-case';
@@ -47,7 +54,7 @@ function makeDeps(opts: {
   } as unknown as WordRepository;
   const searchMissRepo = {
     recordSearchDay: vi.fn().mockResolvedValue(undefined),
-    record: vi.fn().mockResolvedValue(undefined),
+    record: vi.fn().mockResolvedValue({ id: '01MISS', becameVisible: false }),
   } as unknown as SearchMissRepository;
   return {
     wordRepo,
@@ -57,6 +64,11 @@ function makeDeps(opts: {
 }
 
 const QUERY = { q: 'barakat', limit: 10 };
+
+beforeEach(() => {
+  resolvePreferVisibleMock.mockReset();
+  resolvePreferVisibleMock.mockResolvedValue(false);
+});
 
 describe('SearchWordsUseCase - perluasan kelompok makna (PRD relasi-lemma)', () => {
   it('halaman pertama: hasil grup ditempel setelah hasil langsung, match_type=related_group, tanpa duplikat', async () => {
@@ -110,17 +122,18 @@ describe('SearchWordsUseCase - perluasan kelompok makna (PRD relasi-lemma)', () 
 });
 
 describe('SearchWordsUseCase - gate publik vs verifikator', () => {
-  it('tamu / non-verifikator → published+isVerified true (abaikan query klien)', async () => {
+  it('tamu / non-verifikator → published saja (is_verified badge, abaikan query klien)', async () => {
     const { useCase, wordRepo } = makeDeps({ items: [] });
     await useCase.execute({ ...QUERY, isVerified: false });
     expect(wordRepo.search).toHaveBeenCalledWith(
-      expect.objectContaining({ published: true, isVerified: true }),
+      expect.objectContaining({ published: true }),
     );
     const args = vi.mocked(wordRepo.search).mock.calls[0]![0] as unknown as Record<
       string,
       unknown
     >;
     expect(args).not.toHaveProperty('statuses');
+    expect(args).not.toHaveProperty('isVerified');
   });
 
   it('verifikator → statuses pending_review+published, tanpa isVerified', async () => {
@@ -164,5 +177,42 @@ describe('SearchWordsUseCase - counter pencarian harian', () => {
     await useCase.execute({ q: 'xyzzy', limit: 10 });
     expect(searchMissRepo.recordSearchDay).toHaveBeenCalledOnce();
     expect(searchMissRepo.record).toHaveBeenCalledOnce();
+  });
+
+  it('q 2 huruf kosong + commit → miss dicatat (lemma pendek valid)', async () => {
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    await useCase.execute({ q: 'sa', limit: 10 });
+    expect(searchMissRepo.recordSearchDay).toHaveBeenCalledOnce();
+    expect(searchMissRepo.record).toHaveBeenCalledOnce();
+  });
+
+  it('q angka/simbol polos → tidak record miss', async () => {
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    await useCase.execute({ q: '42', limit: 10 });
+    expect(searchMissRepo.record).not.toHaveBeenCalled();
+    await useCase.execute({ q: '!!!', limit: 10 });
+    expect(searchMissRepo.record).not.toHaveBeenCalled();
+  });
+
+  it('recordMiss=false (explore) → tidak record miss / counter', async () => {
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    const result = await useCase.execute({
+      q: 'xyzzy',
+      limit: 10,
+      recordMiss: false,
+    });
+    expect(searchMissRepo.recordSearchDay).not.toHaveBeenCalled();
+    expect(searchMissRepo.record).not.toHaveBeenCalled();
+    expect(result.meta.search_miss_id).toBeUndefined();
+  });
+
+  it('resolvePreferVisible throw → record tetap jalan (preferVisible=false)', async () => {
+    resolvePreferVisibleMock.mockRejectedValueOnce(new Error('settings down'));
+    const { useCase, searchMissRepo } = makeDeps({ items: [] });
+    const result = await useCase.execute({ q: 'xyzzy', limit: 10 });
+    expect(searchMissRepo.record).toHaveBeenCalledWith(
+      expect.objectContaining({ term: 'xyzzy', preferVisible: false }),
+    );
+    expect(result.meta.search_miss_id).toBe('01MISS');
   });
 });

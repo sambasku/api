@@ -149,17 +149,18 @@ function mapPhoto(raw: unknown): ShareBackgroundItem | null {
   const width = typeof photo.width === 'number' ? photo.width : 0;
   const height = typeof photo.height === 'number' ? photo.height : 0;
 
-  const proxyUrl = proxyImageCdnUrl(url);
+  // url kanonik = CDN Unsplash (lemma submit + guidelines hotlink).
+  // preview_url = wsrv untuk thumbnail grid Media Explorer.
   return {
     id,
-    url: proxyUrl,
+    url,
     photographer,
     username,
     attribution_url: attributionUrl,
     unsplash_url: attributionUrl,
     provider: 'unsplash',
     kind: 'photo',
-    preview_url: proxyUrl,
+    preview_url: proxyImageCdnUrl(url),
     width,
     height,
     duration_seconds: 0,

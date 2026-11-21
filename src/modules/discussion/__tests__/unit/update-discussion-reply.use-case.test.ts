@@ -33,6 +33,7 @@ function makeReply(overrides: Partial<DiscussionReply> = {}): DiscussionReply {
     userRole: null,
     body: 'teks lama',
     bodyOriginal: null,
+    stickerId: null,
     audio: null,
     status: 'published',
     reviewedBy: null,
@@ -50,6 +51,8 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     updateReplyBodyWithRevision: vi.fn().mockImplementation(async () =>
       makeReply({ body: 'teks baru', isEdited: true, updatedAt: new Date() }),
     ),
+    markLemmaLinksStale: vi.fn().mockResolvedValue(0),
+    markReplyLemmaLinksStale: vi.fn().mockResolvedValue(0),
     ...overrides,
   } as unknown as DiscussionRepository;
 }

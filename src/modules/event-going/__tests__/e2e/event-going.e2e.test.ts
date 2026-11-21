@@ -128,7 +128,8 @@ describe.skipIf(!hasTestDb)('Event Going E2E', () => {
           name: 'Pawai Going E2E',
           description: 'Acara untuk uji berencana datang.',
           category_id: 'budaya-tradisi',
-          starts_at: new Date(Date.now() + 86_400_000).toISOString(),
+          // Ongoing - presensi valid saat acara berlangsung.
+          starts_at: new Date(Date.now() - 3_600_000).toISOString(),
           ends_at: new Date(Date.now() + 90_000_000).toISOString(),
           location_text: 'Lapangan Going',
           village_id: VILLAGE_ID,
@@ -209,29 +210,29 @@ describe.skipIf(!hasTestDb)('Event Going E2E', () => {
     expect(hidden?.hiddenAt).toBeTruthy();
   });
 
-  it('tolak mark pada acara completed', async () => {
-    const past = await (
+  it('tolak mark pada acara sebelum hari-H (upcoming)', async () => {
+    const future = await (
       await post(
         '/api/v1/admin/events',
         {
-          slug: `pawai-past-${Date.now()}`,
-          name: 'Pawai Past',
-          description: 'Sudah selesai.',
+          slug: `pawai-future-${Date.now()}`,
+          name: 'Pawai Future',
+          description: 'Belum mulai.',
           category_id: 'budaya-tradisi',
-          starts_at: new Date(Date.now() - 90_000_000).toISOString(),
-          ends_at: new Date(Date.now() - 86_400_000).toISOString(),
-          location_text: 'Lapangan Past',
+          starts_at: new Date(Date.now() + 86_400_000).toISOString(),
+          ends_at: new Date(Date.now() + 90_000_000).toISOString(),
+          location_text: 'Lapangan Future',
           status: 'published',
         },
         adminToken,
       )
     ).json();
     const res = await post(
-      `/api/v1/events/${past.data.id}/going`,
+      `/api/v1/events/${future.data.id}/going`,
       undefined,
       userToken,
     );
     expect(res.status).toBe(400);
-    expect((await res.json()).error_code).toBe('EVENT_COMPLETED');
+    expect((await res.json()).error_code).toBe('EVENT_NOT_STARTED');
   });
 });

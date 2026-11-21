@@ -2,10 +2,24 @@ import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
+import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
+import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
+import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
+import type { CreateUsahaCommentAudioUseCase } from '../../application/use-cases/usaha-comment-audio.use-case';
 import type {
+  UsahaComment,
   UsahaDetail,
   UsahaListItem,
 } from '../../domain/entities/usaha.entity';
+import type {
+  CreateUsahaCommentUseCase,
+  DeleteUsahaCommentUseCase,
+  ListUsahaCommentsUseCase,
+  TakedownUsahaCommentUseCase,
+  UpdateUsahaCommentUseCase,
+} from '../../application/use-cases/usaha-comment.use-cases';
 import type {
   AppendUsahaImagesUseCase,
   CreateUsahaUseCase,
@@ -20,6 +34,7 @@ import type {
   RestrictUsahaUseCase,
   UpdateUsahaUseCase,
 } from '../../application/use-cases/usaha.use-cases';
+import type { UsahaVisitRepository } from '@/modules/usaha-visit/domain/repositories/usaha-visit.repository';
 import type {
   createUsahaBodySchema,
   listUsahasQuerySchema,
@@ -29,7 +44,51 @@ import type {
 type CreateBody = z.infer<typeof createUsahaBodySchema>;
 type UpdateBody = z.infer<typeof updateUsahaBodySchema>;
 
-function serialize(u: UsahaListItem | UsahaDetail) {
+function requireUser(c: Context<{ Variables: AppVariables }>) {
+  const user = c.get('user');
+  if (!user) throw new UnauthorizedError();
+  return user;
+}
+
+function toCommentWire(c: UsahaComment) {
+  const deleted = c.authorDeletedAt !== null;
+  return {
+    id: c.id,
+    usaha_id: c.usahaId,
+    user: {
+      user_id: c.userId,
+      username: deleted ? null : c.username,
+      display_name: deleted ? null : c.displayName,
+      avatar_url: deleted ? null : c.avatarUrl,
+      is_verifier: !deleted && isVerifierRole(c.userRole ?? ''),
+    },
+    ...entityCommentMediaWireFields({
+      status: c.status,
+      body: c.body,
+      stickerId: c.stickerId,
+      audio: c.audio,
+      image: c.image,
+    }),
+    status: c.status,
+    is_edited: c.isEdited,
+    created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt?.toISOString() ?? null,
+  };
+}
+
+export interface UsahaCommentControllerDeps {
+  listComments: ListUsahaCommentsUseCase;
+  createComment: CreateUsahaCommentUseCase;
+  createCommentAudio: CreateUsahaCommentAudioUseCase;
+  updateComment: UpdateUsahaCommentUseCase;
+  deleteComment: DeleteUsahaCommentUseCase;
+  takedownComment: TakedownUsahaCommentUseCase;
+}
+
+function serialize(
+  u: UsahaListItem | UsahaDetail,
+  extra?: { visitCount?: number; viewerVisited?: boolean },
+) {
   const items = 'items' in u ? u.items : undefined;
   return {
     id: u.id,
@@ -54,6 +113,7 @@ function serialize(u: UsahaListItem | UsahaDetail) {
     website: u.website,
     social_url: u.socialUrl,
     cover_url: u.coverUrl,
+    sponsor_tier: u.sponsorTier,
     publish_status: u.publishStatus,
     operational_status: u.operationalStatus,
     restricted_reason: u.restrictedReason,
@@ -75,6 +135,8 @@ function serialize(u: UsahaListItem | UsahaDetail) {
         }
       : null,
     published_at: u.publishedAt ? u.publishedAt.toISOString() : null,
+    visit_count: extra?.visitCount ?? 0,
+    viewer_visited: extra?.viewerVisited ?? false,
     created_at: u.createdAt.toISOString(),
     updated_at: u.updatedAt ? u.updatedAt.toISOString() : null,
     items: items?.map((it) => ({
@@ -105,6 +167,21 @@ function serialize(u: UsahaListItem | UsahaDetail) {
   };
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: 'usaha',
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
 export class UsahaController {
   constructor(
     private readonly createUc: CreateUsahaUseCase,
@@ -119,7 +196,29 @@ export class UsahaController {
     private readonly listImagesUc: ListUsahaImagesUseCase,
     private readonly appendImagesUc: AppendUsahaImagesUseCase,
     private readonly hideImageUc: HideUsahaImageUseCase,
+    private readonly listRelated?: ListRelatedFn,
+    private readonly visitRepo?: UsahaVisitRepository,
+    private readonly commentDeps?: UsahaCommentControllerDeps,
   ) {}
+
+  private get comments(): UsahaCommentControllerDeps {
+    if (!this.commentDeps) throw new Error('comment deps not wired');
+    return this.commentDeps;
+  }
+
+  private async visitExtras(
+    usahaIds: string[],
+    userId: string | undefined,
+  ): Promise<{ counts: Map<string, number>; viewer: Set<string> }> {
+    if (!this.visitRepo || usahaIds.length === 0) {
+      return { counts: new Map(), viewer: new Set() };
+    }
+    const counts = await this.visitRepo.countByUsahaIds(usahaIds);
+    const viewer = userId
+      ? await this.visitRepo.viewerVisitedByUsahaIds(userId, usahaIds)
+      : new Set<string>();
+    return { counts, viewer };
+  }
 
   listCategories(c: Context<{ Variables: AppVariables }>, publicOnly: boolean) {
     return this.listCategoriesUc.execute(publicOnly).then((items) =>
@@ -127,37 +226,61 @@ export class UsahaController {
     );
   }
 
-  listPublic(
+  async listPublic(
     c: Context<{ Variables: AppVariables }>,
     query: z.infer<typeof listUsahasQuerySchema>,
   ) {
-    return this.listUc
-      .execute({
-        limit: query.limit,
-        before: query.before,
-        categoryId: query.category_id,
-        regionId: query.region_id,
-        villageId: query.village_id,
-        kind: query.kind,
-        operationalStatus: query.operational_status,
-        q: query.q,
-        publicOnly: true,
-      })
-      .then((res) =>
-        c.json({
-          success: true as const,
-          data: {
-            items: res.items.map(serialize),
-            next_cursor: res.nextCursor,
-          },
-        }),
-      );
+    const res = await this.listUc.execute({
+      limit: query.limit,
+      before: query.before,
+      categoryId: query.category_id,
+      regionId: query.region_id,
+      villageId: query.village_id,
+      kind: query.kind,
+      operationalStatus: query.operational_status,
+      q: query.q,
+      publicOnly: true,
+    });
+    const visits = await this.visitExtras(
+      res.items.map((u) => u.id),
+      c.get('user')?.user_id,
+    );
+    return c.json({
+      success: true as const,
+      data: {
+        items: res.items.map((u) =>
+          serialize(u, {
+            visitCount: visits.counts.get(u.id) ?? 0,
+            viewerVisited: visits.viewer.has(u.id),
+          }),
+        ),
+        next_cursor: res.nextCursor,
+      },
+    });
   }
 
-  getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
-    return this.getBySlugUc
-      .execute(slug, true)
-      .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
+  async getBySlug(c: Context<{ Variables: AppVariables }>, slug: string) {
+    const usaha = await this.getBySlugUc.execute(slug, true);
+    const visits = await this.visitExtras([usaha.id], c.get('user')?.user_id);
+    const related = this.listRelated
+      ? await this.listRelated.execute('usaha', usaha.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...serialize(usaha, {
+          visitCount: visits.counts.get(usaha.id) ?? 0,
+          viewerVisited: visits.viewer.has(usaha.id),
+        }),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   listAdmin(
@@ -180,7 +303,7 @@ export class UsahaController {
         c.json({
           success: true as const,
           data: {
-            items: res.items.map(serialize),
+            items: res.items.map((u) => serialize(u)),
             next_cursor: res.nextCursor,
           },
         }),
@@ -312,5 +435,94 @@ export class UsahaController {
     return this.hideImageUc
       .execute(usahaId, imageId)
       .then(() => c.json({ success: true as const, data: null }));
+  }
+
+  async listComments(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const q = c.req.valid('query' as never) as { cursor?: string; limit: number };
+    const page = await this.comments.listComments.execute(id, q.cursor, q.limit);
+    return c.json({
+      success: true as const,
+      data: {
+        items: page.items.map(toCommentWire),
+        next_cursor: page.nextCursor,
+        has_more: page.hasMore,
+      },
+    });
+  }
+
+  async createComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as EntityCommentBody;
+    const comment = await this.comments.createComment.execute({
+      usahaId: id,
+      userId: user.user_id,
+      body: body.body ?? '',
+      stickerId: body.sticker_id ?? null,
+      image: body.image
+        ? { url: body.image.url, providerFileId: body.image.provider_file_id }
+        : null,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async createCommentAudio(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const comment = await this.comments.createCommentAudio.execute({
+      usahaId: id,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: typeof body['body'] === 'string' ? body['body'] : null,
+      durationMs: body['duration_ms'],
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async updateComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as { body: string };
+    const updated = await this.comments.updateComment.execute({
+      commentId: id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(updated) });
+  }
+
+  async deleteComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    await this.comments.deleteComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
+  }
+
+  async takedownComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    await this.comments.takedownComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
   }
 }

@@ -13,6 +13,10 @@
 #        npx wrangler secret put PRONUNCIACION_GITHUB_TOKEN
 #        npx wrangler secret put PUBLIC_IMAGE_GITHUB_TOKEN
 #        npx wrangler secret put SUPABASE_ANON_KEY
+#        npx wrangler secret put SUPABASE_SECRET_KEY  # chat write (Postgres)
+#        npx wrangler secret put LIVEKIT_API_SECRET   # voice experimental
+#        npx wrangler secret put TURN_SECRET   # voice experimental
+#        LIVEKIT_API_KEY / LIVEKIT_URL / LIVEKIT_ROOM_NAME → [vars] (bukan secret)
 #        …
 #   3. npx wrangler deploy
 #
@@ -56,6 +60,8 @@ PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/sambasku/audios"
 # Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
 SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
+# Leaderboard CDN (opsional sampai repo + secret siap).
+LEADERBOARD_GITHUB_URL = "https://github.com/sambasku/leaderboard"
 # Gate JWT azp pada write (true = ketat: token tanpa azp -> CLIENT_REQUIRED).
 # Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
 # -> client paksa re-login. Cutover lewat redeploy.
@@ -66,8 +72,12 @@ SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 # Statistik Play Console (export CSV GCS). Isi PLAY_STATS_GCS_BUCKET via
 # `npx wrangler secret put PLAY_STATS_GCS_BUCKET` ATAU langsung di sini.
 PLAY_STATS_GCS_PREFIX = ""
-SUPABASE_URL="https://qqlksojwaqrydxhqpyqd.supabase.co"
-MOBILE_GA4_PROPERTY_ID="555160494"
+SUPABASE_URL = "https://qqlksojwaqrydxhqpyqd.supabase.co"
+# LiveKit voice (experimental). API_KEY di vars; API_SECRET via wrangler secret.
+LIVEKIT_URL = "wss://voice.sambasku.com"
+LIVEKIT_ROOM_NAME = "sambasku-global"
+LIVEKIT_API_KEY = "APItJr9b3pcfr6k"
+MOBILE_GA4_PROPERTY_ID = "555160494"
 # OpenWA: kirim WA. API key lewat secret, bukan di sini.
 OPENWA_BASE_URL="https://wa.iamutaki.com"
 OPENWA_SESSION_ID="38d3dfa7-08c9-47f1-9490-f6ffe0124620"
@@ -135,6 +145,8 @@ PRONUNCIACION_PROVIDER = "github"
 PRONUNCIACION_GITHUB_URL = "https://github.com/coem/staging-audios"
 # Target backup repo (token = PUBLIC_IMAGE / PRONUNCIACION yang sudah ada).
 SQLITE_BACKUP_GITHUB_URL = "https://github.com/sambasku/sqlite"
+# Leaderboard CDN staging (pisah dari prod sambasku/leaderboard).
+LEADERBOARD_GITHUB_URL = "https://github.com/coem/staging-leaderboard"
 # Gate JWT azp pada write (true = ketat: token tanpa azp -> CLIENT_REQUIRED).
 # Issue #31: grace dimatikan. Sesi legacy di-refresh -> 401 SESSION_STALE
 # -> client paksa re-login. Cutover lewat redeploy.
@@ -143,12 +155,15 @@ GOOGLE_ANALYTICS_SA_EMAIL="sambasku-analytics-reader@router-501815.iam.gservicea
 GA4_PROPERTY_ID="556164988"
 SEARCH_CONSOLE_SITE_URL="sc-domain:sambasku.com"
 PLAY_STATS_GCS_PREFIX = ""
-SUPABASE_URL="https://wkhlcrxlncflcztptrmg.supabase.co"
-MOBILE_GA4_PROPERTY_ID="555160494"
-OPENWA_BASE_URL="https://wa.iamutaki.com"
-OPENWA_SESSION_ID="38d3dfa7-08c9-47f1-9490-f6ffe0124620"
-OPENWA_GROUP_JID="120363429405087787@g.us"
-GITHUB_CLIENT_ID="Ov23liEGNkEDuPNAhiTj"
+SUPABASE_URL = "https://wkhlcrxlncflcztptrmg.supabase.co"
+LIVEKIT_URL = "wss://voice.sambasku.com"
+LIVEKIT_ROOM_NAME = "sambasku-global"
+LIVEKIT_API_KEY = "APItJr9b3pcfr6k"
+MOBILE_GA4_PROPERTY_ID = "555160494"
+OPENWA_BASE_URL = "https://wa.iamutaki.com"
+OPENWA_SESSION_ID = "38d3dfa7-08c9-47f1-9490-f6ffe0124620"
+OPENWA_GROUP_JID = "120363429405087787@g.us"
+GITHUB_CLIENT_ID = "Ov23liEGNkEDuPNAhiTj"
 
 # [env.staging.limits] DIHAPUS - lihat catatan [limits] di atas (Free plan).
 [env.staging.observability]
@@ -170,8 +185,11 @@ crons = ["* * * * *"]
 #   npx wrangler secret put PIXABAY_API_KEY --env staging
 #   npx wrangler secret put UNSPLASH_ACCESS_KEY --env staging
 #   npx wrangler secret put SUPABASE_ANON_KEY --env staging
+#   npx wrangler secret put SUPABASE_SECRET_KEY --env staging
+#   npx wrangler secret put LIVEKIT_API_SECRET --env staging
 #   npx wrangler secret put GITHUB_CLIENT_SECRET --env staging
 #   npx wrangler secret put OPENWA_API_KEY --env staging
-#   npx wrangler secret put OPENWA_API_KEY
 #   npx wrangler secret put PLAY_STATS_GCS_BUCKET --env staging
-#   … (Resend, ImageKit, OAuth, FCM - sama seperti sebelumnya)
+#   npx wrangler secret put TURN_SECRET --env staging
+# Prod (tanpa --env): LIVEKIT_API_SECRET + SUPABASE_SECRET_KEY (+ Resend, ImageKit, OAuth, FCM)
+#   …

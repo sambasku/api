@@ -10,6 +10,10 @@ import {
   verifierApprovedEmailHtml,
   verifierApprovedEmailText,
 } from '@/modules/auth/infrastructure/verifier-approved-email';
+import {
+  balehoPaymentEmailHtml,
+  balehoPaymentEmailText,
+} from '@/modules/auth/infrastructure/baleho-payment-email';
 import { otpEmailHtml, otpEmailText } from '@/modules/auth/infrastructure/otp-email';
 import {
   OTP_EMAIL_LOGO_BASE64,
@@ -94,6 +98,27 @@ export class QuotaAwareMailer implements MailerPort {
     await this.send(
       { to, subject: 'Selamat menjadi Verifikator - SambasKu', text: verifierApprovedEmailText(displayName), html: verifierApprovedEmailHtml(displayName), inlineLogo: EMAIL_LOGO },
       'verifier_approved',
+    );
+  }
+
+  async sendBalehoPaymentEmail(
+    to: string,
+    input: {
+      displayName: string;
+      placementId: string;
+      sizeLabel: string;
+      positionLabel: string;
+    },
+  ): Promise<void> {
+    await this.send(
+      {
+        to,
+        subject: 'Pesanan Baleho siap dibayar - SambasKu',
+        text: balehoPaymentEmailText(input),
+        html: balehoPaymentEmailHtml(input),
+        inlineLogo: EMAIL_LOGO,
+      },
+      'baleho_payment',
     );
   }
 

@@ -1,8 +1,13 @@
 import { randomInt } from 'node:crypto';
 import { isReservedHandle } from './reserved-handles';
 
-/** Handle mention: a-z, 0-9, titik, underscore. Tanpa hyphen. Min 6 (profesional). */
-export const USERNAME_HANDLE_REGEX = /^[a-z0-9._]{6,30}$/;
+/**
+ * Handle mention: a-z, 0-9, titik, underscore. Tanpa hyphen. Min 6.
+ * Wajib mulai/akhir alfanumerik; tidak boleh separator beruntun (`..` `__` `._` `_.`).
+ * Angka saja (`123456`) boleh.
+ */
+export const USERNAME_HANDLE_REGEX =
+  /^(?=.{6,30}$)(?!.*[._]{2})[a-z0-9][a-z0-9._]*[a-z0-9]$/;
 
 const MAX_LEN = 30;
 const MIN_LEN = 6;
@@ -11,7 +16,8 @@ export type UsernameConflictProvider = 'google' | 'github' | 'facebook' | 'email
 
 /**
  * Normalisasi charset saja (tanpa pad / fallback `user`).
- * Dipakai untuk memutus preferensi nama vs email sebelum padding.
+ * Tidak collapse separator beruntun - biar path validasi user menolak
+ * `a..b` / `a._b` / `_____` sebagai invalid, bukan diam-diam diperbaiki.
  */
 export function normalizeUsernameSlug(raw: string | null | undefined): string {
   return (raw ?? '')
@@ -19,7 +25,15 @@ export function normalizeUsernameSlug(raw: string | null | undefined): string {
     .toLowerCase()
     .replace(/-/g, '_')
     .replace(/[^a-z0-9._]+/g, '_')
-    .replace(/_{2,}/g, '_')
+    .replace(/[._]+$/g, '')
+    .replace(/^[._]+/g, '')
+    .slice(0, MAX_LEN);
+}
+
+/** Collapse separator beruntun untuk generator OAuth / slugify (bukan path edit user). */
+function collapseUsernameSeparators(slug: string): string {
+  return slug
+    .replace(/[._]{2,}/g, '_')
     .replace(/[._]+$/g, '')
     .replace(/^[._]+/g, '')
     .slice(0, MAX_LEN);
@@ -27,11 +41,11 @@ export function normalizeUsernameSlug(raw: string | null | undefined): string {
 
 /**
  * Normalisasi ke handle username (lowercase, charset aman untuk @mention).
- * Spasi / karakter asing / hyphen → underscore.
+ * Spasi / karakter asing / hyphen → underscore; separator beruntun di-collapse.
  * Kosong / terlalu pendek → fallback `user` (+ padding bila perlu).
  */
 export function slugifyUsername(raw: string | null | undefined): string {
-  const base = normalizeUsernameSlug(raw);
+  const base = collapseUsernameSeparators(normalizeUsernameSlug(raw));
 
   if (base.length >= MIN_LEN && USERNAME_HANDLE_REGEX.test(base)) return base;
   if (base.length > 0 && base.length < MIN_LEN) {
@@ -54,8 +68,8 @@ export function randomUsernameToken(length = 5): string {
 
 function fitCandidate(base: string, suffix: string): string {
   const room = Math.max(MIN_LEN, MAX_LEN - suffix.length);
-  const head = base.slice(0, room).replace(/[._]+$/g, '');
-  const merged = `${head}${suffix}`;
+  const head = collapseUsernameSeparators(base.slice(0, room));
+  const merged = collapseUsernameSeparators(`${head}${suffix}`);
   if (USERNAME_HANDLE_REGEX.test(merged)) return merged;
   return merged.replace(/-/g, '_').slice(0, MAX_LEN);
 }

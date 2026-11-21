@@ -17,6 +17,7 @@ import { composeEventRejectDisplay } from "../domain/event-reject-reason";
 import type {
   EventContribution,
   EventContributionPayload,
+  EventContributionStatus,
 } from "../domain/entities/event-contribution.entity";
 import type { EventContributionRepositoryImpl } from "../infrastructure/event-contribution.repository.impl";
 
@@ -119,7 +120,15 @@ export class EventContributionUseCases {
   }
 
   async listPending(): Promise<EventContribution[]> {
-    return this.contrib.listByStatus("pending");
+    return this.listAdmin({});
+  }
+
+  async listAdmin(input: {
+    status?: EventContributionStatus;
+    decided?: boolean;
+    q?: string;
+  }): Promise<EventContribution[]> {
+    return this.contrib.listAdmin(input);
   }
 
   /** Kirim ulang usulan yang diminta revisi (payload baru). */
@@ -162,7 +171,7 @@ export class EventContributionUseCases {
       description: p.description,
       categoryId: p.categoryId,
       startsAt: new Date(p.startsAt),
-      endsAt: new Date(p.endsAt),
+      endsAt: p.endsAt ? new Date(p.endsAt) : null,
       locationText: p.locationText,
       lat: p.lat,
       lng: p.lng,
@@ -330,14 +339,20 @@ export class EventContributionUseCases {
       );
     }
     const startsAt = new Date(payload.startsAt);
-    const endsAt = new Date(payload.endsAt);
-    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+    if (Number.isNaN(startsAt.getTime())) {
       throw new BadRequestError(
         "INVALID_SCHEDULE",
         "Jadwal acara tidak valid",
       );
     }
-    if (endsAt.getTime() < startsAt.getTime()) {
+    const endsAt = payload.endsAt ? new Date(payload.endsAt) : null;
+    if (endsAt && Number.isNaN(endsAt.getTime())) {
+      throw new BadRequestError(
+        "INVALID_SCHEDULE",
+        "Jadwal acara tidak valid",
+      );
+    }
+    if (endsAt && endsAt.getTime() < startsAt.getTime()) {
       throw new BadRequestError(
         "INVALID_SCHEDULE",
         "Waktu selesai tidak boleh sebelum waktu mulai",

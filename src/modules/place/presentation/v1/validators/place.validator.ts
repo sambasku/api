@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { entityCommentWireSchema } from '@/shared/comment/entity-comment-response.schema';
+import { opaqueId } from "@/shared/validation/id";
 import {
   SAMBAS_LAT_MAX,
   SAMBAS_LAT_MIN,
@@ -185,6 +187,8 @@ export const placeItemResponseSchema = z.object({
     ),
     image_count: z.number(),
     images: z.array(placeImageResponseSchema),
+    visit_count: z.number().int().nonnegative(),
+    viewer_visited: z.boolean(),
     status: placeStatusSchema,
     created_at: z.number(),
     updated_at: z.number().nullable(),
@@ -198,3 +202,23 @@ export const placeListResponseSchema = z.object({
     next_cursor: z.string().nullable(),
   }),
 });
+
+// ---------------------------------------------------------------- komentar
+
+export const placeCommentsQuerySchema = z.object({
+  cursor: opaqueId.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export { entityCommentBodySchema as createPlaceCommentBodySchema } from '@/shared/comment/entity-comment-body.schema';
+
+export const updatePlaceCommentBodySchema = z.object({
+  body: z
+    .string({ error: "Komentar wajib diisi" })
+    .trim()
+    .min(1, "Komentar wajib diisi")
+    .max(1000, "Komentar maksimal 1000 karakter"),
+});
+
+export const placeCommentResponseSchema = entityCommentWireSchema
+  .extend({ id: opaqueId, place_id: z.string() });

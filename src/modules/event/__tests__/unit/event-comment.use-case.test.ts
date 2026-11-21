@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BadRequestError, ForbiddenError, NotFoundError } from '@/shared/errors/app-error';
+import {
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/app-error';
 import {
   CreateEventCommentUseCase,
   DeleteEventCommentUseCase,
@@ -128,20 +132,20 @@ describe('CreateEventCommentUseCase', () => {
     ).rejects.toThrow(NotFoundError);
   });
 
-  it('lempar BadRequestError bila body kosong', async () => {
+  it('lempar ValidationError bila body kosong', async () => {
     const repo = makeRepo();
     const uc = new CreateEventCommentUseCase(repo, makeAudit(), makeBlocklist());
     await expect(
       uc.execute({ eventId: EVENT_ID, userId: USER_ID, body: '   ' }),
-    ).rejects.toThrow(BadRequestError);
+    ).rejects.toThrow(ValidationError);
   });
 
-  it('lempar BadRequestError bila body > 1000 karakter', async () => {
+  it('lempar ValidationError bila body > 1000 karakter', async () => {
     const repo = makeRepo();
     const uc = new CreateEventCommentUseCase(repo, makeAudit(), makeBlocklist());
     await expect(
       uc.execute({ eventId: EVENT_ID, userId: USER_ID, body: 'a'.repeat(1001) }),
-    ).rejects.toThrow(BadRequestError);
+    ).rejects.toThrow(ValidationError);
   });
 
   it('terapkan blocklist dan simpan body_original', async () => {

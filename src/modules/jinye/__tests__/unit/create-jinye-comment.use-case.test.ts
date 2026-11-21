@@ -56,6 +56,7 @@ function makeComment(overrides: Partial<JinyeComment> = {}): JinyeComment {
     userRole: 'contributor',
     body: 'komen',
     bodyOriginal: null,
+    stickerId: null,
     images: [],
     status: 'published',
     createdAt: new Date(),
@@ -74,6 +75,7 @@ function emptyRepo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     updateBody: vi.fn(),
     listRevisions: vi.fn(),
     markLemmaLinksStale: vi.fn(),
+    markCommentLemmaLinksStale: vi.fn(),
     findPlainRepostByUser: vi.fn(),
     adjustRepostCount: vi.fn(),
     markDeletedByAuthor: vi.fn(),
@@ -82,6 +84,8 @@ function emptyRepo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     createComment: vi.fn(async () => makeComment()),
     findCommentById: vi.fn(),
     listCommentsByJinyeId: vi.fn(),
+    updateCommentWithRevision: vi.fn(),
+    listCommentRevisions: vi.fn(),
     markCommentDeletedByAuthor: vi.fn(),
     takedownComment: vi.fn(),
     incrementPublishedCommentCount: vi.fn(),
@@ -204,4 +208,99 @@ describe('CreateJinyeCommentUseCase', () => {
       expect.objectContaining({ userId: OWNER }),
     );
   });
+
+  it('sticker_id aktif lolos; unknown ditolak; tidak boleh bareng images', async () => {
+    const repo = emptyRepo({
+      createComment: vi.fn(async () => makeComment({ body: '', stickerId: 'cheer' })),
+    });
+    const stickerRepo = {
+      findActiveById: vi.fn(async (id: string) =>
+        id === 'cheer'
+          ? { id: 'cheer', imageUrl: 'https://cdn.example/cheer.png', playOnce: false }
+          : null,
+      ),
+    };
+    const uc = new CreateJinyeCommentUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      stickerRepo as never,
+    );
+
+    await expect(
+      uc.execute({
+        jinyeId: JINYE_ID,
+        userId: ACTOR,
+        body: '',
+        stickerId: 'ghost',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    await expect(
+      uc.execute({
+        jinyeId: JINYE_ID,
+        userId: ACTOR,
+        body: '',
+        stickerId: 'cheer',
+        images: [
+          {
+            url: 'https://ik.example/a.jpg',
+            providerFileId: 'file1',
+            publicUrl: null,
+            contentWarnings: [],
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    await uc.execute({
+      jinyeId: JINYE_ID,
+      userId: ACTOR,
+      body: '',
+      stickerId: 'cheer',
+    });
+    expect(repo.createComment).toHaveBeenCalledWith(
+      expect.objectContaining({ body: '', stickerId: 'cheer' }),
+    );
+  });
+
+  it('foto komen auto-tayang: publicUrl diisi dari url', async () => {
+    const createComment = vi.fn(async () => makeComment());
+    const repo = emptyRepo({ createComment });
+    const uc = new CreateJinyeCommentUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+    );
+    const url = 'https://ik.example.com/jinye/c.jpg';
+    await uc.execute({
+      jinyeId: JINYE_ID,
+      userId: ACTOR,
+      body: 'dengan foto',
+      images: [
+        {
+          url,
+          providerFileId: 'file1',
+          publicUrl: null,
+          contentWarnings: [],
+        },
+      ],
+    });
+    expect(createComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        images: [
+          expect.objectContaining({
+            url,
+            publicUrl: url,
+          }),
+        ],
+      }),
+    );
+  });
+
 });

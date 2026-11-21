@@ -53,7 +53,10 @@ function phoneWire(row: LayananPhone) {
   };
 }
 
-function toLayananWire(row: Layanan, admin: boolean) {
+function toLayananWire(
+  row: Layanan & { authorName?: string | null },
+  admin: boolean,
+) {
   return {
     id: row.id,
     slug: row.slug,
@@ -72,10 +75,18 @@ function toLayananWire(row: Layanan, admin: boolean) {
     village_name: row.villageName,
     note: row.note,
     updated_at: (row.updatedAt ?? row.createdAt).toISOString(),
+    author: row.author
+      ? {
+          id: row.author.id,
+          username: row.author.username,
+          display_name: row.author.displayName,
+        }
+      : null,
     ...(admin
       ? {
           publish_status: row.publishStatus,
           author_id: row.authorId,
+          author_username: row.authorName ?? null,
           created_at: row.createdAt.toISOString(),
         }
       : {}),
@@ -108,20 +119,54 @@ function toContributionWire(row: LayananContribution) {
   };
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: 'layanan',
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
 export class LayananController {
-  constructor(private readonly uc: LayananUseCases) {}
+  constructor(
+    private readonly uc: LayananUseCases,
+    private readonly listRelated?: ListRelatedFn,
+  ) {}
 
   async listPublic(c: Context, query: z.infer<typeof listLayananQuerySchema>) {
     const items = await this.uc.listPublic({
       regionRef: query.region_id,
       category: query.category,
+      q: query.q,
     });
     return c.json({ success: true as const, data: { items: items.map((row) => toLayananWire(row, false)) } });
   }
 
   async getPublic(c: Context, slug: string) {
     const row = await this.uc.getPublished(slug);
-    return c.json({ success: true as const, data: toLayananWire(row, false) });
+    const related = this.listRelated
+      ? await this.listRelated.execute('layanan', row.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...toLayananWire(row, false),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   async adminList(c: Context) {

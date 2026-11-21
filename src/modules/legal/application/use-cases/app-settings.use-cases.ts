@@ -1,16 +1,19 @@
 import { BadRequestError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import {
+  APP_SETTING_BOOLEAN_KEYS,
   APP_SETTING_KEYS,
+  BALEHO_PRICE_PER_CELL_PER_DAY_KEY,
   LEGAL_OAUTH_CONSENT_ENFORCEMENT_KEY,
+  appSettingTypeForKey,
   type AppSettingKey,
   type AppSettingType,
   WA_GROUP_CTA_URL_KEY,
-  WA_VERIFIER_ENABLED_KEY,
 } from '../../domain/entities/app-setting.entity';
 import type { AppSettingsRepository } from '../../domain/repositories/app-settings.repository';
 
 const ALLOWED = new Set<string>(APP_SETTING_KEYS);
+const BOOLEAN_KEYS = new Set<string>(APP_SETTING_BOOLEAN_KEYS);
 
 export class GetAppSettingsUseCase {
   constructor(private readonly settingsRepo: AppSettingsRepository) {}
@@ -22,7 +25,9 @@ export class GetAppSettingsUseCase {
       return {
         key,
         value: row?.value ?? null,
-        type: row?.type ?? 'string',
+        // Tipe kanonik menang: baris lama / belum ada tidak jatuh ke 'string'
+        // (Console butuh type=boolean agar editor Aktif/Nonaktif).
+        type: appSettingTypeForKey(key),
         description: row?.description ?? null,
         updated_at: row?.updatedAt?.toISOString() ?? null,
         updated_by: row?.updatedBy ?? null,
@@ -98,13 +103,13 @@ export class UpdateAppSettingsUseCase {
           );
         }
       }
-      if (s.key === WA_VERIFIER_ENABLED_KEY) {
+      if (BOOLEAN_KEYS.has(s.key)) {
         const v = s.value.toLowerCase();
         if (v !== 'true' && v !== 'false') {
           throw new BadRequestError(
             'VALIDATION_ERROR',
-            'wa.verifier_enabled harus true atau false',
-            [{ field: 'settings', message: 'Nilai wa.verifier_enabled tidak valid' }],
+            `${s.key} harus true atau false`,
+            [{ field: 'settings', message: `Nilai ${s.key} tidak valid` }],
           );
         }
       }
@@ -117,13 +122,29 @@ export class UpdateAppSettingsUseCase {
           );
         }
       }
+      if (s.key === BALEHO_PRICE_PER_CELL_PER_DAY_KEY) {
+        const n = Number(s.value);
+        if (!Number.isInteger(n) || n < 0 || n > 100_000_000) {
+          throw new BadRequestError(
+            'VALIDATION_ERROR',
+            'baleho.price_per_cell_per_day harus bilangan 0-100000000',
+            [
+              {
+                field: 'settings',
+                message: 'Nilai tarif Baleho tidak valid',
+              },
+            ],
+          );
+        }
+      }
     }
 
     const updated = await this.settingsRepo.upsertMany(
       input.settings.map((s) => ({
         key: s.key as AppSettingKey,
-        value: s.value,
-        type: s.type,
+        value: BOOLEAN_KEYS.has(s.key) ? s.value.toLowerCase() : s.value,
+        // Paksa tipe kanonik (termasuk semua *_enabled → boolean).
+        type: appSettingTypeForKey(s.key),
         description: s.description,
       })),
       input.actorId,

@@ -4,8 +4,10 @@ import {
   buildCulinaryImagePath,
   buildEncyclopediaImagePath,
   buildEventImagePath,
+  buildBalehoImagePath,
   buildLayananImagePath,
   buildPlaceImagePath,
+  buildStickerImagePath,
   buildUsahaImagePath,
   buildWordImagePath,
 } from '../utils/public-image-path';
@@ -19,7 +21,9 @@ export type PublicImagePurpose =
   | 'usaha'
   | 'culinary'
   | 'encyclopedia'
-  | 'layanan';
+  | 'layanan'
+  | 'baleho'
+  | 'sticker';
 
 export interface UploadPublicImageResult {
   url: string;
@@ -44,6 +48,10 @@ function pathForPurpose(purpose: PublicImagePurpose, mimeType: string): string {
       return buildEncyclopediaImagePath(mimeType);
     case 'layanan':
       return buildLayananImagePath(mimeType);
+    case 'baleho':
+      return buildBalehoImagePath(mimeType);
+    case 'sticker':
+      return buildStickerImagePath(mimeType);
     case 'word':
     default:
       return buildWordImagePath(mimeType);
@@ -60,8 +68,8 @@ export class UploadPublicImageUseCase {
     filename?: string | null;
     purpose?: PublicImagePurpose;
   }): Promise<UploadPublicImageResult> {
-    const file = validateImageFile(input);
     const purpose = input.purpose ?? 'word';
+    const file = validateImageFile(input, { allowGif: purpose === 'sticker' });
     const path = pathForPurpose(purpose, file.mimeType);
     const uploaded = await this.storage.upload({
       path,

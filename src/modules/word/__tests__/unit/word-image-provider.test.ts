@@ -26,8 +26,30 @@ describe('word-image-provider', () => {
     ).toBe(true);
     expect(isAllowedStockImageUrl('pexels', 'https://evil.example/a.jpg')).toBe(false);
     expect(isAllowedStockImageUrl('unsplash', 'https://images.unsplash.com/photo-1')).toBe(true);
+    expect(isAllowedStockImageUrl('pixabay', 'https://cdn.pixabay.com/photo/42.jpg')).toBe(true);
     expect(isAllowedStockImageUrl('openverse', 'https://any-cdn.example/x.jpg')).toBe(true);
     expect(isAllowedStockImageUrl('openverse', 'http://insecure.example/x.jpg')).toBe(false);
+  });
+
+  it('menerima URL wsrv.nl bila nested host cocok provider', () => {
+    expect(
+      isAllowedStockImageUrl(
+        'pixabay',
+        'https://wsrv.nl/?url=cdn.pixabay.com%2Fphoto%2F42.jpg&w=640&h=640&fit=cover&output=webp',
+      ),
+    ).toBe(true);
+    expect(
+      isAllowedStockImageUrl(
+        'unsplash',
+        'https://wsrv.nl/?url=images.unsplash.com%2Fphoto-1&w=640&h=640&fit=cover&output=webp',
+      ),
+    ).toBe(true);
+    expect(
+      isAllowedStockImageUrl(
+        'pixabay',
+        'https://wsrv.nl/?url=evil.example%2Fx.jpg&w=640&h=640&fit=cover&output=webp',
+      ),
+    ).toBe(false);
   });
 });
 

@@ -105,8 +105,10 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const { data: created } = await create.json();
     expect(created.status).toBe('published');
     expect(created.is_verified).toBe(false);
-    // Gate publik: belum verified → 404 sampai approve
-    expect((await get(`/api/v1/words/${created.word_id}`)).status).toBe(404);
+    // Publik: published belum verified tetap tayang (badge) sampai approve
+    const beforeApprove = await get(`/api/v1/words/${created.word_id}`);
+    expect(beforeApprove.status).toBe(200);
+    expect((await beforeApprove.json()).data.is_verified).toBe(false);
 
     // 2. Muncul di antrean admin (status pending)
     const list = await get('/api/v1/admin/contributions?status=pending&entity_type=word', adminToken);
@@ -187,12 +189,12 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     expect((await bogus.json()).error_code).toBe('CONTRIBUTION_NOT_FOUND');
   });
 
-  it('ANONIM: submit kata TANPA login → 201 pending_review, atribusi ke user Anonim', async () => {
+  it('ANONIM: submit kata TANPA login → 201 published belum verified, atribusi ke user Anonim', async () => {
     // endpoint publik /api/v1/contributions/words - tanpa token sama sekali
     const res = await post('/api/v1/contributions/words', validWordBody('kata dari anonim'));
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.data.status).toBe('pending_review');
+    expect(body.data.status).toBe('published');
     expect(body.data.is_verified).toBe(false);
 
     // antrean admin: kontribusi ini tercatat atas nama user Anonim
@@ -201,8 +203,10 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const item = listBody.data.find((c: { entity_id: string }) => c.entity_id === body.data.word_id);
     expect(item).toMatchObject({ contributor_username: 'anonim', status: 'pending' });
 
-    // dan tidak tayang sampai di-approve
-    expect((await get(`/api/v1/words/${body.data.word_id}`)).status).toBe(404);
+    // Tayang segera (sama kontributor login); badge belum verified sampai approve
+    const publik = await get(`/api/v1/words/${body.data.word_id}`);
+    expect(publik.status).toBe(200);
+    expect((await publik.json()).data.is_verified).toBe(false);
   });
 
   it('ANONIM + contributor_name → guest_display_name di antrean (username tetap anonim)', async () => {
@@ -317,12 +321,13 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const stillPending = await get('/api/v1/admin/contributions?status=pending&entity_type=example', adminToken);
     expect((await stillPending.json()).data.some((c: { id: string }) => c.id === item.id)).toBe(true);
 
-    // contoh belum verified: tidak di detail publik; admin detail simpan koreksi
+    // Koreksi diam: tetap tayang publik, is_verified=false; admin simpan koreksi
     const afterPublic = await get(`/api/v1/words/${data.word_id}`);
     const afterPublicBody = await afterPublic.json();
     expect(afterPublicBody.data.meanings[0].examples.some(
-      (e: { source_sentence: string }) => e.source_sentence === 'Sudah diperbaiki.',
-    )).toBe(false);
+      (e: { source_sentence: string; is_verified?: boolean }) =>
+        e.source_sentence === 'Sudah diperbaiki.' && e.is_verified === false,
+    )).toBe(true);
     const afterAdmin = await get(`/api/v1/admin/words/${data.word_id}`, adminToken);
     const afterBody = await afterAdmin.json();
     expect(afterBody.data.meanings[0].examples.some(
@@ -399,6 +404,14 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const hiddenBody = (await hidden.json()) as { data: { id: string }[] };
     expect(hiddenBody.data.some((c) => c.id === item.id)).toBe(false);
 
+    // #259: skipped_only=true hanya balikin item yang reviewer itu skip.
+    const skippedList = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&skipped_only=true',
+      adminToken,
+    );
+    const skippedBody = (await skippedList.json()) as { data: { id: string }[] };
+    expect(skippedBody.data.some((c) => c.id === item.id)).toBe(true);
+
     const still = await get(
       '/api/v1/admin/contributions?status=pending&entity_type=word',
       adminToken,
@@ -426,6 +439,18 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     const otherBody = (await other.json()) as { data: { id: string }[] };
     expect(otherBody.data.some((c) => c.id === item.id)).toBe(true);
 
+    // Skip reviewer lain tidak muncul di daftar dilewati admin (#259):
+    // reviewer baru ini belum skip apa pun.
+    const reviewerSkippedList = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&skipped_only=true',
+      reviewerToken,
+    );
+    expect(
+      ((await reviewerSkippedList.json()) as { data: { id: string }[] }).data.some(
+        (c) => c.id === item.id,
+      ),
+    ).toBe(false);
+
     const undo = await request(`/api/v1/admin/contributions/${item.id}/skip`, {
       method: 'DELETE',
       headers: { authorization: `Bearer ${adminToken}` },
@@ -439,5 +464,16 @@ describe.skipIf(!hasTestDb)('Contribution E2E v1 - antrean review (Section 22 ap
     );
     const backBody = (await back.json()) as { data: { id: string }[] };
     expect(backBody.data.some((c) => c.id === item.id)).toBe(true);
+
+    // Setelah unskip, item hilang dari daftar dilewati.
+    const unskippedList = await get(
+      '/api/v1/admin/contributions?status=pending&entity_type=word&skipped_only=true',
+      adminToken,
+    );
+    expect(
+      ((await unskippedList.json()) as { data: { id: string }[] }).data.some(
+        (c) => c.id === item.id,
+      ),
+    ).toBe(false);
   });
 });

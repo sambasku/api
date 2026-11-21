@@ -4,7 +4,7 @@ import {
   UnauthorizedError,
   ValidationError,
 } from '@/shared/errors/app-error';
-import type { User } from '@/modules/auth/domain/entities/user.entity';
+import type { SpeakerStatus, User } from '@/modules/auth/domain/entities/user.entity';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import type { UserConsentRepository } from '@/modules/legal/domain/repositories/user-consent.repository';
@@ -15,6 +15,14 @@ import type { UpdateMyProfileDto } from '../dto/update-my-profile.dto';
 import type { PublicUserRepository } from '../../domain/repositories/public-user.repository';
 import type { PublicProfileLeveling } from '../../domain/entities/public-profile.entity';
 import { buildLeveling } from '@/modules/leveling/domain/leveling';
+import type {
+  UsernameChangeHistoryItem,
+  UsernameChangeRepository,
+} from '../../domain/repositories/username-change.repository';
+import {
+  USERNAME_CHANGE_COOLDOWN_DAYS,
+  computeUsernameChangeAllowedAt,
+} from '../utils/username-change-policy';
 import {
   resolveUsernameAvailability,
   type UsernameAvailabilityResult,
@@ -24,6 +32,7 @@ export interface MyProfileResult {
   username: string;
   displayName: string;
   bio: string | null;
+  speakerStatus: SpeakerStatus | null;
   regionId: string | null;
   villageId: string | null;
   avatarUrl: string | null;
@@ -33,6 +42,10 @@ export interface MyProfileResult {
   leveling: PublicProfileLeveling;
   notifyStreakReminder: boolean;
   notifyLevelUp: boolean;
+  usernameChangedAt: Date | null;
+  /** Null = boleh ganti username sekarang. */
+  usernameChangeAllowedAt: Date | null;
+  usernameChangeCooldownDays: number;
 }
 
 function toMyProfile(
@@ -40,10 +53,12 @@ function toMyProfile(
   requiresConsent: boolean,
   leveling: PublicProfileLeveling,
 ): MyProfileResult {
+  const usernameChangedAt = user.usernameChangedAt ?? null;
   return {
     username: user.username,
     displayName: user.displayName,
     bio: user.bio,
+    speakerStatus: user.speakerStatus,
     regionId: user.regionId,
     villageId: user.villageId,
     avatarUrl: user.avatarUrl,
@@ -52,6 +67,9 @@ function toMyProfile(
     leveling,
     notifyStreakReminder: user.notifyStreakReminder,
     notifyLevelUp: user.notifyLevelUp,
+    usernameChangedAt,
+    usernameChangeAllowedAt: computeUsernameChangeAllowedAt(usernameChangedAt),
+    usernameChangeCooldownDays: USERNAME_CHANGE_COOLDOWN_DAYS,
   };
 }
 
@@ -198,6 +216,7 @@ export class UpdateMyProfileUseCase {
     private readonly userRepo: UserRepository,
     private readonly regionRepo: RegionRepository,
     private readonly publicUserRepo?: PublicUserRepository,
+    private readonly usernameChangeRepo?: UsernameChangeRepository,
   ) {}
 
   /** Prefill status username untuk UI editor (tanpa menulis DB). */
@@ -214,7 +233,21 @@ export class UpdateMyProfileUseCase {
       currentUsername: user.username,
       currentUserId: user.id,
       findByUsername: (username) => this.userRepo.findByUsername(username),
+      findActiveHold: this.usernameChangeRepo
+        ? (username) => this.usernameChangeRepo!.findActiveHold(username)
+        : undefined,
     });
+  }
+
+  async listUsernameHistory(
+    userId: string,
+  ): Promise<UsernameChangeHistoryItem[]> {
+    const user = await this.userRepo.findById(userId);
+    if (!user || user.deletedAt || !user.isActive) {
+      throw new UnauthorizedError('UNAUTHORIZED', 'Sesi tidak valid');
+    }
+    if (!this.usernameChangeRepo) return [];
+    return this.usernameChangeRepo.listHistoryForUser(userId);
   }
 
   async execute(userId: string, dto: UpdateMyProfileDto): Promise<MyProfileResult> {
@@ -224,12 +257,16 @@ export class UpdateMyProfileUseCase {
     }
 
     let nextUsername: string | undefined;
+    let isReclaim = false;
     if (dto.username !== undefined) {
       const availability = await resolveUsernameAvailability({
         raw: dto.username,
         currentUsername: user.username,
         currentUserId: user.id,
         findByUsername: (username) => this.userRepo.findByUsername(username),
+        findActiveHold: this.usernameChangeRepo
+          ? (username) => this.usernameChangeRepo!.findActiveHold(username)
+          : undefined,
       });
       if (availability.status === 'invalid' || availability.status === 'reserved') {
         throw new ValidationError([
@@ -238,17 +275,29 @@ export class UpdateMyProfileUseCase {
             message:
               availability.status === 'reserved'
                 ? 'Username tidak bisa dipakai'
-                : 'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore).',
+                : 'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore), tanpa titik/underscore beruntun.',
           },
         ]);
       }
       if (availability.status === 'taken') {
         throw new ConflictError('USERNAME_ALREADY_EXISTS', 'Nama sudah dipakai');
       }
-      if (availability.status === 'available') {
+      if (availability.status === 'available' || availability.status === 'reclaimable') {
         nextUsername = availability.username;
+        isReclaim = availability.status === 'reclaimable';
       }
       // current = no-op
+    }
+
+    if (nextUsername !== undefined && !isReclaim) {
+      const allowedAt = computeUsernameChangeAllowedAt(user.usernameChangedAt ?? null);
+      if (allowedAt) {
+        throw new ConflictError(
+          'USERNAME_CHANGE_TOO_SOON',
+          `Username baru bisa diganti lagi setelah ${USERNAME_CHANGE_COOLDOWN_DAYS} hari`,
+          { next_allowed_at: allowedAt.toISOString() },
+        );
+      }
     }
 
     const touchesLocation = dto.regionId !== undefined || dto.villageId !== undefined;
@@ -264,10 +313,25 @@ export class UpdateMyProfileUseCase {
       resolvedVillageId = resolved.villageId;
     }
 
+    if (nextUsername !== undefined && this.usernameChangeRepo) {
+      await this.usernameChangeRepo.applyUsernameChange({
+        userId,
+        oldUsername: user.username,
+        newUsername: nextUsername,
+        advanceCooldown: !isReclaim,
+      });
+    }
+
     const updated = await this.userRepo.updateProfile(userId, {
-      ...(nextUsername !== undefined ? { username: nextUsername } : {}),
+      // Username sudah ditulis di applyUsernameChange bila ada.
+      ...(nextUsername !== undefined && !this.usernameChangeRepo
+        ? { username: nextUsername }
+        : {}),
       ...(dto.displayName !== undefined ? { displayName: dto.displayName } : {}),
       ...(dto.bio !== undefined ? { bio: dto.bio } : {}),
+      ...(dto.speakerStatus !== undefined
+        ? { speakerStatus: dto.speakerStatus }
+        : {}),
       ...(resolvedRegionId !== undefined ? { regionId: resolvedRegionId } : {}),
       ...(resolvedVillageId !== undefined ? { villageId: resolvedVillageId } : {}),
       ...(dto.hasReadContributionGuide === true && user.readContributionGuideAt === null

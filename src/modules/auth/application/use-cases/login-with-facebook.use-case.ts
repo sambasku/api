@@ -1,5 +1,6 @@
 import { UnauthorizedError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import { Email } from '../../domain/value-objects/email.vo';
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { AuthIdentityRepository } from '../../domain/repositories/auth-identity.repository';
@@ -14,6 +15,7 @@ import type { TokenServicePort } from '../ports/token-service.port';
 import { issueLoginSession, type LoginResult } from '../utils/issue-login-session';
 import { SocialConsentService } from '../utils/social-consent';
 import { buildUsernameCandidates, syntheticOauthEmail } from '../utils/username-slug';
+import { emitUserJoined } from '../utils/emit-user-joined';
 
 const FACEBOOK_PROVIDER = 'facebook';
 const INVALID_MESSAGE = 'Tidak bisa masuk dengan Facebook.';
@@ -33,6 +35,7 @@ export class LoginWithFacebookUseCase {
     private readonly consent: SocialConsentService,
     private readonly accessTokenTtlSeconds: number,
     private readonly refreshTokenTtlSeconds: number,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(dto: FacebookLoginDto, meta: LoginMeta = {}, requestId?: string | null): Promise<LoginResult> {
@@ -96,6 +99,9 @@ export class LoginWithFacebookUseCase {
       },
       requestId: requestId ?? null,
     });
+
+    // #285: OAuth verified-saat-daftar tidak lewat verify-email.
+    await emitUserJoined(this.activityEvents, created.user.id);
 
     const result = await this.issue(created.user, meta);
     return needsConsent ? { ...result, requiresConsent: true } : result;

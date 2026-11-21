@@ -26,6 +26,8 @@ export interface ContributionListFilter {
   viewerIsElevated?: boolean;
   /** true = sembunyikan kontribusi yang viewer ini sudah skip. */
   hideSkipped?: boolean;
+  /** true = hanya kontribusi yang viewer ini sudah skip (mobile #259). */
+  skippedOnly?: boolean;
   /**
    * true = acak isi halaman per viewer (mobile). Default false supaya console
    * verifikator tetap kronologis. Mode `mine` selalu kronologis.

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { entityCommentWireSchema } from '@/shared/comment/entity-comment-response.schema';
+import { opaqueId } from '@/shared/validation/id';
 
 const httpsUrl = z.string().url().startsWith('https://');
 
@@ -310,4 +312,26 @@ export const duplicateCandidateListSchema = z.object({
       z.object({ id: z.string(), slug: z.string(), name: z.string() }),
     ),
   }),
+});
+
+// ---------------------------------------------------------------- komentar kuliner
+
+export const cuisineCommentsQuerySchema = z.object({
+  cursor: opaqueId.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export { entityCommentBodySchema as createCuisineCommentBodySchema } from '@/shared/comment/entity-comment-body.schema';
+
+export const updateCuisineCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Komentar wajib diisi' })
+    .trim()
+    .min(1, 'Komentar wajib diisi')
+    .max(1000, 'Komentar maksimal 1000 karakter'),
+});
+
+export const cuisineCommentResponseSchema = entityCommentWireSchema.extend({
+  id: opaqueId,
+  cuisine_id: z.string(),
 });

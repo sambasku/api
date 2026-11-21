@@ -90,8 +90,10 @@ describe.skipIf(!hasTestDb)('Batch contribute + import session rollback E2E', ()
     const wordId = body.data.items[0]?.word_id as string;
     expect(wordId).toBeTruthy();
 
-    // Batch anon = published belum verified → belum di feed publik
-    expect((await get(`/api/v1/words/${wordId}`)).status).toBe(404);
+    // Batch = published belum verified → tetap tayang publik (badge)
+    const pub = await get(`/api/v1/words/${wordId}`);
+    expect(pub.status).toBe(200);
+    expect((await pub.json()).data.is_verified).toBe(false);
     const adminDetail = await get(`/api/v1/admin/words/${wordId}`, adminToken);
     expect(adminDetail.status).toBe(200);
     expect((await adminDetail.json()).data.lemma).toBe(lemma);

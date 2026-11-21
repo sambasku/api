@@ -1,0 +1,112 @@
+/**
+ * Mint LiveKit access JWT (HS256) via WebCrypto - 0 dependency.
+ * Grants: roomJoin + publish/subscribe/data (audio room).
+ * ponytail: no jti/nbf - LiveKit hanya butuh iss/sub/exp/video grants.
+ */
+
+const enc = new TextEncoder();
+
+function b64url(bytes: ArrayBuffer | Uint8Array): string {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let bin = '';
+  for (const b of view) bin += String.fromCharCode(b);
+  return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+}
+
+async function hmacKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+}
+
+export interface MintLivekitTokenInput {
+  identity: string;
+  name: string;
+  room: string;
+  apiKey: string;
+  apiSecret: string;
+  /** X-Device-Id - dibaca gate anti multi-device. */
+  deviceId: string;
+  /** Default 1 jam. */
+  ttlSec?: number;
+}
+
+/** Metadata participant LiveKit - kunci pendek hemat wire. */
+export function voiceDeviceMetadata(deviceId: string): string {
+  return JSON.stringify({ d: deviceId });
+}
+
+export function parseVoiceDeviceMetadata(
+  metadata: string | undefined | null,
+): string | null {
+  if (!metadata?.trim()) return null;
+  try {
+    const json = JSON.parse(metadata) as { d?: unknown; deviceId?: unknown };
+    const raw = json.d ?? json.deviceId;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function signHs256(
+  apiKey: string,
+  apiSecret: string,
+  claims: Record<string, unknown>,
+): Promise<string> {
+  const header = b64url(
+    enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })),
+  );
+  const payload = b64url(enc.encode(JSON.stringify({ iss: apiKey, ...claims })));
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    await hmacKey(apiSecret),
+    enc.encode(`${header}.${payload}`),
+  );
+  return `${header}.${payload}.${b64url(sig)}`;
+}
+
+export async function mintLivekitAccessToken(
+  input: MintLivekitTokenInput,
+): Promise<string> {
+  const ttl = input.ttlSec ?? 60 * 60;
+  return signHs256(input.apiKey, input.apiSecret, {
+    sub: input.identity,
+    name: input.name,
+    metadata: voiceDeviceMetadata(input.deviceId),
+    video: {
+      room: input.room,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    },
+    exp: Math.floor(Date.now() / 1000) + ttl,
+  });
+}
+
+/**
+ * JWT admin singkat untuk RoomService Twirp (CreateRoom / ListParticipants).
+ * `room` wajib: ListParticipants menolak roomAdmin yang tidak dikunci ke room.
+ */
+export async function mintLivekitServerToken(input: {
+  apiKey: string;
+  apiSecret: string;
+  room: string;
+  ttlSec?: number;
+}): Promise<string> {
+  const ttl = input.ttlSec ?? 60;
+  return signHs256(input.apiKey, input.apiSecret, {
+    video: {
+      room: input.room,
+      roomCreate: true,
+      roomList: true,
+      roomAdmin: true,
+    },
+    exp: Math.floor(Date.now() / 1000) + ttl,
+  });
+}

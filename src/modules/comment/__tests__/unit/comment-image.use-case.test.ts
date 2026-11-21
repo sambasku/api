@@ -25,6 +25,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     userRole: 'contributor',
     body: 'halo',
     bodyOriginal: null,
+    stickerId: null,
     audio: null,
     image: null,
     status: 'published',

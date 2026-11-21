@@ -1,6 +1,8 @@
+import type { CommentAudio, CommentImage } from '@/modules/comment/domain/entities/comment.entity';
 import type {
   CuisinePublishStatus,
 } from '@/shared/database/drizzle/schema/cuisines.schema';
+import type { CuisineCommentStatus } from '@/shared/database/drizzle/schema/cuisine-comments.schema';
 import type {
   CulinaryOperationalStatus,
   CulinaryPlaceType,
@@ -13,6 +15,25 @@ export interface CulinaryCategoryRef {
   name: string;
 }
 
+export interface CuisineComment {
+  id: string;
+  cuisineId: string;
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  userRole: string | null;
+  authorDeletedAt: Date | null;
+  body: string;
+  stickerId: string | null;
+  audio: CommentAudio | null;
+  image: CommentImage | null;
+  status: CuisineCommentStatus;
+  isEdited: boolean;
+  createdAt: Date;
+  updatedAt: Date | null;
+}
+
 /** Atribusi gambar - disimpan verbatim (PRD kuliner 13). */
 export interface CuisineImage {
   url: string;
@@ -23,6 +44,10 @@ export interface CuisineImage {
     url?: string;
     license?: string;
     license_url?: string;
+    /** #281: pengunggah foto append (rate-limit harian). */
+    authorId?: string;
+    /** #281: ISO waktu unggah append. */
+    uploadedAt?: string;
   } | null;
 }
 

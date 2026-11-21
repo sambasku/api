@@ -22,6 +22,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     username: 'budi',
     displayName: 'budi',
     bio: null,
+    speakerStatus: null,
     regionId: null,
     villageId: null,
     email: 'budi@test.com',
@@ -60,6 +61,7 @@ describe('GetMyProfileUseCase', () => {
       username: 'budi',
       displayName: 'Budi Santoso',
       bio: 'Kontributor Sambas',
+      speakerStatus: null,
       regionId: null,
       villageId: null,
       avatarUrl: null,
@@ -67,6 +69,9 @@ describe('GetMyProfileUseCase', () => {
       requiresConsent: false,
       notifyStreakReminder: true,
       notifyLevelUp: true,
+      usernameChangedAt: null,
+      usernameChangeAllowedAt: null,
+      usernameChangeCooldownDays: 7,
       leveling: {
         points: 0,
         level: 1,
@@ -134,6 +139,24 @@ describe('UpdateMyProfileUseCase', () => {
     });
     expect(result.displayName).toBe('Nama Baru');
     expect(result.bio).toBe('Bio baru');
+  });
+
+  it('menyimpan speaker_status native', async () => {
+    const updated = makeUser({ speakerStatus: 'native' });
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser()),
+      updateProfile: vi.fn().mockResolvedValue(updated),
+    } as unknown as UserRepository;
+
+    const result = await new UpdateMyProfileUseCase(userRepo, regionRepo).execute(
+      USER_ID,
+      { speakerStatus: 'native' },
+    );
+
+    expect(userRepo.updateProfile).toHaveBeenCalledWith(USER_ID, {
+      speakerStatus: 'native',
+    });
+    expect(result.speakerStatus).toBe('native');
   });
 
   it('tap Mengerti → set read_contribution_guide_at', async () => {
@@ -336,5 +359,69 @@ describe('UpdateMyProfileUseCase', () => {
     await expect(
       useCase.checkUsernameAvailability(USER_ID, 'budi00'),
     ).resolves.toEqual({ username: 'budi00', status: 'current' });
+  });
+
+  it('cooldown belum selesai → USERNAME_CHANGE_TOO_SOON', async () => {
+    const changedAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(
+        makeUser({ username: 'budi00', usernameChangedAt: changedAt }),
+      ),
+      findByUsername: vi.fn().mockResolvedValue(null),
+      updateProfile: vi.fn(),
+    } as unknown as UserRepository;
+    const usernameChangeRepo = {
+      findActiveHold: vi.fn().mockResolvedValue(null),
+      applyUsernameChange: vi.fn(),
+    };
+
+    await expect(
+      new UpdateMyProfileUseCase(
+        userRepo,
+        regionRepo,
+        undefined,
+        usernameChangeRepo as never,
+      ).execute(USER_ID, { username: 'warga.sambas' }),
+    ).rejects.toMatchObject({
+      errorCode: 'USERNAME_CHANGE_TOO_SOON',
+    });
+    expect(usernameChangeRepo.applyUsernameChange).not.toHaveBeenCalled();
+  });
+
+  it('reclaim hold sendiri → boleh meski cooldown', async () => {
+    const changedAt = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
+    const updated = makeUser({
+      username: 'budi00',
+      usernameChangedAt: changedAt,
+    });
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(
+        makeUser({ username: 'warga.sambas', usernameChangedAt: changedAt }),
+      ),
+      findByUsername: vi.fn().mockResolvedValue(null),
+      updateProfile: vi.fn().mockResolvedValue(updated),
+    } as unknown as UserRepository;
+    const usernameChangeRepo = {
+      findActiveHold: vi.fn().mockResolvedValue({
+        userId: USER_ID,
+        holdUntil: new Date(Date.now() + 86400000),
+      }),
+      applyUsernameChange: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await new UpdateMyProfileUseCase(
+      userRepo,
+      regionRepo,
+      undefined,
+      usernameChangeRepo as never,
+    ).execute(USER_ID, { username: 'budi00' });
+
+    expect(usernameChangeRepo.applyUsernameChange).toHaveBeenCalledWith({
+      userId: USER_ID,
+      oldUsername: 'warga.sambas',
+      newUsername: 'budi00',
+      advanceCooldown: false,
+    });
+    expect(result.username).toBe('budi00');
   });
 });

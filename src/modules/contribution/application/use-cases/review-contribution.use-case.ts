@@ -18,6 +18,7 @@ import {
   RecordAbuseSignalUseCase,
   safeRecordAbuseSignal,
 } from '@/shared/moderation/record-abuse-signal.use-case';
+import type { AutoPromoteLemmaExampleTranslationUseCase } from '@/modules/translation/application/use-cases/auto-promote-lemma-example-translation.use-case';
 import type { SyncLiveWordContributionsUseCase } from './sync-live-word-contributions.use-case';
 
 export interface ImageReviewDecision {
@@ -68,6 +69,8 @@ export class ReviewContributionUseCase {
     private readonly notifyWordOwnerMedia?: NotifyWordOwnerMediaUseCase,
     /** Tutup sibling pending (ghost update) setelah kata live+verified. */
     private readonly syncContributions?: SyncLiveWordContributionsUseCase,
+    /** Approve contoh + target_sentence → translations accepted (lemma_example). */
+    private readonly autoPromoteLemmaExampleTranslation?: AutoPromoteLemmaExampleTranslationUseCase,
   ) {}
 
   async execute(cmd: ReviewContributionCommand): Promise<ReviewOutcome> {
@@ -160,6 +163,17 @@ export class ReviewContributionUseCase {
         entityId: outcome.entityId,
         actorId: outcome.contributorUserId,
       });
+    }
+
+    // Approve contoh → auto-promote ke translations bila ada target_sentence.
+    if (cmd.decision === 'approve' && outcome.entityType === 'example') {
+      const example = await this.wordRepo.findExampleById(outcome.entityId);
+      if (example) {
+        await this.autoPromoteLemmaExampleTranslation?.safe({
+          example,
+          actorId: cmd.actorId,
+        });
+      }
     }
 
     await this.auditRepo.record({

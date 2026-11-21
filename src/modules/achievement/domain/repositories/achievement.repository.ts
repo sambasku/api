@@ -138,6 +138,13 @@ export interface AchievementRepository {
     userId: string,
     criteriaList: AchievementCriteria[],
   ): Promise<number[]>;
+  /**
+   * Rank snapshot finalized milik user (untuk `repeat_count` leaderboard_top).
+   * Satu query; filter rentang/window di application layer.
+   */
+  listFinalizedLeaderboardRanks(
+    userId: string,
+  ): Promise<Array<{ rank: number; weekStartedAt: Date }>>;
 
   // ---- border profil ----
   /** Set/lepas border aktif. null = tanpa border. */

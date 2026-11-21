@@ -54,6 +54,10 @@ function toUserEntity(row: UserRow, roles: User['roles']): User {
     username: row.username,
     displayName: row.displayName || row.username,
     bio: row.bio ?? null,
+    speakerStatus:
+      row.speakerStatus === 'native' || row.speakerStatus === 'learner'
+        ? row.speakerStatus
+        : null,
     regionId: row.regionId ?? null,
     villageId: row.villageId ?? null,
     email: row.email,
@@ -209,6 +213,10 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
         let userRow: UserRow | undefined;
         for (const candidate of tryList) {
           try {
+            // OAuth path: emailVerified=true saat daftar → isi emailVerifiedAt
+            // juga (welcome feed #47 / #285). Tanpa ini backfill skip user.
+            const verifiedNow =
+              userValues.emailVerified === true ? new Date() : undefined;
             [userRow] = await tx
               .insert(users)
               .values({
@@ -216,6 +224,9 @@ export class AuthIdentityRepositoryImpl implements AuthIdentityRepository {
                 username: candidate,
                 displayName: newUser.displayName ?? candidate,
                 bio: newUser.bio ?? null,
+                ...(verifiedNow
+                  ? { emailVerifiedAt: verifiedNow }
+                  : {}),
               })
               .returning();
             break;

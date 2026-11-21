@@ -31,6 +31,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `USER_NOT_FOUND` | 404 | User tidak ditemukan (profil publik by username; akun soft-deleted / nonaktif; update role admin; cabut mute abuse; user id tidak ada) |
 | `WORD_NOT_FOUND` | 404 | Kata tidak ditemukan by id (modul word - belum implement; toggle bookmark kata tidak ada / sudah dihapus) |
 | `MEANING_NOT_FOUND` | 404 | Makna tidak ditemukan by id (kontribusi contoh kalimat) |
+| `EXAMPLE_NOT_FOUND` | 404 | Contoh kalimat tidak ditemukan by id / bukan milik pemohon (edit contoh pending #244) |
 | `CONTRIBUTION_NOT_FOUND` | 404 | Kontribusi tidak ditemukan by id (antrean review) |
 | `SEARCH_MISS_NOT_FOUND` | 404 | Pencarian kosong tidak ditemukan by id (dismiss / create-from-miss / update / resolve) |
 | `SEARCH_MISS_BULK_EMPTY` | 400 | Mass dismiss pencarian tanpa id |
@@ -57,7 +58,8 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `WORDS_BULK_EMPTY` | 400 | Mass-action kata tanpa id |
 | `WORDS_BULK_TOO_LARGE` | 400 | Mass-action kata lebih dari 50 id |
 | `EMAIL_ALREADY_EXISTS` | 409 | Registrasi dengan email yang sudah dipakai |
-| `USERNAME_ALREADY_EXISTS` | 409 | Registrasi dengan nama (username) yang sudah dipakai |
+| `USERNAME_ALREADY_EXISTS` | 409 | Registrasi / ganti username yang sudah dipakai atau masih di-hold user lain |
+| `USERNAME_CHANGE_TOO_SOON` | 409 | Ganti username baru sebelum cooldown 7 hari selesai (`data.next_allowed_at`) |
 | `PHONE_ALREADY_EXISTS` | 409 | Registrasi / pengajuan verifikator / buat user admin dengan nomor HP yang sudah dipakai user lain |
 | `CONSENT_REQUIRED` | 400 | Register/accept-legal tanpa consents terms+privacy lengkap, atau dokumen legal belum dikonfigurasi |
 | `LEGAL_CONSENT_OUTDATED` | 400/403 | Versi terms/privacy yang dikirim bukan versi aktif; atau user belum setuju versi terbaru saat write |
@@ -97,6 +99,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `WORD_ALREADY_UNVERIFIED` | 409 | Unverify dipanggil pada kata yang sudah `is_verified = false` (tanpa audit baru) |
 | `SUGGESTION_NOT_FOUND` | 404 | Usulan perubahan kata tidak ditemukan |
 | `SUGGESTION_ALREADY_REVIEWED` | 400/409 | Usulan sudah punya keputusan (approve/reject/correct) |
+| `EXAMPLE_ALREADY_REVIEWED` | 409 | Contoh kalimat sudah direview (tidak pending) - edit in-place #244 ditolak, pakai usulan change_example |
 | `WORD_NOT_PUBLISHED` | 400 | Usul edit hanya untuk kata berstatus published |
 | `CANNOT_SUGGEST_OWN_WORD` | 403 | Kontributor tidak boleh mengusulkan edit pada kata buatannya sendiri |
 | `INVALID_SUGGESTION_CHANGES` | 400 | proposed_changes kosong / tidak valid |
@@ -107,6 +110,10 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `INTERNAL_ERROR` | 500 | Error tak terduga (bug, koneksi DB putus, dst) |
 | `UPSTREAM_CAPACITY` | 503 | Kapasitas runtime habis, bukan bug: batas subrequest / CPU Workers terlampaui. SATU-SATUNYA kode yang memicu circuit breaker klien pindah tier (kebijakan failover internal). Hanya muncul di tier 1 (Workers); tier 2/3 proses Node tanpa batas subrequest |
 | `IMAGE_UPLOAD_UNAVAILABLE` | 503 | Provider penyimpanan gambar belum dikonfigurasi (env `IMAGEKIT_*`) |
+| `IMAGE_PROXY_UNAVAILABLE` | 503 | Proxy bukti gambar gagal (URL di luar endpoint / fetch ImageKit gagal) |
+| `BALEHO_PAYMENT_PROOF_NOT_FOUND` | 404 | Placement belum punya bukti bayar |
+| `LEADERBOARD_WEEK_NOT_FOUND` | 404 | `week_id` tidak valid, minggu belum ada, atau snapshot minggu lalu belum difinalisasi |
+| `LEADERBOARD_STORAGE_UNAVAILABLE` | 503 | Repo/token leaderboard GitHub belum dikonfigurasi atau publish ditolak |
 | `PUBLIC_IMAGE_UPLOAD_UNAVAILABLE` | 503 | Provider gambar publik belum dikonfigurasi / token GitHub invalid (`PUBLIC_IMAGE_GITHUB_*`) |
 | `PUBLIC_IMAGE_UPLOAD_FAILED` | 502 | Upload gambar publik ke GitHub Contents API gagal |
 | `IMAGE_TOO_LARGE` | 400 | File gambar melebihi 5 MB |

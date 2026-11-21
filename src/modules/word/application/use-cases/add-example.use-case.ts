@@ -6,6 +6,7 @@ import { assertCanContribute } from '../utils/assert-can-contribute';
 import type { Actor } from './create-word.use-case';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import type { NotifyWordOwnerMediaUseCase } from '@/modules/notification/application/use-cases/notify-word-owner-media.use-case';
+import type { AutoPromoteLemmaExampleTranslationUseCase } from '@/modules/translation/application/use-cases/auto-promote-lemma-example-translation.use-case';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
 import { hasFeedExcludedUsageLabels } from '@/shared/constants/usage-labels';
 import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
@@ -28,6 +29,8 @@ export class AddExampleUseCase {
     private readonly blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>,
     /** #133: notif ke pemilik kata saat contoh tayang. */
     private readonly notifyOwner?: NotifyWordOwnerMediaUseCase,
+    /** Verifikator buat contoh + target_sentence → translations accepted. */
+    private readonly autoPromoteTranslation?: AutoPromoteLemmaExampleTranslationUseCase,
   ) {}
 
   async execute(meaningId: string, dto: AddExampleDto, actor: Actor): Promise<ExampleMedia> {
@@ -82,6 +85,11 @@ export class AddExampleUseCase {
       await this.notifyOwner?.execute({
         entityType: 'example',
         entityId: media.id,
+        actorId: actor.userId,
+      });
+      // Auto-promote pasangan kalimat → translations (reff=lemma_example).
+      await this.autoPromoteTranslation?.safe({
+        example: media,
         actorId: actor.userId,
       });
     }

@@ -44,7 +44,7 @@ export class ListWordsUseCase {
     }
 
     const gate = publicReadGate(query.viewerRoles);
-    // Publik A-Z: published + verified. Verifikator: statuses tanpa paksa verified.
+    // Publik A-Z: published (is_verified = badge). Verifikator: statuses.
     // Query is_verified dari klien diabaikan di kedua mode.
     const { items, nextCursor, hasMore } = await this.wordRepo.listAtoZ({
       q: query.q.trim(),
@@ -53,9 +53,7 @@ export class ListWordsUseCase {
       wordType: query.wordType,
       category: query.category?.trim() || undefined,
       cursor,
-      ...(gate.statuses
-        ? { statuses: gate.statuses }
-        : { isVerified: true }),
+      ...(gate.statuses ? { statuses: gate.statuses } : {}),
     });
 
     return {

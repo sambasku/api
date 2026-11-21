@@ -60,6 +60,9 @@ export function serializeAchievement(
             ? { current: owned.progress.current, target: owned.progress.target }
             : null,
         }),
+    ...(owned.repeatCount === undefined
+      ? {}
+      : { repeat_count: owned.repeatCount }),
   };
 }
 

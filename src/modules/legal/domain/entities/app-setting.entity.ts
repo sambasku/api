@@ -14,6 +14,19 @@ export const APP_SETTING_KEYS = [
   'wa.group_cta_url',
   /** Kill switch pengingat aktivitas (leveling/streak). Default off sampai dry-run. */
   'streak_reminder_enabled',
+  /** Tarif Baleho: rupiah per sel 1x1 per hari. */
+  'baleho.price_per_cell_per_day',
+  /** Experimental LiveKit voice room. false = strip mobile disembunyikan. */
+  'voice.room_enabled',
+  /**
+   * Trust makna / Hot loop (docs/produk/trust-makna-hot-loop.md).
+   * Default false sampai gelombang terkait live; admin boleh nyalakan per env.
+   */
+  'auto_verify_by_vote_enabled',
+  'search_miss_auto_visible_enabled',
+  'vote_reset_on_edit_enabled',
+  'voting_warga_net_threshold',
+  'voting_warga_unique_voters_threshold',
 ] as const;
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];
@@ -59,7 +72,80 @@ export const DEFAULT_WORD_VOTE_PUSH_COOLDOWN_MINUTES = 3;
 /** Default jeda push media anak kata (#133, mode Skip). */
 export const DEFAULT_WORD_MEDIA_PUSH_COOLDOWN_MINUTES = 3;
 
+export const BALEHO_PRICE_PER_CELL_PER_DAY_KEY =
+  'baleho.price_per_cell_per_day' as const;
+
+export const VOICE_ROOM_ENABLED_KEY = 'voice.room_enabled' as const;
+
+/** Auto-verif makna oleh Voting Warga saat quorum vote tercapai. */
+export const AUTO_VERIFY_BY_VOTE_ENABLED_KEY =
+  'auto_verify_by_vote_enabled' as const;
+/** Search miss baru auto `is_visible` bila lolos blocklist/quality. */
+export const SEARCH_MISS_AUTO_VISIBLE_ENABLED_KEY =
+  'search_miss_auto_visible_enabled' as const;
+/** Reset vote + archive saat usulan/edit verifikator mengubah makna. */
+export const VOTE_RESET_ON_EDIT_ENABLED_KEY =
+  'vote_reset_on_edit_enabled' as const;
+/** Ambang net vote Voting Warga (auto-verif ≥ N, dispute/tolak ≤ -N). */
+export const VOTING_WARGA_NET_THRESHOLD_KEY =
+  'voting_warga_net_threshold' as const;
+/** Unique voters minimum untuk quorum Voting Warga. */
+export const VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD_KEY =
+  'voting_warga_unique_voters_threshold' as const;
+
+/** Default kill switch trust-loop: mati sampai gelombang terkait di-ship. */
+export const DEFAULT_AUTO_VERIFY_BY_VOTE_ENABLED = false;
+export const DEFAULT_SEARCH_MISS_AUTO_VISIBLE_ENABLED = false;
+export const DEFAULT_VOTE_RESET_ON_EDIT_ENABLED = false;
+/** Default ambang dari konstanta TS (voting-warga.ts) bila baris settings belum ada. */
+export const DEFAULT_VOTING_WARGA_NET_THRESHOLD = 5;
+export const DEFAULT_VOTING_WARGA_UNIQUE_VOTERS_THRESHOLD = 5;
+
+/** Default tarif Baleho (IDR): 1x1 / hari. */
+export const DEFAULT_BALEHO_PRICE_PER_CELL_PER_DAY = 3000;
+
 export type AppSettingType = 'string' | 'boolean' | 'number' | 'url';
+
+/**
+ * Tipe kanonik per key (Console System Config pakai ini untuk editor).
+ * Semua `*_enabled` = boolean supaya seragam Switch/Select Aktif-Nonaktif.
+ */
+export const APP_SETTING_KEY_TYPES: Record<AppSettingKey, AppSettingType> = {
+  'oauth.third_party_registration': 'string',
+  'oauth.request_log_retention_days': 'number',
+  'legal.terms_version': 'string',
+  'legal.privacy_version': 'string',
+  'legal.oauth_consent_enforcement': 'string',
+  'notification.review_approve_push_cooldown_minutes': 'number',
+  'notification.review_reject_push_cooldown_minutes': 'number',
+  'notification.word_comment_push_cooldown_minutes': 'number',
+  'notification.word_vote_push_cooldown_minutes': 'number',
+  'notification.word_media_push_cooldown_minutes': 'number',
+  'wa.verifier_enabled': 'boolean',
+  'wa.group_cta_url': 'url',
+  streak_reminder_enabled: 'boolean',
+  'baleho.price_per_cell_per_day': 'number',
+  'voice.room_enabled': 'boolean',
+  auto_verify_by_vote_enabled: 'boolean',
+  search_miss_auto_visible_enabled: 'boolean',
+  vote_reset_on_edit_enabled: 'boolean',
+  voting_warga_net_threshold: 'number',
+  voting_warga_unique_voters_threshold: 'number',
+};
+
+/** Keys kill-switch / flag on-off (validasi value true|false + type boolean). */
+export const APP_SETTING_BOOLEAN_KEYS = (
+  Object.entries(APP_SETTING_KEY_TYPES) as [AppSettingKey, AppSettingType][]
+)
+  .filter(([, t]) => t === 'boolean')
+  .map(([k]) => k);
+
+export function appSettingTypeForKey(key: string): AppSettingType {
+  return (
+    (APP_SETTING_KEY_TYPES as Record<string, AppSettingType | undefined>)[key] ??
+    'string'
+  );
+}
 
 export interface AppSetting {
   key: string;

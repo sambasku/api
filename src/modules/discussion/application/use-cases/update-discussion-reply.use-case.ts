@@ -102,10 +102,14 @@ export class UpdateDiscussionReplyUseCase {
       );
     }
 
+    const bodyChanged = reply.body !== filteredBody;
     const changed =
-      reply.body !== filteredBody ||
-      (reply.bodyOriginal ?? null) !== bodyOriginal;
+      bodyChanged || (reply.bodyOriginal ?? null) !== bodyOriginal;
     if (changed) {
+      if (bodyChanged) {
+        await this.repo.markReplyLemmaLinksStale(cmd.replyId);
+      }
+
       await this.auditRepo.record({
         userId: cmd.actorId,
         action: 'update',

@@ -238,6 +238,7 @@ async function usernameTakenByOther(
  * Idempotent: perbaiki username yang gagal handle @mention
  * (charset, panjang < 6, reserved yang kependekan, dll.).
  * Prefer local-part email bila valid; else slugify(+pad) dari username lama.
+ * Juga menangkap handle yang melanggar separator beruntun (migrasi 0168).
  */
 async function backfillUsernameHandles(client: Client): Promise<void> {
   let rows: Array<Record<string, unknown> | unknown[]>;

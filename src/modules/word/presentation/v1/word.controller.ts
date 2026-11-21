@@ -9,6 +9,7 @@ import type { GetWordByLemmaUseCase } from '../../application/use-cases/get-word
 import type { GetWordOfDayUseCase } from '../../application/use-cases/get-word-of-day.use-case';
 import type { SearchWordsUseCase } from '../../application/use-cases/search-words.use-case';
 import type { VerifyWordUseCase } from '../../application/use-cases/verify-word.use-case';
+import type { VerifyMeaningUseCase } from '../../application/use-cases/verify-meaning.use-case';
 import type { PublishWordUseCase } from '../../application/use-cases/publish-word.use-case';
 import type { SoftDeleteWordUseCase } from '../../application/use-cases/soft-delete-word.use-case';
 import type { BulkWordsActionUseCase } from '../../application/use-cases/bulk-words-action.use-case';
@@ -17,6 +18,7 @@ import type { RestoreWordUseCase } from '../../application/use-cases/restore-wor
 import type { AddPronunciationUseCase } from '../../application/use-cases/add-pronunciation.use-case';
 import type { AddWordImageUseCase } from '../../application/use-cases/add-word-image.use-case';
 import type { AddExampleUseCase } from '../../application/use-cases/add-example.use-case';
+import type { UpdateExampleUseCase } from '../../application/use-cases/update-example.use-case';
 import type { AddMeaningUseCase } from '../../application/use-cases/add-meaning.use-case';
 import type { ImportWordsUseCase } from '../../application/use-cases/import-words.use-case';
 import type { BatchContributeWordsUseCase } from '../../application/use-cases/batch-contribute-words.use-case';
@@ -53,6 +55,7 @@ import type {
   AddMeaningBody,
   AddPronunciationBody,
   AddWordImageBody,
+  UpdateExampleBody,
 } from './validators/word-media.validator';
 import { toCreateWordDto, toUpdateWordDto } from './map-create-word';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
@@ -99,6 +102,7 @@ export class WordController {
       applyCommaSplit: ApplyCommaSplitUseCase;
       markCommaLiteral: MarkCommaLiteralUseCase;
       verify: VerifyWordUseCase;
+      verifyMeaning: VerifyMeaningUseCase;
       publish: PublishWordUseCase;
       deleteWord: SoftDeleteWordUseCase;
       bulkWords: BulkWordsActionUseCase;
@@ -107,6 +111,7 @@ export class WordController {
       addPronunciation: AddPronunciationUseCase;
       addWordImage: AddWordImageUseCase;
       addExample: AddExampleUseCase;
+      updateExample: UpdateExampleUseCase;
       addMeaning: AddMeaningUseCase;
       importWords: ImportWordsUseCase;
       batchContributeWords: BatchContributeWordsUseCase;
@@ -123,6 +128,21 @@ export class WordController {
       imageProviderName: string;
       /** Soft-mute IP/device untuk kontribusi tanpa login. */
       assertAnonWriteAllowed?: (ctx: AnonClientContext) => Promise<void>;
+      /** Kartu content_links untuk lemma (artikel/eksplorasi terkait). */
+      listRelated?: {
+        execute(
+          kind: 'word',
+          id: string,
+        ): Promise<
+          Array<{
+            kind: string;
+            id: string;
+            slug: string | null;
+            title: string;
+            coverUrl: string | null;
+          }>
+        >;
+      };
     },
   ) {}
 
@@ -362,17 +382,59 @@ export class WordController {
 
   async detail(c: Context, id: string) {
     const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
-    const word = await this.deps.getById.execute(id, { viewerRoles });
-    setPublicWordReadCache(c);
-    return c.json({ success: true as const, data: this.toDetailData(word, { redactStagingImages: true }) });
+    const focusMeaningId = parseFocusMeaningId(c);
+    const includeUnverified = parseIncludeUnverified(c);
+    const word = await this.deps.getById.execute(id, {
+      viewerRoles,
+      focusMeaningId,
+      includeUnverified,
+    });
+    setPublicWordReadCache(c, { privateCache: Boolean(focusMeaningId || includeUnverified) });
+    const related = this.deps.listRelated
+      ? await this.deps.listRelated.execute('word', word.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...this.toDetailData(word, { redactStagingImages: true }),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   /** URL publik /words/<lemma> - resolusi homonim di repository. */
   async detailByLemma(c: Context, lemma: string) {
     const viewerRoles = (c.get('user') as AuthUser | undefined)?.roles;
-    const word = await this.deps.getByLemma.execute(lemma, { viewerRoles });
-    setPublicWordReadCache(c);
-    return c.json({ success: true as const, data: this.toDetailData(word, { redactStagingImages: true }) });
+    const focusMeaningId = parseFocusMeaningId(c);
+    const includeUnverified = parseIncludeUnverified(c);
+    const word = await this.deps.getByLemma.execute(lemma, {
+      viewerRoles,
+      focusMeaningId,
+      includeUnverified,
+    });
+    setPublicWordReadCache(c, { privateCache: Boolean(focusMeaningId || includeUnverified) });
+    const related = this.deps.listRelated
+      ? await this.deps.listRelated.execute('word', word.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...this.toDetailData(word, { redactStagingImages: true }),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
   }
 
   /** 28-api-word-of-the-day.md - payload detail + date + is_new_this_week,
@@ -497,6 +559,17 @@ export class WordController {
         is_have_translation: m.isHaveTranslation,
         meaning_source: m.meaningSource,
         order_index: m.orderIndex,
+        is_verified: m.isVerified,
+        needs_review: m.needsReview,
+        verified_at: m.isVerified && m.verifiedAt ? m.verifiedAt.toISOString() : null,
+        verified_by:
+          m.isVerified && m.verifier
+            ? {
+                username: m.verifier.username,
+                display_name: m.verifier.displayName,
+                role: m.verifier.role,
+              }
+            : null,
         created_by: m.creator
           ? {
               username: m.creator.username,
@@ -518,6 +591,7 @@ export class WordController {
           target_language_id: e.targetLanguageId,
           target_sentence: e.targetSentence,
           source_type: e.sourceType,
+          is_verified: e.isVerified ?? false,
           audios: (e.audios ?? []).map((a) => ({
             id: a.id,
             url: a.url,
@@ -536,6 +610,7 @@ export class WordController {
         notation: p.notation,
         value: p.value,
         dialect_id: p.dialectId,
+        is_verified: p.isVerified ?? false,
       })),
       images: word.images.map((img) => {
         const mapped = mapPublicWordImageUrl(
@@ -591,6 +666,15 @@ export class WordController {
       lemma: rel.lemma,
       relation_type: rel.relationType,
     })),
+    appears_in_karya: (word.appearsInKarya ?? []).map((row) => ({
+      karya_slug: row.karyaSlug,
+      karya_title: row.karyaTitle,
+      excerpt_id: row.excerptId,
+      excerpt_kind: row.excerptKind,
+      start: row.start,
+      end: row.end,
+      snippet: row.snippet,
+    })),
     // PRD relasi-lemma: kelompok makna published (label UX "Makna terkait")
     meaning_groups: (word.meaningGroups ?? []).map((g) => ({
       group_id: g.groupId,
@@ -637,10 +721,13 @@ export class WordController {
       translationLanguageId: query.translation_language_id,
       wordType: query.word_type,
       isVerified: query.is_verified,
+      // Omit = true (commit). Typeahead kirim record_miss=false.
+      recordMiss: query.record_miss,
       viewerId: user?.user_id,
       viewerRoles: user?.roles,
     });
-    setPublicWordReadCache(c);
+    // Jangan cache: search miss/counter = side-effect tulis per request.
+    c.header('Cache-Control', 'private, no-store');
     return c.json({
       success: true as const,
       data: items.map(toListItem),
@@ -658,6 +745,7 @@ export class WordController {
       isVerified: query.is_verified,
       published: query.published,
       hasImage: query.has_image,
+      needsReview: query.needs_review,
     });
     return c.json({
       success: true as const,
@@ -712,6 +800,23 @@ export class WordController {
       requestId,
     });
     return c.json({ success: true as const, data: null });
+  }
+
+  async verifyMeaning(c: Context, meaningId: string, verified: boolean) {
+    const actor = (c as Context<{ Variables: AppVariables }>).get('user');
+    if (!actor) throw new UnauthorizedError('UNAUTHORIZED', 'Token tidak disertakan');
+    const requestId = (c as Context<{ Variables: AppVariables }>).get('requestId');
+
+    const result = await this.deps.verifyMeaning.execute({
+      meaningId,
+      verified,
+      actorId: actor.user_id,
+      requestId,
+    });
+    return c.json({
+      success: true as const,
+      data: { meaning_id: meaningId, word_id: result.wordId, is_verified: verified },
+    });
   }
 
   async publish(c: Context, id: string, published: boolean) {
@@ -1164,6 +1269,94 @@ export class WordController {
     );
   }
 
+  /** GET /api/v1/examples/:exampleId - #244 prefill edit contoh milik sendiri */
+  async getMyExample(c: Context, exampleId: string) {
+    const media = await this.withActor(c, (actor) => this.deps.updateExample.getMine(exampleId, actor));
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          id: media.id,
+          meaning_id: media.meaningId,
+          source_language_id: media.sourceLanguageId,
+          source_sentence: media.sourceSentence,
+          target_language_id: media.targetLanguageId,
+          target_sentence: media.targetSentence,
+          source_type: media.sourceType,
+          notes: media.notes,
+          status: media.status,
+          is_verified: media.isVerified,
+          is_corrected: media.isCorrected,
+        },
+      },
+      200,
+    );
+  }
+
+  /** GET /api/v1/words/:wordId/my-pending-examples - #244 daftar contoh pending milik user untuk kata ini */
+  async getMyPendingExamplesForWord(c: Context, wordId: string) {
+    const list = await this.withActor(c, (actor) =>
+      this.deps.updateExample.listMineForWord(wordId, actor),
+    );
+    return c.json(
+      {
+        success: true as const,
+        data: list.map((media) => ({
+          id: media.id,
+          meaning_id: media.meaningId,
+          source_language_id: media.sourceLanguageId,
+          source_sentence: media.sourceSentence,
+          target_language_id: media.targetLanguageId,
+          target_sentence: media.targetSentence,
+          source_type: media.sourceType,
+          notes: media.notes,
+          status: media.status,
+          is_verified: media.isVerified,
+          is_corrected: media.isCorrected,
+        })),
+      },
+      200,
+    );
+  }
+
+  /** PATCH /api/v1/examples/:exampleId - #244 edit contoh pending milik sendiri */
+  async updateExample(c: Context, exampleId: string, body: UpdateExampleBody) {
+    const result = await this.withActor(c, (actor) =>
+      this.deps.updateExample.execute(
+        exampleId,
+        {
+          sourceSentence: body.source_sentence,
+          targetSentence: body.target_sentence ?? undefined,
+          sourceType: body.source_type,
+          notes: body.notes,
+        },
+        actor,
+      ),
+    );
+    if (result.outcome === 'no_changes') {
+      return c.json({ success: true as const, data: { id: exampleId, no_changes: true } });
+    }
+    const media = result.media;
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          id: media.id,
+          meaning_id: media.meaningId,
+          source_language_id: media.sourceLanguageId,
+          source_sentence: media.sourceSentence,
+          target_language_id: media.targetLanguageId,
+          target_sentence: media.targetSentence,
+          source_type: media.sourceType,
+          notes: media.notes,
+          status: media.status,
+          is_verified: media.isVerified,
+          is_corrected: media.isCorrected,
+        },
+      },
+      200,
+    );
+  }
   /** POST /api/v1/words/:wordId/meanings - kontribusi definisi (17-api) */
   async addMeaning(c: Context, wordId: string, body: AddMeaningBody) {
     const media = await this.withActor(c, (actor) =>
@@ -1287,8 +1480,23 @@ export class WordController {
 }
 
 /** Cache pendek untuk GET baca kamus publik (bot & CDN ramah). */
-function setPublicWordReadCache(c: Context) {
+function setPublicWordReadCache(c: Context, opts?: { privateCache?: boolean }) {
+  // Query meaning / include_unverified ubah payload - jangan cache CDN bersama.
+  if (opts?.privateCache) {
+    c.header('Cache-Control', 'private, max-age=60');
+    return;
+  }
   c.header('Cache-Control', 'public, max-age=60, s-maxage=300');
+}
+
+function parseFocusMeaningId(c: Context): string | undefined {
+  const raw = c.req.query('meaning')?.trim();
+  return raw && raw.length > 0 ? raw : undefined;
+}
+
+function parseIncludeUnverified(c: Context): boolean {
+  const raw = (c.req.query('include_unverified') ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
 }
 
 function toListItem(w: {

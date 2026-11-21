@@ -18,6 +18,7 @@ import {
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { derivePrimaryRole } from '@/shared/utils/derive-primary-role';
+import { parseSpeakerStatus } from '@/modules/auth/domain/entities/user.entity';
 import {
   IMPORT_POINT_FACTOR,
   POINT_WEIGHTS,
@@ -101,6 +102,7 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         username: users.username,
         displayName: users.displayName,
         bio: users.bio,
+        speakerStatus: users.speakerStatus,
         joinedAt: users.createdAt,
         avatarUrl: users.avatarUrl,
         activeBorderUrl: achievements.badgeUrl,
@@ -129,6 +131,7 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       username: row.username,
       displayName: row.displayName || row.username,
       bio: row.bio ?? null,
+      speakerStatus: parseSpeakerStatus(row.speakerStatus),
       roles: roleList,
       role: derivePrimaryRole(roleList),
       joinedAt: row.joinedAt,

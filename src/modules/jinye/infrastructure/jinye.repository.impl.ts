@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
   publicAccountDisplayName,
@@ -7,6 +7,7 @@ import {
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
   jinye,
+  jinyeCommentRevisions,
   jinyeComments,
   jinyeLemmaLinks,
   jinyeRevisions,
@@ -27,6 +28,7 @@ import type {
   Jinye,
   JinyeAudio,
   JinyeComment,
+  JinyeCommentRevision,
   JinyeLemmaLink,
   JinyeListFilter,
   JinyeRevision,
@@ -35,6 +37,7 @@ import type {
 } from '../domain/entities/jinye.entity';
 import { toImageRows, toJinyeImages } from '../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../domain/repositories/jinye.repository';
+import { JINYE_COMMENT_REVISION_CAP } from '../domain/repositories/jinye.repository';
 
 const proposedWords = alias(words, 'jinye_lemma_proposed_words');
 
@@ -99,6 +102,11 @@ function audioInsertValues(audio: JinyeAudio | null | undefined) {
 const isEditedSql = sql<boolean>`EXISTS (
   SELECT 1 FROM ${jinyeRevisions}
   WHERE ${jinyeRevisions.jinyeId} = ${jinye.id}
+)`;
+
+const isCommentEditedSql = sql<boolean>`EXISTS (
+  SELECT 1 FROM ${jinyeCommentRevisions}
+  WHERE ${jinyeCommentRevisions.commentId} = ${jinyeComments.id}
 )`;
 
 function mapJoined(row: {
@@ -361,6 +369,24 @@ export class JinyeRepositoryImpl implements JinyeRepository {
       .where(
         and(
           eq(jinyeLemmaLinks.jinyeId, jinyeId),
+          sql`${jinyeLemmaLinks.commentId} is null`,
+          sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
+        ),
+      )
+      .returning({ id: jinyeLemmaLinks.id });
+    return rows.length;
+  }
+
+  async markCommentLemmaLinksStale(commentId: string): Promise<number> {
+    const rows = await this.db
+      .update(jinyeLemmaLinks)
+      .set({
+        status: 'stale',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(jinyeLemmaLinks.commentId, commentId),
           sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
         ),
       )
@@ -513,6 +539,7 @@ export class JinyeRepositoryImpl implements JinyeRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal ?? null,
+        stickerId: input.stickerId ?? null,
         images: toImageRows(input.images ?? []),
         status: 'published',
       })
@@ -531,6 +558,7 @@ export class JinyeRepositoryImpl implements JinyeRepository {
         avatarUrl: users.avatarUrl,
         authorDeletedAt: users.deletedAt,
         userRole: highestUserRoleSql,
+        isEdited: isCommentEditedSql,
       })
       .from(jinyeComments)
       .leftJoin(users, eq(users.id, jinyeComments.userId))
@@ -549,6 +577,7 @@ export class JinyeRepositoryImpl implements JinyeRepository {
         avatarUrl: users.avatarUrl,
         authorDeletedAt: users.deletedAt,
         userRole: highestUserRoleSql,
+        isEdited: isCommentEditedSql,
       })
       .from(jinyeComments)
       .leftJoin(users, eq(users.id, jinyeComments.userId))
@@ -561,6 +590,95 @@ export class JinyeRepositoryImpl implements JinyeRepository {
       .orderBy(asc(jinyeComments.createdAt), asc(jinyeComments.id));
 
     return rows.map(mapCommentJoined);
+  }
+
+  async updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+    bodyOriginal: string | null;
+  }): Promise<JinyeComment | null> {
+    const now = new Date();
+    const updated = await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({
+          body: jinyeComments.body,
+          bodyOriginal: jinyeComments.bodyOriginal,
+        })
+        .from(jinyeComments)
+        .where(
+          and(
+            eq(jinyeComments.id, input.commentId),
+            eq(jinyeComments.userId, input.editorId),
+            eq(jinyeComments.status, 'published'),
+          ),
+        )
+        .limit(1);
+      if (!current) return null;
+
+      const sameBody = current.body === input.body;
+      const sameOriginal =
+        (current.bodyOriginal ?? null) === (input.bodyOriginal ?? null);
+      if (sameBody && sameOriginal) {
+        return input.commentId;
+      }
+
+      if (!sameBody) {
+        await tx.insert(jinyeCommentRevisions).values({
+          commentId: input.commentId,
+          editorId: input.editorId,
+          body: current.body,
+          createdAt: now,
+        });
+        const excess = await tx
+          .select({ id: jinyeCommentRevisions.id })
+          .from(jinyeCommentRevisions)
+          .where(eq(jinyeCommentRevisions.commentId, input.commentId))
+          .orderBy(desc(jinyeCommentRevisions.createdAt))
+          .offset(JINYE_COMMENT_REVISION_CAP);
+        if (excess.length > 0) {
+          await tx
+            .delete(jinyeCommentRevisions)
+            .where(inArray(jinyeCommentRevisions.id, excess.map((r) => r.id)));
+        }
+      }
+
+      const [row] = await tx
+        .update(jinyeComments)
+        .set({
+          body: input.body,
+          bodyOriginal: input.bodyOriginal,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(jinyeComments.id, input.commentId),
+            eq(jinyeComments.userId, input.editorId),
+            eq(jinyeComments.status, 'published'),
+          ),
+        )
+        .returning({ id: jinyeComments.id });
+      return row?.id ?? null;
+    });
+    if (!updated) return null;
+    return this.findCommentById(updated);
+  }
+
+  async listCommentRevisions(
+    commentId: string,
+  ): Promise<JinyeCommentRevision[]> {
+    const rows = await this.db
+      .select()
+      .from(jinyeCommentRevisions)
+      .where(eq(jinyeCommentRevisions.commentId, commentId))
+      .orderBy(desc(jinyeCommentRevisions.createdAt));
+    return rows.map((r) => ({
+      id: r.id,
+      commentId: r.commentId,
+      editorId: r.editorId,
+      body: r.body,
+      createdAt: r.createdAt,
+    }));
   }
 
   async markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
@@ -682,9 +800,11 @@ export class JinyeRepositoryImpl implements JinyeRepository {
     const conds = [
       sql`${jinyeLemmaLinks.status} in ('active', 'pending_correction')`,
     ];
-    if (input.jinyeId) conds.push(eq(jinyeLemmaLinks.jinyeId, input.jinyeId));
     if (input.commentId) {
       conds.push(eq(jinyeLemmaLinks.commentId, input.commentId));
+    } else if (input.jinyeId) {
+      conds.push(eq(jinyeLemmaLinks.jinyeId, input.jinyeId));
+      conds.push(sql`${jinyeLemmaLinks.commentId} is null`);
     }
     const rows = await this.db
       .select({
@@ -782,6 +902,7 @@ function mapCommentJoined(row: {
   avatarUrl: string | null;
   authorDeletedAt: Date | null;
   userRole: string | null;
+  isEdited?: boolean;
 }): JinyeComment {
   const deleted = row.authorDeletedAt != null;
   return {
@@ -799,9 +920,11 @@ function mapCommentJoined(row: {
     userRole: deleted ? null : (row.userRole ?? null),
     body: row.comment.body ?? '',
     bodyOriginal: row.comment.bodyOriginal ?? null,
+    stickerId: row.comment.stickerId ?? null,
     images: toJinyeImages(row.comment.images),
     status: row.comment.status as JinyeCommentStatus,
     createdAt: row.comment.createdAt,
     updatedAt: row.comment.updatedAt ?? null,
+    isEdited: !!row.isEdited,
   };
 }

@@ -159,7 +159,7 @@ describe('CreateWordUseCase - event feed (AGENTS.md #25)', () => {
   }
 
   it('kontributor login (published belum verified) → event contribution_submitted', async () => {
-    const { useCase, append } = makeDepsWithEvents({ status: 'pending_review' });
+    const { useCase, append } = makeDepsWithEvents({ status: 'published' });
     await useCase.execute(makeDto({ status: 'published' }), {
       ...CONTRIBUTOR,
       userId: '01CONTRIBUTORULID000000000',
@@ -170,7 +170,7 @@ describe('CreateWordUseCase - event feed (AGENTS.md #25)', () => {
   });
 
   it('anonim → event contribution_submitted', async () => {
-    const { useCase, append } = makeDepsWithEvents({ status: 'pending_review' });
+    const { useCase, append } = makeDepsWithEvents({ status: 'published' });
     await useCase.execute(
       makeDto({ status: 'published' }),
       { ...CONTRIBUTOR, userId: ANONIM_USER_ID },
@@ -223,6 +223,20 @@ describe('CreateWordUseCase', () => {
     expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'published', isVerified: false }),
       CONTRIBUTOR.userId,
+    );
+  });
+
+  it('anonim + status published → tayang, belum terverifikasi (Periksa Kata)', async () => {
+    const { useCase, wordRepo } = makeDeps();
+    const result = await useCase.execute(
+      makeDto({ status: 'published' }),
+      { ...CONTRIBUTOR, userId: ANONIM_USER_ID },
+    );
+    expect(result.word.status).toBe('published');
+    expect(result.word.isVerified).toBe(false);
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'published', isVerified: false }),
+      ANONIM_USER_ID,
     );
   });
 
@@ -374,6 +388,58 @@ describe('CreateWordUseCase', () => {
           'Lemma ini sudah ada dan entri ini sudah tayang. Selesaikan di tab Duplikasi.',
       },
     ]);
+  });
+
+  // #252: kontributor duplikat TANPA kembaran published tidak boleh
+  // ter-stamp verified_by=dirinya - publish ditahan (skipPublishIfNoTwin).
+  it('kontributor + duplikat lemma published tanpa twin → skip publish, warning pending merge', async () => {
+    const { useCase, wordRepo } = makeDeps({}, true);
+    const result = await useCase.execute(makeDto({ status: 'published' }), CONTRIBUTOR);
+
+    expect(wordRepo.publishOrMergeMeanings).toHaveBeenCalledWith(
+      '01WORDULID000000000000000',
+      CONTRIBUTOR.userId,
+      { skipPublishIfNoTwin: true },
+    );
+    expect(result.word.isVerified).toBe(false);
+    expect(result.word.verifiedBy).toBeNull();
+    expect(result.warnings).toEqual([
+      {
+        field: 'lemma',
+        message: expect.stringContaining('Selesaikan di tab Duplikasi'),
+      },
+    ]);
+  });
+
+  it('kontributor + duplikat lemma published DENGAN twin → tetap auto-merge', async () => {
+    const { useCase, wordRepo } = makeDeps({}, true);
+    const keptId = '01WORDULIDKEPT00000000000';
+    (wordRepo.publishOrMergeMeanings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      wordId: keptId,
+      mergedIntoWordId: keptId,
+    });
+    (wordRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeWord({ id: keptId, status: 'published', isVerified: true }),
+    );
+    const result = await useCase.execute(makeDto({ status: 'published' }), CONTRIBUTOR);
+
+    expect(wordRepo.publishOrMergeMeanings).toHaveBeenCalledWith(
+      '01WORDULID000000000000000',
+      CONTRIBUTOR.userId,
+      { skipPublishIfNoTwin: true },
+    );
+    expect(result.word.id).toBe(keptId);
+  });
+
+  it('verifikator + duplikat lemma published → publish-or-merge tanpa skip', async () => {
+    const { useCase, wordRepo } = makeDeps({}, true);
+    await useCase.execute(makeDto({ status: 'published' }), ADMIN);
+
+    expect(wordRepo.publishOrMergeMeanings).toHaveBeenCalledWith(
+      '01WORDULID000000000000000',
+      ADMIN.userId,
+      { skipPublishIfNoTwin: false },
+    );
   });
 
   it('tanpa duplikat → tidak ada field warnings', async () => {
@@ -821,6 +887,36 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
     });
   });
 
+  it('G3b: lemma ≠ miss + variants form = miss.term → lolos', async () => {
+    const { useCase, searchMissRepo, wordRepo } = makeDeps();
+    searchMissRepo.findById = vi.fn().mockResolvedValue({
+      id: MISS_ID,
+      term: 'kalllak',
+      direction: 'lemma',
+      hitCount: 1,
+      lastSearchedAt: new Date(),
+      isFulfilled: false,
+      isVisible: true,
+      createdAt: new Date(),
+    });
+    const result = await useCase.execute(
+      makeDto({
+        searchMissId: MISS_ID,
+        lemma: 'kalak',
+        variants: [{ form: 'kalllak', variantType: 'alternative' }],
+      }),
+      ADMIN,
+    );
+    expect(result.searchMissId).toBe(MISS_ID);
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        searchMissId: MISS_ID,
+        lemma: 'kalak',
+      }),
+      ADMIN.userId,
+    );
+  });
+
   it('direction=translation: soft-check teks terjemahan pertama', async () => {
     const { useCase, searchMissRepo } = makeDeps();
     searchMissRepo.findById = vi.fn().mockResolvedValue({
@@ -854,6 +950,47 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
         ADMIN,
       ),
     ).rejects.toMatchObject({ errorCode: 'SEARCH_MISS_TERM_MISMATCH' });
+  });
+
+  it('G3b: translation koreksi - padanan benar + typo miss di translations → lolos', async () => {
+    const { useCase, searchMissRepo } = makeDeps();
+    searchMissRepo.findById = vi.fn().mockResolvedValue({
+      id: MISS_ID,
+      term: 'makann',
+      direction: 'translation',
+      hitCount: 1,
+      lastSearchedAt: new Date(),
+      isFulfilled: false,
+      isVisible: true,
+      createdAt: new Date(),
+    });
+    const result = await useCase.execute(
+      makeDto({
+        searchMissId: MISS_ID,
+        lemma: 'makatn',
+        meanings: [
+          {
+            wordClassId: '01WORDCLASSESNOMINA000000',
+            definition: 'Aktivitas memasukkan makanan ke mulut',
+            orderIndex: 1,
+            translations: [
+              {
+                languageId: '01LANGUAGESINDONESIA00000',
+                translationText: 'makan',
+                translationType: 'direct',
+              },
+              {
+                languageId: '01LANGUAGESINDONESIA00000',
+                translationText: 'makann',
+                translationType: 'direct',
+              },
+            ],
+          },
+        ],
+      }),
+      ADMIN,
+    );
+    expect(result.searchMissId).toBe(MISS_ID);
   });
 
   it('tanpa search_miss_id + term lemma cocok → auto-attach (#262)', async () => {

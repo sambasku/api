@@ -20,6 +20,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     username: 'siti',
     displayName: 'Siti',
     bio: null,
+    speakerStatus: null,
     regionId: null,
     villageId: null,
     email: 'siti@test.com',

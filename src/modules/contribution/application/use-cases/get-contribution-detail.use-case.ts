@@ -49,6 +49,16 @@ export class GetContributionDetailUseCase {
       }
     } else {
       entity = await this.contributionRepo.findChildWithParent(contribution.entityType, contribution.entityId);
+      // Orphan / race soft-delete: jangan kirim null - UI tinjau auto-skip.
+      if (entity == null) {
+        entity = {
+          id: contribution.entityId,
+          wordId: null,
+          wordLemma: contribution.wordLemma,
+          data: {},
+          payload_missing: true,
+        };
+      }
     }
 
     return { contribution, review, priorReviews, entity };

@@ -22,6 +22,9 @@ export const inboxNotificationTypeSchema = z.enum([
   'jinye_comment',
   'word_comment',
   'word_vote',
+  'meaning_auto_verified',
+  'meaning_needs_review',
+  'meaning_auto_rejected',
   'word_example',
   'word_audio',
   'campaign',
@@ -29,6 +32,9 @@ export const inboxNotificationTypeSchema = z.enum([
   'verifier_application_rejected',
   'streak_reminder',
   'level_up',
+  'baleho_placement_approved',
+  'baleho_placement_rejected',
+  'baleho_placement_ending_soon',
 ]);
 
 export const notificationTargetKindSchema = z.enum([
@@ -42,6 +48,7 @@ export const notificationTargetKindSchema = z.enum([
   'jinye',
   'day',
   'level',
+  'baleho_placement',
 ]);
 
 export const notificationActionKindSchema = z.enum([
@@ -52,6 +59,7 @@ export const notificationActionKindSchema = z.enum([
   'pantun',
   'jinye',
   'url',
+  'baleho_placement',
 ]);
 
 export const listNotificationsQuerySchema = z.object({

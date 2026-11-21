@@ -61,6 +61,10 @@ const envSchema = z.object({
   PUBLIC_IMAGE_GITHUB_TOKEN: z.string().optional(),
   PUBLIC_IMAGE_GITHUB_URL: z.url().optional(),
 
+  // Leaderboard mingguan (CDN GitHub). Kosong = DB-only, publikasi dilewati.
+  LEADERBOARD_GITHUB_URL: z.string().url().optional(),
+  LEADERBOARD_GITHUB_TOKEN: z.string().optional(),
+
   // Audio pronunciation storage - pola sama IMAGE_PROVIDER.
   // Tanpa kredensial: endpoint upload audio balas 503
   // PRONUNCIACION_UPLOAD_UNAVAILABLE.
@@ -171,6 +175,19 @@ const envSchema = z.object({
   // POST /api/v1/admin/system/supabase/ping → 503 SUPABASE_PING_UNAVAILABLE.
   SUPABASE_URL: z.url().optional(),
   SUPABASE_ANON_KEY: z.string().optional(),
+  // Secret/service key untuk mirror chat ke Supabase (SoT tetap Turso).
+  // Jangan expose ke mobile. Kosong = mirror skip; kirim tetap OK di Turso.
+  SUPABASE_SECRET_KEY: z.string().optional(),
+
+  // LiveKit voice room experimental (homelab voice.sambasku.com).
+  // Acuan: docs/env/livekit.md. Kosong = POST /voice/token → 503.
+  LIVEKIT_URL: z.string().url().optional(),
+  LIVEKIT_API_KEY: z.string().optional(),
+  LIVEKIT_API_SECRET: z.string().optional(),
+  LIVEKIT_ROOM_NAME: z.string().optional(),
+  // coturn static-auth-secret (turn.sambasku.com). Kosong = GET /voice/turn-creds → 503.
+  // wrangler secret put TURN_SECRET - jangan commit nilai nyata.
+  TURN_SECRET: z.string().optional(),
 
   // App URL for the API service (Cloudflare Workers custom domain) - sama
   // dengan APP_URL di atas (legacy). Tidak ada definisi kedua.

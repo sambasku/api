@@ -26,6 +26,7 @@ export const layananFieldsSchema = z.object({
 export const listLayananQuerySchema = z.object({
   region_id: z.string().trim().min(1).max(80).optional(),
   category: z.enum(['ambulance', 'fire']).optional(),
+  q: z.string().trim().min(1).max(100).optional(),
 });
 
 export const submitLayananSchema = layananFieldsSchema.extend({

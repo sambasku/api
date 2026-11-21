@@ -11,6 +11,7 @@ import type {
   VoteRepository,
   VoteTargetType,
 } from '../../domain/repositories/vote.repository';
+import type { ApplyMeaningVoteTrustUseCase } from './apply-meaning-vote-trust.use-case';
 
 export interface ToggleVoteCommand {
   userId: string;
@@ -59,6 +60,7 @@ export class ToggleVoteUseCase {
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: WordVotePushCooldownGate,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly meaningVoteTrust?: ApplyMeaningVoteTrustUseCase,
   ) {}
 
   async execute(cmd: ToggleVoteCommand): Promise<ToggleVoteWireResult> {
@@ -155,6 +157,29 @@ export class ToggleVoteUseCase {
         targetType,
         targetId,
       );
+    }
+
+    // G2: auto-verif / needs_review setelah counts final (termasuk unvote).
+    if (targetType === 'meaning' && this.meaningVoteTrust) {
+      await this.meaningVoteTrust
+        .execute({
+          meaningId: targetId,
+          upvotes: result.upvotes,
+          downvotes: result.downvotes,
+          actorId: cmd.userId,
+        })
+        .catch((err) => {
+          console.error(
+            JSON.stringify({
+              level: 'error',
+              time: new Date().toISOString(),
+              msg: 'meaning vote trust apply failed',
+              meaning_id: targetId,
+              actor_id: cmd.userId,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        });
     }
 
     return { ...result, targetType, targetId };

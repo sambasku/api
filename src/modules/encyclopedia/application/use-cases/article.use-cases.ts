@@ -221,13 +221,19 @@ export class UpdateArticleUseCase {
       );
     }
 
+    const nextCoverUrl = input.coverUrl ?? null;
+    const nextSourceUrl = input.sourceUrl ?? null;
+    const nextReferencesMd = input.referencesMd ?? null;
     const unchanged =
       existing.title === input.title &&
       existing.excerpt === input.excerpt &&
       existing.bodyMd === input.bodyMd &&
       existing.categoryId === input.categoryId &&
       JSON.stringify([...existing.tags].sort()) ===
-        JSON.stringify([...input.tags].sort());
+        JSON.stringify([...input.tags].sort()) &&
+      (existing.coverUrl ?? null) === nextCoverUrl &&
+      (existing.sourceUrl ?? null) === nextSourceUrl &&
+      (existing.referencesMd ?? null) === nextReferencesMd;
     if (unchanged) {
       // Edit tanpa perubahan tidak menulis revisi (keputusan plan).
       return existing;
@@ -242,9 +248,9 @@ export class UpdateArticleUseCase {
         bodyText: stripMarkdown(input.bodyMd),
         categoryId: input.categoryId,
         tags: input.tags,
-        coverUrl: input.coverUrl ?? null,
-        sourceUrl: input.sourceUrl ?? null,
-        referencesMd: input.referencesMd ?? null,
+        coverUrl: nextCoverUrl,
+        sourceUrl: nextSourceUrl,
+        referencesMd: nextReferencesMd,
       },
       revision: {
         articleId,
@@ -274,6 +280,9 @@ export class UpdateArticleUseCase {
         body_md_len: existing.bodyMd.length,
         category_id: existing.categoryId,
         tags: existing.tags,
+        cover_url: existing.coverUrl,
+        source_url: existing.sourceUrl,
+        references_md: existing.referencesMd,
       },
       newData: {
         title: updated.title,
@@ -281,6 +290,9 @@ export class UpdateArticleUseCase {
         body_md_len: updated.bodyMd.length,
         category_id: updated.categoryId,
         tags: updated.tags,
+        cover_url: updated.coverUrl,
+        source_url: updated.sourceUrl,
+        references_md: updated.referencesMd,
       },
       requestId: input.requestId ?? null,
     });

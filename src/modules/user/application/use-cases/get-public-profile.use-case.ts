@@ -18,6 +18,7 @@ export class GetPublicProfileUseCase {
       username: user.username,
       displayName: user.displayName,
       bio: user.bio,
+      speakerStatus: user.speakerStatus,
       roles: user.roles,
       role: user.role,
       isVerifier: isVerifierRole(user.roles),

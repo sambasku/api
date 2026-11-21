@@ -1,14 +1,36 @@
 import type {
+  NewEntityCommentAudioInput,
+  NewEntityCommentImageInput,
+} from '@/shared/comment/entity-comment-media';
+import type {
   UsahaKind,
   UsahaOperationalStatus,
   UsahaPublishStatus,
 } from '@/shared/database/drizzle/schema/usahas.schema';
+import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
+  UsahaComment,
   UsahaDetail,
   UsahaImage,
   UsahaImageInput,
   UsahaListItem,
 } from '../entities/usaha.entity';
+
+export interface NewUsahaCommentInput {
+  usahaId: string;
+  userId: string;
+  body: string;
+  bodyOriginal: string | null;
+  stickerId?: string | null;
+  image?: NewEntityCommentImageInput | null;
+  audio?: NewEntityCommentAudioInput | null;
+}
+
+export interface UsahaCommentListFilter {
+  status?: 'published';
+  cursor?: string;
+  limit: number;
+}
 
 export interface CreateUsahaInput {
   id?: string;
@@ -160,4 +182,20 @@ export interface UsahaRepository {
     since: Date,
   ): Promise<number>;
   hideImage(usahaId: string, imageId: string): Promise<UsahaImage | null>;
+
+  // --- komentar ---
+  createComment(input: NewUsahaCommentInput): Promise<UsahaComment>;
+  findCommentById(id: string): Promise<UsahaComment | null>;
+  listComments(
+    usahaId: string,
+    filter: UsahaCommentListFilter,
+  ): Promise<CursorPage<UsahaComment>>;
+  updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<UsahaComment | null>;
+  markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
+  takedownComment(id: string, actorId: string): Promise<boolean>;
+  usahaTargetExists(id: string): Promise<boolean>;
 }

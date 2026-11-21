@@ -460,4 +460,82 @@ describe.skipIf(!hasTestDb)("Event E2E - CRUD admin + usulan moderasi", () => {
     const detail = await get("/api/v1/events/rahasia-draft-e2e");
     expect(detail.status).toBe(404);
   });
+
+  it("galeri foto acara: append max 4, list paginasi, takedown admin", async () => {
+    const res = await post(
+      "/api/v1/admin/events",
+      eventBody({ name: "Acara Galeri E2E", slug: "galeri-e2e" }),
+      adminToken,
+    );
+    expect(res.status).toBe(200);
+    const created = (await res.json()).data;
+    expect(created.status).toBe("published");
+
+    const urls = Array.from(
+      { length: 4 },
+      (_, i) =>
+        `https://cdn.jsdelivr.net/gh/sambasku/data@main/assets/events/galeri-e2e-${i}.jpg`,
+    );
+    const append = await post(
+      "/api/v1/events/galeri-e2e/images",
+      { urls },
+      userToken,
+    );
+    expect(append.status).toBe(200);
+
+    const list = await get("/api/v1/events/galeri-e2e/images?offset=0");
+    expect(list.status).toBe(200);
+    const page = (await list.json()).data;
+    expect(page.items.length).toBe(4);
+    expect(page.total).toBe(4);
+    expect(page.items[0].attribution?.name).toBeTruthy();
+
+    // pagination: offset di luar = next_offset null
+    const page2 = await get("/api/v1/events/galeri-e2e/images?offset=12");
+    const page2Data = (await page2.json()).data;
+    expect(page2Data.items.length).toBe(0);
+    expect(page2Data.next_offset).toBeNull();
+
+    // takedown admin: foto hilang dari galeri publik
+    const hide = await del(
+      `/api/v1/admin/events/${created.id}/images/${page.items[0].id}`,
+      adminToken,
+    );
+    expect(hide.status).toBe(200);
+    const after = await get("/api/v1/events/galeri-e2e/images?offset=0");
+    expect((await after.json()).data.items.length).toBe(3);
+  });
+
+  it("tolak lebih dari 4 foto per kiriman", async () => {
+    const urls = Array.from(
+      { length: 5 },
+      (_, i) =>
+        `https://cdn.jsdelivr.net/gh/sambasku/data@main/assets/events/galeri-e2e-over-${i}.jpg`,
+    );
+    const append = await post(
+      "/api/v1/events/galeri-e2e/images",
+      { urls },
+      userToken,
+    );
+    expect(append.status).toBe(400);
+  });
+
+  it("tolak URL bukan hasil unggah SambasKu", async () => {
+    const append = await post(
+      "/api/v1/events/galeri-e2e/images",
+      { urls: ["https://contoh-luar.com/foto.jpg"] },
+      userToken,
+    );
+    expect(append.status).toBe(400);
+  });
+
+  it("tamu tidak bisa menambah foto (401)", async () => {
+    const append = await post("/api/v1/events/galeri-e2e/images", {
+      urls: [
+        "https://cdn.jsdelivr.net/gh/sambasku/data@main/assets/events/galeri-e2e-x.jpg",
+      ],
+    });
+    expect(append.status).toBe(401);
+  });
 });
+

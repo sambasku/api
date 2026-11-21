@@ -108,6 +108,25 @@ describe.skipIf(!hasTestDb)('Layanan E2E', () => {
     expect((await other.json()).data.items).toEqual([]);
   });
 
+  it('q pakai FTS: nama, kecamatan, dan alamat ketemu; unpublish keluar', async () => {
+    // Nama organisasi.
+    const byName = await get('/api/v1/layanan?q=damkar');
+    expect((await byName.json()).data.items.map((r: { name: string }) => r.name)).toEqual(['Damkar Pemangkat']);
+    // Nama kecamatan (via region_name, bukan kolom layanans).
+    const byRegion = await get('/api/v1/layanan?q=pemangkat');
+    expect((await byRegion.json()).data.items).toHaveLength(2);
+    // Alamat.
+    const withAddr = await post(
+      '/api/v1/layanan-contributions',
+      body({ name: 'Ambulans Sebatang', address_text: 'Jalan Sebatang Udik' }),
+      userToken,
+    );
+    const addrId = (await withAddr.json()).data.id;
+    await post(`/api/v1/admin/layanan-contributions/${addrId}/approve`, {}, adminToken);
+    const byAddr = await get('/api/v1/layanan?q=sebatang');
+    expect((await byAddr.json()).data.items.map((r: { name: string }) => r.name)).toEqual(['Ambulans Sebatang']);
+  });
+
   it('nomor kosong 400 dan desa sebagai kecamatan ditolak', async () => {
     const blank = await post('/api/v1/layanan-contributions', body({ phones: [] }), userToken);
     expect(blank.status).toBe(400);

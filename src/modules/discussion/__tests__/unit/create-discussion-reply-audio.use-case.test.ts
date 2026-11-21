@@ -63,6 +63,7 @@ function makeReply(overrides: Partial<DiscussionReply> = {}): DiscussionReply {
     userRole: 'contributor',
     body: '',
     bodyOriginal: null,
+    stickerId: null,
     audio: {
       url: 'https://cdn.example/a.wav',
       mimeType: 'audio/wav',

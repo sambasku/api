@@ -20,7 +20,7 @@ function nullableRegionId(message: string) {
 }
 
 const USERNAME_FORMAT_MESSAGE =
-  'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore).';
+  'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore), tanpa titik/underscore beruntun.';
 
 export const updateMyProfileSchema = z
   .object({
@@ -47,6 +47,12 @@ export const updateMyProfileSchema = z
       .nullable()
       .optional()
       .transform((v) => (v === '' ? null : v)),
+    speaker_status: z
+      .enum(['native', 'learner'], {
+        message: 'Pilih penutur asli atau sedang belajar',
+      })
+      .nullable()
+      .optional(),
     region_id: nullableRegionId('Kecamatan tidak valid. Pilih ulang dari daftar.'),
     village_id: nullableRegionId('Desa tidak valid. Pilih ulang dari daftar.'),
     // Guide sekali jalan: hanya boleh true, tidak bisa di-reset ke belum baca.
@@ -65,6 +71,7 @@ export const updateMyProfileSchema = z
       body.username !== undefined ||
       body.display_name !== undefined ||
       body.bio !== undefined ||
+      body.speaker_status !== undefined ||
       body.has_read_contribution_guide !== undefined ||
       body.region_id !== undefined ||
       body.village_id !== undefined ||
@@ -88,7 +95,14 @@ export const usernameAvailabilityResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     username: z.string(),
-    status: z.enum(['available', 'current', 'invalid', 'reserved', 'taken']),
+    status: z.enum([
+      'available',
+      'current',
+      'invalid',
+      'reserved',
+      'taken',
+      'reclaimable',
+    ]),
   }),
 });
 
@@ -100,11 +114,30 @@ export const myProfileResponseSchema = z.object({
     username: z.string(),
     display_name: z.string(),
     bio: z.string().nullable(),
+    speaker_status: z.enum(['native', 'learner']).nullable(),
     region_id: z.string().nullable(),
     village_id: z.string().nullable(),
     avatar_url: z.string().url().nullable(),
     has_read_contribution_guide: z.boolean(),
     /** True bila user belum setujui terms/privacy versi aktif. */
     requires_consent: z.boolean(),
+    username_changed_at: z.string().datetime().nullable(),
+    username_change_allowed_at: z.string().datetime().nullable(),
+    username_change_cooldown_days: z.number().int().positive(),
+  }),
+});
+
+export const usernameHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    items: z.array(
+      z.object({
+        old_username: z.string(),
+        new_username: z.string(),
+        changed_at: z.string().datetime(),
+        hold_until: z.string().datetime(),
+        can_reclaim: z.boolean(),
+      }),
+    ),
   }),
 });

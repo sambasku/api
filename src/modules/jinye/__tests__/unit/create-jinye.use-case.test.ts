@@ -56,6 +56,7 @@ describe('CreateJinyeUseCase', () => {
       updateBody: vi.fn(),
       listRevisions: vi.fn(),
       markLemmaLinksStale: vi.fn(),
+      markCommentLemmaLinksStale: vi.fn(),
       findPlainRepostByUser: vi.fn(),
       adjustRepostCount: vi.fn(),
       markDeletedByAuthor: vi.fn(),
@@ -64,6 +65,8 @@ describe('CreateJinyeUseCase', () => {
       createComment: vi.fn(),
       findCommentById: vi.fn(),
       listCommentsByJinyeId: vi.fn(),
+      updateCommentWithRevision: vi.fn(),
+      listCommentRevisions: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
     takedownComment: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
@@ -98,6 +101,7 @@ describe('CreateJinyeUseCase', () => {
       updateBody: vi.fn(),
       listRevisions: vi.fn(),
       markLemmaLinksStale: vi.fn(),
+      markCommentLemmaLinksStale: vi.fn(),
       findPlainRepostByUser: vi.fn(),
       adjustRepostCount: vi.fn(),
       markDeletedByAuthor: vi.fn(),
@@ -106,6 +110,8 @@ describe('CreateJinyeUseCase', () => {
       createComment: vi.fn(),
       findCommentById: vi.fn(),
       listCommentsByJinyeId: vi.fn(),
+      updateCommentWithRevision: vi.fn(),
+      listCommentRevisions: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       takedownComment: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
@@ -143,6 +149,7 @@ describe('CreateJinyeUseCase', () => {
       updateBody: vi.fn(),
       listRevisions: vi.fn(),
       markLemmaLinksStale: vi.fn(),
+      markCommentLemmaLinksStale: vi.fn(),
       findPlainRepostByUser: vi.fn(),
       adjustRepostCount: vi.fn(),
       markDeletedByAuthor: vi.fn(),
@@ -151,6 +158,8 @@ describe('CreateJinyeUseCase', () => {
       createComment: vi.fn(),
       findCommentById: vi.fn(),
       listCommentsByJinyeId: vi.fn(),
+      updateCommentWithRevision: vi.fn(),
+      listCommentRevisions: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       takedownComment: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
@@ -186,6 +195,7 @@ describe('CreateJinyeUseCase', () => {
       updateBody: vi.fn(),
       listRevisions: vi.fn(),
       markLemmaLinksStale: vi.fn(),
+      markCommentLemmaLinksStale: vi.fn(),
       findPlainRepostByUser: vi.fn(),
       adjustRepostCount: vi.fn(),
       markDeletedByAuthor: vi.fn(),
@@ -194,6 +204,8 @@ describe('CreateJinyeUseCase', () => {
       createComment: vi.fn(),
       findCommentById: vi.fn(),
       listCommentsByJinyeId: vi.fn(),
+      updateCommentWithRevision: vi.fn(),
+      listCommentRevisions: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       takedownComment: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
@@ -233,6 +245,7 @@ describe('CreateJinyeUseCase', () => {
       updateBody: vi.fn(),
       listRevisions: vi.fn(),
       markLemmaLinksStale: vi.fn(),
+      markCommentLemmaLinksStale: vi.fn(),
       findPlainRepostByUser: vi.fn(),
       adjustRepostCount: vi.fn(),
       markDeletedByAuthor: vi.fn(),
@@ -241,6 +254,8 @@ describe('CreateJinyeUseCase', () => {
       createComment: vi.fn(),
       findCommentById: vi.fn(),
       listCommentsByJinyeId: vi.fn(),
+      updateCommentWithRevision: vi.fn(),
+      listCommentRevisions: vi.fn(),
       markCommentDeletedByAuthor: vi.fn(),
       takedownComment: vi.fn(),
       incrementPublishedCommentCount: vi.fn(),
@@ -275,4 +290,74 @@ describe('CreateJinyeUseCase', () => {
       }),
     );
   });
+
+  it('foto auto-tayang: publicUrl diisi dari url staging', async () => {
+    const create = vi.fn(async (input: { images: { publicUrl: string | null; url: string }[] }) =>
+      makeJinye({
+        body: '',
+        images: input.images.map((i, idx) => ({
+          url: i.url,
+          providerFileId: `f${idx}`,
+          publicUrl: i.publicUrl,
+          contentWarnings: [],
+        })),
+      }),
+    );
+    const repo: JinyeRepository = {
+      create: create as never,
+      findById: vi.fn(),
+      list: vi.fn(),
+      findLatestCreatedAtByUser: vi.fn(async () => null),
+      findLatestQuotaConsumingCreatedAtByUser: vi.fn(async () => null),
+      updateBody: vi.fn(),
+      listRevisions: vi.fn(),
+      markLemmaLinksStale: vi.fn(),
+      markCommentLemmaLinksStale: vi.fn(),
+      findPlainRepostByUser: vi.fn(),
+      adjustRepostCount: vi.fn(),
+      markDeletedByAuthor: vi.fn(),
+      takedown: vi.fn(),
+      setAudio: vi.fn(),
+      createComment: vi.fn(),
+      findCommentById: vi.fn(),
+      listCommentsByJinyeId: vi.fn(),
+      updateCommentWithRevision: vi.fn(),
+      listCommentRevisions: vi.fn(),
+      markCommentDeletedByAuthor: vi.fn(),
+      takedownComment: vi.fn(),
+      incrementPublishedCommentCount: vi.fn(),
+      setStatus: vi.fn(),
+      getPinnedJinyeId: vi.fn(),
+      setPinnedJinyeId: vi.fn(),
+      clearPinnedIf: vi.fn(),
+      createLemmaLink: vi.fn(),
+      findLemmaLinkById: vi.fn(),
+      listLemmaLinksByJinyeId: vi.fn(),
+      listActiveLemmaLinksForTarget: vi.fn(),
+      updateLemmaLink: vi.fn(),
+      deleteLemmaLink: vi.fn(),
+    };
+    const uc = new CreateJinyeUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+    );
+    const url = 'https://ik.example.com/jinye/a.jpg';
+    await uc.execute({
+      userId: ACTOR,
+      body: '',
+      images: [{ url, providerFileId: 'file1', publicUrl: null, contentWarnings: [] }],
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        images: [
+          expect.objectContaining({
+            url,
+            publicUrl: url,
+          }),
+        ],
+      }),
+    );
+  });
+
 });

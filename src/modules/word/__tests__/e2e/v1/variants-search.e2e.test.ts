@@ -168,7 +168,7 @@ describe.skipIf(!hasTestDb)('Variasi Penulisan E2E v1 (11 doc) - search + valida
     );
     expect(res.status).toBe(201);
 
-    // pending_review → tidak tayang di search publik sampai di-approve;
+    // Anon kini published + unverified (boleh muncul di search lemma);
     // cukup pastikan tidak 400 (varian diterima pintu anonim)
     const search = await get('/api/v1/words/search?q=lamasx&search_in=lemma&limit=10');
     expect(search.status).toBe(200);

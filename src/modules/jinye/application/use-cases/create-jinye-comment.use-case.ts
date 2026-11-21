@@ -8,6 +8,7 @@ import type { RecordInboxNotificationUseCase } from '@/modules/notification/appl
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
+import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type { JinyeComment, JinyeImage } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
 
@@ -15,6 +16,7 @@ const MAX_BODY = 500;
 const MAX_IMAGES = 4;
 const SNIPPET_MAX = 80;
 const REPLY_TITLE = 'Balasan Jinye baru';
+const STICKER_SNIPPET = 'mengirim stiker';
 
 function truncateSnippet(text: string, max = SNIPPET_MAX): string {
   const trimmed = text.trim().replace(/\s+/g, ' ');
@@ -28,6 +30,7 @@ export interface CreateJinyeCommentCommand {
   body?: string | null;
   parentId?: string | null;
   images?: JinyeImage[];
+  stickerId?: string | null;
   requestId?: string | null;
 }
 
@@ -51,6 +54,7 @@ export class CreateJinyeCommentUseCase {
     private readonly userRepo?: UserRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
+    private readonly stickerRepo?: StickerRepository,
   ) {}
 
   async execute(cmd: CreateJinyeCommentCommand): Promise<JinyeComment> {
@@ -110,11 +114,36 @@ export class CreateJinyeCommentUseCase {
       }
     }
 
-    if (!body && images.length === 0) {
+    const rawSticker = cmd.stickerId?.trim() ?? '';
+    if (rawSticker && images.length > 0) {
+      throw new ValidationError([
+        { field: 'sticker_id', message: 'Stiker tidak bisa digabung dengan foto' },
+      ]);
+    }
+    let stickerId: string | null = null;
+    if (rawSticker) {
+      if (!this.stickerRepo) {
+        throw new ValidationError([
+          { field: 'sticker_id', message: 'Stiker tidak tersedia' },
+        ]);
+      }
+      const catalog = await this.stickerRepo.findActiveById(rawSticker);
+      if (!catalog) {
+        throw new ValidationError([
+          {
+            field: 'sticker_id',
+            message: 'Stiker tidak tersedia. Pilih ulang dari daftar.',
+          },
+        ]);
+      }
+      stickerId = catalog.id;
+    }
+
+    if (!body && images.length === 0 && !stickerId) {
       throw new ValidationError([
         {
           field: 'body',
-          message: 'Isi teks atau foto dulu ya.',
+          message: 'Isi teks, foto, atau stiker dulu ya.',
         },
       ]);
     }
@@ -143,10 +172,12 @@ export class CreateJinyeCommentUseCase {
       userId: cmd.userId,
       body,
       bodyOriginal,
+      stickerId,
       images: images.map((i) => ({
         url: i.url.trim(),
         providerFileId: i.providerFileId.trim(),
-        publicUrl: null,
+        // Auto-tayang: staging URL langsung jadi public (post-moderation).
+        publicUrl: i.url.trim(),
         contentWarnings: [],
       })),
     });
@@ -162,6 +193,7 @@ export class CreateJinyeCommentUseCase {
         jinye_id: cmd.jinyeId,
         parent_id: parentId,
         has_images: created.images.length > 0,
+        sticker_id: stickerId,
       },
       requestId: cmd.requestId ?? null,
     });
@@ -179,7 +211,13 @@ export class CreateJinyeCommentUseCase {
       jinyeBody: jinye.body,
       parentAuthorId,
       actorId: cmd.userId,
-      commentBody: created.body || (created.images.length > 0 ? 'Foto' : ''),
+      commentBody:
+        created.body ||
+        (created.images.length > 0
+          ? 'Foto'
+          : stickerId
+            ? STICKER_SNIPPET
+            : ''),
     });
 
     return created;

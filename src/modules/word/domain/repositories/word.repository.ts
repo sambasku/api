@@ -220,6 +220,11 @@ export interface SearchParams {
   statuses?: WordStatus[];
   /** Panel admin: true = bergambar, false = tanpa gambar, omit = semua. */
   hasImage?: boolean;
+  /**
+   * Panel admin (G5): true = punya ≥1 makna `needs_review`, false = tidak
+   * ada, omit = semua. Filter EXISTS di meanings, bukan kolom words.
+   */
+  needsReview?: boolean;
 }
 
 export interface CursorPage<T> {
@@ -455,6 +460,54 @@ export interface WordRepository {
   ): Promise<boolean>;
 
   /**
+   * Trust per makna: set/clear is_verified pada satu makna, lalu rollup
+   * words.is_verified. Return false kalau makna tidak ada / soft-deleted.
+   */
+  setMeaningVerified(
+    meaningId: string,
+    data: {
+      isVerified: boolean;
+      verifiedBy: string;
+      verifiedAt: Date;
+      clearNeedsReview?: boolean;
+    },
+  ): Promise<{ wordId: string } | null>;
+
+  /**
+   * Flag needs_review tanpa cabut is_verified (G2: net jelek setelah verified).
+   * Return false kalau makna tidak ada / sudah soft-deleted.
+   */
+  setMeaningNeedsReview(
+    meaningId: string,
+    needsReview: boolean,
+    actorId: string,
+  ): Promise<{ wordId: string; changed: boolean } | null>;
+
+  /** Ringkas trust + pembuat makna untuk hook vote (G2 / Periksa Kata). */
+  findMeaningTrustState(meaningId: string): Promise<{
+    meaningId: string;
+    wordId: string;
+    lemma: string;
+    status: string;
+    isVerified: boolean;
+    needsReview: boolean;
+    createdBy: string | null;
+  } | null>;
+
+  /**
+   * Auto-tolak warga: makna published → rejected. Jika tidak ada makna
+   * published tersisa, lemma juga rejected. Return null jika makna hilang /
+   * bukan published.
+   */
+  rejectMeaningByCommunityVote(
+    meaningId: string,
+    actorId: string,
+  ): Promise<{ wordId: string; wordRejected: boolean } | null>;
+
+  /** Hitung ulang words.is_verified dari makna published (ikut data lama). */
+  rollupWordVerifiedFromMeanings(wordId: string): Promise<void>;
+
+  /**
    * Flip status tayang: published ↔ draft. Publish juga set is_verified.
    * Return false kalau kata tidak ditemukan / soft-deleted.
    */
@@ -471,6 +524,7 @@ export interface WordRepository {
   publishOrMergeMeanings(
     id: string,
     actorId: string,
+    opts?: { skipPublishIfNoTwin?: boolean },
   ): Promise<{ wordId: string; mergedIntoWordId: string | null } | null>;
 
   /**
@@ -671,6 +725,49 @@ export interface WordRepository {
   findExampleWithWord(
     exampleId: string,
   ): Promise<{ id: string; meaningId: string; wordId: string } | null>;
+
+  /** Contoh aktif (non soft-delete) untuk terjemahan reff=lemma_example. */
+  findExampleById(exampleId: string): Promise<ExampleMedia | null>;
+
+  /**
+   * Terapkan terjemahan accepted ke `examples.target_sentence`
+   * (resolve usulan reff=lemma_example).
+   */
+  applyExampleTargetSentence(
+    exampleId: string,
+    data: { targetSentence: string; targetLanguageId: string },
+    actorId: string,
+  ): Promise<ExampleMedia | null>;
+
+  /**
+   * #244: contoh milik actor (created_by) + status - dasar edit pending.
+   * Null kalau tidak ada / soft-delete / bukan milik actor.
+   */
+  findExampleForOwner(
+    exampleId: string,
+    actorId: string,
+  ): Promise<(ExampleMedia & { wordId: string }) | null>;
+
+  /**
+   * #244: edit in-place konten contoh pending milik sendiri.
+   * WHERE status='pending_review' (race guard direview bersamaan) - null kalau kalah race.
+   */
+  updateExampleContent(
+    exampleId: string,
+    actorId: string,
+    data: {
+      sourceSentence: string;
+      targetSentence?: string | null;
+      sourceType?: string | null;
+      notes?: string | null;
+    },
+  ): Promise<ExampleMedia | null>;
+
+  /** #244: contoh pending milik actor untuk kata - overlay edit di detail lemma. */
+  findPendingExamplesForWord(
+    wordId: string,
+    actorId: string,
+  ): Promise<ExampleMedia[]>;
 
   /**
    * #133: pemilik kata induk untuk media anak (contoh/audio) dalam SATU query.

@@ -157,6 +157,8 @@ export interface VoteHistoryWord {
   isVerified: boolean;
 }
 
+export type VoteCommunityStatus = 'pending' | 'verified' | 'rejected';
+
 export interface VoteHistoryItem {
   id: string;
   entityType: VoteTargetType;
@@ -165,6 +167,17 @@ export interface VoteHistoryItem {
   /** votes.created_at - waktu pasang pertama, bukan ganti arah. */
   votedAt: Date;
   word: VoteHistoryWord | null;
+  /**
+   * Hasil komunitas untuk target makna (Periksa Kata). Null untuk target
+   * non-makna atau makna induk hilang.
+   */
+  communityStatus: VoteCommunityStatus | null;
+  /** Agregat komunitas untuk target (batch countMany). */
+  upvotes: number;
+  downvotes: number;
+  /** Cuplikan makna (hanya target meaning). */
+  definition: string | null;
+  translation: string | null;
 }
 
 export interface VoteHistoryListOptions {
@@ -172,6 +185,10 @@ export interface VoteHistoryListOptions {
   cursor?: string;
   targetType?: VoteTargetType;
   value?: 1 | -1;
+  /** Filter hasil komunitas - hanya baris meaning. */
+  communityStatus?: VoteCommunityStatus;
+  /** Cari lemma kata induk (case-insensitive). */
+  q?: string;
 }
 
 export interface VoteHistoryListResult {
@@ -202,7 +219,15 @@ export interface VoteDeckMeaning {
   isVerified: boolean;
   /** COALESCE(words.verified_at, words.created_at) */
   approvedAt: Date;
-  /** Definisi makna ini; fallback ke terjemahan pertama bila kosong. */
+  /**
+   * Definisi makna ini (`is_have_definition` true, bukan placeholder);
+   * null bila belum diisi. Dikirim terpisah supaya kartu bisa menampilkan
+   * terjemahan dan definisi sebagai dua baris.
+   */
+  definition: string | null;
+  /** Terjemahan pertama makna ini (`translation_text` peringkat awal). */
+  translation: string | null;
+  /** `definition ?? translation` - kompat klien lama yang hanya baca `sense`. */
   sense: string | null;
   /** Posisi 1-based antar makna published kata ini - konteks "makna ke-N". */
   orderIndex: number;
@@ -231,6 +256,8 @@ export interface VoteDeckListOptions {
   cursor?: VoteDeckCursor;
   /** true = acak isi halaman per user (deck mobile tidak seragam). */
   randomize?: boolean;
+  /** Cari lemma / definisi (case-insensitive). */
+  q?: string;
 }
 
 export interface VoteDeckListResult {
@@ -302,8 +329,15 @@ export interface VoteRepository {
    * Antrean MAKNA published yang user belum vote dan belum skip
    * (34-api-vote-deck.md; 0101: deck per makna, bukan per kata).
    * Urut total vote Asc, lalu approved_at Asc, id Asc. LIMIT+1 has_more.
+   * Filter trust: makna + kata **sudah** `is_verified`.
    */
   listDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;
+
+  /**
+   * Antrean Periksa Kata: makna published **belum** verified, user belum
+   * vote/skip (docs/produk/periksa-kata.md). Shape sama VoteDeckMeaning.
+   */
+  listCheckDeckMeanings(userId: string, opts: VoteDeckListOptions): Promise<VoteDeckListResult>;
 
   /**
    * List vote admin cursor pagination compound (created_at, id) desc.

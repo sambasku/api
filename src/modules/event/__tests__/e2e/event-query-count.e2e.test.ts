@@ -220,9 +220,9 @@ describe.skipIf(!hasTestDb)("Event query budget - list & detail", () => {
     const multiIdx = slugs.indexOf("overlap-multi-hari");
     expect(multiIdx).toBeGreaterThanOrEqual(0);
     for (let i = 1; i < res.items.length; i++) {
-      expect(
-        res.items[i].startsAt.getTime(),
-      ).toBeGreaterThanOrEqual(res.items[i - 1].startsAt.getTime());
+      const cur = res.items[i].startsAt?.getTime() ?? 0;
+      const prev = res.items[i - 1].startsAt?.getTime() ?? 0;
+      expect(cur).toBeGreaterThanOrEqual(prev);
     }
   });
 });

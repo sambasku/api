@@ -16,6 +16,8 @@ export const ACTIVITY_EVENT_KINDS = [
   'contribution_example',
   'place_photo_added',
   'usaha_photo_added',
+  'cuisine_photo_added',
+  'event_photo_added',
   'comment_created',
   'vote_word',
   'vote_comment',
@@ -30,15 +32,22 @@ export const ACTIVITY_EVENT_KINDS = [
   'card_shared',
  'usaha_published',
   'layanan_published',
- 'cuisine_published',
+  'karya_published',
+  'kreator_claimed',
+  'cuisine_published',
  'place_published',
- 'event_published',
+  'event_published',
   'event_going',
+  'place_visited',
+  'usaha_visited',
   'pantun_created',
   'pantun_reply_created',
   'article_published',
   'article_comment_created',
   'event_comment_created',
+  'place_comment_created',
+  'usaha_comment_created',
+  'cuisine_comment_created',
   'announcement',
   'jinye_created',
   'jinye_comment_created',
@@ -68,6 +77,8 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'place_photo';
     case 'usaha_photo_added':
       return 'usaha_photo';
+    case 'cuisine_photo_added':
+      return 'culinary';
     case 'comment_created':
       return 'comment';
     case 'vote_word':
@@ -91,16 +102,25 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'card_shared':
       return 'card_share';
     case 'usaha_published':
+    case 'usaha_visited':
+    case 'usaha_comment_created':
       return 'usaha';
     case 'layanan_published':
       return 'layanan';
+    case 'karya_published':
+    case 'kreator_claimed':
+      return 'karya';
     case 'cuisine_published':
+    case 'cuisine_comment_created':
       return 'culinary';
     case 'place_published':
+    case 'place_visited':
+    case 'place_comment_created':
       return 'place_listing';
 case 'event_published':
 case 'event_going':
 case 'event_comment_created':
+case 'event_photo_added':
 return 'event';
   case 'pantun_created':
   case 'pantun_reply_created':

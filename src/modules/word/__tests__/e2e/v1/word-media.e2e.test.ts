@@ -106,10 +106,15 @@ describe.skipIf(!hasTestDb)('Word Media E2E v1 - kontribusi pronounce/gambar/con
     expect(body.data).toMatchObject({ status: 'published', is_verified: false, is_corrected: false });
     expect(body.data.id).toHaveLength(26);
 
-    // Pronounce belum verified: tidak di detail publik
+    // Pronounce published belum verified tetap di detail publik (badge)
     const detail = await get(`/api/v1/words/${wordId}`);
     const detailBody = await detail.json();
-    expect(detailBody.data.pronunciations.some((p: { value: string }) => p.value === '/makatn/')).toBe(false);
+    expect(
+      detailBody.data.pronunciations.some(
+        (p: { value: string; is_verified?: boolean }) =>
+          p.value === '/makatn/' && p.is_verified === false,
+      ),
+    ).toBe(true);
     const adminDetail = await get(`/api/v1/admin/words/${wordId}`, adminToken);
     expect(
       (await adminDetail.json()).data.pronunciations.some(

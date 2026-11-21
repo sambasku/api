@@ -1,15 +1,22 @@
 import { z } from 'zod';
 import { opaqueId } from '@/shared/validation/id';
+import { SPONSORSHIP_TIERS } from '@/shared/database/drizzle/schema/sponsorships.schema';
+
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const sponsorshipTierSchema = z.enum(SPONSORSHIP_TIERS);
 
 const sponsorshipItemSchema = z.object({
   id: z.string(),
   user_id: z.string().nullable(),
+  usaha_id: z.string().nullable(),
   name: z.string(),
   description: z.string().nullable(),
   logo_url: z.string().nullable(),
   url: z.string().nullable(),
   username: z.string().nullable(),
+  tier: sponsorshipTierSchema,
   since: z.string(),
+  ends_on: z.string().nullable(),
   note: z.string(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
@@ -43,9 +50,12 @@ export const createSponsorshipBodySchema = z.object({
   logo_url: z.string().url().nullable().optional(),
   url: z.string().url().nullable().optional(),
   username: z.string().trim().min(1).max(64).nullable().optional(),
-  since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  tier: sponsorshipTierSchema.optional(),
+  since: isoDateSchema,
+  ends_on: isoDateSchema.nullable().optional(),
   note: z.string().trim().max(2000).optional(),
   user_id: opaqueId.nullable().optional(),
+  usaha_id: opaqueId.nullable().optional(),
 });
 
 export const updateSponsorshipBodySchema = z.object({
@@ -54,8 +64,12 @@ export const updateSponsorshipBodySchema = z.object({
   logo_url: z.string().url().nullable().optional(),
   url: z.string().url().nullable().optional(),
   username: z.string().trim().min(1).max(64).nullable().optional(),
-  since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  tier: sponsorshipTierSchema.optional(),
+  since: isoDateSchema.optional(),
+  ends_on: isoDateSchema.nullable().optional(),
   note: z.string().trim().max(2000).optional(),
+  user_id: opaqueId.nullable().optional(),
+  usaha_id: opaqueId.nullable().optional(),
 });
 
 export const listAdminSponsorshipsQuerySchema = z.object({

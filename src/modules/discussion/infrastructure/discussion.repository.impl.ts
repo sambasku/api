@@ -1,19 +1,26 @@
 import { and, asc, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
   publicAccountDisplayName,
   publicAccountName,
 } from '@/shared/constants/deleted-account';
 import {
+  discussionLemmaLinks,
   discussionReplies,
   discussionReplyRevisions,
   discussionRevisions,
   discussions,
   users,
   votes,
+  words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { DiscussionImageRow } from '@/shared/database/drizzle/schema/discussions.schema';
+import type {
+  DiscussionLemmaLinkSource,
+  DiscussionLemmaLinkStatus,
+} from '@/shared/database/drizzle/schema/discussion-lemma-links.schema';
 import { IMAGE_CONTENT_WARNING_SET } from '@/shared/constants/image-content-warnings';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
@@ -21,6 +28,7 @@ import type {
   NewDiscussionReply,
   Discussion,
   DiscussionImage,
+  DiscussionLemmaLink,
   DiscussionListFilter,
   DiscussionListOrder,
   DiscussionReply,
@@ -32,6 +40,8 @@ import type {
 } from '../domain/entities/discussion.entity';
 import { normalizeDiscussionListSort } from '../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../domain/repositories/discussion.repository';
+
+const proposedWords = alias(words, 'discussion_lemma_proposed_words');
 
 type DiscussionRow = typeof discussions.$inferSelect;
 type ReplyRow = typeof discussionReplies.$inferSelect;
@@ -186,6 +196,7 @@ function toReply(
     userRole,
     body: row.body,
     bodyOriginal: row.bodyOriginal,
+    stickerId: row.stickerId ?? null,
     audio: hasAudio
       ? {
           url: row.audioUrl as string,
@@ -634,6 +645,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal ?? null,
+        stickerId: input.stickerId ?? null,
         audioUrl: audio?.url ?? null,
         audioMimeType: audio?.mimeType ?? null,
         audioFileSize: audio?.fileSize ?? null,
@@ -984,4 +996,209 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
     }));
   }
 
+  async markLemmaLinksStale(discussionId: string): Promise<number> {
+    const rows = await this.db
+      .update(discussionLemmaLinks)
+      .set({
+        status: 'stale',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(discussionLemmaLinks.discussionId, discussionId),
+          sql`${discussionLemmaLinks.replyId} is null`,
+          sql`${discussionLemmaLinks.status} in ('active', 'pending_correction')`,
+        ),
+      )
+      .returning({ id: discussionLemmaLinks.id });
+    return rows.length;
+  }
+
+  async markReplyLemmaLinksStale(replyId: string): Promise<number> {
+    const rows = await this.db
+      .update(discussionLemmaLinks)
+      .set({
+        status: 'stale',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(discussionLemmaLinks.replyId, replyId),
+          sql`${discussionLemmaLinks.status} in ('active', 'pending_correction')`,
+        ),
+      )
+      .returning({ id: discussionLemmaLinks.id });
+    return rows.length;
+  }
+
+  async createLemmaLink(input: {
+    discussionId: string;
+    replyId?: string | null;
+    start: number;
+    end: number;
+    wordId: string;
+    source: DiscussionLemmaLinkSource;
+    status?: DiscussionLemmaLinkStatus;
+  }): Promise<DiscussionLemmaLink> {
+    const [row] = await this.db
+      .insert(discussionLemmaLinks)
+      .values({
+        discussionId: input.discussionId,
+        replyId: input.replyId ?? null,
+        start: input.start,
+        end: input.end,
+        wordId: input.wordId,
+        source: input.source,
+        status: input.status ?? 'active',
+      })
+      .returning({ id: discussionLemmaLinks.id });
+    const created = await this.findLemmaLinkById(row.id);
+    if (!created) throw new Error('discussion lemma link missing after insert');
+    return created;
+  }
+
+  async findLemmaLinkById(id: string): Promise<DiscussionLemmaLink | null> {
+    const rows = await this.db
+      .select({
+        link: discussionLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(discussionLemmaLinks)
+      .leftJoin(words, eq(words.id, discussionLemmaLinks.wordId))
+      .leftJoin(
+        proposedWords,
+        eq(proposedWords.id, discussionLemmaLinks.proposedWordId),
+      )
+      .where(eq(discussionLemmaLinks.id, id))
+      .limit(1);
+    const row = rows[0];
+    return row ? mapLemmaLink(row) : null;
+  }
+
+  async listLemmaLinksByDiscussionId(
+    discussionId: string,
+  ): Promise<DiscussionLemmaLink[]> {
+    const rows = await this.db
+      .select({
+        link: discussionLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(discussionLemmaLinks)
+      .leftJoin(words, eq(words.id, discussionLemmaLinks.wordId))
+      .leftJoin(
+        proposedWords,
+        eq(proposedWords.id, discussionLemmaLinks.proposedWordId),
+      )
+      .where(
+        and(
+          eq(discussionLemmaLinks.discussionId, discussionId),
+          sql`${discussionLemmaLinks.status} in ('active', 'pending_correction')`,
+        ),
+      )
+      .orderBy(asc(discussionLemmaLinks.start), asc(discussionLemmaLinks.id));
+    return rows.map(mapLemmaLink);
+  }
+
+  async listActiveLemmaLinksForTarget(input: {
+    discussionId?: string | null;
+    replyId?: string | null;
+  }): Promise<DiscussionLemmaLink[]> {
+    const conds = [
+      sql`${discussionLemmaLinks.status} in ('active', 'pending_correction')`,
+    ];
+    if (input.replyId) {
+      conds.push(eq(discussionLemmaLinks.replyId, input.replyId));
+    } else if (input.discussionId) {
+      conds.push(eq(discussionLemmaLinks.discussionId, input.discussionId));
+      conds.push(sql`${discussionLemmaLinks.replyId} is null`);
+    }
+    const rows = await this.db
+      .select({
+        link: discussionLemmaLinks,
+        lemma: words.lemma,
+        proposedLemma: proposedWords.lemma,
+      })
+      .from(discussionLemmaLinks)
+      .leftJoin(words, eq(words.id, discussionLemmaLinks.wordId))
+      .leftJoin(
+        proposedWords,
+        eq(proposedWords.id, discussionLemmaLinks.proposedWordId),
+      )
+      .where(and(...conds))
+      .orderBy(asc(discussionLemmaLinks.start), asc(discussionLemmaLinks.id));
+    return rows.map(mapLemmaLink);
+  }
+
+  async updateLemmaLink(
+    id: string,
+    patch: {
+      wordId?: string;
+      status?: DiscussionLemmaLinkStatus;
+      source?: DiscussionLemmaLinkSource;
+      proposedWordId?: string | null;
+      proposedBy?: string | null;
+      reviewedBy?: string | null;
+      reviewedAt?: Date | null;
+    },
+  ): Promise<DiscussionLemmaLink | null> {
+    const updated = await this.db
+      .update(discussionLemmaLinks)
+      .set({
+        ...(patch.wordId !== undefined ? { wordId: patch.wordId } : {}),
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(patch.source !== undefined ? { source: patch.source } : {}),
+        ...(patch.proposedWordId !== undefined
+          ? { proposedWordId: patch.proposedWordId }
+          : {}),
+        ...(patch.proposedBy !== undefined
+          ? { proposedBy: patch.proposedBy }
+          : {}),
+        ...(patch.reviewedBy !== undefined
+          ? { reviewedBy: patch.reviewedBy }
+          : {}),
+        ...(patch.reviewedAt !== undefined
+          ? { reviewedAt: patch.reviewedAt }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(discussionLemmaLinks.id, id))
+      .returning({ id: discussionLemmaLinks.id });
+    if (updated.length === 0) return null;
+    return this.findLemmaLinkById(id);
+  }
+
+  async deleteLemmaLink(id: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(discussionLemmaLinks)
+      .where(eq(discussionLemmaLinks.id, id))
+      .returning({ id: discussionLemmaLinks.id });
+    return deleted.length > 0;
+  }
+}
+
+function mapLemmaLink(row: {
+  link: typeof discussionLemmaLinks.$inferSelect;
+  lemma: string | null;
+  proposedLemma: string | null;
+}): DiscussionLemmaLink {
+  return {
+    id: row.link.id,
+    discussionId: row.link.discussionId,
+    replyId: row.link.replyId ?? null,
+    start: row.link.start,
+    end: row.link.end,
+    wordId: row.link.wordId,
+    lemma: row.lemma ?? null,
+    status: row.link.status as DiscussionLemmaLinkStatus,
+    source: row.link.source as DiscussionLemmaLinkSource,
+    proposedWordId: row.link.proposedWordId ?? null,
+    proposedLemma: row.proposedLemma ?? null,
+    proposedBy: row.link.proposedBy ?? null,
+    reviewedBy: row.link.reviewedBy ?? null,
+    reviewedAt: row.link.reviewedAt ?? null,
+    createdAt: row.link.createdAt,
+    updatedAt: row.link.updatedAt ?? null,
+  };
 }

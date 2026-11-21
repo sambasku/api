@@ -51,8 +51,9 @@ describe('mapOpenversePhoto', () => {
       id: 'openverse-photo-abc-1',
       kind: 'photo',
       provider: 'openverse',
-      url: 'https://wsrv.nl/?url=example.com%2Fa.jpg&w=640&h=640&fit=cover&output=webp',
-      preview_url: 'https://wsrv.nl/?url=example.com%2Fa-thumb.jpg&w=640&h=640&fit=cover&output=webp',
+      url: 'https://example.com/a.jpg',
+      preview_url:
+        'https://wsrv.nl/?url=example.com%2Fa-thumb.jpg&w=640&h=640&fit=cover&output=webp',
       photographer: 'Ada',
       attribution_url: 'https://www.flickr.com/photos/x/1',
       license: 'CC BY 2.0',

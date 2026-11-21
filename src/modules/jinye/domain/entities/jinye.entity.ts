@@ -91,11 +91,23 @@ export interface JinyeComment {
   userRole: string | null;
   body: string;
   bodyOriginal: string | null;
+  /** Slug katalog stickers; null = bukan komentar stiker. */
+  stickerId: string | null;
   images: JinyeImage[];
   status: JinyeCommentStatus;
   createdAt: Date;
   updatedAt: Date | null;
+  /** true jika pernah disunting (EXISTS di jinye_comment_revisions). */
+  isEdited?: boolean;
   replies?: JinyeComment[];
+}
+
+export interface JinyeCommentRevision {
+  id: string;
+  commentId: string;
+  editorId: string;
+  body: string;
+  createdAt: Date;
 }
 
 export interface NewJinyeComment {
@@ -104,6 +116,7 @@ export interface NewJinyeComment {
   userId: string;
   body: string;
   bodyOriginal?: string | null;
+  stickerId?: string | null;
   images?: JinyeImage[];
 }
 

@@ -30,6 +30,12 @@ import {
   WEB_IMPORT_USER_ID,
   WEB_IMPORT_USERNAME,
 } from '@/shared/constants/web-importer';
+import {
+  VOTING_WARGA_DISPLAY_NAME,
+  VOTING_WARGA_EMAIL,
+  VOTING_WARGA_USER_ID,
+  VOTING_WARGA_USERNAME,
+} from '@/shared/constants/voting-warga';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { seedAchievements } from './seed-achievements';
@@ -64,6 +70,7 @@ const SEED_CATEGORIES = [
   { name: 'Kekerabatan' },
   { name: 'Alam' },
   { name: 'Makanan' },
+  { name: 'Buah-buahan' },
   { name: 'Binatang & Hewan' },
   { name: 'Tumbuhan & Tanaman' },
   { name: 'Tubuh & Kesehatan' },
@@ -184,15 +191,50 @@ export async function seedReference(): Promise<void> {
     .where(eq(users.id, WEB_IMPORT_USER_ID));
   logger.info(`Seed referensi: user sistem ${WEB_IMPORT_EMAIL}`);
 
+  // User sistem Voting Warga (atribusi auto-verif makna dari quorum vote).
+  await db
+    .insert(users)
+    .values({
+      id: VOTING_WARGA_USER_ID,
+      username: VOTING_WARGA_USERNAME,
+      displayName: VOTING_WARGA_DISPLAY_NAME,
+      email: VOTING_WARGA_EMAIL,
+      passwordHash: await hasher.hash(crypto.randomUUID()),
+      emailVerified: true,
+    })
+    .onConflictDoNothing({ target: users.id });
+  await db
+    .update(users)
+    .set({
+      username: VOTING_WARGA_USERNAME,
+      displayName: VOTING_WARGA_DISPLAY_NAME,
+      email: VOTING_WARGA_EMAIL,
+    })
+    .where(eq(users.id, VOTING_WARGA_USER_ID));
+  logger.info(`Seed referensi: user sistem ${VOTING_WARGA_EMAIL}`);
+
   // Multi role: user sistem pegang role contributor di junction.
-  const systemUserIds = [ANONIM_USER_ID, CSV_IMPORTER_USER_ID, GITHUB_ACTIONS_USER_ID, WEB_IMPORT_USER_ID];
+  const systemUserIds = [
+    ANONIM_USER_ID,
+    CSV_IMPORTER_USER_ID,
+    GITHUB_ACTIONS_USER_ID,
+    WEB_IMPORT_USER_ID,
+    VOTING_WARGA_USER_ID,
+  ];
   await db
     .insert(userRoles)
     .values(systemUserIds.map((userId) => ({ userId, role: 'contributor' })))
     .onConflictDoNothing();
 
-  for (const lang of SEED_LANGUAGES) {
-    await db.insert(languages).values({ ...lang }).onConflictDoNothing({ target: languages.code });
+  // Insert-if-missing (bukan ON CONFLICT target kolom): Turso/SQLite sering
+  // menolak `ON CONFLICT ("languages"."code")` walau unique index ada
+  // ("does not match any PRIMARY KEY or UNIQUE constraint").
+  const existingLangCodes = new Set(
+    (await db.select({ code: languages.code }).from(languages)).map((r) => r.code),
+  );
+  const missingLangs = SEED_LANGUAGES.filter((l) => !existingLangCodes.has(l.code));
+  if (missingLangs.length > 0) {
+    await db.insert(languages).values([...missingLangs]);
   }
 
   const smbLanguage = await db.query.languages.findFirst({ where: (l, { eq }) => eq(l.code, 'SBS') });
@@ -200,20 +242,32 @@ export async function seedReference(): Promise<void> {
     throw new Error('Bahasa SBS belum ada setelah seed languages');
   }
 
-  for (const d of SEED_DIALECTS) {
-    await db
-      .insert(dialects)
-      .values({
+  const existingDialectCodes = new Set(
+    (
+      await db
+        .select({ code: dialects.code })
+        .from(dialects)
+        .where(eq(dialects.languageId, smbLanguage.id))
+    ).map((r) => r.code),
+  );
+  const missingDialects = SEED_DIALECTS.filter((d) => !existingDialectCodes.has(d.code));
+  if (missingDialects.length > 0) {
+    await db.insert(dialects).values(
+      missingDialects.map((d) => ({
         languageId: smbLanguage.id,
         code: d.code,
         name: d.name,
         isDefault: d.isDefault,
-      })
-      .onConflictDoNothing({ target: [dialects.languageId, dialects.code] });
+      })),
+    );
   }
 
-  for (const wc of SEED_WORD_CLASSES) {
-    await db.insert(wordClasses).values({ ...wc }).onConflictDoNothing({ target: wordClasses.code });
+  const existingWordClassCodes = new Set(
+    (await db.select({ code: wordClasses.code }).from(wordClasses)).map((r) => r.code),
+  );
+  const missingWordClasses = SEED_WORD_CLASSES.filter((wc) => !existingWordClassCodes.has(wc.code));
+  if (missingWordClasses.length > 0) {
+    await db.insert(wordClasses).values([...missingWordClasses]);
   }
 
   const existingCategoryNames = new Set(
@@ -227,7 +281,7 @@ export async function seedReference(): Promise<void> {
   }
 
   logger.info(
-    `Seed referensi: ${SEED_LANGUAGES.length} bahasa, ${SEED_DIALECTS.length} dialek, ${SEED_WORD_CLASSES.length} kelas kata, ${SEED_CATEGORIES.length} kategori (${missingCategories.length} kategori baru)`,
+    `Seed referensi: bahasa ${missingLangs.length}/${SEED_LANGUAGES.length} baru, dialek ${missingDialects.length}/${SEED_DIALECTS.length} baru, kelas kata ${missingWordClasses.length}/${SEED_WORD_CLASSES.length} baru, kategori ${missingCategories.length}/${SEED_CATEGORIES.length} baru`,
   );
   // Katalog achievement (angkatan-ke-1, beta-tester) - idempoten, pisah
   // fungsi tapi sekali jalan bareng referensi biar satu workflow saja.

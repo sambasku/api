@@ -10,6 +10,11 @@ export interface UploadCredentials {
   upload_endpoint: string;
 }
 
+export interface AuthenticatedFileBytes {
+  bytes: Uint8Array;
+  contentType: string;
+}
+
 export interface ImageStoragePort {
   /** identitas provider - dicatat ke word_images.provider (bukan hardcode) */
   readonly providerName: string;
@@ -21,4 +26,9 @@ export interface ImageStoragePort {
   createUploadCredentials(folder: string): Promise<UploadCredentials>;
   /** hapus file di provider - dipakai saat word/image dihapus */
   deleteFile(providerFileId: string): Promise<void>;
+  /**
+   * Ambil byte file lewat URL bertanda tangan (file privat / signed).
+   * Dipakai proxy admin - client tidak pernah menerima URL CDN mentah.
+   */
+  fetchAuthenticatedFile(url: string): Promise<AuthenticatedFileBytes>;
 }

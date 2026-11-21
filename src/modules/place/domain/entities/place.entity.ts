@@ -1,3 +1,6 @@
+import type { CommentAudio, CommentImage } from '@/modules/comment/domain/entities/comment.entity';
+import type { PlaceCommentStatus } from '@/shared/database/drizzle/schema/place-comments.schema';
+
 /** Id slug di tabel `place_categories`. */
 export type PlaceCategory = string;
 export type PlaceType =
@@ -82,6 +85,25 @@ export interface Place {
   related: PlaceRelation[];
   images: PlaceImage[];
   status: PlaceStatus;
+  createdAt: Date;
+  updatedAt: Date | null;
+}
+
+export interface PlaceComment {
+  id: string;
+  placeId: string;
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  userRole: string | null;
+  authorDeletedAt: Date | null;
+  body: string;
+  stickerId: string | null;
+  audio: CommentAudio | null;
+  image: CommentImage | null;
+  status: PlaceCommentStatus;
+  isEdited: boolean;
   createdAt: Date;
   updatedAt: Date | null;
 }

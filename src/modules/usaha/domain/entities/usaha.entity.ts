@@ -1,8 +1,11 @@
+import type { CommentAudio, CommentImage } from '@/modules/comment/domain/entities/comment.entity';
 import type {
   UsahaKind,
   UsahaOperationalStatus,
   UsahaPublishStatus,
 } from '@/shared/database/drizzle/schema/usahas.schema';
+import type { SponsorshipTier } from '@/shared/database/drizzle/schema/sponsorships.schema';
+import type { UsahaCommentStatus } from '@/shared/database/drizzle/schema/usaha-comments.schema';
 
 /** Id slug di tabel `usaha_categories`. */
 export type UsahaCategory = string;
@@ -79,6 +82,8 @@ export interface UsahaListItem extends Usaha {
   author: UsahaAuthorRef | null;
   /** Pengelola terverifikasi (klaim disetujui admin), JOIN users. */
   manager: UsahaAuthorRef | null;
+  /** Tier sponsorship aktif terhubung usaha; null = bukan sponsor. */
+  sponsorTier: SponsorshipTier | null;
 }
 
 /** Detail + katalog versi publik. */
@@ -107,4 +112,23 @@ export interface UsahaImageInput {
   url: string;
   isMain?: boolean;
   attribution?: UsahaImageAttribution | null;
+}
+
+export interface UsahaComment {
+  id: string;
+  usahaId: string;
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  userRole: string | null;
+  authorDeletedAt: Date | null;
+  body: string;
+  stickerId: string | null;
+  audio: CommentAudio | null;
+  image: CommentImage | null;
+  status: UsahaCommentStatus;
+  isEdited: boolean;
+  createdAt: Date;
+  updatedAt: Date | null;
 }

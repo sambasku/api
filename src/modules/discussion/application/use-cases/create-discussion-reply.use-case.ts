@@ -16,6 +16,7 @@ import {
   RecordAbuseSignalUseCase,
   safeRecordAbuseSignal,
 } from '@/shared/moderation/record-abuse-signal.use-case';
+import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type { DiscussionReply } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
 
@@ -23,12 +24,14 @@ export interface CreateDiscussionReplyCommand {
   discussionId: string;
   userId: string;
   body: string;
+  stickerId?: string | null;
   requestId?: string | null;
 }
 
 const SNIPPET_MAX = 80;
 const REPLY_TITLE = 'Balasan baru';
 const DISCUSSION_MENTION_TITLE = 'Kamu disebut di diskusi';
+const STICKER_SNIPPET = 'mengirim stiker';
 
 function truncateSnippet(text: string, max = SNIPPET_MAX): string {
   const trimmed = text.trim().replace(/\s+/g, ' ');
@@ -56,25 +59,50 @@ export class CreateDiscussionReplyUseCase {
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: DiscussionReplyPushCooldownGate,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly stickerRepo?: StickerRepository,
   ) {}
 
   async execute(cmd: CreateDiscussionReplyCommand): Promise<DiscussionReply> {
     await assertCanContribute(cmd.userId);
 
-    const raw = cmd.body.trim();
-    if (raw.length < 1) {
-      throw new ValidationError([{ field: 'body', message: 'Balasan minimal 1 karakter' }]);
+    const raw = cmd.body?.trim() ?? '';
+    const rawSticker = cmd.stickerId?.trim() ?? '';
+    let stickerId: string | null = null;
+    if (rawSticker) {
+      if (!this.stickerRepo) {
+        throw new ValidationError([
+          { field: 'sticker_id', message: 'Stiker tidak tersedia' },
+        ]);
+      }
+      const catalog = await this.stickerRepo.findActiveById(rawSticker);
+      if (!catalog) {
+        throw new ValidationError([
+          {
+            field: 'sticker_id',
+            message: 'Stiker tidak tersedia. Pilih ulang dari daftar.',
+          },
+        ]);
+      }
+      stickerId = catalog.id;
+    }
+    if (raw.length === 0 && !stickerId) {
+      throw new ValidationError([
+        { field: 'body', message: 'Balasan atau stiker wajib diisi' },
+      ]);
     }
     if (raw.length > 500) {
       throw new ValidationError([{ field: 'body', message: 'Balasan maksimal 500 karakter' }]);
     }
 
-    const body = await assertUgcTextQualityWithStrike(raw, {
-      userId: cmd.userId,
-      abuse: this.abuse,
-      entityType: 'discussion_reply',
-      requestId: cmd.requestId,
-    });
+    let body = raw;
+    if (raw.length > 0) {
+      body = await assertUgcTextQualityWithStrike(raw, {
+        userId: cmd.userId,
+        abuse: this.abuse,
+        entityType: 'discussion_reply',
+        requestId: cmd.requestId,
+      });
+    }
 
     const discussion = await this.repo.findById(cmd.discussionId);
     if (!discussion) {
@@ -88,14 +116,16 @@ export class CreateDiscussionReplyUseCase {
     }
 
     const blocked = await this.blocklistRepo.listAllActiveWords();
-    const filteredBody = applyBlocklistFilter(body, blocked);
-    const wasFiltered = filteredBody !== body;
+    const filteredBody =
+      body.length > 0 ? applyBlocklistFilter(body, blocked) : '';
+    const wasFiltered = body.length > 0 && filteredBody !== body;
 
     const reply = await this.repo.createReply({
       discussionId: cmd.discussionId,
       userId: cmd.userId,
       body: filteredBody,
       bodyOriginal: wasFiltered ? body : null,
+      stickerId,
     });
 
     await this.auditRepo.record({
@@ -107,6 +137,7 @@ export class CreateDiscussionReplyUseCase {
         discussion_id: cmd.discussionId,
         status: 'published',
         censored: wasFiltered,
+        sticker_id: stickerId,
       },
       requestId: cmd.requestId ?? null,
     });
@@ -127,6 +158,7 @@ export class CreateDiscussionReplyUseCase {
       ownerUserId: discussion.userId,
       actorId: cmd.userId,
       replyBody: reply.body,
+      hasSticker: Boolean(stickerId),
     });
 
     await this.notifyMentionedUsers({
@@ -232,6 +264,7 @@ export class CreateDiscussionReplyUseCase {
     ownerUserId: string;
     actorId: string;
     replyBody: string;
+    hasSticker?: boolean;
   }): Promise<string[]> {
     if (!this.inbox && !this.notifyUser) return [];
 
@@ -253,7 +286,12 @@ export class CreateDiscussionReplyUseCase {
       }
 
       const topicLabel = truncateSnippet(input.topicBody?.trim() || 'Ruang Diskusi');
-      const snippet = truncateSnippet(input.replyBody);
+      const snippet =
+        input.replyBody.trim().length > 0
+          ? truncateSnippet(input.replyBody)
+          : input.hasSticker
+            ? STICKER_SNIPPET
+            : truncateSnippet(input.replyBody);
       const body = replyNotifyBody(displayName, topicLabel, snippet);
       const title = REPLY_TITLE;
 

@@ -1,14 +1,28 @@
 import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
-import { NotFoundError } from '@/shared/errors/app-error';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { BadRequestError, NotFoundError, UnauthorizedError } from '@/shared/errors/app-error';
+import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
+import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
+import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
+import type { CreateCuisineCommentAudioUseCase } from '../../application/use-cases/cuisine-comment-audio.use-case';
+import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type {
   Cuisine,
+  CuisineComment,
   CuisineDetail,
   CuisinePlaceLink,
   CulinaryPlace,
   CulinaryPlaceDetail,
 } from '../../domain/entities/culinary.entity';
+import type {
+  CreateCuisineCommentUseCase,
+  DeleteCuisineCommentUseCase,
+  ListCuisineCommentsUseCase,
+  TakedownCuisineCommentUseCase,
+  UpdateCuisineCommentUseCase,
+} from '../../application/use-cases/cuisine-comment.use-cases';
 import type {
   CulinaryRepository,
   CreateCuisineInput,
@@ -17,6 +31,7 @@ import type {
   UpdatePlaceInput,
 } from '../../domain/repositories/culinary.repository';
 import {
+  AppendCuisineImagesUseCase,
   FindCulinaryDuplicatesUseCase,
   GetCuisineBySlugUseCase,
   GetCulinaryPlaceBySlugUseCase,
@@ -42,6 +57,47 @@ import type {
 
 type ListCuisinesQuery = z.infer<typeof listCuisinesQuerySchema>;
 type ListPlacesQuery = z.infer<typeof listPlacesQuerySchema>;
+
+function requireUser(c: Context<{ Variables: AppVariables }>) {
+  const user = c.get('user');
+  if (!user) throw new UnauthorizedError();
+  return user;
+}
+
+function toCuisineCommentWire(c: CuisineComment) {
+  const deleted = c.authorDeletedAt !== null;
+  return {
+    id: c.id,
+    cuisine_id: c.cuisineId,
+    user: {
+      user_id: c.userId,
+      username: deleted ? null : c.username,
+      display_name: deleted ? null : c.displayName,
+      avatar_url: deleted ? null : c.avatarUrl,
+      is_verifier: !deleted && isVerifierRole(c.userRole ?? ''),
+    },
+    ...entityCommentMediaWireFields({
+      status: c.status,
+      body: c.body,
+      stickerId: c.stickerId,
+      audio: c.audio,
+      image: c.image,
+    }),
+    status: c.status,
+    is_edited: c.isEdited,
+    created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt?.toISOString() ?? null,
+  };
+}
+
+export interface CuisineCommentControllerDeps {
+  listComments: ListCuisineCommentsUseCase;
+  createComment: CreateCuisineCommentUseCase;
+  createCommentAudio: CreateCuisineCommentAudioUseCase;
+  updateComment: UpdateCuisineCommentUseCase;
+  deleteComment: DeleteCuisineCommentUseCase;
+  takedownComment: TakedownCuisineCommentUseCase;
+}
 
 export function serializeLink(l: CuisinePlaceLink) {
   return {
@@ -139,6 +195,21 @@ export function serializePlace(p: CulinaryPlace | CulinaryPlaceDetail) {
   };
 }
 
+type ListRelatedFn = {
+  execute(
+    kind: 'cuisine',
+    id: string,
+  ): Promise<
+    Array<{
+      kind: string;
+      id: string;
+      slug: string | null;
+      title: string;
+      coverUrl: string | null;
+    }>
+  >;
+};
+
 export class CulinaryController {
   constructor(
     private readonly repo: CulinaryRepository,
@@ -155,7 +226,15 @@ export class CulinaryController {
     private readonly restrictPlaceUc: RestrictCulinaryUseCase,
     private readonly restorePlaceUc: RestoreCulinaryUseCase,
     private readonly deletePlaceUc: DeleteCulinaryUseCase,
+    private readonly appendImagesUc: AppendCuisineImagesUseCase,
+    private readonly listRelated?: ListRelatedFn,
+    private readonly commentDeps?: CuisineCommentControllerDeps,
   ) {}
+
+  private get cuisineComments(): CuisineCommentControllerDeps {
+    if (!this.commentDeps) throw new Error('comment deps not wired');
+    return this.commentDeps;
+  }
 
   // ------------------------------------------------------------- publik --
 
@@ -182,10 +261,35 @@ export class CulinaryController {
       );
   }
 
-  getCuisine(c: Context<{ Variables: AppVariables }>, slug: string) {
-    return this.getCuisineUc
-      .execute(slug, true)
-      .then((cuisine) => c.json({ success: true as const, data: serializeCuisine(cuisine as Cuisine) }));
+  async getCuisine(c: Context<{ Variables: AppVariables }>, slug: string) {
+    const cuisine = await this.getCuisineUc.execute(slug, true);
+    const related = this.listRelated
+      ? await this.listRelated.execute('cuisine', cuisine.id)
+      : [];
+    return c.json({
+      success: true as const,
+      data: {
+        ...serializeCuisine(cuisine as Cuisine),
+        related: related.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          cover_url: r.coverUrl,
+        })),
+      },
+    });
+  }
+
+  /** #281: tambah foto ke kuliner published (wajib login). */
+  appendImages(
+    c: Context<{ Variables: AppVariables }>,
+    slug: string,
+    urls: string[],
+  ) {
+    return this.appendImagesUc
+      .execute(slug, c.get('user')?.user_id ?? ANONIM_USER_ID, urls)
+      .then(() => c.json({ success: true as const, data: null }));
   }
 
   listPlaces(
@@ -499,5 +603,94 @@ export class CulinaryController {
       }
       return c.json({ success: true as const, data: null });
     });
+  }
+
+  async listCuisineComments(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const q = c.req.valid('query' as never) as { cursor?: string; limit: number };
+    const page = await this.cuisineComments.listComments.execute(id, q.cursor, q.limit);
+    return c.json({
+      success: true as const,
+      data: {
+        items: page.items.map(toCuisineCommentWire),
+        next_cursor: page.nextCursor,
+        has_more: page.hasMore,
+      },
+    });
+  }
+
+  async createCuisineComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as EntityCommentBody;
+    const comment = await this.cuisineComments.createComment.execute({
+      cuisineId: id,
+      userId: user.user_id,
+      body: body.body ?? '',
+      stickerId: body.sticker_id ?? null,
+      image: body.image
+        ? { url: body.image.url, providerFileId: body.image.provider_file_id }
+        : null,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCuisineCommentWire(comment) }, 201);
+  }
+
+  async createCuisineCommentAudio(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const comment = await this.cuisineComments.createCommentAudio.execute({
+      cuisineId: id,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: typeof body['body'] === 'string' ? body['body'] : null,
+      durationMs: body['duration_ms'],
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCuisineCommentWire(comment) }, 201);
+  }
+
+  async updateCuisineComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const body = c.req.valid('json' as never) as { body: string };
+    const updated = await this.cuisineComments.updateComment.execute({
+      commentId: id,
+      userId: user.user_id,
+      body: body.body,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCuisineCommentWire(updated) });
+  }
+
+  async deleteCuisineComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    await this.cuisineComments.deleteComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
+  }
+
+  async takedownCuisineComment(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    const { id } = c.req.valid('param' as never) as { id: string };
+    await this.cuisineComments.takedownComment.execute(id, user.user_id);
+    return c.json({ success: true as const, data: null });
   }
 }

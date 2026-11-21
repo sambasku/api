@@ -18,7 +18,7 @@ import type {
   InlineWordDto,
   MeaningOverrideDto,
 } from '../dto/create-word.dto';
-import { resolvePublication } from '../utils/resolve-publication';
+import { resolvePublication, isVerifierRole } from '../utils/resolve-publication';
 import { assertCanContribute } from '../utils/assert-can-contribute';
 import { assertContributorWordImageProvider } from '../utils/assert-word-image-provider';
 import {
@@ -170,7 +170,7 @@ export class CreateWordUseCase {
     const { word, warnings } = await this.resolveDuplicateAfterSave(
       saved,
       parentWasDuplicate,
-      actor.userId,
+      actor,
       'lemma',
     );
 
@@ -211,8 +211,8 @@ export class CreateWordUseCase {
       });
     }
 
-    // Event feed: (a) usulan kata baru = contribution_submitted (anonim →
-    // pending_review; kontributor login → published tapi belum verified, masuk
+    // Event feed: (a) usulan kata baru = contribution_submitted (anonim +
+    // kontributor login → published tapi belum verified, masuk
     // antrean review); (b) create langsung oleh verifikator = word_created.
     // Draft tidak ber-event. Momen submit, bukan derivasi timestamp (#25).
     if (this.activityEvents && word.status !== 'draft') {
@@ -247,7 +247,7 @@ export class CreateWordUseCase {
   private async resolveDuplicateAfterSave(
     saved: Word,
     wasDuplicate: boolean,
-    actorId: string,
+    actor: Actor,
     field: string,
   ): Promise<{ word: Word; warnings: { field: string; message: string }[] }> {
     if (!wasDuplicate) return { word: saved, warnings: [] };
@@ -259,9 +259,16 @@ export class CreateWordUseCase {
       };
     }
 
-    const merge = await this.wordRepo.publishOrMergeMeanings(saved.id, actorId);
+    // #252: kontributor hanya boleh MERGE ke kembaran published - tanpa twin,
+    // publish-or-merge dulu men-stamp verified_by=dirinya sendiri (non-
+    // verifikator). skipPublishIfNoTwin menahan publish sampai reviewer
+    // approve (jalur itu memakai reviewerId + guard preserve).
+    const canVerify = isVerifierRole(actor.roles);
+    const merge = await this.wordRepo.publishOrMergeMeanings(saved.id, actor.userId, {
+      skipPublishIfNoTwin: !canVerify,
+    });
     if (merge?.mergedIntoWordId) {
-      await this.syncContributions?.closeMerged(merge.mergedIntoWordId, saved.id, actorId);
+      await this.syncContributions?.closeMerged(merge.mergedIntoWordId, saved.id, actor.userId);
       const kept = await this.wordRepo.findById(merge.mergedIntoWordId);
       return {
         word: kept ?? saved,
@@ -396,25 +403,41 @@ export class CreateWordUseCase {
       throw new NotFoundError('SEARCH_MISS_NOT_FOUND', 'Search miss tidak ditemukan');
     }
     if (miss.direction === 'lemma') {
-      if (normalizeSearchMissTerm(dto.lemma) !== miss.term) {
+      const lemmaMatches = normalizeSearchMissTerm(dto.lemma) === miss.term;
+      // G3b: lemma ≠ miss.term boleh jika miss.term ada di variants[].form
+      // (koreksi ejaan: lemma kanonik + typo jadi varian).
+      const typoAsVariant = (dto.variants ?? []).some(
+        (v) => normalizeSearchMissTerm(v.form) === miss.term,
+      );
+      if (!lemmaMatches && !typoAsVariant) {
         throw new BadRequestError(
           'SEARCH_MISS_TERM_MISMATCH',
           'Lemma tidak cocok dengan istilah search miss',
-          [{ field: 'lemma', message: `Harus cocok dengan miss term "${miss.term}"` }],
+          [
+            {
+              field: 'lemma',
+              message: `Harus cocok dengan miss term "${miss.term}", atau sertakan term itu di variants[].form`,
+            },
+          ],
         );
       }
       return;
     }
-    // direction=translation → soft-check teks terjemahan pertama
-    const firstText = dto.meanings[0]?.translations[0]?.translationText ?? '';
-    if (normalizeSearchMissTerm(firstText) !== miss.term) {
+    // direction=translation → soft-check: salah satu terjemahan = miss.term
+    // (G3b: padanan benar di urutan pertama + typo miss sebagai terjemahan lain).
+    const anyTranslationMatches = (dto.meanings ?? []).some((m) =>
+      (m.translations ?? []).some(
+        (t) => normalizeSearchMissTerm(t.translationText) === miss.term,
+      ),
+    );
+    if (!anyTranslationMatches) {
       throw new BadRequestError(
         'SEARCH_MISS_TERM_MISMATCH',
         'Terjemahan tidak cocok dengan istilah search miss',
         [
           {
             field: 'meanings.0.translations.0.translation_text',
-            message: `Harus cocok dengan miss term "${miss.term}"`,
+            message: `Salah satu terjemahan harus cocok dengan miss term "${miss.term}"`,
           },
         ],
       );

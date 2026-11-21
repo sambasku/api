@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
  *
  * Kohort V1 + warm-up R1/G3 (ACHIEVEMENT_ENHANCEMENT G2):
  * kontribusi kata tier, suara, contoh, verifikasi, komentar, diskusi.
+ * Plus bingkai role staf (`istana-alwatzikhoebillah` = reviewer/admin/root).
  *
  * Award TIDAK diberikan di sini - jalankan Scan di console / cron /
  * `pnpm scan:achievements` untuk backfill.
@@ -38,6 +39,19 @@ const SEED_ACHIEVEMENTS: Array<{
     criteria: {
       source: 'registration',
       window: { from: '2026-01-01T00:00:00+07:00', to: '2027-01-01T00:00:00+07:00' },
+    },
+  },
+  {
+    code: 'istana-alwatzikhoebillah',
+    title: 'Istana Alwatzikhoebillah',
+    description:
+      'Bingkai khusus untuk verifikator, admin, dan root (bukan kontributor saja)',
+    category: 'kualitas',
+    rewardType: 'profile_border',
+    badgeUrl: `${CDN}/istana-alwatzikhoebillah.png`,
+    criteria: {
+      source: 'user_role',
+      filters: { role_in: 'reviewer,admin,root' },
     },
   },
   {
@@ -182,14 +196,78 @@ const SEED_ACHIEVEMENTS: Array<{
     family: 'penyambung',
     level: 1,
   },
+  {
+    code: 'peringkat-juara',
+    title: 'Juara Mingguan',
+    description: 'Pernah juara papan peringkat minggu (rank 1)',
+    category: 'momen',
+    rewardType: 'badge',
+    badgeUrl: `${CDN}/peringkat-juara.png`,
+    criteria: {
+      source: 'leaderboard_top',
+      filters: { rank_min: '1', rank_max: '1' },
+    },
+    family: 'peringkat-mingguan',
+    level: 4,
+  },
+  {
+    code: 'peringkat-tiga-besar',
+    title: 'Tiga Besar Mingguan',
+    description: 'Pernah rank 2 atau 3 di papan peringkat minggu',
+    category: 'momen',
+    rewardType: 'badge',
+    badgeUrl: `${CDN}/peringkat-tiga-besar.png`,
+    criteria: {
+      source: 'leaderboard_top',
+      filters: { rank_min: '2', rank_max: '3' },
+    },
+    family: 'peringkat-mingguan',
+    level: 3,
+  },
+  {
+    code: 'peringkat-sepuluh',
+    title: 'Sepuluh Besar Mingguan',
+    description: 'Pernah rank 4 sampai 10 di papan peringkat minggu',
+    category: 'momen',
+    rewardType: 'badge',
+    badgeUrl: `${CDN}/peringkat-sepuluh.png`,
+    criteria: {
+      source: 'leaderboard_top',
+      filters: { rank_min: '4', rank_max: '10' },
+    },
+    family: 'peringkat-mingguan',
+    level: 2,
+  },
+  {
+    code: 'peringkat-papan',
+    title: 'Masuk Papan Mingguan',
+    description: 'Pernah rank 11 sampai 30 di papan peringkat minggu',
+    category: 'momen',
+    rewardType: 'badge',
+    badgeUrl: `${CDN}/peringkat-papan.png`,
+    criteria: {
+      source: 'leaderboard_top',
+      filters: { rank_min: '11', rank_max: '30' },
+    },
+    family: 'peringkat-mingguan',
+    level: 1,
+  },
 ];
 
 export async function seedAchievements() {
   let inserted = 0;
   for (const item of SEED_ACHIEVEMENTS) {
-    const rows = await db
-      .insert(achievements)
-      .values({
+    // Select-then-insert: hindari ON CONFLICT(target) Drizzle yang emit
+    // `ON CONFLICT ("achievements"."code")` - LibSQL/SQLite menolak
+    // conflict target berkualifikasi tabel (error: does not match UNIQUE).
+    const existing = await db
+      .select({ id: achievements.id })
+      .from(achievements)
+      .where(eq(achievements.code, item.code))
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(achievements).values({
         code: item.code,
         title: item.title,
         description: item.description,
@@ -200,26 +278,24 @@ export async function seedAchievements() {
         family: item.family ?? null,
         level: item.level ?? null,
         isActive: true,
-      })
-      .onConflictDoNothing({ target: achievements.code })
-      .returning({ id: achievements.id });
-    if (rows.length > 0) inserted += 1;
+      });
+      inserted += 1;
+      continue;
+    }
 
     // Sinkronisasi aset/kriteria bila baris sudah ada (idempotent re-run):
     // update NON-kritis saja supaya re-run tidak menimpa katalog yang sudah
     // dikurasi admin (title/description/is_active dibiarkan).
-    if (rows.length === 0) {
-      await db
-        .update(achievements)
-        .set({
-          badgeUrl: item.badgeUrl,
-          criteria: JSON.stringify(item.criteria),
-          family: item.family ?? null,
-          level: item.level ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(achievements.code, item.code));
-    }
+    await db
+      .update(achievements)
+      .set({
+        badgeUrl: item.badgeUrl,
+        criteria: JSON.stringify(item.criteria),
+        family: item.family ?? null,
+        level: item.level ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(achievements.code, item.code));
   }
   logger.info(`Seed achievements: ${inserted} baru, total katalog ${SEED_ACHIEVEMENTS.length}`);
 }

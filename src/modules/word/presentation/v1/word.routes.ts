@@ -551,6 +551,85 @@ export function createAdminWordRoutes(deps: WordRoutesDeps) {
   routes.openapi(verifyRoute, (c) => deps.controller.verify(c, c.req.param('id'), true) as never);
   routes.openapi(unverifyRoute, (c) => deps.controller.verify(c, c.req.param('id'), false) as never);
 
+  // Trust per makna (G1) - verifikasi satu baris makna, rollup lemma di server.
+  routes.use(
+    '/meanings/:meaningId/verify',
+    deps.authenticate,
+    authorizeRole('admin', 'root', 'reviewer'),
+    rateLimit({ points: 500, duration: 60 }),
+  );
+  routes.use(
+    '/meanings/:meaningId/unverify',
+    deps.authenticate,
+    authorizeRole('admin', 'root', 'reviewer'),
+    rateLimit({ points: 500, duration: 60 }),
+  );
+
+  const verifyMeaningRoute = createRoute({
+    method: 'post',
+    path: '/meanings/:meaningId/verify',
+    tags: ['Words', 'Admin'],
+    summary: 'Verifikasi satu makna (is_verified → true) + rollup lemma',
+    request: { params: z.object({ meaningId: opaqueId }) },
+    responses: {
+      200: {
+        description: 'Makna terverifikasi',
+        content: {
+          'application/json': {
+            schema: z.object({
+              success: z.literal(true),
+              data: z.object({
+                meaning_id: z.string(),
+                word_id: z.string(),
+                is_verified: z.boolean(),
+              }),
+            }),
+          },
+        },
+      },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan verifikator', content: json(errorResponseSchema) },
+      404: { description: 'Makna tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Sudah terverifikasi', content: json(errorResponseSchema) },
+    },
+  });
+
+  const unverifyMeaningRoute = createRoute({
+    method: 'post',
+    path: '/meanings/:meaningId/unverify',
+    tags: ['Words', 'Admin'],
+    summary: 'Cabut verifikasi satu makna + rollup lemma',
+    request: { params: z.object({ meaningId: opaqueId }) },
+    responses: {
+      200: {
+        description: 'Verifikasi makna dicabut',
+        content: {
+          'application/json': {
+            schema: z.object({
+              success: z.literal(true),
+              data: z.object({
+                meaning_id: z.string(),
+                word_id: z.string(),
+                is_verified: z.boolean(),
+              }),
+            }),
+          },
+        },
+      },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Bukan verifikator', content: json(errorResponseSchema) },
+      404: { description: 'Makna tidak ditemukan', content: json(errorResponseSchema) },
+      409: { description: 'Belum terverifikasi', content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(verifyMeaningRoute, (c) =>
+    deps.controller.verifyMeaning(c, c.req.param('meaningId'), true) as never,
+  );
+  routes.openapi(unverifyMeaningRoute, (c) =>
+    deps.controller.verifyMeaning(c, c.req.param('meaningId'), false) as never,
+  );
+
   // Publikasikan / tarik tayang (status published ↔ draft)
   routes.use('/:id/publish', deps.authenticate, authorizeRole('admin', 'root', 'reviewer'), rateLimit({ points: 500, duration: 60 }));
   routes.use('/:id/unpublish', deps.authenticate, authorizeRole('admin', 'root', 'reviewer'), rateLimit({ points: 500, duration: 60 }));
@@ -705,9 +784,15 @@ export function createPublicWordRoutes(deps: WordRoutesDeps) {
     method: 'get',
     path: '/:id',
     tags: ['Words'],
-    summary: 'Detail kata published (halaman publik)',
+    summary: 'Detail kata published (halaman publik; makna default verified-only)',
     request: {
       params: z.object({ id: z.string().length(26) }),
+      query: z.object({
+        meaning: z.string().trim().min(1).max(26).optional(),
+        include_unverified: z
+          .enum(['0', '1', 'true', 'false', 'yes', 'no'])
+          .optional(),
+      }),
     },
     responses: {
       200: { description: 'Detail kata', content: json(wordDetailResponseSchema) },
@@ -721,9 +806,15 @@ export function createPublicWordRoutes(deps: WordRoutesDeps) {
     method: 'get',
     path: '/lemma/:lemma',
     tags: ['Words'],
-    summary: 'Detail kata published berdasarkan lemma (URL publik web)',
+    summary: 'Detail kata published berdasarkan lemma (makna default verified-only)',
     request: {
       params: z.object({ lemma: z.string().trim().min(1).max(255) }),
+      query: z.object({
+        meaning: z.string().trim().min(1).max(26).optional(),
+        include_unverified: z
+          .enum(['0', '1', 'true', 'false', 'yes', 'no'])
+          .optional(),
+      }),
     },
     responses: {
       200: { description: 'Detail kata', content: json(wordDetailResponseSchema) },

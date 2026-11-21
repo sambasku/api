@@ -1,9 +1,9 @@
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, articles, contributions, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, layanans, pantunReplies, pantuns, places, searchMisses, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, articles, contributions, cuisineComments, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
-import { FEED_EXCLUDED_USAGE_LABELS } from '@/shared/constants/usage-labels';
+import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
 import {
   publicAccountDisplayName,
   publicAccountName,
@@ -42,6 +42,8 @@ const KIND_TO_WIRE: Record<ActivityEventKind, ActivityKind> = {
   contribution_example: 'example',
   place_photo_added: 'place_photo',
   usaha_photo_added: 'usaha_photo',
+  cuisine_photo_added: 'culinary',
+  event_photo_added: 'event',
   comment_created: 'comment',
 vote_word: 'vote',
 vote_comment: 'vote',
@@ -55,9 +57,16 @@ vote_meaning: 'vote',
   user_joined: 'welcome',
   card_shared: 'card_share',
   usaha_published: 'usaha',
+  usaha_visited: 'usaha',
+  usaha_comment_created: 'usaha',
   layanan_published: 'layanan',
+  karya_published: 'karya',
+  kreator_claimed: 'karya',
   cuisine_published: 'culinary',
+  cuisine_comment_created: 'culinary',
   place_published: 'place_listing',
+  place_visited: 'place_listing',
+  place_comment_created: 'place_listing',
   event_published: 'event',
   event_going: 'event',
   event_comment_created: 'event',
@@ -82,6 +91,8 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   contribution_example: 'Menambah contoh kalimat',
   place_photo_added: 'Menambah foto wisata',
   usaha_photo_added: 'Menambah foto usaha',
+  cuisine_photo_added: 'Menambah foto kuliner',
+  event_photo_added: 'Menambah foto acara',
   comment_created: '',
   vote_word: '',
   vote_comment: '',
@@ -95,9 +106,16 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   user_joined: 'Bergabung di SambasKu',
   card_shared: 'Membagikan kartu',
   usaha_published: 'Menambahkan usaha',
+  usaha_visited: 'Pernah bertransaksi di usaha',
+  usaha_comment_created: 'Mengomentari usaha',
   layanan_published: 'Menambahkan layanan publik',
+  karya_published: 'Menambahkan karya',
+  kreator_claimed: 'Mengklaim profil kreator',
   cuisine_published: 'Menambahkan kuliner',
+  cuisine_comment_created: 'Mengomentari kuliner',
   place_published: 'Menambahkan wisata',
+  place_visited: 'Pernah singgah di wisata',
+  place_comment_created: 'Mengomentari wisata',
   event_published: 'Menambahkan acara',
   event_going: 'Berencana datang ke acara',
   event_comment_created: 'Mengomentari acara',
@@ -167,15 +185,25 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'contribution_submitted',
     'place_photo_added',
     'usaha_photo_added',
+    'cuisine_photo_added',
     'usaha_published',
     'layanan_published',
+    'karya_published',
+    'kreator_claimed',
     'cuisine_published',
     'place_published',
     'event_published',
     'article_published',
   ],
   correction: FEED_CATEGORY_KINDS.correction!,
-  comment: ['comment_created', 'article_comment_created', 'event_comment_created'],
+  comment: [
+    'comment_created',
+    'article_comment_created',
+    'event_comment_created',
+    'place_comment_created',
+    'usaha_comment_created',
+    'cuisine_comment_created',
+  ],
   verification: ['word_verified', 'suggestion_selfapply'],
   vote: ['vote_word', 'vote_comment', 'vote_meaning'],
   jinye: [
@@ -245,6 +273,8 @@ interface FeedRow {
   occurredAt: Date;
   payload: string | null;
   wordStatus: string | null;
+  /** Untuk wire #166: published + belum verified → status pending_review. */
+  wordIsVerified: boolean | null;
   lemma: string | null;
   actorUserId: string | null;
   actorUsername: string | null;
@@ -263,6 +293,10 @@ interface FeedRow {
   usahaSlug: string | null;
   layananSlug: string | null;
   layananName: string | null;
+  karyaSlug: string | null;
+  karyaTitle: string | null;
+  kreatorSlug: string | null;
+  kreatorDisplayName: string | null;
   /** Pantun pembuka untuk pantun_reply_created (LEFT JOIN, published saja). */
   replyParentId: string | null;
   /** Jinye induk untuk jinye_comment_created. */
@@ -443,12 +477,30 @@ export class ActivityEventFeedRepositoryImpl {
       return 'Menambahkan foto wisata';
     case 'usaha_photo_added':
       return 'Menambahkan foto usaha';
+    case 'cuisine_photo_added':
+      return 'Menambahkan foto kuliner';
     case 'usaha_published':
       return 'Menambahkan usaha';
+    case 'usaha_visited':
+      return q
+        ? `Pernah bertransaksi di ${q}`.trim()
+        : 'Pernah bertransaksi di usaha';
     case 'layanan_published':
       return 'Menambahkan layanan publik';
+    case 'karya_published':
+      return 'Menambahkan karya';
+    case 'kreator_claimed':
+      return 'Mengklaim profil kreator';
     case 'place_published':
       return 'Menambahkan wisata';
+    case 'place_visited':
+      return q ? `Pernah singgah di ${q}`.trim() : 'Pernah singgah di wisata';
+    case 'place_comment_created':
+      return 'Mengomentari wisata';
+    case 'usaha_comment_created':
+      return 'Mengomentari usaha';
+    case 'cuisine_comment_created':
+      return 'Mengomentari kuliner';
     case 'event_published':
       return 'Menambahkan acara';
     case 'event_going':
@@ -492,12 +544,7 @@ export class ActivityEventFeedRepositoryImpl {
       ${words.deletedAt} is null
       and ${words.status} = 'published'
       and ${words.isVerified} = 1
-      and ${sql.join(
-        FEED_EXCLUDED_USAGE_LABELS.map(
-          (label) => sql`${words.usageLabels} NOT LIKE ${`%\"${label}\"%`}`,
-        ),
-        sql` and `,
-      )}
+      and ${sql.join(feedExcludedUsageLabelClauses(), sql` and `)}
     )`;
   }
 
@@ -557,6 +604,7 @@ export class ActivityEventFeedRepositoryImpl {
         payload: activityEvents.payload,
         // status kata untuk keputusan CTA (pending = tanpa target)
         wordStatus: words.status,
+        wordIsVerified: words.isVerified,
         // #103: field dari JOIN - ganti resolveWord/resolveActor per baris.
         lemma: words.lemma,
         actorUserId: users.id,
@@ -579,6 +627,10 @@ export class ActivityEventFeedRepositoryImpl {
       usahaName: usahas.name,
       layananSlug: layanans.slug,
       layananName: layanans.name,
+      karyaSlug: karyas.slug,
+      karyaTitle: karyas.title,
+      kreatorSlug: kreators.slug,
+      kreatorDisplayName: kreators.displayName,
       // pantun_reply_created: link ke pantun pembuka (balasan takedown →
       // baris feed ikut sembunyi; induk takedown → sembunyi juga).
       replyParentId: parentPantuns.id,
@@ -609,20 +661,54 @@ articleTitle: articles.title,
       )
       .leftJoin(users, eq(users.id, activityEvents.actorId))
       .leftJoin(
+        placeComments,
+        and(
+          eq(activityEvents.kind, 'place_comment_created'),
+          eq(placeComments.id, activityEvents.targetId),
+          eq(placeComments.status, 'published'),
+        ),
+      )
+      .leftJoin(
         places,
         and(
-          // #187 foto wisata + wisata baru tayang: dua kind, satu JOIN.
-          sql`${activityEvents.kind} in ('place_photo_added', 'place_published')`,
-          eq(places.id, activityEvents.targetId),
+          // #187 foto wisata + wisata baru tayang + komentar wisata.
+          sql`${activityEvents.kind} in ('place_photo_added', 'place_published', 'place_visited', 'place_comment_created')`,
+          or(
+            and(
+              sql`${activityEvents.kind} in ('place_photo_added', 'place_published', 'place_visited')`,
+              eq(places.id, activityEvents.targetId),
+            ),
+            and(
+              eq(activityEvents.kind, 'place_comment_created'),
+              eq(places.id, placeComments.placeId),
+            ),
+          ),
           eq(places.status, 'published'),
           sql`${places.deletedAt} is null`,
         ),
       )
     .leftJoin(
+      usahaComments,
+      and(
+        eq(activityEvents.kind, 'usaha_comment_created'),
+        eq(usahaComments.id, activityEvents.targetId),
+        eq(usahaComments.status, 'published'),
+      ),
+    )
+    .leftJoin(
       usahas,
       and(
-        sql`${activityEvents.kind} in ('usaha_published', 'usaha_photo_added')`,
-        eq(usahas.id, activityEvents.targetId),
+        sql`${activityEvents.kind} in ('usaha_published', 'usaha_photo_added', 'usaha_visited', 'usaha_comment_created')`,
+        or(
+          and(
+            sql`${activityEvents.kind} in ('usaha_published', 'usaha_photo_added', 'usaha_visited')`,
+            eq(usahas.id, activityEvents.targetId),
+          ),
+          and(
+            eq(activityEvents.kind, 'usaha_comment_created'),
+            eq(usahas.id, usahaComments.usahaId),
+          ),
+        ),
         eq(usahas.publishStatus, 'published'),
         sql`${usahas.deletedAt} is null`,
       ),
@@ -636,10 +722,44 @@ articleTitle: articles.title,
       ),
     )
     .leftJoin(
+      karyas,
+      and(
+        eq(activityEvents.kind, 'karya_published'),
+        eq(karyas.id, activityEvents.targetId),
+        eq(karyas.publishStatus, 'published'),
+        sql`${karyas.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      kreators,
+      and(
+        eq(activityEvents.kind, 'kreator_claimed'),
+        eq(kreators.id, activityEvents.targetId),
+        sql`${kreators.deletedAt} is null`,
+      ),
+    )
+    .leftJoin(
+      cuisineComments,
+      and(
+        eq(activityEvents.kind, 'cuisine_comment_created'),
+        eq(cuisineComments.id, activityEvents.targetId),
+        eq(cuisineComments.status, 'published'),
+      ),
+    )
+    .leftJoin(
       cuisines,
       and(
-        eq(activityEvents.kind, 'cuisine_published'),
-        eq(cuisines.id, activityEvents.targetId),
+        sql`${activityEvents.kind} in ('cuisine_published', 'cuisine_photo_added', 'cuisine_comment_created')`,
+        or(
+          and(
+            sql`${activityEvents.kind} in ('cuisine_published', 'cuisine_photo_added')`,
+            eq(cuisines.id, activityEvents.targetId),
+          ),
+          and(
+            eq(activityEvents.kind, 'cuisine_comment_created'),
+            eq(cuisines.id, cuisineComments.cuisineId),
+          ),
+        ),
         eq(cuisines.publishStatus, 'published'),
         sql`${cuisines.deletedAt} is null`,
       ),
@@ -793,6 +913,9 @@ articleTitle: articles.title,
         sql`(${activityEvents.kind} <> 'place_photo_added' or ${places.id} is not null)`,
         // Wisata baru hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'place_published' or ${places.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'place_visited' or ${places.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'place_comment_created' or ${placeComments.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'place_comment_created' or ${places.id} is not null)`,
         // Acara baru / berencana datang hanya tayang selama masih published.
         sql`(${activityEvents.kind} <> 'event_published' or ${events.id} is not null)`,
         sql`(${activityEvents.kind} <> 'event_going' or ${events.id} is not null)`,
@@ -809,10 +932,18 @@ articleTitle: articles.title,
       sql`(${activityEvents.kind} <> 'pantun_reply_created' or ${parentPantuns.id} is not null)`,
         // Usaha hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'usaha_published' or ${usahas.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'usaha_visited' or ${usahas.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'usaha_comment_created' or ${usahaComments.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'usaha_comment_created' or ${usahas.id} is not null)`,
         sql`(${activityEvents.kind} <> 'layanan_published' or ${layanans.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'karya_published' or ${karyas.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'kreator_claimed' or ${kreators.id} is not null)`,
         sql`(${activityEvents.kind} <> 'usaha_photo_added' or ${usahas.id} is not null)`,
 // Kuliner/tempat kuliner hanya tayang selama masih published.
 sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null or ${culinaryPlaces.id} is not null)`,
+sql`(${activityEvents.kind} <> 'cuisine_photo_added' or ${cuisines.id} is not null)`,
+sql`(${activityEvents.kind} <> 'cuisine_comment_created' or ${cuisineComments.id} is not null)`,
+sql`(${activityEvents.kind} <> 'cuisine_comment_created' or ${cuisines.id} is not null)`,
 // Artikel hanya tayang selama published (arsip = sembunyi).
 sql`(${activityEvents.kind} <> 'article_published' or ${articles.id} is not null)`,
 // Komentar artikel: komentar & artikelnya harus published.
@@ -927,14 +1058,18 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
             ? this.applyLemmaPlaceholder(frozen, lemma)
             : this.bodyFor(kind, lemma);
 const subtitle =
-kind === 'place_photo_added' || kind === 'place_published'
+kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_visited'
 ? row.placeName
-: kind === 'cuisine_published'
+: kind === 'cuisine_published' || kind === 'cuisine_photo_added'
 ? (row.cuisineName ?? row.culinaryPlaceName)
-: kind === 'usaha_published' || kind === 'usaha_photo_added'
+: kind === 'usaha_published' || kind === 'usaha_photo_added' || kind === 'usaha_visited'
 ? row.usahaName
 : kind === 'layanan_published'
 ? row.layananName
+: kind === 'karya_published'
+? row.karyaTitle
+: kind === 'kreator_claimed'
+? row.kreatorDisplayName
 : kind === 'event_published'
 ? row.eventName
 : kind === 'article_published' || kind === 'article_comment_created'
@@ -947,17 +1082,20 @@ kind === 'place_photo_added' || kind === 'place_published'
     if (wire === 'vote') {
       wire = /perlu dicek ulang/.test(body) ? 'vote_down' : 'vote_up';
     }
-    // Kata masih pending (usulan baru): tampil tanpa CTA - target null.
-    // Setelah approve, read-time join published menghidupkan CTA lagi.
-    // Kecuali #166: contribution_submitted (usul kata baru) tetap bawa
-    // target + status 'pending_review' supaya verifikator bisa shortcut
-    // ke antrean review dari feed; non-verifikator cukup tahu masih menunggu.
+    // Kata non-published: tampil tanpa CTA (target null), kecuali #166.
+    // #166 contribution_submitted: wire status 'pending_review' supaya
+    // verifikator shortcut ke antrean - berlaku untuk DB pending_review
+    // ATAU published + belum verified (usulan tamu/kontributor).
     let target: ActivityItem['target'];
-    if (row.wordStatus && row.wordStatus !== 'published') {
-      target =
-        kind === 'contribution_submitted' && word
-          ? { type: 'word', id: word.id, status: 'pending_review' }
-          : null;
+    const needsReviewWire =
+      kind === 'contribution_submitted' &&
+      !!word &&
+      (row.wordStatus === 'pending_review' ||
+        (row.wordStatus === 'published' && row.wordIsVerified === false));
+    if (needsReviewWire) {
+      target = { type: 'word', id: word!.id, status: 'pending_review' };
+    } else if (row.wordStatus && row.wordStatus !== 'published') {
+      target = null;
     } else {
       target = this.targetFor(kind, row, word);
     }
@@ -1053,9 +1191,17 @@ kind === 'place_photo_added' || kind === 'place_published'
     case 'card_shared':
       return lemma ? `Membagikan kartu · ${quoted(lemma)}` : 'Membagikan kartu';
 case 'usaha_published':
+case 'usaha_visited':
+case 'usaha_comment_created':
 case 'layanan_published':
+case 'karya_published':
+case 'kreator_claimed':
 case 'cuisine_published':
+case 'cuisine_photo_added':
+case 'cuisine_comment_created':
 case 'place_published':
+case 'place_visited':
+case 'place_comment_created':
 case 'event_published':
 case 'event_going':
 case 'event_comment_created':
@@ -1118,6 +1264,8 @@ return KIND_BODY[kind];
       placeSlug?: string | null;
       usahaSlug?: string | null;
       layananSlug?: string | null;
+      karyaSlug?: string | null;
+      kreatorSlug?: string | null;
       eventSlug?: string | null;
 cuisineSlug?: string | null;
 culinaryPlaceSlug?: string | null;
@@ -1168,11 +1316,19 @@ articleSlug?: string | null;
         return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'usaha_published':
       case 'usaha_photo_added':
+      case 'usaha_visited':
+      case 'usaha_comment_created':
         return row.usahaSlug ? { type: 'usaha', id: row.usahaSlug } : null;
       case 'layanan_published':
         return row.layananSlug ? { type: 'layanan', id: row.layananSlug } : null;
-      case 'place_published':
-        return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
+      case 'karya_published':
+        return row.karyaSlug ? { type: 'karya', id: row.karyaSlug } : null;
+      case 'kreator_claimed':
+        return row.kreatorSlug ? { type: 'kreator', id: row.kreatorSlug } : null;
+case 'place_published':
+case 'place_visited':
+case 'place_comment_created':
+      return row.placeSlug ? { type: 'place', id: row.placeSlug } : null;
       case 'event_published':
       case 'event_going':
       case 'event_comment_created':
@@ -1195,6 +1351,8 @@ articleSlug?: string | null;
         ? { type: 'pantun', id: row.replyParentId }
         : null;
       case 'cuisine_published':
+      case 'cuisine_photo_added':
+      case 'cuisine_comment_created':
         if (row.cuisineSlug) return { type: 'culinary', id: row.cuisineSlug };
         return row.culinaryPlaceSlug
           ? { type: 'culinary_place', id: row.culinaryPlaceSlug }

@@ -1,5 +1,6 @@
 // Entitas domain - murni TypeScript, tidak tahu Drizzle/HTTP
 
+import type { WordImageAttribution } from '@/shared/constants/word-image-attribution';
 
 export type SuggestionStatus = 'pending' | 'approved' | 'rejected' | 'corrected';
 export type ChangeAction = 'update' | 'add' | 'delete';
@@ -34,6 +35,7 @@ export const SUGGESTION_CATEGORY_CODES = [
   'derived_from',
   'meaning_group',
   'spelling_variant',
+  'change_categories',
   'lemma_notes',
 ] as const;
 
@@ -80,6 +82,7 @@ export const REASON_CODE_LABELS: Record<SuggestionReasonCode, string> = {
   derived_from: 'Kata turunan',
   meaning_group: 'Kelompok makna',
   spelling_variant: 'Variasi penulisan',
+  change_categories: 'Ubah kategori',
   lemma_notes: 'Lemma atau catatan',
   typo: 'Kesalahan penulisan',
   inaccurate_definition: 'Definisi kurang tepat',
@@ -144,7 +147,7 @@ export interface ProposedChanges {
 /** Usulan perbaikan contoh kalimat published (issue mobile#244). */
 export interface ExampleChange {
   exampleId: string;
-  action: 'update';
+  action: 'update' | 'delete';
   sourceSentence?: string;
   targetSentence?: string | null;
 }
@@ -211,6 +214,8 @@ export interface ImageChange {
   providerFileId?: string;
   altText?: string;
   isPrimary?: boolean;
+  /** Kredit foto stock (Unsplash/Openverse/Pixabay); dibuang saat apply jika bukan stock. */
+  attribution?: WordImageAttribution;
 }
 
 export interface SuggestionSummary {

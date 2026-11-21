@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   effectiveAggregateThreshold,
   findAchievementSource,
+  parseRoleInFilter,
 } from '@/modules/achievement/domain/achievement-registry';
 
 describe('achievement registry - dual mode (B2)', () => {
@@ -10,6 +11,30 @@ describe('achievement registry - dual mode (B2)', () => {
     expect(src?.kind).toBe('user_match');
     expect(src?.supportsThreshold).toBe(false);
     expect(src?.buildMatch).toBeTypeOf('function');
+  });
+
+  it('user_role = user_match dengan filter role_in', () => {
+    const src = findAchievementSource('user_role');
+    expect(src?.kind).toBe('user_match');
+    expect(src?.supportsThreshold).toBe(false);
+    expect(src?.supportsWindow).toBe(false);
+    expect(src?.filterFields.map((f) => f.key)).toContain('role_in');
+    expect(src?.buildMatch).toBeTypeOf('function');
+    const match = src!.buildMatch!({
+      source: 'user_role',
+      filters: { role_in: 'reviewer,admin,root' },
+    });
+    expect(match).toBeTruthy();
+    expect(
+      src!.buildMatch!({ source: 'user_role', filters: { role_in: 'bukan-role' } }),
+    ).toBeTruthy();
+  });
+
+  it('parseRoleInFilter: pisah koma + dedupe + skip invalid', () => {
+    expect(parseRoleInFilter('reviewer,admin,root')).toEqual(['reviewer', 'admin', 'root']);
+    expect(parseRoleInFilter('admin, admin, contributor')).toEqual(['admin', 'contributor']);
+    expect(parseRoleInFilter('bukan,role')).toEqual([]);
+    expect(parseRoleInFilter(undefined)).toEqual([]);
   });
 
   it('contributions_approved = aggregate dengan filter entity_type', () => {

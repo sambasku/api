@@ -1,4 +1,8 @@
 import { logger } from '@/shared/logging/logger';
+import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
+import { resolveSearchMissPreferVisible } from '@/modules/search-miss/application/resolve-auto-visible';
+import { isSearchMissJunkTerm } from '@/modules/search-miss/domain/quality-gate';
+import { normalizeSearchMissTerm } from '@/modules/search-miss/domain/normalize-term';
 import type { SearchMissRepository } from '@/modules/search-miss/domain/repositories/search-miss.repository';
 import type { WordSummary } from '../../domain/entities/word.entity';
 import type { CursorPage, WordRepository } from '../../domain/repositories/word.repository';
@@ -20,10 +24,21 @@ export interface SearchWordsQuery {
   viewerId?: string;
   /** Role dari soft auth - gate verifikator (pending_review + published). */
   viewerRoles?: string[];
+  /**
+   * false = explore/typeahead (jangan rekam miss/counter).
+   * true / omit = commit search (boleh rekam miss saat 0 hasil).
+   */
+  recordMiss?: boolean;
 }
 
 export interface SearchWordsResult extends CursorPage<WordSummary> {
-  meta: { limit: number; next_cursor: string | null; has_more: boolean };
+  meta: {
+    limit: number;
+    next_cursor: string | null;
+    has_more: boolean;
+    /** G3b: id miss yang baru/di-upsert saat 0 hasil (untuk CTA koreksi). */
+    search_miss_id?: string | null;
+  };
 }
 
 // Searchable dropdown sinonim/antonim di form admin - HANYA kata
@@ -36,24 +51,39 @@ export class SearchWordsUseCase {
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly searchMissRepo: SearchMissRepository,
+    private readonly blocklistRepo?: Pick<CommentBlocklistRepository, 'findActiveWordSet'>,
+    private readonly activityEvents?: {
+      safe: (cmd: {
+        kind: 'search_miss';
+        targetId: string;
+        dedupeKey: string;
+        hidden?: boolean;
+      }) => Promise<void>;
+    },
   ) {}
 
   async execute(query: SearchWordsQuery): Promise<SearchWordsResult> {
-    // `viewerId` / `viewerRoles` milik soft-auth - dilepas sebelum diteruskan
-    // ke repo (query di sini juga jadi argumen REST).
-    const { viewerId, viewerRoles, isVerified: _ignored, ...wordQuery } = query;
+    // `viewerId` / `viewerRoles` / `recordMiss` milik soft-auth / intent -
+    // dilepas sebelum diteruskan ke repo.
+    const {
+      viewerId,
+      viewerRoles,
+      isVerified: _ignored,
+      recordMiss: recordMissRaw,
+      ...wordQuery
+    } = query;
+    const recordMiss = recordMissRaw !== false;
     const gate = publicReadGate(viewerRoles);
 
     const { items, nextCursor, hasMore } = await this.wordRepo.search({
       ...wordQuery,
       ...(gate.statuses
         ? { statuses: gate.statuses }
-        : { published: true, isVerified: true }),
+        : { published: true }),
     });
 
-    // Counter pencarian harian (hit + miss) untuk chart dashboard.
-    // Best-effort: kegagalan tidak boleh membatalkan response.
-    if (query.q.trim().length > 0) {
+    // Counter + miss hanya saat commit (bukan ketikan typeahead).
+    if (recordMiss && query.q.trim().length > 0) {
       try {
         await this.searchMissRepo.recordSearchDay();
       } catch (err) {
@@ -81,14 +111,45 @@ export class SearchWordsUseCase {
       }
     }
 
-    if (items.length === 0 && query.q.trim().length >= 2) {
-      // Best-effort: kegagalan pencatatan tidak boleh membatalkan response
+    let searchMissId: string | null = null;
+    // Min 2: ada lemma Sambas 2 huruf. Fragment ketik dicegah lewat
+    // recordMiss=false (explore). Angka/simbol polos tidak direkam.
+    const normalizedMiss = normalizeSearchMissTerm(query.q);
+    if (
+      recordMiss &&
+      items.length === 0 &&
+      normalizedMiss.length >= 2 &&
+      !isSearchMissJunkTerm(normalizedMiss)
+    ) {
+      // Best-effort: kegagalan pencatatan tidak boleh membatalkan response.
+      // preferVisible dipisah: gagal resolve (settings/blocklist) jangan
+      // mencegah INSERT miss - gejala staging G3 (search 0 hasil tanpa baris).
+      let preferVisible = false;
       try {
-        await this.searchMissRepo.record({
+        preferVisible = await resolveSearchMissPreferVisible({
+          term: query.q,
+          blocklist: this.blocklistRepo,
+        });
+      } catch (err) {
+        logger.warn({ err, q: query.q }, 'gagal resolve search miss auto-visible');
+      }
+      try {
+        const recorded = await this.searchMissRepo.record({
           term: query.q,
           direction: query.searchIn === 'translation' ? 'translation' : 'lemma',
           searcherId: viewerId,
+          preferVisible,
         });
+        searchMissId = recorded?.id ?? null;
+        // G3: event feed saat pertama kali auto-tayang (dedupe sama PATCH admin).
+        if (recorded?.becameVisible) {
+          await this.activityEvents?.safe({
+            kind: 'search_miss',
+            targetId: recorded.id,
+            dedupeKey: `search_miss:${recorded.id}`,
+            hidden: false,
+          });
+        }
       } catch (err) {
         logger.warn({ err, q: query.q }, 'gagal mencatat search miss');
       }
@@ -98,7 +159,12 @@ export class SearchWordsUseCase {
       items,
       nextCursor,
       hasMore,
-      meta: { limit: query.limit, next_cursor: nextCursor, has_more: hasMore },
+      meta: {
+        limit: query.limit,
+        next_cursor: nextCursor,
+        has_more: hasMore,
+        ...(searchMissId ? { search_miss_id: searchMissId } : {}),
+      },
     };
   }
 }

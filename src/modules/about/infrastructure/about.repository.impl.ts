@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import type * as schema from '@/shared/database/drizzle/schema';
 import { sponsorships, userRoles, users } from '@/shared/database/drizzle/schema';
@@ -22,12 +22,15 @@ function toSponsorship(row: typeof sponsorships.$inferSelect): Sponsorship {
   return {
     id: row.id,
     userId: row.userId ?? null,
+    usahaId: row.usahaId ?? null,
     name: row.name,
     description: row.description ?? null,
     logoUrl: row.logoUrl ?? null,
     url: row.url ?? null,
     username: row.username ?? null,
+    tier: row.tier,
     since: row.since,
+    endsOn: row.endsOn ?? null,
     note: row.note ?? '',
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? null,
@@ -37,6 +40,15 @@ function toSponsorship(row: typeof sponsorships.$inferSelect): Sponsorship {
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Soft-delete null + since/ends_on window (hari ini di dalam masa). */
+function activeSponsorshipConds(today = todayIsoDate()) {
+  return and(
+    isNull(sponsorships.deletedAt),
+    sql`${sponsorships.since} <= ${today}`,
+    or(isNull(sponsorships.endsOn), sql`${sponsorships.endsOn} >= ${today}`),
+  );
 }
 
 export class AboutRepositoryImpl implements AboutRepository {
@@ -75,7 +87,22 @@ export class AboutRepositoryImpl implements AboutRepository {
     const rows = await this.db
       .select()
       .from(sponsorships)
-      .where(isNull(sponsorships.deletedAt))
+      .where(activeSponsorshipConds())
+      .orderBy(asc(sponsorships.since), asc(sponsorships.id));
+    return rows.map(toSponsorship);
+  }
+
+  async listSplashSponsorships(): Promise<Sponsorship[]> {
+    const rows = await this.db
+      .select()
+      .from(sponsorships)
+      .where(
+        and(
+          activeSponsorshipConds(),
+          sql`${sponsorships.usahaId} is not null`,
+          inArray(sponsorships.tier, ['emas', 'intan', 'mustika']),
+        ),
+      )
       .orderBy(asc(sponsorships.since), asc(sponsorships.id));
     return rows.map(toSponsorship);
   }
@@ -116,12 +143,7 @@ export class AboutRepositoryImpl implements AboutRepository {
     const [row] = await this.db
       .select()
       .from(sponsorships)
-      .where(
-        and(
-          eq(sponsorships.userId, userId),
-          isNull(sponsorships.deletedAt),
-        ),
-      )
+      .where(and(eq(sponsorships.userId, userId), activeSponsorshipConds()))
       .limit(1);
     return row ? toSponsorship(row) : null;
   }
@@ -131,12 +153,15 @@ export class AboutRepositoryImpl implements AboutRepository {
       .insert(sponsorships)
       .values({
         userId: data.userId ?? null,
+        usahaId: data.usahaId ?? null,
         name: data.name,
         description: data.description ?? null,
         logoUrl: data.logoUrl ?? null,
         url: data.url ?? null,
         username: data.username ?? null,
+        tier: data.tier ?? 'perak',
         since: data.since,
+        endsOn: data.endsOn ?? null,
         note: data.note ?? '',
       })
       .returning();
@@ -155,7 +180,11 @@ export class AboutRepositoryImpl implements AboutRepository {
     if (data.logoUrl !== undefined) patch.logoUrl = data.logoUrl;
     if (data.url !== undefined) patch.url = data.url;
     if (data.username !== undefined) patch.username = data.username;
+    if (data.userId !== undefined) patch.userId = data.userId;
+    if (data.usahaId !== undefined) patch.usahaId = data.usahaId;
+    if (data.tier !== undefined) patch.tier = data.tier;
     if (data.since !== undefined) patch.since = data.since;
+    if (data.endsOn !== undefined) patch.endsOn = data.endsOn;
     if (data.note !== undefined) patch.note = data.note;
 
     const [row] = await this.db
@@ -231,6 +260,7 @@ export class AboutRepositoryImpl implements AboutRepository {
       name: user.displayName || user.username,
       username: user.username,
       logoUrl: user.avatarUrl ?? null,
+      tier: 'perak',
       since: todayIsoDate(),
       note: '',
     });
@@ -302,12 +332,7 @@ export class AboutRepositoryImpl implements AboutRepository {
     const rows = await this.db
       .select({ userId: sponsorships.userId })
       .from(sponsorships)
-      .where(
-        and(
-          inArray(sponsorships.userId, userIds),
-          isNull(sponsorships.deletedAt),
-        ),
-      );
+      .where(and(inArray(sponsorships.userId, userIds), activeSponsorshipConds()));
     for (const r of rows) {
       if (r.userId) set.add(r.userId);
     }

@@ -1,3 +1,4 @@
+import type { CommentAudio } from '@/modules/comment/domain/entities/comment.entity';
 import type {
   ArticleCommentStatus,
   ArticleContributionKind,
@@ -22,6 +23,8 @@ export interface Article {
   authorDisplayName: string | null;
   authorAvatarUrl: string | null;
   authorDeletedAt: Date | null;
+  /** Role tertinggi penulis (untuk `is_verifier` wire); null bila bukan staf. */
+  authorRole: string | null;
   status: ArticleStatus;
   tags: string[];
   publishedAt: Date | null;
@@ -43,6 +46,21 @@ export interface EncyclopediaTag {
 }
 
 /** Payload usulan (versi lengkap yang diusulkan user/admin). */
+export interface ArticleRelatedRef {
+  kind:
+    | 'word'
+    | 'article'
+    | 'place'
+    | 'event'
+    | 'usaha'
+    | 'karya'
+    | 'kreator'
+    | 'cuisine'
+    | 'layanan';
+  id?: string;
+  slug?: string;
+}
+
 export interface ArticlePayload {
   title: string;
   excerpt: string;
@@ -52,6 +70,7 @@ export interface ArticlePayload {
   cover_url?: string | null;
   source_url?: string | null;
   references_md?: string | null;
+  related?: ArticleRelatedRef[];
 }
 
 export interface ArticleContribution {
@@ -101,6 +120,9 @@ export interface ArticleComment {
   authorDeletedAt: Date | null;
   body: string;
   imageUrl: string | null;
+  /** Slug katalog stickers; null = bukan komentar stiker. */
+  stickerId: string | null;
+  audio: CommentAudio | null;
   status: ArticleCommentStatus;
   isEdited: boolean;
   createdAt: Date;

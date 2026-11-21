@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ValidationError } from '@/shared/errors/app-error';
+import { NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import { CreateJinyeLemmaLinkUseCase } from '../../application/use-cases/create-jinye-lemma-link.use-case';
 import { ProposeJinyeLemmaCorrectionUseCase } from '../../application/use-cases/propose-jinye-lemma-correction.use-case';
 import { ResolveJinyeLemmaCorrectionUseCase } from '../../application/use-cases/resolve-jinye-lemma-correction.use-case';
-import type { Jinye, JinyeLemmaLink } from '../../domain/entities/jinye.entity';
+import type {
+  Jinye,
+  JinyeComment,
+  JinyeLemmaLink,
+} from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
 
 vi.mock('@/modules/word/application/utils/assert-can-contribute', () => ({
@@ -12,7 +16,9 @@ vi.mock('@/modules/word/application/utils/assert-can-contribute', () => ({
 
 const OWNER = '01OWNERJINYE0000000000000';
 const OTHER = '01OTHERJINYE0000000000000';
+const COMMENT_AUTHOR = '01COMMENTAUTHOR0000000000';
 const JINYE_ID = '01JINYE0000000000000000001';
+const COMMENT_ID = '01JINYECOMMENT000000000001';
 const WORD_ID = '01WORD00000000000000000001';
 const WORD2 = '01WORD00000000000000000002';
 
@@ -60,6 +66,27 @@ function makeLink(overrides: Partial<JinyeLemmaLink> = {}): JinyeLemmaLink {
   };
 }
 
+function makeComment(overrides: Partial<JinyeComment> = {}): JinyeComment {
+  return {
+    id: COMMENT_ID,
+    jinyeId: JINYE_ID,
+    parentId: null,
+    userId: COMMENT_AUTHOR,
+    username: 'budi',
+    displayName: 'Budi',
+    avatarUrl: null,
+    userRole: null,
+    body: 'Aku makan nasi',
+    bodyOriginal: null,
+    stickerId: null,
+    images: [],
+    status: 'published',
+    createdAt: new Date(),
+    updatedAt: null,
+    ...overrides,
+  };
+}
+
 function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
   return {
     create: vi.fn(),
@@ -70,6 +97,7 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     updateBody: vi.fn(),
     listRevisions: vi.fn(),
     markLemmaLinksStale: vi.fn(),
+    markCommentLemmaLinksStale: vi.fn(),
     findPlainRepostByUser: vi.fn(),
     adjustRepostCount: vi.fn(),
     markDeletedByAuthor: vi.fn(),
@@ -82,6 +110,8 @@ function repo(overrides: Partial<JinyeRepository> = {}): JinyeRepository {
     createComment: vi.fn(),
     findCommentById: vi.fn(),
     listCommentsByJinyeId: vi.fn(),
+    updateCommentWithRevision: vi.fn(),
+    listCommentRevisions: vi.fn(),
     markCommentDeletedByAuthor: vi.fn(),
     takedownComment: vi.fn(),
     incrementPublishedCommentCount: vi.fn(),
@@ -162,8 +192,127 @@ describe('Jinye lemma links', () => {
         source: 'author',
         status: 'active',
         wordId: WORD_ID,
+        commentId: null,
       }),
     );
+    expect(r.listActiveLemmaLinksForTarget).toHaveBeenCalledWith({
+      jinyeId: JINYE_ID,
+    });
+  });
+
+  it('create: span di komentar → commentId + source author komentar', async () => {
+    const COMMENT_ID = '01COMMENT00000000000000001';
+    const r = repo({
+      findCommentById: vi.fn(async () => ({
+        id: COMMENT_ID,
+        jinyeId: JINYE_ID,
+        parentId: null,
+        userId: OTHER,
+        username: 'budi',
+        displayName: 'Budi',
+        avatarUrl: null,
+        userRole: null,
+        body: 'enak sekali',
+        bodyOriginal: null,
+        stickerId: null,
+        images: [],
+        status: 'published' as const,
+        createdAt: new Date(),
+        updatedAt: null,
+      })),
+      createLemmaLink: vi.fn(async () =>
+        makeLink({
+          commentId: COMMENT_ID,
+          start: 0,
+          end: 4,
+          source: 'author',
+          lemma: 'enak',
+        }),
+      ),
+    });
+    await new CreateJinyeLemmaLinkUseCase(r, words as never, audit).execute({
+      jinyeId: JINYE_ID,
+      userId: OTHER,
+      start: 0,
+      end: 4,
+      wordId: WORD_ID,
+      commentId: COMMENT_ID,
+    });
+    expect(r.createLemmaLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jinyeId: JINYE_ID,
+        commentId: COMMENT_ID,
+        source: 'author',
+        start: 0,
+        end: 4,
+      }),
+    );
+    expect(r.listActiveLemmaLinksForTarget).toHaveBeenCalledWith({
+      commentId: COMMENT_ID,
+    });
+  });
+
+  it('create: comment_id tidak valid → NotFoundError', async () => {
+    await expect(
+      new CreateJinyeLemmaLinkUseCase(
+        repo({ findCommentById: vi.fn(async () => null) }),
+        words as never,
+        audit,
+      ).execute({
+        jinyeId: JINYE_ID,
+        userId: OWNER,
+        start: 0,
+        end: 4,
+        wordId: WORD_ID,
+        commentId: '01MISSINGCOMMENT0000000000',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('create: comment span → source from comment author + scoped list', async () => {
+    const r = repo({
+      findCommentById: vi.fn(async () => makeComment()),
+      createLemmaLink: vi.fn(async () =>
+        makeLink({ commentId: COMMENT_ID, source: 'author' }),
+      ),
+    });
+    await new CreateJinyeLemmaLinkUseCase(r, words as never, audit).execute({
+      jinyeId: JINYE_ID,
+      userId: COMMENT_AUTHOR,
+      commentId: COMMENT_ID,
+      start: 4,
+      end: 9,
+      wordId: WORD_ID,
+    });
+    expect(r.listActiveLemmaLinksForTarget).toHaveBeenCalledWith({
+      commentId: COMMENT_ID,
+    });
+    expect(r.createLemmaLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jinyeId: JINYE_ID,
+        commentId: COMMENT_ID,
+        source: 'author',
+        status: 'active',
+        wordId: WORD_ID,
+      }),
+    );
+  });
+
+  it('create: invalid comment → NotFoundError', async () => {
+    const r = repo({
+      findCommentById: vi.fn(async () => null),
+    });
+    await expect(
+      new CreateJinyeLemmaLinkUseCase(r, words as never, audit).execute({
+        jinyeId: JINYE_ID,
+        userId: OWNER,
+        commentId: COMMENT_ID,
+        start: 4,
+        end: 9,
+        wordId: WORD_ID,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(r.createLemmaLink).not.toHaveBeenCalled();
   });
 
   it('propose correction → pending_correction', async () => {

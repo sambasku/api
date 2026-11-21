@@ -12,6 +12,7 @@ import {
 import type { AppVariables } from "@/shared/types";
 import type { EventContributionController } from "./event-contribution.controller";
 import {
+  listEventContributionsQuerySchema,
   rejectEventContributionBodySchema,
   requestRevisionBodySchema,
   resubmitEventContributionBodySchema,
@@ -181,7 +182,8 @@ export function createAdminEventContributionRoutes(deps: {
     method: "get",
     path: "/",
     tags: ["Admin event contributions"],
-    summary: "Usulan acara yang menunggu",
+    summary: "Usulan acara (periksa / riwayat) + cari",
+    request: { query: listEventContributionsQuerySchema },
     responses: {
       200: { description: "Daftar", content: json(okList) },
     },
@@ -237,7 +239,9 @@ export function createAdminEventContributionRoutes(deps: {
     },
   });
 
-  routes.openapi(listRoute, (c) => deps.controller.listPending(c) as never);
+  routes.openapi(listRoute, (c) =>
+    deps.controller.listPending(c, c.req.valid("query")) as never,
+  );
   routes.openapi(
     approveRoute,
     (c) => deps.controller.approve(c, c.req.param("id")) as never,

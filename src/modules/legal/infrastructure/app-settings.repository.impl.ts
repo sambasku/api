@@ -115,7 +115,10 @@ export class AppSettingsRepositoryImpl implements AppSettingsRepository {
           .returning(),
       ) as any,
     );
-    const results = (await batch) as unknown as Array<typeof appSettings.$inferSelect>;
-    return results.map((row) => toEntity(row));
+    // libSQL/drizzle batch: tiap statement → array rows (returning), bukan 1 row.
+    const results = (await batch) as unknown as Array<
+      Array<typeof appSettings.$inferSelect>
+    >;
+    return results.flatMap((rows) => (rows ?? []).map(toEntity));
   }
 }

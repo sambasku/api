@@ -16,6 +16,19 @@ describe('classifyUsernameLocal', () => {
     expect(classifyUsernameLocal('abc').status).toBe('invalid');
   });
 
+  it('separator beruntun / saja → invalid', () => {
+    for (const raw of ['a..bcde', 'a._bcde', '_____', '____9', '......']) {
+      expect(classifyUsernameLocal(raw).status).toBe('invalid');
+    }
+  });
+
+  it('angka saja → available format', () => {
+    expect(classifyUsernameLocal('123456')).toEqual({
+      username: '123456',
+      status: 'available',
+    });
+  });
+
   it('reserved → reserved', () => {
     // 'system' lolos format 6-30 tapi reserved
     expect(classifyUsernameLocal('system').status).toBe('reserved');
@@ -57,5 +70,29 @@ describe('resolveUsernameAvailability', () => {
         findByUsername: async () => null,
       }),
     ).resolves.toEqual({ username: 'warga.sambas', status: 'available' });
+  });
+
+  it('hold milik sendiri → reclaimable', async () => {
+    await expect(
+      resolveUsernameAvailability({
+        raw: 'budi00',
+        currentUsername: 'warga.sambas',
+        currentUserId: 'u1',
+        findByUsername: async () => null,
+        findActiveHold: async () => ({ userId: 'u1' }),
+      }),
+    ).resolves.toEqual({ username: 'budi00', status: 'reclaimable' });
+  });
+
+  it('hold milik orang lain → taken', async () => {
+    await expect(
+      resolveUsernameAvailability({
+        raw: 'budi00',
+        currentUsername: 'warga.sambas',
+        currentUserId: 'u1',
+        findByUsername: async () => null,
+        findActiveHold: async () => ({ userId: 'u2' }),
+      }),
+    ).resolves.toEqual({ username: 'budi00', status: 'taken' });
   });
 });

@@ -591,6 +591,19 @@ export const wordDetailResponseSchema = z.object({
         relation_type: z.string(),
       }),
     ),
+    appears_in_karya: z
+      .array(
+        z.object({
+          karya_slug: z.string(),
+          karya_title: z.string(),
+          excerpt_id: z.string(),
+          excerpt_kind: z.string(),
+          start: z.number(),
+          end: z.number(),
+          snippet: z.string(),
+        }),
+      )
+      .optional(),
     // PRD relasi-lemma: kelompok makna published (kosong bila tak ada)
     meaning_groups: z
       .array(
@@ -657,6 +670,8 @@ export const wordListResponseSchema = z.object({
     limit: z.number().int(),
     next_cursor: z.string().nullable(),
     has_more: z.boolean(),
+    /** Ada saat search 0 hasil + miss berhasil dicatat (CTA koreksi / usul). */
+    search_miss_id: z.string().nullable().optional(),
   }),
 });
 
@@ -688,6 +703,12 @@ export const searchWordsQuerySchema = z.object({
   translation_language_id: z.string().length(26).optional(),
   word_type: z.enum(['word', 'idiom', 'peribahasa', 'ungkapan']).optional(),
   is_verified: queryBooleanSchema,
+  /**
+   * true (default) = boleh rekam search-miss + counter harian saat 0 hasil.
+   * false = explore/typeahead (ketikan) - hasil tetap, tanpa membengkakkan miss.
+   * Client commit (Enter / Cari / blur idle) kirim true atau omit.
+   */
+  record_miss: queryBooleanSchema,
 });
 
 /** GET /api/v1/admin/words - panel Kata (tabs tayang / tidak / semua) */
@@ -701,6 +722,8 @@ export const adminListWordsQuerySchema = z.object({
   published: queryBooleanSchema,
   /** true = bergambar, false = tanpa gambar, omit = semua */
   has_image: queryBooleanSchema,
+  /** true = punya makna needs_review, false = tidak, omit = semua */
+  needs_review: queryBooleanSchema,
 });
 
 /** GET /api/v1/words - daftar semua kata A-Z publik (18-api-list-words.md) */

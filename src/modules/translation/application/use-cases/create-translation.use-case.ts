@@ -1,7 +1,9 @@
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { JinyeRepository } from '@/modules/jinye/domain/repositories/jinye.repository';
+import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import {
+  LEMMA_EXAMPLE_TRANSLATION_REFF,
   TRANSLATION_REFFS,
   type TranslationReff,
 } from '@/shared/database/drizzle/schema';
@@ -31,6 +33,7 @@ export class CreateTranslationUseCase {
     private readonly translationRepo: TranslationRepository,
     private readonly jinyeRepo: JinyeRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly words: Pick<WordRepository, 'findExampleById'>,
   ) {}
 
   async execute(input: CreateTranslationInput): Promise<Translation> {
@@ -69,6 +72,24 @@ export class CreateTranslationUseCase {
       }
       // Snapshot teks sumber - review tidak perlu JOIN ulang ke jinye.
       sourceBody = target.body;
+    } else if (input.reff === LEMMA_EXAMPLE_TRANSLATION_REFF) {
+      const example = await this.words.findExampleById(input.reffId);
+      if (!example || example.status === 'rejected') {
+        throw new NotFoundError(
+          'EXAMPLE_NOT_FOUND',
+          'Contoh kalimat tidak ditemukan',
+        );
+      }
+      const source = example.sourceSentence.trim();
+      if (source.length === 0) {
+        throw new ValidationError([
+          {
+            field: 'body',
+            message: 'Contoh tanpa teks sumber tidak perlu terjemahan.',
+          },
+        ]);
+      }
+      sourceBody = source;
     }
 
     const existing = await this.translationRepo.findPendingByTranslator(

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import type { AppDatabase } from "./client";
 import { ensureTestDbReady } from "./test-client";
 import {
@@ -15,7 +15,11 @@ import {
   bugReports,
   categories,
   categorySuggestions,
+  chatMessageDeletions,
+  chatMessageRevisions,
+  chatMessages,
   commentBlocklistWords,
+  contentLinks,
   commentRevisions,
   comments,
   contributionReviews,
@@ -88,6 +92,7 @@ discussions,
   webImports,
   userConsents,
   userRoles,
+  usernameChanges,
   users,
   userSkips,
   ugcAbuseEvents,
@@ -111,7 +116,50 @@ discussions,
   wordVariants,
   meaningVoteCounts,
   meanings,
+  wordViews,
+  usahaViews,
+  cuisineViews,
+  articleViews,
   words,
+  balehoEvents,
+  balehoCommissions,
+  balehoOccupancy,
+  balehoPlacements,
+  balehoFrames,
+  balehoCreatives,
+  leaderboardWeekEntries,
+  leaderboardWeeks,
+  // FK users / parent entity - wajib di truncateAll (CI SQLITE_CONSTRAINT)
+  translations,
+  jinyeCommentRevisions,
+  jinyeComments,
+  jinyeRevisions,
+  jinyeLemmaLinks,
+  jinyeReports,
+  jinye,
+  discussionLemmaLinks,
+  placeCommentRevisions,
+  placeComments,
+  placeVisits,
+  usahaCommentRevisions,
+  usahaComments,
+  usahaVisits,
+  cuisineCommentRevisions,
+  cuisineComments,
+  eventCommentRevisions,
+  eventComments,
+  eventGoings,
+  eventImages,
+  voiceRoomEvents,
+  sponsorships,
+  karyaLemmaLinks,
+  karyaExcerpts,
+  karyaCredits,
+  karyaContributions,
+  karyas,
+  kreatorClaims,
+  kreators,
+  voteResetArchives,
 } from "./schema";
 import { FIRST_PARTY_SCOPE_STRING } from "@/modules/developer-oauth/domain/entities/api-client.entity";
 
@@ -400,9 +448,19 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
 // beforeEach/beforeAll integration & e2e test, jangan delete per tabel.
 export async function truncateAll(db: AppDatabase): Promise<void> {
   await ensureTestDbReady();
+  // Skip tabel yang belum ada di file DB test (migrasi lokal tertinggal).
+  const existing = new Set(
+    (
+      await db.all<{ name: string }>(
+        sql`select name from sqlite_master where type = 'table'`,
+      )
+    ).map((r) => r.name),
+  );
   // FK siklus users.active_border_id -> user_achievements.id -> users.id:
   // kosongkan dulu kolom border aktif SEBELUM hapus tabel manapun.
-  await db.run(sql`update users set active_border_id = null`);
+  if (existing.has("users")) {
+    await db.run(sql`update users set active_border_id = null`);
+  }
   for (const table of [
     auditLogs,
     wordReports,
@@ -439,6 +497,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     wordAudios,
     examples,
     meaningTranslations,
+    // translations (translator_id / reviewed_by → users)
+    translations,
     passwordResetTokens,
     accountDeletionTokens,
     refreshTokens,
@@ -453,6 +513,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     // meaning_vote_counts FK meanings - wajib sebelum meanings.
     meaningVoteCounts,
     meanings,
+    // word_views FK words - sebelum words.
+    wordViews,
     // Detail impor web FK words + web_imports - sebelum keduanya.
     webImportDetails,
     webImports,
@@ -476,30 +538,44 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     // Katalog achievement - sebelum userAchievements (FK achievement_id)
     achievements,
     // Places CRUD (FK place_images.place_id) - anak dulu
+    placeCommentRevisions,
+    placeComments,
+    placeVisits,
     placeContributions,
     placeImages,
     placeViews,
     places,
     placeCategories,
 	// Usaha (anak dulu: contributions/claims/reports -> items -> usahas)
+	usahaCommentRevisions,
+	usahaComments,
+	usahaVisits,
 	usahaContributions,
 	usahaClaims,
 	usahaReports,
 	usahaImages,
 	usahaItems,
+	usahaViews,
 	usahas,
 	usahaCategories,
 	layananContributions,
 	layanans,
 	// Kuliner (anak dulu: contributions/claims/reports -> relasi -> entitas -> kategori)
+	cuisineCommentRevisions,
+	cuisineComments,
 	culinaryContributions,
 	culinaryClaims,
 	culinaryReports,
 	culinaryPlaceCuisines,
+	cuisineViews,
 	cuisines,
 	culinaryPlaces,
 	culinaryCategories,
       // Event/acara (FK event_places -> places/events) - anak dulu
+      eventCommentRevisions,
+      eventComments,
+      eventGoings,
+      eventImages,
       eventContributions,
       eventPlaces,
       events,
@@ -513,6 +589,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
       articleRevisions,
       articleContributions,
       articleTags,
+      articleViews,
       articles,
       encyclopediaTags,
       encyclopediaCategories,
@@ -521,16 +598,53 @@ pantunReports,
 pantunReplyRevisions,
 pantunReplies,
 pantuns,
+    // Jinye + lemma links (FK user_id / taken_down_by) - sebelum users
+    jinyeCommentRevisions,
+    jinyeComments,
+    jinyeRevisions,
+    jinyeLemmaLinks,
+    jinyeReports,
+    jinye,
+    discussionLemmaLinks,
+    // Karya / kreator (FK users) - anak dulu
+    karyaLemmaLinks,
+    karyaExcerpts,
+    karyaCredits,
+    karyaContributions,
+    karyas,
+    kreatorClaims,
+    kreators,
+    voiceRoomEvents,
+    sponsorships,
+    voteResetArchives,
       // Event feed publik (FK actor_id) - sebelum users
       activityEvents,
+    // Baleho (anak dulu: events/commissions/occupancy → placements → frames → creatives)
+    balehoEvents,
+    balehoCommissions,
+    balehoOccupancy,
+    balehoPlacements,
+    balehoFrames,
+    balehoCreatives,
+    // Leaderboard (entries sebelum weeks; entries FK users)
+    leaderboardWeekEntries,
+    leaderboardWeeks,
+    // Chat publik (FK user_id / editor_id / deleted_by) - sebelum users
+    chatMessageRevisions,
+    chatMessageDeletions,
+    chatMessages,
+    // Content links (FK created_by) - sebelum users
+    contentLinks,
     // Legal / OAuth - harus sebelum users (FK created_by / user_id / owner)
     userConsents,
     legalDocuments,
     appSettings,
     apiClients,
     userRoles,
+    usernameChanges,
     users,
   ]) {
+    if (!existing.has(getTableName(table))) continue;
     await db.delete(table);
   }
 

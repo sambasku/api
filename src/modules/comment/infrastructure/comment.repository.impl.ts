@@ -104,6 +104,7 @@ export class CommentRepositoryImpl implements CommentRepository {
     userId: string;
     body: string;
     bodyOriginal?: string | null;
+    stickerId?: string | null;
     audio?: {
       url: string;
       mimeType: string;
@@ -128,6 +129,7 @@ export class CommentRepositoryImpl implements CommentRepository {
         userId: data.userId,
         body: data.body,
         bodyOriginal: data.bodyOriginal ?? null,
+        stickerId: data.stickerId ?? null,
         audioUrl: audio?.url ?? null,
         audioMimeType: audio?.mimeType ?? null,
         audioFileSize: audio?.fileSize ?? null,
@@ -531,6 +533,7 @@ export class CommentRepositoryImpl implements CommentRepository {
       userRole,
       body: row.body,
       bodyOriginal: row.bodyOriginal ?? null,
+      stickerId: row.stickerId ?? null,
       audio: hasAudio
         ? {
             url: row.audioUrl as string,

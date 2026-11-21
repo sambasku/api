@@ -13,18 +13,25 @@ const categoryIdSchema = z
   .max(64, 'Kategori artikel tidak valid')
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Kategori artikel tidak valid');
 
-/** Tag: slug lowercase-hyphen, maks 40 karakter, maks 8 per artikel. */
-const tagSchema = z
-  .string({ error: 'Tag tidak valid' })
-  .trim()
-  .min(1, 'Tag tidak valid')
-  .max(40, 'Tag maksimal 40 karakter')
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Tag hanya huruf kecil, angka, hyphen');
+/**
+ * Tag: slug lowercase-hyphen, maks 40 karakter, maks 8 per artikel.
+ * Huruf besar dari klien di-lowercase dulu (bukan error) supaya form mobile
+ * yang kirim "Sejarah" tetap lolos.
+ */
+const tagSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+  z
+    .string({ error: 'Tag tidak valid' })
+    .min(1, 'Tag tidak valid')
+    .max(40, 'Tag maksimal 40 karakter')
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Tag hanya huruf kecil, angka, hyphen'),
+);
 
 const tagsSchema = z
   .array(tagSchema)
   .max(8, 'Tag maksimal 8 per artikel')
-  .default([]);
+  .default([])
+  .transform((tags) => [...new Set(tags)]);
 
 const BODY_MD_MAX = 50_000;
 
@@ -53,6 +60,30 @@ const articlePayloadFields = {
     .string()
     .max(10_000, 'Referensi maksimal 10.000 karakter')
     .nullable()
+    .optional(),
+  related: z
+    .array(
+      z
+        .object({
+          kind: z.enum([
+            'word',
+            'article',
+            'place',
+            'event',
+            'usaha',
+            'karya',
+            'kreator',
+            'cuisine',
+            'layanan',
+          ]),
+          id: z.string().trim().min(1).max(26).optional(),
+          slug: z.string().trim().min(1).max(120).optional(),
+        })
+        .refine((d) => Boolean(d.id || d.slug), {
+          message: 'Setiap tautan butuh id atau slug',
+        }),
+    )
+    .max(12, 'Maksimal 12 tautan terkait')
     .optional(),
 };
 
@@ -172,14 +203,41 @@ export const articleCommentsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
-export const createCommentBodySchema = z.object({
-  body: z
-    .string({ error: 'Komentar wajib diisi' })
-    .trim()
-    .min(1, 'Komentar wajib diisi')
-    .max(1000, 'Komentar maksimal 1000 karakter'),
-  image_url: z.string().url().startsWith('https://').nullable().optional(),
-});
+export const createCommentBodySchema = z
+  .object({
+    body: z
+      .string({ error: 'Komentar tidak valid' })
+      .trim()
+      .max(1000, 'Komentar maksimal 1000 karakter')
+      .optional()
+      .default(''),
+    image_url: z.string().url().startsWith('https://').nullable().optional(),
+    sticker_id: z
+      .string({ error: 'Stiker tidak valid' })
+      .trim()
+      .min(1, 'Stiker tidak valid')
+      .max(64, 'Stiker tidak valid')
+      .nullish(),
+  })
+  .superRefine((val, ctx) => {
+    const hasBody = (val.body?.trim().length ?? 0) > 0;
+    const hasImage = Boolean(val.image_url?.trim());
+    const hasSticker = Boolean(val.sticker_id?.trim());
+    if (hasSticker && hasImage) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sticker_id'],
+        message: 'Stiker tidak bisa digabung dengan foto',
+      });
+    }
+    if (!hasBody && !hasImage && !hasSticker) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['body'],
+        message: 'Komentar, foto, atau stiker wajib diisi',
+      });
+    }
+  });
 
 export const updateCommentBodySchema = z.object({
   body: z

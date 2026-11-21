@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
@@ -104,6 +105,25 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
     rateLimit({ points: 30, duration: 3600, keyFn: userKey('article-comment') }),
   );
   routes.use(
+    '/articles/:id/comments/audio',
+    deps.authenticate,
+    ...consent,
+    ...client,
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) =>
+        c.json(
+          {
+            success: false as const,
+            error_code: 'AUDIO_TOO_LARGE',
+            message: 'File audio terlalu besar (maks 5 MB)',
+          },
+          400,
+        ),
+    }),
+    rateLimit({ points: 30, duration: 3600, keyFn: userKey('article-comment') }),
+  );
+  routes.use(
     '/comments/:id',
     deps.authenticate,
     ...consent,
@@ -205,6 +225,19 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
       },
     }),
     createRoute({
+      method: 'post',
+      path: '/articles/:id/comments/audio',
+      tags: ['Encyclopedia', 'Article Comments'],
+      summary: 'Komentar artikel dengan rekaman suara (multipart; publish langsung)',
+      request: { params: articleIdParamSchema },
+      responses: {
+        201: okResponse('Komentar tersimpan'),
+        401: { description: 'Belum login', content: json(errorResponseSchema) },
+        404: { description: 'Artikel tidak ditemukan', content: json(errorResponseSchema) },
+        429: { description: 'Rate limit', content: json(errorResponseSchema) },
+      },
+    }),
+    createRoute({
       method: 'patch',
       path: '/comments/:id',
       tags: ['Encyclopedia', 'Article Comments'],
@@ -259,15 +292,15 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
       method: 'patch',
       path: '/contributions/:id',
       tags: ['Encyclopedia', 'Encyclopedia Contributions'],
-      summary: 'Kirim ulang usulan yang berstatus needs_revision',
+      summary: 'Ubah usulan pending / needs_revision (in-place, milik pengusul)',
       request: {
         params: articleIdParamSchema,
         body: { content: json(resubmitContributionBodySchema) },
       },
       responses: {
-        201: okResponse('Usulan dikirim ulang'),
+        200: okResponse('Usulan diperbarui'),
         404: { description: 'Usulan tidak ditemukan', content: json(errorResponseSchema) },
-        409: { description: 'Status tidak bisa dikirim ulang', content: json(errorResponseSchema) },
+        409: { description: 'Usulan sudah diverifikasi', content: json(errorResponseSchema) },
       },
     }),
     createRoute({
@@ -301,6 +334,7 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
     'get /tags': (c) => deps.controller.tags(c),
     'get /articles/:id/comments': (c) => deps.controller.listComments(c),
     'post /articles/:id/comments': (c) => deps.controller.createComment(c),
+    'post /articles/:id/comments/audio': (c) => deps.controller.createCommentAudio(c),
     'patch /comments/:id': (c) => deps.controller.updateComment(c),
     'delete /comments/:id': (c) => deps.controller.deleteComment(c),
     'post /articles/:id/bookmark': (c) => deps.controller.toggleBookmark(c),

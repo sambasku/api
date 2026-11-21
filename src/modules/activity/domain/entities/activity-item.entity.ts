@@ -23,6 +23,7 @@ export type ActivityKind =
   | 'event'
 | 'usaha'
 | 'layanan'
+| 'karya'
 | 'culinary'
 | 'pantun'
 | 'article'
@@ -40,15 +41,15 @@ export interface ActivityTarget {
   type: string;
   id: string;
   /**
- * #144: arah pencarian search-miss. `lemma` = kata Sambas dicari,
- * `translation` = kata Indonesia dicari. Null untuk kind lain - mobile
- * memakai ini agar prefill form usul mengisi field yang benar.
- */
-direction?: 'lemma' | 'translation' | null;
+   * #144: arah pencarian search-miss. `lemma` = kata Sambas dicari,
+   * `translation` = kata Indonesia dicari. Null untuk kind lain - mobile
+   * memakai ini agar prefill form usul mengisi field yang benar.
+   */
+  direction?: 'lemma' | 'translation' | null;
   /**
-   * #166: status kata target saat event dibaca. `pending_review` = usulan
-   * kata baru yang belum tayang - mobile mengarahkan verifikator ke antrean
-   * review, bukan detail publik (404). Null/`published` = kata tayang normal.
+   * #166: status wire target. `pending_review` = usulan masih perlu review
+   * (DB boleh sudah `published` + belum verified; verifikator shortcut ke
+   * antrean). Null/`published` = kata tayang normal.
    */
   status?: 'published' | 'pending_review' | null;
 }

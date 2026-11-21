@@ -4,6 +4,7 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { EmailVerificationOtpRepository } from '../../domain/repositories/email-verification-otp.repository';
+import { emitUserJoined } from '../utils/emit-user-joined';
 
 /**
  * Verifikasi email manual oleh admin (mis. email OTP gagal terkirim ke user).
@@ -52,14 +53,8 @@ export class AdminVerifyEmailUseCase {
       requestId: cmd.requestId ?? null,
     });
 
-    // Feed "Bergabung": momen akun terverifikasi (AGENTS #25). DedupeKey sama
-    // dengan VerifyEmailUseCase supaya tidak dobel baris feed.
-    await this.activityEvents?.safe({
-      kind: 'user_joined',
-      actorId: target.id,
-      targetId: target.id,
-      dedupeKey: `joined:${target.id}`,
-    });
+    // Feed "Bergabung": momen akun terverifikasi (AGENTS #25 / #285).
+    await emitUserJoined(this.activityEvents, target.id, emailVerifiedAt);
 
     return { id: target.id, emailVerifiedAt };
   }

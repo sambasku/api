@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import { authorizeRole } from "@/shared/middlewares/authorize-role.middleware";
@@ -103,6 +104,63 @@ export function createPublicEventRoutes(deps: {
     getRoute,
     (c) => deps.controller.getBySlug(c, c.req.param("slug")) as never,
   );
+
+  // ---------------------------------------------------------------- galeri foto
+  const imagesListRoute = createRoute({
+    method: "get",
+    path: "/:slug/images",
+    tags: ["Events"],
+    summary: "Galeri foto acara, 12 per halaman",
+    request: {
+      params: slugParam,
+      query: z.object({ offset: z.coerce.number().int().min(0).default(0) }),
+    },
+    responses: {
+      200: {
+        description: "Halaman foto",
+        content: json(
+          z.object({ success: z.literal(true) }).passthrough(),
+        ),
+      },
+      404: { description: "Acara tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(imagesListRoute, (c) =>
+    deps.controller.listImages(c) as never,
+  );
+
+  return routes;
+}
+export function createUserEventImageRoutes(deps: {
+  controller: EventController;
+  authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}) {
+  const routes = createOpenApiApp();
+  routes.use("*", rateLimit({ points: 30, duration: 60 }));
+  routes.use("*", deps.authenticate);
+  const appendRoute = createRoute({
+    method: "post",
+    path: "/:slug/images",
+    tags: ["Events"],
+    summary: "Tambah foto ke acara terbit (login, max 4 per submit)",
+    request: {
+      params: slugParam,
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({ urls: z.array(z.string().url()).min(1).max(4) }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: { description: "Foto ditambahkan", content: json(okNullResponseSchema) },
+      400: { description: "Batas foto", content: json(errorResponseSchema) },
+      401: { description: "Tidak terautentikasi", content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(appendRoute, (c) => deps.controller.appendImages(c) as never);
   return routes;
 }
 
@@ -259,6 +317,23 @@ export function createAdminEventRoutes(deps: {
     deleteRoute,
     (c) => deps.controller.remove(c, c.req.param("id")) as never,
   );
+
+  // Galeri foto acara (admin: takedown).
+  const hideImageRoute = createRoute({
+    method: "delete",
+    path: "/:id/images/:imageId",
+    tags: ["Admin Events"],
+    summary: "Takedown foto acara (admin)",
+    request: { params: z.object({ id: z.string().min(1).max(64), imageId: z.string().min(1).max(64) }) },
+    responses: {
+      200: { description: "Takedown", content: json(okNullResponseSchema) },
+      404: { description: "Acara/foto tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
+  routes.openapi(hideImageRoute, (c) =>
+    deps.controller.hideImage(c) as never,
+  );
   return routes;
 }
 
@@ -336,7 +411,32 @@ export function createPublicEventCommentRoutes(deps: {
     },
   });
 
+  const createAudioRoute = createRoute({
+    method: "post",
+    path: "/:id/comments/audio",
+    tags: ["Event Comments"],
+    summary: "Komentar acara dengan rekaman suara (multipart; publish langsung)",
+    request: { params: idParam },
+    responses: {
+      201: { description: "Komentar dibuat", content: json(commentItemSchema) },
+      401: { description: "Tidak terautentikasi", content: json(errorResponseSchema) },
+      404: { description: "Acara tidak ditemukan", content: json(errorResponseSchema) },
+    },
+  });
+
   routes.use("/:id/comments", deps.optionalAuthenticate);
+  routes.use("/:id/comments/audio", deps.authenticate, bodyLimit({
+    maxSize: 6 * 1024 * 1024,
+    onError: (c) =>
+      c.json(
+        {
+          success: false as const,
+          error_code: "AUDIO_TOO_LARGE",
+          message: "File audio terlalu besar (maks 5 MB)",
+        },
+        400,
+      ),
+  }));
   routes.use("/comments/:id", deps.authenticate);
 
   routes.openapi(listRoute, (c) => deps.controller.listComments(c) as never);
@@ -344,6 +444,7 @@ export function createPublicEventCommentRoutes(deps: {
     createRoute_,
     (c) => deps.controller.createComment(c) as never,
   );
+  routes.openapi(createAudioRoute, (c) => deps.controller.createCommentAudio(c) as never);
   routes.openapi(
     updateRoute_,
     (c) => deps.controller.updateComment(c) as never,

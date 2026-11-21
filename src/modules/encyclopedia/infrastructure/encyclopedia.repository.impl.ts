@@ -14,6 +14,10 @@ import {
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
+import {
+  entityCommentAudioInsertValues,
+  toEntityCommentAudio,
+} from '@/shared/comment/entity-comment-media';
 import type {
   ArticleCommentStatus,
   ArticleContributionKind,
@@ -81,6 +85,7 @@ function toPayload(raw: string): ArticlePayload {
     cover_url: parsed.cover_url ?? null,
     source_url: parsed.source_url ?? null,
     references_md: parsed.references_md ?? null,
+    related: Array.isArray(parsed.related) ? parsed.related : undefined,
   };
 }
 
@@ -102,6 +107,7 @@ function toArticle(row: ArticleRow, tags: string[]): Article {
     authorDisplayName: null,
     authorAvatarUrl: null,
     authorDeletedAt: null,
+    authorRole: null,
     status: row.status as ArticleStatus,
     tags,
     publishedAt: row.publishedAt,
@@ -132,6 +138,8 @@ function toComment(
     authorDeletedAt: profile.authorDeletedAt,
     body: row.body,
     imageUrl: row.imageUrl,
+    stickerId: row.stickerId ?? null,
+    audio: toEntityCommentAudio(row),
     status: row.status as ArticleCommentStatus,
     isEdited: profile.isEdited,
     createdAt: row.createdAt,
@@ -157,6 +165,14 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
       else map.set(row.articleId, [row.slug]);
     }
     return map;
+  }
+
+  /** Isi tags artikel (satu query batch) tanpa menyentuh field lain. */
+  private async fillTags(items: Article[]): Promise<Article[]> {
+    if (items.length === 0) return [];
+    const tagMap = await this.loadTagsByArticle(items.map((a) => a.id));
+    for (const a of items) a.tags = tagMap.get(a.id) ?? [];
+    return items;
   }
 
   private async attachTags(rows: ArticleRow[]): Promise<Article[]> {
@@ -203,26 +219,56 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
     return created;
   }
 
-  async findById(id: string): Promise<Article | null> {
+  /**
+   * Artikel + profil penulis live (JOIN users sekali, termasuk role) -
+   * pola sama dengan wisata/usaha. Role dipakai untuk `is_verifier` wire.
+   */
+  private async getArticleWithAuthor(
+    key: string,
+    by: 'id' | 'slug',
+  ): Promise<Article | null> {
     const [row] = await this.db
-      .select()
+      .select({
+        article: articles,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        authorRole: highestUserRoleSql,
+      })
       .from(articles)
-      .where(and(eq(articles.id, id), sql`${articles.deletedAt} is null`))
+      .leftJoin(users, eq(users.id, articles.authorUserId))
+      .where(
+        and(
+          by === 'id' ? eq(articles.id, key) : eq(articles.slug, key),
+          sql`${articles.deletedAt} is null`,
+        ),
+      )
       .limit(1);
     if (!row) return null;
-    const [article] = await this.attachTags([row]);
-    return article ?? null;
+    const article = toArticle(row.article, []);
+    if (row.authorDeletedAt === null) {
+      article.authorUsername = row.username;
+      article.authorDisplayName = row.displayName;
+      article.authorAvatarUrl = row.avatarUrl;
+    }
+    article.authorDeletedAt = row.authorDeletedAt;
+    article.authorRole = row.authorRole;
+    return article;
+  }
+
+  async findById(id: string): Promise<Article | null> {
+    const article = await this.getArticleWithAuthor(id, 'id');
+    if (!article) return null;
+    const [withTags] = await this.fillTags([article]);
+    return withTags ?? null;
   }
 
   async findBySlug(slug: string): Promise<Article | null> {
-    const [row] = await this.db
-      .select()
-      .from(articles)
-      .where(and(eq(articles.slug, slug), sql`${articles.deletedAt} is null`))
-      .limit(1);
-    if (!row) return null;
-    const [article] = await this.attachTags([row]);
-    return article ?? null;
+    const article = await this.getArticleWithAuthor(slug, 'slug');
+    if (!article) return null;
+    const [withTags] = await this.fillTags([article]);
+    return withTags ?? null;
   }
 
   async list(filter: ArticleListFilter): Promise<CursorPage<Article>> {
@@ -653,6 +699,8 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         body: input.body,
         bodyOriginal: input.bodyOriginal,
         imageUrl: input.imageUrl ?? null,
+        stickerId: input.stickerId ?? null,
+        ...entityCommentAudioInsertValues(input.audio),
         createdAt: new Date(),
       })
       .returning();
@@ -983,6 +1031,32 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         resultArticleId: input.resultArticleId ?? null,
         reviewedAt: new Date(),
         updatedAt: new Date(),
+      })
+      .where(eq(articleContributions.id, input.id))
+      .returning({ id: articleContributions.id });
+    if (!row) return null;
+    return this.findContributionById(row.id);
+  }
+
+  async updateContributionPayload(input: {
+    id: string;
+    payload: ArticlePayload;
+    resetToPending: boolean;
+  }): Promise<ArticleContribution | null> {
+    const [row] = await this.db
+      .update(articleContributions)
+      .set({
+        payloadJson: JSON.stringify(input.payload),
+        updatedAt: new Date(),
+        ...(input.resetToPending
+          ? {
+              status: 'pending' as const,
+              revisionNote: null,
+              rejectReasonCode: null,
+              rejectReasonText: null,
+              reviewedAt: null,
+            }
+          : {}),
       })
       .where(eq(articleContributions.id, input.id))
       .returning({ id: articleContributions.id });

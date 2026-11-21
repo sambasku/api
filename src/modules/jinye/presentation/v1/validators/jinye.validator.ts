@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { opaqueId } from '@/shared/validation/id';
 import { uploadCredentialsResponseSchema } from '@/modules/image/presentation/v1/validators/image.validator';
 import { JINYE_STATUSES } from '@/shared/database/drizzle/schema/jinye.schema';
@@ -150,17 +150,53 @@ export const deleteJinyeResponseSchema = z.object({
   data: z.object({ ok: z.literal(true) }),
 });
 
-export const createJinyeCommentBodySchema = z.object({
-  body: z
-    .string({ error: 'Teks tidak valid' })
-    .max(500, 'Teks maksimal 500 karakter')
-    .optional()
-    .nullable(),
-  parent_id: opaqueId.optional().nullable(),
-  images: z.array(imageInputSchema).max(4, 'Lampiran tidak boleh lebih dari 4 foto').optional(),
-});
+export const createJinyeCommentBodySchema = z
+  .object({
+    body: z
+      .string({ error: 'Teks tidak valid' })
+      .max(500, 'Teks maksimal 500 karakter')
+      .optional()
+      .nullable(),
+    parent_id: opaqueId.optional().nullable(),
+    images: z
+      .array(imageInputSchema)
+      .max(4, 'Lampiran tidak boleh lebih dari 4 foto')
+      .optional(),
+    sticker_id: z
+      .string({ error: 'Stiker tidak valid' })
+      .trim()
+      .min(1, 'Stiker tidak valid')
+      .max(64, 'Stiker tidak valid')
+      .nullish(),
+  })
+  .superRefine((val, ctx) => {
+    const hasBody = (val.body?.trim().length ?? 0) > 0;
+    const hasImages = (val.images?.length ?? 0) > 0;
+    const hasSticker = Boolean(val.sticker_id?.trim());
+    if (hasSticker && hasImages) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sticker_id'],
+        message: 'Stiker tidak bisa digabung dengan foto',
+      });
+    }
+    if (!hasBody && !hasImages && !hasSticker) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['body'],
+        message: 'Isi teks, foto, atau stiker dulu ya.',
+      });
+    }
+  });
 
 export type CreateJinyeCommentBody = z.infer<typeof createJinyeCommentBodySchema>;
+
+export const updateJinyeCommentBodySchema = z.object({
+  body: z
+    .string({ error: 'Teks tidak valid' })
+    .max(500, 'Teks maksimal 500 karakter'),
+});
+export type UpdateJinyeCommentBody = z.infer<typeof updateJinyeCommentBodySchema>;
 
 export const jinyeCommentIdParamSchema = z.object({
   id: opaqueId,
@@ -177,16 +213,23 @@ const jinyeCommentWireBase = z.object({
   avatar_url: z.string().nullable(),
   is_verifier: z.boolean(),
   body: z.string(),
+  sticker_id: z.string().nullable(),
   images: z.array(jinyeImageWireSchema),
   status: z.string(),
   created_at: z.string(),
+  updated_at: z.string().nullable(),
+  is_edited: z.boolean(),
   upvotes: z.number().int(),
   downvotes: z.number().int(),
 });
 
-export const jinyeCommentWireSchema: z.ZodTypeAny = jinyeCommentWireBase.extend({
-  replies: z.array(z.lazy(() => jinyeCommentWireSchema)).optional(),
-});
+// Wajib .openapi('JinyeComment') supaya zod-to-openapi pakai $ref,
+// bukan expand rekursif tanpa batas (RangeError → /openapi.json 500 → Scalar kosong).
+export const jinyeCommentWireSchema: z.ZodTypeAny = jinyeCommentWireBase
+  .extend({
+    replies: z.array(z.lazy(() => jinyeCommentWireSchema)).optional(),
+  })
+  .openapi('JinyeComment');
 
 export const createJinyeCommentResponseSchema = z.object({
   data: jinyeCommentWireSchema,
@@ -204,6 +247,7 @@ export const createJinyeLemmaLinkBodySchema = z.object({
   start: z.coerce.number().int().min(0),
   end: z.coerce.number().int().min(1),
   word_id: opaqueId,
+  comment_id: opaqueId.optional().nullable(),
 });
 export type CreateJinyeLemmaLinkBody = z.infer<
   typeof createJinyeLemmaLinkBodySchema
@@ -294,6 +338,10 @@ export const jinyeEditHistoryResponseSchema = z.object({
     ),
   }),
 });
+
+/** Sama bentuk wire OP edit-history. */
+export const jinyeCommentEditHistoryResponseSchema =
+  jinyeEditHistoryResponseSchema;
 
 export const quoteJinyeBodySchema = z.object({
   quote_body: z

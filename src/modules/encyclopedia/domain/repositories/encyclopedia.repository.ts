@@ -1,3 +1,4 @@
+import type { NewEntityCommentAudioInput } from '@/shared/comment/entity-comment-media';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type {
   Article,
@@ -68,6 +69,8 @@ export interface NewArticleCommentInput {
   /** Body asli; null = tidak disensor. */
   bodyOriginal: string | null;
   imageUrl?: string | null;
+  stickerId?: string | null;
+  audio?: NewEntityCommentAudioInput | null;
 }
 
 export interface NewArticleContributionInput {
@@ -159,6 +162,16 @@ export interface ArticleRepository {
     rejectReasonCode?: string | null;
     rejectReasonText?: string | null;
     resultArticleId?: string | null;
+  }): Promise<ArticleContribution | null>;
+  /**
+   * Update payload usulan milik pengusul (pending / needs_revision → pending).
+   * Tidak menulis reviewedAt (bukan aksi review admin).
+   */
+  updateContributionPayload(input: {
+    id: string;
+    payload: ArticlePayload;
+    /** true bila dari needs_revision: status balik pending + bersihkan catatan. */
+    resetToPending: boolean;
   }): Promise<ArticleContribution | null>;
   /** Kosongkan posisi usulan edit aktif (setelah approve/reject) supaya index partial bebas. */
   clearActiveEdit(articleId: string, userId: string): Promise<void>;

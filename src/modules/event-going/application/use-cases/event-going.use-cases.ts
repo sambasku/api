@@ -13,21 +13,23 @@ import type {
 function assertMarkable(
   event: {
     cancelledAt: Date | null;
-    startsAt: Date;
-    endsAt: Date;
+    startsAt: Date | null;
+    endsAt: Date | null;
   },
 ): void {
   const status = occurrenceStatus(event);
   if (status === 'cancelled') {
     throw new BadRequestError(
       'EVENT_CANCELLED',
-      'Acara ini sudah dibatalkan. Rencana datang tidak bisa diubah.',
+      'Acara ini sudah dibatalkan. Presensi tidak bisa diubah.',
     );
   }
-  if (status === 'completed') {
+  // Presensi = penegasan kehadiran, jadi baru valid saat acara sudah
+  // dimulai (berlangsung) atau sudah lewat. Sebelum hari-H ditolak.
+  if (status === 'upcoming') {
     throw new BadRequestError(
-      'EVENT_COMPLETED',
-      'Acara ini sudah selesai. Rencana datang tidak bisa diubah.',
+      'EVENT_NOT_STARTED',
+      'Presensi bisa dilakukan saat acara sudah dimulai ya.',
     );
   }
 }

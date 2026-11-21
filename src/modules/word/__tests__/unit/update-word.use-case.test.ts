@@ -1,4 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
+
+// G2b hook impor reset helper → mock agar unit test tidak memuat env/DB.
+vi.mock('@/modules/vote/application/reset-meaning-votes-on-content-change', () => ({
+  resetMeaningVotesOnContentChange: vi.fn().mockResolvedValue({
+    archived: 0,
+    meaningsReset: 0,
+    batchId: null,
+  }),
+}));
+
 import { UpdateWordUseCase } from '../../application/use-cases/update-word.use-case';
 import type { WordRepository, MissingReferences } from '../../domain/repositories/word.repository';
 import type { UpdateWordDto } from '../../application/dto/update-word.dto';
@@ -84,6 +94,10 @@ function makeDetail(overrides: Partial<WordDetail> = {}): WordDetail {
         translations: [],
         examples: [],
         creator: null,
+        isVerified: false,
+        needsReview: false,
+        verifiedAt: null,
+        verifier: null,
       },
     ],
     categories: [],
