@@ -1,5 +1,7 @@
 -- User yang dikecualikan dari agregat papan peringkat mingguan (#310).
-CREATE TABLE `leaderboard_excluded_users` (
+-- IF NOT EXISTS: seed-reference bisa sudah buat tabel ini sebelum migrate jalan
+-- (drift staging) - selaras ensureLeaderboardExcludedUsersTable di seed-reference.ts.
+CREATE TABLE IF NOT EXISTS `leaderboard_excluded_users` (
 	`user_id` text PRIMARY KEY NOT NULL REFERENCES users(id),
 	`note` text,
 	`created_at` integer NOT NULL
