@@ -36,6 +36,19 @@ export function isUniqueViolationOn(err: unknown, needle: string): boolean {
 export function isUsernameHandleConstraint(err: unknown): boolean {
   return collectMessages(err).join(' ').toLowerCase().includes('username harus handle');
 }
+/** Schema belum dimigrate (mis. rollout API lebih dulu dari `db:migrate`). */
+export function isNoSuchTableError(err: unknown, table?: string): boolean {
+  const msgs = collectMessages(err).join(' ').toLowerCase();
+  if (!msgs.includes('no such table')) return false;
+  if (!table) return true;
+  const t = table.toLowerCase();
+  return (
+    msgs.includes(`no such table: ${t}`) ||
+    msgs.includes(`no such table: "${t}"`) ||
+    msgs.includes(`no such table: \`${t}\``)
+  );
+}
+
 export function isForeignKeyViolation(err: unknown): boolean {
   const codes = collectCodes(err);
   if (
