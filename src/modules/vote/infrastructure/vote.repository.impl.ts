@@ -110,6 +110,51 @@ function mapMeaningProposerFields(row: {
   return { contributorUsername: username, contributorDisplayName: displayName };
 }
 
+
+function meaningProposerSelectSql() {
+  return {
+    proposerGuest: sql<string | null>`(
+      select ${contributions.guestDisplayName} from ${contributions}
+      where ${contributions.entityType} = 'meaning'
+        and ${contributions.entityId} = ${meanings.id}
+        and ${contributions.action} = 'create'
+        and ${contributions.deletedAt} is null
+      order by ${contributions.createdAt} asc
+      limit 1
+    )`,
+    proposerUsername: sql<string | null>`COALESCE(
+      (select ${users.username} from ${contributions}
+        inner join ${users} on ${users.id} = ${contributions.userId}
+       where ${contributions.entityType} = 'meaning'
+         and ${contributions.entityId} = ${meanings.id}
+         and ${contributions.action} = 'create'
+         and ${contributions.deletedAt} is null
+       order by ${contributions.createdAt} asc limit 1),
+      (select ${users.username} from ${users} where ${users.id} = ${meanings.createdBy})
+    )`,
+    proposerDisplayName: sql<string | null>`COALESCE(
+      (select ${users.displayName} from ${contributions}
+        inner join ${users} on ${users.id} = ${contributions.userId}
+       where ${contributions.entityType} = 'meaning'
+         and ${contributions.entityId} = ${meanings.id}
+         and ${contributions.action} = 'create'
+         and ${contributions.deletedAt} is null
+       order by ${contributions.createdAt} asc limit 1),
+      (select ${users.displayName} from ${users} where ${users.id} = ${meanings.createdBy})
+    )`,
+    proposerDeletedAt: sql<Date | null>`COALESCE(
+      (select ${users.deletedAt} from ${contributions}
+        inner join ${users} on ${users.id} = ${contributions.userId}
+       where ${contributions.entityType} = 'meaning'
+         and ${contributions.entityId} = ${meanings.id}
+         and ${contributions.action} = 'create'
+         and ${contributions.deletedAt} is null
+       order by ${contributions.createdAt} asc limit 1),
+      (select ${users.deletedAt} from ${users} where ${users.id} = ${meanings.createdBy})
+    )`,
+  };
+}
+
 export class VoteRepositoryImpl implements VoteRepository {
   constructor(private readonly db: AppDatabase) {}
 
@@ -1022,46 +1067,7 @@ case 'article_comment': {
         definition: meanings.definition,
         isHaveDefinition: meanings.isHaveDefinition,
         translationText: meaningTranslations.translationText,
-        proposerGuest: sql<string | null>`(
-          select ${contributions.guestDisplayName} from ${contributions}
-          where ${contributions.entityType} = 'meaning'
-            and ${contributions.entityId} = ${meanings.id}
-            and ${contributions.action} = 'create'
-            and ${contributions.deletedAt} is null
-          order by ${contributions.createdAt} asc
-          limit 1
-        )`,
-        proposerUsername: sql<string | null>`COALESCE(
-          (select ${users.username} from ${contributions}
-            inner join ${users} on ${users.id} = ${contributions.userId}
-           where ${contributions.entityType} = 'meaning'
-             and ${contributions.entityId} = ${meanings.id}
-             and ${contributions.action} = 'create'
-             and ${contributions.deletedAt} is null
-           order by ${contributions.createdAt} asc limit 1),
-          (select ${users.username} from ${users} where ${users.id} = ${meanings.createdBy})
-        )`,
-        proposerDisplayName: sql<string | null>`COALESCE(
-          (select ${users.displayName} from ${contributions}
-            inner join ${users} on ${users.id} = ${contributions.userId}
-           where ${contributions.entityType} = 'meaning'
-             and ${contributions.entityId} = ${meanings.id}
-             and ${contributions.action} = 'create'
-             and ${contributions.deletedAt} is null
-           order by ${contributions.createdAt} asc limit 1),
-          (select ${users.displayName} from ${users} where ${users.id} = ${meanings.createdBy})
-        )`,
-        proposerDeletedAt: sql<Date | null>`COALESCE(
-          (select ${users.deletedAt} from ${contributions}
-            inner join ${users} on ${users.id} = ${contributions.userId}
-           where ${contributions.entityType} = 'meaning'
-             and ${contributions.entityId} = ${meanings.id}
-             and ${contributions.action} = 'create'
-             and ${contributions.deletedAt} is null
-           order by ${contributions.createdAt} asc limit 1),
-          (select ${users.deletedAt} from ${users} where ${users.id} = ${meanings.createdBy})
-        )`,
-      })
+        ...meaningProposerSelectSql(),      })
       .from(meanings)
       .leftJoin(
         meaningTranslations,
@@ -1651,6 +1657,7 @@ if (articleCommentIds.length > 0) {
               and ${wordAudios.status} = 'published'
           )
         )`.mapWith(Number),
+        ...meaningProposerSelectSql(),
         totalVotes: totalVotesExpr,
       })
       .from(meanings)
