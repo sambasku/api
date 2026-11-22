@@ -10,14 +10,14 @@ import type {
   CulinaryContributionPayload,
   CulinaryContributionWithTarget,
   NewCuisinePayload,
-  NewPlacePayload,
+  NewUsahaPayload,
 } from '../../domain/culinary-contribution.entity';
 import {
   approveCulinaryContributionBodySchema,
   type listCulinaryContributionsQuerySchema,
   type submitCulinaryChangeBodySchema,
   type submitNewCuisineBodySchema,
-  type submitNewPlaceBodySchema,
+  type submitNewUsahaBodySchema,
 } from './validators/culinary-contribution.validator';
 
 function serialize(r: CulinaryContribution | CulinaryContributionWithTarget) {
@@ -29,14 +29,14 @@ function serialize(r: CulinaryContribution | CulinaryContributionWithTarget) {
     cuisine_id: r.cuisineId,
     cuisine_slug: withTarget.cuisineSlug ?? null,
     cuisine_name: withTarget.cuisineName ?? null,
-    place_id: r.placeId,
-    place_slug: withTarget.placeSlug ?? null,
-    place_name: withTarget.placeName ?? null,
+    usaha_id: r.usahaId,
+    usaha_slug: withTarget.usahaSlug ?? null,
+    usaha_name: withTarget.usahaName ?? null,
     link_id: r.linkId,
     fields: r.lockedFields ? r.lockedFields.split(',') : [],
     payload: r.payload as Record<string, unknown>,
     result_cuisine_id: r.resultCuisineId,
-    result_place_id: r.resultPlaceId,
+    result_usaha_id: r.resultUsahaId,
     revision_note: r.revisionNote,
     reject_reason_code: r.rejectReasonCode,
     reject_reason_text: r.rejectReasonText,
@@ -84,14 +84,12 @@ function toNewCuisine(
   };
 }
 
-function toNewPlace(
-  payload: z.infer<typeof submitNewPlaceBodySchema>['payload'],
-): NewPlacePayload {
+function toNewUsaha(
+  payload: z.infer<typeof submitNewUsahaBodySchema>['payload'],
+): NewUsahaPayload {
   return {
     name: payload.name,
-    type: payload.type ?? null,
     description: payload.description ?? null,
-    locationHint: payload.location_hint ?? null,
     addressText: payload.address_text ?? null,
     lat: payload.lat ?? null,
     lng: payload.lng ?? null,
@@ -99,7 +97,6 @@ function toNewPlace(
     phone: payload.phone ?? null,
     whatsapp: payload.whatsapp ?? null,
     website: payload.website ?? null,
-    socialUrl: payload.social_url ?? null,
     coverUrl: payload.cover_url ?? null,
   };
 }
@@ -152,10 +149,9 @@ function normalizeChangePayload(kind: string, raw: Record<string, unknown>) {
     location_hint: 'locationHint',
     address_text: 'addressText',
     maps_url: 'mapsUrl',
-    social_url: 'socialUrl',
     cover_url: 'coverUrl',
     cuisine_slug: 'cuisineSlug',
-    place_slug: 'placeSlug',
+    usaha_slug: 'usahaSlug',
     operational_status: 'operationalStatus',
   };
   const out: Record<string, unknown> = {};
@@ -189,12 +185,12 @@ export class CulinaryContributionController {
 
   submitNew(
     c: Context<{ Variables: AppVariables }>,
-    body: z.infer<typeof submitNewCuisineBodySchema> | z.infer<typeof submitNewPlaceBodySchema>,
+    body: z.infer<typeof submitNewCuisineBodySchema> | z.infer<typeof submitNewUsahaBodySchema>,
   ) {
     const input =
       body.kind === 'new_cuisine'
         ? ({ kind: 'new_cuisine', payload: toNewCuisine(body.payload) } as const)
-        : ({ kind: 'new_place', payload: toNewPlace(body.payload) } as const);
+        : ({ kind: 'new_usaha', payload: toNewUsaha(body.payload) } as const);
     return this.uc
       .submit(this.actorId(c), input)
       .then((r) => c.json({ success: true as const, data: serialize(r) }));
@@ -218,12 +214,12 @@ export class CulinaryContributionController {
   resubmit(
     c: Context<{ Variables: AppVariables }>,
     id: string,
-    body: z.infer<typeof submitNewCuisineBodySchema> | z.infer<typeof submitNewPlaceBodySchema>,
+    body: z.infer<typeof submitNewCuisineBodySchema> | z.infer<typeof submitNewUsahaBodySchema>,
   ) {
     const input =
       body.kind === 'new_cuisine'
         ? ({ kind: 'new_cuisine', payload: toNewCuisine(body.payload) } as const)
-        : ({ kind: 'new_place', payload: toNewPlace(body.payload) } as const);
+        : ({ kind: 'new_usaha', payload: toNewUsaha(body.payload) } as const);
     return this.uc
       .resubmit(this.actorId(c), id, input)
       .then((r) => c.json({ success: true as const, data: serialize(r) }));
@@ -238,7 +234,7 @@ export class CulinaryContributionController {
       .submitChange(c.get('user')?.user_id ?? '', {
         kind: body.kind,
         cuisineId: body.cuisine_id ?? null,
-        placeId: body.place_id ?? null,
+        usahaId: body.usaha_id ?? null,
         linkId: body.link_id ?? null,
         payload: normalized.payload as CulinaryContributionPayload,
         fields: body.fields,

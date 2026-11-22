@@ -119,14 +119,6 @@ import {
   createCulinaryContributionRoutes,
 } from "@/modules/culinary-contribution/presentation/v1/culinary-contribution.routes";
 import {
-  createAdminCulinaryClaimRoutes,
-  createCulinaryClaimRoutes,
-} from "@/modules/culinary-claim/presentation/v1/culinary-claim.routes";
-import {
-  createAdminCulinaryReportRoutes,
-  createCulinaryReportRoutes,
-} from "@/modules/culinary-report/presentation/v1/culinary-report.routes";
-import {
   createAdminPlaceCategoryRoutes,
   createPublicPlaceCategoryRoutes,
 } from "@/modules/place-category/presentation/v1/place-category.routes";
@@ -515,51 +507,23 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
       authenticate: di.authenticate,
     }),
   );
-  app.route(
-    "/api/v1/admin/culinary-contributions",
-    createAdminCulinaryContributionRoutes({
-      controller: di.culinaryContributionController,
-      authenticate: di.authenticate,
-    }),
-  );
-  app.route(
-    "/api/v1/admin/culinary-claims",
-    createAdminCulinaryClaimRoutes({
-      controller: di.culinaryClaimController,
-      authenticate: di.authenticate,
-    }),
-  );
-  app.route(
-    "/api/v1/admin/culinary-reports",
-    createAdminCulinaryReportRoutes({
-      controller: di.culinaryReportController,
-      authenticate: di.authenticate,
-    }),
-  );
-  app.route(
-    "/api/v1/culinary",
-    createCulinaryClaimRoutes({
-      controller: di.culinaryClaimController,
-      authenticate: di.authenticate,
-    }),
-  );
-  app.route(
-    "/api/v1/culinary",
-    createCulinaryReportRoutes({
-      controller: di.culinaryReportController,
-      authenticate: di.authenticate,
-    }),
-  );
-  app.route(
-    "/api/v1/culinary/contributions",
-    createCulinaryContributionRoutes({
-      controller: di.culinaryContributionController,
-      authenticate: di.authenticate,
-      optionalAuthenticate: di.optionalAuthenticate,
-      uploadCulinaryImage: (c) =>
-        publicImageController.upload(c, { purpose: "culinary" }),
-    }),
-  );
+app.route(
+  "/api/v1/admin/culinary-contributions",
+  createAdminCulinaryContributionRoutes({
+    controller: di.culinaryContributionController,
+    authenticate: di.authenticate,
+  }),
+);
+app.route(
+  "/api/v1/culinary/contributions",
+  createCulinaryContributionRoutes({
+    controller: di.culinaryContributionController,
+    authenticate: di.authenticate,
+    optionalAuthenticate: di.optionalAuthenticate,
+    uploadCulinaryImage: (c) =>
+      publicImageController.upload(c, { purpose: "culinary" }),
+  }),
+);
   app.route(
     "/api/v1/culinary-categories",
     createPublicCulinaryCategoryRoutes({ controller: di.culinaryCategoryController }),

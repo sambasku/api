@@ -13,20 +13,15 @@ import type { CulinaryController } from './culinary.controller';
 import {
   createCuisineBodySchema,
   createLinkBodySchema,
-  createPlaceBodySchema,
   cuisineListResponseSchema,
   cuisineResponseSchema,
   culinaryCategoryListResponseSchema,
-  culinaryPlaceResponseSchema,
   duplicateCandidateListSchema,
   duplicatesQuerySchema,
   listCuisinesQuerySchema,
-  listPlacesQuerySchema,
-  placeListResponseSchema,
   restrictBodySchema,
   updateCuisineBodySchema,
   updateLinkBodySchema,
-  updatePlaceBodySchema,
 } from './validators/culinary.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -38,7 +33,7 @@ const slugParam = z.object({ slug: z.string().min(1).max(120) });
 
 /**
  * Route publik kuliner. Di-mount di `/api/v1/culinary`.
- * Urutan penting: segmen statis (`/cuisines`, `/places`, `/categories`)
+ * Urutan penting: segmen statis (`/cuisines`, `/categories`)
  * didaftarkan sebelum `/:slug` supaya tidak tertelan.
  */
 export function createPublicCulinaryRoutes(deps: {
@@ -110,41 +105,6 @@ export function createPublicCulinaryRoutes(deps: {
     },
   });
 
-  const listPlacesRoute = createRoute({
-    method: 'get',
-    path: '/places',
-    tags: ['Culinary'],
-    summary: 'List tempat/penjual published (publik)',
-    request: { query: listPlacesQuerySchema },
-    responses: {
-      200: { description: 'Daftar tempat', content: json(placeListResponseSchema) },
-      400: { description: 'Query tidak valid', content: json(errorResponseSchema) },
-    },
-  });
-
-  const placeDuplicateRoute = createRoute({
-    method: 'get',
-    path: '/places/duplicates',
-    tags: ['Culinary'],
-    summary: 'Kandidat tempat serupa (read-only)',
-    request: { query: duplicatesQuerySchema },
-    responses: {
-      200: { description: 'Kandidat duplikat', content: json(duplicateCandidateListSchema) },
-    },
-  });
-
-  const getPlaceRoute = createRoute({
-    method: 'get',
-    path: '/places/:slug',
-    tags: ['Culinary'],
-    summary: 'Detail tempat/penjual by slug + kuliner yang tersedia',
-    request: { params: slugParam },
-    responses: {
-      200: { description: 'Detail tempat', content: json(culinaryPlaceResponseSchema) },
-      404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
-    },
-  });
-
   const categoriesRoute = createRoute({
     method: 'get',
     path: '/categories',
@@ -180,19 +140,6 @@ export function createPublicCulinaryRoutes(deps: {
       c.req.param('slug'),
       c.req.valid('json').urls,
     ) as never,
-  );
-  routes.openapi(listPlacesRoute, (c) =>
-    deps.controller.listPlaces(c, c.req.valid('query')) as never,
-  );
-  routes.openapi(placeDuplicateRoute, (c) =>
-    deps.controller.placeDuplicates(
-      c,
-      c.req.valid('query').q,
-      c.req.valid('query').exclude_id,
-    ) as never,
-  );
-  routes.openapi(getPlaceRoute, (c) =>
-    deps.controller.getPlace(c, c.req.param('slug')) as never,
   );
   return routes;
 }
@@ -283,81 +230,6 @@ export function createAdminCulinaryRoutes(deps: {
     },
   });
 
-  const listPlacesRoute = createRoute({
-    method: 'get',
-    path: '/places',
-    tags: ['Admin culinary'],
-    summary: 'List tempat/penjual (semua status)',
-    request: { query: listPlacesQuerySchema },
-    responses: {
-      200: { description: 'Daftar tempat', content: json(placeListResponseSchema) },
-    },
-  });
-
-  const createPlaceRoute = createRoute({
-    method: 'post',
-    path: '/places',
-    tags: ['Admin culinary'],
-    summary: 'Buat tempat/penjual langsung (published)',
-    request: {
-      body: { content: { 'application/json': { schema: createPlaceBodySchema } } },
-    },
-    responses: {
-      200: { description: 'Tempat dibuat', content: json(culinaryPlaceResponseSchema) },
-      409: { description: 'Slug bentrok', content: json(errorResponseSchema) },
-    },
-  });
-
-  const updatePlaceRoute = createRoute({
-    method: 'patch',
-    path: '/places/:id',
-    tags: ['Admin culinary'],
-    summary: 'Edit tempat/penjual',
-    request: {
-      params: idParam,
-      body: { content: { 'application/json': { schema: updatePlaceBodySchema } } },
-    },
-    responses: {
-      200: { description: 'Tempat diperbarui', content: json(culinaryPlaceResponseSchema) },
-    },
-  });
-
-  const deletePlaceRoute = createRoute({
-    method: 'delete',
-    path: '/places/:id',
-    tags: ['Admin culinary'],
-    summary: 'Soft-delete tempat/penjual',
-    request: { params: idParam },
-    responses: {
-      200: { description: 'Terhapus', content: json(okNullResponseSchema) },
-    },
-  });
-
-  const restrictPlaceRoute = createRoute({
-    method: 'post',
-    path: '/places/:id/restrict',
-    tags: ['Admin culinary'],
-    summary: 'Batasi publikasi tempat (alasan wajib)',
-    request: {
-      params: idParam,
-      body: { content: { 'application/json': { schema: restrictBodySchema } } },
-    },
-    responses: {
-      200: { description: 'Dibatasi', content: json(culinaryPlaceResponseSchema) },
-    },
-  });
-
-  const restorePlaceRoute = createRoute({
-    method: 'post',
-    path: '/places/:id/restore',
-    tags: ['Admin culinary'],
-    summary: 'Pulihkan publikasi tempat',
-    request: { params: idParam },
-    responses: {
-      200: { description: 'Dipulihkan', content: json(culinaryPlaceResponseSchema) },
-    },
-  });
-
   const categoriesRoute = createRoute({
     method: 'get',
     path: '/categories',
@@ -376,7 +248,7 @@ export function createAdminCulinaryRoutes(deps: {
     method: 'post',
     path: '/links',
     tags: ['Admin culinary'],
-    summary: 'Buat relasi kuliner-tempat langsung',
+    summary: 'Buat relasi kuliner-usaha langsung',
     request: {
       body: { content: { 'application/json': { schema: createLinkBodySchema } } },
     },
@@ -428,24 +300,6 @@ export function createAdminCulinaryRoutes(deps: {
   );
   routes.openapi(restoreCuisineRoute, (c) =>
     deps.controller.restoreCuisine(c, c.req.param('id')) as never,
-  );
-  routes.openapi(listPlacesRoute, (c) =>
-    deps.controller.listPlacesAdmin(c, c.req.valid('query')) as never,
-  );
-  routes.openapi(createPlaceRoute, (c) =>
-    deps.controller.createPlace(c, c.req.valid('json')) as never,
-  );
-  routes.openapi(updatePlaceRoute, (c) =>
-    deps.controller.updatePlace(c, c.req.param('id'), c.req.valid('json')) as never,
-  );
-  routes.openapi(deletePlaceRoute, (c) =>
-    deps.controller.deletePlace(c, c.req.param('id')) as never,
-  );
-  routes.openapi(restrictPlaceRoute, (c) =>
-    deps.controller.restrictPlace(c, c.req.param('id'), c.req.valid('json').reason) as never,
-  );
-  routes.openapi(restorePlaceRoute, (c) =>
-    deps.controller.restorePlace(c, c.req.param('id')) as never,
   );
   routes.openapi(categoriesRoute, (c) =>
     deps.controller.listCategories(c, false) as never,

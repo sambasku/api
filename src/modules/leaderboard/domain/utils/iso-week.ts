@@ -8,6 +8,11 @@ export const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 export const TOP_N = 30;
 export const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/** Skor papan peringkat mingguan (plan peringkat mingguan skor poin usul + bonus). */
+export const LEADERBOARD_CREATE_SUBMIT_POINTS = 5;
+export const LEADERBOARD_EDIT_SUBMIT_POINTS = 3;
+export const LEADERBOARD_APPROVE_POINTS = 2;
+export const LEADERBOARD_VERIFICATION_POINTS = 2;
 
 /** Instant UTC → komponen kalender WIB. */
 export function wibParts(date: Date): {

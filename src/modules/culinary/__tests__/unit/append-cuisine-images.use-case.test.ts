@@ -34,7 +34,7 @@ function cuisine(over: Partial<CuisineDetail> = {}): CuisineDetail {
     publishedAt: new Date(),
     createdAt: new Date(),
     updatedAt: null,
-    places: [],
+    usahas: [],
     ...over,
   };
 }

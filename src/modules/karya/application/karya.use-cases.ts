@@ -1,4 +1,5 @@
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type {
   Karya,
@@ -26,11 +27,12 @@ type ExcerptBody = z.infer<typeof excerptPayloadSchema>;
 type KaryaBody = NewKaryaBody | PublishKaryaBody;
 
 export class KaryaUseCases {
-  constructor(
-    private readonly repo: KaryaRepositoryImpl,
-    private readonly activity: RecordActivityEventUseCase,
-    private readonly relatedResolver: ResolveKaryaRelated,
-  ) {}
+constructor(
+private readonly repo: KaryaRepositoryImpl,
+private readonly activity: RecordActivityEventUseCase,
+private readonly relatedResolver: ResolveKaryaRelated,
+private readonly groupNotifier?: ExplorationGroupNotifier,
+) {}
 
   listPublic(input: {
     kind?: Karya['kind'];
@@ -134,6 +136,7 @@ export class KaryaUseCases {
       karyaId: kind === 'new' ? null : karyaId!,
       payload: stored,
     });
+    if (stored.kind !== 'excerpt') await this.notifyGroup(userId, kind, stored.title);
     return (await this.repo.findContribution(id))!;
   }
 
@@ -181,6 +184,9 @@ export class KaryaUseCases {
       status: 'pending',
       revisionNote: null,
     });
+    if (stored.kind !== 'excerpt') {
+      await this.notifyGroup(userId, row.kind, stored.title, true);
+    }
     return (await this.repo.findContribution(id))!;
   }
 
@@ -249,6 +255,30 @@ export class KaryaUseCases {
   async requestRevision(id: string, note: string) {
     await this.mustPending(id);
     await this.repo.updateContribution(id, { status: 'needs_revision', revisionNote: note });
+  }
+
+  /** Notifikasi grup WhatsApp. Gagal kirim tidak membatalkan usulan. */
+  private async notifyGroup(
+    userId: string,
+    kind: 'new' | 'edit' | 'excerpt',
+    title: string,
+    resubmit = false,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis:
+          kind === 'edit'
+            ? 'Karya (perbaikan)'
+            : kind === 'excerpt'
+              ? 'Karya (cuplikan)'
+              : 'Karya',
+        name: title.trim() || 'tanpa nama',
+        userId,
+        resubmit,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan usulan.
+    }
   }
 
   private fieldsFromBody(body: KaryaBody): KaryaFields {

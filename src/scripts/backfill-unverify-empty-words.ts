@@ -76,7 +76,8 @@ async function main() {
       isVerified: false,
       verifiedBy: null,
       verifiedAt: null,
-      updatedBy: 'system-backfill',
+      // words.updated_by FK ke users.id; jangan isi string arbitrer.
+      updatedBy: null,
       updatedAt: new Date(),
     })
     .where(

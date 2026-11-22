@@ -45,6 +45,8 @@ const SKIPPED_MIGRATION_REPAIRS: ReadonlyArray<{ tag: string; when: number }> = 
   { tag: '0063_category_suggestions', when: 1_799_946_450_000 },
   { tag: '0072_places_seed', when: 1_800_246_900_000 },
   { tag: '0123_layanan', when: 1_801_621_010_000 },
+// 0177 absen di _journal.json (idx 176 -> 0178), DB masih `year NOT NULL`.
+{ tag: '0177_karyas_year_nullable', when: 1_801_676_000_000 },
 ];
 
 function fail(message: string, err?: unknown): never {

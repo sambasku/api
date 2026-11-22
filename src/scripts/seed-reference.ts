@@ -33,6 +33,12 @@ import {
   WEB_IMPORT_USERNAME,
 } from '@/shared/constants/web-importer';
 import {
+  LIVE_TIKTOK_DISPLAY_NAME,
+  LIVE_TIKTOK_EMAIL,
+  LIVE_TIKTOK_USER_ID,
+  LIVE_TIKTOK_USERNAME,
+} from '@/shared/constants/live-tiktok';
+import {
   VOTING_WARGA_DISPLAY_NAME,
   VOTING_WARGA_EMAIL,
   VOTING_WARGA_USER_ID,
@@ -203,6 +209,28 @@ export async function seedReference(): Promise<void> {
     })
     .where(eq(users.id, WEB_IMPORT_USER_ID));
   logger.info(`Seed referensi: user sistem ${WEB_IMPORT_EMAIL}`);
+
+  // User sistem Live TikTok (streaming live dari platform TikTok).
+  await db
+    .insert(users)
+    .values({
+      id: LIVE_TIKTOK_USER_ID,
+      username: LIVE_TIKTOK_USERNAME,
+      displayName: LIVE_TIKTOK_DISPLAY_NAME,
+      email: LIVE_TIKTOK_EMAIL,
+      passwordHash: await hasher.hash(crypto.randomUUID()),
+      emailVerified: true,
+    })
+    .onConflictDoNothing({ target: users.id });
+  await db
+    .update(users)
+    .set({
+      username: LIVE_TIKTOK_USERNAME,
+      displayName: LIVE_TIKTOK_DISPLAY_NAME,
+      email: LIVE_TIKTOK_EMAIL,
+    })
+    .where(eq(users.id, LIVE_TIKTOK_USER_ID));
+  logger.info(`Seed referensi: user sistem ${LIVE_TIKTOK_EMAIL}`);
 
   // User sistem Voting Warga (atribusi auto-verif makna dari quorum vote).
   await db

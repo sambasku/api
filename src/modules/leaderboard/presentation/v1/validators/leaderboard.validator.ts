@@ -9,14 +9,14 @@ export const getLeaderboardQuerySchema = z
       .string()
       .regex(weekIdPattern, 'Format week_id harus YYYY-Www, contoh 2026-W40')
       .optional(),
-    metric: z.enum(['combined', 'contributions', 'verifications']).default('combined'),
+    metric: z.enum(['combined', 'submitted', 'approved', 'verifications']).default('combined'),
     limit: z.coerce.number().int().min(1).max(50).default(20),
   })
   .superRefine((val, ctx) => {
     if (val.period === 'week' && val.metric !== 'combined') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Metrik contributions atau verifications hanya untuk period=all',
+        message: 'Metrik submitted, approved, atau verifications hanya untuk period=all',
         path: ['metric'],
       });
     }
@@ -32,9 +32,11 @@ export const finalizeLeaderboardBodySchema = z.object({
 export const leaderboardEntryWireSchema = z.object({
   rank: z.number().int(),
   username: z.string(),
+  display_name: z.string().nullable(),
   avatar_url: z.string().nullable(),
-  contributions: z.number().int(),
-  verifications: z.number().int(),
+  submitted_points: z.number().int(),
+  approved_points: z.number().int(),
+  verification_points: z.number().int(),
   combined: z.number().int(),
   is_verifier: z.boolean(),
 });
@@ -45,7 +47,7 @@ export const leaderboardListResponseSchema = z.object({
   meta: z.object({
     week_id: z.string().nullable(),
     resets_at: z.string().nullable(),
-    metric: z.enum(['combined', 'contributions', 'verifications']),
+    metric: z.enum(['combined', 'submitted', 'approved', 'verifications']),
     cdn: z.object({
       current: z.string().nullable(),
       weekly: z.string().nullable(),
@@ -98,3 +100,24 @@ export const leaderboardExclusionMutationResponseSchema = z.object({
 export type GetLeaderboardQuery = z.infer<typeof getLeaderboardQuerySchema>;
 export type FinalizeLeaderboardBody = z.infer<typeof finalizeLeaderboardBodySchema>;
 export type AddLeaderboardExclusionBody = z.infer<typeof addLeaderboardExclusionBodySchema>;
+
+export const getPointsHistoryQuerySchema = z.object({
+  username: z.string().trim().min(1).max(100),
+  limit: z.coerce.number().int().min(1).max(52).default(52),
+});
+
+export const getPointsHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  username: z.string(),
+  history: z.array(
+    z.object({
+      week_id: z.string(),
+      submitted_points: z.number().int(),
+      approved_points: z.number().int(),
+      verification_points: z.number().int(),
+      combined: z.number().int(),
+      xp_at_week_end: z.number().int(),
+    }),
+  ),
+});
+

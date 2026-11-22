@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, articles, contributions, cuisineComments, culinaryPlaces, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, articles, contributions, cuisineComments, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
@@ -323,8 +323,6 @@ interface FeedRow {
    */
 cuisineSlug: string | null;
 cuisineName: string | null;
-culinaryPlaceSlug: string | null;
-culinaryPlaceName: string | null;
 /** Artikel untuk article_published / article_comment_created (published saja). */
 articleSlug: string | null;
 articleTitle: string | null;
@@ -660,8 +658,6 @@ export class ActivityEventFeedRepositoryImpl {
       eventName: events.name,
       cuisineSlug: cuisines.slug,
       cuisineName: cuisines.name,
-culinaryPlaceSlug: culinaryPlaces.slug,
-culinaryPlaceName: culinaryPlaces.name,
 articleSlug: articles.slug,
 articleTitle: articles.title,
 })
@@ -781,15 +777,7 @@ articleTitle: articles.title,
         sql`${cuisines.deletedAt} is null`,
       ),
     )
-    .leftJoin(
-      culinaryPlaces,
-      and(
-        eq(activityEvents.kind, 'cuisine_published'),
-        eq(culinaryPlaces.id, activityEvents.targetId),
-        eq(culinaryPlaces.publishStatus, 'published'),
-        sql`${culinaryPlaces.deletedAt} is null`,
-      ),
-    )
+
     // Komentar acara: join dulu agar event join bisa pakai event_comments.event_id.
     .leftJoin(
       eventComments,
@@ -957,7 +945,7 @@ articleTitle: articles.title,
         sql`(${activityEvents.kind} <> 'kreator_claimed' or ${kreators.id} is not null)`,
         sql`(${activityEvents.kind} <> 'usaha_photo_added' or ${usahas.id} is not null)`,
 // Kuliner/tempat kuliner hanya tayang selama masih published.
-sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null or ${culinaryPlaces.id} is not null)`,
+sql`(${activityEvents.kind} <> 'cuisine_published' or ${cuisines.id} is not null)`,
 sql`(${activityEvents.kind} <> 'cuisine_photo_added' or ${cuisines.id} is not null)`,
 sql`(${activityEvents.kind} <> 'cuisine_comment_created' or ${cuisineComments.id} is not null)`,
 sql`(${activityEvents.kind} <> 'cuisine_comment_created' or ${cuisines.id} is not null)`,
@@ -1078,7 +1066,7 @@ const subtitle =
 kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_visited'
 ? row.placeName
 : kind === 'cuisine_published' || kind === 'cuisine_photo_added'
-? (row.cuisineName ?? row.culinaryPlaceName)
+? row.cuisineName
 : kind === 'usaha_published' || kind === 'usaha_photo_added' || kind === 'usaha_visited'
 ? row.usahaName
 : kind === 'layanan_published'
@@ -1285,7 +1273,6 @@ return KIND_BODY[kind];
       kreatorSlug?: string | null;
       eventSlug?: string | null;
 cuisineSlug?: string | null;
-culinaryPlaceSlug?: string | null;
 replyParentId?: string | null;
 jinyeCommentParentId?: string | null;
 articleSlug?: string | null;
@@ -1372,9 +1359,8 @@ case 'place_comment_created':
       case 'cuisine_published':
       case 'cuisine_photo_added':
       case 'cuisine_comment_created':
-        if (row.cuisineSlug) return { type: 'culinary', id: row.cuisineSlug };
-        return row.culinaryPlaceSlug
-          ? { type: 'culinary_place', id: row.culinaryPlaceSlug }
+        return row.cuisineSlug
+          ? { type: 'culinary', id: row.cuisineSlug }
           : null;
       case 'user_joined':
         return row.targetId ? { type: 'user', id: row.targetId! } : null;

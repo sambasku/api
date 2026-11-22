@@ -9,7 +9,7 @@ export interface CreateCulinaryContributionInput {
   kind: CulinaryContribution['kind'];
   userId: string;
   cuisineId?: string | null;
-  placeId?: string | null;
+  usahaId?: string | null;
   linkId?: string | null;
   lockedFields: string;
   payload: CulinaryContributionPayload;
@@ -33,8 +33,8 @@ export interface CulinaryContributionRepository {
   countPending(userId: string): Promise<number>;
   /** Field-lock: field terkunci pengajuan pending lain untuk kuliner. */
   pendingLockedFieldsForCuisine(cuisineId: string): Promise<string[]>;
-  /** Field-lock: field terkunci pengajuan pending lain untuk tempat. */
-  pendingLockedFieldsForPlace(placeId: string): Promise<string[]>;
+  /** Field-lock: field terkunci pengajuan pending lain untuk usaha. */
+  pendingLockedFieldsForUsaha(usahaId: string): Promise<string[]>;
   setStatus(
     id: string,
     status: CulinaryContributionStatus,
@@ -43,7 +43,7 @@ export interface CulinaryContributionRepository {
       rejectReasonCode?: string | null;
       rejectReasonText?: string | null;
       resultCuisineId?: string | null;
-      resultPlaceId?: string | null;
+      resultUsahaId?: string | null;
     },
   ): Promise<void>;
   replacePayload(

@@ -3,12 +3,7 @@ import type {
   CuisinePublishStatus,
 } from '@/shared/database/drizzle/schema/cuisines.schema';
 import type { CuisineCommentStatus } from '@/shared/database/drizzle/schema/cuisine-comments.schema';
-import type {
-  CulinaryOperationalStatus,
-  CulinaryPlaceType,
-  CulinaryPublishStatus,
-} from '@/shared/database/drizzle/schema/culinary-places.schema';
-import type { CulinaryAvailability } from '@/shared/database/drizzle/schema/culinary-place-cuisines.schema';
+import type { CuisineUsahaAvailability } from '@/shared/database/drizzle/schema/cuisine-usahas.schema';
 
 export interface CulinaryCategoryRef {
   id: string;
@@ -91,57 +86,22 @@ export interface Cuisine {
   updatedAt: Date | null;
 }
 
-export interface CulinaryPlace {
-  id: string;
-  slug: string;
-  name: string;
-  type: CulinaryPlaceType | null;
-  description: string | null;
-  locationHint: string | null;
-  addressText: string | null;
-  lat: number | null;
-  lng: number | null;
-  mapsUrl: string | null;
-  phone: string | null;
-  whatsapp: string | null;
-  website: string | null;
-  socialUrl: string | null;
-  coverUrl: string | null;
-  operationalStatus: CulinaryOperationalStatus;
-  publishStatus: CulinaryPublishStatus;
-  restrictedReason: string | null;
-  restrictedAt: Date | null;
-  managerId: string | null;
-  authorId: string | null;
-  /** Diisi di path detail; list boleh null. */
-  author: CulinaryAuthorRef | null;
-  publishedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date | null;
-}
-
-/** Baris relasi kuliner <-> tempat + nama tampil (hasil JOIN). */
-export interface CuisinePlaceLink {
+/** Baris relasi kuliner <-> usaha + nama tampil (hasil JOIN). */
+export interface CuisineUsahaLink {
   id: string;
   cuisineId: string;
-  placeId: string;
-  availability: CulinaryAvailability;
+  usahaId: string;
+  availability: CuisineUsahaAvailability;
   note: string | null;
-  publishStatus: CulinaryPublishStatus;
   cuisineName: string | null;
   cuisineSlug: string | null;
-  placeName: string | null;
-  placeSlug: string | null;
+  usahaName: string | null;
+  usahaSlug: string | null;
 }
 
 export interface CuisineDetail extends Cuisine {
-  /** Tempat yang menyediakan kuliner ini (published saja). */
-  places: CuisinePlaceLink[];
-}
-
-export interface CulinaryPlaceDetail extends CulinaryPlace {
-  /** Kuliner yang tersedia di tempat ini (published saja). */
-  cuisines: CuisinePlaceLink[];
+  /** Usaha yang menjual kuliner ini (published saja). */
+  usahas: CuisineUsahaLink[];
 }
 
 function parseJsonArray<T>(raw: string | null): T[] {
