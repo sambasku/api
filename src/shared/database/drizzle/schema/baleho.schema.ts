@@ -1,7 +1,6 @@
 import {
   index,
   integer,
-  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,

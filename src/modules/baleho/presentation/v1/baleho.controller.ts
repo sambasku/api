@@ -4,6 +4,10 @@ import { ForbiddenError, ServiceUnavailableError } from '@/shared/errors/app-err
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import { deriveBalehoPerfMetrics } from '../../application/baleho-metrics';
+import {
+  computeEndsAtFromWindow,
+  formatBalehoStartsOn,
+} from '../../domain/baleho-schedule';
 import type { BalehoUseCases } from '../../application/baleho.use-cases';
 import type {
   balehoEventBodySchema,
@@ -197,6 +201,13 @@ export class BalehoController {
           quotedAmount: r.quotedAmount,
           daily: r.daily,
         });
+        const days = r.days ?? 30;
+        const scheduledStartsOn = r.scheduledStartsOn
+          ? formatBalehoStartsOn(r.scheduledStartsOn)
+          : null;
+        const scheduledEndsOn = r.scheduledStartsOn
+          ? formatBalehoStartsOn(computeEndsAtFromWindow(r.scheduledStartsOn, days))
+          : null;
         return {
           id: r.id,
           slide: r.slide,
@@ -208,6 +219,10 @@ export class BalehoController {
           advertiser_user_id: r.advertiserUserId,
           advertiser_username: r.advertiserUsername,
           referral_username: r.referralUsername,
+          confirmation_phone: r.confirmationPhone,
+          scheduled_starts_on: scheduledStartsOn,
+          scheduled_ends_on: scheduledEndsOn,
+          starts_at: r.startsAt?.toISOString() ?? null,
           // Raw ImageKit URL tidak diekspos - preview lewat GET .../payment-proof.
           has_payment_proof: Boolean(r.paymentProofUrl?.trim()),
           price_per_cell_per_day: r.pricePerCellPerDay,

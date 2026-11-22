@@ -74,7 +74,10 @@ export type BalehoRepository = {
       pricePerCellPerDay: number | null;
       days: number | null;
       createdAt: Date;
+      scheduledStartsOn: Date | null;
+      startsAt: Date | null;
       endsAt: Date | null;
+      confirmationPhone: string | null;
       impressions: number;
       taps: number;
       /** Klik tombol CTA (`event_type=action`). */

@@ -43,7 +43,13 @@ import {
 
 function cellsFor(col: number, row: number, w: number, h: number) {
   const cells: Array<{ col: number; row: number }> = [];
-  for (let r = row; r < row + h; r++)
+  for (let r = row; r < row + h; r++) {
+    for (let c = col; c < col + w; c++) {
+      cells.push({ col: c, row: r });
+    }
+  }
+  return cells;
+}
 
 function placementVisibleOnBoardAt(
   row: {
@@ -57,13 +63,6 @@ function placementVisibleOnBoardAt(
   if (!row.endsAt || row.endsAt.getTime() < now.getTime()) return false;
   const start = placementBookingWindowStart(row);
   return start.getTime() <= now.getTime() && now.getTime() <= row.endsAt.getTime();
-}
- {
-    for (let c = col; c < col + w; c++) {
-      cells.push({ col: c, row: r });
-    }
-  }
-  return cells;
 }
 
 export class BalehoRepositoryImpl implements BalehoRepository {
@@ -555,7 +554,10 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         pricePerCellPerDay: balehoPlacements.pricePerCellPerDay,
         days: balehoPlacements.days,
         createdAt: balehoPlacements.createdAt,
+        scheduledStartsOn: balehoPlacements.scheduledStartsOn,
+        startsAt: balehoPlacements.startsAt,
         endsAt: balehoPlacements.endsAt,
+        confirmationPhone: balehoPlacements.confirmationPhone,
       })
       .from(balehoPlacements)
       .leftJoin(users, eq(users.id, balehoPlacements.advertiserUserId))
@@ -579,7 +581,10 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         pricePerCellPerDay: r.pricePerCellPerDay ?? null,
         days: r.days ?? null,
         createdAt: r.createdAt,
+        scheduledStartsOn: r.scheduledStartsOn ?? null,
+        startsAt: r.startsAt ?? null,
         endsAt: r.endsAt ?? null,
+        confirmationPhone: r.confirmationPhone ?? null,
         impressions: c.impressions,
         taps: c.taps,
         actions: c.actions,

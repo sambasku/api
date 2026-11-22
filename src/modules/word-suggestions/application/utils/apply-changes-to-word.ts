@@ -1,6 +1,6 @@
 import type { ProposedChanges } from '../../domain/entities/word-suggestion.entity';
 import { NotFoundError, ConflictError, BadRequestError } from '@/shared/errors/app-error';
-import { hasConflictingUsageLabels } from '@/shared/constants/usage-labels';
+import { hasConflictingUsageLabels, type UsageLabel } from '@/shared/constants/usage-labels';
 import {
   resolveWordImageProvider,
   stockImageAttribution,
@@ -688,7 +688,7 @@ export async function applyChangesToWord(
     const next = new Set(current);
     for (const label of changes.usageLabelsToRemove ?? []) next.delete(label);
     for (const label of changes.usageLabelsToAdd ?? []) next.add(label);
-    const merged = [...next];
+    const merged = [...next] as UsageLabel[];
     if (hasConflictingUsageLabels(merged)) {
       throw new BadRequestError('VALIDATION_ERROR', 'Label halus dan kasar tidak bisa bersamaan', [
         { field: 'usage_labels', message: 'Label halus dan kasar tidak bisa dipilih bersamaan' },
