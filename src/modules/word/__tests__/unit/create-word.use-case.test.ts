@@ -870,11 +870,11 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
     });
   });
 
-  it('lemma tidak cocok miss term → 400 SEARCH_MISS_TERM_MISMATCH', async () => {
-    const { useCase, searchMissRepo } = makeDeps();
+  it('G3b server: lemma dikoreksi + miss typo → auto varian miss.term', async () => {
+    const { useCase, searchMissRepo, wordRepo } = makeDeps();
     searchMissRepo.findById = vi.fn().mockResolvedValue({
       id: MISS_ID,
-      term: 'kalintiak',
+      term: 'asalx',
       direction: 'lemma',
       hitCount: 1,
       lastSearchedAt: new Date(),
@@ -882,9 +882,18 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
       isVisible: false,
       createdAt: new Date(),
     });
-    await expect(useCase.execute(makeDto({ searchMissId: MISS_ID, lemma: 'makatn' }), ADMIN)).rejects.toMatchObject({
-      errorCode: 'SEARCH_MISS_TERM_MISMATCH',
-    });
+    const result = await useCase.execute(makeDto({ searchMissId: MISS_ID, lemma: 'asal' }), ADMIN);
+    expect(result.searchMissId).toBe(MISS_ID);
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        searchMissId: MISS_ID,
+        lemma: 'asal',
+        variants: expect.arrayContaining([
+          expect.objectContaining({ form: 'asalx', variantType: 'alternative' }),
+        ]),
+      }),
+      ADMIN.userId,
+    );
   });
 
   it('G3b: lemma ≠ miss + variants form = miss.term → lolos', async () => {
@@ -918,7 +927,7 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
   });
 
   it('direction=translation: soft-check teks terjemahan pertama', async () => {
-    const { useCase, searchMissRepo } = makeDeps();
+    const { useCase, searchMissRepo, wordRepo } = makeDeps();
     searchMissRepo.findById = vi.fn().mockResolvedValue({
       id: MISS_ID,
       term: 'makan',
@@ -932,24 +941,35 @@ describe('CreateWordUseCase - search_miss provenance (12-api)', () => {
     const result = await useCase.execute(makeDto({ searchMissId: MISS_ID, lemma: 'makatn' }), ADMIN);
     expect(result.searchMissId).toBe(MISS_ID);
 
-    await expect(
-      useCase.execute(
-        makeDto({
-          searchMissId: MISS_ID,
-          meanings: [
-            {
-              wordClassId: '01WORDCLASSESNOMINA000000',
-              definition: 'arti lain',
-              orderIndex: 1,
-              translations: [
-                { languageId: '01LANGUAGESINDONESIA00000', translationText: 'minum', translationType: 'direct' },
-              ],
-            },
-          ],
-        }),
-        ADMIN,
-      ),
-    ).rejects.toMatchObject({ errorCode: 'SEARCH_MISS_TERM_MISMATCH' });
+    const autoTrans = await useCase.execute(
+      makeDto({
+        searchMissId: MISS_ID,
+        meanings: [
+          {
+            wordClassId: '01WORDCLASSESNOMINA000000',
+            definition: 'arti lain',
+            orderIndex: 1,
+            translations: [
+              { languageId: '01LANGUAGESINDONESIA00000', translationText: 'minum', translationType: 'direct' },
+            ],
+          },
+        ],
+      }),
+      ADMIN,
+    );
+    expect(autoTrans.searchMissId).toBe(MISS_ID);
+    expect(wordRepo.saveWithRelations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meanings: expect.arrayContaining([
+          expect.objectContaining({
+            translations: expect.arrayContaining([
+              expect.objectContaining({ translationText: 'makan' }),
+            ]),
+          }),
+        ]),
+      }),
+      ADMIN.userId,
+    );
   });
 
   it('G3b: translation koreksi - padanan benar + typo miss di translations → lolos', async () => {

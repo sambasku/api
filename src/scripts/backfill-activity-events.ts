@@ -28,7 +28,7 @@ const {
   words,
 } = await import('../shared/database/drizzle/schema');
 import type { ActivityEventKind } from '../modules/activity/domain/entities/activity-event.entity';
-import { discussionCreatedPayload } from '../modules/activity/application/utils/activity-body-snippet';
+import { commentFeedPayload, discussionCreatedPayload } from '../modules/activity/application/utils/activity-body-snippet';
 
 interface Row {
   kind: ActivityEventKind;
@@ -37,6 +37,7 @@ interface Row {
   targetId: string | null;
   occurredAt: Date;
   dedupeKey: string;
+  payload?: string | null;
 }
 
 async function insertAll(rows: Row[]): Promise<number> {
@@ -187,6 +188,8 @@ async function main() {
       userId: comments.userId,
       wordId: comments.wordId,
       createdAt: comments.createdAt,
+      body: comments.body,
+      stickerId: comments.stickerId,
     })
     .from(comments)
     .where(and(eq(comments.status, 'published'), isNull(comments.deletedAt)));
@@ -198,6 +201,7 @@ async function main() {
       targetId: r.id,
       occurredAt: r.createdAt,
       dedupeKey: `comment:${r.id}`,
+      payload: commentFeedPayload({ body: r.body, stickerId: r.stickerId }),
     })),
   );
   console.log(`[backfill-activity] komentar: ${n3}`);
@@ -530,9 +534,58 @@ async function main() {
   }
   console.log(`[backfill-activity] payload discussion_created: ${n10}`);
 
+  // #326: komentar (semua kind) tanpa payload → cuplikan dari tabel sumber.
+  const schema = await import('../shared/database/drizzle/schema');
+  const commentBackfillSpecs: Array<{
+    kind: ActivityEventKind;
+    table:
+      | typeof schema.comments
+      | typeof schema.placeComments
+      | typeof schema.usahaComments
+      | typeof schema.cuisineComments
+      | typeof schema.eventComments
+      | typeof schema.articleComments
+      | typeof schema.jinyeComments;
+  }> = [
+    { kind: 'comment_created', table: schema.comments },
+    { kind: 'place_comment_created', table: schema.placeComments },
+    { kind: 'usaha_comment_created', table: schema.usahaComments },
+    { kind: 'cuisine_comment_created', table: schema.cuisineComments },
+    { kind: 'event_comment_created', table: schema.eventComments },
+    { kind: 'article_comment_created', table: schema.articleComments },
+    { kind: 'jinye_comment_created', table: schema.jinyeComments },
+  ];
+  let n11 = 0;
+  for (const spec of commentBackfillSpecs) {
+    const events = await db
+      .select({ id: activityEvents.id, targetId: activityEvents.targetId })
+      .from(activityEvents)
+      .where(and(eq(activityEvents.kind, spec.kind), isNull(activityEvents.payload)));
+    const ids = [
+      ...new Set(events.map((e) => e.targetId).filter((id): id is string => !!id)),
+    ];
+    const bodyById = new Map<string, string | null>();
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      const rowsB = await db
+        .select({ id: spec.table.id, body: spec.table.body })
+        .from(spec.table)
+        .where(inArray(spec.table.id, chunk));
+      for (const r of rowsB) bodyById.set(r.id, r.body);
+    }
+    for (const ev of events) {
+      if (!ev.targetId) continue;
+      const payload = commentFeedPayload({ body: bodyById.get(ev.targetId) });
+      await db.update(activityEvents).set({ payload }).where(eq(activityEvents.id, ev.id));
+      n11++;
+    }
+  }
+  console.log(`[backfill-activity] payload komentar: ${n11}`);
+
+
   const total = n1 + n2 + n3 + n4 + n5 + n5b + n6 + n7 + n8;
   console.log(
-    `[backfill-activity] selesai: ${total} event baru (+${n9} payload vote, +${n10} payload discussion)`,
+    `[backfill-activity] selesai: ${total} event baru (+${n9} payload vote, +${n10} payload discussion, +${n11} payload komentar)`,
   );
   await closeDb();
 }

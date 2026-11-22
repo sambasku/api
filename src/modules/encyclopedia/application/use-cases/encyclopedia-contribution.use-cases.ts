@@ -12,6 +12,7 @@ import { assertCanContribute } from '@/modules/word/application/utils/assert-can
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import { commentFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type {
   ArticleComment,
@@ -144,6 +145,11 @@ export class CreateArticleCommentUseCase {
       actorId: input.userId,
       targetId: created.id,
       dedupeKey: `article_comment:${created.id}`,
+      payload: commentFeedPayload({
+        body: created.body,
+        stickerId,
+        hasImage: Boolean(imageUrl),
+      }),
     });
     return created;
   }

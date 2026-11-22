@@ -67,8 +67,6 @@ export type PublicActivityKind =
   | 'contribution'
   | 'correction'
   | 'comment'
-  | 'verification'
-  | 'vote'
   | 'jinye';
 
 export interface PublicActivityItem {

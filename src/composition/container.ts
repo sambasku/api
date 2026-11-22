@@ -312,6 +312,21 @@ import { UsahaContributionController } from "@/modules/usaha-contribution/presen
 import { LayananRepositoryImpl } from "@/modules/layanan/infrastructure/layanan.repository.impl";
 import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases";
 import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
+import {
+  GetKaryaViewReportUseCase,
+  ListKaryaViewsUseCase,
+  RecordKaryaViewBySlugUseCase,
+} from "@/modules/karya/application/use-cases/karya-views.use-cases";
+import { KaryaViewsRepositoryImpl } from "@/modules/karya/infrastructure/karya-views.repository.impl";
+import { KaryaViewsController } from "@/modules/karya/presentation/v1/karya-views.controller";
+import {
+  GetLayananViewReportUseCase,
+  ListLayananViewsUseCase,
+  RecordLayananViewBySlugUseCase,
+} from "@/modules/layanan/application/use-cases/layanan-views.use-cases";
+import { LayananViewsRepositoryImpl } from "@/modules/layanan/infrastructure/layanan-views.repository.impl";
+import { LayananViewsController } from "@/modules/layanan/presentation/v1/layanan-views.controller";
+
 import { KaryaRepositoryImpl } from "@/modules/karya/infrastructure/karya.repository.impl";
 import { KaryaUseCases } from "@/modules/karya/application/karya.use-cases";
 import { ResolveKaryaRelated } from "@/modules/karya/application/resolve-karya-related";
@@ -483,6 +498,11 @@ import { ListMyCommentsUseCase } from "@/modules/comment/application/use-cases/l
 import { TakedownCommentUseCase } from "@/modules/comment/application/use-cases/takedown-comment.use-case";
 import { UncensorCommentUseCase } from "@/modules/comment/application/use-cases/uncensor-comment.use-case";
 import { CommentController } from "@/modules/comment/presentation/v1/comment.controller";
+import { UgcCommentLemmaRepositoryImpl } from "@/modules/ugc-comment-lemma/infrastructure/ugc-comment-lemma.repository.impl";
+import { CreateUgcCommentLemmaLinkUseCase } from "@/modules/ugc-comment-lemma/application/use-cases/create-ugc-comment-lemma-link.use-case";
+import { DeleteUgcCommentLemmaLinkUseCase } from "@/modules/ugc-comment-lemma/application/use-cases/delete-ugc-comment-lemma-link.use-case";
+import { UgcCommentLemmaController } from "@/modules/ugc-comment-lemma/presentation/ugc-comment-lemma.controller";
+
 import { CommentBlocklistRepositoryImpl } from "@/modules/comment-blocklist/infrastructure/comment-blocklist.repository.impl";
 import { CreateBlocklistWordUseCase } from "@/modules/comment-blocklist/application/use-cases/create-blocklist-word.use-case";
 import { BulkCreateBlocklistWordsUseCase } from "@/modules/comment-blocklist/application/use-cases/bulk-create-blocklist-words.use-case";
@@ -802,6 +822,23 @@ export const requireProfileWriteClient = createRequireApprovedClientMiddleware(
 // Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
 // Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
 export const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
+
+// ---- Span lemma pada komentar UGC (kata, wisata, …). ----
+export const ugcCommentLemmaRepo = new UgcCommentLemmaRepositoryImpl(db);
+export const ugcCommentLemmaController = new UgcCommentLemmaController({
+  create: new CreateUgcCommentLemmaLinkUseCase(
+    db,
+    ugcCommentLemmaRepo,
+    wordRepo,
+    auditRepo,
+  ),
+  delete: new DeleteUgcCommentLemmaLinkUseCase(
+    db,
+    ugcCommentLemmaRepo,
+    auditRepo,
+  ),
+});
+
 export const translationRepo = new TranslationRepositoryImpl(db);
 export const autoPromoteLemmaExampleTranslation =
   new AutoPromoteLemmaExampleTranslationUseCase(translationRepo);
@@ -1134,6 +1171,7 @@ export const placeController = new PlaceController(
     ),
     deleteComment: new DeletePlaceCommentUseCase(placeRepo),
     takedownComment: new TakedownPlaceCommentUseCase(placeRepo, auditRepo),
+    ugcLemmaLinks: ugcCommentLemmaRepo,
   },
 );
 export const placeCategoryController = new PlaceCategoryController(
@@ -1213,6 +1251,7 @@ export const eventController = new EventController(
     ),
     deleteComment: new DeleteEventCommentUseCase(eventRepo),
     takedownComment: new TakedownEventCommentUseCase(eventRepo, auditRepo),
+    ugcLemmaLinks: ugcCommentLemmaRepo,
   },
   {
     listImages: new ListEventImagesUseCase(eventRepo),
@@ -1292,6 +1331,7 @@ export const usahaController = new UsahaController(
     ),
     deleteComment: new DeleteUsahaCommentUseCase(usahaRepo),
     takedownComment: new TakedownUsahaCommentUseCase(usahaRepo, auditRepo),
+    ugcLemmaLinks: ugcCommentLemmaRepo,
   },
 );
 export const usahaViewsRepo = new UsahaViewsRepositoryImpl(db);
@@ -1316,6 +1356,19 @@ export const usahaContributionUseCases = new UsahaContributionUseCases(
 );
 export const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
+);
+
+export const layananViewsRepo = new LayananViewsRepositoryImpl(db);
+export const layananViewsController = new LayananViewsController(
+  new RecordLayananViewBySlugUseCase(layananViewsRepo),
+  new ListLayananViewsUseCase(layananViewsRepo),
+  new GetLayananViewReportUseCase(layananViewsRepo),
+);
+export const karyaViewsRepo = new KaryaViewsRepositoryImpl(db);
+export const karyaViewsController = new KaryaViewsController(
+  new RecordKaryaViewBySlugUseCase(karyaViewsRepo),
+  new ListKaryaViewsUseCase(karyaViewsRepo),
+  new GetKaryaViewReportUseCase(karyaViewsRepo),
 );
 export const layananController = new LayananController(
   new LayananUseCases(
@@ -1429,6 +1482,7 @@ export const culinaryController = new CulinaryController(
     ),
     deleteComment: new DeleteCuisineCommentUseCase(culinaryRepo),
     takedownComment: new TakedownCuisineCommentUseCase(culinaryRepo, auditRepo),
+    ugcLemmaLinks: ugcCommentLemmaRepo,
   },
 );
 export const cuisineViewsRepo = new CuisineViewsRepositoryImpl(db);
@@ -1598,6 +1652,7 @@ export const commentUploadCredentials = new CreateUploadCredentialsUseCase({
   defaultFolder: "/comments",
 });
 export const commentController = new CommentController({
+  ugcLemmaLinks: ugcCommentLemmaRepo,
   create: new CreateCommentUseCase(
     commentRepo,
     wordRepo,
@@ -1622,6 +1677,7 @@ export const commentController = new CommentController({
     notifyUser,
     wordCommentPushCooldown,
     recordAbuseSignal,
+    activityEvents,
   ),
   attachImage: new AttachCommentImageUseCase(
     commentRepo,
@@ -1652,6 +1708,7 @@ export const commentController = new CommentController({
     auditRepo,
     commentBlocklistRepo,
     recordAbuseSignal,
+    ugcCommentLemmaRepo,
   ),
   editHistory: new GetCommentEditHistoryUseCase(commentRepo),
   listAdmin: new ListAdminCommentsUseCase(commentRepo),

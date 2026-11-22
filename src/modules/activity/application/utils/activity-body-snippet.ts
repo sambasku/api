@@ -17,6 +17,24 @@ export function discussionCreatedPayload(
 }
 
 /**
+ * Payload feed komentar (kata + entitas + Jinye) - cuplikan isi beku #94.
+ * Tanpa teks: fallback media (selaras feed lama `snippet(body || '…')`).
+ */
+export function commentFeedPayload(input: {
+  body?: string | null;
+  hasAudio?: boolean;
+  hasImage?: boolean;
+  stickerId?: string | null;
+}): string {
+  const t = input.body?.trim();
+  if (t) return snippetActivityBody(t, 120);
+  if (input.stickerId) return 'Stiker';
+  if (input.hasImage) return 'Foto';
+  if (input.hasAudio) return 'Rekaman suara';
+  return '…';
+}
+
+/**
  * Copy feed/timeline Jinye (`jinye_created` / `jinye_quote_created`).
  * Prioritas: teks → Foto → Suara → "Jinye".
  */

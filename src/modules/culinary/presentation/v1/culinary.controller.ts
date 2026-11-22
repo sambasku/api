@@ -4,6 +4,8 @@ import type { z } from 'zod';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { BadRequestError, NotFoundError, UnauthorizedError } from '@/shared/errors/app-error';
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
+import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
+import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { CreateCuisineCommentAudioUseCase } from '../../application/use-cases/cuisine-comment-audio.use-case';
@@ -87,6 +89,7 @@ export interface CuisineCommentControllerDeps {
   updateComment: UpdateCuisineCommentUseCase;
   deleteComment: DeleteCuisineCommentUseCase;
   takedownComment: TakedownCuisineCommentUseCase;
+  ugcLemmaLinks?: UgcCommentLemmaRepository;
 }
 
 export function serializeLink(l: CuisineUsahaLink) {
@@ -416,7 +419,21 @@ export class CulinaryController {
     return c.json({
       success: true as const,
       data: {
-        items: page.items.map(toCuisineCommentWire),
+        items: await (async () => {
+          const repo = this.cuisineComments.ugcLemmaLinks;
+          if (repo) {
+            return attachLemmaLinksToCommentWireItems(
+              repo,
+              'cuisine_comment',
+              page.items,
+              (c) => toCuisineCommentWire(c),
+            );
+          }
+          return page.items.map((c) => ({
+            ...toCuisineCommentWire(c),
+            lemma_links: [] as const,
+          }));
+        })(),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
       },

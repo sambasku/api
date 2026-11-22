@@ -1,4 +1,6 @@
 import type { Context } from 'hono';
+import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
+import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
 import { redactEntityCommentAudio } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
@@ -227,6 +229,7 @@ export interface EncyclopediaControllerDeps {
   updateComment: UpdateArticleCommentUseCase;
   deleteComment: DeleteArticleCommentUseCase;
   takedownComment: TakedownArticleCommentUseCase;
+  ugcLemmaLinks?: UgcCommentLemmaRepository;
   toggleBookmark: ToggleArticleBookmarkUseCase;
   setClapCount: SetArticleClapCountUseCase;
   submitContribution: SubmitArticleContributionUseCase;
@@ -344,7 +347,21 @@ export class EncyclopediaController {
     return c.json({
       success: true as const,
       data: {
-        items: page.items.map(toCommentWire),
+        items: await (async () => {
+          const repo = this.deps.ugcLemmaLinks;
+          if (repo) {
+            return attachLemmaLinksToCommentWireItems(
+              repo,
+              'article_comment',
+              page.items,
+              (c) => toCommentWire(c),
+            );
+          }
+          return page.items.map((c) => ({
+            ...toCommentWire(c),
+            lemma_links: [] as const,
+          }));
+        })(),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
       },

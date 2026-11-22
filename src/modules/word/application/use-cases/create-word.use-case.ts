@@ -1,6 +1,7 @@
 import { BadRequestError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { SearchMiss } from '@/modules/search-miss/domain/entities/search-miss.entity';
 import type { SearchMissRepository } from '@/modules/search-miss/domain/repositories/search-miss.repository';
 import { normalizeSearchMissTerm } from '@/modules/search-miss/domain/normalize-term';
 import type { ActivityEventRepository } from '@/modules/activity/domain/repositories/activity-event.repository';
@@ -402,6 +403,7 @@ export class CreateWordUseCase {
     if (!miss) {
       throw new NotFoundError('SEARCH_MISS_NOT_FOUND', 'Search miss tidak ditemukan');
     }
+    coerceSearchMissG3b(dto, miss);
     if (miss.direction === 'lemma') {
       const lemmaMatches = normalizeSearchMissTerm(dto.lemma) === miss.term;
       // G3b: lemma ≠ miss.term boleh jika miss.term ada di variants[].form
@@ -443,6 +445,7 @@ export class CreateWordUseCase {
       );
     }
   }
+
 
   /**
    * Backward compat mobile lama: field ID sering dikirim `""` saat daftar
@@ -509,6 +512,44 @@ export class CreateWordUseCase {
       }
     }
   }
+}
+
+
+/**
+ * G3b server-side: saat search_miss_id terisi, simpan miss.term sebagai varian
+ * (lemma) atau terjemahan tambahan bila konten utama sudah dikoreksi.
+ */
+function coerceSearchMissG3b(dto: CreateWordDto, miss: SearchMiss): void {
+  if (miss.direction === 'lemma') {
+    const lemmaMatches = normalizeSearchMissTerm(dto.lemma) === miss.term;
+    if (lemmaMatches) return;
+    const hasVariant = (dto.variants ?? []).some(
+      (v) => normalizeSearchMissTerm(v.form) === miss.term,
+    );
+    if (hasVariant) return;
+    dto.variants = [...(dto.variants ?? []), { form: miss.term, variantType: 'alternative' }];
+    return;
+  }
+
+  const anyTranslationMatches = (dto.meanings ?? []).some((m) =>
+    (m.translations ?? []).some(
+      (t) => normalizeSearchMissTerm(t.translationText) === miss.term,
+    ),
+  );
+  if (anyTranslationMatches) return;
+
+  const first = dto.meanings[0];
+  if (!first) return;
+
+  const langId = first.translations?.[0]?.languageId?.trim();
+  if (!langId) return;
+
+  first.translations = [...(first.translations ?? [])];
+  first.translations.push({
+    languageId: langId,
+    translationText: miss.term,
+    translationType: 'direct',
+  });
 }
 
 // ---- Form B: resolusi makna + publikasi per entitas (04) ----

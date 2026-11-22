@@ -368,6 +368,46 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
     expect(found).toBe(true);
   });
 
+
+  it('G3b server: lemma dikoreksi dari miss typo → fulfilled + varian auto', async () => {
+    const stamp = Date.now();
+    const typo = `asalx${stamp}`;
+    await get(`/api/v1/words/search?q=${encodeURIComponent(typo)}`);
+    const panel = await get('/api/v1/admin/search-misses', adminToken);
+    const miss = (await panel.json()).data.find((m: { term: string }) => m.term === typo.toLowerCase());
+    expect(miss).toBeTruthy();
+    expect(miss.is_fulfilled).toBe(false);
+
+    const create = await post(
+      '/api/v1/admin/words',
+      {
+        language_id: SMB,
+        lemma: 'asal',
+        word_type: 'word',
+        category_ids: [],
+        related_words: [],
+        meanings: [
+          {
+            word_class_id: NOMINA,
+            definition: 'daripada',
+            order_index: 1,
+            translations: [
+              { language_id: IDN, translation_text: 'asal', translation_type: 'direct' },
+            ],
+          },
+        ],
+        status: 'published',
+        search_miss_id: miss.id,
+      },
+      adminToken,
+    );
+    expect(create.status).toBe(201);
+
+    const panelAfter = await get('/api/v1/admin/search-misses', adminToken);
+    const after = (await panelAfter.json()).data.find((m: { id: string }) => m.id === miss.id);
+    expect(after).toMatchObject({ is_fulfilled: true });
+  });
+
   it('usulan kata dari miss → panel tampilkan pending_contribution_count; approve → kembali 0', async () => {
     // 1. Miss baru
     await get('/api/v1/words/search?q=pandai');

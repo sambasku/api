@@ -73,6 +73,15 @@ import {
   createPublicKaryaRoutes,
 } from "@/modules/karya/presentation/v1/karya.routes";
 import {
+  createAdminKaryaViewsRoutes,
+  createPublicKaryaViewsRoutes,
+} from "@/modules/karya/presentation/v1/karya-views.routes";
+import {
+  createAdminLayananViewsRoutes,
+  createPublicLayananViewsRoutes,
+} from "@/modules/layanan/presentation/v1/layanan-views.routes";
+
+import {
   createKaryaExcerptLemmaLinkRoutes,
   createKaryaLemmaLinkDeleteRoutes,
 } from "@/modules/karya/presentation/v1/karya-lemma-link.routes";
@@ -370,6 +379,13 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
   );
   app.route(
     "/api/v1/admin/layanan",
+    createAdminLayananViewsRoutes({
+      controller: di.layananViewsController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/layanan",
     createAdminLayananRoutes({ controller: di.layananController, authenticate: di.authenticate }),
   );
   app.route(
@@ -388,7 +404,21 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
   );
   app.route(
     "/api/v1/layanan",
+    createPublicLayananViewsRoutes({
+      controller: di.layananViewsController,
+      softAuthenticate: di.softAuthenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/layanan",
     createPublicLayananRoutes({ controller: di.layananController }),
+  );
+  app.route(
+    "/api/v1/admin/karya",
+    createAdminKaryaViewsRoutes({
+      controller: di.karyaViewsController,
+      authenticate: di.authenticate,
+    }),
   );
   app.route(
     "/api/v1/admin/karya",
@@ -406,6 +436,13 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
     createKaryaContributionRoutes({
       controller: di.karyaController,
       authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/karya",
+    createPublicKaryaViewsRoutes({
+      controller: di.karyaViewsController,
+      softAuthenticate: di.softAuthenticate,
     }),
   );
   app.route(

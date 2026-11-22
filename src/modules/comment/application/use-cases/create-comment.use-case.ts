@@ -11,6 +11,7 @@ import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/n
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { WordCommentPushCooldownGate } from '@/modules/notification/application/use-cases/word-comment-push-cooldown-gate';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import { commentFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
@@ -150,6 +151,11 @@ export class CreateCommentUseCase {
       targetWordId: cmd.wordId,
       targetId: comment.id,
       dedupeKey: `comment:${comment.id}`,
+      payload: commentFeedPayload({
+        body: comment.body,
+        stickerId,
+        hasImage,
+      }),
     });
 
     await this.auditRepo.record({

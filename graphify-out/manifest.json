@@ -3456,9 +3456,9 @@
     "semantic_hash": ""
   },
   "src/modules/user/__tests__/unit/update-my-profile.use-case.test.ts": {
-    "mtime": 1795233349.6580856,
-    "seen": 1795345435.4514802,
-    "ast_hash": "c0e0cb8be189cb55c569321c2a34ef2c",
+    "mtime": 1795346626.0114868,
+    "seen": 1795357036.332397,
+    "ast_hash": "0b13de52d904739dca2ad3022f7c5e08",
     "semantic_hash": ""
   },
   "src/modules/user/__tests__/unit/update-my-profile.validator.test.ts": {
@@ -4176,9 +4176,9 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/__tests__/unit/suggestion-category.test.ts": {
-    "mtime": 1795233350.233205,
-    "seen": 1795345435.4548101,
-    "ast_hash": "da30a968d229514db014fa519615b31a",
+    "mtime": 1795345558.525987,
+    "seen": 1795357036.3370082,
+    "ast_hash": "629b204c1b73d15beee3b3fb4332b9ef",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/__tests__/unit/suggestion-image-moderation.test.ts": {
@@ -4206,9 +4206,9 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/application/utils/apply-changes-to-word.ts": {
-    "mtime": 1795233350.2959495,
-    "seen": 1795345435.454984,
-    "ast_hash": "9c238138cb6de9587fa29b508b8ae9ab",
+    "mtime": 1795346179.3246071,
+    "seen": 1795357036.337147,
+    "ast_hash": "5466e98b8a43558f446eaae70febd8e9",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/application/utils/suggestion-blocklist.ts": {
@@ -4218,9 +4218,9 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/application/utils/suggestion-category-shape.ts": {
-    "mtime": 1795233350.307303,
-    "seen": 1795345435.455014,
-    "ast_hash": "1415bbe19451b6b924af37cfaf89c731",
+    "mtime": 1795345519.0579507,
+    "seen": 1795357036.337177,
+    "ast_hash": "8a184a51eb72072cc4abafbe10cd7fcd",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/application/utils/suggestion-image-moderation.ts": {
@@ -4230,15 +4230,15 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/application/utils/verify-proposed-changes.ts": {
-    "mtime": 1794586556.5091164,
-    "seen": 1794871091.379243,
-    "ast_hash": "8b52452763034800bc39c2310fa0c10f",
+    "mtime": 1795345516.3817933,
+    "seen": 1795357036.3372061,
+    "ast_hash": "533428d63caf87575eace74c46d9f140",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/domain/entities/word-suggestion.entity.ts": {
-    "mtime": 1795233350.3160715,
-    "seen": 1795345435.455096,
-    "ast_hash": "c965a55c97a80ce1828563b4c31acc9e",
+    "mtime": 1795345510.0743592,
+    "seen": 1795357036.337207,
+    "ast_hash": "ef595d665e45ccf45b8c2705b76dd381",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/domain/repositories/word-suggestion.repository.ts": {
@@ -4248,21 +4248,21 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/infrastructure/word-suggestion.repository.impl.ts": {
-    "mtime": 1795277248.9146307,
-    "seen": 1795345435.45513,
-    "ast_hash": "65b82cd20fa902555fc7e60950bf33a3",
+    "mtime": 1795345548.757604,
+    "seen": 1795357036.337315,
+    "ast_hash": "f1c1ff6d4c5b94418522d9d18a385939",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/presentation/v1/validators/suggestion.validator.ts": {
-    "mtime": 1795233350.3929272,
-    "seen": 1795345435.45513,
-    "ast_hash": "055f42b0c38a8340ae77527a688f650f",
+    "mtime": 1795345531.4862518,
+    "seen": 1795357036.337316,
+    "ast_hash": "1e9f99b3d6c8ba36f3fbbd55576f44b9",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/presentation/v1/word-suggestions.controller.ts": {
-    "mtime": 1794511221.3794239,
-    "seen": 1794871091.379284,
-    "ast_hash": "49b3db2a27d34d9959998c84af32ab38",
+    "mtime": 1795345557.338363,
+    "seen": 1795357036.337316,
+    "ast_hash": "fb435899da8cc6ca8586530aaa8b5a12",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/presentation/v1/word-suggestions.routes.ts": {
@@ -5256,9 +5256,9 @@
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/migrations/meta/_journal.json": {
-    "mtime": 1795345185.819591,
-    "seen": 1795345435.4593139,
-    "ast_hash": "fa6a1e2f458e73c067464633cddfdbb2",
+    "mtime": 1795356808.0539114,
+    "seen": 1795357036.343132,
+    "ast_hash": "22d88576fba134c448cae122af167c78",
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/account-deletion-tokens.schema.ts": {
@@ -5394,9 +5394,9 @@
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/index.ts": {
-    "mtime": 1795321891.974167,
-    "seen": 1795345435.459996,
-    "ast_hash": "4fa88dbeac4bb6cec60aa7c4ccd88179",
+    "mtime": 1795356805.1204023,
+    "seen": 1795357036.34421,
+    "ast_hash": "20a13b15ceec0b3b330b94864eaf90c3",
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/languages.schema.ts": {
@@ -5658,9 +5658,9 @@
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/test-utils.ts": {
-    "mtime": 1795323322.1159072,
-    "seen": 1795345435.4614232,
-    "ast_hash": "a00d9107fdbbaf5d5c22aa6e11e44b69",
+    "mtime": 1795356822.0612671,
+    "seen": 1795357036.346396,
+    "ast_hash": "c8f18c408cefbb475b1dbb0d395eeda8",
     "semantic_hash": ""
   },
   "src/shared/database/highest-user-role-sql.ts": {
@@ -6120,9 +6120,9 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/__tests__/unit/suggestion-list-response.test.ts": {
-    "mtime": 1794511221.3774052,
-    "seen": 1794871091.3791502,
-    "ast_hash": "a463ceea4e7d8d9cc8e34e519ae6d2fa",
+    "mtime": 1795346626.0624332,
+    "seen": 1795357036.337065,
+    "ast_hash": "bdbcc61f0a7333f67b50518971c0307b",
     "semantic_hash": ""
   },
   "src/scripts/backfill-user-consents.ts": {
@@ -7608,9 +7608,9 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/__tests__/unit/suggestion-detail-response-groups.test.ts": {
-    "mtime": 1794511221.376974,
-    "seen": 1794871091.3790941,
-    "ast_hash": "dcd32b3b2bb6504050cde0d74fc7ed4e",
+    "mtime": 1795346627.3001041,
+    "seen": 1795357036.337009,
+    "ast_hash": "03c2aafee074d45172e5f07c151f72ea",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/__tests__/unit/suggestion-meaning-dedupe.test.ts": {
@@ -7620,9 +7620,9 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/application/utils/suggestion-meaning-dedupe.ts": {
-    "mtime": 1794511221.3783422,
-    "seen": 1794871091.379242,
-    "ast_hash": "514ba7b5c315858197816f2d5be7ced1",
+    "mtime": 1795345517.3704412,
+    "seen": 1795357036.337205,
+    "ast_hash": "d8c2d333bd3ecfef2ced4ef657f24476",
     "semantic_hash": ""
   },
   "src/modules/word/__tests__/unit/merge-duplicate-meanings.test.ts": {
@@ -8646,21 +8646,21 @@
     "semantic_hash": ""
   },
   "src/modules/baleho/domain/repositories/baleho.repository.ts": {
-    "mtime": 1795345195.8491862,
-    "seen": 1795345435.436539,
-    "ast_hash": "2036601c8100eff2f78fe6e48acb5e4e",
+    "mtime": 1795346146.309387,
+    "seen": 1795357036.290255,
+    "ast_hash": "4e94a23e0ddbfddd7fe0886154b39b59",
     "semantic_hash": ""
   },
   "src/modules/baleho/infrastructure/baleho.repository.impl.ts": {
-    "mtime": 1795345254.194313,
-    "seen": 1795345435.436539,
-    "ast_hash": "12ebdda5a961fa5854a04cc1cca4661d",
+    "mtime": 1795346179.3241434,
+    "seen": 1795357036.290255,
+    "ast_hash": "a5633d4d0a45e5a789e8cb71e2ca6331",
     "semantic_hash": ""
   },
   "src/modules/baleho/presentation/v1/baleho.controller.ts": {
-    "mtime": 1795345193.095501,
-    "seen": 1795345435.43654,
-    "ast_hash": "245511d8cd089290ff7daa31eb0bc71e",
+    "mtime": 1795346148.6371536,
+    "seen": 1795357036.2902558,
+    "ast_hash": "3625a95780da7649fc49f78259c07c5b",
     "semantic_hash": ""
   },
   "src/modules/baleho/presentation/v1/baleho.routes.ts": {
@@ -8850,9 +8850,9 @@
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/baleho.schema.ts": {
-    "mtime": 1795345181.7603002,
-    "seen": 1795345435.4595299,
-    "ast_hash": "113735b634507bc904559a0987544f7b",
+    "mtime": 1795346175.5563605,
+    "seen": 1795357036.343376,
+    "ast_hash": "6f1ec70611c19fc9500e97e823e7a2f3",
     "semantic_hash": ""
   },
   "src/shared/database/drizzle/schema/karya-lemma-links.schema.ts": {
@@ -9438,9 +9438,9 @@
     "semantic_hash": ""
   },
   "src/composition/container.ts": {
-    "mtime": 1795321891.7063556,
-    "seen": 1795345435.4317608,
-    "ast_hash": "3412d11212bacbdb9db32c970dff2a79",
+    "mtime": 1795356860.5642426,
+    "seen": 1795357036.283424,
+    "ast_hash": "15101b5dac098a076cafa3bdbe19b30e",
     "semantic_hash": ""
   },
   "src/composition/register-routes.ts": {
@@ -9864,9 +9864,9 @@
     "semantic_hash": ""
   },
   "src/composition/routes/register-explore-routes.ts": {
-    "mtime": 1795321891.8842528,
-    "seen": 1795345435.431766,
-    "ast_hash": "e1f7019709711052b3c7f46978f3823e",
+    "mtime": 1795356867.712454,
+    "seen": 1795357036.283558,
+    "ast_hash": "ae1f8eaa618a36efe47acb1ee2294f92",
     "semantic_hash": ""
   },
   "src/composition/routes/register-social-routes.ts": {
@@ -9918,9 +9918,9 @@
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/infrastructure/suggestion-snapshot-diff.ts": {
-    "mtime": 1795233350.3386588,
-    "seen": 1795345435.455128,
-    "ast_hash": "8c9fe06691a8a6a94ca7f719c21d954e",
+    "mtime": 1795345540.1286788,
+    "seen": 1795357036.337263,
+    "ast_hash": "1f681bfdf0f247a30d7ef70aee5a04bd",
     "semantic_hash": ""
   },
   "src/modules/word-suggestions/infrastructure/suggestion-stale.ts": {
@@ -9966,15 +9966,15 @@
     "semantic_hash": ""
   },
   "src/modules/baleho/__tests__/unit/baleho-schedule.test.ts": {
-    "mtime": 1795345178.8661263,
-    "seen": 1795345435.436534,
-    "ast_hash": "083960d9f8a7b33ab338966615f3e658",
+    "mtime": 1795345650.5205405,
+    "seen": 1795357036.290116,
+    "ast_hash": "4b77835a02e1342ba5c7f8af401b9125",
     "semantic_hash": ""
   },
   "src/modules/baleho/domain/baleho-schedule.ts": {
-    "mtime": 1795345177.341272,
-    "seen": 1795345435.4365382,
-    "ast_hash": "67a34ff8fd13196832585ef38b1fd127",
+    "mtime": 1795345628.4492364,
+    "seen": 1795357036.290227,
+    "ast_hash": "29d3d70f2bafd0044df9077b76c7f419",
     "semantic_hash": ""
   },
   "src/modules/chat/__tests__/unit/send-chat-ping.use-case.test.ts": {
@@ -10137,6 +10137,102 @@
     "mtime": 1795271324.9022746,
     "seen": 1795345435.462585,
     "ast_hash": "f67a202182d5ea13d2f25525b03d5b6f",
+    "semantic_hash": ""
+  },
+  "src/modules/karya/__tests__/e2e/v1/karya-views.e2e.test.ts": {
+    "mtime": 1795357003.7663317,
+    "seen": 1795357036.301646,
+    "ast_hash": "c6a49b50b6612a2733e947cab250d46e",
+    "semantic_hash": ""
+  },
+  "src/modules/karya/application/use-cases/karya-views.use-cases.ts": {
+    "mtime": 1795356836.5446064,
+    "seen": 1795357036.301835,
+    "ast_hash": "b00f0ce63bc54bbfbd20bb8778d7fcda",
+    "semantic_hash": ""
+  },
+  "src/modules/karya/domain/repositories/karya-views.repository.ts": {
+    "mtime": 1795356828.9098434,
+    "seen": 1795357036.301974,
+    "ast_hash": "636e1fb87257143422816ba36d462f7d",
+    "semantic_hash": ""
+  },
+  "src/modules/karya/infrastructure/karya-views.repository.impl.ts": {
+    "mtime": 1795356831.8639488,
+    "seen": 1795357036.301975,
+    "ast_hash": "a045828c2fe90356a425295bc7f085c7",
+    "semantic_hash": ""
+  },
+  "src/modules/karya/presentation/v1/karya-views.controller.ts": {
+    "mtime": 1795356837.9922502,
+    "seen": 1795357036.302057,
+    "ast_hash": "edbaeaf4270f78cd2b36b438026ade79",
+    "semantic_hash": ""
+  },
+  "src/modules/karya/presentation/v1/karya-views.routes.ts": {
+    "mtime": 1795356841.3154016,
+    "seen": 1795357036.302058,
+    "ast_hash": "eb59cac9e96d15de5b538324232e6d4a",
+    "semantic_hash": ""
+  },
+  "src/modules/layanan/__tests__/e2e/v1/layanan-views.e2e.test.ts": {
+    "mtime": 1795356884.7669132,
+    "seen": 1795357036.302689,
+    "ast_hash": "6790850cdc5ee5cae1ddc927d00d0cac",
+    "semantic_hash": ""
+  },
+  "src/modules/layanan/application/use-cases/layanan-views.use-cases.ts": {
+    "mtime": 1795356837.4166322,
+    "seen": 1795357036.3027148,
+    "ast_hash": "1f8de13be77c160a1c7370e693f2a6cb",
+    "semantic_hash": ""
+  },
+  "src/modules/layanan/domain/repositories/layanan-views.repository.ts": {
+    "mtime": 1795356829.473059,
+    "seen": 1795357036.302742,
+    "ast_hash": "fe87ec3c755685817dc37e3622f4f6bf",
+    "semantic_hash": ""
+  },
+  "src/modules/layanan/infrastructure/layanan-views.repository.impl.ts": {
+    "mtime": 1795357017.9900925,
+    "seen": 1795357036.302743,
+    "ast_hash": "49bd55db392273c5eab1550b9bf06f7c",
+    "semantic_hash": ""
+  },
+  "src/modules/layanan/presentation/v1/layanan-views.controller.ts": {
+    "mtime": 1795356838.9054728,
+    "seen": 1795357036.302769,
+    "ast_hash": "fa93eb17b218e6a6eb6b767d3e72cbe8",
+    "semantic_hash": ""
+  },
+  "src/modules/layanan/presentation/v1/layanan-views.routes.ts": {
+    "mtime": 1795356844.0114262,
+    "seen": 1795357036.30277,
+    "ast_hash": "177cfcdf295b4a4644a951e6b7f4d13a",
+    "semantic_hash": ""
+  },
+  "src/modules/word-suggestions/__tests__/unit/normalize-usage-label-changes.test.ts": {
+    "mtime": 1795345563.4043117,
+    "seen": 1795357036.337007,
+    "ast_hash": "63ea696e779e1b4fbf074a631d9e539a",
+    "semantic_hash": ""
+  },
+  "src/modules/word-suggestions/application/utils/normalize-usage-label-changes.ts": {
+    "mtime": 1795345513.6039433,
+    "seen": 1795357036.337147,
+    "ast_hash": "689f7a3aa62e4af77040e68873671545",
+    "semantic_hash": ""
+  },
+  "src/shared/database/drizzle/schema/karya-views.schema.ts": {
+    "mtime": 1795356802.2847345,
+    "seen": 1795357036.344373,
+    "ast_hash": "47123eba81092f414ff97475cd5fd0c9",
+    "semantic_hash": ""
+  },
+  "src/shared/database/drizzle/schema/layanan-views.schema.ts": {
+    "mtime": 1795356803.298737,
+    "seen": 1795357036.344515,
+    "ast_hash": "5de203d8036b85fa84fd3efe7c951c19",
     "semantic_hash": ""
   }
 }

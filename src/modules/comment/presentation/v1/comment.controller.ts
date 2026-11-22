@@ -17,6 +17,8 @@ import type { UncensorCommentUseCase } from '../../application/use-cases/uncenso
 import type { ListMyCommentsUseCase } from '../../application/use-cases/list-my-comments.use-case';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CreateUploadCredentialsUseCase } from '@/modules/image/application/use-cases/create-upload-credentials.use-case';
+import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
+import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type {
@@ -129,6 +131,7 @@ export class CommentController {
       takedown: TakedownCommentUseCase;
       uncensor: UncensorCommentUseCase;
       createUploadCredentials: CreateUploadCredentialsUseCase;
+      ugcLemmaLinks?: UgcCommentLemmaRepository;
     },
   ) {}
 
@@ -217,13 +220,27 @@ export class CommentController {
 
   async listByWord(c: Context, wordId: string, query: ListCommentsQueryBody) {
     const page = await this.deps.listByWord.execute(wordId, query);
+    const repo = this.deps.ugcLemmaLinks;
+    const items = repo
+      ? await attachLemmaLinksToCommentWireItems(
+          repo,
+          'word_comment',
+          page.items,
+          (cm) => ({
+            ...toPublicCommentFields(cm),
+            upvotes: cm.upvotes,
+            downvotes: cm.downvotes,
+          }),
+        )
+      : page.items.map((cm) => ({
+          ...toPublicCommentFields(cm),
+          upvotes: cm.upvotes,
+          downvotes: cm.downvotes,
+          lemma_links: [] as const,
+        }));
     return c.json({
       success: true as const,
-      data: page.items.map((cm) => ({
-        ...toPublicCommentFields(cm),
-        upvotes: cm.upvotes,
-        downvotes: cm.downvotes,
-      })),
+      data: items,
       meta: { limit: query.limit, next_cursor: page.nextCursor, has_more: page.hasMore },
     });
   }

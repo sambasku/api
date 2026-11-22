@@ -19,6 +19,7 @@ import {
 } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
+import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
 
 export interface UpdateCommentCommand {
   commentId: string;
@@ -35,6 +36,7 @@ export class UpdateCommentUseCase {
     private readonly auditRepo: AuditLogRepository,
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly ugcLemmaLinks?: UgcCommentLemmaRepository,
   ) {}
 
   async execute(cmd: UpdateCommentCommand): Promise<Comment> {
@@ -116,6 +118,12 @@ export class UpdateCommentUseCase {
       comment.body !== filteredBody ||
       (comment.bodyOriginal ?? null) !== bodyOriginal;
     if (changed) {
+      if (this.ugcLemmaLinks && comment.body !== filteredBody) {
+        await this.ugcLemmaLinks.markStaleForComment(
+          'word_comment',
+          comment.id,
+        );
+      }
       await this.auditRepo.record({
         userId: cmd.actorId,
         action: 'update',

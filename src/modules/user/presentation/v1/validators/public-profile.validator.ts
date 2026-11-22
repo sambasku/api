@@ -62,8 +62,6 @@ export const publicActivityQuerySchema = z.object({
       'contribution',
       'correction',
       'comment',
-      'verification',
-      'vote',
       'jinye',
     ])
     .optional(),
@@ -83,8 +81,6 @@ export const publicActivityResponseSchema = z.object({
           'contribution',
           'correction',
           'comment',
-          'verification',
-          'vote',
           'jinye',
         ]),
         occurred_at: z.string(),

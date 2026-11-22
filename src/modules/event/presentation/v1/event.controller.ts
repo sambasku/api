@@ -2,6 +2,8 @@ import type { Context } from "hono";
 import type { AppVariables, AuthUser } from "@/shared/types";
 import { BadRequestError, UnauthorizedError } from "@/shared/errors/app-error";
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
+import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
+import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { CreateEventCommentAudioUseCase } from '../../application/use-cases/event-comment-audio.use-case';
@@ -168,6 +170,7 @@ export interface EventCommentControllerDeps {
   updateComment: UpdateEventCommentUseCase;
   deleteComment: DeleteEventCommentUseCase;
   takedownComment: TakedownEventCommentUseCase;
+  ugcLemmaLinks?: UgcCommentLemmaRepository;
 }
 
 export interface EventImageControllerDeps {
@@ -443,7 +446,21 @@ export class EventController {
     return c.json({
       success: true as const,
       data: {
-        items: page.items.map(toCommentWire),
+        items: await (async () => {
+          const repo = this.comments.ugcLemmaLinks;
+          if (repo) {
+            return attachLemmaLinksToCommentWireItems(
+              repo,
+              'event_comment',
+              page.items,
+              (c) => toCommentWire(c),
+            );
+          }
+          return page.items.map((c) => ({
+            ...toCommentWire(c),
+            lemma_links: [] as const,
+          }));
+        })(),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
       },

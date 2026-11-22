@@ -112,23 +112,14 @@ describe('ListActivityUseCase - kategori feed (#193)', () => {
     );
   });
 
-  it('kategori "search_miss" -> kinds [search_miss]', async () => {
-    const repo = feedRepo([[]]);
-    await new ListActivityUseCase(repo).execute({ category: 'search_miss' });
-    expect(repo.listFeed).toHaveBeenCalledWith(
-      21,
-      undefined,
-      undefined,
-      ['search_miss'],
-    );
-  });
-
   it('kategori "correction" = kontribusi media + usulan edit', async () => {
     const repo = feedRepo([[]]);
     await new ListActivityUseCase(repo).execute({ category: 'correction' });
     const kinds = repo.listFeed.mock.calls[0][3];
     expect(kinds).toContain('contribution_image');
-    expect(kinds).toContain('suggestion_applied');
+    expect(kinds).toContain('suggestion_created');
+    expect(kinds).not.toContain('suggestion_applied');
+    expect(kinds).not.toContain('suggestion_selfapply');
     // Bukan kategori kata baru / verifikasi.
     expect(kinds).not.toContain('word_created');
     expect(kinds).not.toContain('word_verified');
