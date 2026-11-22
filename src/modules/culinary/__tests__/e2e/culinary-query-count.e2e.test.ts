@@ -18,15 +18,16 @@ describe.skipIf(!hasTestDb)("Culinary query budget - list & detail", () => {
     { length: 20 },
     (_, i) => `01EKCULBUDGET${String(i).padStart(15, "0")}`,
   );
-  const PLACE_ID = "01EKPLBUDGET0000000000001";
+  const USAHA_ID = "01EKUSBUDGET0000000000001";
 
   beforeAll(async () => {
     const { getTestDb } = await import("@/shared/database/drizzle/test-client");
     const schema = await import("@/shared/database/drizzle/schema");
-    const { cuisines, culinaryPlaces, culinaryPlaceCuisines } = schema;
+    const { cuisines, cuisineUsahas, usahas } = schema;
     const { truncateAll, reseedTestReferenceData } = await import(
       "@/shared/database/drizzle/test-utils"
     );
+
     const seedDb = getTestDb();
     await truncateAll(seedDb);
     await reseedTestReferenceData(seedDb);
@@ -46,23 +47,22 @@ describe.skipIf(!hasTestDb)("Culinary query budget - list & detail", () => {
       })),
     );
 
-    await seedDb.insert(culinaryPlaces).values({
-      id: PLACE_ID,
-      slug: "tempat-budget",
-      name: "Tempat Budget",
-      type: "warung" as const,
+    await seedDb.insert(usahas).values([{
+      id: USAHA_ID,
+      slug: "usaha-budget",
+      name: "Usaha Budget",
       publishStatus: "published" as const,
-      operationalStatus: "operating" as const,
+      operationalStatus: "open" as const,
       publishedAt: now,
       createdAt: now,
       updatedAt: now,
-    });
+    }]);
 
-    await seedDb.insert(culinaryPlaceCuisines).values(
+    await seedDb.insert(cuisineUsahas).values(
       CUISINE_IDS.map((cuisineId, i) => ({
         id: `01EKLINKBUDGET${String(i).padStart(14, "0")}`,
         cuisineId,
-        placeId: PLACE_ID,
+        usahaId: USAHA_ID,
         availability: "available" as const,
         publishStatus: "published" as const,
         createdAt: now,
@@ -76,6 +76,7 @@ describe.skipIf(!hasTestDb)("Culinary query budget - list & detail", () => {
     const schema = await import("@/shared/database/drizzle/schema");
     const client = createClient({ url: process.env.DATABASE_URL! });
     const realExecute = client.execute.bind(client);
+
     queryCount = 0;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (client as any).execute = async (...args: unknown[]) => {
@@ -92,34 +93,25 @@ describe.skipIf(!hasTestDb)("Culinary query budget - list & detail", () => {
     );
     const repo = new CulinaryRepositoryImpl(db);
     queryCount = 0;
+
     const res = await repo.listCuisines({ limit: 20, publicOnly: true });
     expect(res.items.length).toBe(20);
     expect(queryCount).toBe(1);
     expect(res.items[0].category?.name).toBeTruthy();
   });
 
-  it("detail kuliner pakai <= 2 query (kuliner join + relasi tempat)", async () => {
+  it("detail kuliner pakai <= 2 query (kuliner join + relasi usaha)", async () => {
     const { CulinaryRepositoryImpl } = await import(
       "@/modules/culinary/infrastructure/culinary.repository.impl"
     );
     const repo = new CulinaryRepositoryImpl(db);
     queryCount = 0;
+
     const cuisine = await repo.findCuisineBySlug("kuliner-budget-0", {
       publicOnly: true,
     });
     expect(cuisine).toBeTruthy();
-    expect(cuisine!.places.length).toBe(1);
+    expect(cuisine!.usahas.length).toBe(1);
     expect(queryCount).toBeLessThanOrEqual(2);
-  });
-
-  it("list tempat pakai 1 query", async () => {
-    const { CulinaryRepositoryImpl } = await import(
-      "@/modules/culinary/infrastructure/culinary.repository.impl"
-    );
-    const repo = new CulinaryRepositoryImpl(db);
-    queryCount = 0;
-    const res = await repo.listPlaces({ limit: 20, publicOnly: true });
-    expect(res.items.length).toBe(1);
-    expect(queryCount).toBe(1);
   });
 });

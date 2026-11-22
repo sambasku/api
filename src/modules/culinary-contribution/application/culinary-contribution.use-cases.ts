@@ -6,13 +6,17 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type {
   CulinaryRepository,
   CreateCuisineInput,
-  CreatePlaceInput,
   UpdateCuisineInput,
-  UpdatePlaceInput,
 } from '@/modules/culinary/domain/repositories/culinary.repository';
+import type { UsahaRepository } from '@/modules/usaha/domain/repositories/usaha.repository';
+import type {
+  CreateUsahaInput,
+  UpdateUsahaInput,
+} from '@/modules/usaha/domain/repositories/usaha.repository';
 import {
   UniqueCulinarySlugUseCase,
   imagesToJson,
+  slugifyUsaha,
 } from '@/modules/culinary/application/use-cases/culinary.use-cases';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import {
@@ -29,8 +33,8 @@ import type {
   CulinaryContributionPayload,
   LinkPayload,
   NewCuisinePayload,
-  NewPlacePayload,
-  PlaceEditPayload,
+  NewUsahaPayload,
+  UsahaEditPayload,
 } from '../domain/culinary-contribution.entity';
 import type { CulinaryContributionRepository } from '../domain/culinary-contribution.repository';
 import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
@@ -56,11 +60,9 @@ export const CUISINE_EDIT_FIELDS = [
   'sources',
 ] as const;
 
-export const PLACE_EDIT_FIELDS = [
+export const USAHA_EDIT_FIELDS = [
   'name',
-  'type',
   'description',
-  'locationHint',
   'addressText',
   'lat',
   'lng',
@@ -68,7 +70,6 @@ export const PLACE_EDIT_FIELDS = [
   'phone',
   'whatsapp',
   'website',
-  'socialUrl',
   'coverUrl',
 ] as const;
 
@@ -87,12 +88,12 @@ function culinaryJenis(kind: CulinaryContributionKind): string {
   switch (kind) {
     case 'new_cuisine':
       return 'Kuliner';
-    case 'new_place':
-      return 'Tempat kuliner';
+    case 'new_usaha':
+      return 'Usaha penjual kuliner';
     case 'cuisine_edit':
       return 'Kuliner (perbaikan)';
-    case 'place_edit':
-      return 'Tempat kuliner (perbaikan)';
+    case 'usaha_edit':
+      return 'Usaha penjual kuliner (perbaikan)';
     default:
       return 'Kuliner (perbaikan)';
   }
@@ -129,14 +130,14 @@ function decisionCopy(
 }
 
 export interface SubmitNewCulinaryInput {
-  kind: 'new_cuisine' | 'new_place';
-  payload: NewCuisinePayload | NewPlacePayload;
+  kind: 'new_cuisine' | 'new_usaha';
+  payload: NewCuisinePayload | NewUsahaPayload;
 }
 
 export interface SubmitCulinaryChangeInput {
-  kind: Exclude<CulinaryContributionKind, 'new_cuisine' | 'new_place'>;
+  kind: Exclude<CulinaryContributionKind, 'new_cuisine' | 'new_usaha'>;
   cuisineId?: string | null;
-  placeId?: string | null;
+  usahaId?: string | null;
   linkId?: string | null;
   payload: CulinaryContributionPayload;
   /** Field yang diajukan (kind=*_edit). Kosong = deteksi dari payload. */
@@ -147,8 +148,8 @@ export class CulinaryContributionUseCases {
   constructor(
     private readonly contrib: CulinaryContributionRepository,
     private readonly culinary: CulinaryRepository,
+    private readonly usahas: UsahaRepository,
     private readonly uniqueCuisineSlug: UniqueCulinarySlugUseCase,
-    private readonly uniquePlaceSlug: UniqueCulinarySlugUseCase,
     private readonly audit?: AuditLogRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
@@ -184,7 +185,7 @@ export class CulinaryContributionUseCases {
     if (input.kind === 'new_cuisine') {
       await this.assertNewCuisine(input.payload as NewCuisinePayload);
     } else {
-      this.assertNewPlace(input.payload as NewPlacePayload);
+      this.assertNewUsaha(input.payload as NewUsahaPayload);
     }
     const anon = userId === ANONIM_USER_ID;
     if (!anon && (await this.contrib.countPending(userId)) >= PENDING_CAP) {
@@ -244,7 +245,7 @@ export class CulinaryContributionUseCases {
     if (input.kind === 'new_cuisine') {
       await this.assertNewCuisine(input.payload as NewCuisinePayload);
     } else {
-      this.assertNewPlace(input.payload as NewPlacePayload);
+      this.assertNewUsaha(input.payload as NewUsahaPayload);
     }
     await this.contrib.replacePayload(id, this.withDefaultLicense(input.payload), '');
     const updated = await this.contrib.findById(id);
@@ -289,11 +290,11 @@ export class CulinaryContributionUseCases {
       });
     }
 
-    if (input.kind === 'place_edit') {
-      const place = await this.mustPlace(input.placeId);
-      this.assertPlaceEdit(payload as PlaceEditPayload, locked);
+    if (input.kind === 'usaha_edit') {
+      const usaha = await this.mustUsaha(input.usahaId);
+      this.assertUsahaEdit(payload as UsahaEditPayload, locked);
       if (locked) {
-        const pending = await this.contrib.pendingLockedFieldsForPlace(place.id);
+        const pending = await this.contrib.pendingLockedFieldsForUsaha(usaha.id);
         if (pending.some((other) => overlaps(locked, other))) {
           throw new ConflictError(
             'PENDING_FIELD_LOCK',
@@ -301,21 +302,21 @@ export class CulinaryContributionUseCases {
           );
         }
       }
-      return this.createChange(userId, input, locked, place.createdAt, {
-        placeId: place.id,
-        updatedAt: place.updatedAt,
+      return this.createChange(userId, input, locked, usaha.createdAt, {
+        usahaId: usaha.id,
+        updatedAt: usaha.updatedAt,
       });
     }
 
     if (input.kind === 'link') {
       const p = payload as LinkPayload;
-      if (!p.cuisineSlug?.trim() || !p.placeSlug?.trim()) {
+      if (!p.cuisineSlug?.trim() || !p.usahaSlug?.trim()) {
         throw new BadRequestError(
           'LINK_TARGET_REQUIRED',
-          'Kuliner dan tempat wajib dipilih',
+          'Kuliner dan usaha wajib dipilih',
           [
             { field: 'cuisine_slug', message: 'Pilih kuliner dulu ya' },
-            { field: 'place_slug', message: 'Pilih tempat dulu ya' },
+            { field: 'usaha_slug', message: 'Pilih usaha dulu ya' },
           ],
         );
       }
@@ -325,32 +326,30 @@ export class CulinaryContributionUseCases {
       if (!cuisine) {
         throw new NotFoundError('CUISINE_NOT_FOUND', 'Kuliner tidak ditemukan');
       }
-      const place = await this.culinary.findPlaceBySlug(p.placeSlug, {
-        publicOnly: true,
-      });
-      if (!place) {
-        throw new NotFoundError('PLACE_NOT_FOUND', 'Tempat tidak ditemukan');
+      const usaha = await this.usahas.findBySlug(p.usahaSlug);
+      if (!usaha) {
+        throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
       }
-      const existing = await this.culinary.findLinkByPair(cuisine.id, place.id);
+      const existing = await this.culinary.findLinkByPair(cuisine.id, usaha.id);
       if (existing) {
         throw new ConflictError(
           'LINK_EXISTS',
-          'Hubungan kuliner dan tempat ini sudah ada',
+          'Hubungan kuliner dan usaha ini sudah ada',
         );
       }
       return this.contrib.create({
         kind: 'link',
         userId,
         cuisineId: cuisine.id,
-        placeId: place.id,
-        lockedFields: `link:${cuisine.id}:${place.id}`,
-        payload: { ...p, cuisineSlug: cuisine.slug, placeSlug: place.slug },
-        baseUpdatedAt: place.updatedAt ?? place.createdAt,
+        usahaId: usaha.id,
+        lockedFields: `link:${cuisine.id}:${usaha.id}`,
+        payload: { ...p, cuisineSlug: cuisine.slug, usahaSlug: usaha.slug },
+        baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
       });
     }
 
-    if (input.kind === 'place_operational') {
-      const place = await this.mustPlace(input.placeId);
+    if (input.kind === 'usaha_operational') {
+      const usaha = await this.mustUsaha(input.usahaId);
       const status = (payload as { operationalStatus?: string }).operationalStatus;
       if (!status) {
         throw new BadRequestError(
@@ -358,20 +357,20 @@ export class CulinaryContributionUseCases {
           'Status operasional wajib diisi',
         );
       }
-      const pending = await this.contrib.pendingLockedFieldsForPlace(place.id);
+      const pending = await this.contrib.pendingLockedFieldsForUsaha(usaha.id);
       if (pending.some((other) => overlaps('operationalStatus', other))) {
         throw new ConflictError(
           'PENDING_FIELD_LOCK',
-          'Status operasional tempat ini sedang ditinjau. Tunggu keputusannya dulu ya.',
+          'Status operasional usaha ini sedang ditinjau. Tunggu keputusannya dulu ya.',
         );
       }
       return this.contrib.create({
-        kind: 'place_operational',
+        kind: 'usaha_operational',
         userId,
-        placeId: place.id,
+        usahaId: usaha.id,
         lockedFields: 'operationalStatus',
         payload,
-        baseUpdatedAt: place.updatedAt ?? place.createdAt,
+        baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
       });
     }
 
@@ -387,9 +386,9 @@ export class CulinaryContributionUseCases {
         kind: 'link_edit',
         userId,
         cuisineId: link.cuisineId,
-        placeId: link.placeId,
+        usahaId: link.usahaId,
         linkId: link.id,
-        lockedFields: `link:${link.cuisineId}:${link.placeId}`,
+        lockedFields: `link:${link.cuisineId}:${link.usahaId}`,
         payload,
       });
     }
@@ -406,14 +405,14 @@ export class CulinaryContributionUseCases {
           baseUpdatedAt: cuisine.updatedAt ?? cuisine.createdAt,
         });
       }
-      const place = await this.mustPlace(input.placeId);
+      const usaha = await this.mustUsaha(input.usahaId);
       return this.contrib.create({
         kind: input.kind,
         userId,
-        placeId: place.id,
+        usahaId: usaha.id,
         lockedFields: 'publishStatus',
         payload,
-        baseUpdatedAt: place.updatedAt ?? place.createdAt,
+        baseUpdatedAt: usaha.updatedAt ?? usaha.createdAt,
       });
     }
 
@@ -487,15 +486,13 @@ export class CulinaryContributionUseCases {
       return;
     }
 
-    if (row.kind === 'new_place') {
-      const p = row.payload as NewPlacePayload;
-      const slug = await this.uniquePlaceSlug.execute(p.name);
-      const place = await this.culinary.createPlace({
+    if (row.kind === 'new_usaha') {
+      const p = row.payload as NewUsahaPayload;
+      const slug = await this.uniqueUsahaSlug(p.name);
+      const usaha = await this.usahas.create({
         slug,
         name: p.name,
-        type: p.type ?? null,
         description: p.description ?? null,
-        locationHint: p.locationHint ?? null,
         addressText: p.addressText ?? null,
         lat: p.lat ?? null,
         lng: p.lng ?? null,
@@ -503,19 +500,18 @@ export class CulinaryContributionUseCases {
         phone: p.phone ?? null,
         whatsapp: p.whatsapp ?? null,
         website: p.website ?? null,
-        socialUrl: p.socialUrl ?? null,
         coverUrl: p.coverUrl ?? null,
         publishStatus: 'published',
         authorId: row.userId === ANONIM_USER_ID ? null : row.userId,
-      } satisfies CreatePlaceInput);
-      await this.contrib.setStatus(id, 'approved', { resultPlaceId: place.id });
-      await this.emitPublished('place', place.id, place.name, row.userId);
+      } satisfies CreateUsahaInput);
+      await this.contrib.setStatus(id, 'approved', { resultUsahaId: usaha.id });
+      await this.emitPublished('usaha', usaha.id, usaha.name, row.userId);
       await this.audit?.record({
         userId: actorId ?? null,
         action: 'culinary.contribution.approve',
-        entityType: 'culinary_place',
-        entityId: place.id,
-        newData: { kind: 'new_place', contribution_id: id, name: p.name },
+        entityType: 'usaha',
+        entityId: usaha.id,
+        newData: { kind: 'new_usaha', contribution_id: id, name: p.name },
         requestId: requestId ?? null,
       });
       await this.notifyDecision(row, 'approved', p.name, undefined, actorId);
@@ -548,10 +544,10 @@ export class CulinaryContributionUseCases {
         await this.culinary.updateCuisine(patch);
         break;
       }
-      case 'place_edit': {
-        const p = row.payload as PlaceEditPayload;
+      case 'usaha_edit': {
+        const p = row.payload as UsahaEditPayload;
         const fields = row.lockedFields ? row.lockedFields.split(',') : [];
-        const patch: UpdatePlaceInput = { id: row.placeId! };
+        const patch: UpdateUsahaInput = { id: row.usahaId! };
         for (const f of fields) {
           if (f in p) {
             (patch as unknown as Record<string, unknown>)[f] = (
@@ -559,15 +555,15 @@ export class CulinaryContributionUseCases {
             )[f];
           }
         }
-        await this.culinary.updatePlace(patch);
+        await this.usahas.update(patch);
         break;
       }
       case 'link': {
         const p = row.payload as LinkPayload;
-        if (row.cuisineId && row.placeId) {
+        if (row.cuisineId && row.usahaId) {
           await this.culinary.createLink({
             cuisineId: row.cuisineId,
-            placeId: row.placeId,
+            usahaId: row.usahaId,
             availability: p.availability ?? 'unknown',
             note: p.note ?? null,
             publishStatus: 'published',
@@ -592,12 +588,12 @@ export class CulinaryContributionUseCases {
         });
         break;
       }
-      case 'place_operational': {
+      case 'usaha_operational': {
         const status = (row.payload as { operationalStatus: string })
           .operationalStatus;
         // Dimensi terpisah: publish_status TIDAK berubah (PRD 9).
-        await this.culinary.updatePlace({
-          id: row.placeId!,
+        await this.usahas.update({
+          id: row.usahaId!,
           operationalStatus: status as never,
         });
         break;
@@ -608,9 +604,9 @@ export class CulinaryContributionUseCases {
             id: row.cuisineId,
             publishStatus: 'archived',
           });
-        } else if (row.placeId) {
-          await this.culinary.updatePlace({
-            id: row.placeId,
+        } else if (row.usahaId) {
+          await this.usahas.update({
+            id: row.usahaId,
             publishStatus: 'archived',
           });
         }
@@ -623,9 +619,9 @@ export class CulinaryContributionUseCases {
             publishStatus: 'published',
             restricted: null,
           });
-        } else if (row.placeId) {
-          await this.culinary.updatePlace({
-            id: row.placeId,
+        } else if (row.usahaId) {
+          await this.usahas.update({
+            id: row.usahaId,
             publishStatus: 'published',
             restricted: null,
           });
@@ -654,8 +650,8 @@ export class CulinaryContributionUseCases {
     await this.audit?.record({
       userId: actorId ?? null,
       action: 'culinary.contribution.approve',
-      entityType: row.cuisineId ? 'cuisine' : 'culinary_place',
-      entityId: row.cuisineId ?? row.placeId ?? id,
+      entityType: row.cuisineId ? 'cuisine' : 'usaha',
+      entityId: row.cuisineId ?? row.usahaId ?? id,
       newData: { kind: row.kind, contribution_id: id },
       requestId: requestId ?? null,
     });
@@ -677,8 +673,8 @@ export class CulinaryContributionUseCases {
     await this.audit?.record({
       userId: actorId ?? null,
       action: 'culinary.contribution.reject',
-      entityType: row.cuisineId ? 'cuisine' : 'culinary_place',
-      entityId: row.cuisineId ?? row.placeId ?? id,
+      entityType: row.cuisineId ? 'cuisine' : 'usaha',
+      entityId: row.cuisineId ?? row.usahaId ?? id,
       newData: { kind: row.kind, contribution_id: id, reason_code: reasonCode },
       requestId: requestId ?? null,
     });
@@ -702,8 +698,8 @@ export class CulinaryContributionUseCases {
     await this.audit?.record({
       userId: actorId ?? null,
       action: 'culinary.contribution.request_revision',
-      entityType: row.cuisineId ? 'cuisine' : 'culinary_place',
-      entityId: row.cuisineId ?? row.placeId ?? id,
+      entityType: row.cuisineId ? 'cuisine' : 'usaha',
+      entityId: row.cuisineId ?? row.usahaId ?? id,
       newData: { kind: row.kind, contribution_id: id },
       requestId: requestId ?? null,
     });
@@ -723,13 +719,13 @@ export class CulinaryContributionUseCases {
     input: SubmitCulinaryChangeInput,
     locked: string,
     _createdAt: Date,
-    target: { cuisineId?: string; placeId?: string; updatedAt: Date | null },
+    target: { cuisineId?: string; usahaId?: string; updatedAt: Date | null },
   ): Promise<CulinaryContribution> {
     const created = await this.contrib.create({
       kind: input.kind,
       userId,
       cuisineId: target.cuisineId ?? null,
-      placeId: target.placeId ?? null,
+      usahaId: target.usahaId ?? null,
       lockedFields: locked,
       payload: this.withDefaultLicense(input.payload),
       baseUpdatedAt: target.updatedAt ?? _createdAt,
@@ -760,13 +756,13 @@ export class CulinaryContributionUseCases {
         }
         return canonicalCulinaryFields(declared);
       }
-      case 'place_edit': {
+      case 'usaha_edit': {
         const p = input.payload as Record<string, unknown>;
         const declared = input.fields?.length
           ? input.fields
-          : PLACE_EDIT_FIELDS.filter((f) => f in p);
+          : USAHA_EDIT_FIELDS.filter((f) => f in p);
         const unknown = declared.filter(
-          (f) => !(PLACE_EDIT_FIELDS as readonly string[]).includes(f),
+          (f) => !(USAHA_EDIT_FIELDS as readonly string[]).includes(f),
         );
         if (unknown.length > 0) {
           throw new BadRequestError(
@@ -776,7 +772,7 @@ export class CulinaryContributionUseCases {
         }
         return canonicalCulinaryFields(declared);
       }
-      case 'place_operational':
+      case 'usaha_operational':
         return 'operationalStatus';
       case 'archive':
       case 'restore':
@@ -812,12 +808,23 @@ export class CulinaryContributionUseCases {
     }
   }
 
-  private assertNewPlace(p: NewPlacePayload): void {
+  /** Slug unik usaha penjual kuliner (pola UniqueCulinarySlugUseCase). */
+  private async uniqueUsahaSlug(name: string): Promise<string> {
+    const base = slugifyUsaha(name) || 'usaha';
+    const candidates = [base];
+    for (let i = 2; i <= 20; i++) candidates.push(`${base}-${i}`);
+    const taken = await this.usahas.existingSlugs(candidates);
+    for (const slug of candidates) {
+      if (!taken.has(slug)) return slug;
+    }
+    return `${base}-${Date.now()}`;
+  }
+  private assertNewUsaha(p: NewUsahaPayload): void {
     if (!p.name?.trim() || p.name.trim().length < 2) {
       throw new BadRequestError(
         'NAME_TOO_SHORT',
-        'Nama tempat minimal 2 karakter',
-        [{ field: 'name', message: 'Tulis nama tempat dulu ya' }],
+        'Nama usaha minimal 2 karakter',
+        [{ field: 'name', message: 'Tulis nama usaha dulu ya' }],
       );
     }
     if ((p.lat != null) !== (p.lng != null)) {
@@ -891,7 +898,7 @@ export class CulinaryContributionUseCases {
     this.assertImageAttribution(p.images);
   }
 
-  private assertPlaceEdit(p: PlaceEditPayload, locked: string): void {
+  private assertUsahaEdit(p: UsahaEditPayload, locked: string): void {
     if (!locked) {
       throw new BadRequestError(
         'EMPTY_CHANGE',
@@ -901,7 +908,7 @@ export class CulinaryContributionUseCases {
     if (p.name !== undefined && p.name.trim().length < 2) {
       throw new BadRequestError(
         'NAME_TOO_SHORT',
-        'Nama tempat minimal 2 karakter',
+        'Nama usaha minimal 2 karakter',
       );
     }
     if ((p.lat != null) !== (p.lng != null)) {
@@ -923,15 +930,15 @@ export class CulinaryContributionUseCases {
     return cuisine;
   }
 
-  private async mustPlace(placeId: string | null | undefined) {
-    if (!placeId) {
-      throw new BadRequestError('PLACE_REQUIRED', 'Tempat wajib dipilih');
+  private async mustUsaha(usahaId: string | null | undefined) {
+    if (!usahaId) {
+      throw new BadRequestError('USAHA_REQUIRED', 'Usaha wajib dipilih');
     }
-    const place = await this.culinary.findPlaceById(placeId);
-    if (!place) {
-      throw new NotFoundError('PLACE_NOT_FOUND', 'Tempat tidak ditemukan');
+    const usaha = await this.usahas.findById(usahaId);
+    if (!usaha) {
+      throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
     }
-    return place;
+    return usaha;
   }
 
   private async mustPending(id: string): Promise<CulinaryContribution> {
@@ -949,8 +956,8 @@ export class CulinaryContributionUseCases {
   private async assertNotStale(row: CulinaryContribution): Promise<string> {
     const target = row.cuisineId
       ? await this.culinary.findCuisineById(row.cuisineId)
-      : row.placeId
-        ? await this.culinary.findPlaceById(row.placeId)
+      : row.usahaId
+        ? await this.usahas.findById(row.usahaId)
         : null;
     if (!target) {
       throw new NotFoundError('TARGET_NOT_FOUND', 'Data target tidak ditemukan');
@@ -971,25 +978,25 @@ export class CulinaryContributionUseCases {
   private labelOf(row: CulinaryContribution): string {
     return (
       (row.payload as { name?: string }).name ??
-      (row.cuisineId ? 'perubahan kuliner' : 'perubahan tempat')
+      (row.cuisineId ? 'perubahan kuliner' : 'perubahan usaha')
     );
   }
 
   /** Activity event publik (AGENTS.md #25) - best-effort. */
   private async emitPublished(
-    entity: 'cuisine' | 'place',
+    entity: 'cuisine' | 'usaha',
     id: string,
     name: string,
     authorId: string,
     dedupeSuffix?: string,
   ): Promise<void> {
-    // Satu kind untuk modul kuliner (kuliner & tempat kuliner): targetId
-    // membedakan entitas, body membedakan jenis. `place_published` sudah
-    // dipakai wisata (AGENTS.md #25) - jangan ditumpuk.
+    // Satu kind untuk modul kuliner (kuliner & usaha penjualnya): targetId
+    // membedakan entitas, body membedakan jenis. `usaha_published` sudah
+    // dipakai modul usaha (AGENTS.md #25) - jangan ditumpuk.
     const body =
       entity === 'cuisine'
         ? `Menambahkan kuliner · "${name}"`
-        : `Menambahkan tempat kuliner · "${name}"`;
+        : `Menambahkan penjual kuliner · "${name}"`;
     try {
       await this.activityEvents?.append({
         kind: 'cuisine_published',

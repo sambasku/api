@@ -22,6 +22,11 @@ export class ManageLeaderboardExclusionsUseCase {
     return this.repo.listExcludedUsers();
   }
 
+  /** Semua user sistem bawaan + status excluded (toggle di panel admin). */
+  async listSystem() {
+    return this.repo.listSystemUsers();
+  }
+
   async add(input: { userId: string; note?: string | null; actorId: string }) {
     const exists = await this.repo.findUserForExclusion(input.userId);
     if (!exists) {
@@ -38,11 +43,11 @@ export class ManageLeaderboardExclusionsUseCase {
     return this.refreshAfterChange(true);
   }
 
-  async remove(input: { userId: string; actorId: string }) {
-    if (isSystemUserId(input.userId)) {
+  async remove(input: { userId: string; actorId: string; actorRoles?: string[] }) {
+    if (isSystemUserId(input.userId) && !this.canManageSystemExclusion(input.actorRoles)) {
       throw new ForbiddenError(
         'LEADERBOARD_EXCLUSION_PROTECTED',
-        'Akun sistem bawaan tidak bisa dikeluarkan dari daftar exclude.',
+        'Akun sistem bawaan hanya bisa dikelola root/admin.',
       );
     }
     const removed = await this.repo.removeExclusion(input.userId);
@@ -56,6 +61,11 @@ export class ManageLeaderboardExclusionsUseCase {
       entityId: input.userId,
     });
     return this.refreshAfterChange(false);
+  }
+
+  /** Root/admin boleh toggle exclude akun sistem bawaan; selain itu terlindungi. */
+  private canManageSystemExclusion(roles: string[] | undefined): boolean {
+    return (roles ?? []).some((r) => r === 'root' || r === 'admin');
   }
 
   private async refreshAfterChange(excluded: boolean): Promise<LeaderboardExclusionMutationResult> {

@@ -2,11 +2,7 @@ import type {
   CulinaryContributionKind,
   CulinaryContributionStatus,
 } from '@/shared/database/drizzle/schema/culinary-contributions.schema';
-import type {
-  CulinaryOperationalStatus,
-  CulinaryPlaceType,
-} from '@/shared/database/drizzle/schema/culinary-places.schema';
-import type { CulinaryAvailability } from '@/shared/database/drizzle/schema/culinary-place-cuisines.schema';
+import type { CuisineUsahaAvailability } from '@/shared/database/drizzle/schema/cuisine-usahas.schema';
 
 export type { CulinaryContributionKind, CulinaryContributionStatus };
 
@@ -42,12 +38,10 @@ export interface NewCuisinePayload {
   }>;
 }
 
-/** Usulan tempat/penjual baru (kind=new_place). Minimum: name (PRD 7.2). */
-export interface NewPlacePayload {
+/** Usulan usaha (penjual kuliner) baru (kind=new_usaha). Minimum: name. */
+export interface NewUsahaPayload {
   name: string;
-  type?: CulinaryPlaceType | null;
   description?: string | null;
-  locationHint?: string | null;
   addressText?: string | null;
   lat?: number | null;
   lng?: number | null;
@@ -55,15 +49,14 @@ export interface NewPlacePayload {
   phone?: string | null;
   whatsapp?: string | null;
   website?: string | null;
-  socialUrl?: string | null;
   coverUrl?: string | null;
 }
 
-/** Usulan hubungan kuliner-tempat (kind=link). PRD 7.3. */
+/** Usulan hubungan kuliner-usaha (kind=link). PRD 7.3. */
 export interface LinkPayload {
   cuisineSlug: string;
-  placeSlug: string;
-  availability?: CulinaryAvailability;
+  usahaSlug: string;
+  availability?: CuisineUsahaAvailability;
   note?: string | null;
 }
 
@@ -80,12 +73,12 @@ export interface CuisineEditPayload {
   sources?: NewCuisinePayload['sources'];
 }
 
-/** Perbaikan data tempat (kind=place_edit) - hanya field di `fields`. */
-export interface PlaceEditPayload {
+/** Perbaikan data usaha penjual kuliner (kind=usaha_edit) - dialihkan ke
+ * usulan usaha (usaha-contribution); payload ini hanya untuk edit ringan
+ * lewat antrean kuliner. */
+export interface UsahaEditPayload {
   name?: string;
-  type?: CulinaryPlaceType | null;
   description?: string | null;
-  locationHint?: string | null;
   addressText?: string | null;
   lat?: number | null;
   lng?: number | null;
@@ -93,12 +86,11 @@ export interface PlaceEditPayload {
   phone?: string | null;
   whatsapp?: string | null;
   website?: string | null;
-  socialUrl?: string | null;
   coverUrl?: string | null;
 }
 
 export interface OperationalPayload {
-  operationalStatus: CulinaryOperationalStatus;
+  operationalStatus: string;
 }
 
 export interface ArchivePayload {
@@ -108,10 +100,10 @@ export interface ArchivePayload {
 /** Semua bentuk payload kontribusi kuliner (discriminator `kind`). */
 export type CulinaryContributionPayload =
   | NewCuisinePayload
-  | NewPlacePayload
+  | NewUsahaPayload
   | LinkPayload
   | CuisineEditPayload
-  | PlaceEditPayload
+  | UsahaEditPayload
   | OperationalPayload
   | ArchivePayload;
 
@@ -120,14 +112,14 @@ export interface CulinaryContribution {
   kind: CulinaryContributionKind;
   userId: string;
   cuisineId: string | null;
-  placeId: string | null;
+  usahaId: string | null;
   linkId: string | null;
   lockedFields: string;
   payload: CulinaryContributionPayload;
   baseUpdatedAt: Date | null;
   status: CulinaryContributionStatus;
   resultCuisineId: string | null;
-  resultPlaceId: string | null;
+  resultUsahaId: string | null;
   revisionNote: string | null;
   rejectReasonCode: string | null;
   rejectReasonText: string | null;
@@ -139,8 +131,8 @@ export interface CulinaryContribution {
 export interface CulinaryContributionWithTarget extends CulinaryContribution {
   cuisineName: string | null;
   cuisineSlug: string | null;
-  placeName: string | null;
-  placeSlug: string | null;
+  usahaName: string | null;
+  usahaSlug: string | null;
 }
 
 export const CULINARY_CONTRIBUTION_REJECT_DISPLAY: Record<string, string> = {
@@ -179,12 +171,12 @@ export const CULINARY_CONTRIBUTION_KIND_LABEL: Record<
   string
 > = {
   new_cuisine: 'Usulan kuliner baru',
-  new_place: 'Usulan tempat baru',
-  link: 'Usulan hubungan kuliner-tempat',
+  new_usaha: 'Usulan usaha penjual kuliner baru',
+  link: 'Usulan hubungan kuliner-usaha',
   cuisine_edit: 'Perbaikan data kuliner',
-  place_edit: 'Perbaikan data tempat',
+  usaha_edit: 'Perbaikan data usaha penjual kuliner',
   link_edit: 'Ubah ketersediaan relasi',
-  place_operational: 'Status operasional tempat',
+  usaha_operational: 'Status operasional usaha',
   archive: 'Minta arsip',
   restore: 'Minta tayang lagi',
 };

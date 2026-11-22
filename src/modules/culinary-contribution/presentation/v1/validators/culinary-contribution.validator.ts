@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { CULINARY_PLACE_TYPES } from '@/shared/database/drizzle/schema/culinary-places.schema';
 
 function optionalCoord(schema: z.ZodNumber) {
   return z.preprocess(
@@ -66,16 +65,14 @@ export const submitNewCuisineBodySchema = z
   })
   .strict();
 
-/** Usulan tempat/penjual baru. Minimum: nama (PRD 7.2). */
-export const submitNewPlaceBodySchema = z
+/** Usulan usaha (penjual kuliner) baru. Minimum: nama. */
+export const submitNewUsahaBodySchema = z
   .object({
-    kind: z.literal('new_place'),
+    kind: z.literal('new_usaha'),
     payload: z
       .object({
         name: z.string().trim().min(2).max(200),
-        type: z.enum(CULINARY_PLACE_TYPES).nullable().optional(),
         description: z.string().max(8000).nullable().optional(),
-        location_hint: z.string().max(500).nullable().optional(),
         address_text: z.string().max(500).nullable().optional(),
         lat: sambasLat,
         lng: sambasLng,
@@ -83,7 +80,6 @@ export const submitNewPlaceBodySchema = z
         phone: z.string().max(40).nullable().optional(),
         whatsapp: z.string().max(40).nullable().optional(),
         website: httpsUrl,
-        social_url: httpsUrl,
         cover_url: httpsUrl,
       })
       .strict(),
@@ -92,15 +88,15 @@ export const submitNewPlaceBodySchema = z
 
 export const submitCulinaryContributionBodySchema = z.discriminatedUnion('kind', [
   submitNewCuisineBodySchema,
-  submitNewPlaceBodySchema,
+  submitNewUsahaBodySchema,
 ]);
 
 export const CHANGE_KINDS = [
   'link',
   'cuisine_edit',
-  'place_edit',
+  'usaha_edit',
   'link_edit',
-  'place_operational',
+  'usaha_operational',
   'archive',
   'restore',
 ] as const;
@@ -117,11 +113,9 @@ export const cuisineFieldSchema = z.enum([
   'sources',
 ]);
 
-export const placeFieldSchema = z.enum([
+export const usahaFieldSchema = z.enum([
   'name',
-  'type',
   'description',
-  'locationHint',
   'addressText',
   'lat',
   'lng',
@@ -129,7 +123,6 @@ export const placeFieldSchema = z.enum([
   'phone',
   'whatsapp',
   'website',
-  'socialUrl',
   'coverUrl',
 ]);
 
@@ -138,10 +131,10 @@ export const submitCulinaryChangeBodySchema = z
   .object({
     kind: z.enum(CHANGE_KINDS),
     cuisine_id: z.string().min(1).max(64).nullable().optional(),
-    place_id: z.string().min(1).max(64).nullable().optional(),
+    usaha_id: z.string().min(1).max(64).nullable().optional(),
     link_id: z.string().min(1).max(64).nullable().optional(),
     payload: z.record(z.string(), z.unknown()),
-    fields: z.array(z.union([cuisineFieldSchema, placeFieldSchema])).max(20).optional(),
+    fields: z.array(z.union([cuisineFieldSchema, usahaFieldSchema])).max(20).optional(),
   })
   .strict();
 
@@ -183,12 +176,12 @@ export const listCulinaryContributionsQuerySchema = z.object({
   kind: z
     .enum([
       'new_cuisine',
-      'new_place',
+      'new_usaha',
       'link',
       'cuisine_edit',
-      'place_edit',
+      'usaha_edit',
       'link_edit',
-      'place_operational',
+      'usaha_operational',
       'archive',
       'restore',
     ])
@@ -202,14 +195,14 @@ export const culinaryContributionResponseSchema = z.object({
   cuisine_id: z.string().nullable(),
   cuisine_slug: z.string().nullable().optional(),
   cuisine_name: z.string().nullable().optional(),
-  place_id: z.string().nullable(),
-  place_slug: z.string().nullable().optional(),
-  place_name: z.string().nullable().optional(),
+  usaha_id: z.string().nullable(),
+  usaha_slug: z.string().nullable().optional(),
+  usaha_name: z.string().nullable().optional(),
   link_id: z.string().nullable(),
   fields: z.array(z.string()),
   payload: z.record(z.string(), z.unknown()),
   result_cuisine_id: z.string().nullable(),
-  result_place_id: z.string().nullable(),
+  result_usaha_id: z.string().nullable(),
   revision_note: z.string().nullable(),
   reject_reason_code: z.string().nullable(),
   reject_reason_text: z.string().nullable(),

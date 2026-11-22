@@ -19,9 +19,11 @@ export function toFilePayload(input: {
     entries: input.entries.map((e) => ({
       rank: e.rank,
       username: e.username,
+      display_name: e.displayName,
       avatar_url: e.avatarUrl,
-      contributions: e.contributions,
-      verifications: e.verifications,
+      submitted_points: e.submittedPoints,
+      approved_points: e.approvedPoints,
+      verification_points: e.verificationPoints,
       combined: e.combined,
       is_verifier: e.isVerifier,
     })),
@@ -32,9 +34,11 @@ export function serializeWireEntry(e: LeaderboardEntry): Record<string, unknown>
   return {
     rank: e.rank,
     username: e.username,
+    display_name: e.displayName,
     avatar_url: e.avatarUrl,
-    contributions: e.contributions,
-    verifications: e.verifications,
+    submitted_points: e.submittedPoints,
+    approved_points: e.approvedPoints,
+    verification_points: e.verificationPoints,
     combined: e.combined,
     is_verifier: e.isVerifier,
   };

@@ -4,17 +4,7 @@ import { opaqueId } from '@/shared/validation/id';
 
 const httpsUrl = z.string().url().startsWith('https://');
 
-function optionalCoord(schema: z.ZodNumber) {
-  return z.preprocess(
-    (value) =>
-      value === '' || value === null || value === undefined ? undefined : value,
-    schema.optional(),
-  );
-}
 
-/** Koordinat Kabupaten Sambas - tolak titik di luar wilayah. */
-const sambasLat = optionalCoord(z.number().min(1.0).max(1.8));
-const sambasLng = optionalCoord(z.number().min(108.5).max(110.0));
 
 export const cuisinePublishStatusSchema = z.enum([
   'draft',
@@ -108,36 +98,10 @@ export const updateCuisineBodySchema = z
   .partial()
   .strict();
 
-const placeBodyFields = {
-  slug: z
-    .string()
-    .min(1)
-    .max(120)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug hanya huruf kecil, angka, hyphen'),
-  name: z.string().trim().min(1).max(200),
-  type: culinaryPlaceTypeSchema.nullable().optional(),
-  description: z.string().max(8000).nullable().optional(),
-  location_hint: z.string().max(300).nullable().optional(),
-  address_text: z.string().max(500).nullable().optional(),
-  lat: sambasLat,
-  lng: sambasLng,
-  maps_url: httpsUrl.nullable().optional(),
-  phone: z.string().max(40).nullable().optional(),
-  whatsapp: z.string().max(40).nullable().optional(),
-  website: httpsUrl.nullable().optional(),
-  social_url: httpsUrl.nullable().optional(),
-  cover_url: httpsUrl.nullable().optional(),
-  operational_status: culinaryOperationalStatusSchema.optional(),
-  publish_status: culinaryPublishStatusSchema.optional(),
-};
-
-export const createPlaceBodySchema = z.object(placeBodyFields).strict();
-export const updatePlaceBodySchema = z.object(placeBodyFields).partial().strict();
-
 export const createLinkBodySchema = z
   .object({
     cuisine_id: z.string().min(1).max(64),
-    place_id: z.string().min(1).max(64),
+    usaha_id: z.string().min(1).max(64),
     availability: culinaryAvailabilitySchema.optional(),
     note: z.string().max(500).nullable().optional(),
     publish_status: culinaryPublishStatusSchema.optional(),
@@ -161,15 +125,6 @@ export const listCuisinesQuerySchema = z.object({
     .optional(),
   q: z.string().max(120).optional(),
   status: cuisinePublishStatusSchema.optional(),
-});
-
-export const listPlacesQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(500).default(50),
-  before: z.string().min(1).max(64).optional(),
-  type: culinaryPlaceTypeSchema.optional(),
-  operational_status: culinaryOperationalStatusSchema.optional(),
-  q: z.string().max(120).optional(),
-  status: culinaryPublishStatusSchema.optional(),
 });
 
 export const duplicatesQuerySchema = z.object({
@@ -210,16 +165,16 @@ export const cuisineSourceResponseSchema = z.object({
   license_url: z.string().nullable(),
 });
 
-export const cuisinePlaceLinkSchema = z.object({
+export const cuisineUsahaLinkSchema = z.object({
   id: z.string(),
   cuisine_id: z.string(),
-  place_id: z.string(),
+  usaha_id: z.string(),
   availability: culinaryAvailabilitySchema,
   note: z.string().nullable(),
   cuisine_name: z.string().nullable(),
   cuisine_slug: z.string().nullable(),
-  place_name: z.string().nullable(),
-  place_slug: z.string().nullable(),
+  usaha_name: z.string().nullable(),
+  usaha_slug: z.string().nullable(),
 });
 
 export const cuisineResponseSchema = z.object({
@@ -251,52 +206,11 @@ export const cuisineResponseSchema = z.object({
   published_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
-  places: z.array(cuisinePlaceLinkSchema).optional(),
-});
-
-export const culinaryPlaceResponseSchema = z.object({
-  id: z.string(),
-  slug: z.string(),
-  name: z.string(),
-  type: culinaryPlaceTypeSchema.nullable(),
-  description: z.string().nullable(),
-  location_hint: z.string().nullable(),
-  address_text: z.string().nullable(),
-  lat: z.number().nullable(),
-  lng: z.number().nullable(),
-  maps_url: z.string().nullable(),
-  phone: z.string().nullable(),
-  whatsapp: z.string().nullable(),
-  website: z.string().nullable(),
-  social_url: z.string().nullable(),
-  cover_url: z.string().nullable(),
-  operational_status: culinaryOperationalStatusSchema,
-  publish_status: culinaryPublishStatusSchema,
-  restricted_reason: z.string().nullable(),
-  restricted_at: z.string().nullable(),
-  manager_id: z.string().nullable(),
-  author_id: z.string().nullable(),
-  author: z
-    .object({
-      id: z.string(),
-      username: z.string(),
-      display_name: z.string(),
-    })
-    .nullable()
-    .optional(),
-  published_at: z.string().nullable(),
-  created_at: z.string(),
-  updated_at: z.string().nullable(),
-  cuisines: z.array(cuisinePlaceLinkSchema).optional(),
+  usahas: z.array(cuisineUsahaLinkSchema).optional(),
 });
 
 export const cuisineListResponseSchema = z.object({
   items: z.array(cuisineResponseSchema),
-  next_cursor: z.string().nullable(),
-});
-
-export const placeListResponseSchema = z.object({
-  items: z.array(culinaryPlaceResponseSchema),
   next_cursor: z.string().nullable(),
 });
 

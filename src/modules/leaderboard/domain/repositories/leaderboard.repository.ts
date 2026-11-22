@@ -3,7 +3,7 @@ import type {
   LeaderboardWeekRecord,
 } from '../entities/leaderboard-entry.entity';
 
-export type LeaderboardMetric = 'combined' | 'contributions' | 'verifications';
+export type LeaderboardMetric = 'combined' | 'submitted' | 'approved' | 'verifications';
 
 export interface LeaderboardExclusionRow {
   userId: string;
@@ -46,10 +46,42 @@ export interface LeaderboardRepository {
 
   listExcludedUsers(): Promise<LeaderboardExclusionRow[]>;
 
+  /** Semua user sistem bawaan + status excluded saat ini (untuk panel admin). */
+  listSystemUsers(): Promise<LeaderboardExclusionRow[]>;
+
   addExclusion(userId: string, note?: string | null): Promise<void>;
 
   removeExclusion(userId: string): Promise<boolean>;
 
   /** User aktif (belum soft-delete) untuk validasi POST exclude. */
   findUserForExclusion(userId: string): Promise<{ id: string } | null>;
+/**
+ * Simpan snapshot poin mingguan user (idempoten per user+minggu):
+ * skor 5/3/2/2 + total XP leveling saat minggu berakhir.
+ */
+saveUserWeekStats(
+  rows: Array<{
+    userId: string;
+    weekId: string;
+    submittedPoints: number;
+    approvedPoints: number;
+    verificationPoints: number;
+    combined: number;
+    xpAtWeekEnd: number;
+  }>,
+): Promise<void>;
+/** Riwayat mingguan user, minggu terbaru dulu. */
+listUserWeekStats(
+  userId: string,
+  limit: number,
+): Promise<
+  Array<{
+    weekId: string;
+    submittedPoints: number;
+    approvedPoints: number;
+    verificationPoints: number;
+    combined: number;
+    xpAtWeekEnd: number;
+  }>
+>;
 }

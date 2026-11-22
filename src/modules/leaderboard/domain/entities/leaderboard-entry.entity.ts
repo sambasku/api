@@ -2,9 +2,11 @@ export interface LeaderboardEntry {
   rank: number;
   userId: string;
   username: string;
+  displayName: string | null;
   avatarUrl: string | null;
-  contributions: number;
-  verifications: number;
+  submittedPoints: number;
+  approvedPoints: number;
+  verificationPoints: number;
   combined: number;
   isVerifier: boolean;
 }
@@ -19,9 +21,11 @@ export interface LeaderboardFilePayload {
   entries: Array<{
     rank: number;
     username: string;
+    display_name: string | null;
     avatar_url: string | null;
-    contributions: number;
-    verifications: number;
+    submitted_points: number;
+    approved_points: number;
+    verification_points: number;
     combined: number;
     is_verifier: boolean;
   }>;

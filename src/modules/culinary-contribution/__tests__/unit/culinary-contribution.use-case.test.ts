@@ -20,7 +20,7 @@ function makeContrib(over: Mock = {}) {
     list: vi.fn().mockResolvedValue([]),
     countPending: vi.fn().mockResolvedValue(0),
     pendingLockedFieldsForCuisine: vi.fn().mockResolvedValue([]),
-    pendingLockedFieldsForPlace: vi.fn().mockResolvedValue([]),
+    pendingLockedFieldsForUsaha: vi.fn().mockResolvedValue([]),
     setStatus: vi.fn(),
     replacePayload: vi.fn(),
     remove: vi.fn(),
@@ -37,41 +37,45 @@ function makeCulinary(over: Mock = {}) {
       publishStatus: "published",
       createdAt: EARLIER,
       updatedAt: EARLIER,
-      places: [],
+      usahas: [],
     }),
-    findPlaceById: vi.fn().mockResolvedValue({
-      id: "T1",
+    findCuisineBySlug: vi.fn().mockResolvedValue({ id: "K1", slug: "bubur-pedas" }),
+    findLinkById: vi.fn().mockResolvedValue(null),
+    findLinkByPair: vi.fn().mockResolvedValue(null),
+    createCuisine: vi.fn().mockResolvedValue({ id: "K_NEW", name: "Pengkang" }),
+    createLink: vi.fn(),
+    updateCuisine: vi.fn(),
+    updateLink: vi.fn(),
+    categoryRef: vi.fn().mockResolvedValue({ id: "makanan-utama", name: "Makanan Utama" }),
+    existingCuisineSlugs: vi.fn().mockResolvedValue(new Set<string>()),
+    ...over,
+  };
+}
+function makeUsahas(over: Mock = {}) {
+  return {
+    findById: vi.fn().mockResolvedValue({
+      id: "U1",
       name: "Warung Bu Siti",
       slug: "warung-bu-siti",
       publishStatus: "published",
       createdAt: EARLIER,
       updatedAt: EARLIER,
-      cuisines: [],
     }),
-    findCuisineBySlug: vi.fn().mockResolvedValue({ id: "K1", slug: "bubur-pedas" }),
-    findPlaceBySlug: vi.fn().mockResolvedValue({ id: "T1", slug: "warung-bu-siti" }),
-    findLinkById: vi.fn().mockResolvedValue(null),
-    findLinkByPair: vi.fn().mockResolvedValue(null),
-    createCuisine: vi.fn().mockResolvedValue({ id: "K_NEW", name: "Pengkang" }),
-    createPlace: vi.fn().mockResolvedValue({ id: "T_NEW", name: "Warung Baru" }),
-    createLink: vi.fn(),
-    updateCuisine: vi.fn(),
-    updatePlace: vi.fn(),
-    updateLink: vi.fn(),
-    categoryRef: vi.fn().mockResolvedValue({ id: "makanan-utama", name: "Makanan Utama" }),
-    existingCuisineSlugs: vi.fn().mockResolvedValue(new Set<string>()),
-    existingPlaceSlugs: vi.fn().mockResolvedValue(new Set<string>()),
+    findBySlug: vi.fn().mockResolvedValue({ id: "U1", slug: "warung-bu-siti" }),
+    create: vi.fn().mockResolvedValue({ id: "U_NEW", name: "Warung Baru" }),
+    update: vi.fn(),
+    existingSlugs: vi.fn().mockResolvedValue(new Set<string>()),
     ...over,
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function build(contrib: any, culinary: any, extra: any = {}) {
+function build(contrib: any, culinary: any, extra: any = {}, usahas: any = makeUsahas()) {
   return new CulinaryContributionUseCases(
     contrib,
     culinary,
-    new UniqueCulinarySlugUseCase(culinary, "cuisine"),
-    new UniqueCulinarySlugUseCase(culinary, "place"),
+    usahas,
+    new UniqueCulinarySlugUseCase(culinary),
     extra.audit,
     extra.inbox,
     extra.notifyUser,
@@ -155,7 +159,7 @@ describe("Culinary contribution - submit usulan baru", () => {
     const uc = build(makeContrib(), makeCulinary());
     await expect(
       uc.submit(ANONIM_USER_ID, {
-        kind: "new_place",
+        kind: "new_usaha",
         payload: { name: "Warung Baru", lat: 1.36 },
       }),
     ).rejects.toBeInstanceOf(BadRequestError);
@@ -215,7 +219,7 @@ describe("Culinary contribution - approve", () => {
         kind: "new_cuisine",
         userId: "USER1",
         cuisineId: null,
-        placeId: null,
+        usahaId: null,
         status: "pending",
         lockedFields: "",
         payload: { name: "Pengkang" },
@@ -269,7 +273,7 @@ describe("Culinary contribution - approve", () => {
         kind: "cuisine_edit",
         userId: "USER1",
         cuisineId: "K1",
-        placeId: null,
+        usahaId: null,
         status: "pending",
         lockedFields: "description",
         payload: { description: "Baru" },
@@ -282,7 +286,7 @@ describe("Culinary contribution - approve", () => {
         name: "Bubur Pedas",
         createdAt: EARLIER,
         updatedAt: NOW, // lebih baru dari baseUpdatedAt
-        places: [],
+        usahas: [],
       }),
     });
     const uc = build(contrib, culinary);
@@ -292,28 +296,28 @@ describe("Culinary contribution - approve", () => {
     expect(culinary.updateCuisine).not.toHaveBeenCalled();
   });
 
-  it("place_operational TIDAK mengubah publish_status", async () => {
+  it("usaha_operational TIDAK mengubah publish_status", async () => {
     const contrib = makeContrib({
       findById: vi.fn().mockResolvedValue({
         id: "C1",
-        kind: "place_operational",
+        kind: "usaha_operational",
         userId: "USER1",
         cuisineId: null,
-        placeId: "T1",
+        usahaId: "U1",
         status: "pending",
         lockedFields: "operationalStatus",
         payload: { operationalStatus: "temporarily_closed" },
         baseUpdatedAt: EARLIER,
       }),
     });
-    const culinary = makeCulinary();
-    const uc = build(contrib, culinary);
+    const usahas = makeUsahas();
+    const uc = build(contrib, makeCulinary(), {}, usahas);
     await uc.approve("C1", "ADMIN1");
-    expect(culinary.updatePlace).toHaveBeenCalledWith({
-      id: "T1",
+    expect(usahas.update).toHaveBeenCalledWith({
+      id: "U1",
       operationalStatus: "temporarily_closed",
     });
-    expect(culinary.updatePlace).not.toHaveBeenCalledWith(
+    expect(usahas.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ publishStatus: expect.anything() }),
     );
   });

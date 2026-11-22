@@ -5,7 +5,7 @@ import {
   type CulinaryContributionStatus,
 } from '@/shared/database/drizzle/schema/culinary-contributions.schema';
 import { cuisines } from '@/shared/database/drizzle/schema/cuisines.schema';
-import { culinaryPlaces } from '@/shared/database/drizzle/schema/culinary-places.schema';
+import { usahas } from '@/shared/database/drizzle/schema/usahas.schema';
 import { generateId } from '@/shared/utils/ulid';
 import type {
   CulinaryContribution,
@@ -26,14 +26,14 @@ function mapRow(row: Row): CulinaryContribution {
     kind: row.kind,
     userId: row.userId,
     cuisineId: row.cuisineId ?? null,
-    placeId: row.placeId ?? null,
+    usahaId: row.usahaId ?? null,
     linkId: row.linkId ?? null,
     lockedFields: row.lockedFields,
     payload: JSON.parse(row.payloadJson) as CulinaryContributionPayload,
     baseUpdatedAt: row.baseUpdatedAt ?? null,
     status: row.status,
     resultCuisineId: row.resultCuisineId ?? null,
-    resultPlaceId: row.resultPlaceId ?? null,
+    resultUsahaId: row.resultUsahaId ?? null,
     revisionNote: row.revisionNote ?? null,
     rejectReasonCode: row.rejectReasonCode ?? null,
     rejectReasonText: row.rejectReasonText ?? null,
@@ -47,10 +47,10 @@ function withTarget(
   row: Row,
   cuisineName: string | null,
   cuisineSlug: string | null,
-  placeName: string | null,
-  placeSlug: string | null,
+  usahaName: string | null,
+  usahaSlug: string | null,
 ): CulinaryContributionWithTarget {
-  return { ...mapRow(row), cuisineName, cuisineSlug, placeName, placeSlug };
+  return { ...mapRow(row), cuisineName, cuisineSlug, usahaName, usahaSlug };
 }
 
 export class CulinaryContributionRepositoryImpl
@@ -67,7 +67,7 @@ export class CulinaryContributionRepositoryImpl
       kind: input.kind,
       userId: input.userId,
       cuisineId: input.cuisineId ?? null,
-      placeId: input.placeId ?? null,
+      usahaId: input.usahaId ?? null,
       linkId: input.linkId ?? null,
       lockedFields: input.lockedFields,
       payloadJson: JSON.stringify(input.payload),
@@ -94,15 +94,12 @@ export class CulinaryContributionRepositoryImpl
         row: culinaryContributions,
         cuisineName: cuisines.name,
         cuisineSlug: cuisines.slug,
-        placeName: culinaryPlaces.name,
-        placeSlug: culinaryPlaces.slug,
+        usahaName: usahas.name,
+        usahaSlug: usahas.slug,
       })
       .from(culinaryContributions)
       .leftJoin(cuisines, eq(cuisines.id, culinaryContributions.cuisineId))
-      .leftJoin(
-        culinaryPlaces,
-        eq(culinaryPlaces.id, culinaryContributions.placeId),
-      )
+      .leftJoin(usahas, eq(usahas.id, culinaryContributions.usahaId))
       .where(eq(culinaryContributions.userId, userId))
       .orderBy(desc(culinaryContributions.createdAt))
       .limit(50);
@@ -111,8 +108,8 @@ export class CulinaryContributionRepositoryImpl
         r.row,
         r.cuisineName ?? null,
         r.cuisineSlug ?? null,
-        r.placeName ?? null,
-        r.placeSlug ?? null,
+        r.usahaName ?? null,
+        r.usahaSlug ?? null,
       ),
     );
   }
@@ -128,15 +125,12 @@ export class CulinaryContributionRepositoryImpl
         row: culinaryContributions,
         cuisineName: cuisines.name,
         cuisineSlug: cuisines.slug,
-        placeName: culinaryPlaces.name,
-        placeSlug: culinaryPlaces.slug,
+        usahaName: usahas.name,
+        usahaSlug: usahas.slug,
       })
       .from(culinaryContributions)
       .leftJoin(cuisines, eq(cuisines.id, culinaryContributions.cuisineId))
-      .leftJoin(
-        culinaryPlaces,
-        eq(culinaryPlaces.id, culinaryContributions.placeId),
-      )
+      .leftJoin(usahas, eq(usahas.id, culinaryContributions.usahaId))
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(culinaryContributions.createdAt))
       .limit(100);
@@ -145,8 +139,8 @@ export class CulinaryContributionRepositoryImpl
         r.row,
         r.cuisineName ?? null,
         r.cuisineSlug ?? null,
-        r.placeName ?? null,
-        r.placeSlug ?? null,
+        r.usahaName ?? null,
+        r.usahaSlug ?? null,
       ),
     );
   }
@@ -177,13 +171,13 @@ export class CulinaryContributionRepositoryImpl
     return rows.map((r) => r.lockedFields);
   }
 
-  async pendingLockedFieldsForPlace(placeId: string): Promise<string[]> {
+  async pendingLockedFieldsForUsaha(usahaId: string): Promise<string[]> {
     const rows = await this.db
       .select({ lockedFields: culinaryContributions.lockedFields })
       .from(culinaryContributions)
       .where(
         and(
-          eq(culinaryContributions.placeId, placeId),
+          eq(culinaryContributions.usahaId, usahaId),
           eq(culinaryContributions.status, 'pending'),
         ),
       );
@@ -198,7 +192,7 @@ export class CulinaryContributionRepositoryImpl
       rejectReasonCode?: string | null;
       rejectReasonText?: string | null;
       resultCuisineId?: string | null;
-      resultPlaceId?: string | null;
+      resultUsahaId?: string | null;
     },
   ): Promise<void> {
     await this.db
@@ -219,8 +213,8 @@ export class CulinaryContributionRepositoryImpl
         ...(extra?.resultCuisineId !== undefined
           ? { resultCuisineId: extra.resultCuisineId }
           : {}),
-        ...(extra?.resultPlaceId !== undefined
-          ? { resultPlaceId: extra.resultPlaceId }
+        ...(extra?.resultUsahaId !== undefined
+          ? { resultUsahaId: extra.resultUsahaId }
           : {}),
       })
       .where(eq(culinaryContributions.id, id));
@@ -255,31 +249,28 @@ export class CulinaryContributionRepositoryImpl
   }
 
   // Helper dipakai use-case untuk resolusi slug -> id dalam satu query.
+  // Helper dipakai use-case untuk resolusi slug -> id dalam satu query.
   async resolveSlugs(input: {
     cuisineSlugs?: string[];
-    placeSlugs?: string[];
+    usahaSlugs?: string[];
   }): Promise<{
     cuisines: Array<{ id: string; slug: string; name: string }>;
-    places: Array<{ id: string; slug: string; name: string }>;
+    usahas: Array<{ id: string; slug: string; name: string }>;
   }> {
-    const [cuisineRows, placeRows] = await Promise.all([
+    const [cuisineRows, usahaRows] = await Promise.all([
       input.cuisineSlugs?.length
         ? this.db
             .select({ id: cuisines.id, slug: cuisines.slug, name: cuisines.name })
             .from(cuisines)
             .where(inArray(cuisines.slug, input.cuisineSlugs))
         : Promise.resolve([]),
-      input.placeSlugs?.length
+      input.usahaSlugs?.length
         ? this.db
-            .select({
-              id: culinaryPlaces.id,
-              slug: culinaryPlaces.slug,
-              name: culinaryPlaces.name,
-            })
-            .from(culinaryPlaces)
-            .where(inArray(culinaryPlaces.slug, input.placeSlugs))
+            .select({ id: usahas.id, slug: usahas.slug, name: usahas.name })
+            .from(usahas)
+            .where(inArray(usahas.slug, input.usahaSlugs))
         : Promise.resolve([]),
     ]);
-    return { cuisines: cuisineRows, places: placeRows };
+    return { cuisines: cuisineRows, usahas: usahaRows };
   }
 }

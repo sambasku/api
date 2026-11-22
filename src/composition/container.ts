@@ -189,6 +189,8 @@ import { FinalizeLeaderboardWeekUseCase } from "@/modules/leaderboard/applicatio
 import { RunDueLeaderboardJobsUseCase } from "@/modules/leaderboard/application/use-cases/run-due-leaderboard-jobs.use-case";
 import { GetLeaderboardUseCase } from "@/modules/leaderboard/application/use-cases/get-leaderboard.use-case";
 import { ManageLeaderboardExclusionsUseCase } from "@/modules/leaderboard/application/use-cases/manage-leaderboard-exclusions.use-case";
+import { GetPointsHistoryUseCase } from "@/modules/leaderboard/application/use-cases/get-points-history.use-case";
+import { UserXpSnapshotAdapter } from "@/modules/leaderboard/infrastructure/user-xp-snapshot.adapter";
 import { LeaderboardController } from "@/modules/leaderboard/presentation/v1/leaderboard.controller";
 import { PlaceRepositoryImpl } from "@/modules/place/infrastructure/place.repository.impl";
 import {
@@ -347,10 +349,8 @@ import {
   DeleteCulinaryUseCase,
   FindCulinaryDuplicatesUseCase,
   GetCuisineBySlugUseCase,
-  GetCulinaryPlaceBySlugUseCase,
   ListCuisinesUseCase,
   ListCulinaryCategoriesUseCase,
-  ListCulinaryPlacesUseCase,
   RestoreCulinaryUseCase,
   RestrictCulinaryUseCase,
   UniqueCulinarySlugUseCase,
@@ -374,12 +374,6 @@ import { CreateCuisineCommentAudioUseCase } from "@/modules/culinary/application
 import { CulinaryContributionRepositoryImpl } from "@/modules/culinary-contribution/infrastructure/culinary-contribution.repository.impl";
 import { CulinaryContributionUseCases } from "@/modules/culinary-contribution/application/culinary-contribution.use-cases";
 import { CulinaryContributionController } from "@/modules/culinary-contribution/presentation/v1/culinary-contribution.controller";
-import { CulinaryClaimRepositoryImpl } from "@/modules/culinary-claim/infrastructure/culinary-claim.repository.impl";
-import { CulinaryClaimUseCases } from "@/modules/culinary-claim/application/culinary-claim.use-cases";
-import { CulinaryClaimController } from "@/modules/culinary-claim/presentation/v1/culinary-claim.controller";
-import { CulinaryReportRepositoryImpl } from "@/modules/culinary-report/infrastructure/culinary-report.repository.impl";
-import { CulinaryReportUseCases } from "@/modules/culinary-report/application/culinary-report.use-cases";
-import { CulinaryReportController } from "@/modules/culinary-report/presentation/v1/culinary-report.controller";
 import { PlaceCategoryRepositoryImpl } from "@/modules/place-category/infrastructure/place-category.repository.impl";
 import {
   CreatePlaceCategoryUseCase,
@@ -1344,7 +1338,12 @@ export const karyaLemmaLinkController = new KaryaLemmaLinkController({
   deleteLink: new DeleteKaryaLemmaLinkUseCase(karyaRepo, auditRepo),
 });
 export const karyaController = new KaryaController(
-  new KaryaUseCases(karyaRepo, activityEvents, new ResolveKaryaRelated(db)),
+  new KaryaUseCases(
+    karyaRepo,
+    activityEvents,
+    new ResolveKaryaRelated(db),
+    explorationGroupNotifier,
+  ),
   listRelatedContent,
   replaceContentLinks,
 );
@@ -1397,17 +1396,11 @@ export const culinaryController = new CulinaryController(
   culinaryRepo,
   new ListCuisinesUseCase(culinaryRepo),
   new GetCuisineBySlugUseCase(culinaryRepo),
-  new ListCulinaryPlacesUseCase(culinaryRepo),
-  new GetCulinaryPlaceBySlugUseCase(culinaryRepo),
   new ListCulinaryCategoriesUseCase(culinaryRepo),
-  new FindCulinaryDuplicatesUseCase(culinaryRepo, 'cuisine'),
-  new FindCulinaryDuplicatesUseCase(culinaryRepo, 'place'),
-  new RestrictCulinaryUseCase(culinaryRepo, 'cuisine'),
-  new RestoreCulinaryUseCase(culinaryRepo, 'cuisine'),
-  new DeleteCulinaryUseCase(culinaryRepo, 'cuisine'),
-  new RestrictCulinaryUseCase(culinaryRepo, 'place'),
-  new RestoreCulinaryUseCase(culinaryRepo, 'place'),
-  new DeleteCulinaryUseCase(culinaryRepo, 'place'),
+  new FindCulinaryDuplicatesUseCase(culinaryRepo),
+  new RestrictCulinaryUseCase(culinaryRepo),
+  new RestoreCulinaryUseCase(culinaryRepo),
+  new DeleteCulinaryUseCase(culinaryRepo),
   new AppendCuisineImagesUseCase(culinaryRepo, userRepo, activityEvents),
   listRelatedContent,
   {
@@ -1445,12 +1438,11 @@ export const cuisineViewsController = new CuisineViewsController(
   new GetCuisineViewReportUseCase(cuisineViewsRepo),
 );
 export const culinaryContributionRepo = new CulinaryContributionRepositoryImpl(db);
-export const culinaryClaimRepo = new CulinaryClaimRepositoryImpl(db);
 export const culinaryContributionUseCases = new CulinaryContributionUseCases(
   culinaryContributionRepo,
   culinaryRepo,
-  new UniqueCulinarySlugUseCase(culinaryRepo, 'cuisine'),
-  new UniqueCulinarySlugUseCase(culinaryRepo, 'place'),
+  usahaRepo,
+  new UniqueCulinarySlugUseCase(culinaryRepo),
   auditRepo,
   recordInbox,
   notifyUser,
@@ -1459,23 +1451,6 @@ export const culinaryContributionUseCases = new CulinaryContributionUseCases(
 );
 export const culinaryContributionController = new CulinaryContributionController(
   culinaryContributionUseCases,
-);
-export const culinaryClaimController = new CulinaryClaimController(
-  new CulinaryClaimUseCases(
-    culinaryClaimRepo,
-    culinaryRepo,
-    auditRepo,
-    recordInbox,
-    notifyUser,
-    activityEventRepo,
-  ),
-);
-export const culinaryReportController = new CulinaryReportController(
-  new CulinaryReportUseCases(
-    new CulinaryReportRepositoryImpl(db),
-    culinaryRepo,
-    auditRepo,
-  ),
 );
 
 export const categoryRepo = new CategoryRepositoryImpl(db);
@@ -1770,6 +1745,7 @@ export const runDueAchievementScanUseCase = new RunDueAchievementScanUseCase(
 
 export const leaderboardRepo = new LeaderboardRepositoryImpl(db);
 export const leaderboardStorage = createLeaderboardStorage();
+export const userXpSnapshotAdapter = new UserXpSnapshotAdapter(publicUserRepo);
 export const computeLiveLeaderboardUseCase = new ComputeLiveLeaderboardUseCase(
   leaderboardRepo,
   leaderboardStorage,
@@ -1783,6 +1759,7 @@ export const finalizeLeaderboardWeekUseCase = new FinalizeLeaderboardWeekUseCase
     // Award lencana leaderboard_top dari snapshot yang baru dibekukan.
     await runDueAchievementScanUseCase.execute(new Date(), { force: true });
   },
+  userXpSnapshotAdapter,
 );
 export const runDueLeaderboardJobsUseCase = new RunDueLeaderboardJobsUseCase(
   leaderboardRepo,
@@ -1799,11 +1776,17 @@ export const manageLeaderboardExclusionsUseCase = new ManageLeaderboardExclusion
   computeLiveLeaderboardUseCase,
   auditRepo,
 );
+
+export const getPointsHistoryUseCase = new GetPointsHistoryUseCase(
+  leaderboardRepo,
+  publicUserRepo,
+);
 export const leaderboardController = new LeaderboardController({
   getLeaderboard: getLeaderboardUseCase,
   computeLive: computeLiveLeaderboardUseCase,
   finalizeWeek: finalizeLeaderboardWeekUseCase,
   manageExclusions: manageLeaderboardExclusionsUseCase,
+  getPointsHistory: getPointsHistoryUseCase,
 });
 
 export const runStreakReminderUseCase = new RunStreakReminderUseCase(

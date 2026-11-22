@@ -8,8 +8,8 @@ import {
 import { users } from '@/shared/database/drizzle/schema/users.schema';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { culinaryCategories } from '@/shared/database/drizzle/schema/culinary-categories.schema';
-import { culinaryPlaces } from '@/shared/database/drizzle/schema/culinary-places.schema';
-import { culinaryPlaceCuisines } from '@/shared/database/drizzle/schema/culinary-place-cuisines.schema';
+import { usahas } from '@/shared/database/drizzle/schema/usahas.schema';
+import { cuisineUsahas } from '@/shared/database/drizzle/schema/cuisine-usahas.schema';
 import { ilikeCompat } from '@/shared/database/drizzle/ilike-compat';
 import { generateId } from '@/shared/utils/ulid';
 import { ConflictError } from '@/shared/errors/app-error';
@@ -20,21 +20,16 @@ import {
   parseJsonArray,
   type Cuisine,
   type CuisineDetail,
-  type CuisinePlaceLink,
-  type CulinaryPlace,
-  type CulinaryPlaceDetail,
+  type CuisineUsahaLink,
 } from '../domain/entities/culinary.entity';
 import type {
   CreateCuisineInput,
   CreateLinkInput,
-  CreatePlaceInput,
   CulinaryRepository,
   ListCuisinesInput,
-  ListPlacesInput,
   ListResult,
   UpdateCuisineInput,
   UpdateLinkInput,
-  UpdatePlaceInput,
   NewCuisineCommentInput,
   CuisineCommentListFilter,
 } from '../domain/repositories/culinary.repository';
@@ -48,10 +43,7 @@ import {
 } from '@/shared/comment/entity-comment-media';
 
 type CuisineRow = typeof cuisines.$inferSelect;
-type PlaceRow = typeof culinaryPlaces.$inferSelect;
-
 const COMMENT_REVISION_CAP = 50;
-
 type CuisineCommentRow = typeof cuisineComments.$inferSelect;
 
 function toCuisineComment(
@@ -90,8 +82,6 @@ const cuisineSelect = {
   categoryName: culinaryCategories.name,
 };
 
-const placeSelect = { ...getTableColumns(culinaryPlaces) };
-
 function mapCuisine(row: CuisineRow & { categoryName: string | null }): Cuisine {
   return {
     id: row.id,
@@ -121,56 +111,25 @@ function mapCuisine(row: CuisineRow & { categoryName: string | null }): Cuisine 
   };
 }
 
-function mapPlace(row: PlaceRow): CulinaryPlace {
-  return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    type: row.type ?? null,
-    description: row.description ?? null,
-    locationHint: row.locationHint ?? null,
-    addressText: row.addressText ?? null,
-    lat: row.lat ?? null,
-    lng: row.lng ?? null,
-    mapsUrl: row.mapsUrl ?? null,
-    phone: row.phone ?? null,
-    whatsapp: row.whatsapp ?? null,
-    website: row.website ?? null,
-    socialUrl: row.socialUrl ?? null,
-    coverUrl: row.coverUrl ?? null,
-    operationalStatus: row.operationalStatus,
-    publishStatus: row.publishStatus,
-    restrictedReason: row.restrictedReason ?? null,
-    restrictedAt: row.restrictedAt ?? null,
-    managerId: row.managerId ?? null,
-    authorId: row.authorId ?? null,
-    author: null,
-    publishedAt: row.publishedAt ?? null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt ?? null,
-  };
-}
-
-type LinkRow = typeof culinaryPlaceCuisines.$inferSelect;
+type LinkRow = typeof cuisineUsahas.$inferSelect;
 
 function mapLink(
   row: LinkRow,
   cuisineName: string | null,
   cuisineSlug: string | null,
-  placeName: string | null,
-  placeSlug: string | null,
-): CuisinePlaceLink {
+  usahaName: string | null,
+  usahaSlug: string | null,
+): CuisineUsahaLink {
   return {
     id: row.id,
     cuisineId: row.cuisineId,
-    placeId: row.placeId,
+    usahaId: row.usahaId,
     availability: row.availability,
     note: row.note ?? null,
-    publishStatus: row.publishStatus,
     cuisineName,
     cuisineSlug,
-    placeName,
-    placeSlug,
+    usahaName,
+    usahaSlug,
   };
 }
 
@@ -183,7 +142,6 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
   constructor(private readonly db: AppDatabase) {}
 
   // ------------------------------------------------------------- kuliner --
-
   async createCuisine(input: CreateCuisineInput): Promise<Cuisine> {
     const id = input.id ?? generateId();
     const now = new Date();
@@ -278,7 +236,7 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .where(and(eq(cuisines.id, id), isNull(cuisines.deletedAt)))
       .limit(1);
     if (!row) return null;
-    return { ...mapCuisine(row), places: await this.linksForCuisine(row.id) };
+    return { ...mapCuisine(row), usahas: await this.linksForCuisine(row.id) };
   }
 
   async findCuisineBySlug(
@@ -296,7 +254,7 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
     if (!row) return null;
     const detail: CuisineDetail = {
       ...mapCuisine(row),
-      places: await this.linksForCuisine(row.id),
+      usahas: await this.linksForCuisine(row.id),
     };
     detail.author = await resolvePublicAuthor(this.db, detail.authorId);
     return detail;
@@ -374,228 +332,14 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
     return rows;
   }
 
-  // --------------------------------------------------- tempat/penjual --
-
-  async createPlace(input: CreatePlaceInput): Promise<CulinaryPlace> {
-    const id = input.id ?? generateId();
-    const now = new Date();
-    try {
-      await this.db.insert(culinaryPlaces).values({
-        id,
-        slug: input.slug,
-        name: input.name,
-        type: input.type ?? null,
-        description: input.description ?? null,
-        locationHint: input.locationHint ?? null,
-        addressText: input.addressText ?? null,
-        lat: input.lat ?? null,
-        lng: input.lng ?? null,
-        mapsUrl: input.mapsUrl ?? null,
-        phone: input.phone ?? null,
-        whatsapp: input.whatsapp ?? null,
-        website: input.website ?? null,
-        socialUrl: input.socialUrl ?? null,
-        coverUrl: input.coverUrl ?? null,
-        operationalStatus: input.operationalStatus ?? 'unknown',
-        publishStatus: input.publishStatus ?? 'published',
-        publishedAt:
-          input.publishStatus === undefined || input.publishStatus === 'published'
-            ? now
-            : null,
-        authorId: input.authorId ?? null,
-      });
-    } catch (e) {
-      if (isUniqueError(e)) {
-        throw new ConflictError('SLUG_TAKEN', 'Slug tempat sudah dipakai');
-      }
-      throw e;
-    }
-    const created = await this.findPlaceById(id);
-    if (!created) throw new Error('Tempat create gagal - row tidak ketemu');
-    return created;
-  }
-
-  async updatePlace(input: UpdatePlaceInput): Promise<CulinaryPlace | null> {
-    const values: Partial<typeof culinaryPlaces.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    if (input.slug !== undefined) values.slug = input.slug;
-    if (input.name !== undefined) values.name = input.name;
-    if (input.type !== undefined) values.type = input.type;
-    if (input.description !== undefined) values.description = input.description;
-    if (input.locationHint !== undefined) values.locationHint = input.locationHint;
-    if (input.addressText !== undefined) values.addressText = input.addressText;
-    if (input.lat !== undefined) values.lat = input.lat;
-    if (input.lng !== undefined) values.lng = input.lng;
-    if (input.mapsUrl !== undefined) values.mapsUrl = input.mapsUrl;
-    if (input.phone !== undefined) values.phone = input.phone;
-    if (input.whatsapp !== undefined) values.whatsapp = input.whatsapp;
-    if (input.website !== undefined) values.website = input.website;
-    if (input.socialUrl !== undefined) values.socialUrl = input.socialUrl;
-    if (input.coverUrl !== undefined) values.coverUrl = input.coverUrl;
-    if (input.operationalStatus !== undefined)
-      values.operationalStatus = input.operationalStatus;
-    if (input.publishStatus !== undefined) {
-      values.publishStatus = input.publishStatus;
-      if (input.publishStatus === 'published') values.publishedAt = new Date();
-    }
-    if (input.restricted === null) {
-      values.restrictedReason = null;
-      values.restrictedAt = null;
-    } else if (input.restricted) {
-      values.restrictedReason = input.restricted.reason;
-      values.restrictedAt = new Date();
-    }
-    try {
-      await this.db
-        .update(culinaryPlaces)
-        .set(values)
-        .where(
-          and(eq(culinaryPlaces.id, input.id), isNull(culinaryPlaces.deletedAt)),
-        );
-    } catch (e) {
-      if (isUniqueError(e)) {
-        throw new ConflictError('SLUG_TAKEN', 'Slug tempat sudah dipakai');
-      }
-      throw e;
-    }
-    return this.findPlaceById(input.id);
-  }
-
-  async softDeletePlace(id: string): Promise<boolean> {
-    const rows = await this.db
-      .update(culinaryPlaces)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(culinaryPlaces.id, id), isNull(culinaryPlaces.deletedAt)))
-      .returning({ id: culinaryPlaces.id });
-    return rows.length > 0;
-  }
-
-  async findPlaceById(id: string): Promise<CulinaryPlaceDetail | null> {
-    const [row] = await this.db
-      .select(placeSelect)
-      .from(culinaryPlaces)
-      .where(and(eq(culinaryPlaces.id, id), isNull(culinaryPlaces.deletedAt)))
-      .limit(1);
-    if (!row) return null;
-    return { ...mapPlace(row), cuisines: await this.linksForPlace(row.id) };
-  }
-
-  async findPlaceBySlug(
-    slug: string,
-    opts?: { publicOnly?: boolean },
-  ): Promise<CulinaryPlaceDetail | null> {
-    const conds = [eq(culinaryPlaces.slug, slug), isNull(culinaryPlaces.deletedAt)];
-    if (opts?.publicOnly)
-      conds.push(eq(culinaryPlaces.publishStatus, 'published'));
-    const [row] = await this.db
-      .select(placeSelect)
-      .from(culinaryPlaces)
-      .where(and(...conds))
-      .limit(1);
-    if (!row) return null;
-    const detail: CulinaryPlaceDetail = {
-      ...mapPlace(row),
-      cuisines: await this.linksForPlace(row.id),
-    };
-    detail.author = await resolvePublicAuthor(this.db, detail.authorId);
-    return detail;
-  }
-
-  async listPlaces(input: ListPlacesInput): Promise<ListResult<CulinaryPlace>> {
-    const conds = [isNull(culinaryPlaces.deletedAt)];
-    if (input.publicOnly)
-      conds.push(eq(culinaryPlaces.publishStatus, 'published'));
-    else if (input.status)
-      conds.push(eq(culinaryPlaces.publishStatus, input.status));
-    if (input.managerId) conds.push(eq(culinaryPlaces.managerId, input.managerId));
-    if (input.type) conds.push(eq(culinaryPlaces.type, input.type));
-    if (input.operationalStatus)
-      conds.push(eq(culinaryPlaces.operationalStatus, input.operationalStatus));
-    if (input.q?.trim()) {
-      const q = `%${input.q.trim()}%`;
-      conds.push(
-        or(ilikeCompat(culinaryPlaces.name, q), ilikeCompat(culinaryPlaces.slug, q))!,
-      );
-    }
-    // Keyset harus cocok dengan ORDER BY (created_at, id) DESC.
-    // Cursor tidak ketemu → halaman kosong (jangan jatuh ke page 1).
-    if (input.before) {
-      const [cursor] = await this.db
-        .select({ id: culinaryPlaces.id, createdAt: culinaryPlaces.createdAt })
-        .from(culinaryPlaces)
-        .where(eq(culinaryPlaces.id, input.before))
-        .limit(1);
-      if (!cursor) {
-        return { items: [], nextCursor: null };
-      }
-      conds.push(
-        or(
-          lt(culinaryPlaces.createdAt, cursor.createdAt),
-          and(
-            eq(culinaryPlaces.createdAt, cursor.createdAt),
-            lt(culinaryPlaces.id, cursor.id),
-          ),
-        )!,
-      );
-    }
-    const rows = await this.db
-      .select(placeSelect)
-      .from(culinaryPlaces)
-      .where(and(...conds))
-      .orderBy(desc(culinaryPlaces.createdAt), desc(culinaryPlaces.id))
-      .limit(input.limit + 1);
-    const hasMore = rows.length > input.limit;
-    const page = hasMore ? rows.slice(0, input.limit) : rows;
-    const items = page.map(mapPlace);
-    return {
-      items,
-      nextCursor: hasMore ? items[items.length - 1].id : null,
-    };
-  }
-
-  async existingPlaceSlugs(slugs: string[]): Promise<Set<string>> {
-    if (slugs.length === 0) return new Set();
-    const rows = await this.db
-      .select({ slug: culinaryPlaces.slug })
-      .from(culinaryPlaces)
-      .where(inArray(culinaryPlaces.slug, slugs));
-    return new Set(rows.map((r) => r.slug));
-  }
-
-  async findPlaceDuplicates(input: {
-    q: string;
-    excludeId?: string;
-  }): Promise<Array<{ id: string; slug: string; name: string }>> {
-    const term = input.q.trim().toLowerCase();
-    if (!term) return [];
-    const conds = [
-      isNull(culinaryPlaces.deletedAt),
-      ne(culinaryPlaces.publishStatus, 'archived'),
-      sql`lower(trim(${culinaryPlaces.name})) like ${`%${term}%`}`,
-    ];
-    if (input.excludeId) conds.push(ne(culinaryPlaces.id, input.excludeId));
-    const rows = await this.db
-      .select({
-        id: culinaryPlaces.id,
-        slug: culinaryPlaces.slug,
-        name: culinaryPlaces.name,
-      })
-      .from(culinaryPlaces)
-      .where(and(...conds))
-      .limit(10);
-    return rows;
-  }
-
   // ------------------------------------------------------------- relasi --
-
-  async createLink(input: CreateLinkInput): Promise<CuisinePlaceLink> {
+  async createLink(input: CreateLinkInput): Promise<CuisineUsahaLink> {
     const id = input.id ?? generateId();
     try {
-      await this.db.insert(culinaryPlaceCuisines).values({
+      await this.db.insert(cuisineUsahas).values({
         id,
         cuisineId: input.cuisineId,
-        placeId: input.placeId,
+        usahaId: input.usahaId,
         availability: input.availability ?? 'unknown',
         note: input.note ?? null,
         publishStatus: input.publishStatus ?? 'published',
@@ -605,7 +349,7 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       if (isUniqueError(e)) {
         throw new ConflictError(
           'LINK_EXISTS',
-          'Hubungan kuliner dan tempat ini sudah ada',
+          'Hubungan kuliner dan usaha ini sudah ada',
         );
       }
       throw e;
@@ -615,8 +359,8 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
     return created;
   }
 
-  async updateLink(input: UpdateLinkInput): Promise<CuisinePlaceLink | null> {
-    const values: Partial<typeof culinaryPlaceCuisines.$inferInsert> = {
+  async updateLink(input: UpdateLinkInput): Promise<CuisineUsahaLink | null> {
+    const values: Partial<typeof cuisineUsahas.$inferInsert> = {
       updatedAt: new Date(),
     };
     if (input.availability !== undefined) values.availability = input.availability;
@@ -624,12 +368,12 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
     if (input.publishStatus !== undefined)
       values.publishStatus = input.publishStatus;
     await this.db
-      .update(culinaryPlaceCuisines)
+      .update(cuisineUsahas)
       .set(values)
       .where(
         and(
-          eq(culinaryPlaceCuisines.id, input.id),
-          isNull(culinaryPlaceCuisines.deletedAt),
+          eq(cuisineUsahas.id, input.id),
+          isNull(cuisineUsahas.deletedAt),
         ),
       );
     return this.findLinkById(input.id);
@@ -637,62 +381,62 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
 
   async softDeleteLink(id: string): Promise<boolean> {
     const rows = await this.db
-      .update(culinaryPlaceCuisines)
+      .update(cuisineUsahas)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(
         and(
-          eq(culinaryPlaceCuisines.id, id),
-          isNull(culinaryPlaceCuisines.deletedAt),
+          eq(cuisineUsahas.id, id),
+          isNull(cuisineUsahas.deletedAt),
         ),
       )
-      .returning({ id: culinaryPlaceCuisines.id });
+      .returning({ id: cuisineUsahas.id });
     return rows.length > 0;
   }
 
-  async findLinkById(id: string): Promise<CuisinePlaceLink | null> {
+  async findLinkById(id: string): Promise<CuisineUsahaLink | null> {
     const [row] = await this.db
       .select({
-        link: culinaryPlaceCuisines,
+        link: cuisineUsahas,
         cuisineName: cuisines.name,
         cuisineSlug: cuisines.slug,
-        placeName: culinaryPlaces.name,
-        placeSlug: culinaryPlaces.slug,
+        usahaName: usahas.name,
+        usahaSlug: usahas.slug,
       })
-      .from(culinaryPlaceCuisines)
-      .leftJoin(cuisines, eq(cuisines.id, culinaryPlaceCuisines.cuisineId))
-      .leftJoin(culinaryPlaces, eq(culinaryPlaces.id, culinaryPlaceCuisines.placeId))
-      .where(eq(culinaryPlaceCuisines.id, id))
+      .from(cuisineUsahas)
+      .leftJoin(cuisines, eq(cuisines.id, cuisineUsahas.cuisineId))
+      .leftJoin(usahas, eq(usahas.id, cuisineUsahas.usahaId))
+      .where(eq(cuisineUsahas.id, id))
       .limit(1);
     if (!row) return null;
     return mapLink(
       row.link,
       row.cuisineName ?? null,
       row.cuisineSlug ?? null,
-      row.placeName ?? null,
-      row.placeSlug ?? null,
+      row.usahaName ?? null,
+      row.usahaSlug ?? null,
     );
   }
 
   async findLinkByPair(
     cuisineId: string,
-    placeId: string,
-  ): Promise<CuisinePlaceLink | null> {
+    usahaId: string,
+  ): Promise<CuisineUsahaLink | null> {
     const [row] = await this.db
       .select({
-        link: culinaryPlaceCuisines,
+        link: cuisineUsahas,
         cuisineName: cuisines.name,
         cuisineSlug: cuisines.slug,
-        placeName: culinaryPlaces.name,
-        placeSlug: culinaryPlaces.slug,
+        usahaName: usahas.name,
+        usahaSlug: usahas.slug,
       })
-      .from(culinaryPlaceCuisines)
-      .leftJoin(cuisines, eq(cuisines.id, culinaryPlaceCuisines.cuisineId))
-      .leftJoin(culinaryPlaces, eq(culinaryPlaces.id, culinaryPlaceCuisines.placeId))
+      .from(cuisineUsahas)
+      .leftJoin(cuisines, eq(cuisines.id, cuisineUsahas.cuisineId))
+      .leftJoin(usahas, eq(usahas.id, cuisineUsahas.usahaId))
       .where(
         and(
-          eq(culinaryPlaceCuisines.cuisineId, cuisineId),
-          eq(culinaryPlaceCuisines.placeId, placeId),
-          isNull(culinaryPlaceCuisines.deletedAt),
+          eq(cuisineUsahas.cuisineId, cuisineId),
+          eq(cuisineUsahas.usahaId, usahaId),
+          isNull(cuisineUsahas.deletedAt),
         ),
       )
       .limit(1);
@@ -701,64 +445,38 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       row.link,
       row.cuisineName ?? null,
       row.cuisineSlug ?? null,
-      row.placeName ?? null,
-      row.placeSlug ?? null,
+      row.usahaName ?? null,
+      row.usahaSlug ?? null,
     );
   }
 
-  async linksForCuisine(cuisineId: string): Promise<CuisinePlaceLink[]> {
+  async linksForCuisine(cuisineId: string): Promise<CuisineUsahaLink[]> {
     const rows = await this.db
       .select({
-        link: culinaryPlaceCuisines,
-        placeName: culinaryPlaces.name,
-        placeSlug: culinaryPlaces.slug,
+        link: cuisineUsahas,
+        usahaName: usahas.name,
+        usahaSlug: usahas.slug,
       })
-      .from(culinaryPlaceCuisines)
-      // INNER JOIN: relasi hanya tayang bila tempatnya juga published.
-      .innerJoin(culinaryPlaces, eq(culinaryPlaces.id, culinaryPlaceCuisines.placeId))
+      .from(cuisineUsahas)
+      // INNER JOIN: relasi hanya tayang bila usahanya juga published.
+      .innerJoin(usahas, eq(usahas.id, cuisineUsahas.usahaId))
       .where(
         and(
-          eq(culinaryPlaceCuisines.cuisineId, cuisineId),
-          eq(culinaryPlaceCuisines.publishStatus, 'published'),
-          isNull(culinaryPlaceCuisines.deletedAt),
-          eq(culinaryPlaces.publishStatus, 'published'),
-          isNull(culinaryPlaces.deletedAt),
+          eq(cuisineUsahas.cuisineId, cuisineId),
+          eq(cuisineUsahas.publishStatus, 'published'),
+          isNull(cuisineUsahas.deletedAt),
+          eq(usahas.publishStatus, 'published'),
+          isNull(usahas.deletedAt),
         ),
       )
-      .orderBy(asc(culinaryPlaces.name))
+      .orderBy(asc(usahas.name))
       .limit(100);
     return rows.map((r) =>
-      mapLink(r.link, null, null, r.placeName ?? null, r.placeSlug ?? null),
-    );
-  }
-
-  async linksForPlace(placeId: string): Promise<CuisinePlaceLink[]> {
-    const rows = await this.db
-      .select({
-        link: culinaryPlaceCuisines,
-        cuisineName: cuisines.name,
-        cuisineSlug: cuisines.slug,
-      })
-      .from(culinaryPlaceCuisines)
-      .innerJoin(cuisines, eq(cuisines.id, culinaryPlaceCuisines.cuisineId))
-      .where(
-        and(
-          eq(culinaryPlaceCuisines.placeId, placeId),
-          eq(culinaryPlaceCuisines.publishStatus, 'published'),
-          isNull(culinaryPlaceCuisines.deletedAt),
-          eq(cuisines.publishStatus, 'published'),
-          isNull(cuisines.deletedAt),
-        ),
-      )
-      .orderBy(asc(cuisines.name))
-      .limit(100);
-    return rows.map((r) =>
-      mapLink(r.link, r.cuisineName ?? null, r.cuisineSlug ?? null, null, null),
+      mapLink(r.link, null, null, r.usahaName ?? null, r.usahaSlug ?? null),
     );
   }
 
   // ---------------------------------------------------------- kategori --
-
   async categoryRef(categoryId: string) {
     const [row] = await this.db
       .select({ id: culinaryCategories.id, name: culinaryCategories.name })
@@ -784,7 +502,6 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
   }
 
   // ---------------------------------------------------------------- komentar
-
   async createComment(input: NewCuisineCommentInput): Promise<CuisineComment> {
     const [row] = await this.db
       .insert(cuisineComments)
@@ -842,7 +559,6 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
     const conditions = [eq(cuisineComments.cuisineId, cuisineId)];
     if (filter.status) conditions.push(eq(cuisineComments.status, filter.status));
     if (filter.cursor) conditions.push(lt(cuisineComments.id, filter.cursor));
-
     const rows = await this.db
       .select({
         c: cuisineComments,
@@ -861,7 +577,6 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .where(and(...conditions))
       .orderBy(desc(cuisineComments.id))
       .limit(limit + 1);
-
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     return {
@@ -893,7 +608,6 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
         .where(eq(cuisineComments.id, input.commentId))
         .limit(1);
       if (!current) return null;
-
       await tx.insert(cuisineCommentRevisions).values({
         commentId: input.commentId,
         editorId: input.editorId,
@@ -911,7 +625,6 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
           .delete(cuisineCommentRevisions)
           .where(inArray(cuisineCommentRevisions.id, excess.map((r) => r.id)));
       }
-
       const [row] = await tx
         .update(cuisineComments)
         .set({ body: input.body, updatedAt: now })

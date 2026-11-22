@@ -11,6 +11,7 @@ import {
   addLeaderboardExclusionBodySchema,
   finalizeLeaderboardBodySchema,
   getLeaderboardQuerySchema,
+  getPointsHistoryResponseSchema,
   leaderboardAdminActionResponseSchema,
   leaderboardExclusionListResponseSchema,
   leaderboardExclusionMutationResponseSchema,
@@ -43,6 +44,30 @@ export function createPublicLeaderboardRoutes(deps: { controller: LeaderboardCon
   });
 
   routes.openapi(listRoute, (c) => deps.controller.getPublic(c, c.req.valid('query')) as never);
+
+  const pointsHistoryRoute = createRoute({
+    method: 'get',
+    path: '/users/{username}/points-history',
+    tags: ['Leaderboard'],
+    summary: 'Riwayat poin mingguan user (snapshot per minggu)',
+    request: {
+      params: z.object({ username: z.string().min(1).max(100) }),
+      query: z.object({ limit: z.coerce.number().int().min(1).max(52).default(52) }),
+    },
+    responses: {
+      200: { description: 'Riwayat poin', content: json(getPointsHistoryResponseSchema) },
+      404: { description: 'User tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(
+    pointsHistoryRoute,
+    (c) =>
+      deps.controller.pointsHistory(
+        c,
+        c.req.param('username'),
+        c.req.valid('query').limit,
+      ) as never,
+  );
   return routes;
 }
 
@@ -120,6 +145,17 @@ export function createAdminLeaderboardRoutes(deps: LeaderboardRoutesDeps) {
     },
   });
 
+  const listSystemExclusionsRoute = createRoute({
+    method: 'get',
+    path: '/exclusions/system',
+    tags: ['Admin Leaderboard'],
+    summary: 'Semua user sistem bawaan + status exclude (untuk toggle panel)',
+    responses: {
+      200: { description: 'Daftar user sistem', content: json(leaderboardExclusionListResponseSchema) },
+    },
+  });
+
+  routes.openapi(listSystemExclusionsRoute, (c) => deps.controller.listSystemUsers(c) as never);
   routes.openapi(listExclusionsRoute, (c) => deps.controller.listExclusions(c) as never);
   routes.openapi(addExclusionRoute, (c) =>
     deps.controller.addExclusion(c, c.req.valid('json')) as never,
