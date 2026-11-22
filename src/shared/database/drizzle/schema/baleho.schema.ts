@@ -160,6 +160,10 @@ export const balehoPlacements = sqliteTable(
     entityId: text('entity_id'),
     startsAt: integer('starts_at', { mode: 'timestamp' }),
     endsAt: integer('ends_at', { mode: 'timestamp' }),
+    /** Hari mulai tayang yang dipilih saat pesan (00:00 WIB). */
+    scheduledStartsOn: integer('scheduled_starts_on', { mode: 'timestamp' }),
+    /** Nomor WA konfirmasi (digit internasional 62/60). */
+    confirmationPhone: text('confirmation_phone'),
     /** Sudah dikirim notif H-1 (1x). Epoch ms. */
     endingSoonNotifiedAt: integer('ending_soon_notified_at', {
       mode: 'timestamp',
@@ -203,7 +207,12 @@ export const balehoOccupancy = sqliteTable(
       .references(() => balehoPlacements.id, { onDelete: 'cascade' }),
   },
   (t) => [
-    primaryKey({ columns: [t.slide, t.col, t.row] }),
+    uniqueIndex('baleho_occupancy_cell_placement_uq').on(
+      t.slide,
+      t.col,
+      t.row,
+      t.placementId,
+    ),
     index('baleho_occupancy_placement_idx').on(t.placementId),
   ],
 );

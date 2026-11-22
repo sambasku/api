@@ -1317,6 +1317,20 @@
       "when": 1801678504000,
       "tag": "0188_leaderboard_week_entries_display_name",
       "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "6",
+      "when": 1801678505000,
+      "tag": "0189_baleho_booking_contact_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "6",
+      "when": 1801678506000,
+      "tag": "0190_baleho_occupancy_multi",
+      "breakpoints": true
     }
   ]
 }

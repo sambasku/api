@@ -46,6 +46,7 @@ function toMyProfileWire(profile: MyProfileResult) {
     username_change_allowed_at:
       profile.usernameChangeAllowedAt?.toISOString() ?? null,
     username_change_cooldown_days: profile.usernameChangeCooldownDays,
+    phone: profile.phone,
   };
 }
 

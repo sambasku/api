@@ -1,5 +1,6 @@
 import type { ProposedChanges } from '../../domain/entities/word-suggestion.entity';
 import { NotFoundError, ConflictError, BadRequestError } from '@/shared/errors/app-error';
+import { hasConflictingUsageLabels } from '@/shared/constants/usage-labels';
 import {
   resolveWordImageProvider,
   stockImageAttribution,
@@ -656,7 +657,6 @@ export async function applyChangesToWord(
       }
     }
   }
-
   if (changes.categoryIdsToRemove && changes.categoryIdsToRemove.length > 0) {
     for (const catId of changes.categoryIdsToRemove) {
       await db
@@ -671,6 +671,34 @@ export async function applyChangesToWord(
         );
       changesApplied++;
     }
+  }
+
+  if (
+    (changes.usageLabelsToAdd?.length ?? 0) > 0 ||
+    (changes.usageLabelsToRemove?.length ?? 0) > 0
+  ) {
+    const [usageRow] = await db
+      .select({ usageLabels: words.usageLabels })
+      .from(words)
+      .where(eq(words.id, word.id))
+      .limit(1);
+    const current = Array.isArray(usageRow?.usageLabels)
+      ? (usageRow.usageLabels as string[])
+      : [];
+    const next = new Set(current);
+    for (const label of changes.usageLabelsToRemove ?? []) next.delete(label);
+    for (const label of changes.usageLabelsToAdd ?? []) next.add(label);
+    const merged = [...next];
+    if (hasConflictingUsageLabels(merged)) {
+      throw new BadRequestError('VALIDATION_ERROR', 'Label halus dan kasar tidak bisa bersamaan', [
+        { field: 'usage_labels', message: 'Label halus dan kasar tidak bisa dipilih bersamaan' },
+      ]);
+    }
+    await db
+      .update(words)
+      .set({ usageLabels: merged, updatedBy: reviewerId, updatedAt: new Date() })
+      .where(eq(words.id, word.id));
+    changesApplied++;
   }
 
   // Relations (Form A link + Form B lemma - resolve/create saat approve)

@@ -46,6 +46,7 @@ export interface MyProfileResult {
   /** Null = boleh ganti username sekarang. */
   usernameChangeAllowedAt: Date | null;
   usernameChangeCooldownDays: number;
+  phone: string | null;
 }
 
 function toMyProfile(
@@ -70,6 +71,7 @@ function toMyProfile(
     usernameChangedAt,
     usernameChangeAllowedAt: computeUsernameChangeAllowedAt(usernameChangedAt),
     usernameChangeCooldownDays: USERNAME_CHANGE_COOLDOWN_DAYS,
+    phone: user.phone,
   };
 }
 

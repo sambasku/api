@@ -6,7 +6,9 @@ export class GeoController {
   constructor(private readonly deps: { resolveMapsUrl: ResolveMapsUrlUseCase }) {}
 
   async resolveMapsUrl(c: Context, body: ResolveMapsUrlBody) {
-    const data = await this.deps.resolveMapsUrl.execute(body.url);
+    const data = await this.deps.resolveMapsUrl.execute(body.url, {
+      requireSambasBounds: body.require_sambas_bounds === true,
+    });
     return c.json({ success: true as const, data });
   }
 }

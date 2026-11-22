@@ -181,6 +181,8 @@ export class WordSuggestionController {
             pronunciations_count: item.summaryChanges.pronunciationsCount,
             categories_added: item.summaryChanges.categoriesAdded,
             categories_removed: item.summaryChanges.categoriesRemoved,
+            usage_labels_added: item.summaryChanges.usageLabelsAdded,
+            usage_labels_removed: item.summaryChanges.usageLabelsRemoved,
             relations_count: item.summaryChanges.relationsCount,
             variants_count: item.summaryChanges.variantsCount,
             images_count: item.summaryChanges.imagesCount,
@@ -251,6 +253,7 @@ export class WordSuggestionController {
               dialect_id: p.dialectId,
             })),
             category_ids: detail.currentWord.categoryIds,
+            usage_labels: detail.currentWord.usageLabels,
             relations: detail.currentWord.relations.map((r) => ({
               relation_type: r.relationType,
               word_id: r.wordId,
@@ -291,6 +294,7 @@ export class WordSuggestionController {
               changes: p.changes,
             })),
             categories: detail.diff.categories,
+            usage_labels: detail.diff.usageLabels,
             relations: {
               added: detail.diff.relations.added.map((r) => ({
                 relation_type: r.relationType,

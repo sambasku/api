@@ -317,9 +317,8 @@ interface FeedRow {
   eventSlug: string | null;
   eventName: string | null;
   /**
-   * Kuliner untuk cuisine_published (LEFT JOIN cuisines + culinary_places,
-   * published saja). Satu kind dipakai dua entitas: targetId menentukan mana
-   * yang terisi.
+   * Kuliner untuk cuisine_published (LEFT JOIN cuisines, published saja).
+   * Tempat jual kuliner = usaha (bukan culinary_places; dihapus migrasi 0184).
    */
 cuisineSlug: string | null;
 cuisineName: string | null;

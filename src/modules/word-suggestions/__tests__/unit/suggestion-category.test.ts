@@ -74,6 +74,28 @@ describe('checkSuggestionCategoryShape', () => {
     expect(issues.map((i) => i.field)).toContain('word_type');
   });
 
+  it('change_usage_labels hanya terima usage_labels_to_add/remove', () => {
+    expect(
+      checkSuggestionCategoryShape('change_usage_labels', {
+        usageLabelsToAdd: ['seksual'],
+      }),
+    ).toEqual([]);
+    expect(
+      checkSuggestionCategoryShape('change_usage_labels', {
+        usageLabelsToRemove: ['kasar'],
+      }),
+    ).toEqual([]);
+    expect(
+      checkSuggestionCategoryShape('change_usage_labels', {
+        lemma: 'x',
+        usageLabelsToAdd: ['diskriminatif'],
+      }).map((i) => i.field),
+    ).toContain('lemma');
+    expect(
+      checkSuggestionCategoryShape('change_usage_labels', {}).map((i) => i.field),
+    ).toContain('proposed_changes');
+  });
+
   it('change_categories hanya terima category_ids_to_add/remove', () => {
     expect(
       checkSuggestionCategoryShape('change_categories', {

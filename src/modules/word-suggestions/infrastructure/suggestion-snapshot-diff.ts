@@ -3,6 +3,7 @@ import { eq, and, isNull, inArray, asc, sql } from 'drizzle-orm';
 import { db } from '@/shared/database/drizzle/client';
 import { words, meanings, meaningTranslations, examples, pronunciations, wordCategories, wordClasses, lexicalRelations, wordVariants, wordImages, wordGroups, wordGroupMembers } from '@/shared/database/drizzle/schema';
 import type { CurrentWordSnapshot, DiffResult, ProposedChanges } from '../domain/entities/word-suggestion.entity';
+import { toUsageLabels } from '@/modules/word/infrastructure/word-row-mappers';
 export async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapshot | null> {
   const [word] = await db
     .select({
@@ -10,6 +11,7 @@ export async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWor
       notes: words.notes,
       wordType: words.wordType,
       languageId: words.languageId,
+      usageLabels: words.usageLabels,
     })
     .from(words)
     .where(and(eq(words.id, wordId), isNull(words.deletedAt)))
@@ -191,6 +193,7 @@ export async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWor
       dialectId: p.dialectId,
     })),
     categoryIds: catRows.map((c) => c.categoryId),
+    usageLabels: toUsageLabels(word.usageLabels),
     relations: relRows.map((r) => ({
       relationType: r.relationType,
       wordId: r.wordId,
@@ -361,6 +364,7 @@ export async function buildDiff(proposed: ProposedChanges, current: CurrentWordS
   }
 
   const curCats = new Set(current.categoryIds);
+  const curUsage = new Set(current.usageLabels);
   const lemmaOf = await relationLemmas(proposed, current);
   // Form B (lemma): kata yang sudah ada → word_id + lemma; belum ada →
   // lemma + new_word=true (dibuat saat approve).
@@ -466,6 +470,10 @@ export async function buildDiff(proposed: ProposedChanges, current: CurrentWordS
     categories: {
       added: (proposed.categoryIdsToAdd ?? []).filter((c) => !curCats.has(c)),
       removed: (proposed.categoryIdsToRemove ?? []).filter((c) => curCats.has(c)),
+    },
+    usageLabels: {
+      added: (proposed.usageLabelsToAdd ?? []).filter((l) => !curUsage.has(l)),
+      removed: (proposed.usageLabelsToRemove ?? []).filter((l) => curUsage.has(l)),
     },
     relations: { added: relAdded, removed: relRemoved },
     variants: {

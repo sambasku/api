@@ -89,6 +89,8 @@ export class BalehoController {
       entityType: body.entity_type,
       entityId: body.entity_id,
       days: body.days,
+      startsOn: body.starts_on,
+      confirmationPhone: body.confirmation_phone,
       creativeId: body.creative_id,
       frames: body.frames.map((f) => ({
         mediaType: f.media_type,

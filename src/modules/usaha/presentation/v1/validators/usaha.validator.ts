@@ -34,8 +34,8 @@ function optionalCoord(schema: z.ZodNumber) {
   );
 }
 
-const sambasLat = optionalCoord(z.number().min(1.0).max(1.8));
-const sambasLng = optionalCoord(z.number().min(108.5).max(110.0));
+const geoLat = optionalCoord(z.number().min(-90).max(90));
+const geoLng = optionalCoord(z.number().min(-180).max(180));
 
 const itemFields = {
   name: z.string().trim().min(1).max(120),
@@ -62,8 +62,8 @@ const usahaBodyFields = {
   region_id: z.string().max(64).nullable().optional(),
   village_id: z.string().max(64).nullable().optional(),
   address_text: z.string().max(500).nullable().optional(),
-  lat: sambasLat,
-  lng: sambasLng,
+  lat: geoLat,
+  lng: geoLng,
   maps_url: z.string().url().startsWith('https://').nullable().optional(),
   phone: z.string().max(40).nullable().optional(),
   whatsapp: z.string().max(40).nullable().optional(),

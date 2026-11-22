@@ -54,6 +54,8 @@ export type BalehoRepository = {
     days: number;
     pricePerCellPerDay: number;
     quotedAmount: number;
+    scheduledStartsOn: Date;
+    confirmationPhone: string;
   }): Promise<{ placementId: string; creativeId: string }>;
   listAdmin(limit: number): Promise<
     Array<{
@@ -126,6 +128,9 @@ export type BalehoRepository = {
     h: number;
     status: BalehoPlacementStatus;
     endsAt: Date | null;
+    scheduledStartsOn: Date | null;
+    days: number | null;
+    confirmationPhone: string | null;
     advertiserUserId: string;
     referrerUserId: string | null;
   } | null>;

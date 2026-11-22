@@ -36,11 +36,11 @@ export function createGeoRoutes(deps: { controller: GeoController }) {
     method: 'post',
     path: '/resolve-maps-url',
     tags: ['Geo'],
-    summary: 'Ubah tautan Google Maps jadi koordinat (Kabupaten Sambas)',
+    summary: 'Ubah tautan Google Maps jadi koordinat',
     description:
       'Terima tautan share Maps (`maps.app.goo.gl`, `google.com/maps`, …). ' +
-      'Short link diikuti redirect (allowlist host). Koordinat di luar ' +
-      'Kabupaten Sambas ditolak. Tidak memakai Google Places API.',
+      'Short link diikuti redirect (allowlist host). Mengembalikan titik pin ' +
+      'valid dari URL. Opsional `require_sambas_bounds` (wisata). Tidak memakai Google Places API.',
     request: {
       body: { content: json(resolveMapsUrlBodySchema), required: true },
     },
@@ -51,7 +51,7 @@ export function createGeoRoutes(deps: { controller: GeoController }) {
       },
       400: {
         description:
-          'MAPS_URL_INVALID / MAPS_URL_NO_COORDS / MAPS_URL_OUT_OF_BOUNDS / MAPS_URL_RESOLVE_FAILED / VALIDATION_ERROR',
+          'MAPS_URL_INVALID / MAPS_URL_NO_COORDS / MAPS_URL_OUT_OF_BOUNDS (jika require_sambas_bounds) / MAPS_URL_RESOLVE_FAILED / VALIDATION_ERROR',
         content: json(errorResponseSchema),
       },
       429: { description: 'Rate limit', content: json(errorResponseSchema) },

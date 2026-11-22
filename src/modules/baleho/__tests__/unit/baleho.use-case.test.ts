@@ -32,6 +32,8 @@ function placementInput(
     w: 1,
     h: 1,
     days: 7,
+    startsOn: '2099-01-01',
+    confirmationPhone: '6281234567890',
     frames: [frameInput()],
     ...over,
   };
