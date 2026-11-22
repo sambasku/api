@@ -50,6 +50,8 @@ export type CreateBalehoPlacementInput = {
   entityType?: BalehoEntityType | null;
   entityId?: string | null;
   days?: number;
+  startsOn: string;
+  confirmationPhone: string;
   frames: Array<{
     mediaType: BalehoMediaType;
     mediaUrl?: string | null;

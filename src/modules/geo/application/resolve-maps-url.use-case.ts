@@ -43,7 +43,11 @@ const MAPS_FETCH_UA =
 export class ResolveMapsUrlUseCase {
   constructor(private readonly deps: ResolveMapsUrlDeps) {}
 
-  async execute(rawUrl: string): Promise<ResolveMapsUrlResult> {
+  async execute(
+    rawUrl: string,
+    options?: { requireSambasBounds?: boolean },
+  ): Promise<ResolveMapsUrlResult> {
+    const requireSambasBounds = options?.requireSambasBounds === true;
     const extracted = extractHttpsUrl(rawUrl);
     if (!extracted || !isAllowedMapsUrl(extracted)) {
       throw new BadRequestError(
@@ -95,7 +99,7 @@ export class ResolveMapsUrlUseCase {
       );
     }
 
-    if (!inSambasBounds(coords.lat, coords.lng)) {
+    if (requireSambasBounds && !inSambasBounds(coords.lat, coords.lng)) {
       throw new BadRequestError(
         'MAPS_URL_OUT_OF_BOUNDS',
         'Titik di tautan di luar Kabupaten Sambas. Pilih lokasi di dalam Sambas ya.',

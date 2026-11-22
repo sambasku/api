@@ -14,8 +14,8 @@ function optionalCoord(schema: z.ZodNumber) {
   );
 }
 
-const sambasLat = optionalCoord(z.number().min(1.0).max(1.8));
-const sambasLng = optionalCoord(z.number().min(108.5).max(110.0));
+const geoLat = optionalCoord(z.number().min(-90).max(90));
+const geoLng = optionalCoord(z.number().min(-180).max(180));
 
 
 /** Query admin list usulan: periksa (pending) atau riwayat (decided) + cari. */
@@ -42,8 +42,8 @@ export const submitEventContributionBodySchema = z
     starts_at: z.coerce.date(),
     ends_at: z.coerce.date().nullable().optional(),
     location_text: z.string().max(500).default(""),
-    lat: sambasLat,
-    lng: sambasLng,
+    lat: geoLat,
+    lng: geoLng,
     maps_url: z.string().url().startsWith("https://").nullable().optional(),
     poster_urls: z
     .array(z.string().url().startsWith("https://"))

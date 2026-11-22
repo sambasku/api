@@ -36,6 +36,7 @@ export const SUGGESTION_CATEGORY_CODES = [
   'meaning_group',
   'spelling_variant',
   'change_categories',
+  'change_usage_labels',
   'lemma_notes',
 ] as const;
 
@@ -82,7 +83,8 @@ export const REASON_CODE_LABELS: Record<SuggestionReasonCode, string> = {
   derived_from: 'Kata turunan',
   meaning_group: 'Kelompok makna',
   spelling_variant: 'Variasi penulisan',
-  change_categories: 'Ubah kategori',
+  change_categories: 'Ubah kategori topik',
+  change_usage_labels: 'Ubah label register & peringatan',
   lemma_notes: 'Lemma atau catatan',
   typo: 'Kesalahan penulisan',
   inaccurate_definition: 'Definisi kurang tepat',
@@ -137,6 +139,8 @@ export interface ProposedChanges {
   pronunciations?: PronunciationChange[];
   categoryIdsToAdd?: string[];
   categoryIdsToRemove?: string[];
+  usageLabelsToAdd?: string[];
+  usageLabelsToRemove?: string[];
   relations?: RelationChange[];
   variants?: VariantChange[];
   images?: ImageChange[];
@@ -238,7 +242,9 @@ export interface SuggestionSummary {
     pronunciationsCount: number;
     categoriesAdded: number;
     categoriesRemoved: number;
-  relationsCount: number;
+    usageLabelsAdded: number;
+    usageLabelsRemoved: number;
+    relationsCount: number;
   variantsCount: number;
   imagesCount: number;
   groupsCount: number;
@@ -261,6 +267,7 @@ export interface CurrentWordSnapshot {
   examples: CurrentExampleSnapshot[];
   pronunciations: CurrentPronunciationSnapshot[];
   categoryIds: string[];
+  usageLabels: string[];
   relations: { relationType: string; wordId: string; lemma: string }[];
   variants: { form: string; variantType: string; dialectId: string | null }[];
   images: { id: string; url: string; isPrimary: boolean; altText: string | null }[];
@@ -297,6 +304,7 @@ export interface DiffResult {
   wordType: DiffField;
   meanings: DiffMeaning[];
   categories: { added: string[]; removed: string[] };
+  usageLabels: { added: string[]; removed: string[] };
   relations: {
     added: { relationType: string; wordId?: string; lemma?: string; newWord?: boolean }[];
     removed: { relationType: string; wordId: string; lemma?: string }[];

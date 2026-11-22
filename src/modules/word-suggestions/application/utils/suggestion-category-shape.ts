@@ -17,6 +17,7 @@ type Part =
   | 'examples'
   | 'pronunciations'
   | 'categories'
+  | 'usage_labels'
   | 'relations'
   | 'variants'
   | 'images'
@@ -31,6 +32,7 @@ function presentParts(c: ProposedChanges): Set<Part> {
   if (c.examples?.length) parts.add('examples');
   if (c.pronunciations?.length) parts.add('pronunciations');
   if (c.categoryIdsToAdd?.length || c.categoryIdsToRemove?.length) parts.add('categories');
+  if (c.usageLabelsToAdd?.length || c.usageLabelsToRemove?.length) parts.add('usage_labels');
   if (c.relations?.length) parts.add('relations');
   if (c.variants?.length) parts.add('variants');
   if (c.images?.length) parts.add('images');
@@ -55,6 +57,7 @@ const ALLOWED: Record<string, Part[]> = {
   meaning_group: ['groups'],
   spelling_variant: ['variants'],
   change_categories: ['categories'],
+  change_usage_labels: ['usage_labels'],
   lemma_notes: ['lemma', 'notes'],
 };
 
@@ -203,6 +206,7 @@ export function checkSuggestionCategoryShape(
  */
 export function isRevertibleForApplyPending(c: ProposedChanges): boolean {
   if (c.categoryIdsToAdd?.length || c.categoryIdsToRemove?.length) return false;
+  if (c.usageLabelsToAdd?.length || c.usageLabelsToRemove?.length) return false;
   if (c.relations?.length || c.variants?.length || c.groups?.length) return false;
   if ((c.meanings ?? []).some((m) => m.action !== 'update')) return false;
   if ((c.examples ?? []).some((e) => e.action !== 'update')) return false;

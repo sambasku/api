@@ -31,6 +31,7 @@ import type { PublicImageStoragePort } from '@/modules/public-image/application/
 import { getUserPublicLabel, getUserPublicLabels } from './suggestion-user-labels';
 import { captureBaseline } from './suggestion-baseline';
 import { assertProposedTargetsCurrent, restoreBaseline } from './suggestion-stale';
+import { normalizeUsageLabelChanges } from '../application/utils/normalize-usage-label-changes';
 import {
   getCurrentWordSnapshot,
   buildDiff,
@@ -115,6 +116,13 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
 
     if (proposedChanges.wordType !== undefined && proposedChanges.wordType === word.wordType) {
       proposedChanges = { ...proposedChanges, wordType: undefined };
+    }
+    if (
+      (proposedChanges.usageLabelsToAdd?.length ?? 0) > 0 ||
+      (proposedChanges.usageLabelsToRemove?.length ?? 0) > 0
+    ) {
+      const currentLabels = await this.getWordUsageLabels(wordId);
+      proposedChanges = normalizeUsageLabelChanges(currentLabels, proposedChanges);
     }
     const validation = verifyProposedChanges(proposedChanges);
     if (!validation.valid) {
@@ -396,6 +404,8 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           pronunciationsCount: pc.pronunciations?.length ?? 0,
           categoriesAdded: pc.categoryIdsToAdd?.length ?? 0,
           categoriesRemoved: pc.categoryIdsToRemove?.length ?? 0,
+          usageLabelsAdded: pc.usageLabelsToAdd?.length ?? 0,
+          usageLabelsRemoved: pc.usageLabelsToRemove?.length ?? 0,
           relationsCount: pc.relations?.length ?? 0,
           variantsCount: pc.variants?.length ?? 0,
           imagesCount: pc.images?.length ?? 0,

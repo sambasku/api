@@ -34,6 +34,11 @@ import {
   type BalehoDailyBucket,
   type BalehoEventCounts,
 } from '../application/baleho-metrics';
+import {
+  placementBookingWindowStart,
+  rectsOverlap,
+  windowsOverlap,
+} from '../domain/baleho-schedule';
 
 
 function cellsFor(col: number, row: number, w: number, h: number) {
@@ -46,6 +51,20 @@ function cellsFor(col: number, row: number, w: number, h: number) {
   return cells;
 }
 
+function placementVisibleOnBoardAt(
+  row: {
+    scheduledStartsOn: Date | null;
+    startsAt: Date | null;
+    createdAt: Date;
+    endsAt: Date | null;
+  },
+  now: Date,
+): boolean {
+  if (!row.endsAt || row.endsAt.getTime() < now.getTime()) return false;
+  const start = placementBookingWindowStart(row);
+  return start.getTime() <= now.getTime() && now.getTime() <= row.endsAt.getTime();
+}
+
 export class BalehoRepositoryImpl implements BalehoRepository {
   constructor(private readonly db: AppDatabase) {}
 
@@ -53,7 +72,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     slide: number,
     viewerUserId: string | null,
   ): Promise<BalehoBoard> {
-    const rows = await this.db
+    const rowsAll = await this.db
       .select()
       .from(balehoPlacements)
       .where(
@@ -67,14 +86,21 @@ export class BalehoRepositoryImpl implements BalehoRepository {
       )
       .orderBy(asc(balehoPlacements.row), asc(balehoPlacements.col));
 
+    const boardNow = new Date();
+    const rows = rowsAll.filter((p) => placementVisibleOnBoardAt(p, boardNow));
+
     // Semua status locking wajib tampil sebagai area terisi (buat semua viewer).
     // Konten frame hanya untuk live + milik sendiri (pending/awaiting).
     // Tanpa ini: orang lain lihat sel kosong → pesan → UNIQUE occupancy → 500/409.
+    const nowMs = Date.now();
     const contentCreativeIds = [
       ...new Set(
         rows
           .filter((p) => {
-            if (p.status === 'live') return true;
+            if (p.status === 'live') {
+              if (!p.startsAt) return true;
+              return p.startsAt.getTime() <= nowMs;
+            }
             return (
               !!viewerUserId &&
               p.advertiserUserId === viewerUserId &&
@@ -113,8 +139,11 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     const placements: BalehoPlacementView[] = rows.map((p) => {
       const isOwner =
         !!viewerUserId && p.advertiserUserId === viewerUserId;
+      const livePublic =
+        p.status === 'live' &&
+        (!p.startsAt || p.startsAt.getTime() <= nowMs);
       const showContent =
-        p.status === 'live' ||
+        livePublic ||
         (isOwner &&
           (p.status === 'pending_review' || p.status === 'awaiting_payment'));
       return {
@@ -328,6 +357,68 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     return rows[0] ?? null;
   }
 
+  private async hasScheduleConflictInTx(
+    tx: Parameters<Parameters<AppDatabase['transaction']>[0]>[0],
+    args: {
+      slide: number;
+      col: number;
+      row: number;
+      w: number;
+      h: number;
+      windowStart: Date;
+      windowEnd: Date;
+    },
+  ): Promise<boolean> {
+    const candidates = await tx
+      .select({
+        col: balehoPlacements.col,
+        row: balehoPlacements.row,
+        w: balehoPlacements.w,
+        h: balehoPlacements.h,
+        scheduledStartsOn: balehoPlacements.scheduledStartsOn,
+        startsAt: balehoPlacements.startsAt,
+        createdAt: balehoPlacements.createdAt,
+        endsAt: balehoPlacements.endsAt,
+      })
+      .from(balehoPlacements)
+      .where(
+        and(
+          eq(balehoPlacements.slide, args.slide),
+          isNull(balehoPlacements.deletedAt),
+          inArray(balehoPlacements.status, [
+            ...BALEHO_LOCKING_STATUSES,
+          ] as BalehoPlacementStatus[]),
+        ),
+      );
+    const rect: { col: number; row: number; w: number; h: number } = {
+      col: args.col,
+      row: args.row,
+      w: args.w,
+      h: args.h,
+    };
+    for (const c of candidates) {
+      if (!c.endsAt) continue;
+      if (
+        !rectsOverlap(rect, {
+          col: c.col,
+          row: c.row,
+          w: c.w,
+          h: c.h,
+        })
+      ) {
+        continue;
+      }
+      const start = placementBookingWindowStart(c);
+      if (
+        windowsOverlap(start, c.endsAt, args.windowStart, args.windowEnd)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+
   async createPlacement(args: {
     advertiserUserId: string;
     input: CreateBalehoPlacementInput;
@@ -341,6 +432,8 @@ export class BalehoRepositoryImpl implements BalehoRepository {
     days: number;
     pricePerCellPerDay: number;
     quotedAmount: number;
+    scheduledStartsOn: Date;
+    confirmationPhone: string;
   }): Promise<{ placementId: string; creativeId: string }> {
     const { input } = args;
     const now = new Date();
@@ -378,6 +471,22 @@ export class BalehoRepositoryImpl implements BalehoRepository {
           }
         }
 
+        const conflict = await this.hasScheduleConflictInTx(tx, {
+          slide: input.slide,
+          col: input.col,
+          row: input.row,
+          w: input.w,
+          h: input.h,
+          windowStart: args.scheduledStartsOn,
+          windowEnd: args.endsAt!,
+        });
+        if (conflict) {
+          throw new ConflictError(
+            'SLOT_TAKEN',
+            'Area ini bentrok dengan jadwal pesanan lain. Pilih tanggal atau area lain ya.',
+          );
+        }
+
         await tx.insert(balehoPlacements).values({
           id: placementId,
           creativeId,
@@ -394,6 +503,8 @@ export class BalehoRepositoryImpl implements BalehoRepository {
           entityId: input.entityId ?? null,
           startsAt: args.startsAt,
           endsAt: args.endsAt,
+          scheduledStartsOn: args.scheduledStartsOn,
+          confirmationPhone: args.confirmationPhone,
           days: args.days,
           pricePerCellPerDay: args.pricePerCellPerDay,
           quotedAmount: args.quotedAmount,
@@ -443,7 +554,10 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         pricePerCellPerDay: balehoPlacements.pricePerCellPerDay,
         days: balehoPlacements.days,
         createdAt: balehoPlacements.createdAt,
+        scheduledStartsOn: balehoPlacements.scheduledStartsOn,
+        startsAt: balehoPlacements.startsAt,
         endsAt: balehoPlacements.endsAt,
+        confirmationPhone: balehoPlacements.confirmationPhone,
       })
       .from(balehoPlacements)
       .leftJoin(users, eq(users.id, balehoPlacements.advertiserUserId))
@@ -467,7 +581,10 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         pricePerCellPerDay: r.pricePerCellPerDay ?? null,
         days: r.days ?? null,
         createdAt: r.createdAt,
+        scheduledStartsOn: r.scheduledStartsOn ?? null,
+        startsAt: r.startsAt ?? null,
         endsAt: r.endsAt ?? null,
+        confirmationPhone: r.confirmationPhone ?? null,
         impressions: c.impressions,
         taps: c.taps,
         actions: c.actions,
@@ -671,6 +788,9 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         h: balehoPlacements.h,
         status: balehoPlacements.status,
         endsAt: balehoPlacements.endsAt,
+        scheduledStartsOn: balehoPlacements.scheduledStartsOn,
+        days: balehoPlacements.days,
+        confirmationPhone: balehoPlacements.confirmationPhone,
         advertiserUserId: balehoPlacements.advertiserUserId,
         referrerUserId: balehoPlacements.referrerUserId,
       })

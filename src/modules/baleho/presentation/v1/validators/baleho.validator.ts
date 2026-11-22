@@ -4,12 +4,18 @@ import {
   BALEHO_COLS,
   BALEHO_ENTITY_TYPES,
   BALEHO_EVENT_TYPES,
+  BALEHO_MAX_DAYS,
   BALEHO_MAX_H,
   BALEHO_MAX_W,
   BALEHO_MEDIA_TYPES,
   BALEHO_ROWS,
   isValidBalehoSize,
 } from '@/shared/database/drizzle/schema/baleho.schema';
+import {
+  balehoDayWib,
+  normalizeBalehoConfirmationPhone,
+  parseBalehoStartsOn,
+} from '../../../domain/baleho-schedule';
 
 const frameSchema = z.object({
   media_type: z.enum(BALEHO_MEDIA_TYPES),
@@ -31,7 +37,9 @@ export const createBalehoPlacementBodySchema = z
     referral_username: z.string().min(1).max(40).nullable().optional(),
     entity_type: z.enum(BALEHO_ENTITY_TYPES).nullable().optional(),
     entity_id: z.string().min(1).max(40).nullable().optional(),
-    days: z.number().int().min(1).max(30).optional(),
+    days: z.number().int().min(1).max(BALEHO_MAX_DAYS).optional(),
+    starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal YYYY-MM-DD'),
+    confirmation_phone: z.string().min(8).max(20),
     creative_id: z.string().min(1).max(40).nullable().optional(),
     frames: z.array(frameSchema).max(10).default([]),
   })
@@ -57,7 +65,46 @@ export const createBalehoPlacementBodySchema = z
         message: 'Minimal satu frame',
       });
     }
-  });
+    const phone = normalizeBalehoConfirmationPhone(val.confirmation_phone);
+    if (phone === '__INVALID__') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['confirmation_phone'],
+        message:
+          'Nomor HP/WA wajib format internasional 62… (Indonesia) atau 60… (Malaysia)',
+      });
+    }
+    const start = parseBalehoStartsOn(val.starts_on);
+    if (!start) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['starts_on'],
+        message: 'Tanggal mulai tidak valid',
+      });
+      return;
+    }
+    const today = balehoDayWib(new Date());
+    if (val.starts_on < today) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['starts_on'],
+        message: 'Tanggal mulai tidak boleh di masa lalu',
+      });
+    }
+    const days = val.days ?? BALEHO_MAX_DAYS;
+    if (days < 1 || days > BALEHO_MAX_DAYS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['days'],
+        message: `Durasi harus 1 sampai ${BALEHO_MAX_DAYS} hari`,
+      });
+    }
+  })
+  .transform((val) => ({
+    ...val,
+    confirmation_phone: normalizeBalehoConfirmationPhone(val.confirmation_phone)!,
+    days: val.days ?? BALEHO_MAX_DAYS,
+  }));
 
 export const balehoEventBodySchema = z.object({
   placement_id: z.string().min(1).max(40),

@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { wordTypeSchema } from '@/modules/word/presentation/v1/validators/create-word.validator';
+import {
+  usageLabelSchema,
+  wordTypeSchema,
+} from '@/modules/word/presentation/v1/validators/create-word.validator';
+import { USAGE_LABELS } from '@/shared/constants/usage-labels';
 import { choiceId, opaqueId } from '@/shared/validation/id';
 import {
   STOCK_WORD_IMAGE_PROVIDERS,
@@ -201,6 +205,8 @@ const proposedChangesObjectSchema = z
     pronunciations: z.array(pronunciationChangeSchema).max(10).optional(),
     category_ids_to_add: z.array(ulid).optional(),
     category_ids_to_remove: z.array(ulid).optional(),
+    usage_labels_to_add: z.array(usageLabelSchema).max(USAGE_LABELS.length).optional(),
+    usage_labels_to_remove: z.array(usageLabelSchema).max(USAGE_LABELS.length).optional(),
     relations: z.array(relationChangeSchema).max(10).optional(),
     variants: z.array(variantChangeSchema).max(10).optional(),
     images: z.array(imageChangeSchema).max(5).optional(),
@@ -216,6 +222,8 @@ const proposedChangesObjectSchema = z
       (p.pronunciations?.length ?? 0) > 0 ||
       (p.category_ids_to_add?.length ?? 0) > 0 ||
       (p.category_ids_to_remove?.length ?? 0) > 0 ||
+      (p.usage_labels_to_add?.length ?? 0) > 0 ||
+      (p.usage_labels_to_remove?.length ?? 0) > 0 ||
       (p.relations?.length ?? 0) > 0 ||
       (p.variants?.length ?? 0) > 0 ||
       (p.images?.length ?? 0) > 0 ||
@@ -316,6 +324,8 @@ export function mapProposedChanges(
     })),
     categoryIdsToAdd: raw.category_ids_to_add,
     categoryIdsToRemove: raw.category_ids_to_remove,
+    usageLabelsToAdd: raw.usage_labels_to_add,
+    usageLabelsToRemove: raw.usage_labels_to_remove,
     relations: raw.relations?.map((r) => ({
       action: r.action,
       relationType: r.relation_type,
@@ -384,6 +394,8 @@ export const suggestionListResponseSchema = z.object({
         pronunciations_count: z.number(),
     categories_added: z.number(),
     categories_removed: z.number(),
+    usage_labels_added: z.number(),
+    usage_labels_removed: z.number(),
     relations_count: z.number(),
     variants_count: z.number(),
     images_count: z.number(),
@@ -443,6 +455,7 @@ export const suggestionDetailResponseSchema = z.object({
         }),
       ),
       category_ids: z.array(z.string().length(26)),
+      usage_labels: z.array(usageLabelSchema),
       relations: z.array(
         z.object({
           relation_type: z.string(),
@@ -531,6 +544,10 @@ export const suggestionDetailResponseSchema = z.object({
       categories: z.object({
         added: z.array(z.string().length(26)),
         removed: z.array(z.string().length(26)),
+      }),
+      usage_labels: z.object({
+        added: z.array(usageLabelSchema),
+        removed: z.array(usageLabelSchema),
       }),
       relations: z.object({
         added: z.array(

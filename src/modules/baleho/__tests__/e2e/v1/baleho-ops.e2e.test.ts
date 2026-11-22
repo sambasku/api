@@ -18,6 +18,8 @@ function placementBody(over: Record<string, unknown> = {}) {
     w: 1,
     h: 1,
     days: 7,
+    starts_on: '2026-11-22',
+    confirmation_phone: '6281234567890',
     frames: [
       {
         media_type: 'image',

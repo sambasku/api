@@ -69,6 +69,7 @@ describe('GetMyProfileUseCase', () => {
       requiresConsent: false,
       notifyStreakReminder: true,
       notifyLevelUp: true,
+      phone: null,
       usernameChangedAt: null,
       usernameChangeAllowedAt: null,
       usernameChangeCooldownDays: 7,

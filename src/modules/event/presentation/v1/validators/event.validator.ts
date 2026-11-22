@@ -1,11 +1,5 @@
 import { z } from "zod";
 import { entityCommentWireSchema } from '@/shared/comment/entity-comment-response.schema';
-import {
-  SAMBAS_LAT_MAX,
-  SAMBAS_LAT_MIN,
-  SAMBAS_LNG_MAX,
-  SAMBAS_LNG_MIN,
-} from "@/shared/constants/sambas-bounds";
 import { opaqueId } from "@/shared/validation/id";
 
 export const eventCategorySchema = z
@@ -37,12 +31,8 @@ function optionalCoord(schema: z.ZodNumber) {
   );
 }
 
-const sambasLat = optionalCoord(
-  z.number().min(SAMBAS_LAT_MIN).max(SAMBAS_LAT_MAX),
-);
-const sambasLng = optionalCoord(
-  z.number().min(SAMBAS_LNG_MIN).max(SAMBAS_LNG_MAX),
-);
+const geoLat = optionalCoord(z.number().min(-90).max(90));
+const geoLng = optionalCoord(z.number().min(-180).max(180));
 
 // Field body event. Dipisah dari refinement supaya `.partial()` legal
 // (zod v4: object dengan refinement tidak bisa di-partial).
@@ -65,8 +55,8 @@ const eventBodyFields = {
   ends_at: z.coerce.date().nullable().optional(),
   /** Boleh kosong (barebone). */
   location_text: z.string().max(500).default(""),
-  lat: sambasLat,
-  lng: sambasLng,
+  lat: geoLat,
+  lng: geoLng,
   maps_url: z.string().url().startsWith("https://").nullable().optional(),
   poster_urls: z
     .array(z.string().url().startsWith("https://"))

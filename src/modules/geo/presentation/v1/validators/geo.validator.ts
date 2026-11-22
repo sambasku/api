@@ -6,6 +6,8 @@ export const resolveMapsUrlBodySchema = z.object({
     .trim()
     .min(12, 'Tautan terlalu pendek')
     .max(2048, 'Tautan terlalu panjang'),
+  /** True untuk wisata: titik di luar Kab. Sambas ditolak. Default false. */
+  require_sambas_bounds: z.boolean().optional().default(false),
 });
 
 export type ResolveMapsUrlBody = z.infer<typeof resolveMapsUrlBodySchema>;

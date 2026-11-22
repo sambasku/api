@@ -181,10 +181,41 @@ describe('ResolveMapsUrlUseCase', () => {
     expect(result.canonical_url).toContain('/maps/place/Temajuk');
   });
 
-  it('MAPS_URL_OUT_OF_BOUNDS untuk titik di luar Sambas', async () => {
+  it('mengembalikan koordinat valid di luar Kab. Sambas', async () => {
+    const uc = new ResolveMapsUrlUseCase({ fetch: vi.fn() });
+    const result = await uc.execute('https://www.google.com/maps?q=-6.2,106.8');
+    expect(result.lat).toBe(-6.2);
+    expect(result.lng).toBe(106.8);
+  });
+
+  it('MAPS_URL_OUT_OF_BOUNDS bila require_sambas_bounds dan titik luar Sambas', async () => {
     const uc = new ResolveMapsUrlUseCase({ fetch: vi.fn() });
     await expect(
-      uc.execute('https://www.google.com/maps?q=-6.2,106.8'),
+      uc.execute('https://www.google.com/maps?q=-6.2,106.8', {
+        requireSambasBounds: true,
+      }),
+    ).rejects.toMatchObject({ errorCode: 'MAPS_URL_OUT_OF_BOUNDS' });
+  });
+
+  it('parse URL expanded Pendopo (lat negatif, lng ~109)', async () => {
+    const url =
+      'https://www.google.com/maps/place/Pendopo+Gubernur+Kalimantan+Barat,+Indonesia./' +
+      '@-0.0469556,109.3413212,17z/data=!3m1!4b1!4m6!3m5!1s0x2e1d59bb3c5706e5:0xa3c9a1a1f313eec4' +
+      '!8m2!3d-0.0469556!4d109.3438961';
+    const uc = new ResolveMapsUrlUseCase({ fetch: vi.fn() });
+    const result = await uc.execute(url);
+    expect(result.lat).toBeCloseTo(-0.0469556, 5);
+    expect(result.lng).toBeCloseTo(109.3438961, 5);
+  });
+
+  it('Pendopo ditolak bila require_sambas_bounds (wisata)', async () => {
+    const url =
+      'https://www.google.com/maps/place/Pendopo+Gubernur+Kalimantan+Barat,+Indonesia./' +
+      '@-0.0469556,109.3413212,17z/data=!3m1!4b1!4m6!3m5!1s0x2e1d59bb3c5706e5:0xa3c9a1a1f313eec4' +
+      '!8m2!3d-0.0469556!4d109.3438961';
+    const uc = new ResolveMapsUrlUseCase({ fetch: vi.fn() });
+    await expect(
+      uc.execute(url, { requireSambasBounds: true }),
     ).rejects.toMatchObject({ errorCode: 'MAPS_URL_OUT_OF_BOUNDS' });
   });
 

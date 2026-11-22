@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createBalehoPlacementBodySchema } from '../../presentation/v1/validators/baleho.validator';
 
+const bookingExtras = {
+  starts_on: '2026-11-22',
+  confirmation_phone: '6281234567890',
+};
+
 const baseFrame = {
   media_type: 'image' as const,
   media_url: 'https://cdn.example.com/a.jpg',
@@ -17,6 +22,7 @@ describe('createBalehoPlacementBodySchema', () => {
       w: 2,
       h: 4,
       frames: [baseFrame],
+      ...bookingExtras,
     });
     expect(parsed.success).toBe(true);
   });
@@ -29,6 +35,7 @@ describe('createBalehoPlacementBodySchema', () => {
       w: 3,
       h: 3,
       frames: [baseFrame],
+      ...bookingExtras,
     });
     expect(parsed.success).toBe(false);
   });
@@ -41,6 +48,7 @@ describe('createBalehoPlacementBodySchema', () => {
       w: 2,
       h: 4,
       frames: [baseFrame],
+      ...bookingExtras,
     });
     expect(parsed.success).toBe(false);
   });

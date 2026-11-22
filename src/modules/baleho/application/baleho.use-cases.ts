@@ -24,6 +24,11 @@ import { inboxCopyFor } from '@/modules/notification/domain/entities/notificatio
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { SendWaMessageUseCase } from '@/modules/wa/application/use-cases/send-wa-message.use-case';
 import { logger } from '@/shared/logging/logger';
+import {
+  computeEndsAtFromWindow,
+  parseBalehoStartsOn,
+  resolveBalehoLiveWindow,
+} from '../domain/baleho-schedule';
 import type { CreateBalehoPlacementInput } from '../domain/baleho';
 import type { BalehoRepository } from '../domain/repositories/baleho.repository';
 
@@ -122,6 +127,37 @@ function assertRect(input: CreateBalehoPlacementInput) {
   }
 }
 
+function scheduleForBooking(input: CreateBalehoPlacementInput, days: number) {
+  const scheduledStart = parseBalehoStartsOn(input.startsOn);
+  if (!scheduledStart) {
+    throw new ValidationError([
+      { field: 'starts_on', message: 'Tanggal mulai tidak valid' },
+    ]);
+  }
+  const endsAt = computeEndsAtFromWindow(scheduledStart, days);
+  return { scheduledStart, endsAt };
+}
+
+async function maybeBackfillUserPhone(
+  deps: BalehoNotifyDeps,
+  userId: string,
+  phone: string,
+): Promise<void> {
+  const userRepo = deps.userRepo;
+  if (!userRepo) return;
+  try {
+    const user = await userRepo.findById(userId);
+    if (!user?.phone?.trim()) {
+      await userRepo.updatePhone(userId, phone);
+    }
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), userId },
+      'baleho backfill phone gagal',
+    );
+  }
+}
+
 export type BalehoNotifyDeps = {
   mailer?: MailerPort;
   sendWa?: SendWaMessageUseCase;
@@ -163,6 +199,8 @@ export class BalehoUseCases {
 
     const days = Math.min(Math.max(input.days ?? BALEHO_MAX_DAYS, 1), BALEHO_MAX_DAYS);
     const pricePerCellPerDay = await this.readPricePerCellPerDay();
+    const { scheduledStart, endsAt } = scheduleForBooking(input, days);
+    await maybeBackfillUserPhone(this.notify, advertiserUserId, input.confirmationPhone);
 
     // Reaktivasi creative approved → skip review, awaiting_payment.
     if (input.creativeId) {
@@ -200,7 +238,6 @@ export class BalehoUseCases {
         pricePerCellPerDay,
         slideCount,
       });
-      const endsAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
       return this.repo.createPlacement({
         advertiserUserId,
         input: { ...input, frames: [] },
@@ -214,6 +251,8 @@ export class BalehoUseCases {
         days,
         pricePerCellPerDay,
         quotedAmount,
+        scheduledStartsOn: scheduledStart,
+        confirmationPhone: input.confirmationPhone,
       });
     }
 
@@ -262,11 +301,13 @@ export class BalehoUseCases {
       referralUsername,
       status: 'pending_review',
       startsAt: null,
-      endsAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+      endsAt,
       awaitingPaymentAt: null,
       days,
       pricePerCellPerDay,
       quotedAmount,
+      scheduledStartsOn: scheduledStart,
+      confirmationPhone: input.confirmationPhone,
     });
   }
 
@@ -368,11 +409,19 @@ export class BalehoUseCases {
       );
     }
     const now = new Date();
+    const scheduledStart = row.scheduledStartsOn ?? now;
+    const windowDays = row.days ?? BALEHO_MAX_DAYS;
+    const liveWindow = resolveBalehoLiveWindow({
+      scheduledStart,
+      days: windowDays,
+      paidAt: now,
+    });
     const ok = await this.repo.updatePlacementStatus({
       placementId,
       status: 'live',
       paidAt: now,
-      startsAt: now,
+      startsAt: liveWindow.startsAt,
+      endsAt: liveWindow.endsAt,
       paymentProofUrl: url,
       paymentProofFileId: fileId,
     });
@@ -591,6 +640,7 @@ export class BalehoUseCases {
     w: number;
     h: number;
     advertiserUserId: string;
+    confirmationPhone: string | null;
   }): Promise<void> {
     const { mailer, sendWa, userRepo } = this.notify;
     if (!mailer && !sendWa) return;
@@ -617,7 +667,8 @@ export class BalehoUseCases {
           );
         }
       }
-      if (sendWa && user.phone) {
+      const waPhone = row.confirmationPhone?.trim() || user.phone;
+      if (sendWa && waPhone) {
         const body = [
           `Halo ${displayName},`,
           'Pesanan Baleho kamu lolos cek dan menunggu pembayaran (48 jam).',
@@ -627,7 +678,7 @@ export class BalehoUseCases {
         try {
           await sendWa.execute({
             eventKey: 'baleho_payment',
-            toPhone: user.phone,
+            toPhone: waPhone,
             channel: 'text',
             bodyText: body,
             templateName: 'baleho_payment',

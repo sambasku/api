@@ -23,6 +23,8 @@ export function verifyProposedChanges(changes: ProposedChanges): {
     (changes.pronunciations?.length ?? 0) > 0 ||
     (changes.categoryIdsToAdd?.length ?? 0) > 0 ||
     (changes.categoryIdsToRemove?.length ?? 0) > 0 ||
+    (changes.usageLabelsToAdd?.length ?? 0) > 0 ||
+    (changes.usageLabelsToRemove?.length ?? 0) > 0 ||
     (changes.relations?.length ?? 0) > 0 ||
     (changes.variants?.length ?? 0) > 0 ||
     (changes.images?.length ?? 0) > 0 ||

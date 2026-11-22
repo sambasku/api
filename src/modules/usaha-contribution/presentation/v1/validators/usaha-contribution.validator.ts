@@ -8,8 +8,8 @@ function optionalCoord(schema: z.ZodNumber) {
   );
 }
 
-const sambasLat = optionalCoord(z.number().min(1.0).max(1.8));
-const sambasLng = optionalCoord(z.number().min(108.5).max(110.0));
+const geoLat = optionalCoord(z.number().min(-90).max(90));
+const geoLng = optionalCoord(z.number().min(-180).max(180));
 
 const httpsUrl = z.string().url().startsWith('https://').nullable().optional();
 
@@ -39,8 +39,8 @@ export const submitUsahaContributionBodySchema = z
     kind: z.enum(['product', 'service', 'both']).optional(),
     village_id: z.string().max(120).nullable().optional(),
     address_text: z.string().max(500).nullable().optional(),
-    lat: sambasLat,
-    lng: sambasLng,
+    lat: geoLat,
+    lng: geoLng,
     phone: z.string().max(40).nullable().optional(),
     whatsapp: z.string().max(40).nullable().optional(),
     website: httpsUrl,
@@ -109,8 +109,8 @@ export const submitSuggestEditBodySchema = z
     village_id: z.string().max(120).nullable().optional(),
     region_id: z.string().max(120).nullable().optional(),
     address_text: z.string().max(500).nullable().optional(),
-    lat: sambasLat,
-    lng: sambasLng,
+    lat: geoLat,
+    lng: geoLng,
     phone: z.string().max(40).nullable().optional(),
     whatsapp: z.string().max(40).nullable().optional(),
     website: httpsUrl,
