@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { e2eBalehoStartsOn } from '@/shared/testing/baleho-e2e';
 import { createBalehoPlacementBodySchema } from '../../presentation/v1/validators/baleho.validator';
 
 const bookingExtras = {
-  starts_on: '2026-11-22',
+  starts_on: e2eBalehoStartsOn(),
   confirmation_phone: '6281234567890',
 };
 

@@ -19,6 +19,7 @@ import { resolveFeedPreview } from '../application/utils/feed-preview';
 import {
   FEED_CATEGORY_KINDS,
   PUBLIC_FEED_HIDDEN_EVENT_KINDS,
+  PUBLIC_PROFILE_HIDDEN_EVENT_KINDS,
   type ActivityCursor,
 } from '../domain/merge-activity';
 
@@ -218,6 +219,8 @@ const MERGED_PROFILE_KINDS: ActivityEventKind[] = [
   ...PROFILE_KIND_SETS.contribution,
   ...PROFILE_KIND_SETS.comment,
   ...PROFILE_KIND_SETS.jinye,
+  'word_verified',
+  'suggestion_selfapply',
 ];
 
 function profileCategoryOf(kind: ActivityEventKind): ProfileCategory {
@@ -446,6 +449,7 @@ export class ActivityEventFeedRepositoryImpl {
       kinds,
       undefined,
       true,
+      [...PUBLIC_PROFILE_HIDDEN_EVENT_KINDS],
     );
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
@@ -625,6 +629,7 @@ export class ActivityEventFeedRepositoryImpl {
     kinds?: ActivityEventKind[] | null,
     excludeSuperseded?: boolean,
     excludePublicHiddenKinds?: boolean,
+    hiddenKinds?: readonly ActivityEventKind[],
   ) {
     const occurredAt = activityEvents.occurredAt;
     const conds = this.baseConditions(excludeUserId, actorId);
@@ -636,7 +641,7 @@ export class ActivityEventFeedRepositoryImpl {
       conds.push(
         notInArray(
           activityEvents.kind,
-          [...PUBLIC_FEED_HIDDEN_EVENT_KINDS],
+          [...(hiddenKinds ?? PUBLIC_FEED_HIDDEN_EVENT_KINDS)],
         ),
       );
     }

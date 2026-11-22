@@ -21,7 +21,7 @@ export type FeedCategory =
   | 'jinye';
 
 /**
- * Kind yang tidak tayang di feed beranda maupun timeline profil publik.
+ * Kind yang tidak tayang di feed beranda (kategori Semua).
  * Event tetap dicatat; filter read-time.
  */
 export const PUBLIC_FEED_HIDDEN_EVENT_KINDS = [
@@ -31,6 +31,18 @@ export const PUBLIC_FEED_HIDDEN_EVENT_KINDS = [
   'search_miss',
   'word_verified',
   'suggestion_selfapply',
+  'suggestion_applied',
+] as const satisfies readonly ActivityEventKind[];
+
+/**
+ * Kind tersembunyi di timeline profil publik (subset feed beranda).
+ * Verifikasi dan self-apply tetap tayang di profil verifikator (#56).
+ */
+export const PUBLIC_PROFILE_HIDDEN_EVENT_KINDS = [
+  'vote_word',
+  'vote_comment',
+  'vote_meaning',
+  'search_miss',
   'suggestion_applied',
 ] as const satisfies readonly ActivityEventKind[];
 

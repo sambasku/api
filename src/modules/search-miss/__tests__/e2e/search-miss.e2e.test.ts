@@ -526,8 +526,8 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
       (await berandaPending.json()).data.some((m: { term: string }) => m.term === 'bandong262'),
     ).toBe(false);
 
-    // Feed pencarian warga ikut menutup case
-    const feedPending = await get('/api/v1/activity?limit=50&category=search_miss');
+    // Feed beranda: search_miss tidak tayang (#193); pastikan tidak ada baris miss ini.
+    const feedPending = await get('/api/v1/activity?limit=50');
     expect(feedPending.status).toBe(200);
     expect(
       (await feedPending.json()).data.some(
@@ -570,11 +570,14 @@ describe.skipIf(!hasTestDb)('Search Miss E2E - pencarian kosong jadi peluang kon
       (await berandaAfterReject.json()).data.some((m: { term: string }) => m.term === 'bandong262'),
     ).toBe(true);
 
-    const feedAfterReject = await get('/api/v1/activity?limit=50&category=search_miss');
+    const feedAfterReject = await get('/api/v1/activity?limit=50');
+    expect(feedAfterReject.status).toBe(200);
+    // search_miss tetap tidak tayang di feed; beranda search-misses sudah diassert di atas.
     expect(
       (await feedAfterReject.json()).data.some(
-        (i: { target?: { id?: string } }) => i.target?.id === miss.id,
+        (i: { kind?: string; target?: { id?: string } }) =>
+          i.kind === 'search_miss' && i.target?.id === miss.id,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

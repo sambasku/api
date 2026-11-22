@@ -131,16 +131,13 @@ describe.skipIf(!hasTestDb)('Verification feed consolidation - #56', () => {
     const approve = await post(`/api/v1/admin/contributions/${target.id}/approve`, {}, reviewerToken);
     expect(approve.status).toBeLessThan(300);
 
-    // Feed home: tepat 1 row utk lemma, berkind verification.
+    // Feed home: verifikasi tersembunyi (#193); usulan + word_created superseded (#56).
     const feedRes = await get('/api/v1/activity?limit=50');
     const feed = await feedRes.json();
     if (!Array.isArray(feed.data)) throw new Error('feed error: ' + feedRes.status + ' ' + JSON.stringify(feed).slice(0, 300));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = (feed.data as any[]).filter((it: any) => it.body?.includes(lemma));
-    expect(rows.length).toBe(1);
-    expect(rows[0].kind).toBe('verification');
-    // Copy #2: "Memverifikasi usulan {B}: lemma".
-    expect(rows[0].body).toBe(`Memverifikasi usulan ${contributorUsername}: ${lemma}`);
+    const withLemma = (feed.data as any[]).filter((it: any) => it.body?.includes(lemma));
+    expect(withLemma.length).toBe(0);
 
     // Event store: usulan lama superseded (bukan hidden/delete).
     const verifEvents = await db.select().from(activityEvents).where(eq(activityEvents.kind, 'word_verified'));
