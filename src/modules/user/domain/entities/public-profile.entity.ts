@@ -63,11 +63,17 @@ export interface MentionUserRow {
   avatarUrl: string | null;
 }
 
-export type PublicActivityKind =
+/** Filter query GET /users/:username/activity (selaras activity_events). */
+export type PublicProfileActivityFilter =
   | 'contribution'
   | 'correction'
   | 'comment'
   | 'jinye';
+
+export type PublicActivityKind =
+  | PublicProfileActivityFilter
+  | 'verification'
+  | 'vote';
 
 export interface PublicActivityItem {
   /** ULID sumber - dipakai sebagai cursor keyset (tidak dibocorkan ke response). */

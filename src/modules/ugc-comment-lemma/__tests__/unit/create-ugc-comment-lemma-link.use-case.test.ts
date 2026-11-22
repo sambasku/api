@@ -33,7 +33,7 @@ describe('CreateUgcCommentLemmaLinkUseCase', () => {
       db,
       repo,
       { findById: vi.fn().mockResolvedValue({ id: 'w2', status: 'published', isVerified: true, deletedAt: null }) },
-      { record: vi.fn() },
+      { record: vi.fn(), list: vi.fn() },
     );
 
     await expect(
