@@ -241,12 +241,9 @@ describe.skipIf(!hasTestDb)('Activity feed kategori #193 - GET /api/v1/activity?
     expect(new Set(kindsOf(body.data))).toEqual(new Set(['welcome']));
   });
 
-  it('category=search_miss hanya search_miss', async () => {
-    const body = (await (await get('/api/v1/activity?limit=50&category=search_miss')).json()) as {
-      data: Array<{ kind: string }>;
-    };
-    expect(body.data.length).toBeGreaterThan(0);
-    expect(new Set(kindsOf(body.data))).toEqual(new Set(['search_miss']));
+  it('category=search_miss tidak valid -> 400', async () => {
+    const res = await get('/api/v1/activity?limit=50&category=search_miss');
+    expect(res.status).toBe(400);
   });
 
   it('category=correction memuat kontribusi media, bukan kata/verifikasi', async () => {
@@ -317,7 +314,7 @@ describe.skipIf(!hasTestDb)('Activity feed kategori #193 - GET /api/v1/activity?
     let cursor: string | null = null;
     let pages = 0;
     do {
-      const url = `/api/v1/activity?limit=1&category=search_miss${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+      const url = `/api/v1/activity?limit=1&category=announcement${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
       const body = (await (await get(url)).json()) as {
         data: Array<{ id: string; kind: string }>;
         meta: { next_cursor: string | null };

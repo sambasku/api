@@ -64,6 +64,10 @@ export interface ActivityItem {
   body: string;
   subtitle: string | null;
   target: ActivityTarget | null;
+  /** Thumbnail gambar pertama untuk tile feed (null = tanpa media gambar). */
+  previewImageUrl?: string | null;
+  /** Jumlah gambar jika > 1 (batch / galeri). */
+  previewImageCount?: number | null;
   /** #102: data pengumuman (payload beku) untuk tile + detail mobile. Null = kind lain. */
   announcement?: {
     id: string;

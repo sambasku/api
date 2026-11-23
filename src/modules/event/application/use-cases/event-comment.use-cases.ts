@@ -11,6 +11,7 @@ import { assertCanContribute } from '@/modules/word/application/utils/assert-can
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import { commentFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 import { prepareEntityCommentCreate } from '@/shared/comment/prepare-entity-comment-create';
 import type { EventComment } from '../../domain/entities/event.entity';
 import type { EventRepository } from '../../domain/repositories/event.repository';
@@ -95,6 +96,11 @@ export class CreateEventCommentUseCase {
       actorId: input.userId,
       targetId: created.id,
       dedupeKey: `event_comment:${created.id}`,
+      payload: commentFeedPayload({
+        body: created.body,
+        stickerId: prepared.stickerId,
+        hasImage: Boolean(prepared.image),
+      }),
     });
     return created;
   }

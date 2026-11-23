@@ -152,7 +152,7 @@ describe('CreateJinyeCommentUseCase', () => {
       { record: vi.fn(async () => undefined) } as never,
       { listAllActiveWords: vi.fn(async () => []) },
       undefined,
-      activity,
+      activity as never,
     );
     const out = await uc.execute({
       jinyeId: JINYE_ID,
@@ -162,7 +162,10 @@ describe('CreateJinyeCommentUseCase', () => {
     expect(out.body).toBe('halo juga');
     expect(repo.incrementPublishedCommentCount).toHaveBeenCalledWith(JINYE_ID, 1);
     expect(activity.safe).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'jinye_comment_created' }),
+      expect.objectContaining({
+        kind: 'jinye_comment_created',
+        payload: 'halo juga',
+      }),
     );
   });
 

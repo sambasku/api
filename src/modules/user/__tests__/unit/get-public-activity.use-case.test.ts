@@ -19,7 +19,7 @@ const actor = (
 });
 
 /** Mock event feed repo: halaman per kategori (merge = 1 key 'merged'). */
-type FeedKey = 'contribution' | 'comment' | 'verification' | 'vote' | 'merged';
+type FeedKey = 'contribution' | 'comment' | 'jinye' | 'merged';
 function eventFeed(pages: Partial<Record<FeedKey, PublicActivityItem[]>> = {}) {
   return {
     listPublicByActor: vi.fn(
@@ -63,19 +63,17 @@ describe('GetPublicActivityUseCase - dari activity_events (#86)', () => {
     const feed = eventFeed({
       merged: [
         actor('01M1', 'comment', new Date(now), 'Mengomentari kata'),
-        actor('01V1', 'verification', new Date(now - 500), 'Memverifikasi kata'),
         actor('01C1', 'contribution', new Date(now - 1000), 'Menambahkan foto'),
-        actor('01X1', 'vote', new Date(now - 2000), 'Mendukung kata'),
+        actor('01J1', 'jinye', new Date(now - 1500), 'Menulis Jinye'),
       ],
     });
 
     const page = await new GetPublicActivityUseCase(userRepo(), feed).execute('budi');
-    expect(page.items).toHaveLength(4);
+    expect(page.items).toHaveLength(3);
     expect(page.items.map((i) => i.kind)).toEqual([
       'comment',
-      'verification',
       'contribution',
-      'vote',
+      'jinye',
     ]);
     // Mode merge tanpa cursor.
     expect(page.nextCursor).toBeUndefined();

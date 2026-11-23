@@ -6,6 +6,8 @@ import { registerDictionaryRoutes } from './routes/register-dictionary-routes';
 import { registerExploreRoutes } from './routes/register-explore-routes';
 import { registerSocialRoutes } from './routes/register-social-routes';
 import { registerCommunityRoutes } from './routes/register-community-routes';
+import { registerUgcCommentLemmaRoutes } from './routes/register-ugc-comment-lemma-routes';
+import * as di from './container';
 
 export function registerRoutes(app: OpenAPIHono<{ Variables: AppVariables }>): void {
   registerCoreRoutes(app);
@@ -13,4 +15,5 @@ export function registerRoutes(app: OpenAPIHono<{ Variables: AppVariables }>): v
   registerExploreRoutes(app);
   registerSocialRoutes(app);
   registerCommunityRoutes(app);
+  registerUgcCommentLemmaRoutes(app, di);
 }

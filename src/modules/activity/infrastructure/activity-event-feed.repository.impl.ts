@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, articles, contributions, cuisineComments, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, comments, articles, contributions, cuisineComments, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, wordImages, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
@@ -12,11 +12,14 @@ import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
+import { snippetActivityBody } from '../application/utils/activity-body-snippet';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
 import { jinyeFeedPayload } from '../application/utils/activity-body-snippet';
+import { resolveFeedPreview } from '../application/utils/feed-preview';
 import {
   FEED_CATEGORY_KINDS,
-  HOME_FEED_EXCLUDED_EVENT_KINDS,
+  PUBLIC_FEED_HIDDEN_EVENT_KINDS,
+  PUBLIC_PROFILE_HIDDEN_EVENT_KINDS,
   type ActivityCursor,
 } from '../domain/merge-activity';
 
@@ -164,13 +167,7 @@ function cursorFromEventId(id: string): { id: string; createdAt: Date } {
 }
 
 /** Kategori timeline profil publik (19-api-profil-publik). */
-type ProfileCategory =
-  | 'contribution'
-  | 'correction'
-  | 'comment'
-  | 'verification'
-  | 'vote'
-  | 'jinye';
+type ProfileCategory = 'contribution' | 'correction' | 'comment' | 'jinye';
 
 /**
  * Kind event -> kategori profil. Empat set lama (kontrak 19-api-profil-publik)
@@ -186,7 +183,6 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'contribution_audio',
     'contribution_pron',
     'contribution_example',
-    'suggestion_applied',
     'suggestion_created',
     'contribution_submitted',
     'place_photo_added',
@@ -210,8 +206,6 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'usaha_comment_created',
     'cuisine_comment_created',
   ],
-  verification: ['word_verified', 'suggestion_selfapply'],
-  vote: ['vote_word', 'vote_comment', 'vote_meaning'],
   jinye: [
     'jinye_created',
     'jinye_comment_created',
@@ -224,9 +218,9 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
 const MERGED_PROFILE_KINDS: ActivityEventKind[] = [
   ...PROFILE_KIND_SETS.contribution,
   ...PROFILE_KIND_SETS.comment,
-  ...PROFILE_KIND_SETS.verification,
-  ...PROFILE_KIND_SETS.vote,
   ...PROFILE_KIND_SETS.jinye,
+  'word_verified',
+  'suggestion_selfapply',
 ];
 
 function profileCategoryOf(kind: ActivityEventKind): ProfileCategory {
@@ -270,6 +264,38 @@ function jinyeCopyFromRow(
  * Baris selectVisible + kolom JOIN (#103): semua kebutuhan buildItem/
  * listPublicByActor datang dari SATU query tanpa resolve per baris.
  */
+
+const COMMENT_FEED_BODY_KINDS = new Set<ActivityEventKind>([
+  'comment_created',
+  'place_comment_created',
+  'usaha_comment_created',
+  'cuisine_comment_created',
+  'event_comment_created',
+  'article_comment_created',
+  'jinye_comment_created',
+]);
+
+function liveCommentBodyFromRow(kind: ActivityEventKind, row: FeedRow): string | null {
+  const raw =
+    kind === 'comment_created'
+      ? row.wordCommentBody
+      : kind === 'place_comment_created'
+        ? row.placeCommentBody
+        : kind === 'usaha_comment_created'
+          ? row.usahaCommentBody
+          : kind === 'cuisine_comment_created'
+            ? row.cuisineCommentBody
+            : kind === 'event_comment_created'
+              ? row.eventCommentBody
+              : kind === 'article_comment_created'
+                ? row.articleCommentBody
+                : kind === 'jinye_comment_created'
+                  ? row.jinyeCommentBody
+                  : null;
+  const t = raw?.trim();
+  return t ? snippetActivityBody(t, 120) : null;
+}
+
 interface FeedRow {
   id: string;
   kind: string;
@@ -278,6 +304,7 @@ interface FeedRow {
   targetId: string | null;
   occurredAt: Date;
   payload: string | null;
+  dedupeKey: string | null;
   wordStatus: string | null;
   /** Untuk wire #166: published + belum verified → status pending_review. */
   wordIsVerified: boolean | null;
@@ -312,6 +339,29 @@ interface FeedRow {
   jinyeQuoteBody: string | null;
   jinyeAudioUrl: string | null;
   jinyeImages: unknown;
+  jinyeCommentImages: unknown;
+  discussionImages: unknown;
+  wordImageUrl: string | null;
+  wordCommentImagePublicUrl: string | null;
+  wordCommentImageUrl: string | null;
+  placeCommentImagePublicUrl: string | null;
+  placeCommentImageUrl: string | null;
+  usahaCommentImagePublicUrl: string | null;
+  usahaCommentImageUrl: string | null;
+  cuisineCommentImagePublicUrl: string | null;
+  cuisineCommentImageUrl: string | null;
+  eventCommentImagePublicUrl: string | null;
+  eventCommentImageUrl: string | null;
+  articleCommentImagePublicUrl: string | null;
+  articleCommentImageUrl: string | null;
+  /** Cuplikan komentar dari JOIN read-time (#326). */
+  wordCommentBody: string | null;
+  placeCommentBody: string | null;
+  usahaCommentBody: string | null;
+  cuisineCommentBody: string | null;
+  eventCommentBody: string | null;
+  articleCommentBody: string | null;
+  jinyeCommentBody: string | null;
   usahaName: string | null;
   /** Acara untuk event_published (LEFT JOIN events, published saja). */
   eventSlug: string | null;
@@ -346,7 +396,7 @@ export class ActivityEventFeedRepositoryImpl {
   ): Promise<ActivityItem[]> {
     // #56: event superseded (usulan yang ceritanya sudah jadi verifikasi)
     // tidak tayang di feed home - profil (listByActor) tetap memuatnya.
-    // Vote (Periksa Kata): event vote_* tidak tayang di beranda; lihat timeline profil.
+    // Kind sensitif / moderasi: filter PUBLIC_FEED_HIDDEN_EVENT_KINDS.
     const rows = await this.selectVisible(
       limit,
       before,
@@ -397,6 +447,9 @@ export class ActivityEventFeedRepositoryImpl {
       undefined,
       actorId,
       kinds,
+      undefined,
+      true,
+      [...PUBLIC_PROFILE_HIDDEN_EVENT_KINDS],
     );
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
@@ -575,7 +628,8 @@ export class ActivityEventFeedRepositoryImpl {
     actorId?: string,
     kinds?: ActivityEventKind[] | null,
     excludeSuperseded?: boolean,
-    excludeHomeVoteEvents?: boolean,
+    excludePublicHiddenKinds?: boolean,
+    hiddenKinds?: readonly ActivityEventKind[],
   ) {
     const occurredAt = activityEvents.occurredAt;
     const conds = this.baseConditions(excludeUserId, actorId);
@@ -583,11 +637,11 @@ export class ActivityEventFeedRepositoryImpl {
       // #56: superseded = cerita lama yang sudah digantikan verifikasi.
       conds.push(sql`${activityEvents.supersededAt} is null`);
     }
-    if (excludeHomeVoteEvents) {
+    if (excludePublicHiddenKinds) {
       conds.push(
         notInArray(
           activityEvents.kind,
-          [...HOME_FEED_EXCLUDED_EVENT_KINDS],
+          [...(hiddenKinds ?? PUBLIC_FEED_HIDDEN_EVENT_KINDS)],
         ),
       );
     }
@@ -616,6 +670,7 @@ export class ActivityEventFeedRepositoryImpl {
         occurredAt: activityEvents.occurredAt,
         // copy beku saat kejadian (#94): null = fallback bodyFor read-time
         payload: activityEvents.payload,
+        dedupeKey: activityEvents.dedupeKey,
         // status kata untuk keputusan CTA (pending = tanpa target)
         wordStatus: words.status,
         wordIsVerified: words.isVerified,
@@ -653,10 +708,32 @@ export class ActivityEventFeedRepositoryImpl {
       jinyeQuoteBody: jinye.quoteBody,
       jinyeAudioUrl: jinye.audioUrl,
       jinyeImages: jinye.images,
+      jinyeCommentImages: jinyeComments.images,
+      discussionImages: discussions.images,
+      wordImageUrl: wordImages.url,
+      wordCommentImagePublicUrl: comments.imagePublicUrl,
+      wordCommentImageUrl: comments.imageUrl,
+      placeCommentImagePublicUrl: placeComments.imagePublicUrl,
+      placeCommentImageUrl: placeComments.imageUrl,
+      usahaCommentImagePublicUrl: usahaComments.imagePublicUrl,
+      usahaCommentImageUrl: usahaComments.imageUrl,
+      cuisineCommentImagePublicUrl: cuisineComments.imagePublicUrl,
+      cuisineCommentImageUrl: cuisineComments.imageUrl,
+      eventCommentImagePublicUrl: eventComments.imagePublicUrl,
+      eventCommentImageUrl: eventComments.imageUrl,
+      articleCommentImagePublicUrl: sql<string | null>`null`,
+      articleCommentImageUrl: articleComments.imageUrl,
       eventSlug: events.slug,
       eventName: events.name,
       cuisineSlug: cuisines.slug,
       cuisineName: cuisines.name,
+wordCommentBody: comments.body,
+      placeCommentBody: placeComments.body,
+      usahaCommentBody: usahaComments.body,
+      cuisineCommentBody: cuisineComments.body,
+      eventCommentBody: eventComments.body,
+      articleCommentBody: articleComments.body,
+      jinyeCommentBody: jinyeComments.body,
 articleSlug: articles.slug,
 articleTitle: articles.title,
 })
@@ -672,6 +749,24 @@ articleTitle: articles.title,
         ),
       )
       .leftJoin(users, eq(users.id, activityEvents.actorId))
+      .leftJoin(
+      comments,
+      and(
+        eq(activityEvents.kind, 'comment_created'),
+        eq(comments.id, activityEvents.targetId),
+        eq(comments.status, 'published'),
+        isNull(comments.deletedAt),
+      ),
+    )
+    .leftJoin(
+      wordImages,
+      and(
+        eq(activityEvents.kind, 'contribution_image'),
+        eq(wordImages.id, activityEvents.targetId),
+        eq(wordImages.status, 'published'),
+        isNull(wordImages.deletedAt),
+      ),
+    )
       .leftJoin(
         placeComments,
         and(
@@ -953,6 +1048,7 @@ sql`(${activityEvents.kind} <> 'article_published' or ${articles.id} is not null
 // Komentar artikel: komentar & artikelnya harus published.
 sql`(${activityEvents.kind} <> 'article_comment_created' or ${articleComments.id} is not null)`,
 sql`(${activityEvents.kind} <> 'article_comment_created' or ${articles.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'comment_created' or ${comments.id} is not null)`,
 // #262: pencarian warga closed saat ada usulan pending bertaut miss
 // (sama aturan GET /search-misses publik; derived, bukan flip hidden_at).
 sql`(${activityEvents.kind} <> 'search_miss' or not exists (
@@ -966,6 +1062,7 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
       .orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id))
       .limit(limit);
     await this.hydrateLegacyVoteDirection(rows);
+    await this.hydrateCommentBodies(rows);
     return rows;
   }
 
@@ -1018,6 +1115,96 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
     }
   }
 
+
+  /**
+   * Cuplikan komentar untuk event lama tanpa payload saat JOIN tidak mengisi
+   * body (mis. migrasi data). Satu query batch per tabel komentar.
+   */
+  private async hydrateCommentBodies(rows: FeedRow[]): Promise<void> {
+    type Patch = { ids: string[]; table: 'word' | 'place' | 'usaha' | 'cuisine' | 'event' | 'article' | 'jinye' };
+    const buckets: Record<Patch['table'], string[]> = {
+      word: [],
+      place: [],
+      usaha: [],
+      cuisine: [],
+      event: [],
+      article: [],
+      jinye: [],
+    };
+    for (const r of rows) {
+      if (r.payload?.trim()) continue;
+      const kind = r.kind as ActivityEventKind;
+      if (!COMMENT_FEED_BODY_KINDS.has(kind) || !r.targetId) continue;
+      if (liveCommentBodyFromRow(kind, r)) continue;
+      if (kind === 'comment_created') buckets.word.push(r.targetId);
+      else if (kind === 'place_comment_created') buckets.place.push(r.targetId);
+      else if (kind === 'usaha_comment_created') buckets.usaha.push(r.targetId);
+      else if (kind === 'cuisine_comment_created') buckets.cuisine.push(r.targetId);
+      else if (kind === 'event_comment_created') buckets.event.push(r.targetId);
+      else if (kind === 'article_comment_created') buckets.article.push(r.targetId);
+      else if (kind === 'jinye_comment_created') buckets.jinye.push(r.targetId);
+    }
+    const maps = new Map<string, string>();
+    const load = async (
+      ids: string[],
+      table:
+        | typeof comments
+        | typeof placeComments
+        | typeof usahaComments
+        | typeof cuisineComments
+        | typeof eventComments
+        | typeof articleComments
+        | typeof jinyeComments,
+      prefix: string,
+    ) => {
+      if (ids.length === 0) return;
+      const found = await this.db
+        .select({ id: table.id, body: table.body })
+        .from(table)
+        .where(inArray(table.id, [...new Set(ids)]));
+      for (const row of found) {
+        if (row.body?.trim()) maps.set(`${prefix}:${row.id}`, row.body.trim());
+      }
+    };
+    await load(buckets.word, comments, 'word');
+    await load(buckets.place, placeComments, 'place');
+    await load(buckets.usaha, usahaComments, 'usaha');
+    await load(buckets.cuisine, cuisineComments, 'cuisine');
+    await load(buckets.event, eventComments, 'event');
+    await load(buckets.article, articleComments, 'article');
+    await load(buckets.jinye, jinyeComments, 'jinye');
+    for (const r of rows) {
+      if (r.payload?.trim() || !r.targetId) continue;
+      const kind = r.kind as ActivityEventKind;
+      const prefix =
+        kind === 'comment_created'
+          ? 'word'
+          : kind === 'place_comment_created'
+            ? 'place'
+            : kind === 'usaha_comment_created'
+              ? 'usaha'
+              : kind === 'cuisine_comment_created'
+                ? 'cuisine'
+                : kind === 'event_comment_created'
+                  ? 'event'
+                  : kind === 'article_comment_created'
+                    ? 'article'
+                    : kind === 'jinye_comment_created'
+                      ? 'jinye'
+                      : null;
+      if (!prefix) continue;
+      const body = maps.get(`${prefix}:${r.targetId}`);
+      if (!body) continue;
+      if (kind === 'comment_created') r.wordCommentBody = body;
+      else if (kind === 'place_comment_created') r.placeCommentBody = body;
+      else if (kind === 'usaha_comment_created') r.usahaCommentBody = body;
+      else if (kind === 'cuisine_comment_created') r.cuisineCommentBody = body;
+      else if (kind === 'event_comment_created') r.eventCommentBody = body;
+      else if (kind === 'article_comment_created') r.articleCommentBody = body;
+      else if (kind === 'jinye_comment_created') r.jinyeCommentBody = body;
+    }
+  }
+
   // ----------------------------------------------------------------- build --
 
   private buildItems(rows: FeedRow[]): ActivityItem[] {
@@ -1053,6 +1240,10 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
     // Body wire announcement diisi setelah parse di bawah.
     const isAnnouncement = kind === 'announcement';
     const jinyeCopy = jinyeCopyFromRow(kind, row);
+    const joinedComment =
+      frozen === null && !jinyeCopy && COMMENT_FEED_BODY_KINDS.has(kind)
+        ? liveCommentBodyFromRow(kind, row)
+        : null;
     const body =
       isAnnouncement
         ? ''
@@ -1060,7 +1251,7 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
           ? jinyeCopy
           : frozen !== null
             ? this.applyLemmaPlaceholder(frozen, lemma)
-            : this.bodyFor(kind, lemma);
+            : joinedComment ?? this.bodyFor(kind, lemma);
 const subtitle =
 kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_visited'
 ? row.placeName
@@ -1147,6 +1338,27 @@ kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_vi
       };
     }
 
+    const preview = resolveFeedPreview({
+      kind,
+      dedupeKey: row.dedupeKey,
+      wordImageUrl: row.wordImageUrl,
+      discussionImages: row.discussionImages,
+      jinyeImages: row.jinyeImages,
+      jinyeCommentImages: row.jinyeCommentImages,
+      wordCommentImagePublicUrl: row.wordCommentImagePublicUrl,
+      wordCommentImageUrl: row.wordCommentImageUrl,
+      placeCommentImagePublicUrl: row.placeCommentImagePublicUrl,
+      placeCommentImageUrl: row.placeCommentImageUrl,
+      usahaCommentImagePublicUrl: row.usahaCommentImagePublicUrl,
+      usahaCommentImageUrl: row.usahaCommentImageUrl,
+      cuisineCommentImagePublicUrl: row.cuisineCommentImagePublicUrl,
+      cuisineCommentImageUrl: row.cuisineCommentImageUrl,
+      eventCommentImagePublicUrl: row.eventCommentImagePublicUrl,
+      eventCommentImageUrl: row.eventCommentImageUrl,
+      articleCommentImagePublicUrl: row.articleCommentImagePublicUrl,
+      articleCommentImageUrl: row.articleCommentImageUrl,
+    });
+
     return {
       id: `${wire}:${row.id}`,
       kind: wire as ActivityKind,
@@ -1156,6 +1368,8 @@ kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_vi
       body: isAnnouncement ? announcementTitle : body,
       subtitle,
       target,
+      previewImageUrl: preview.previewImageUrl,
+      previewImageCount: preview.previewImageCount,
       announcement,
     };
   }

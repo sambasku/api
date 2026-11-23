@@ -11,6 +11,8 @@ import { assertCanContribute } from '@/modules/word/application/utils/assert-can
 import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type { JinyeComment, JinyeImage } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import { commentFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 
 const MAX_BODY = 500;
 const MAX_IMAGES = 4;
@@ -43,14 +45,7 @@ export class CreateJinyeCommentUseCase {
       'listAllActiveWords'
     >,
     private readonly abuse?: RecordAbuseSignalUseCase,
-    private readonly activityEvents?: {
-      safe: (cmd: {
-        kind: 'jinye_comment_created';
-        actorId: string;
-        targetId: string;
-        dedupeKey: string;
-      }) => Promise<void>;
-    },
+    private readonly activityEvents?: RecordActivityEventUseCase,
     private readonly userRepo?: UserRepository,
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
@@ -203,6 +198,11 @@ export class CreateJinyeCommentUseCase {
       actorId: cmd.userId,
       targetId: created.id,
       dedupeKey: `jinye_comment:${created.id}`,
+      payload: commentFeedPayload({
+        body: created.body,
+        stickerId,
+        hasImage: created.images.length > 0,
+      }),
     });
 
     await this.notifyRecipients({

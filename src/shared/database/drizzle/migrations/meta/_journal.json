@@ -1331,6 +1331,20 @@
       "when": 1801678506000,
       "tag": "0190_baleho_occupancy_multi",
       "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "6",
+      "when": 1801678507000,
+      "tag": "0191_karya_layanan_views",
+      "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "6",
+      "when": 1801678508000,
+      "tag": "0192_ugc_comment_lemma_links",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,8 @@ function toWire(item: ActivityItem) {
     body: item.body,
     subtitle: item.subtitle,
     target: item.target,
+    preview_image_url: item.previewImageUrl ?? null,
+    preview_image_count: item.previewImageCount ?? null,
     announcement: item.announcement
       ? (() => {
           const a = item.announcement!;

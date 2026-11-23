@@ -20,6 +20,8 @@ import {
   RecordAbuseSignalUseCase,
   safeRecordAbuseSignal,
 } from '@/shared/moderation/record-abuse-signal.use-case';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import { commentFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 import { resolveDiscussionNotifyRecipients } from '../utils/resolve-discussion-notify-recipients';
@@ -67,6 +69,7 @@ export class CreateCommentAudioUseCase {
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly pushCooldown?: WordCommentPushCooldownGate,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly activityEvents?: RecordActivityEventUseCase,
   ) {}
 
   async execute(cmd: CreateCommentAudioCommand): Promise<Comment> {
@@ -157,6 +160,18 @@ export class CreateCommentAudioUseCase {
         censored: bodyOriginal != null,
       },
       requestId: cmd.requestId ?? null,
+    });
+
+    await this.activityEvents?.safe({
+      kind: 'comment_created',
+      actorId: cmd.userId,
+      targetWordId: cmd.wordId,
+      targetId: comment.id,
+      dedupeKey: `comment:${comment.id}`,
+      payload: commentFeedPayload({
+        body: comment.body,
+        hasAudio: true,
+      }),
     });
 
     if (bodyOriginal != null && isHeavyCensor(caption, filteredBody)) {

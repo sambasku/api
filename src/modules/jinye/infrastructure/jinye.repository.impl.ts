@@ -587,7 +587,7 @@ export class JinyeRepositoryImpl implements JinyeRepository {
           eq(jinyeComments.status, 'published'),
         ),
       )
-      .orderBy(asc(jinyeComments.createdAt), asc(jinyeComments.id));
+      .orderBy(desc(jinyeComments.createdAt), desc(jinyeComments.id));
 
     return rows.map(mapCommentJoined);
   }

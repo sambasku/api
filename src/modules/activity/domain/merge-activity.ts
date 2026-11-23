@@ -14,34 +14,52 @@ import type { ActivityEventKind } from './entities/activity-event.entity';
  */
 export type FeedCategory =
   | 'all'
-  | 'search_miss'
   | 'correction'
   | 'explore'
   | 'announcement'
   | 'joined'
   | 'jinye';
 
-/** Event vote tidak tayang di `GET /api/v1/activity` (beranda); hanya timeline profil. */
-export const HOME_FEED_EXCLUDED_EVENT_KINDS = [
+/**
+ * Kind yang tidak tayang di feed beranda (kategori Semua).
+ * Event tetap dicatat; filter read-time.
+ */
+export const PUBLIC_FEED_HIDDEN_EVENT_KINDS = [
   'vote_word',
   'vote_comment',
   'vote_meaning',
+  'search_miss',
+  'word_verified',
+  'suggestion_selfapply',
+  'suggestion_applied',
 ] as const satisfies readonly ActivityEventKind[];
+
+/**
+ * Kind tersembunyi di timeline profil publik (subset feed beranda).
+ * Verifikasi dan self-apply tetap tayang di profil verifikator (#56).
+ */
+export const PUBLIC_PROFILE_HIDDEN_EVENT_KINDS = [
+  'vote_word',
+  'vote_comment',
+  'vote_meaning',
+  'search_miss',
+  'suggestion_applied',
+] as const satisfies readonly ActivityEventKind[];
+
+/** @deprecated Pakai PUBLIC_FEED_HIDDEN_EVENT_KINDS */
+export const HOME_FEED_EXCLUDED_EVENT_KINDS = PUBLIC_FEED_HIDDEN_EVENT_KINDS;
 
 export const FEED_CATEGORY_KINDS: Record<
   FeedCategory,
   ActivityEventKind[] | null
 > = {
   all: null,
-  search_miss: ['search_miss'],
   correction: [
     'contribution_image',
     'contribution_audio',
     'contribution_pron',
     'contribution_example',
     'suggestion_created',
-    'suggestion_applied',
-    'suggestion_selfapply',
     'place_photo_added',
     'usaha_photo_added',
     'cuisine_photo_added',

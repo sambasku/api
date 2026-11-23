@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
 import { and, eq, inArray } from 'drizzle-orm';
 import { e2eRegisterBody } from '@/shared/testing/e2e-auth';
+import { e2eBalehoStartsOn } from '@/shared/testing/baleho-e2e';
 import {
   BALEHO_PAYMENT_TIMEOUT_MS,
 } from '@/shared/database/drizzle/schema/baleho.schema';
@@ -18,7 +19,7 @@ function placementBody(over: Record<string, unknown> = {}) {
     w: 1,
     h: 1,
     days: 7,
-    starts_on: '2026-11-22',
+    starts_on: e2eBalehoStartsOn(),
     confirmation_phone: '6281234567890',
     frames: [
       {

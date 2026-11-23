@@ -208,6 +208,7 @@ export function registerCommunityRoutes(app: OpenAPIHono<{ Variables: AppVariabl
     ),
     deleteComment: new DeleteArticleCommentUseCase(encyclopediaRepo),
     takedownComment: new TakedownArticleCommentUseCase(encyclopediaRepo, di.auditRepo),
+    ugcLemmaLinks: di.ugcCommentLemmaRepo,
     toggleBookmark: new ToggleArticleBookmarkUseCase(encyclopediaRepo),
     setClapCount: new SetArticleClapCountUseCase(encyclopediaRepo),
     submitContribution: new SubmitArticleContributionUseCase(

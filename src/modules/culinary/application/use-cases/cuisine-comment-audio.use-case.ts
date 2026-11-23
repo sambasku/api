@@ -9,6 +9,7 @@ import {
 } from '@/modules/word/application/utils/validate-audio-file';
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import { commentFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 import { buildEntityCommentAudioPath } from '@/shared/comment/build-entity-comment-audio-path';
 import { prepareEntityCommentAudioCaption } from '@/shared/comment/prepare-entity-comment-create';
 import type { CuisineComment } from '../../domain/entities/culinary.entity';
@@ -100,6 +101,10 @@ export class CreateCuisineCommentAudioUseCase {
       actorId: cmd.userId,
       targetId: created.id,
       dedupeKey: `cuisine_comment:${created.id}`,
+      payload: commentFeedPayload({
+        body: created.body,
+        hasAudio: true,
+      }),
     });
     return created;
   }

@@ -52,20 +52,21 @@ describe.skipIf(!hasTestDb)('Subrequest budget #103 - query count per halaman', 
     await seedDb.insert(searchMisses).values({ id: 'sm_qc1', term: 'kwintal' });
 
     const now = Date.now();
+    const visibleKinds = [
+      'word_created',
+      'comment_created',
+      'user_joined',
+      'contribution_image',
+      'discussion_created',
+    ] as const;
     const rows = Array.from({ length: 25 }, (_, i) => ({
       id: `01QC${String(i).padStart(22, '0')}`,
-      kind: i % 5 === 0 ? 'search_miss' : i % 3 === 0 ? 'word_verified' : 'vote_word',
+      kind: visibleKinds[i % visibleKinds.length]!,
       actorId: 'u_qc1',
       targetWordId: i % 5 === 0 ? null : 'w_qc1',
       targetId: i % 5 === 0 ? 'sm_qc1' : 'w_qc1',
       occurredAt: new Date(now - i * 1000),
-      // search_miss payload null = jalur bodyFor/lemma read-time ikut teruji.
-      payload:
-        i % 5 === 0
-          ? null
-          : i % 2 === 0
-            ? '"makatn" sudah pas'
-            : '"makatn" perlu dicek ulang',
+      payload: i % 2 === 0 ? 'Menambah foto' : null,
     }));
     await seedDb.insert(activityEvents).values(rows);
   });

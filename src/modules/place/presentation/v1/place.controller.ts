@@ -2,6 +2,8 @@ import type { Context } from "hono";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import { BadRequestError, UnauthorizedError } from "@/shared/errors/app-error";
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
+import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
+import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { CreatePlaceCommentAudioUseCase } from '../../application/use-cases/place-comment-audio.use-case';
@@ -85,6 +87,7 @@ export interface PlaceCommentControllerDeps {
   updateComment: UpdatePlaceCommentUseCase;
   deleteComment: DeletePlaceCommentUseCase;
   takedownComment: TakedownPlaceCommentUseCase;
+  ugcLemmaLinks?: UgcCommentLemmaRepository;
 }
 
 function viewerKey(c: Context<{ Variables: AppVariables }>): string {
@@ -535,10 +538,19 @@ export class PlaceController {
     const { id } = c.req.valid("param" as never) as { id: string };
     const q = c.req.valid("query" as never) as { cursor?: string; limit: number };
     const page = await this.comments.listComments.execute(id, q.cursor, q.limit);
+    const repo = this.comments.ugcLemmaLinks;
+    const items = repo
+      ? await attachLemmaLinksToCommentWireItems(
+          repo,
+          'place_comment',
+          page.items,
+          (c) => toCommentWire(c),
+        )
+      : page.items.map((c) => ({ ...toCommentWire(c), lemma_links: [] as const }));
     return c.json({
       success: true as const,
       data: {
-        items: page.items.map(toCommentWire),
+        items,
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
       },

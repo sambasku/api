@@ -251,7 +251,7 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     const item = body.data.items[0];
     expect(item).toMatchObject({
       kind: expect.stringMatching(
-        /^(contribution|comment|verification|vote)$/,
+        /^(contribution|correction|comment|jinye)$/,
       ),
       occurred_at: expect.any(String),
       summary: expect.any(String),
@@ -260,53 +260,6 @@ describe.skipIf(!hasTestDb)('Public profile E2E v1 - GET /users/:username (19 do
     expect(item).toHaveProperty('lemma');
     expect(item).not.toHaveProperty('user_id');
     expect(item).not.toHaveProperty('email');
-  });
-
-  it('GET /users/:username/activity → vote downvote contributor muncul', async () => {
-    const res = await get(`/api/v1/users/${contributorUsername}/activity`);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    // Cari vote dengan lemma asli (downvote) - bukan yang di-insert untuk pagination.
-    const vote = body.data.items.find(
-      (entry: { kind: string; lemma: string }) =>
-        entry.kind === 'vote' && entry.lemma === `lemmaprof${stamp}`,
-    );
-    expect(vote).toBeTruthy();
-    expect(vote.summary).toContain('"');
-    // #94: payload beku menang — copy "sudah pas" meski votes DB = -1.
-    expect(vote.summary).toMatch(/sudah pas$/);
-    expect(vote.lemma).toBe(`lemmaprof${stamp}`);
-    expect(vote.word_id).toBeTruthy();
-  });
-
-  it('GET /users/:username/activity?kind=vote&limit=1 → meta cursor + halaman 2', async () => {
-    // Halaman 1
-    const res1 = await get(
-      `/api/v1/users/${contributorUsername}/activity?kind=vote&limit=1`,
-    );
-    expect(res1.status).toBe(200);
-    const body1 = await res1.json();
-    expect(body1.data.items).toHaveLength(1);
-    expect(body1.meta).toMatchObject({
-      limit: 1,
-      next_cursor: expect.any(String),
-      has_more: true,
-    });
-    const cursor1 = body1.meta.next_cursor;
-    expect(cursor1).toBeTruthy();
-
-    // Halaman 2 pakai cursor (ada 4 total vote → halaman 2 masih has_more=true)
-    const res2 = await get(
-      `/api/v1/users/${contributorUsername}/activity?kind=vote&limit=1&cursor=${cursor1}`,
-    );
-    expect(res2.status).toBe(200);
-    const body2 = await res2.json();
-    expect(body2.data.items).toHaveLength(1);
-    expect(body2.meta.has_more).toBe(true); // 4 total, limit=1 → page 2 of 4
-    expect(body2.meta.next_cursor).toBeTruthy();
-
-    // Tidak duplikat
-    expect(body2.data.items[0].id).not.toBe(body1.data.items[0].id);
   });
 
   it('GET /users/:username/activity?kind=comment → filter kind', async () => {

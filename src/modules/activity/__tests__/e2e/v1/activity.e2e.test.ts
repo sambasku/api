@@ -136,6 +136,7 @@ describe.skipIf(!hasTestDb)('Activity feed E2E - GET /api/v1/activity (37)', () 
         targetId: ulid26(`01E2ECMT${stamp}`),
         occurredAt: new Date(),
         dedupeKey: `comment:${ulid26(`01E2ECMT${stamp}`)}`,
+        payload: 'komentar feed aktivitas',
       },
       {
         kind: 'vote_word',
@@ -247,7 +248,7 @@ let pendingLemma = '';
     expect(shares[0].body).toMatch(/^Membagikan kartu · "lemmaact/);
   });
 
-  it('GET /activity publik 200, tanpa email, search_miss actor null', async () => {
+  it('GET /activity publik 200, tanpa email, tanpa kind tersembunyi', async () => {
     const res = await get('/api/v1/activity?limit=20');
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -278,10 +279,16 @@ let pendingLemma = '';
       }
     }
 
-    const miss = body.data.find((i) => i.kind === 'search_miss');
-    expect(miss).toBeTruthy();
-    expect(miss!.actor).toBeNull();
-    expect(miss!.body).toMatch(/Mencari ".+" - belum ada/);
+    const hiddenKinds = new Set([
+      'search_miss',
+      'vote',
+      'vote_up',
+      'vote_down',
+      'verification',
+    ]);
+    for (const item of body.data) {
+      expect(hiddenKinds.has(item.kind)).toBe(false);
+    }
 
     // #190: target baris komentar = id KATA (bisa dibuka), bukan id komentar
     // (pernah salah kirim targetId -> detail 404 "tidak ditemukan").
@@ -289,23 +296,7 @@ let pendingLemma = '';
     expect(commentRow).toBeTruthy();
     expect(commentRow!.target?.type).toBe('word');
     expect(commentRow!.target?.id).toBe(sharedWordId);
-
-    // Vote tidak tayang di feed beranda (hanya timeline profil + Vote Saya).
-    const voteRows = body.data.filter(
-      (i) =>
-        i.kind === 'vote' ||
-        i.kind === 'vote_up' ||
-        i.kind === 'vote_down',
-    );
-    expect(voteRows).toHaveLength(0);
-
-    // #99: word_verified terpisah dari vote di wire
-    const verification = body.data.find((i) => i.kind === 'verification');
-    expect(verification).toBeTruthy();
-    expect(verification!.body).toBe('Memverifikasi kata');
-    // #132: subtitle verifikasi wajib null - 'Verifikasi' duplikat kindLabel
-    // mobile sehingga meta dirender "Verifikasi · Verifikasi".
-    expect(verification!.subtitle).toBeNull();
+    expect(commentRow!.body).toBe('komentar feed aktivitas');
 
       const welcome = body.data.find((i) => i.kind === 'welcome');
       expect(welcome).toBeTruthy();
