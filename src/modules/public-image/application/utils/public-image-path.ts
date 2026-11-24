@@ -76,3 +76,8 @@ export function buildBalehoImagePath(mimeType: string): string {
 export function buildStickerImagePath(mimeType: string): string {
   return `assets/stickers/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path logo komunitas: assets/community/<ulid>.<ext> */
+export function buildCommunityImagePath(mimeType: string): string {
+  return `assets/community/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

@@ -1345,6 +1345,13 @@
       "when": 1801678508000,
       "tag": "0192_ugc_comment_lemma_links",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "6",
+      "when": 1801678509000,
+      "tag": "0193_community",
+      "breakpoints": true
     }
   ]
 }

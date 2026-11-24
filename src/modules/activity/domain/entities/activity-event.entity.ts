@@ -54,6 +54,8 @@ export const ACTIVITY_EVENT_KINDS = [
   'jinye_comment_created',
   'jinye_reposted',
   'jinye_quote_created',
+  'community_proposal_created',
+  'community_published',
 ] as const;
 
 export type ActivityEventKind = (typeof ACTIVITY_EVENT_KINDS)[number];
@@ -136,6 +138,9 @@ case 'announcement':
     case 'jinye_reposted':
     case 'jinye_quote_created':
       return 'jinye';
+    case 'community_proposal_created':
+    case 'community_published':
+      return 'community';
     case 'chat_ping':
       return 'chat';
   }

@@ -87,6 +87,8 @@ announcement: 'announcement',
   jinye_comment_created: 'jinye',
   jinye_reposted: 'jinye',
   jinye_quote_created: 'jinye',
+  community_proposal_created: 'community',
+  community_published: 'community',
 };
 
 /** Label aksi per kind (badan feed; lemma diresolve terpisah). */
@@ -137,6 +139,8 @@ announcement: 'Pengumuman',
   jinye_comment_created: 'Membalas Jinye',
   jinye_reposted: 'Membagikan ulang Jinye',
   jinye_quote_created: 'Mengutip Jinye',
+  community_proposal_created: 'Mengusulkan komunitas',
+  community_published: 'Menambahkan komunitas',
 };
 
 /** Entity type votes untuk kind event vote (legacy hydration #94). */
@@ -196,6 +200,8 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'place_published',
     'event_published',
     'article_published',
+    'community_published',
+    'community_proposal_created',
   ],
   correction: FEED_CATEGORY_KINDS.correction!,
   comment: [
@@ -545,6 +551,10 @@ export class ActivityEventFeedRepositoryImpl {
         : 'Pernah bertransaksi di usaha';
     case 'layanan_published':
       return 'Menambahkan layanan publik';
+    case 'community_published':
+      return 'Menambahkan komunitas';
+    case 'community_proposal_created':
+      return 'Mengusulkan komunitas';
     case 'karya_published':
       return 'Menambahkan karya';
     case 'kreator_claimed':
@@ -1412,6 +1422,8 @@ case 'usaha_published':
 case 'usaha_visited':
 case 'usaha_comment_created':
 case 'layanan_published':
+case 'community_published':
+case 'community_proposal_created':
 case 'karya_published':
 case 'kreator_claimed':
 case 'cuisine_published':
@@ -1540,6 +1552,9 @@ articleSlug?: string | null;
         return row.usahaSlug ? { type: 'usaha', id: row.usahaSlug } : null;
       case 'layanan_published':
         return row.layananSlug ? { type: 'layanan', id: row.layananSlug } : null;
+      case 'community_published':
+      case 'community_proposal_created':
+        return null;
       case 'karya_published':
         return row.karyaSlug ? { type: 'karya', id: row.karyaSlug } : null;
       case 'kreator_claimed':

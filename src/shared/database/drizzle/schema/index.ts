@@ -111,6 +111,8 @@ export * from "./translations.schema";
 export * from "./kreators.schema";
 export * from "./kreator-claims.schema";
 export * from "./karyas.schema";
+export * from "./community-orgs.schema";
+export * from "./community-proposals.schema";
 export * from "./karya-views.schema";
 export * from "./karya-excerpts.schema";
 export * from "./karya-lemma-links.schema";

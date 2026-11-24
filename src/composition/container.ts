@@ -312,6 +312,9 @@ import { UsahaContributionController } from "@/modules/usaha-contribution/presen
 import { LayananRepositoryImpl } from "@/modules/layanan/infrastructure/layanan.repository.impl";
 import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases";
 import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
+import { CommunityRepositoryImpl } from "@/modules/community/infrastructure/community.repository.impl";
+import { CommunityUseCases } from "@/modules/community/application/community.use-cases";
+import { CommunityController } from "@/modules/community/presentation/v1/community.controller";
 import {
   GetKaryaViewReportUseCase,
   ListKaryaViewsUseCase,
@@ -1379,6 +1382,12 @@ export const layananController = new LayananController(
   ),
   listRelatedContent,
 );
+export const communityRepo = new CommunityRepositoryImpl(db);
+export const communityUseCases = new CommunityUseCases(
+  communityRepo,
+  activityEvents,
+);
+export const communityController = new CommunityController(communityUseCases);
 export const karyaLemmaLinkController = new KaryaLemmaLinkController({
   listByExcerpt: new ListKaryaExcerptLemmaLinksUseCase(karyaRepo),
   create: new CreateKaryaLemmaLinkUseCase(karyaRepo, wordRepo, auditRepo),

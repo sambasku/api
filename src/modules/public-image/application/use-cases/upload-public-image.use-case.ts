@@ -8,6 +8,7 @@ import {
   buildLayananImagePath,
   buildPlaceImagePath,
   buildStickerImagePath,
+  buildCommunityImagePath,
   buildUsahaImagePath,
   buildWordImagePath,
 } from '../utils/public-image-path';
@@ -23,7 +24,8 @@ export type PublicImagePurpose =
   | 'encyclopedia'
   | 'layanan'
   | 'baleho'
-  | 'sticker';
+  | 'sticker'
+  | 'community';
 
 export interface UploadPublicImageResult {
   url: string;
@@ -52,6 +54,8 @@ function pathForPurpose(purpose: PublicImagePurpose, mimeType: string): string {
       return buildBalehoImagePath(mimeType);
     case 'sticker':
       return buildStickerImagePath(mimeType);
+    case 'community':
+      return buildCommunityImagePath(mimeType);
     case 'word':
     default:
       return buildWordImagePath(mimeType);

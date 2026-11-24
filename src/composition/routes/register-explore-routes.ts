@@ -67,6 +67,12 @@ import {
   createPublicLayananRoutes,
 } from "@/modules/layanan/presentation/v1/layanan.routes";
 import {
+  createAdminCommunityOrgRoutes,
+  createAdminCommunityProposalRoutes,
+  createAuthCommunityRoutes,
+  createPublicCommunityRoutes,
+} from "@/modules/community/presentation/v1/community.routes";
+import {
   createAdminKaryaContributionRoutes,
   createAdminKaryaRoutes,
   createKaryaContributionRoutes,
@@ -412,6 +418,31 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
   app.route(
     "/api/v1/layanan",
     createPublicLayananRoutes({ controller: di.layananController }),
+  );
+  app.route(
+    "/api/v1/community",
+    createPublicCommunityRoutes({ controller: di.communityController }),
+  );
+  app.route(
+    "/api/v1/community",
+    createAuthCommunityRoutes({
+      controller: di.communityController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/community/orgs",
+    createAdminCommunityOrgRoutes({
+      controller: di.communityController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/community-proposals",
+    createAdminCommunityProposalRoutes({
+      controller: di.communityController,
+      authenticate: di.authenticate,
+    }),
   );
   app.route(
     "/api/v1/admin/karya",
