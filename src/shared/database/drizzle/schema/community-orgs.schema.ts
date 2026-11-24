@@ -7,15 +7,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
-
-export const COMMUNITY_CATEGORIES = [
-  'seni',
-  'bahasa',
-  'pendidikan',
-  'ukm',
-  'lain',
-] as const;
-export type CommunityCategory = (typeof COMMUNITY_CATEGORIES)[number];
+import { kategoriKomunitas } from './kategori-komunitas.schema';
 
 export const COMMUNITY_PUBLISH_STATUSES = ['published', 'archived'] as const;
 export type CommunityPublishStatus =
@@ -26,6 +18,7 @@ export type CommunityFeaturedKind = (typeof COMMUNITY_FEATURED_KINDS)[number];
 
 /**
  * Direktori komunitas / organisasi Sambas (fase 1).
+ * `category_id` → master `kategori_komunitas`.
  * Sorotan: tepat satu baris `tim` dan satu `sponsor` via unique partial.
  */
 export const communityOrgs = sqliteTable(
@@ -36,9 +29,10 @@ export const communityOrgs = sqliteTable(
       .$defaultFn(() => generateId()),
     slug: text('slug').notNull(),
     name: text('name').notNull(),
-    category: text('category', { enum: COMMUNITY_CATEGORIES })
+    categoryId: text('category_id')
       .notNull()
-      .default('lain'),
+      .default('lain')
+      .references(() => kategoriKomunitas.id),
     description: text('description').notNull().default(''),
     logoUrl: text('logo_url'),
     coverUrl: text('cover_url'),
@@ -57,7 +51,7 @@ export const communityOrgs = sqliteTable(
   },
   (t) => [
     uniqueIndex('community_orgs_slug_uidx').on(t.slug),
-    index('community_orgs_status_category_idx').on(t.status, t.category),
+    index('community_orgs_status_category_idx').on(t.status, t.categoryId),
     index('community_orgs_status_created_idx').on(t.status, t.createdAt),
     uniqueIndex('community_orgs_featured_kind_uidx')
       .on(t.isFeaturedKind)

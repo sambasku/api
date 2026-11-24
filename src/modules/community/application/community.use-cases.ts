@@ -5,10 +5,10 @@ import {
   ValidationError,
 } from '@/shared/errors/app-error';
 import {
+  COMMUNITY_CATEGORY_DEFAULT,
   COMMUNITY_DESC_MAX,
   COMMUNITY_PENDING_CAP,
   slugifyCommunity,
-  type CommunityCategory,
   type CommunityFeaturedKind,
   type CommunityOrg,
   type CommunityOrgFields,
@@ -40,8 +40,12 @@ export class CommunityUseCases {
     private readonly activity: RecordActivityEventUseCase,
   ) {}
 
+  listCategories() {
+    return this.repo.listCategories(true);
+  }
+
   listPublic(input: {
-    category?: CommunityCategory;
+    categoryId?: string;
     q?: string;
     cursor?: string | null;
     limit?: number;
@@ -69,7 +73,7 @@ export class CommunityUseCases {
     fields: CommunityOrgFields,
     authorId: string,
   ): Promise<CommunityOrg> {
-    const normalized = this.normalizeOrg(fields);
+    const normalized = await this.normalizeOrg(fields);
     if (normalized.isFeaturedKind) {
       await this.repo.clearFeaturedKind(normalized.isFeaturedKind);
     }
@@ -83,11 +87,16 @@ export class CommunityUseCases {
     return row;
   }
 
-  async adminUpdate(id: string, fields: Partial<CommunityOrgFields>): Promise<CommunityOrg> {
+  async adminUpdate(
+    id: string,
+    fields: Partial<CommunityOrgFields>,
+  ): Promise<CommunityOrg> {
     await this.mustOrg(id);
     const patch: Partial<CommunityOrgFields> = {};
     if (fields.name !== undefined) patch.name = fields.name.trim();
-    if (fields.category !== undefined) patch.category = fields.category;
+    if (fields.categoryId !== undefined) {
+      patch.categoryId = await this.requireCategoryId(fields.categoryId);
+    }
     if (fields.description !== undefined) {
       patch.description = this.normalizeDescription(fields.description);
     }
@@ -118,6 +127,7 @@ export class CommunityUseCases {
       name: string;
       description: string;
       logoUrl?: string | null;
+      categoryId?: string;
     },
   ): Promise<CommunityProposal> {
     if ((await this.repo.countOpenByUser(userId)) >= COMMUNITY_PENDING_CAP) {
@@ -134,12 +144,15 @@ export class CommunityUseCases {
     }
     const description = this.normalizeDescription(input.description);
     const logoUrl = assertHttpsUrl('logo_url', input.logoUrl);
+    const categoryId = await this.requireCategoryId(
+      input.categoryId ?? COMMUNITY_CATEGORY_DEFAULT,
+    );
     const id = await this.repo.insertProposal({
       userId,
       name,
       description,
       logoUrl,
-      category: 'lain',
+      categoryId,
     });
     await this.activity.safe({
       kind: 'community_proposal_created',
@@ -181,7 +194,7 @@ export class CommunityUseCases {
     id: string,
     reviewerId: string,
     override?: {
-      category?: CommunityCategory;
+      categoryId?: string;
       name?: string;
       description?: string;
       logoUrl?: string | null;
@@ -193,7 +206,9 @@ export class CommunityUseCases {
     const description = this.normalizeDescription(
       override?.description ?? row.description,
     );
-    const category = override?.category ?? row.category;
+    const categoryId = await this.requireCategoryId(
+      override?.categoryId ?? row.categoryId,
+    );
     const logoUrl =
       override?.logoUrl !== undefined
         ? assertHttpsUrl('logo_url', override.logoUrl)
@@ -205,7 +220,7 @@ export class CommunityUseCases {
     const slug = await this.uniqueSlug(name);
     const created = await this.repo.insertOrg({
       name,
-      category,
+      categoryId,
       description,
       logoUrl,
       coverUrl: null,
@@ -218,7 +233,7 @@ export class CommunityUseCases {
       communityOrgId: created.id,
       reviewedBy: reviewerId,
       reviewedAt: new Date(),
-      category,
+      categoryId,
       name,
       description,
       logoUrl,
@@ -248,7 +263,21 @@ export class CommunityUseCases {
     });
   }
 
-  private normalizeOrg(fields: CommunityOrgFields): CommunityOrgFields {
+  private async requireCategoryId(raw: string): Promise<string> {
+    const id = raw.trim();
+    const cat = await this.repo.findCategory(id);
+    if (!cat) {
+      throw new ValidationError([
+        {
+          field: 'category_id',
+          message: 'Kategori tidak valid. Pilih ulang dari daftar.',
+        },
+      ]);
+    }
+    return cat.id;
+  }
+
+  private async normalizeOrg(fields: CommunityOrgFields): Promise<CommunityOrgFields> {
     const name = fields.name.trim();
     if (name.length < 2) {
       throw new ValidationError([
@@ -257,7 +286,7 @@ export class CommunityUseCases {
     }
     return {
       name,
-      category: fields.category,
+      categoryId: await this.requireCategoryId(fields.categoryId),
       description: this.normalizeDescription(fields.description),
       logoUrl: assertHttpsUrl('logo_url', fields.logoUrl),
       coverUrl: assertHttpsUrl('cover_url', fields.coverUrl),

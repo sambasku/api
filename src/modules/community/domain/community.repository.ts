@@ -1,5 +1,5 @@
 import type {
-  CommunityCategory,
+  CommunityCategoryRef,
   CommunityFeaturedKind,
   CommunityOrg,
   CommunityOrgFields,
@@ -9,7 +9,7 @@ import type {
 } from './community';
 
 export interface ListCommunityOrgsInput {
-  category?: CommunityCategory;
+  categoryId?: string;
   q?: string;
   cursor?: string | null;
   limit?: number;
@@ -21,6 +21,9 @@ export interface ListCommunityOrgsResult {
 }
 
 export interface CommunityRepository {
+  listCategories(publicOnly?: boolean): Promise<CommunityCategoryRef[]>;
+  findCategory(id: string): Promise<CommunityCategoryRef | null>;
+
   listPublished(input: ListCommunityOrgsInput): Promise<ListCommunityOrgsResult>;
   listManage(): Promise<CommunityOrg[]>;
   listFeatured(): Promise<CommunityOrg[]>;
@@ -46,7 +49,7 @@ export interface CommunityRepository {
     name: string;
     description: string;
     logoUrl: string | null;
-    category: CommunityCategory;
+    categoryId: string;
   }): Promise<string>;
   findProposal(id: string): Promise<CommunityProposal | null>;
   listProposals(input: {
@@ -61,7 +64,7 @@ export interface CommunityRepository {
       reviewedBy: string | null;
       reviewedAt: Date | null;
       communityOrgId: string | null;
-      category: CommunityCategory;
+      categoryId: string;
       name: string;
       description: string;
       logoUrl: string | null;

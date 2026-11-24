@@ -1,12 +1,13 @@
-import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   communityOrgs,
   communityProposals,
+  kategoriKomunitas,
   users,
 } from '@/shared/database/drizzle/schema';
 import type {
-  CommunityCategory,
+  CommunityCategoryRef,
   CommunityFeaturedKind,
   CommunityOrg,
   CommunityOrgFields,
@@ -22,12 +23,13 @@ import type {
 
 type OrgRow = typeof communityOrgs.$inferSelect;
 
-function toOrg(row: OrgRow): CommunityOrg {
+function toOrg(row: OrgRow, categoryName: string | null): CommunityOrg {
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    category: row.category,
+    categoryId: row.categoryId,
+    categoryName,
     description: row.description,
     logoUrl: row.logoUrl,
     coverUrl: row.coverUrl,
@@ -42,6 +44,7 @@ function toOrg(row: OrgRow): CommunityOrg {
 function toProposal(
   row: typeof communityProposals.$inferSelect,
   username: string | null,
+  categoryName: string | null,
 ): CommunityProposal {
   return {
     id: row.id,
@@ -50,7 +53,8 @@ function toProposal(
     name: row.name,
     description: row.description,
     logoUrl: row.logoUrl,
-    category: row.category,
+    categoryId: row.categoryId,
+    categoryName,
     status: row.status,
     reviewNote: row.reviewNote,
     reviewedBy: row.reviewedBy,
@@ -61,13 +65,49 @@ function toProposal(
   };
 }
 
+const orgSelect = {
+  row: communityOrgs,
+  categoryName: kategoriKomunitas.name,
+};
+
+const proposalSelect = {
+  row: communityProposals,
+  username: users.username,
+  categoryName: kategoriKomunitas.name,
+};
+
 export class CommunityRepositoryImpl implements CommunityRepository {
   constructor(private readonly db: AppDatabase) {}
 
-  async listPublished(input: ListCommunityOrgsInput): Promise<ListCommunityOrgsResult> {
+  async listCategories(publicOnly = true): Promise<CommunityCategoryRef[]> {
+    const conds = [isNull(kategoriKomunitas.deletedAt)];
+    if (publicOnly) conds.push(eq(kategoriKomunitas.status, 'published'));
+    return this.db
+      .select({ id: kategoriKomunitas.id, name: kategoriKomunitas.name })
+      .from(kategoriKomunitas)
+      .where(and(...conds))
+      .orderBy(asc(kategoriKomunitas.sortOrder), asc(kategoriKomunitas.name));
+  }
+
+  async findCategory(id: string): Promise<CommunityCategoryRef | null> {
+    const [row] = await this.db
+      .select({ id: kategoriKomunitas.id, name: kategoriKomunitas.name })
+      .from(kategoriKomunitas)
+      .where(
+        and(eq(kategoriKomunitas.id, id), isNull(kategoriKomunitas.deletedAt)),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async listPublished(
+    input: ListCommunityOrgsInput,
+  ): Promise<ListCommunityOrgsResult> {
     const limit = Math.min(Math.max(input.limit ?? 30, 1), 50);
     const conds = [eq(communityOrgs.status, 'published')];
-    if (input.category) conds.push(eq(communityOrgs.category, input.category));
+    if (input.categoryId) {
+      conds.push(eq(communityOrgs.categoryId, input.categoryId));
+    }
     if (input.q && input.q.trim()) {
       const like = `%${input.q.trim().toLowerCase()}%`;
       conds.push(
@@ -93,32 +133,44 @@ export class CommunityRepositoryImpl implements CommunityRepository {
       }
     }
     const rows = await this.db
-      .select()
+      .select(orgSelect)
       .from(communityOrgs)
+      .leftJoin(
+        kategoriKomunitas,
+        eq(kategoriKomunitas.id, communityOrgs.categoryId),
+      )
       .where(and(...conds))
       .orderBy(desc(communityOrgs.createdAt), desc(communityOrgs.id))
       .limit(limit + 1);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     return {
-      items: page.map(toOrg),
-      nextCursor: hasMore ? page[page.length - 1]!.id : null,
+      items: page.map((r) => toOrg(r.row, r.categoryName)),
+      nextCursor: hasMore ? page[page.length - 1]!.row.id : null,
     };
   }
 
   async listManage(): Promise<CommunityOrg[]> {
     const rows = await this.db
-      .select()
+      .select(orgSelect)
       .from(communityOrgs)
+      .leftJoin(
+        kategoriKomunitas,
+        eq(kategoriKomunitas.id, communityOrgs.categoryId),
+      )
       .orderBy(desc(communityOrgs.updatedAt), desc(communityOrgs.createdAt))
       .limit(200);
-    return rows.map(toOrg);
+    return rows.map((r) => toOrg(r.row, r.categoryName));
   }
 
   async listFeatured(): Promise<CommunityOrg[]> {
     const rows = await this.db
-      .select()
+      .select(orgSelect)
       .from(communityOrgs)
+      .leftJoin(
+        kategoriKomunitas,
+        eq(kategoriKomunitas.id, communityOrgs.categoryId),
+      )
       .where(
         and(
           eq(communityOrgs.status, 'published'),
@@ -126,25 +178,35 @@ export class CommunityRepositoryImpl implements CommunityRepository {
         ),
       )
       .limit(4);
-    return rows.map(toOrg);
+    return rows.map((r) => toOrg(r.row, r.categoryName));
   }
 
   async findPublishedBySlug(slug: string): Promise<CommunityOrg | null> {
     const [row] = await this.db
-      .select()
+      .select(orgSelect)
       .from(communityOrgs)
-      .where(and(eq(communityOrgs.slug, slug), eq(communityOrgs.status, 'published')))
+      .leftJoin(
+        kategoriKomunitas,
+        eq(kategoriKomunitas.id, communityOrgs.categoryId),
+      )
+      .where(
+        and(eq(communityOrgs.slug, slug), eq(communityOrgs.status, 'published')),
+      )
       .limit(1);
-    return row ? toOrg(row) : null;
+    return row ? toOrg(row.row, row.categoryName) : null;
   }
 
   async findById(id: string): Promise<CommunityOrg | null> {
     const [row] = await this.db
-      .select()
+      .select(orgSelect)
       .from(communityOrgs)
+      .leftJoin(
+        kategoriKomunitas,
+        eq(kategoriKomunitas.id, communityOrgs.categoryId),
+      )
       .where(eq(communityOrgs.id, id))
       .limit(1);
-    return row ? toOrg(row) : null;
+    return row ? toOrg(row.row, row.categoryName) : null;
   }
 
   async existingSlugs(candidates: string[]): Promise<Set<string>> {
@@ -169,7 +231,7 @@ export class CommunityRepositoryImpl implements CommunityRepository {
       .values({
         slug: input.slug,
         name: input.name,
-        category: input.category,
+        categoryId: input.categoryId,
         description: input.description,
         logoUrl: input.logoUrl,
         coverUrl: input.coverUrl,
@@ -180,7 +242,8 @@ export class CommunityRepositoryImpl implements CommunityRepository {
         updatedAt: now,
       })
       .returning();
-    return toOrg(row!);
+    const cat = await this.findCategory(input.categoryId);
+    return toOrg(row!, cat?.name ?? null);
   }
 
   async updateOrg(
@@ -189,7 +252,7 @@ export class CommunityRepositoryImpl implements CommunityRepository {
   ): Promise<void> {
     const set: Record<string, unknown> = { updatedAt: new Date() };
     if (patch.name !== undefined) set.name = patch.name;
-    if (patch.category !== undefined) set.category = patch.category;
+    if (patch.categoryId !== undefined) set.categoryId = patch.categoryId;
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.logoUrl !== undefined) set.logoUrl = patch.logoUrl;
     if (patch.coverUrl !== undefined) set.coverUrl = patch.coverUrl;
@@ -234,7 +297,7 @@ export class CommunityRepositoryImpl implements CommunityRepository {
     name: string;
     description: string;
     logoUrl: string | null;
-    category: CommunityCategory;
+    categoryId: string;
   }): Promise<string> {
     const [row] = await this.db
       .insert(communityProposals)
@@ -243,7 +306,7 @@ export class CommunityRepositoryImpl implements CommunityRepository {
         name: input.name,
         description: input.description,
         logoUrl: input.logoUrl,
-        category: input.category,
+        categoryId: input.categoryId,
         status: 'pending',
         createdAt: new Date(),
       })
@@ -253,12 +316,16 @@ export class CommunityRepositoryImpl implements CommunityRepository {
 
   async findProposal(id: string): Promise<CommunityProposal | null> {
     const [row] = await this.db
-      .select({ row: communityProposals, username: users.username })
+      .select(proposalSelect)
       .from(communityProposals)
       .leftJoin(users, eq(users.id, communityProposals.userId))
+      .leftJoin(
+        kategoriKomunitas,
+        eq(kategoriKomunitas.id, communityProposals.categoryId),
+      )
       .where(eq(communityProposals.id, id))
       .limit(1);
-    return row ? toProposal(row.row, row.username) : null;
+    return row ? toProposal(row.row, row.username, row.categoryName) : null;
   }
 
   async listProposals(input: {
@@ -269,13 +336,17 @@ export class CommunityRepositoryImpl implements CommunityRepository {
     if (input.status) conds.push(eq(communityProposals.status, input.status));
     if (input.userId) conds.push(eq(communityProposals.userId, input.userId));
     const rows = await this.db
-      .select({ row: communityProposals, username: users.username })
+      .select(proposalSelect)
       .from(communityProposals)
       .leftJoin(users, eq(users.id, communityProposals.userId))
+      .leftJoin(
+        kategoriKomunitas,
+        eq(kategoriKomunitas.id, communityProposals.categoryId),
+      )
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(communityProposals.createdAt))
       .limit(200);
-    return rows.map((r) => toProposal(r.row, r.username));
+    return rows.map((r) => toProposal(r.row, r.username, r.categoryName));
   }
 
   async updateProposal(
@@ -286,7 +357,7 @@ export class CommunityRepositoryImpl implements CommunityRepository {
       reviewedBy: string | null;
       reviewedAt: Date | null;
       communityOrgId: string | null;
-      category: CommunityCategory;
+      categoryId: string;
       name: string;
       description: string;
       logoUrl: string | null;
@@ -298,7 +369,7 @@ export class CommunityRepositoryImpl implements CommunityRepository {
     if (patch.reviewedBy !== undefined) set.reviewedBy = patch.reviewedBy;
     if (patch.reviewedAt !== undefined) set.reviewedAt = patch.reviewedAt;
     if (patch.communityOrgId !== undefined) set.communityOrgId = patch.communityOrgId;
-    if (patch.category !== undefined) set.category = patch.category;
+    if (patch.categoryId !== undefined) set.categoryId = patch.categoryId;
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.logoUrl !== undefined) set.logoUrl = patch.logoUrl;

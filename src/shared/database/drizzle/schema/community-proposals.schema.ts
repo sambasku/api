@@ -1,9 +1,7 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
-import {
-  COMMUNITY_CATEGORIES,
-  communityOrgs,
-} from './community-orgs.schema';
+import { communityOrgs } from './community-orgs.schema';
+import { kategoriKomunitas } from './kategori-komunitas.schema';
 
 export const COMMUNITY_PROPOSAL_STATUSES = [
   'pending',
@@ -15,8 +13,8 @@ export type CommunityProposalStatus =
   (typeof COMMUNITY_PROPOSAL_STATUSES)[number];
 
 /**
- * Usulan komunitas baru (form minimal: nama, deskripsi, logo).
- * Kategori default `lain`; admin bisa ubah saat approve.
+ * Usulan komunitas baru.
+ * `category_id` → master `kategori_komunitas` (default `lain`).
  */
 export const communityProposals = sqliteTable(
   'community_proposals',
@@ -28,9 +26,10 @@ export const communityProposals = sqliteTable(
     name: text('name').notNull(),
     description: text('description').notNull(),
     logoUrl: text('logo_url'),
-    category: text('category', { enum: COMMUNITY_CATEGORIES })
+    categoryId: text('category_id')
       .notNull()
-      .default('lain'),
+      .default('lain')
+      .references(() => kategoriKomunitas.id),
     status: text('status', { enum: COMMUNITY_PROPOSAL_STATUSES })
       .notNull()
       .default('pending'),

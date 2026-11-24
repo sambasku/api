@@ -31,6 +31,18 @@ export function createPublicCommunityRoutes(deps: {
   routes.openapi(
     createRoute({
       method: 'get',
+      path: '/categories',
+      tags: ['Community'],
+      responses: {
+        200: { description: 'Master kategori komunitas', content: json },
+      },
+    }),
+    (c) => deps.controller.listCategories(c) as never,
+  );
+
+  routes.openapi(
+    createRoute({
+      method: 'get',
       path: '/orgs',
       tags: ['Community'],
       request: { query: listCommunityQuerySchema },

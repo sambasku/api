@@ -1,12 +1,10 @@
 import type {
-  CommunityCategory,
   CommunityFeaturedKind,
   CommunityPublishStatus,
 } from '@/shared/database/drizzle/schema/community-orgs.schema';
 import type { CommunityProposalStatus } from '@/shared/database/drizzle/schema/community-proposals.schema';
 
 export type {
-  CommunityCategory,
   CommunityFeaturedKind,
   CommunityPublishStatus,
   CommunityProposalStatus,
@@ -14,12 +12,20 @@ export type {
 
 export const COMMUNITY_DESC_MAX = 320;
 export const COMMUNITY_PENDING_CAP = 10;
+/** Fallback bila client tidak kirim kategori. */
+export const COMMUNITY_CATEGORY_DEFAULT = 'lain';
+
+export interface CommunityCategoryRef {
+  id: string;
+  name: string;
+}
 
 export interface CommunityOrg {
   id: string;
   slug: string;
   name: string;
-  category: CommunityCategory;
+  categoryId: string;
+  categoryName: string | null;
   description: string;
   logoUrl: string | null;
   coverUrl: string | null;
@@ -32,7 +38,7 @@ export interface CommunityOrg {
 
 export interface CommunityOrgFields {
   name: string;
-  category: CommunityCategory;
+  categoryId: string;
   description: string;
   logoUrl: string | null;
   coverUrl: string | null;
@@ -46,7 +52,8 @@ export interface CommunityProposal {
   name: string;
   description: string;
   logoUrl: string | null;
-  category: CommunityCategory;
+  categoryId: string;
+  categoryName: string | null;
   status: CommunityProposalStatus;
   reviewNote: string | null;
   reviewedBy: string | null;

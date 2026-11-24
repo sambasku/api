@@ -25,12 +25,21 @@ function requireUserId(c: Context<{ Variables: AppVariables }>): string {
   return user.user_id;
 }
 
+function categoryWire(row: { categoryId: string; categoryName: string | null }) {
+  return {
+    category_id: row.categoryId,
+    /** Alias id (client lama). */
+    category: row.categoryId,
+    category_name: row.categoryName,
+  };
+}
+
 function toOrgWire(row: CommunityOrg, admin = false) {
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    category: row.category,
+    ...categoryWire(row),
     description: row.description,
     logo_url: row.logoUrl,
     cover_url: row.coverUrl,
@@ -52,7 +61,7 @@ function toProposalWire(row: CommunityProposal) {
     name: row.name,
     description: row.description,
     logo_url: row.logoUrl,
-    category: row.category,
+    ...categoryWire(row),
     status: row.status,
     review_note: row.reviewNote,
     community_org_id: row.communityOrgId,
@@ -69,7 +78,7 @@ function fieldsFrom(
 ): CommunityOrgFields {
   return {
     name: body.name,
-    category: body.category,
+    categoryId: body.category_id,
     description: body.description,
     logoUrl: body.logo_url ?? null,
     coverUrl: body.cover_url ?? null,
@@ -80,12 +89,17 @@ function fieldsFrom(
 export class CommunityController {
   constructor(private readonly uc: CommunityUseCases) {}
 
+  async listCategories(c: Context<{ Variables: AppVariables }>) {
+    const items = await this.uc.listCategories();
+    return c.json({ success: true as const, data: { items } });
+  }
+
   async listPublic(
     c: Context<{ Variables: AppVariables }>,
     query: z.infer<typeof listCommunityQuerySchema>,
   ) {
     const result = await this.uc.listPublic({
-      category: query.category,
+      categoryId: query.category_id ?? query.category,
       q: query.q,
       cursor: query.cursor,
       limit: query.limit,
@@ -120,6 +134,7 @@ export class CommunityController {
       name: body.name,
       description: body.description,
       logoUrl: body.logo_url,
+      categoryId: body.category_id ?? body.category,
     });
     return c.json({ success: true as const, data: toProposalWire(row) }, 201);
   }
@@ -160,7 +175,7 @@ export class CommunityController {
   ) {
     const patch: Partial<CommunityOrgFields> = {};
     if (body.name !== undefined) patch.name = body.name;
-    if (body.category !== undefined) patch.category = body.category;
+    if (body.category_id !== undefined) patch.categoryId = body.category_id;
     if (body.description !== undefined) patch.description = body.description;
     if (body.logo_url !== undefined) patch.logoUrl = body.logo_url;
     if (body.cover_url !== undefined) patch.coverUrl = body.cover_url;
@@ -197,7 +212,7 @@ export class CommunityController {
     body: z.infer<typeof approveCommunityProposalSchema>,
   ) {
     const row = await this.uc.approveProposal(id, requireUserId(c), {
-      category: body.category,
+      categoryId: body.category_id,
       name: body.name,
       description: body.description,
       logoUrl: body.logo_url,

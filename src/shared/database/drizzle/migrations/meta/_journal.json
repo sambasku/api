@@ -1352,6 +1352,13 @@
       "when": 1801678509000,
       "tag": "0193_community",
       "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "6",
+      "when": 1801678510000,
+      "tag": "0194_kategori_komunitas",
+      "breakpoints": true
     }
   ]
 }

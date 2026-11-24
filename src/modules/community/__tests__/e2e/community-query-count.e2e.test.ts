@@ -8,8 +8,20 @@ if (parsed?.DATABASE_URL) process.env.DATABASE_URL = parsed.DATABASE_URL;
 describe.skipIf(!hasTestDb)('Community query budget', () => {
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
-    const { communityOrgs } = await import('@/shared/database/drizzle/schema');
+    const { communityOrgs, kategoriKomunitas } = await import(
+      '@/shared/database/drizzle/schema'
+    );
     const db = getTestDb();
+    await db
+      .insert(kategoriKomunitas)
+      .values({
+        id: 'lain',
+        name: 'Lainnya',
+        status: 'published',
+        sortOrder: 0,
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
     await db
       .insert(communityOrgs)
       .values(
@@ -17,7 +29,7 @@ describe.skipIf(!hasTestDb)('Community query budget', () => {
           id: `01EVCOMMUNITYBUDGET000000${i}`,
           slug: `budget-community-${i}`,
           name: `Komunitas ${i}`,
-          category: 'lain' as const,
+          categoryId: 'lain',
           description: `Deskripsi ${i}`,
           status: 'published' as const,
           createdAt: new Date(Date.now() - i * 1000),
