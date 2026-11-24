@@ -448,6 +448,15 @@ import {
   UpdateStickerUseCase,
 } from "@/modules/sticker/application/use-cases/sticker.use-cases";
 import { StickerController } from "@/modules/sticker/presentation/v1/sticker.controller";
+import { ProfileCoverRepositoryImpl } from "@/modules/profile-cover/infrastructure/profile-cover.repository.impl";
+import {
+  ActivateProfileCoverUseCase,
+  CreateProfileCoverUseCase,
+  DeleteProfileCoverUseCase,
+  GetActiveProfileCoversUseCase,
+  ListProfileCoversUseCase,
+} from "@/modules/profile-cover/application/use-cases/profile-cover.use-cases";
+import { ProfileCoverController } from "@/modules/profile-cover/presentation/v1/profile-cover.controller";
 import { ContentLinkRepositoryImpl } from "@/modules/content-link/infrastructure/content-link.repository.impl";
 import { ResolveContentLinks } from "@/modules/content-link/application/resolve-content-links";
 import {
@@ -928,6 +937,7 @@ export const publishWord = new PublishWordUseCase(wordRepo, auditRepo, syncLiveW
 export const softDeleteWord = new SoftDeleteWordUseCase(wordRepo, auditRepo);
 export const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
 export const stickerRepo = new StickerRepositoryImpl(db);
+export const profileCoverRepo = new ProfileCoverRepositoryImpl(db);
 export const contentLinkRepo = new ContentLinkRepositoryImpl(db);
 export const resolveContentLinks = new ResolveContentLinks(db);
 export const listRelatedContent = new ListRelatedContentUseCase(
@@ -1639,6 +1649,14 @@ export const stickerController = new StickerController({
   create: new CreateStickerUseCase(stickerRepo, auditRepo),
   update: new UpdateStickerUseCase(stickerRepo, auditRepo),
   remove: new DeleteStickerUseCase(stickerRepo, auditRepo),
+});
+
+export const profileCoverController = new ProfileCoverController({
+  list: new ListProfileCoversUseCase(profileCoverRepo),
+  getActive: new GetActiveProfileCoversUseCase(profileCoverRepo),
+  create: new CreateProfileCoverUseCase(profileCoverRepo, auditRepo),
+  activate: new ActivateProfileCoverUseCase(profileCoverRepo, auditRepo),
+  remove: new DeleteProfileCoverUseCase(profileCoverRepo, imageStorage, auditRepo),
 });
 
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----

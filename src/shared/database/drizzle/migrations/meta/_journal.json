@@ -1359,6 +1359,13 @@
       "when": 1801678510000,
       "tag": "0194_kategori_komunitas",
       "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "6",
+      "when": 1801680000000,
+      "tag": "0195_profile_covers",
+      "breakpoints": true
     }
   ]
 }

@@ -41,6 +41,10 @@ import {
   createPublicAboutUserListRoutes,
 } from "@/modules/about/presentation/v1/about.routes";
 import {
+  createAdminProfileCoverRoutes,
+  createPublicProfileCoverRoutes,
+} from "@/modules/profile-cover/presentation/v1/profile-cover.routes";
+import {
   createAdminAchievementRoutes,
   createMyAchievementRoutes,
   createMyProfileBorderRoutes,
@@ -257,6 +261,17 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
   app.route(
     "/api/v1/about",
     createPublicAboutRoutes({ controller: di.aboutController }),
+  );
+  app.route(
+    "/api/v1/about",
+    createPublicProfileCoverRoutes({ controller: di.profileCoverController }),
+  );
+  app.route(
+    "/api/v1/admin/profile-covers",
+    createAdminProfileCoverRoutes({
+      controller: di.profileCoverController,
+      authenticate: di.authenticate,
+    }),
   );
   app.route(
     "/api/v1/admin/sponsorships",
