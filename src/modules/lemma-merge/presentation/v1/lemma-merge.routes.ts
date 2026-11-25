@@ -11,6 +11,19 @@ import {
   lemmaMergeResponseSchema,
   rejectLemmaMergeBodySchema,
 } from './lemma-merge.validator';
+import type { Context } from 'hono';
+
+async function readOptionalReviewNote(
+  c: Context<{ Variables: AppVariables }>,
+): Promise<string | undefined> {
+  const contentType = c.req.header('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return undefined;
+  }
+  const raw: unknown = await c.req.json().catch(() => ({}));
+  const parsed = rejectLemmaMergeBodySchema.safeParse(raw);
+  return parsed.success ? parsed.data.review_note : undefined;
+}
 
 const json = <T extends import('zod').ZodType>(schema: T) => ({
   'application/json': { schema },
@@ -58,8 +71,6 @@ export function createLemmaMergeRoutes(deps: {
     rateLimit({ points: 30, duration: 60 }),
   );
 
-  const approveBodySchema = rejectLemmaMergeBodySchema;
-
   const approveDef = createRoute({
     method: 'post',
     path: '/lemma-merges/{id}/approve',
@@ -67,7 +78,6 @@ export function createLemmaMergeRoutes(deps: {
     summary: 'Setujui usulan gabung lemma',
     request: {
       params: lemmaMergeIdParamSchema,
-      body: { content: json(approveBodySchema) },
     },
     responses: {
       200: { description: 'Disetujui', content: json(lemmaMergeResponseSchema) },
@@ -83,7 +93,6 @@ export function createLemmaMergeRoutes(deps: {
     summary: 'Tolak usulan gabung lemma',
     request: {
       params: lemmaMergeIdParamSchema,
-      body: { content: json(rejectLemmaMergeBodySchema) },
     },
     responses: {
       200: { description: 'Ditolak' },
@@ -91,15 +100,15 @@ export function createLemmaMergeRoutes(deps: {
     },
   });
 
-  routes.openapi(approveDef, (c) => {
+  routes.openapi(approveDef, async (c) => {
     const id = c.req.valid('param').id;
-    const body = c.req.valid('json') as { review_note?: string } | undefined;
-    return deps.controller.approveMerge(c, id, body?.review_note) as never;
+    const reviewNote = await readOptionalReviewNote(c);
+    return deps.controller.approveMerge(c, id, reviewNote) as never;
   });
-  routes.openapi(rejectDef, (c) => {
+  routes.openapi(rejectDef, async (c) => {
     const id = c.req.valid('param').id;
-    const body = c.req.valid('json');
-    return deps.controller.rejectMerge(c, id, body.review_note) as never;
+    const reviewNote = await readOptionalReviewNote(c);
+    return deps.controller.rejectMerge(c, id, reviewNote) as never;
   });
 
   return routes;
