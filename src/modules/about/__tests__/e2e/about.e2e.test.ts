@@ -34,6 +34,25 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     });
   const get = (path: string) => request(path);
 
+
+  const registerVerified = async (name: string, email: string) => {
+    const reg = await post('/api/v1/auth/register', e2eRegisterBody({ name, email }));
+    expect(reg.status).toBe(201);
+    const ver = await post('/api/v1/auth/verify-email', {
+      email,
+      code: capturedOtpDisplayCode(),
+    });
+    expect(ver.status).toBe(200);
+    const { users } = await import('@/shared/database/drizzle/schema');
+    const [row] = await db
+      .select({ id: users.id, username: users.username })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    expect(row).toBeTruthy();
+    return row!;
+  };
+
   beforeAll(async () => {
     const { getTestDb } = await import('@/shared/database/drizzle/test-client');
     const { userRoles, users } = await import('@/shared/database/drizzle/schema');
@@ -67,12 +86,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     const { users } = await import('@/shared/database/drizzle/schema');
     const email = `team${stamp}@test.com`;
     const name = `team${stamp}`;
-    await post('/api/v1/auth/register', e2eRegisterBody({ name, email }));
-    await post('/api/v1/auth/verify-email', {
-      email,
-      code: capturedOtpDisplayCode(),
-    });
-    const [u] = await db.select().from(users).where(eq(users.username, name)).limit(1);
+    const u = await registerVerified(name, email);
     await db
       .update(users)
       .set({ isTeam: true, teamAs: 'maintainer', teamNote: 'tester' })
@@ -81,9 +95,9 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     const res = await get('/api/v1/about/team');
     expect(res.status).toBe(200);
     const body = await res.json();
-    const found = body.data.items.find((i: { username: string }) => i.username === name);
+    const found = body.data.items.find((i: { username: string }) => i.username === u.username);
     expect(found).toMatchObject({
-      username: name,
+      username: u.username,
       team_as: 'maintainer',
       team_note: 'tester',
     });
@@ -94,12 +108,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     const stamp2 = Date.now();
     const mk = async (uname: string, sort: number | null) => {
       const email = `${uname}${stamp2}@test.com`;
-      await post('/api/v1/auth/register', e2eRegisterBody({ name: uname, email }));
-      await post('/api/v1/auth/verify-email', {
-        email,
-        code: capturedOtpDisplayCode(),
-      });
-      const [u] = await db.select().from(users).where(eq(users.username, uname)).limit(1);
+      const u = await registerVerified(uname, email);
       await db
         .update(users)
         .set({
@@ -109,7 +118,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
           teamSortOrder: sort,
         })
         .where(eq(users.id, u.id));
-      return uname;
+      return u.username;
     };
     const late = await mk(`teamlater${stamp2}`, null);
     const first = await mk(`teamfirst${stamp2}`, 1);
@@ -128,12 +137,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const email = `revabout${stamp}@test.com`;
     const name = `revabout${stamp}`;
-    await post('/api/v1/auth/register', e2eRegisterBody({ name, email }));
-    await post('/api/v1/auth/verify-email', {
-      email,
-      code: capturedOtpDisplayCode(),
-    });
-    const [u] = await db.select().from(users).where(eq(users.username, name)).limit(1);
+    const u = await registerVerified(name, email);
     await db.delete(userRoles).where(eq(userRoles.userId, u.id));
     await db.insert(userRoles).values({ userId: u.id, role: 'reviewer' });
 
@@ -141,7 +145,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(typeof body.data.has_more).toBe('boolean');
-    expect(body.data.items.some((i: { username: string }) => i.username === name)).toBe(
+    expect(body.data.items.some((i: { username: string }) => i.username === u.username)).toBe(
       true,
     );
   });
@@ -149,16 +153,12 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
   it('contributors: role contributor masuk list', async () => {
     const email = `ctrabout${stamp}@test.com`;
     const name = `ctrabout${stamp}`;
-    await post('/api/v1/auth/register', e2eRegisterBody({ name, email }));
-    await post('/api/v1/auth/verify-email', {
-      email,
-      code: capturedOtpDisplayCode(),
-    });
+    const u = await registerVerified(name, email);
 
     const res = await get('/api/v1/users/contributors?limit=100');
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.data.items.some((i: { username: string }) => i.username === name)).toBe(
+    expect(body.data.items.some((i: { username: string }) => i.username === u.username)).toBe(
       true,
     );
   });
@@ -167,12 +167,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     const { users } = await import('@/shared/database/drizzle/schema');
     const email = `spabout${stamp}@test.com`;
     const name = `spabout${stamp}`;
-    await post('/api/v1/auth/register', e2eRegisterBody({ name, email }));
-    await post('/api/v1/auth/verify-email', {
-      email,
-      code: capturedOtpDisplayCode(),
-    });
-    const [u] = await db.select().from(users).where(eq(users.username, name)).limit(1);
+    const u = await registerVerified(name, email);
 
     const on = await patch(
       `/api/v1/admin/users/${u.id}/sponsor`,
@@ -184,7 +179,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     let list = await get('/api/v1/about/sponsorships');
     let body = await list.json();
     expect(
-      body.data.items.some((i: { username: string | null }) => i.username === name),
+      body.data.items.some((i: { username: string | null }) => i.username === u.username),
     ).toBe(true);
 
     const off = await patch(
@@ -197,7 +192,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     list = await get('/api/v1/about/sponsorships');
     body = await list.json();
     expect(
-      body.data.items.some((i: { username: string | null }) => i.username === name),
+      body.data.items.some((i: { username: string | null }) => i.username === u.username),
     ).toBe(false);
   });
 
@@ -300,11 +295,11 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
 
     // 4) User saja - pakai akun checkbox test (sponsor sudah di-off, unik index longgar)
     const { users } = await import('@/shared/database/drizzle/schema');
-    const sponsorUserName = `spabout${stamp}`;
+    const sponsorEmail = `spabout${stamp}@test.com`;
     const [sponsorUser] = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.username, sponsorUserName))
+      .where(eq(users.email, sponsorEmail))
       .limit(1);
     expect(sponsorUser).toBeTruthy();
     const userOnly = await post(
