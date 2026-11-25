@@ -79,6 +79,10 @@ import {
   createPublicKaryaRoutes,
 } from "@/modules/karya/presentation/v1/karya.routes";
 import {
+  createAdminKaryaCommentRoutes,
+  createPublicKaryaCommentRoutes,
+} from "@/modules/karya/presentation/v1/karya-comment.routes";
+import {
   createAdminKaryaViewsRoutes,
   createPublicKaryaViewsRoutes,
 } from "@/modules/karya/presentation/v1/karya-views.routes";
@@ -453,6 +457,13 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
   );
   app.route(
     "/api/v1/admin/karya",
+    createAdminKaryaCommentRoutes({
+      controller: di.karyaCommentController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/karya",
     createAdminKaryaRoutes({ controller: di.karyaController, authenticate: di.authenticate }),
   );
   app.route(
@@ -476,6 +487,14 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
     createPublicKaryaViewsRoutes({
       controller: di.karyaViewsController,
       softAuthenticate: di.softAuthenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/karya",
+    createPublicKaryaCommentRoutes({
+      controller: di.karyaCommentController,
+      authenticate: di.authenticate,
+      optionalAuthenticate: di.optionalAuthenticate,
     }),
   );
   app.route(

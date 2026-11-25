@@ -48,6 +48,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'article_published',
   'article_comment_created',
   'event_comment_created',
+  'karya_comment_created',
   'place_comment_created',
   'usaha_comment_created',
   'cuisine_comment_created',
@@ -116,6 +117,7 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'layanan_published':
       return 'layanan';
     case 'karya_published':
+    case 'karya_comment_created':
     case 'kreator_claimed':
       return 'karya';
     case 'cuisine_published':

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, like, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, like, lt, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
@@ -9,7 +9,19 @@ import {
   karyas,
   kreators,
 } from '@/shared/database/drizzle/schema';
+import {
+  karyaCommentRevisions,
+  karyaComments,
+} from '@/shared/database/drizzle/schema/karya-comments.schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
+import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
+import {
+  entityCommentAudioInsertValues,
+  entityCommentImageInsertValues,
+  toEntityCommentAudio,
+  toEntityCommentImage,
+} from '@/shared/comment/entity-comment-media';
+import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import { words } from '@/shared/database/drizzle/schema/words.schema';
 import {
   KARYA_EXCERPT_LEMMA_LINK_RIGHTS,
@@ -28,6 +40,12 @@ import type {
   KaryaLemmaAppearance,
   KaryaLemmaLink,
 } from '../domain/karya';
+import type {
+  KaryaComment,
+  KaryaCommentListFilter,
+  KaryaCommentRepository,
+  NewKaryaCommentInput,
+} from '../domain/karya-comment';
 import type { KaryaExcerptLemmaContext } from '../application/utils/assert-excerpt-lemma-eligible';
 import {
   parseAccessLinksJson,
@@ -41,6 +59,42 @@ import { KreatorRepositoryImpl } from '@/modules/kreator/infrastructure/kreator.
 type KaryaRow = typeof karyas.$inferSelect;
 
 const proposedWords = alias(words, 'proposed_words');
+
+/** Cap riwayat edit per komentar. */
+const COMMENT_REVISION_CAP = 50;
+
+type KaryaCommentRow = typeof karyaComments.$inferSelect;
+
+function toKaryaComment(
+  row: KaryaCommentRow,
+  meta: {
+    username: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+    userRole: string | null;
+    authorDeletedAt: Date | null;
+    isEdited: boolean;
+  },
+): KaryaComment {
+  return {
+    id: row.id,
+    karyaId: row.karyaId,
+    userId: row.userId,
+    username: meta.authorDeletedAt ? null : meta.username,
+    displayName: meta.authorDeletedAt ? null : meta.displayName,
+    avatarUrl: meta.authorDeletedAt ? null : meta.avatarUrl,
+    userRole: meta.authorDeletedAt ? null : meta.userRole,
+    authorDeletedAt: meta.authorDeletedAt,
+    body: row.body,
+    stickerId: row.stickerId ?? null,
+    audio: toEntityCommentAudio(row),
+    image: toEntityCommentImage(row),
+    status: row.status,
+    isEdited: meta.isEdited,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt ?? null,
+  };
+}
 
 function toCredits(rows: (typeof karyaCredits.$inferSelect)[]): KaryaCredit[] {
   return rows.map((r) => ({
@@ -117,7 +171,7 @@ function parsePayload(raw: string): KaryaContributionPayload {
   return JSON.parse(raw) as KaryaContributionPayload;
 }
 
-export class KaryaRepositoryImpl {
+export class KaryaRepositoryImpl implements KaryaCommentRepository {
   private readonly kreators: KreatorRepositoryImpl;
 
   constructor(private readonly db: AppDatabase) {
@@ -676,6 +730,192 @@ export class KaryaRepositoryImpl {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  // ---------------------------------------------------------------- komentar
+
+  async createComment(input: NewKaryaCommentInput): Promise<KaryaComment> {
+    const [row] = await this.db
+      .insert(karyaComments)
+      .values({
+        karyaId: input.karyaId,
+        userId: input.userId,
+        body: input.body,
+        bodyOriginal: input.bodyOriginal,
+        stickerId: input.stickerId ?? null,
+        ...entityCommentImageInsertValues(input.image),
+        ...entityCommentAudioInsertValues(input.audio),
+        createdAt: new Date(),
+      })
+      .returning();
+    if (!row) throw new Error('gagal menyimpan komentar karya');
+    const comment = await this.findCommentById(row.id);
+    if (!comment) throw new Error('komentar karya tidak ditemukan setelah dibuat');
+    return comment;
+  }
+
+  async findCommentById(id: string): Promise<KaryaComment | null> {
+    const [row] = await this.db
+      .select({
+        c: karyaComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${karyaCommentRevisions}
+          WHERE ${karyaCommentRevisions.commentId} = ${karyaComments.id}
+        )`,
+      })
+      .from(karyaComments)
+      .leftJoin(users, eq(users.id, karyaComments.userId))
+      .where(eq(karyaComments.id, id))
+      .limit(1);
+    if (!row) return null;
+    return toKaryaComment(row.c, {
+      username: row.username,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+      userRole: row.userRole,
+      authorDeletedAt: row.authorDeletedAt,
+      isEdited: Boolean(row.isEdited),
+    });
+  }
+
+  async listComments(
+    karyaId: string,
+    filter: KaryaCommentListFilter,
+  ): Promise<CursorPage<KaryaComment>> {
+    const limit = filter.limit;
+    const conditions = [eq(karyaComments.karyaId, karyaId)];
+    if (filter.status) conditions.push(eq(karyaComments.status, filter.status));
+    // Komentar id = ULID monoton -> lt(id, cursor) aman sebagai keyset.
+    if (filter.cursor) conditions.push(lt(karyaComments.id, filter.cursor));
+
+    const rows = await this.db
+      .select({
+        c: karyaComments,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        authorDeletedAt: users.deletedAt,
+        userRole: highestUserRoleSql,
+        isEdited: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${karyaCommentRevisions}
+          WHERE ${karyaCommentRevisions.commentId} = ${karyaComments.id}
+        )`,
+      })
+      .from(karyaComments)
+      .leftJoin(users, eq(users.id, karyaComments.userId))
+      .where(and(...conditions))
+      .orderBy(desc(karyaComments.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      items: page.map((row) =>
+        toKaryaComment(row.c, {
+          username: row.username,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          userRole: row.userRole,
+          authorDeletedAt: row.authorDeletedAt,
+          isEdited: Boolean(row.isEdited),
+        }),
+      ),
+      nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
+      hasMore,
+    };
+  }
+
+  async updateCommentWithRevision(input: {
+    commentId: string;
+    editorId: string;
+    body: string;
+  }): Promise<KaryaComment | null> {
+    const now = new Date();
+    const updated = await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ body: karyaComments.body })
+        .from(karyaComments)
+        .where(eq(karyaComments.id, input.commentId))
+        .limit(1);
+      if (!current) return null;
+
+      await tx.insert(karyaCommentRevisions).values({
+        commentId: input.commentId,
+        editorId: input.editorId,
+        body: current.body,
+        createdAt: now,
+      });
+      const revisions = await tx
+        .select({ id: karyaCommentRevisions.id })
+        .from(karyaCommentRevisions)
+        .where(eq(karyaCommentRevisions.commentId, input.commentId))
+        .orderBy(desc(karyaCommentRevisions.createdAt));
+      const excess = revisions.slice(COMMENT_REVISION_CAP);
+      if (excess.length > 0) {
+        await tx
+          .delete(karyaCommentRevisions)
+          .where(inArray(karyaCommentRevisions.id, excess.map((r) => r.id)));
+      }
+
+      const [row] = await tx
+        .update(karyaComments)
+        .set({ body: input.body, updatedAt: now })
+        .where(
+          and(
+            eq(karyaComments.id, input.commentId),
+            eq(karyaComments.status, 'published'),
+            eq(karyaComments.userId, input.editorId),
+          ),
+        )
+        .returning({ id: karyaComments.id });
+      return row?.id ?? null;
+    });
+    if (!updated) return null;
+    return this.findCommentById(updated);
+  }
+
+  async markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(karyaComments)
+      .set({ status: 'deleted_by_author', deletedAt: new Date() })
+      .where(
+        and(
+          eq(karyaComments.id, id),
+          eq(karyaComments.userId, actorId),
+          eq(karyaComments.status, 'published'),
+        ),
+      )
+      .returning({ id: karyaComments.id });
+    return Boolean(row);
+  }
+
+  async takedownComment(id: string, actorId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(karyaComments)
+      .set({ status: 'taken_down', reviewedBy: actorId, reviewedAt: new Date() })
+      .where(and(eq(karyaComments.id, id), eq(karyaComments.status, 'published')))
+      .returning({ id: karyaComments.id });
+    return Boolean(row);
+  }
+
+  async karyaTargetExists(id: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: karyas.id })
+      .from(karyas)
+      .where(
+        and(
+          eq(karyas.id, id),
+          eq(karyas.publishStatus, 'published'),
+          isNull(karyas.deletedAt),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
   }
 }
 

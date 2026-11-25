@@ -5,6 +5,7 @@ import {
   comments,
   cuisineComments,
   eventComments,
+  karyaComments,
   placeComments,
   usahaComments,
 } from '@/shared/database/drizzle/schema';
@@ -118,6 +119,26 @@ export async function resolveUgcCommentAnchor(
         .where(eq(eventComments.id, input.commentId))
         .limit(1);
       if (!row || row.eventId !== input.hostId) {
+        throw new NotFoundError('COMMENT_NOT_FOUND', 'Komentar tidak ditemukan');
+      }
+      return {
+        body: row.body ?? '',
+        authorId: row.userId,
+        status: row.status,
+      };
+    }
+    case 'karya_comment': {
+      const [row] = await db
+        .select({
+          body: karyaComments.body,
+          userId: karyaComments.userId,
+          status: karyaComments.status,
+          karyaId: karyaComments.karyaId,
+        })
+        .from(karyaComments)
+        .where(eq(karyaComments.id, input.commentId))
+        .limit(1);
+      if (!row || row.karyaId !== input.hostId) {
         throw new NotFoundError('COMMENT_NOT_FOUND', 'Komentar tidak ditemukan');
       }
       return {

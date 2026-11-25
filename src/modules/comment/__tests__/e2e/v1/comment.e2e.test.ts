@@ -115,6 +115,25 @@ describe.skipIf(!hasTestDb)('Comment E2E v1 - post-moderation (09 doc)', () => {
     });
   });
 
+
+  it('penulis admin: is_verifier true di create + list', async () => {
+    const created = await post(
+      `/api/v1/words/${wordId}/comments`,
+      { body: 'Komentar dari admin verifikator' },
+      adminToken,
+    );
+    expect(created.status).toBe(201);
+    const { data } = await created.json();
+    expect(data.is_verifier).toBe(true);
+
+    const list = await get(`/api/v1/words/${wordId}/comments`);
+    const listBody = await list.json();
+    const row = (listBody.data as Array<{ body?: string; is_verifier?: boolean }>).find(
+      (c) => c.body === 'Komentar dari admin verifikator',
+    );
+    expect(row?.is_verifier).toBe(true);
+  });
+
   it('ALUR: POST → published langsung + vote; takedown → body null di publik', async () => {
     const created = await post(
       `/api/v1/words/${wordId}/comments`,

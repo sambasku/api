@@ -86,6 +86,8 @@ export type FeedPreviewRow = {
   cuisineCommentImageUrl?: string | null;
   eventCommentImagePublicUrl?: string | null;
   eventCommentImageUrl?: string | null;
+  karyaCommentImagePublicUrl?: string | null;
+  karyaCommentImageUrl?: string | null;
   articleCommentImagePublicUrl?: string | null;
   articleCommentImageUrl?: string | null;
 };
@@ -142,6 +144,9 @@ export function resolveFeedPreview(row: FeedPreviewRow): FeedPreview {
       break;
     case 'event_comment_created':
       url = commentPreviewUrl(row.eventCommentImagePublicUrl, row.eventCommentImageUrl);
+      break;
+    case 'karya_comment_created':
+      url = commentPreviewUrl(row.karyaCommentImagePublicUrl, row.karyaCommentImageUrl);
       break;
     case 'article_comment_created':
       url = commentPreviewUrl(row.articleCommentImagePublicUrl, row.articleCommentImageUrl);

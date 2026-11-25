@@ -38,6 +38,7 @@ export * from "./events.schema";
 export * from "./event-categories.schema";
 export * from "./event-contributions.schema";
 export * from "./event-comments.schema";
+export * from "./karya-comments.schema";
 export * from "./event-goings.schema";
 export * from "./event-images.schema";
 export * from "./regions.schema";

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, comments, articles, contributions, cuisineComments, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, wordImages, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, comments, articles, contributions, cuisineComments, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyaComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, wordImages, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
@@ -71,6 +71,7 @@ vote_meaning: 'vote',
   usaha_comment_created: 'usaha',
   layanan_published: 'layanan',
   karya_published: 'karya',
+  karya_comment_created: 'karya',
   kreator_claimed: 'karya',
   cuisine_published: 'culinary',
   cuisine_comment_created: 'culinary',
@@ -126,6 +127,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   usaha_comment_created: 'Mengomentari usaha',
   layanan_published: 'Menambahkan layanan publik',
   karya_published: 'Menambahkan karya',
+  karya_comment_created: 'Mengomentari karya',
   kreator_claimed: 'Mengklaim profil kreator',
   cuisine_published: 'Menambahkan kuliner',
   cuisine_comment_created: 'Mengomentari kuliner',
@@ -215,6 +217,7 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'comment_created',
     'article_comment_created',
     'event_comment_created',
+    'karya_comment_created',
     'place_comment_created',
     'usaha_comment_created',
     'cuisine_comment_created',
@@ -284,6 +287,7 @@ const COMMENT_FEED_BODY_KINDS = new Set<ActivityEventKind>([
   'usaha_comment_created',
   'cuisine_comment_created',
   'event_comment_created',
+  'karya_comment_created',
   'article_comment_created',
   'jinye_comment_created',
 ]);
@@ -300,11 +304,13 @@ function liveCommentBodyFromRow(kind: ActivityEventKind, row: FeedRow): string |
             ? row.cuisineCommentBody
             : kind === 'event_comment_created'
               ? row.eventCommentBody
-              : kind === 'article_comment_created'
-                ? row.articleCommentBody
-                : kind === 'jinye_comment_created'
-                  ? row.jinyeCommentBody
-                  : null;
+              : kind === 'karya_comment_created'
+                ? row.karyaCommentBody
+                : kind === 'article_comment_created'
+                  ? row.articleCommentBody
+                  : kind === 'jinye_comment_created'
+                    ? row.jinyeCommentBody
+                    : null;
   const t = raw?.trim();
   return t ? snippetActivityBody(t, 120) : null;
 }
@@ -365,6 +371,8 @@ interface FeedRow {
   cuisineCommentImageUrl: string | null;
   eventCommentImagePublicUrl: string | null;
   eventCommentImageUrl: string | null;
+  karyaCommentImagePublicUrl: string | null;
+  karyaCommentImageUrl: string | null;
   articleCommentImagePublicUrl: string | null;
   articleCommentImageUrl: string | null;
   /** Cuplikan komentar dari JOIN read-time (#326). */
@@ -373,6 +381,7 @@ interface FeedRow {
   usahaCommentBody: string | null;
   cuisineCommentBody: string | null;
   eventCommentBody: string | null;
+  karyaCommentBody: string | null;
   articleCommentBody: string | null;
   jinyeCommentBody: string | null;
   usahaName: string | null;
@@ -582,6 +591,8 @@ export class ActivityEventFeedRepositoryImpl {
       return q ? `Berencana datang ke ${q}`.trim() : 'Berencana datang ke acara';
     case 'event_comment_created':
       return 'Mengomentari acara';
+    case 'karya_comment_created':
+      return 'Mengomentari karya';
     case 'pantun_created':
       return 'Menulis pantun';
     case 'pantun_reply_created':
@@ -738,6 +749,8 @@ export class ActivityEventFeedRepositoryImpl {
       cuisineCommentImageUrl: cuisineComments.imageUrl,
       eventCommentImagePublicUrl: eventComments.imagePublicUrl,
       eventCommentImageUrl: eventComments.imageUrl,
+      karyaCommentImagePublicUrl: karyaComments.imagePublicUrl,
+      karyaCommentImageUrl: karyaComments.imageUrl,
       articleCommentImagePublicUrl: sql<string | null>`null`,
       articleCommentImageUrl: articleComments.imageUrl,
       eventSlug: events.slug,
@@ -749,6 +762,7 @@ wordCommentBody: comments.body,
       usahaCommentBody: usahaComments.body,
       cuisineCommentBody: cuisineComments.body,
       eventCommentBody: eventComments.body,
+      karyaCommentBody: karyaComments.body,
       articleCommentBody: articleComments.body,
       jinyeCommentBody: jinyeComments.body,
 articleSlug: articles.slug,
@@ -845,11 +859,29 @@ articleTitle: articles.title,
         eq(layanans.publishStatus, 'published'),
       ),
     )
+    // Komentar karya: join dulu agar karya join bisa pakai karya_comments.karya_id.
+    .leftJoin(
+      karyaComments,
+      and(
+        eq(activityEvents.kind, 'karya_comment_created'),
+        eq(karyaComments.id, activityEvents.targetId),
+        eq(karyaComments.status, 'published'),
+      ),
+    )
     .leftJoin(
       karyas,
       and(
-        eq(activityEvents.kind, 'karya_published'),
-        eq(karyas.id, activityEvents.targetId),
+        sql`${activityEvents.kind} in ('karya_published', 'karya_comment_created')`,
+        or(
+          and(
+            eq(activityEvents.kind, 'karya_published'),
+            eq(karyas.id, activityEvents.targetId),
+          ),
+          and(
+            eq(activityEvents.kind, 'karya_comment_created'),
+            eq(karyas.id, karyaComments.karyaId),
+          ),
+        ),
         eq(karyas.publishStatus, 'published'),
         sql`${karyas.deletedAt} is null`,
       ),
@@ -1053,6 +1085,8 @@ articleTitle: articles.title,
         sql`(${activityEvents.kind} <> 'usaha_comment_created' or ${usahas.id} is not null)`,
         sql`(${activityEvents.kind} <> 'layanan_published' or ${layanans.id} is not null)`,
         sql`(${activityEvents.kind} <> 'karya_published' or ${karyas.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'karya_comment_created' or ${karyaComments.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'karya_comment_created' or ${karyas.id} is not null)`,
         sql`(${activityEvents.kind} <> 'kreator_claimed' or ${kreators.id} is not null)`,
         sql`(${activityEvents.kind} <> 'usaha_photo_added' or ${usahas.id} is not null)`,
 // Kuliner/tempat kuliner hanya tayang selama masih published.
@@ -1138,13 +1172,14 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
    * body (mis. migrasi data). Satu query batch per tabel komentar.
    */
   private async hydrateCommentBodies(rows: FeedRow[]): Promise<void> {
-    type Patch = { ids: string[]; table: 'word' | 'place' | 'usaha' | 'cuisine' | 'event' | 'article' | 'jinye' };
+    type Patch = { ids: string[]; table: 'word' | 'place' | 'usaha' | 'cuisine' | 'event' | 'karya' | 'article' | 'jinye' };
     const buckets: Record<Patch['table'], string[]> = {
       word: [],
       place: [],
       usaha: [],
       cuisine: [],
       event: [],
+      karya: [],
       article: [],
       jinye: [],
     };
@@ -1158,6 +1193,7 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
       else if (kind === 'usaha_comment_created') buckets.usaha.push(r.targetId);
       else if (kind === 'cuisine_comment_created') buckets.cuisine.push(r.targetId);
       else if (kind === 'event_comment_created') buckets.event.push(r.targetId);
+      else if (kind === 'karya_comment_created') buckets.karya.push(r.targetId);
       else if (kind === 'article_comment_created') buckets.article.push(r.targetId);
       else if (kind === 'jinye_comment_created') buckets.jinye.push(r.targetId);
     }
@@ -1170,6 +1206,7 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
         | typeof usahaComments
         | typeof cuisineComments
         | typeof eventComments
+        | typeof karyaComments
         | typeof articleComments
         | typeof jinyeComments,
       prefix: string,
@@ -1188,6 +1225,7 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
     await load(buckets.usaha, usahaComments, 'usaha');
     await load(buckets.cuisine, cuisineComments, 'cuisine');
     await load(buckets.event, eventComments, 'event');
+    await load(buckets.karya, karyaComments, 'karya');
     await load(buckets.article, articleComments, 'article');
     await load(buckets.jinye, jinyeComments, 'jinye');
     for (const r of rows) {
@@ -1204,11 +1242,13 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
                 ? 'cuisine'
                 : kind === 'event_comment_created'
                   ? 'event'
-                  : kind === 'article_comment_created'
-                    ? 'article'
-                    : kind === 'jinye_comment_created'
-                      ? 'jinye'
-                      : null;
+                  : kind === 'karya_comment_created'
+                    ? 'karya'
+                    : kind === 'article_comment_created'
+                      ? 'article'
+                      : kind === 'jinye_comment_created'
+                        ? 'jinye'
+                        : null;
       if (!prefix) continue;
       const body = maps.get(`${prefix}:${r.targetId}`);
       if (!body) continue;
@@ -1217,6 +1257,7 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
       else if (kind === 'usaha_comment_created') r.usahaCommentBody = body;
       else if (kind === 'cuisine_comment_created') r.cuisineCommentBody = body;
       else if (kind === 'event_comment_created') r.eventCommentBody = body;
+      else if (kind === 'karya_comment_created') r.karyaCommentBody = body;
       else if (kind === 'article_comment_created') r.articleCommentBody = body;
       else if (kind === 'jinye_comment_created') r.jinyeCommentBody = body;
     }
@@ -1372,6 +1413,8 @@ kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_vi
       cuisineCommentImageUrl: row.cuisineCommentImageUrl,
       eventCommentImagePublicUrl: row.eventCommentImagePublicUrl,
       eventCommentImageUrl: row.eventCommentImageUrl,
+      karyaCommentImagePublicUrl: row.karyaCommentImagePublicUrl,
+      karyaCommentImageUrl: row.karyaCommentImageUrl,
       articleCommentImagePublicUrl: row.articleCommentImagePublicUrl,
       articleCommentImageUrl: row.articleCommentImageUrl,
     });
@@ -1432,6 +1475,7 @@ case 'layanan_published':
 case 'community_published':
 case 'community_proposal_created':
 case 'karya_published':
+case 'karya_comment_created':
 case 'kreator_claimed':
 case 'cuisine_published':
 case 'cuisine_photo_added':
@@ -1565,6 +1609,7 @@ articleSlug?: string | null;
       case 'community_proposal_created':
         return null;
       case 'karya_published':
+      case 'karya_comment_created':
         return row.karyaSlug ? { type: 'karya', id: row.karyaSlug } : null;
       case 'kreator_claimed':
         return row.kreatorSlug ? { type: 'kreator', id: row.kreatorSlug } : null;

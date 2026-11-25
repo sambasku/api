@@ -1,7 +1,7 @@
 import { generateId } from '@/shared/utils/ulid';
 import { extensionForMime } from '@/modules/word/application/utils/pronunciation-audio-path';
 
-export type EntityCommentAudioKind = 'places' | 'usaha' | 'cuisine' | 'events' | 'articles';
+export type EntityCommentAudioKind = 'places' | 'usaha' | 'cuisine' | 'events' | 'articles' | 'karya';
 
 /**
  * Path immutable per komentar suara entitas:

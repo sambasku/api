@@ -347,6 +347,15 @@ import { KaryaRepositoryImpl } from "@/modules/karya/infrastructure/karya.reposi
 import { KaryaUseCases } from "@/modules/karya/application/karya.use-cases";
 import { ResolveKaryaRelated } from "@/modules/karya/application/resolve-karya-related";
 import { KaryaController } from "@/modules/karya/presentation/v1/karya.controller";
+import {
+  CreateKaryaCommentUseCase,
+  DeleteKaryaCommentUseCase,
+  ListKaryaCommentsUseCase,
+  TakedownKaryaCommentUseCase,
+  UpdateKaryaCommentUseCase,
+} from "@/modules/karya/application/use-cases/karya-comment.use-cases";
+import { CreateKaryaCommentAudioUseCase } from "@/modules/karya/application/use-cases/karya-comment-audio.use-case";
+import { KaryaCommentController } from "@/modules/karya/presentation/v1/karya-comment.controller";
 import { CreateKaryaLemmaLinkUseCase } from "@/modules/karya/application/use-cases/create-karya-lemma-link.use-case";
 import { DeleteKaryaLemmaLinkUseCase } from "@/modules/karya/application/use-cases/delete-karya-lemma-link.use-case";
 import { ListKaryaExcerptLemmaLinksUseCase } from "@/modules/karya/application/use-cases/list-karya-excerpt-lemma-links.use-case";
@@ -1433,6 +1442,34 @@ export const karyaController = new KaryaController(
   listRelatedContent,
   replaceContentLinks,
 );
+export const karyaCommentController = new KaryaCommentController({
+  listComments: new ListKaryaCommentsUseCase(karyaRepo),
+  createComment: new CreateKaryaCommentUseCase(
+    karyaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+    stickerRepo,
+  ),
+  createCommentAudio: new CreateKaryaCommentAudioUseCase(
+    karyaRepo,
+    pronunciationStorage,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  updateComment: new UpdateKaryaCommentUseCase(
+    karyaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  deleteComment: new DeleteKaryaCommentUseCase(karyaRepo),
+  takedownComment: new TakedownKaryaCommentUseCase(karyaRepo, auditRepo),
+  ugcLemmaLinks: ugcCommentLemmaRepo,
+});
 export const kreatorController = new KreatorController(
   new KreatorUseCases(new KreatorRepositoryImpl(db), activityEvents),
 );
