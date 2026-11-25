@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   lemmaMergeRequests,
@@ -11,7 +11,13 @@ export async function assertLemmaMergeBatchAllowed(
   db: AppDatabase,
   keepWordId: string,
   mergeWordIds: string[],
-  opts?: { requirePublishedKeep?: boolean },
+  opts?: {
+    requirePublishedKeep?: boolean;
+    /** Saat approve: jangan bentrok dengan baris usulan yang sedang diproses. */
+    excludeMergeRequestId?: string;
+    /** Untuk pesan konflik usulan sendiri vs orang lain. */
+    proposerId?: string;
+  },
 ): Promise<{ keepLemma: string; mergeLemmas: string[] }> {
   const mergeIds = [...new Set(mergeWordIds.filter((id) => id !== keepWordId))];
   if (mergeIds.length === 0) {
@@ -76,20 +82,30 @@ export async function assertLemmaMergeBatchAllowed(
     );
   }
 
+  const pendingMergeWhere = opts?.excludeMergeRequestId
+    ? and(eq(lemmaMergeRequests.status, 'pending'), ne(lemmaMergeRequests.id, opts.excludeMergeRequestId))
+    : eq(lemmaMergeRequests.status, 'pending');
+
   const pendingMerge = await db
     .select({
+      id: lemmaMergeRequests.id,
+      proposerId: lemmaMergeRequests.proposerId,
       keepWordId: lemmaMergeRequests.keepWordId,
       mergeWordIds: lemmaMergeRequests.mergeWordIds,
     })
     .from(lemmaMergeRequests)
-    .where(eq(lemmaMergeRequests.status, 'pending'))
+    .where(pendingMergeWhere)
     .limit(200);
   for (const row of pendingMerge) {
     const ids = new Set([row.keepWordId, ...(row.mergeWordIds ?? [])]);
     if (allIds.some((id) => ids.has(id))) {
+      const own =
+        opts?.proposerId != null && row.proposerId === opts.proposerId;
       throw new ConflictError(
         'MERGE_ALREADY_PENDING',
-        'Salah satu entri sedang dalam usulan gabung lain.',
+        own
+          ? 'Kamu sudah punya usulan gabung yang menunggu tinjauan untuk salah satu entri ini.'
+          : 'Salah satu entri sedang dalam usulan gabung lain.',
       );
     }
   }

@@ -42,6 +42,7 @@ export class CreateLemmaMergeUseCase {
     const verifier = isVerifierRole(cmd.actorRole ?? '');
     const { keepLemma } = await assertLemmaMergeBatchAllowed(this.db, cmd.keepWordId, mergeIds, {
       requirePublishedKeep: !verifier,
+      proposerId: cmd.proposerId,
     });
 
     if (!verifier && (!cmd.reasonText || cmd.reasonText.trim().length < 10)) {

@@ -43,6 +43,7 @@ export class ApproveLemmaMergeUseCase {
     const mergeIds = req.mergeWordIds ?? [];
     const { keepLemma } = await assertLemmaMergeBatchAllowed(this.db, req.keepWordId, mergeIds, {
       requirePublishedKeep: false,
+      excludeMergeRequestId: cmd.requestId,
     });
 
     const now = new Date();
