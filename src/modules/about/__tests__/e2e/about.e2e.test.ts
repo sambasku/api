@@ -14,34 +14,60 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
   let db: any;
   let adminToken: string;
   const stamp = Date.now();
+  // Rate-limiter keyed by x-forwarded-for - IP unik per call mengisolasi
+  // bucket (register 5/jam). Tanpa ini suite about kena 429 di mid-test.
+  let ipSeq = 0;
+  const xff = () => ({ 'x-forwarded-for': `10.42.0.${++ipSeq}` });
 
   const request = (path: string, init: RequestInit = {}) =>
     app.request(path, {
       ...init,
       headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
     });
-  const post = (path: string, body: unknown, token?: string) =>
+  const post = (
+    path: string,
+    body: unknown,
+    token?: string,
+    extraHeaders?: Record<string, string>,
+  ) =>
     request(path, {
       method: 'POST',
       body: JSON.stringify(body),
-      headers: token ? { authorization: `Bearer ${token}` } : {},
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(extraHeaders ?? {}),
+      },
     });
-  const patch = (path: string, body: unknown, token?: string) =>
+  const patch = (
+    path: string,
+    body: unknown,
+    token?: string,
+    extraHeaders?: Record<string, string>,
+  ) =>
     request(path, {
       method: 'PATCH',
       body: JSON.stringify(body),
-      headers: token ? { authorization: `Bearer ${token}` } : {},
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(extraHeaders ?? {}),
+      },
     });
   const get = (path: string) => request(path);
 
-
   const registerVerified = async (name: string, email: string) => {
-    const reg = await post('/api/v1/auth/register', e2eRegisterBody({ name, email }));
+    const reg = await post(
+      '/api/v1/auth/register',
+      e2eRegisterBody({ name, email }),
+      undefined,
+      xff(),
+    );
     expect(reg.status).toBe(201);
-    const ver = await post('/api/v1/auth/verify-email', {
-      email,
-      code: capturedOtpDisplayCode(),
-    });
+    const ver = await post(
+      '/api/v1/auth/verify-email',
+      { email, code: capturedOtpDisplayCode() },
+      undefined,
+      xff(),
+    );
     expect(ver.status).toBe(200);
     const { users } = await import('@/shared/database/drizzle/schema');
     const [row] = await db
@@ -62,11 +88,18 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
 
     const email = `adm-about${stamp}@test.com`;
     const name = `admabout${stamp}`;
-    await post('/api/v1/auth/register', e2eRegisterBody({ name, email }));
-    await post('/api/v1/auth/verify-email', {
-      email,
-      code: capturedOtpDisplayCode(),
-    });
+    await post(
+      '/api/v1/auth/register',
+      e2eRegisterBody({ name, email }),
+      undefined,
+      xff(),
+    );
+    await post(
+      '/api/v1/auth/verify-email',
+      { email, code: capturedOtpDisplayCode() },
+      undefined,
+      xff(),
+    );
     const [uid] = await db
       .select({ id: users.id })
       .from(users)
@@ -77,7 +110,12 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     }
     adminToken = (
       await (
-        await post('/api/v1/auth/login', { email, password: 'Password123' })
+        await post(
+          '/api/v1/auth/login',
+          { email, password: 'Password123' },
+          undefined,
+          xff(),
+        )
       ).json()
     ).data.access_token;
   });
