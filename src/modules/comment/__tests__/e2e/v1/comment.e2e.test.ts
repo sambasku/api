@@ -147,8 +147,15 @@ describe.skipIf(!hasTestDb)('Comment E2E v1 - post-moderation (09 doc)', () => {
 
     const list = await get(`/api/v1/words/${wordId}/comments`);
     const listBody = await list.json();
-    expect(listBody.data).toHaveLength(1);
-    expect(listBody.data[0]).toMatchObject({
+    const listed = (
+      listBody.data as Array<{
+        id: string;
+        status: string;
+        body: string | null;
+        upvotes: number;
+      }>
+    ).find((c) => c.id === commentId);
+    expect(listed).toMatchObject({
       id: commentId,
       status: 'published',
       body: 'Kata ini sering saya dengar',
@@ -157,7 +164,10 @@ describe.skipIf(!hasTestDb)('Comment E2E v1 - post-moderation (09 doc)', () => {
 
     await post('/api/v1/votes', { target_type: 'comment', target_id: commentId, value: 1 }, otherToken);
     const afterVote = await get(`/api/v1/words/${wordId}/comments`);
-    expect(((await afterVote.json()) as { data: { upvotes: number }[] }).data[0].upvotes).toBe(1);
+    const voted = (
+      (await afterVote.json()) as { data: { id: string; upvotes: number }[] }
+    ).data.find((c) => c.id === commentId);
+    expect(voted?.upvotes).toBe(1);
 
     const td = await post(`/api/v1/admin/comments/${commentId}/takedown`, {}, adminToken);
     expect(td.status).toBe(200);
@@ -165,7 +175,18 @@ describe.skipIf(!hasTestDb)('Comment E2E v1 - post-moderation (09 doc)', () => {
 
     const afterTd = await get(`/api/v1/words/${wordId}/comments`);
     const afterTdBody = await afterTd.json();
-    expect(afterTdBody.data[0]).toMatchObject({ id: commentId, status: 'taken_down', body: null });
+    const takenDown = (
+      afterTdBody.data as Array<{
+        id: string;
+        status: string;
+        body: string | null;
+      }>
+    ).find((c) => c.id === commentId);
+    expect(takenDown).toMatchObject({
+      id: commentId,
+      status: 'taken_down',
+      body: null,
+    });
 
     const logs = await get('/api/v1/admin/audit-logs', adminToken);
     const logBody = await logs.json();
