@@ -1860,12 +1860,12 @@ export const finalizeLeaderboardWeekUseCase = new FinalizeLeaderboardWeekUseCase
     // Award lencana leaderboard_top dari snapshot yang baru dibekukan.
     await runDueAchievementScanUseCase.execute(new Date(), { force: true });
   },
-  userXpSnapshotAdapter,
 );
 export const runDueLeaderboardJobsUseCase = new RunDueLeaderboardJobsUseCase(
   leaderboardRepo,
   finalizeLeaderboardWeekUseCase,
   computeLiveLeaderboardUseCase,
+  userXpSnapshotAdapter,
 );
 export const getLeaderboardUseCase = new GetLeaderboardUseCase(
   leaderboardRepo,

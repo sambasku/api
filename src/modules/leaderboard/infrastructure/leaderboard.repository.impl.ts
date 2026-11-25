@@ -624,6 +624,96 @@ displayName: r.displayName ?? null,
     }));
   }
 
+  async listVisibleEntriesForWeek(weekId: string): Promise<LeaderboardEntry[]> {
+    const excludedUserIds = await this.listExcludedUserIds();
+    const conditions: SQL[] = [eq(leaderboardWeekEntries.weekId, weekId)];
+    if (excludedUserIds.length > 0) {
+      conditions.push(notInArray(leaderboardWeekEntries.userId, excludedUserIds));
+    }
+    const rows = await this.db
+      .select()
+      .from(leaderboardWeekEntries)
+      .where(and(...conditions))
+      .orderBy(asc(leaderboardWeekEntries.rank), asc(leaderboardWeekEntries.username));
+    const entries: LeaderboardEntry[] = rows.map((r) => ({
+      rank: r.rank,
+      userId: r.userId,
+      username: r.username,
+      displayName: r.displayName ?? null,
+      avatarUrl: r.avatarUrl ?? null,
+      submittedPoints: r.submittedPoints,
+      approvedPoints: r.approvedPoints,
+      verificationPoints: r.verificationPoints,
+      combined: r.combined,
+      isVerifier: r.isVerifier,
+    }));
+    assignCompetitionRanks(entries);
+    return entries;
+  }
+
+  async findWeeksByWeekIds(weekIds: string[]): Promise<LeaderboardWeekRecord[]> {
+    if (weekIds.length === 0) return [];
+    const rows = await this.db
+      .select()
+      .from(leaderboardWeeks)
+      .where(and(inArray(leaderboardWeeks.weekId, weekIds), isNull(leaderboardWeeks.deletedAt)));
+    return rows.map((r) => this.mapWeek(r));
+  }
+
+  async listEntriesMissingWeekStats(
+    fromWeekId: string,
+    limit: number,
+  ): Promise<Array<{ weekId: string; entry: LeaderboardEntry }>> {
+    const rows = await this.db
+      .select({
+        rank: leaderboardWeekEntries.rank,
+        userId: leaderboardWeekEntries.userId,
+        username: leaderboardWeekEntries.username,
+        displayName: leaderboardWeekEntries.displayName,
+        avatarUrl: leaderboardWeekEntries.avatarUrl,
+        submittedPoints: leaderboardWeekEntries.submittedPoints,
+        approvedPoints: leaderboardWeekEntries.approvedPoints,
+        verificationPoints: leaderboardWeekEntries.verificationPoints,
+        combined: leaderboardWeekEntries.combined,
+        isVerifier: leaderboardWeekEntries.isVerifier,
+        weekId: leaderboardWeekEntries.weekId,
+      })
+      .from(leaderboardWeekEntries)
+      .innerJoin(
+        leaderboardWeeks,
+        and(
+          eq(leaderboardWeekEntries.weekId, leaderboardWeeks.weekId),
+          isNotNull(leaderboardWeeks.finalizedAt),
+          isNull(leaderboardWeeks.deletedAt),
+        ),
+      )
+      .leftJoin(
+        userWeekStats,
+        and(
+          eq(userWeekStats.userId, leaderboardWeekEntries.userId),
+          eq(userWeekStats.weekId, leaderboardWeekEntries.weekId),
+        ),
+      )
+      .where(and(gte(leaderboardWeekEntries.weekId, fromWeekId), isNull(userWeekStats.id)))
+      .orderBy(asc(leaderboardWeekEntries.weekId), asc(leaderboardWeekEntries.rank))
+      .limit(limit);
+    return rows.map((r) => ({
+      weekId: r.weekId,
+      entry: {
+        rank: r.rank,
+        userId: r.userId,
+        username: r.username,
+        displayName: r.displayName ?? null,
+        avatarUrl: r.avatarUrl ?? null,
+        submittedPoints: r.submittedPoints,
+        approvedPoints: r.approvedPoints,
+        verificationPoints: r.verificationPoints,
+        combined: r.combined,
+        isVerifier: r.isVerifier,
+      },
+    }));
+  }
+
   async findWeekByWeekId(weekId: string): Promise<LeaderboardWeekRecord | null> {
     const [row] = await this.db
       .select()
