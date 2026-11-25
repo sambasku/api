@@ -29,7 +29,8 @@ export type ActivityKind =
 | 'pantun'
 | 'article'
 | 'jinye'
-  | 'chat';
+  | 'chat'
+  | 'leaderboard_rank';
 
 export interface ActivityActor {
   username: string | null;

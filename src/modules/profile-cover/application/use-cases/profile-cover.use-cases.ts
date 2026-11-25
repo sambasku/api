@@ -27,7 +27,7 @@ function assertVariant(raw: string): ProfileCoverVariant {
   const v = raw.trim() as ProfileCoverVariant;
   if (!PROFILE_COVER_VARIANTS.includes(v)) {
     throw new ValidationError([
-      { field: 'variant', message: 'Varian harus tab atau public' },
+      { field: 'variant', message: 'Varian harus tab, public, atau wotd' },
     ]);
   }
   return v;

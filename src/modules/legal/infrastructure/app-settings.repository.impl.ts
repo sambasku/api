@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { desc, eq, inArray, like } from 'drizzle-orm';
 import { appSettings } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
@@ -120,5 +120,20 @@ export class AppSettingsRepositoryImpl implements AppSettingsRepository {
       Array<typeof appSettings.$inferSelect>
     >;
     return results.flatMap((rows) => (rows ?? []).map(toEntity));
+  }
+
+  async deleteKey(key: string): Promise<void> {
+    await this.db.delete(appSettings).where(eq(appSettings.key, key));
+  }
+
+  async listByKeyPrefix(prefix: string, limit: number): Promise<AppSetting[]> {
+    const capped = Math.min(Math.max(limit, 1), 100);
+    const rows = await this.db
+      .select()
+      .from(appSettings)
+      .where(like(appSettings.key, `${prefix}%`))
+      .orderBy(desc(appSettings.key))
+      .limit(capped);
+    return rows.map(toEntity);
   }
 }

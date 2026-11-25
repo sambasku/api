@@ -121,3 +121,11 @@ export const getPointsHistoryResponseSchema = z.object({
   ),
 });
 
+export const shareLeaderboardRankResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    rank: z.number().int(),
+    combined: z.number().int(),
+    week_id: z.string(),
+  }),
+});

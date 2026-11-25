@@ -89,6 +89,7 @@ announcement: 'announcement',
   jinye_quote_created: 'jinye',
   community_proposal_created: 'community',
   community_published: 'community',
+  leaderboard_rank_shared: 'leaderboard_rank',
 };
 
 /** Label aksi per kind (badan feed; lemma diresolve terpisah). */
@@ -141,6 +142,7 @@ announcement: 'Pengumuman',
   jinye_quote_created: 'Mengutip Jinye',
   community_proposal_created: 'Mengusulkan komunitas',
   community_published: 'Menambahkan komunitas',
+  leaderboard_rank_shared: 'Membagikan posisi papan peringkat',
 };
 
 /** Entity type votes untuk kind event vote (legacy hydration #94). */
@@ -202,6 +204,7 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'article_published',
     'community_published',
     'community_proposal_created',
+    'leaderboard_rank_shared',
   ],
   correction: FEED_CATEGORY_KINDS.correction!,
   comment: [
@@ -1531,6 +1534,8 @@ articleSlug?: string | null;
         return row.targetId ? { type: 'discussion', id: row.targetId! } : null;
       case 'chat_ping':
         return { type: 'chat', id: 'public' };
+      case 'leaderboard_rank_shared':
+        return row.targetId ? { type: 'leaderboard', id: row.targetId! } : null;
       case 'search_miss':
         return row.targetId
           ? {

@@ -1,6 +1,6 @@
-export type ProfileCoverVariant = 'tab' | 'public';
+export type ProfileCoverVariant = 'tab' | 'public' | 'wotd';
 
-export const PROFILE_COVER_VARIANTS = ['tab', 'public'] as const;
+export const PROFILE_COVER_VARIANTS = ['tab', 'public', 'wotd'] as const;
 
 export const PROFILE_COVER_DIMENSIONS: Record<
   ProfileCoverVariant,
@@ -8,6 +8,8 @@ export const PROFILE_COVER_DIMENSIONS: Record<
 > = {
   tab: { width: 1032, height: 400 },
   public: { width: 1032, height: 534 },
+  /** Kartu Kata Hari Ini (`wotd_cover.webp` bundled). */
+  wotd: { width: 600, height: 338 },
 };
 
 export interface ProfileCover {
@@ -27,4 +29,5 @@ export interface ProfileCover {
 export interface ActiveProfileCovers {
   tabUrl: string | null;
   publicUrl: string | null;
+  wotdUrl: string | null;
 }

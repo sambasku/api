@@ -56,6 +56,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'jinye_quote_created',
   'community_proposal_created',
   'community_published',
+  'leaderboard_rank_shared',
 ] as const;
 
 export type ActivityEventKind = (typeof ACTIVITY_EVENT_KINDS)[number];
@@ -143,6 +144,8 @@ case 'announcement':
       return 'community';
     case 'chat_ping':
       return 'chat';
+    case 'leaderboard_rank_shared':
+      return 'leaderboard_rank';
   }
 }
 

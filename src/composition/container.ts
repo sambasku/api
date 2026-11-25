@@ -68,6 +68,13 @@ import { UpdateWordUseCase } from "@/modules/word/application/use-cases/update-w
 import { GetWordByIdUseCase } from "@/modules/word/application/use-cases/get-word-by-id.use-case";
 import { GetWordByLemmaUseCase } from "@/modules/word/application/use-cases/get-word-by-lemma.use-case";
 import { GetWordOfDayUseCase } from "@/modules/word/application/use-cases/get-word-of-day.use-case";
+import {
+  ClearAdminWordOfDayUseCase,
+  GetAdminWordOfDayUseCase,
+  ListAdminWordOfDayHistoryUseCase,
+  SetAdminWordOfDayUseCase,
+} from "@/modules/word/application/use-cases/admin-word-of-day.use-cases";
+import { WordOfDayAdminController } from "@/modules/word/presentation/v1/word-of-day-admin.controller";
 import { SearchWordsUseCase } from "@/modules/word/application/use-cases/search-words.use-case";
 import { ListAdminWordsUseCase } from "@/modules/word/application/use-cases/list-admin-words.use-case";
 import { ListWordsUseCase } from "@/modules/word/application/use-cases/list-words.use-case";
@@ -185,6 +192,7 @@ import { AchievementController } from "@/modules/achievement/presentation/v1/ach
 import { LeaderboardRepositoryImpl } from "@/modules/leaderboard/infrastructure/leaderboard.repository.impl";
 import { createLeaderboardStorage } from "@/modules/leaderboard/infrastructure/leaderboard-storage.factory";
 import { ComputeLiveLeaderboardUseCase } from "@/modules/leaderboard/application/use-cases/compute-live-leaderboard.use-case";
+import { ShareLeaderboardRankUseCase } from "@/modules/leaderboard/application/use-cases/share-leaderboard-rank.use-case";
 import { FinalizeLeaderboardWeekUseCase } from "@/modules/leaderboard/application/use-cases/finalize-leaderboard-week.use-case";
 import { RunDueLeaderboardJobsUseCase } from "@/modules/leaderboard/application/use-cases/run-due-leaderboard-jobs.use-case";
 import { GetLeaderboardUseCase } from "@/modules/leaderboard/application/use-cases/get-leaderboard.use-case";
@@ -834,6 +842,7 @@ export const requireProfileWriteClient = createRequireApprovedClientMiddleware(
 // Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
 // Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
 export const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
+export const getWordOfDayUseCase = new GetWordOfDayUseCase(wordRepo, appSettingsRepo);
 
 // ---- Span lemma pada komentar UGC (kata, wisata, …). ----
 export const ugcCommentLemmaRepo = new UgcCommentLemmaRepositoryImpl(db);
@@ -962,7 +971,7 @@ export const wordController = new WordController({
   update: new UpdateWordUseCase(wordRepo, auditRepo, syncLiveWordContributions),
   getById: new GetWordByIdUseCase(wordRepo, karyaRepo),
   getByLemma: new GetWordByLemmaUseCase(wordRepo, karyaRepo),
-  wordOfDay: new GetWordOfDayUseCase(wordRepo, appSettingsRepo),
+  wordOfDay: getWordOfDayUseCase,
   search: new SearchWordsUseCase(
     wordRepo,
     searchMissRepo,
@@ -1651,6 +1660,14 @@ export const stickerController = new StickerController({
   remove: new DeleteStickerUseCase(stickerRepo, auditRepo),
 });
 
+
+export const wordOfDayAdminController = new WordOfDayAdminController({
+  get: new GetAdminWordOfDayUseCase(wordRepo, appSettingsRepo),
+  listHistory: new ListAdminWordOfDayHistoryUseCase(wordRepo, appSettingsRepo),
+  set: new SetAdminWordOfDayUseCase(wordRepo, appSettingsRepo, getWordOfDayUseCase, auditRepo),
+  clear: new ClearAdminWordOfDayUseCase(appSettingsRepo, getWordOfDayUseCase, auditRepo),
+});
+
 export const profileCoverController = new ProfileCoverController({
   list: new ListProfileCoversUseCase(profileCoverRepo),
   getActive: new GetActiveProfileCoversUseCase(profileCoverRepo),
@@ -1871,6 +1888,7 @@ export const leaderboardController = new LeaderboardController({
   finalizeWeek: finalizeLeaderboardWeekUseCase,
   manageExclusions: manageLeaderboardExclusionsUseCase,
   getPointsHistory: getPointsHistoryUseCase,
+  shareRank: new ShareLeaderboardRankUseCase(computeLiveLeaderboardUseCase, activityEventRepo),
 });
 
 export const runStreakReminderUseCase = new RunStreakReminderUseCase(

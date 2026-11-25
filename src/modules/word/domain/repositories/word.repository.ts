@@ -402,6 +402,10 @@ export interface WordRepository {
    * semua user melihat kata sama per hari. Null = korpus kosong.
    */
   findWordOfDayId(date: string): Promise<string | null>;
+  /** Batch lemma/status untuk riwayat admin kata hari ini (satu query). */
+  findLemmaByIds(ids: readonly string[]): Promise<
+    Map<string, { lemma: string; status: string }>
+  >;
   /** kata by id (belum soft-deleted, semua status) - validasi parent kontribusi media */
   findById(id: string): Promise<Word | null>;
   /** replace semantics: hapus children lama, insert baru - satu transaksi.

@@ -3507,6 +3507,19 @@ memberLemma: string;
     }
   }
 
+
+  async findLemmaByIds(
+    ids: readonly string[],
+  ): Promise<Map<string, { lemma: string; status: string }>> {
+    if (ids.length === 0) return new Map();
+    const uniq = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+    const rows = await this.db
+      .select({ id: words.id, lemma: words.lemma, status: words.status })
+      .from(words)
+      .where(and(inArray(words.id, uniq), isNull(words.deletedAt)));
+    return new Map(rows.map((r) => [r.id, { lemma: r.lemma, status: r.status }]));
+  }
+
   async findById(id: string): Promise<Word | null> {
     const [row] = await this.db
       .select()

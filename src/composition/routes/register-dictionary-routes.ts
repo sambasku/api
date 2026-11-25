@@ -44,6 +44,7 @@ import {
   createAdminProfileCoverRoutes,
   createPublicProfileCoverRoutes,
 } from "@/modules/profile-cover/presentation/v1/profile-cover.routes";
+import { createAdminWordOfDayRoutes } from "@/modules/word/presentation/v1/word-of-day-admin.routes";
 import {
   createAdminAchievementRoutes,
   createMyAchievementRoutes,
@@ -274,6 +275,13 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
     }),
   );
   app.route(
+    "/api/v1/admin/word-of-day",
+    createAdminWordOfDayRoutes({
+      controller: di.wordOfDayAdminController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
     "/api/v1/admin/sponsorships",
     createAdminSponsorshipRoutes({
       controller: di.aboutController,
@@ -428,7 +436,10 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
   );
   app.route(
     "/api/v1/leaderboard",
-    createPublicLeaderboardRoutes({ controller: di.leaderboardController }),
+    createPublicLeaderboardRoutes({
+      controller: di.leaderboardController,
+      authenticate: di.authenticate,
+    }),
   );
   app.route(
     "/api/v1/admin/leaderboard",

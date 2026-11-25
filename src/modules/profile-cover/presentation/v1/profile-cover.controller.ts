@@ -44,13 +44,14 @@ export class ProfileCoverController {
       data: {
         tab_url: active.tabUrl,
         public_url: active.publicUrl,
+        wotd_url: active.wotdUrl,
       },
     });
   }
 
   async listAdmin(
     c: Context<{ Variables: AppVariables }>,
-    query: { variant: 'tab' | 'public' },
+    query: { variant: 'tab' | 'public' | 'wotd' },
   ) {
     const items = await this.deps.list.execute(query.variant);
     return c.json({
