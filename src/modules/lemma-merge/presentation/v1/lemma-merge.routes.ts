@@ -9,21 +9,8 @@ import {
   createLemmaMergeBodySchema,
   lemmaMergeIdParamSchema,
   lemmaMergeResponseSchema,
-  rejectLemmaMergeBodySchema,
 } from './lemma-merge.validator';
-import type { Context } from 'hono';
-
-async function readOptionalReviewNote(
-  c: Context<{ Variables: AppVariables }>,
-): Promise<string | undefined> {
-  const contentType = c.req.header('content-type') ?? '';
-  if (!contentType.includes('application/json')) {
-    return undefined;
-  }
-  const raw: unknown = await c.req.json().catch(() => ({}));
-  const parsed = rejectLemmaMergeBodySchema.safeParse(raw);
-  return parsed.success ? parsed.data.review_note : undefined;
-}
+import { readOptionalReviewNote } from './lemma-merge-admin-route-utils';
 
 const json = <T extends import('zod').ZodType>(schema: T) => ({
   'application/json': { schema },

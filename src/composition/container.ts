@@ -83,6 +83,7 @@ import { ListDuplicateWordsUseCase } from "@/modules/word/application/use-cases/
 import { MergeDuplicateWordsUseCase } from "@/modules/word/application/use-cases/merge-duplicate-words.use-case";
 import { ApproveLemmaMergeUseCase } from "@/modules/lemma-merge/application/approve-lemma-merge.use-case";
 import { CreateLemmaMergeUseCase } from "@/modules/lemma-merge/application/create-lemma-merge.use-case";
+import { LemmaMergeAdminReadUseCase } from "@/modules/lemma-merge/application/lemma-merge-admin-read.use-case";
 import { RejectLemmaMergeUseCase } from "@/modules/lemma-merge/application/reject-lemma-merge.use-case";
 import { LemmaMergeController } from "@/modules/lemma-merge/presentation/v1/lemma-merge.controller";
 import { ListCommaSplitsUseCase } from "@/modules/word/application/use-cases/list-comma-splits.use-case";
@@ -1915,8 +1916,14 @@ export const suggestionRepo = new WordSuggestionRepositoryImpl(
 );
 const approveLemmaMerge = new ApproveLemmaMergeUseCase(db, wordRepo, auditRepo, activityEvents);
 const rejectLemmaMerge = new RejectLemmaMergeUseCase(db, activityEvents);
+const lemmaMergeAdminRead = new LemmaMergeAdminReadUseCase(db);
 export const createLemmaMerge = new CreateLemmaMergeUseCase(db, activityEvents, approveLemmaMerge);
-export const lemmaMergeController = new LemmaMergeController(createLemmaMerge, approveLemmaMerge, rejectLemmaMerge);
+export const lemmaMergeController = new LemmaMergeController(
+  createLemmaMerge,
+  approveLemmaMerge,
+  rejectLemmaMerge,
+  lemmaMergeAdminRead,
+);
 
 export const suggestionController = new WordSuggestionController({
   repository: suggestionRepo,

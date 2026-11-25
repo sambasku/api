@@ -3,7 +3,12 @@ import type { CreateLemmaMergeBody } from './lemma-merge.validator';
 import type { CreateLemmaMergeUseCase } from '../../application/create-lemma-merge.use-case';
 import type { ApproveLemmaMergeUseCase } from '../../application/approve-lemma-merge.use-case';
 import type { RejectLemmaMergeUseCase } from '../../application/reject-lemma-merge.use-case';
-import { lemmaMergeResponseSchema } from './lemma-merge.validator';
+import type { LemmaMergeAdminReadUseCase } from '../../application/lemma-merge-admin-read.use-case';
+import {
+  lemmaMergeDetailResponseSchema,
+  lemmaMergeListResponseSchema,
+  lemmaMergeResponseSchema,
+} from './lemma-merge.validator';
 import type { AppVariables } from '@/shared/types';
 
 export class LemmaMergeController {
@@ -11,6 +16,7 @@ export class LemmaMergeController {
     private readonly create: CreateLemmaMergeUseCase,
     private readonly approveUseCase: ApproveLemmaMergeUseCase,
     private readonly rejectUseCase: RejectLemmaMergeUseCase,
+    private readonly adminRead: LemmaMergeAdminReadUseCase,
   ) {}
 
   async createMerge(c: Context<{ Variables: AppVariables }>, body: CreateLemmaMergeBody) {
@@ -59,6 +65,33 @@ export class LemmaMergeController {
         message: 'Usulan gabung disetujui.',
       },
     });
+  }
+
+  async listMergesAdmin(
+    c: Context<{ Variables: AppVariables }>,
+    opts: { limit: number; cursor?: string; status?: 'pending' | 'approved' | 'rejected' },
+  ) {
+    const result = await this.adminRead.list({
+      status: opts.status,
+      limit: opts.limit,
+      cursor: opts.cursor,
+    });
+    return c.json(
+      lemmaMergeListResponseSchema.parse({
+        success: true,
+        data: result.items,
+        meta: {
+          limit: opts.limit,
+          next_cursor: result.nextCursor,
+          has_more: result.hasMore,
+        },
+      }),
+    );
+  }
+
+  async getMergeDetailAdmin(c: Context<{ Variables: AppVariables }>, id: string) {
+    const detail = await this.adminRead.getDetail(id);
+    return c.json(lemmaMergeDetailResponseSchema.parse({ success: true, data: detail }));
   }
 
   async rejectMerge(c: Context<{ Variables: AppVariables }>, id: string, reviewNote?: string) {

@@ -19,6 +19,7 @@ import {
 import { createAnonContributionRoutes } from "@/modules/word/presentation/v1/anon-contribution.routes";
 import { createWordClassRoutes } from "@/modules/word/presentation/v1/word-class.routes";
 import { createLemmaMergeRoutes } from "@/modules/lemma-merge/presentation/v1/lemma-merge.routes";
+import { createAdminLemmaMergeRoutes } from "@/modules/lemma-merge/presentation/v1/lemma-merge-admin.routes";
 import {
   createWordSuggestionRoutes,
   createWordHistoryRoutes,
@@ -176,6 +177,13 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
     "/api/v1/admin",
     createAdminSuggestionRoutes({
       controller: di.suggestionController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin",
+    createAdminLemmaMergeRoutes({
+      controller: di.lemmaMergeController,
       authenticate: di.authenticate,
     }),
   );
