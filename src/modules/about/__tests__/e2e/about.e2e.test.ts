@@ -134,7 +134,7 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
   });
 
   it('verifiers: role reviewer masuk list', async () => {
-    const { users, userRoles } = await import('@/shared/database/drizzle/schema');
+    const { userRoles } = await import('@/shared/database/drizzle/schema');
     const email = `revabout${stamp}@test.com`;
     const name = `revabout${stamp}`;
     const u = await registerVerified(name, email);
@@ -164,7 +164,6 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
   });
 
   it('sponsorship checkbox: check masuk publik, uncheck hilang', async () => {
-    const { users } = await import('@/shared/database/drizzle/schema');
     const email = `spabout${stamp}@test.com`;
     const name = `spabout${stamp}`;
     const u = await registerVerified(name, email);
