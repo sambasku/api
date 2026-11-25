@@ -126,3 +126,4 @@ export * from "./stickers.schema";
 export * from "./voice-room-events.schema";
 export * from "./user-week-stats.schema";
 export * from "./ugc-comment-lemma-links.schema";
+export * from "./lemma-merge-requests.schema";

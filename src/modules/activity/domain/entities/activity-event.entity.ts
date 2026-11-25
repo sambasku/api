@@ -27,6 +27,8 @@ export const ACTIVITY_EVENT_KINDS = [
   'suggestion_applied',
   'suggestion_selfapply',
   'suggestion_created',
+  'lemma_merge_created',
+  'lemma_merge_applied',
   'contribution_submitted',
   'search_miss',
   'user_joined',
@@ -96,6 +98,8 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'suggestion_applied':
       return 'suggestion';
     case 'suggestion_created':
+    case 'lemma_merge_created':
+    case 'lemma_merge_applied':
       return 'suggestion';
     case 'contribution_submitted':
       return 'contribution';

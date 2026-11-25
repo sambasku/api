@@ -49,7 +49,8 @@ import { mapDuplicateMeaningIndexes, meaningDeduplicationFingerprint, meaningDed
 import { normalizeLemma } from '../application/utils/normalize-lemma';
 import { throwDuplicateMeaningConflict } from '../application/utils/throw-duplicate-meaning-conflict';
 import { publishOrMergeMeaningsInTx } from './publish-or-merge-meanings';
-import { mergeDuplicateWordsInTx } from './merge-duplicate-words';
+import { mergeDuplicateWordsInTx, mergeWordEntriesInTx } from './merge-duplicate-words';
+import type { MergeWordEntriesOptions } from '../application/utils/merge-word-entries-options';
 import {
   applyCommaSplitLemmaInTx,
   applyCommaSplitTranslationInTx,
@@ -2610,6 +2611,17 @@ memberLemma: string;
   ): Promise<{ keepWordId: string; mergedWordIds: string[] }> {
     return this.db.transaction((tx) =>
       mergeDuplicateWordsInTx(tx, keepWordId, mergeWordIds, actorId),
+    );
+  }
+
+  async mergeWordEntries(
+    keepWordId: string,
+    mergeWordIds: string[],
+    actorId: string,
+    options: MergeWordEntriesOptions,
+  ): Promise<{ keepWordId: string; mergedWordIds: string[] }> {
+    return this.db.transaction((tx) =>
+      mergeWordEntriesInTx(tx, keepWordId, mergeWordIds, actorId, options),
     );
   }
 

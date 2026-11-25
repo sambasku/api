@@ -561,6 +561,13 @@ export interface WordRepository {
     actorId: string,
   ): Promise<{ keepWordId: string; mergedWordIds: string[] }>;
 
+  mergeWordEntries(
+    keepWordId: string,
+    mergeWordIds: string[],
+    actorId: string,
+    options: import('../../application/utils/merge-word-entries-options').MergeWordEntriesOptions,
+  ): Promise<{ keepWordId: string; mergedWordIds: string[] }>;
+
   /** Antrean tab Pemisahan: lemma/padanan mengandung koma dan belum di-flag literal. */
   listCommaSplitCandidates(): Promise<CommaSplitCandidates>;
 
