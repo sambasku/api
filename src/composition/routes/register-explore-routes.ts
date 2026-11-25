@@ -467,6 +467,8 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
     createKaryaContributionRoutes({
       controller: di.karyaController,
       authenticate: di.authenticate,
+      uploadKaryaImage: (c) =>
+        publicImageController.upload(c, { purpose: "karya" }),
     }),
   );
   app.route(

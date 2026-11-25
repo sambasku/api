@@ -14,6 +14,7 @@ export const uploadPublicImageQuerySchema = z.object({
       'baleho',
       'sticker',
       'community',
+      'karya',
     ])
     .default('word'),
 });

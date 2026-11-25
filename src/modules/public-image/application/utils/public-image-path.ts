@@ -81,3 +81,8 @@ export function buildStickerImagePath(mimeType: string): string {
 export function buildCommunityImagePath(mimeType: string): string {
   return `assets/community/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path cover/poster karya: assets/karyas/<ulid>.<ext> */
+export function buildKaryaImagePath(mimeType: string): string {
+  return `assets/karyas/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

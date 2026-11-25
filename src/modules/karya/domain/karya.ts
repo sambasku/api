@@ -42,6 +42,7 @@ export interface KaryaRelatedRef {
 export const KARYA_ACCESS_LINK_KINDS = [
   'listen',
   'watch',
+  'trailer',
   'buy',
   'read',
   'stream',

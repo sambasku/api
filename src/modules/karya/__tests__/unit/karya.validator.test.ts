@@ -196,3 +196,38 @@ describe('submitKaryaContributionBodySchema', () => {
     expect(good.success).toBe(true);
   });
 });
+
+describe('access_links trailer film-only', () => {
+  it('menerima film dengan access_links kind trailer', () => {
+    const parsed = newKaryaPayloadSchema.safeParse({
+      title: 'Film Kampung',
+      kind: 'film',
+      credits: [{ role: 'other', name_text: 'Studio' }],
+      access_links: [
+        {
+          kind: 'trailer',
+          label: 'Trailer',
+          url: 'https://youtube.com/watch?v=abc',
+          is_primary: true,
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('menolak musik dengan access_links kind trailer', () => {
+    const parsed = newKaryaPayloadSchema.safeParse({
+      title: 'Lagu Sambas',
+      kind: 'music',
+      credits: [{ role: 'vocal', name_text: 'Ahmad' }],
+      access_links: [
+        {
+          kind: 'trailer',
+          label: 'Trailer',
+          url: 'https://youtube.com/watch?v=abc',
+        },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
