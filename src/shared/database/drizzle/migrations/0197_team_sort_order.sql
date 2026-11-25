@@ -1,1 +1,1 @@
-ALTER TABLE `users` ADD `team_sort_order` integer;--> statement-breakpoint
+ALTER TABLE `users` ADD `team_sort_order` integer;
