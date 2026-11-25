@@ -20,6 +20,7 @@ import {
   sponsorshipListResponseSchema,
   teamListResponseSchema,
   updateSponsorshipBodySchema,
+  verifiersListQuerySchema,
   verifiersListResponseSchema,
 } from './validators/about.validator';
 
@@ -96,7 +97,8 @@ export function createPublicAboutUserListRoutes(deps: {
     method: 'get',
     path: '/verifiers',
     tags: ['Users'],
-    summary: 'Daftar verifikator (role reviewer) untuk apresiasi',
+    summary: 'Daftar verifikator (role reviewer) untuk apresiasi, cursor',
+    request: { query: verifiersListQuerySchema },
     responses: {
       200: {
         description: 'Verifikator',
@@ -108,7 +110,9 @@ export function createPublicAboutUserListRoutes(deps: {
   routes.openapi(contributorsRoute, (c) =>
     deps.controller.listContributors(c, c.req.valid('query')) as never,
   );
-  routes.openapi(verifiersRoute, (c) => deps.controller.listVerifiers(c) as never);
+  routes.openapi(verifiersRoute, (c) =>
+    deps.controller.listVerifiers(c, c.req.valid('query')) as never,
+  );
   return routes;
 }
 

@@ -89,6 +89,41 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     });
   });
 
+  it('team: urutan team_sort_order ascending, null di belakang', async () => {
+    const { users } = await import('@/shared/database/drizzle/schema');
+    const stamp2 = Date.now();
+    const mk = async (uname: string, sort: number | null) => {
+      const email = `${uname}${stamp2}@test.com`;
+      await post('/api/v1/auth/register', e2eRegisterBody({ name: uname, email }));
+      await post('/api/v1/auth/verify-email', {
+        email,
+        code: capturedOtpDisplayCode(),
+      });
+      const [u] = await db.select().from(users).where(eq(users.username, uname)).limit(1);
+      await db
+        .update(users)
+        .set({
+          isTeam: true,
+          teamAs: 'tim',
+          teamNote: uname,
+          teamSortOrder: sort,
+        })
+        .where(eq(users.id, u.id));
+      return uname;
+    };
+    const late = await mk(`teamlater${stamp2}`, null);
+    const first = await mk(`teamfirst${stamp2}`, 1);
+    const second = await mk(`teamsecond${stamp2}`, 2);
+
+    const res = await get('/api/v1/about/team');
+    expect(res.status).toBe(200);
+    const items = (await res.json()).data.items as { username: string }[];
+    const ours = items
+      .map((i) => i.username)
+      .filter((u) => [late, first, second].includes(u));
+    expect(ours).toEqual([first, second, late]);
+  });
+
   it('verifiers: role reviewer masuk list', async () => {
     const { users, userRoles } = await import('@/shared/database/drizzle/schema');
     const email = `revabout${stamp}@test.com`;
@@ -102,9 +137,10 @@ describe.skipIf(!hasTestDb)('About E2E - team / contributors / verifiers / spons
     await db.delete(userRoles).where(eq(userRoles.userId, u.id));
     await db.insert(userRoles).values({ userId: u.id, role: 'reviewer' });
 
-    const res = await get('/api/v1/users/verifiers');
+    const res = await get('/api/v1/users/verifiers?limit=50');
     expect(res.status).toBe(200);
     const body = await res.json();
+    expect(typeof body.data.has_more).toBe('boolean');
     expect(body.data.items.some((i: { username: string }) => i.username === name)).toBe(
       true,
     );

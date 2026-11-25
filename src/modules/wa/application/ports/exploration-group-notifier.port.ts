@@ -1,3 +1,6 @@
+export const EXPLORATION_GROUP_EVENT_KEY = 'exploration_proposal_submitted';
+export const LEMMA_MERGE_GROUP_EVENT_KEY = 'lemma_merge_submitted';
+
 export interface ExplorationGroupNotice {
   /** Label jenis di pesan grup, mis. "Usaha" atau "Wisata (perbaikan)". */
   jenis: string;
@@ -5,6 +8,8 @@ export interface ExplorationGroupNotice {
   userId: string;
   /** true saat usulan dikirim ulang dari status revisi. */
   resubmit?: boolean;
+  /** Log `wa_message_logs.event_key` (default: exploration_proposal_submitted). */
+  eventKey?: string;
 }
 
 /** Kirim kabar usulan eksplorasi ke grup WhatsApp. Gagal kirim tidak melempar. */

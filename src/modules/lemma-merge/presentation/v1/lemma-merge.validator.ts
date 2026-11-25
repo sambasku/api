@@ -42,6 +42,7 @@ export const lemmaMergeListItemSchema = z.object({
   keep_word_id: opaqueId,
   keep_lemma: z.string(),
   merge_word_ids: z.array(opaqueId),
+  merge_lemmas: z.array(z.string()),
   merge_count: z.number().int(),
   reason_text: z.string().nullable(),
   proposer_id: opaqueId,

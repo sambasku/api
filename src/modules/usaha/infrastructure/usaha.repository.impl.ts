@@ -853,12 +853,12 @@ export class UsahaRepositoryImpl implements UsahaRepository {
         body: current.body,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: usahaCommentRevisions.id })
         .from(usahaCommentRevisions)
         .where(eq(usahaCommentRevisions.commentId, input.commentId))
-        .orderBy(desc(usahaCommentRevisions.createdAt))
-        .offset(COMMENT_REVISION_CAP);
+        .orderBy(desc(usahaCommentRevisions.createdAt));
+      const excess = revisions.slice(COMMENT_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(usahaCommentRevisions)

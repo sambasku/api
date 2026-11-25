@@ -23,7 +23,7 @@ export class LemmaMergeController {
     const user = c.get('user')!;
     const result = await this.create.execute({
       proposerId: user.user_id,
-      actorRole: user.role,
+      actorRole: user.roles?.length ? user.roles : user.role,
       keepWordId: body.keep_word_id,
       mergeWordIds: body.merge_word_ids,
       reasonText: body.reason_text,

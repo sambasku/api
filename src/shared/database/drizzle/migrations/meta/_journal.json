@@ -1373,6 +1373,13 @@
       "when": 1801680001000,
       "tag": "0196_lemma_merge_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "6",
+      "when": 1801680002000,
+      "tag": "0197_team_sort_order",
+      "breakpoints": true
     }
   ]
 }

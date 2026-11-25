@@ -1917,7 +1917,12 @@ export const suggestionRepo = new WordSuggestionRepositoryImpl(
 const approveLemmaMerge = new ApproveLemmaMergeUseCase(db, wordRepo, auditRepo, activityEvents);
 const rejectLemmaMerge = new RejectLemmaMergeUseCase(db, activityEvents);
 const lemmaMergeAdminRead = new LemmaMergeAdminReadUseCase(db);
-export const createLemmaMerge = new CreateLemmaMergeUseCase(db, activityEvents, approveLemmaMerge);
+export const createLemmaMerge = new CreateLemmaMergeUseCase(
+  db,
+  activityEvents,
+  approveLemmaMerge,
+  explorationGroupNotifier,
+);
 export const lemmaMergeController = new LemmaMergeController(
   createLemmaMerge,
   approveLemmaMerge,

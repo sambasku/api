@@ -60,6 +60,7 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     isTeam: row.isTeam ?? false,
     teamAs: row.teamAs ?? null,
     teamNote: row.teamNote ?? null,
+    teamSortOrder: row.teamSortOrder ?? null,
     usernameChangedAt: row.usernameChangedAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -194,6 +195,7 @@ export class UserRepositoryImpl implements UserRepository {
       isTeam: users.isTeam,
       teamAs: users.teamAs,
       teamNote: users.teamNote,
+      teamSortOrder: users.teamSortOrder,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
         // Di-select juga untuk cursor comparison walau tidak di-return ke user (deletedAt
@@ -479,6 +481,7 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
       isTeam?: boolean;
       teamAs?: string | null;
       teamNote?: string | null;
+      teamSortOrder?: number | null;
     },
   ): Promise<User | null> {
     if (id === ANONIM_USER_ID) return null;
@@ -488,6 +491,7 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
         ...(data.isTeam !== undefined ? { isTeam: data.isTeam } : {}),
         ...(data.teamAs !== undefined ? { teamAs: data.teamAs } : {}),
         ...(data.teamNote !== undefined ? { teamNote: data.teamNote } : {}),
+        ...(data.teamSortOrder !== undefined ? { teamSortOrder: data.teamSortOrder } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(users.id, id), isNull(users.deletedAt)))

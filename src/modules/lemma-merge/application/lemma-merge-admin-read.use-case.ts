@@ -18,6 +18,7 @@ export class LemmaMergeAdminReadUseCase {
       keep_word_id: string;
       keep_lemma: string;
       merge_word_ids: string[];
+      merge_lemmas: string[];
       merge_count: number;
       reason_text: string | null;
       proposer_id: string;
@@ -54,8 +55,19 @@ export class LemmaMergeAdminReadUseCase {
       .limit(limit + 1);
 
     const slice = rows.slice(0, limit);
+    const allMergeIds = [...new Set(slice.flatMap((r) => r.mergeWordIds ?? []))];
+    const mergeLemmaRows =
+      allMergeIds.length > 0
+        ? await this.db
+            .select({ id: words.id, lemma: words.lemma })
+            .from(words)
+            .where(inArray(words.id, allMergeIds))
+        : [];
+    const lemmaById = new Map(mergeLemmaRows.map((w) => [w.id, w.lemma]));
+
     const items = slice.map((r) => {
       const mergeIds = r.mergeWordIds ?? [];
+      const merge_lemmas = mergeIds.map((id) => lemmaById.get(id) ?? '-');
       const display = r.displayName?.trim();
       return {
         id: r.id,
@@ -63,6 +75,7 @@ export class LemmaMergeAdminReadUseCase {
         keep_word_id: r.keepWordId,
         keep_lemma: r.keepLemma,
         merge_word_ids: mergeIds,
+        merge_lemmas,
         merge_count: mergeIds.length,
         reason_text: r.reasonText,
         proposer_id: r.proposerId,

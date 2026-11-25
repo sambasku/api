@@ -614,12 +614,12 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
         body: current.body,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: cuisineCommentRevisions.id })
         .from(cuisineCommentRevisions)
         .where(eq(cuisineCommentRevisions.commentId, input.commentId))
-        .orderBy(desc(cuisineCommentRevisions.createdAt))
-        .offset(COMMENT_REVISION_CAP);
+        .orderBy(desc(cuisineCommentRevisions.createdAt));
+      const excess = revisions.slice(COMMENT_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(cuisineCommentRevisions)

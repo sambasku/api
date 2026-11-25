@@ -14,6 +14,7 @@ import type {
 import type { Sponsorship } from '../../domain/entities/about.entity';
 import type {
   ContributorsListQuery,
+  VerifiersListQuery,
   CreateSponsorshipBody,
   ListAdminSponsorshipsQuery,
   UpdateSponsorshipBody,
@@ -170,16 +171,21 @@ export class AboutController {
     });
   }
 
-  async listVerifiers(c: Context) {
-    const items = await this.deps.listVerifiers.execute();
+  async listVerifiers(c: Context, query: VerifiersListQuery) {
+    const page = await this.deps.listVerifiers.execute({
+      limit: query.limit,
+      cursor: query.cursor,
+    });
     return c.json({
       success: true as const,
       data: {
-        items: items.map((i) => ({
+        items: page.items.map((i) => ({
           username: i.username,
           display_name: i.displayName,
           avatar_url: i.avatarUrl,
         })),
+        next_cursor: page.nextCursor,
+        has_more: page.hasMore,
       },
     });
   }

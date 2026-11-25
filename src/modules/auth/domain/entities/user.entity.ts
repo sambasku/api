@@ -82,6 +82,7 @@ export interface User {
   isTeam: boolean;
   teamAs: string | null;
   teamNote: string | null;
+  teamSortOrder: number | null;
   /** Waktu terakhir ganti ke username baru (bukan reclaim). Null = belum pernah. */
   usernameChangedAt?: Date | null;
   createdAt: Date;

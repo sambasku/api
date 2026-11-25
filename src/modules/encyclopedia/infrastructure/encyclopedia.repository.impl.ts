@@ -368,12 +368,12 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         changeNote: input.revision.changeNote,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: articleRevisions.id })
         .from(articleRevisions)
         .where(eq(articleRevisions.articleId, input.revision.articleId))
-        .orderBy(desc(articleRevisions.createdAt))
-        .offset(ARTICLE_REVISION_CAP);
+        .orderBy(desc(articleRevisions.createdAt));
+      const excess = revisions.slice(ARTICLE_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(articleRevisions)
@@ -806,12 +806,12 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         body: current.body,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: articleCommentRevisions.id })
         .from(articleCommentRevisions)
         .where(eq(articleCommentRevisions.commentId, input.commentId))
-        .orderBy(desc(articleCommentRevisions.createdAt))
-        .offset(COMMENT_REVISION_CAP);
+        .orderBy(desc(articleCommentRevisions.createdAt));
+      const excess = revisions.slice(COMMENT_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(articleCommentRevisions)

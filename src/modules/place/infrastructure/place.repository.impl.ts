@@ -907,12 +907,12 @@ export class PlaceRepositoryImpl implements PlaceRepository {
         body: current.body,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: placeCommentRevisions.id })
         .from(placeCommentRevisions)
         .where(eq(placeCommentRevisions.commentId, input.commentId))
-        .orderBy(desc(placeCommentRevisions.createdAt))
-        .offset(COMMENT_REVISION_CAP);
+        .orderBy(desc(placeCommentRevisions.createdAt));
+      const excess = revisions.slice(COMMENT_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(placeCommentRevisions)

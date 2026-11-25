@@ -50,6 +50,7 @@ const adminUserWireSchema = z.object({
   is_team: z.boolean(),
   team_as: z.string().nullable(),
   team_note: z.string().nullable(),
+  team_sort_order: z.number().int().nullable(),
   is_sponsor: z.boolean().optional(),
   auth_providers: z.array(z.string()).optional(),
   /** OTP verifikasi terakhir; null = tidak ada OTP tertunda. */

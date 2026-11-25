@@ -630,12 +630,12 @@ export class JinyeRepositoryImpl implements JinyeRepository {
           body: current.body,
           createdAt: now,
         });
-        const excess = await tx
+        const revisions = await tx
           .select({ id: jinyeCommentRevisions.id })
           .from(jinyeCommentRevisions)
           .where(eq(jinyeCommentRevisions.commentId, input.commentId))
-          .orderBy(desc(jinyeCommentRevisions.createdAt))
-          .offset(JINYE_COMMENT_REVISION_CAP);
+          .orderBy(desc(jinyeCommentRevisions.createdAt));
+        const excess = revisions.slice(JINYE_COMMENT_REVISION_CAP);
         if (excess.length > 0) {
           await tx
             .delete(jinyeCommentRevisions)

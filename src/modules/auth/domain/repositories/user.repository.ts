@@ -65,6 +65,7 @@ export interface UserRepository {
       isTeam?: boolean;
       teamAs?: string | null;
       teamNote?: string | null;
+      teamSortOrder?: number | null;
     },
   ): Promise<User | null>;
 }

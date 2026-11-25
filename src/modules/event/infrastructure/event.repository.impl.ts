@@ -702,12 +702,12 @@ export class EventRepositoryImpl implements EventRepository {
         body: current.body,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: eventCommentRevisions.id })
         .from(eventCommentRevisions)
         .where(eq(eventCommentRevisions.commentId, input.commentId))
-        .orderBy(desc(eventCommentRevisions.createdAt))
-        .offset(COMMENT_REVISION_CAP);
+        .orderBy(desc(eventCommentRevisions.createdAt));
+      const excess = revisions.slice(COMMENT_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(eventCommentRevisions)

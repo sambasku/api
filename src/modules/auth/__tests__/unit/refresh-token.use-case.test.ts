@@ -43,6 +43,7 @@ function user(): User {
     isTeam: false,
     teamAs: null,
     teamNote: null,
+    teamSortOrder: null,
     emailVerified: true,
     avatarUrl: null,
     avatarProvider: null,

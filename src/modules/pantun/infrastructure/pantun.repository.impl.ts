@@ -414,12 +414,12 @@ export class PantunRepositoryImpl implements PantunRepository {
         createdAt: now,
       });
 
-      const excess = await tx
+      const revisions = await tx
         .select({ id: pantunReplyRevisions.id })
         .from(pantunReplyRevisions)
         .where(eq(pantunReplyRevisions.replyId, input.replyId))
-        .orderBy(desc(pantunReplyRevisions.createdAt))
-        .offset(REPLY_REVISION_CAP);
+        .orderBy(desc(pantunReplyRevisions.createdAt));
+      const excess = revisions.slice(REPLY_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(pantunReplyRevisions)

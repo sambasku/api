@@ -19,6 +19,7 @@ import {
   updateUserRoleBodySchema,
   updateUserRoleResponseSchema,
 } from './validators/admin-users.validator';
+import { adminUpdateTeamBodySchema } from '@/shared/validation/team-note';
 
 const json = <T extends z.ZodType>(schema: T) => ({
   'application/json': { schema },
@@ -195,18 +196,10 @@ export function createAdminUserRoutes(deps: AdminUserRoutesDeps) {
     method: 'patch',
     path: '/:id/team',
     tags: ['Admin Users'],
-    summary: 'Kurasi Tim Kami (is_team, team_as, team_note)',
+    summary: 'Kurasi Tim Kami (is_team, team_as, team_note, team_sort_order)',
     request: {
       params: z.object({ id: z.string().length(26) }),
-      body: {
-        content: json(
-          z.object({
-            is_team: z.boolean().optional(),
-            team_as: z.string().trim().max(200).nullable().optional(),
-            team_note: z.string().trim().max(2000).nullable().optional(),
-          }),
-        ),
-      },
+      body: { content: json(adminUpdateTeamBodySchema) },
     },
     responses: {
       200: { description: 'Tim diperbarui', content: json(adminUserMutationResponseSchema) },
