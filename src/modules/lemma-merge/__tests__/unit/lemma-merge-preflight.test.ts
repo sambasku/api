@@ -15,6 +15,6 @@ describe('assertLemmaMergeBatchAllowed', () => {
 
     await expect(
       assertLemmaMergeBatchAllowed(db, '01KEEP_____________________', ['01KEEP_____________________']),
-    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
   });
 });
