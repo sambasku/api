@@ -386,7 +386,7 @@ export class DiscussionController {
         success: true as const,
         data: {
           id: row.id,
-          status: 'pending_review' as const,
+          status: 'published' as const,
           submitted_at: row.createdAt.toISOString(),
         },
       },

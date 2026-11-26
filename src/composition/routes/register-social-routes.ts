@@ -220,9 +220,9 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
     create: new CreateDiscussionUseCase(
       discussionRepo,
       di.auditRepo,
-      di.userRepo,
-      di.recordInbox,
-      di.notifyUser,
+      di.publicImageStorage,
+      di.imageStorage,
+      di.activityEvents,
       di.recordAbuseSignal,
       di.commentBlocklistRepo,
     ),
@@ -295,9 +295,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.auditRepo,
       di.commentBlocklistRepo,
       di.recordAbuseSignal,
-      di.userRepo,
-      di.recordInbox,
-      di.notifyUser,
+      di.activityEvents,
     ),
     delete: new DeleteDiscussionUseCase(
       discussionRepo,

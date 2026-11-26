@@ -2,8 +2,6 @@ import { NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
 import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
-import { buildDiscussionImagePath } from '@/modules/public-image/application/utils/public-image-path';
-import { validateImageFile } from '@/modules/public-image/application/utils/validate-image-file';
 import { IMAGE_CONTENT_WARNING_SET } from '@/shared/constants/image-content-warnings';
 import { discussionCreatedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
@@ -13,6 +11,7 @@ import type {
   DiscussionImage,
 } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
+import { promoteDiscussionImages } from '../utils/promote-discussion-images';
 
 export interface ApproveDiscussionCommand {
   id: string;
@@ -27,20 +26,6 @@ export interface ApproveDiscussionCommand {
    */
   imageContentWarnings?: string[][] | null;
   requestId?: string | null;
-}
-
-async function fetchImageBytes(url: string): Promise<{ bytes: Uint8Array; mimeType: string | null }> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) {
-    throw new ValidationError([
-      { field: 'images', message: 'Gagal mengunduh gambar staging untuk dipromosikan' },
-    ]);
-  }
-  const buf = await res.arrayBuffer();
-  return {
-    bytes: new Uint8Array(buf),
-    mimeType: res.headers.get('content-type'),
-  };
 }
 
 /** Validasi & normalisasi content_warnings sejajar jumlah gambar. */
@@ -122,56 +107,14 @@ export class ApproveDiscussionUseCase {
     }));
 
     if (existing.images.length > 0) {
-      const promoted: DiscussionImage[] = [];
-      const toDeleteStaging: string[] = [];
-      for (let i = 0; i < existing.images.length; i++) {
-        const staging = existing.images[i];
-        // #202 re-approve setelah sunting OP: gambar sudah di GitHub - jangan fetch staging.
-        if (staging.publicUrl) {
-          promoted.push({
-            url: staging.url,
-            providerFileId: staging.providerFileId,
-            publicUrl: staging.publicUrl,
-            contentWarnings: warningsByIndex[i] ?? staging.contentWarnings ?? [],
-          });
-          continue;
-        }
-
-        const provided = cmd.censoredFiles?.[i];
-        let bytes: Uint8Array;
-        let mimeHint: string | null;
-
-        if (provided && provided.byteLength > 0) {
-          bytes = provided;
-          mimeHint = cmd.censoredMimeTypes?.[i] ?? null;
-        } else {
-          const fetched = await fetchImageBytes(staging.url);
-          bytes = fetched.bytes;
-          mimeHint = fetched.mimeType;
-        }
-
-        const file = validateImageFile({ bytes, mimeType: mimeHint });
-        const path = buildDiscussionImagePath(file.mimeType);
-        const uploaded = await this.publicImageStorage.upload({
-          path,
-          content: file.bytes,
-          mimeType: file.mimeType,
-        });
-
-        promoted.push({
-          url: staging.url,
-          providerFileId: staging.providerFileId,
-          publicUrl: uploaded.url,
-          contentWarnings: warningsByIndex[i] ?? [],
-        });
-        toDeleteStaging.push(staging.providerFileId);
-      }
-      nextImages = promoted;
-
-      for (const providerFileId of toDeleteStaging) {
-        // deleteFile ImageKit sudah best-effort (log internal, tidak lempar)
-        await this.imageStorage.deleteFile(providerFileId);
-      }
+      nextImages = await promoteDiscussionImages({
+        images: existing.images,
+        publicImageStorage: this.publicImageStorage,
+        imageStorage: this.imageStorage,
+        censoredFiles: cmd.censoredFiles,
+        censoredMimeTypes: cmd.censoredMimeTypes,
+        warningsByIndex,
+      });
     }
 
     const updated = await this.repo.updateStatus({
@@ -186,7 +129,7 @@ export class ApproveDiscussionUseCase {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');
     }
 
-    // Event feed: diskusi tayang. Actor = pembuat. Payload = cuplikan (#206 / #94).
+    // Event feed: diskusi tayang (requeue edit / antrean lama). Actor = pembuat.
     await this.activityEvents?.safe({
       kind: 'discussion_created',
       actorId: existing.userId,

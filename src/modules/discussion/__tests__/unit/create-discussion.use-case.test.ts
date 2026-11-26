@@ -1,13 +1,32 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ValidationError } from '@/shared/errors/app-error';
 import { CreateDiscussionUseCase } from '../../application/use-cases/create-discussion.use-case';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
 import type { Discussion } from '../../domain/entities/discussion.entity';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
+import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
 import { discussionUploadTokenQuerySchema } from '../../presentation/v1/validators/discussion.validator';
 
 const ID = '01JDHELPTRANSL0000000000000';
 const USER = '01JDUSERKONTRIB0000000000A';
+
+/** Minimal valid 1x1 JPEG */
+const JPEG_BYTES = Uint8Array.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+  0x00, 0x01, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
+  0x07, 0x07, 0x07, 0x09, 0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12,
+  0x13, 0x0f, 0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d, 0x1a, 0x1c, 0x1c, 0x20, 0x24, 0x2e, 0x27, 0x20,
+  0x22, 0x2c, 0x23, 0x1c, 0x1c, 0x28, 0x37, 0x29, 0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27,
+  0x39, 0x3d, 0x38, 0x32, 0x3c, 0x2e, 0x33, 0x34, 0x32, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01,
+  0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xff, 0xc4, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0xff, 0xc4, 0x00, 0x14,
+  0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0x7f, 0xff, 0xd9,
+]);
+
+const PUBLIC_URL =
+  'https://cdn.jsdelivr.net/gh/org/repo@main/assets/discussions/01.jpg';
 
 const image = {
   url: 'https://ik.imagekit.io/test/discussions/x.jpg',
@@ -29,7 +48,7 @@ function makeHelp(overrides: Partial<Discussion> = {}): Discussion {
     linkUrl: null,
     images: [],
     audio: null,
-    status: 'pending_review',
+    status: 'published',
     rejectionNote: null,
     reviewedBy: null,
     reviewedAt: null,
@@ -66,6 +85,50 @@ function makeAudit() {
   return { record: vi.fn().mockResolvedValue(undefined) } as unknown as AuditLogRepository;
 }
 
+function makePublicStorage() {
+  return {
+    providerName: 'github',
+    upload: vi.fn().mockResolvedValue({
+      path: 'assets/discussions/01.jpg',
+      url: PUBLIC_URL,
+      sha: 'abc',
+      size: 100,
+    }),
+    delete: vi.fn(),
+  } as unknown as PublicImageStoragePort;
+}
+
+function makeImageStorage() {
+  return {
+    providerName: 'imagekit',
+    createUploadCredentials: vi.fn(),
+    deleteFile: vi.fn().mockResolvedValue(undefined),
+  } as unknown as ImageStoragePort;
+}
+
+function makeUc(
+  repo = makeRepo(),
+  audit = makeAudit(),
+  publicStorage = makePublicStorage(),
+  imageStorage = makeImageStorage(),
+  activityEvents?: { safe: ReturnType<typeof vi.fn> },
+) {
+  return {
+    repo,
+    audit,
+    publicStorage,
+    imageStorage,
+    activityEvents,
+    uc: new CreateDiscussionUseCase(
+      repo,
+      audit,
+      publicStorage,
+      imageStorage,
+      activityEvents,
+    ),
+  };
+}
+
 describe('discussionUploadTokenQuerySchema', () => {
   it('folder selain /discussions → gagal', () => {
     const parsed = discussionUploadTokenQuerySchema.safeParse({ folder: '/bug-reports' });
@@ -81,22 +144,37 @@ describe('discussionUploadTokenQuerySchema', () => {
 });
 
 describe('CreateDiscussionUseCase', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'image/jpeg' },
+        arrayBuffer: async () => JPEG_BYTES.buffer.slice(0),
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('tanpa body → VALIDATION_ERROR', async () => {
-    const uc = new CreateDiscussionUseCase(makeRepo(), makeAudit());
+    const { uc } = makeUc();
     await expect(
       uc.execute({ userId: USER, body: '   ', images: [] }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('body > 1000 → VALIDATION_ERROR', async () => {
-    const uc = new CreateDiscussionUseCase(makeRepo(), makeAudit());
+    const { uc } = makeUc();
     await expect(
       uc.execute({ userId: USER, body: 'a'.repeat(1001), images: [] }),
     ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
   });
 
   it('images 5 item → VALIDATION_ERROR', async () => {
-    const uc = new CreateDiscussionUseCase(makeRepo(), makeAudit());
+    const { uc } = makeUc();
     await expect(
       uc.execute({
         userId: USER,
@@ -107,10 +185,15 @@ describe('CreateDiscussionUseCase', () => {
     ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
   });
 
-  it('teks saja → create pending_review + audit', async () => {
-    const repo = makeRepo();
-    const audit = makeAudit();
-    const uc = new CreateDiscussionUseCase(repo, audit);
+  it('teks saja → create published + activity + audit, tanpa blast moderasi', async () => {
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined) };
+    const { uc, repo, audit, publicStorage, imageStorage } = makeUc(
+      makeRepo(),
+      makeAudit(),
+      makePublicStorage(),
+      makeImageStorage(),
+      activityEvents,
+    );
     await uc.execute({
       userId: USER,
       body: 'Apa arti tulisan di papan ini?',
@@ -125,97 +208,69 @@ describe('CreateDiscussionUseCase', () => {
         images: [],
       }),
     );
+    expect(publicStorage.upload).not.toHaveBeenCalled();
+    expect(imageStorage.deleteFile).not.toHaveBeenCalled();
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'discussion_created',
+        actorId: USER,
+        targetId: ID,
+        dedupeKey: `discussion:${ID}`,
+        payload: 'Apa arti tulisan di papan ini?',
+      }),
+    );
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER,
         action: 'create',
         entityType: 'discussion',
+        newData: expect.objectContaining({ status: 'published' }),
       }),
     );
   });
 
-  it('create → blast inbox+push ke verifikator, skip penulis', async () => {
-    const repo = makeRepo();
-    const audit = makeAudit();
-    const MOD_A = '01JDMODERATORAAAA000000000A';
-    const MOD_B = '01JDMODERATORBBBB000000000B';
-    const userRepo = {
-      listActiveIdsByRoles: vi.fn().mockResolvedValue([MOD_A, MOD_B, USER]),
-    };
-    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
-    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
-    const uc = new CreateDiscussionUseCase(
-      repo,
-      audit,
-      userRepo as never,
-      inbox as never,
-      notifyUser as never,
+  it('gambar → promote lalu create dengan publicUrl', async () => {
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined) };
+    const { uc, repo, publicStorage, imageStorage } = makeUc(
+      makeRepo(),
+      makeAudit(),
+      makePublicStorage(),
+      makeImageStorage(),
+      activityEvents,
     );
     await uc.execute({
       userId: USER,
-      body: 'Apa arti tulisan di papan ini?',
-      images: [],
+      body: 'Tolong jelaskan foto ini',
+      images: [image],
     });
-
-    expect(userRepo.listActiveIdsByRoles).toHaveBeenCalledWith([
-      'reviewer',
-      'admin',
-      'root',
-      'editor',
-    ]);
-    expect(inbox.execute).toHaveBeenCalledTimes(2);
-    expect(inbox.execute).toHaveBeenCalledWith(
+    expect(publicStorage.upload).toHaveBeenCalledTimes(1);
+    expect(imageStorage.deleteFile).toHaveBeenCalledWith('file_th_x');
+    expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        userId: MOD_A,
-        type: 'discussion_pending_review',
-        targetKind: 'discussion',
-        targetId: ID,
-        actorId: USER,
-        actionKind: 'discussion',
-        actionValue: ID,
+        body: 'Tolong jelaskan foto ini',
+        images: [
+          expect.objectContaining({
+            url: image.url,
+            providerFileId: image.providerFileId,
+            publicUrl: PUBLIC_URL,
+          }),
+        ],
       }),
     );
-    expect(inbox.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: MOD_B }),
-    );
-    expect(inbox.execute).not.toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER }),
-    );
-    expect(notifyUser.execute).toHaveBeenCalledTimes(2);
-    expect(notifyUser.execute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: MOD_A,
-        title: 'Diskusi menunggu tinjauan',
-        data: expect.objectContaining({
-          type: 'discussion_pending_review',
-          target_id: ID,
-        }),
-      }),
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'discussion_created', actorId: USER }),
     );
   });
 
   it('gambar saja (tanpa body) → VALIDATION_ERROR', async () => {
-    const uc = new CreateDiscussionUseCase(makeRepo(), makeAudit());
+    const { uc } = makeUc();
     await expect(
       uc.execute({ userId: USER, body: '', images: [image] }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
-  it('deskripsi + gambar → lolos', async () => {
-    const repo = makeRepo();
-    const uc = new CreateDiscussionUseCase(repo, makeAudit());
-    await uc.execute({ userId: USER, body: 'Tolong jelaskan foto ini', images: [image] });
-    expect(repo.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: 'Tolong jelaskan foto ini',
-        linkUrl: null,
-        images: [expect.objectContaining({ url: image.url })],
-      }),
-    );
-  });
-
   it('link http (bukan https) → VALIDATION_ERROR', async () => {
-    const uc = new CreateDiscussionUseCase(makeRepo(), makeAudit());
+    const { uc } = makeUc();
     await expect(
       uc.execute({
         userId: USER,
@@ -227,8 +282,7 @@ describe('CreateDiscussionUseCase', () => {
   });
 
   it('link https → tersimpan', async () => {
-    const repo = makeRepo();
-    const uc = new CreateDiscussionUseCase(repo, makeAudit());
+    const { uc, repo } = makeUc();
     await uc.execute({
       userId: USER,
       body: 'Lihat tautan ini',

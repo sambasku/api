@@ -51,7 +51,7 @@ function makeRepo(overrides: Partial<DiscussionRepository> = {}) {
     updateDiscussionBodyWithRevision: vi.fn().mockImplementation(async () =>
       makeDiscussion({
         body: 'teks baru yang aman',
-        status: 'pending_review',
+        status: 'published',
         isEdited: true,
         updatedAt: new Date(),
       }),
@@ -95,38 +95,50 @@ describe('UpdateDiscussionUseCase', () => {
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('published → pending_review + requeue flag', async () => {
+  it('published → tetap published + update activity payload', async () => {
     const updateRevision = vi.fn().mockResolvedValue(
       makeDiscussion({
         body: 'teks baru yang aman',
-        status: 'pending_review',
+        status: 'published',
         isEdited: true,
       }),
     );
     const audit = { record: vi.fn() };
+    const activityEvents = { safe: vi.fn().mockResolvedValue(undefined) };
     const uc = new UpdateDiscussionUseCase(
       makeRepo({ updateDiscussionBodyWithRevision: updateRevision }),
       audit as unknown as AuditLogRepository,
       { listAllActiveWords: vi.fn().mockResolvedValue([]) } as unknown as CommentBlocklistRepository,
+      undefined,
+      activityEvents,
     );
     const result = await uc.execute({
       discussionId: DISC_ID,
       actorId: ACTOR,
       body: 'teks baru yang aman',
     });
-    expect(result.status).toBe('pending_review');
+    expect(result.status).toBe('published');
     expect(updateRevision).toHaveBeenCalledWith(
       expect.objectContaining({
         discussionId: DISC_ID,
-        requeuePendingReview: true,
+        requeuePendingReview: false,
         body: 'teks baru yang aman',
+      }),
+    );
+    expect(activityEvents.safe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'discussion_created',
+        actorId: ACTOR,
+        targetId: DISC_ID,
+        dedupeKey: `discussion:${DISC_ID}`,
+        payload: 'teks baru yang aman',
       }),
     );
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'update',
         entityType: 'discussion',
-        newData: expect.objectContaining({ status: 'pending_review', requeued: true }),
+        newData: expect.objectContaining({ status: 'published', requeued: false }),
       }),
     );
   });

@@ -43,7 +43,7 @@ export const createDiscussionResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     id: z.string(),
-    status: z.literal('pending_review'),
+    status: z.literal('published'),
     submitted_at: z.string(),
   }),
 });
@@ -368,7 +368,7 @@ export const updateDiscussionReplyResponseSchema = z.object({
 
 export const updateDiscussionResponseSchema = z.object({
   success: z.literal(true),
-  /** Owner wire: setelah sunting status jadi pending_review. */
+  /** Owner wire: setelah sunting tetap published (#338). */
   data: discussionOwnerItemSchema,
 });
 

@@ -1,9 +1,9 @@
 import { ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
-import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
-import type { UserRole } from '@/modules/auth/domain/entities/user.entity';
-import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
-import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
+import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
+import { discussionCreatedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
@@ -16,6 +16,7 @@ import type {
   DiscussionImage,
 } from '../../domain/entities/discussion.entity';
 import type { DiscussionRepository } from '../../domain/repositories/discussion.repository';
+import { promoteDiscussionImages } from '../utils/promote-discussion-images';
 
 export interface CreateDiscussionCommand {
   userId: string;
@@ -23,23 +24,6 @@ export interface CreateDiscussionCommand {
   linkUrl?: string | null;
   images: DiscussionImage[];
   requestId?: string | null;
-}
-
-/** Role yang boleh moderasi Ruang Diskusi (parity admin-discussion.routes). */
-const DISCUSSION_MODERATOR_ROLES: UserRole[] = [
-  'reviewer',
-  'admin',
-  'root',
-  'editor',
-];
-
-const SNIPPET_MAX = 80;
-const PENDING_TITLE = 'Diskusi menunggu tinjauan';
-
-function truncateSnippet(text: string, max = SNIPPET_MAX): string {
-  const trimmed = text.trim().replace(/\s+/g, ' ');
-  if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, max - 1).trimEnd()}...`;
 }
 
 function normalizeLinkUrl(raw: string | null | undefined): string | null {
@@ -66,9 +50,9 @@ export class CreateDiscussionUseCase {
   constructor(
     private readonly repo: DiscussionRepository,
     private readonly auditRepo: AuditLogRepository,
-    private readonly userRepo?: UserRepository,
-    private readonly inbox?: RecordInboxNotificationUseCase,
-    private readonly notifyUser?: NotifyUserUseCase,
+    private readonly publicImageStorage: PublicImageStoragePort,
+    private readonly imageStorage: ImageStoragePort,
+    private readonly activityEvents?: Pick<RecordActivityEventUseCase, 'safe'>,
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly blocklist?: Pick<CommentBlocklistRepository, 'listAllActiveWords'>,
   ) {}
@@ -117,18 +101,38 @@ export class CreateDiscussionUseCase {
       }
     }
 
+    const stagingImages: DiscussionImage[] = cmd.images.map((img) => ({
+      url: img.url,
+      providerFileId: img.providerFileId,
+      publicUrl: null,
+      contentWarnings: [],
+    }));
+
+    // Promote sebelum insert supaya create langsung published dengan public_url.
+    const images =
+      stagingImages.length > 0
+        ? await promoteDiscussionImages({
+            images: stagingImages,
+            publicImageStorage: this.publicImageStorage,
+            imageStorage: this.imageStorage,
+          })
+        : [];
+
     const input: NewDiscussion = {
       userId: cmd.userId,
       body: trimmed,
       linkUrl,
-      images: cmd.images.map((img) => ({
-        url: img.url,
-        providerFileId: img.providerFileId,
-        publicUrl: null,
-        contentWarnings: [],
-      })),
+      images,
     };
     const row = await this.repo.create(input);
+
+    await this.activityEvents?.safe({
+      kind: 'discussion_created',
+      actorId: cmd.userId,
+      targetId: row.id,
+      dedupeKey: `discussion:${row.id}`,
+      payload: discussionCreatedPayload(trimmed),
+    });
 
     await this.auditRepo.record({
       userId: cmd.userId,
@@ -137,81 +141,14 @@ export class CreateDiscussionUseCase {
       entityId: row.id,
       newData: {
         status: row.status,
-        image_count: cmd.images.length,
+        image_count: images.length,
         has_body: true,
         has_link: linkUrl != null,
+        promoted: images.some((i) => i.publicUrl != null),
       },
       requestId: cmd.requestId ?? null,
     });
 
-    await this.notifyModerators({
-      discussionId: row.id,
-      actorId: cmd.userId,
-      bodySnippet: trimmed,
-    });
-
     return row;
-  }
-
-  /** Blast inbox + FCM ke verifikator (best-effort, tanpa cooldown). */
-  private async notifyModerators(input: {
-    discussionId: string;
-    actorId: string;
-    bodySnippet: string;
-  }): Promise<void> {
-    if (!this.userRepo || (!this.inbox && !this.notifyUser)) return;
-
-    try {
-      const moderatorIds = await this.userRepo.listActiveIdsByRoles(DISCUSSION_MODERATOR_ROLES);
-      const recipients = moderatorIds.filter((id) => id !== input.actorId);
-      if (recipients.length === 0) return;
-
-      const snippet = truncateSnippet(input.bodySnippet);
-      const body = snippet
-        ? `Ada diskusi baru: "${snippet}"`
-        : 'Ada diskusi baru yang menunggu pemeriksaan.';
-      const title = PENDING_TITLE;
-
-      for (const userId of recipients) {
-        if (this.inbox) {
-          await this.inbox.execute({
-            userId,
-            type: 'discussion_pending_review',
-            targetKind: 'discussion',
-            targetId: input.discussionId,
-            actorId: input.actorId,
-            title,
-            body,
-            actionKind: 'discussion',
-            actionValue: input.discussionId,
-          });
-        }
-        if (this.notifyUser) {
-          await this.notifyUser.execute({
-            userId,
-            title,
-            body,
-            actorId: input.actorId,
-            data: {
-              type: 'discussion_pending_review',
-              target_kind: 'discussion',
-              target_id: input.discussionId,
-              action_kind: 'discussion',
-              action_value: input.discussionId,
-            },
-          });
-        }
-      }
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          time: new Date().toISOString(),
-          msg: 'discussion pending_review blast failed',
-          discussion_id: input.discussionId,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    }
   }
 }
