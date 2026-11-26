@@ -11,6 +11,10 @@ import type { Region } from '@/modules/region/domain/entities/region.entity';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import {
+  EXPLORE_PHOTO_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import type {
   UsahaCategoryRef,
   UsahaDetail,
@@ -237,6 +241,7 @@ export class AppendUsahaImagesUseCase {
     private readonly repo: UsahaRepository,
     private readonly users: UserRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(slug: string, userId: string, urls: string[]): Promise<void> {
@@ -289,6 +294,17 @@ export class AppendUsahaImagesUseCase {
       dedupeKey: `usaha_photo:${usaha.id}:${fresh.join('|')}`,
       payload: `Menambahkan foto usaha ${usaha.name}`,
     });
+    try {
+      await this.groupNotifier?.notify({
+        heading: 'Foto baru tayang.',
+        jenis: 'Foto Usaha',
+        name: `${usaha.name} (${fresh.length} foto)`,
+        userId,
+        eventKey: EXPLORE_PHOTO_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan unggah foto.
+    }
   }
 }
 

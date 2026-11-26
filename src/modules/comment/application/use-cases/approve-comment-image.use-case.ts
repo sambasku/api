@@ -67,15 +67,20 @@ export class ApproveCommentImageUseCase {
     if (!existing) {
       throw new NotFoundError('COMMENT_NOT_FOUND', 'Komentar tidak ditemukan');
     }
-    if (!existing.image || existing.image.status !== 'pending_review') {
+    if (
+      !existing.image ||
+      (existing.image.status !== 'pending_review' && existing.image.status !== 'published')
+    ) {
       throw new ConflictError(
-        'COMMENT_IMAGE_NOT_PENDING',
-        'Foto komentar tidak menunggu pengecekan',
+        'COMMENT_IMAGE_NOT_MODERATABLE',
+        'Foto komentar tidak tersedia untuk dimoderasi',
       );
     }
 
+    const wasPending = existing.image.status === 'pending_review';
     const warnings = normalizeContentWarnings(cmd.contentWarnings);
-    const stagingFileId = existing.image.providerFileId;
+    const stagingFileId =
+      existing.image.provider === 'imagekit' ? existing.image.providerFileId : null;
 
     let bytes: Uint8Array;
     let mimeHint: string | null;
@@ -83,7 +88,8 @@ export class ApproveCommentImageUseCase {
       bytes = cmd.censoredBytes;
       mimeHint = cmd.censoredMimeType ?? null;
     } else {
-      const fetched = await fetchImageBytes(existing.image.url);
+      const sourceUrl = existing.image.publicUrl ?? existing.image.url;
+      const fetched = await fetchImageBytes(sourceUrl);
       bytes = fetched.bytes;
       mimeHint = fetched.mimeType;
     }
@@ -105,19 +111,21 @@ export class ApproveCommentImageUseCase {
     });
     if (!updated) {
       throw new ConflictError(
-        'COMMENT_IMAGE_NOT_PENDING',
-        'Foto komentar tidak menunggu pengecekan',
+        'COMMENT_IMAGE_NOT_MODERATABLE',
+        'Foto komentar tidak tersedia untuk dimoderasi',
       );
     }
 
-    await this.imageStorage.deleteFile(stagingFileId);
+    if (stagingFileId) {
+      await this.imageStorage.deleteFile(stagingFileId);
+    }
 
     await this.auditRepo.record({
       userId: cmd.actorId,
       action: 'update',
       entityType: 'comment',
       entityId: updated.id,
-      oldData: { image_status: 'pending_review' },
+      oldData: { image_status: existing.image.status },
       newData: {
         image_status: 'published',
         image_public_url: uploaded.url,
@@ -126,17 +134,19 @@ export class ApproveCommentImageUseCase {
       requestId: cmd.requestId ?? null,
     });
 
-    await this.inbox?.execute({
-      userId: existing.userId,
-      type: 'comment_image_approved',
-      targetKind: 'word',
-      targetId: existing.wordId,
-      actorId: cmd.actorId,
-      title: 'Foto komentar disetujui',
-      body: 'Fotomu di komentar sudah tayang.',
-      actionKind: 'word',
-      actionValue: existing.wordId,
-    });
+    if (wasPending) {
+      await this.inbox?.execute({
+        userId: existing.userId,
+        type: 'comment_image_approved',
+        targetKind: 'word',
+        targetId: existing.wordId,
+        actorId: cmd.actorId,
+        title: 'Foto komentar disetujui',
+        body: 'Fotomu di komentar sudah tayang.',
+        actionKind: 'word',
+        actionValue: existing.wordId,
+      });
+    }
 
     return updated;
   }

@@ -8,6 +8,10 @@ import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import {
+  EXPLORE_PHOTO_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
+import {
   slugifyUsaha,
 } from '@/modules/usaha/application/use-cases/usaha.use-cases';
 import {
@@ -165,6 +169,7 @@ export class AppendCuisineImagesUseCase {
     private readonly repo: CulinaryRepository,
     private readonly users: UserRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(slug: string, userId: string, urls: string[]): Promise<void> {
@@ -235,6 +240,17 @@ export class AppendCuisineImagesUseCase {
       dedupeKey: `cuisine_photo:${cuisine.id}:${fresh.join('|')}`,
       payload: `Menambahkan foto kuliner ${cuisine.name}`,
     });
+    try {
+      await this.groupNotifier?.notify({
+        heading: 'Foto baru tayang.',
+        jenis: 'Foto Kuliner',
+        name: `${cuisine.name} (${fresh.length} foto)`,
+        userId,
+        eventKey: EXPLORE_PHOTO_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan unggah foto.
+    }
   }
 }
 

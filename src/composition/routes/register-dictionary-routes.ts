@@ -67,6 +67,8 @@ import {
   createWordCommentRoutes,
 } from "@/modules/comment/presentation/v1/comment.routes";
 import { createAdminCommentRoutes } from "@/modules/comment/presentation/v1/admin-comment.routes";
+import { createAdminExploreCommentRoutes } from "@/modules/comment/presentation/v1/admin-explore-comment.routes";
+import { createAdminExplorePhotoRoutes } from "@/modules/public-image/presentation/v1/admin-explore-photo.routes";
 import { createAdminCommentBlocklistRoutes } from "@/modules/comment-blocklist/presentation/v1/admin-comment-blocklist.routes";
 import { createBookmarkRoutes } from "@/modules/bookmark/presentation/v1/bookmark.routes";
 import {
@@ -337,6 +339,20 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
   app.route(
     "/api/v1/admin/comments",
     createAdminCommentRoutes({ controller: di.commentController, authenticate: di.authenticate }),
+  );
+  app.route(
+    "/api/v1/admin/explore-comments",
+    createAdminExploreCommentRoutes({
+      service: di.adminExploreCommentService,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/explore-photos",
+    createAdminExplorePhotoRoutes({
+      service: di.adminExplorePhotoService,
+      authenticate: di.authenticate,
+    }),
   );
   app.route(
     "/api/v1/admin/comment-blocklist",

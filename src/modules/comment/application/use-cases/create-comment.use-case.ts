@@ -20,6 +20,10 @@ import {
   safeRecordAbuseSignal,
 } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
+import {
+  COMMENT_MEDIA_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 import { resolveDiscussionNotifyRecipients } from '../utils/resolve-discussion-notify-recipients';
@@ -66,6 +70,7 @@ export class CreateCommentUseCase {
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly activityEvents?: RecordActivityEventUseCase,
     private readonly stickerRepo?: StickerRepository,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(cmd: CreateCommentCommand): Promise<Comment> {
@@ -203,9 +208,7 @@ export class CreateCommentUseCase {
     });
 
     if (hasImage) {
-      await this.notifyImageModerators({
-        commentId: comment.id,
-        wordId: cmd.wordId,
+      await this.notifyImageGroup({
         actorId: cmd.userId,
         lemma: word.lemma,
       });
@@ -214,67 +217,21 @@ export class CreateCommentUseCase {
     return (await this.commentRepo.findById(comment.id)) ?? comment;
   }
 
-  private async notifyImageModerators(input: {
-    commentId: string;
-    wordId: string;
+  private async notifyImageGroup(input: {
     actorId: string;
     lemma: string;
   }): Promise<void> {
-    if (!this.userRepo || (!this.inbox && !this.notifyUser)) return;
+    if (!this.groupNotifier) return;
     try {
-      const moderatorIds = await this.userRepo.listActiveIdsByRoles([
-        'admin',
-        'root',
-        'reviewer',
-        'editor',
-      ]);
-      const recipients = moderatorIds.filter((id) => id !== input.actorId);
-      if (recipients.length === 0) return;
-
-      const body = `Ada foto komentar di "${input.lemma}" yang menunggu pengecekan.`;
-      const title = 'Foto komentar menunggu cek';
-
-      for (const userId of recipients) {
-        if (this.inbox) {
-          await this.inbox.execute({
-            userId,
-            type: 'comment_image_pending_review',
-            targetKind: 'word',
-            targetId: input.wordId,
-            actorId: input.actorId,
-            title,
-            body,
-            actionKind: 'word',
-            actionValue: input.wordId,
-          });
-        }
-        if (this.notifyUser) {
-          await this.notifyUser.execute({
-            userId,
-            title,
-            body,
-            actorId: input.actorId,
-            data: {
-              type: 'comment_image_pending_review',
-              target_kind: 'word',
-              target_id: input.wordId,
-              action_kind: 'word',
-              action_value: input.wordId,
-              comment_id: input.commentId,
-            },
-          });
-        }
-      }
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          time: new Date().toISOString(),
-          msg: 'comment image pending_review blast failed',
-          comment_id: input.commentId,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
+      await this.groupNotifier.notify({
+        heading: 'Foto komentar baru tayang.',
+        jenis: 'Foto komentar kata',
+        name: input.lemma.trim() || 'sebuah kata',
+        userId: input.actorId,
+        eventKey: COMMENT_MEDIA_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan komentar.
     }
   }
 

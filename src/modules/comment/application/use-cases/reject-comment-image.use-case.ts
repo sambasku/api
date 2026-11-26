@@ -32,19 +32,24 @@ export class RejectCommentImageUseCase {
     if (!existing) {
       throw new NotFoundError('COMMENT_NOT_FOUND', 'Komentar tidak ditemukan');
     }
-    if (!existing.image || existing.image.status !== 'pending_review') {
+    if (
+      !existing.image ||
+      (existing.image.status !== 'pending_review' && existing.image.status !== 'published')
+    ) {
       throw new ConflictError(
-        'COMMENT_IMAGE_NOT_PENDING',
-        'Foto komentar tidak menunggu pengecekan',
+        'COMMENT_IMAGE_NOT_MODERATABLE',
+        'Foto komentar tidak tersedia untuk diturunkan',
       );
     }
 
-    const stagingFileId = existing.image.providerFileId;
+    const wasPending = existing.image.status === 'pending_review';
+    const stagingFileId =
+      existing.image.provider === 'imagekit' ? existing.image.providerFileId : null;
     const updated = await this.commentRepo.rejectImage(cmd.commentId, cmd.actorId);
     if (!updated) {
       throw new ConflictError(
-        'COMMENT_IMAGE_NOT_PENDING',
-        'Foto komentar tidak menunggu pengecekan',
+        'COMMENT_IMAGE_NOT_MODERATABLE',
+        'Foto komentar tidak tersedia untuk diturunkan',
       );
     }
 
@@ -57,7 +62,7 @@ export class RejectCommentImageUseCase {
       action: 'update',
       entityType: 'comment',
       entityId: updated.id,
-      oldData: { image_status: 'pending_review' },
+      oldData: { image_status: existing.image.status },
       newData: { image_status: 'rejected', abusive: cmd.abusive === true },
       requestId: cmd.requestId ?? null,
     });
@@ -78,8 +83,10 @@ export class RejectCommentImageUseCase {
       targetKind: 'word',
       targetId: existing.wordId,
       actorId: cmd.actorId,
-      title: 'Foto komentar tidak lolos',
-      body: 'Fotomu di komentar tidak lolos pengecekan. Teks komentar tetap tayang.',
+      title: wasPending ? 'Foto komentar tidak lolos' : 'Foto komentar diturunkan',
+      body: wasPending
+        ? 'Fotomu di komentar tidak lolos pengecekan. Teks komentar tetap tayang.'
+        : 'Fotomu di komentar diturunkan oleh moderator. Teks komentar tetap tayang.',
       actionKind: 'word',
       actionValue: existing.wordId,
     });

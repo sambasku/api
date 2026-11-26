@@ -532,6 +532,8 @@ import { ListMyCommentsUseCase } from "@/modules/comment/application/use-cases/l
 import { TakedownCommentUseCase } from "@/modules/comment/application/use-cases/takedown-comment.use-case";
 import { UncensorCommentUseCase } from "@/modules/comment/application/use-cases/uncensor-comment.use-case";
 import { CommentController } from "@/modules/comment/presentation/v1/comment.controller";
+import { AdminExploreCommentService } from "@/modules/comment/infrastructure/admin-explore-comment.service";
+import { AdminExplorePhotoService } from "@/modules/public-image/infrastructure/admin-explore-photo.service";
 import { UgcCommentLemmaRepositoryImpl } from "@/modules/ugc-comment-lemma/infrastructure/ugc-comment-lemma.repository.impl";
 import { CreateUgcCommentLemmaLinkUseCase } from "@/modules/ugc-comment-lemma/application/use-cases/create-ugc-comment-lemma-link.use-case";
 import { DeleteUgcCommentLemmaLinkUseCase } from "@/modules/ugc-comment-lemma/application/use-cases/delete-ugc-comment-lemma-link.use-case";
@@ -1167,6 +1169,10 @@ export const placeVisitController = new PlaceVisitController({
   list: new ListPlaceVisitsUseCase(placeVisitRepo),
 });
 export const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
+export const explorationGroupNotifier = new OpenWaExplorationGroupNotifier(
+  userRepo,
+  new WaMessageLogRepositoryImpl(db),
+);
 export const placeController = new PlaceController(
   new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
   new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
@@ -1174,7 +1180,7 @@ export const placeController = new PlaceController(
   new ListPlacesUseCase(placeRepo),
   new GetPlaceBySlugUseCase(placeRepo),
   new ListPlaceImagesUseCase(placeRepo),
-  new AppendPlaceImagesUseCase(placeRepo, userRepo, activityEvents),
+  new AppendPlaceImagesUseCase(placeRepo, userRepo, activityEvents, explorationGroupNotifier),
   new RecordPlaceViewUseCase(placeRepo),
   new ListPlaceViewsUseCase(placeRepo),
   new GetPlaceViewReportUseCase(placeRepo),
@@ -1220,10 +1226,6 @@ export const placeCategoryController = new PlaceCategoryController(
 );
 
 export const regionRepo = new RegionRepositoryImpl(db);
-export const explorationGroupNotifier = new OpenWaExplorationGroupNotifier(
-  userRepo,
-  new WaMessageLogRepositoryImpl(db),
-);
 export const placeContributionController = new PlaceContributionController(
   new PlaceContributionUseCases(
     new PlaceContributionRepositoryImpl(db),
@@ -1292,7 +1294,7 @@ export const eventController = new EventController(
   },
   {
     listImages: new ListEventImagesUseCase(eventRepo),
-    appendImages: new AppendEventImagesUseCase(eventRepo, userRepo, activityEvents),
+    appendImages: new AppendEventImagesUseCase(eventRepo, userRepo, activityEvents, explorationGroupNotifier),
     hideImage: new HideEventImageUseCase(eventRepo, activityEvents),
   },
   eventGoingRepo,
@@ -1338,7 +1340,7 @@ export const usahaController = new UsahaController(
   new ListUsahaCategoriesUseCase(usahaRepo),
   new FindUsahaDuplicatesUseCase(usahaRepo),
   new ListUsahaImagesUseCase(usahaRepo),
-  new AppendUsahaImagesUseCase(usahaRepo, userRepo, activityEvents),
+  new AppendUsahaImagesUseCase(usahaRepo, userRepo, activityEvents, explorationGroupNotifier),
   new HideUsahaImageUseCase(usahaRepo),
   listRelatedContent,
   usahaVisitRepo,
@@ -1525,7 +1527,7 @@ export const culinaryController = new CulinaryController(
   new RestrictCulinaryUseCase(culinaryRepo),
   new RestoreCulinaryUseCase(culinaryRepo),
   new DeleteCulinaryUseCase(culinaryRepo),
-  new AppendCuisineImagesUseCase(culinaryRepo, userRepo, activityEvents),
+  new AppendCuisineImagesUseCase(culinaryRepo, userRepo, activityEvents, explorationGroupNotifier),
   listRelatedContent,
   {
     listComments: new ListCuisineCommentsUseCase(culinaryRepo),
@@ -1738,6 +1740,19 @@ export const pantunReplyPushCooldown = new ReplyPushCooldownGate(
   notificationPushCooldownRepo,
   'pantun_reply',
 );
+export const adminExplorePhotoService = new AdminExplorePhotoService(
+  db,
+  publicImageStorage,
+  auditRepo,
+  activityEvents,
+);
+export const adminExploreCommentService = new AdminExploreCommentService(
+  db,
+  publicImageStorage,
+  imageStorage,
+  auditRepo,
+  recordAbuseSignal,
+);
 export const commentUploadCredentials = new CreateUploadCredentialsUseCase({
   imageStorage,
   defaultFolder: "/comments",
@@ -1756,6 +1771,7 @@ export const commentController = new CommentController({
     recordAbuseSignal,
     activityEvents,
     stickerRepo,
+    explorationGroupNotifier,
   ),
   createAudio: new CreateCommentAudioUseCase(
     commentRepo,
@@ -1769,6 +1785,7 @@ export const commentController = new CommentController({
     wordCommentPushCooldown,
     recordAbuseSignal,
     activityEvents,
+    explorationGroupNotifier,
   ),
   attachImage: new AttachCommentImageUseCase(
     commentRepo,
@@ -1776,6 +1793,7 @@ export const commentController = new CommentController({
     userRepo,
     recordInbox,
     notifyUser,
+    explorationGroupNotifier,
   ),
   approveImage: new ApproveCommentImageUseCase(
     commentRepo,
@@ -1913,6 +1931,7 @@ export const runDueLeaderboardJobsUseCase = new RunDueLeaderboardJobsUseCase(
   finalizeLeaderboardWeekUseCase,
   computeLiveLeaderboardUseCase,
   userXpSnapshotAdapter,
+  appSettingsRepo,
 );
 export const getLeaderboardUseCase = new GetLeaderboardUseCase(
   leaderboardRepo,

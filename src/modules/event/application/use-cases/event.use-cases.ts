@@ -8,6 +8,10 @@ UnauthorizedError,
 import type { RegionRepository } from "@/modules/region/domain/repositories/region.repository";
 import type { UserRepository } from "@/modules/auth/domain/repositories/user.repository";
 import type { RecordActivityEventUseCase } from "@/modules/activity/application/use-cases/record-activity-event.use-case";
+import {
+  EXPLORE_PHOTO_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from "@/modules/wa/application/ports/exploration-group-notifier.port";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import type {
   EventCategoryRef,
@@ -312,6 +316,7 @@ export class AppendEventImagesUseCase {
     private readonly repo: EventRepository,
     private readonly users: UserRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(slug: string, authorId: string, urls: string[]): Promise<void> {
@@ -375,6 +380,17 @@ export class AppendEventImagesUseCase {
       dedupeKey: `event_photo:${event.id}:${fresh.join("|")}`,
       payload: `Menambahkan foto acara ${event.name}`,
     });
+    try {
+      await this.groupNotifier?.notify({
+        heading: "Foto baru tayang.",
+        jenis: "Foto Acara",
+        name: `${event.name} (${fresh.length} foto)`,
+        userId: authorId,
+        eventKey: EXPLORE_PHOTO_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan unggah foto.
+    }
   }
 }
 

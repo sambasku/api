@@ -9,11 +9,22 @@ import type { FinalizeLeaderboardWeekUseCase } from './finalize-leaderboard-week
 import type { ComputeLiveLeaderboardUseCase } from './compute-live-leaderboard.use-case';
 import type { UserXpSnapshotPort } from '../ports/user-xp-snapshot.port';
 import type { LeaderboardEntry } from '../../domain/entities/leaderboard-entry.entity';
+import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 
 /** Minggu paling awal yang di-backfill XP bertahap (hindari XP "sekarang" untuk minggu lama). */
 export const LEADERBOARD_XP_SNAPSHOT_FROM_WEEK = '2026-W47';
 
 const XP_SNAPSHOT_CHUNK = 20;
+
+/** Key app_settings: kapan chunk snapshot XP terakhir dicoba (ISO 8601). */
+export const XP_SNAPSHOT_LAST_RUN_KEY = 'leaderboard_xp_snapshot_last_run_at';
+
+/**
+ * Chunk snapshot XP tiap 6 jam, bukan tiap tick cron (1 menit). Setiap user
+ * di chunk = 1 query berat (loadStats); entry yang gagal tidak punya
+ * user_week_stats, jadi tanpa gate ini akan dicoba ulang tiap menit.
+ */
+export const XP_SNAPSHOT_INTERVAL_MS = REFRESH_INTERVAL_MS;
 
 export interface RunDueLeaderboardJobsResult {
   refreshed: boolean;
@@ -27,6 +38,7 @@ export class RunDueLeaderboardJobsUseCase {
     private readonly finalizeWeek: FinalizeLeaderboardWeekUseCase,
     private readonly computeLive: ComputeLiveLeaderboardUseCase,
     private readonly xpSnapshot?: UserXpSnapshotPort,
+    private readonly settingsRepo: AppSettingsRepository | null = null,
   ) {}
 
   async execute(now: Date = new Date()): Promise<RunDueLeaderboardJobsResult> {
@@ -35,8 +47,11 @@ export class RunDueLeaderboardJobsUseCase {
       await this.finalizeWeek.execute(id, now);
     }
 
-    if (weekIdsToFinalize.length === 0 && this.xpSnapshot) {
+    if (weekIdsToFinalize.length === 0 && this.xpSnapshot && (await this.isXpSnapshotDue(now))) {
       try {
+        // Catat percobaan sebelum kerja: entry yang gagal tetap menunggu
+        // siklus 6 jam berikutnya, tidak diulang tiap menit.
+        await this.markXpSnapshotRun(now);
         await this.runXpSnapshotChunk(now);
       } catch (err) {
         console.error(
@@ -65,6 +80,30 @@ export class RunDueLeaderboardJobsUseCase {
       finalized: weekIdsToFinalize.length > 0,
       finalizedWeekIds: weekIdsToFinalize,
     };
+  }
+
+  private async isXpSnapshotDue(now: Date): Promise<boolean> {
+    if (!this.settingsRepo) return true;
+    const lastRaw = await this.settingsRepo.getValue(XP_SNAPSHOT_LAST_RUN_KEY);
+    if (!lastRaw) return true;
+    const last = new Date(lastRaw);
+    if (Number.isNaN(last.getTime())) return true;
+    return now.getTime() - last.getTime() >= XP_SNAPSHOT_INTERVAL_MS;
+  }
+
+  private async markXpSnapshotRun(now: Date): Promise<void> {
+    if (!this.settingsRepo) return;
+    await this.settingsRepo.upsertMany(
+      [
+        {
+          key: XP_SNAPSHOT_LAST_RUN_KEY,
+          value: now.toISOString(),
+          type: 'string',
+          description: 'Waktu terakhir chunk snapshot XP leaderboard dicoba (cron)',
+        },
+      ],
+      null,
+    );
   }
 
   private async runXpSnapshotChunk(now: Date): Promise<void> {

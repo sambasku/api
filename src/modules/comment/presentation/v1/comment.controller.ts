@@ -365,12 +365,42 @@ export class CommentController {
     );
   }
 
-  async approveImage(c: Context, id: string, body: ApproveCommentImageBody) {
+  async approveImage(c: Context, id: string, body?: ApproveCommentImageBody) {
     const actor = this.requireUser(c);
+    let censoredBytes: Uint8Array | null = null;
+    let censoredMimeType: string | null = null;
+    let contentWarnings: string[] = body?.content_warnings ?? [];
+
+    if (!body) {
+      const ct = (c.req.header('content-type') ?? '').toLowerCase();
+      if (ct.includes('multipart/form-data')) {
+        const form = await c.req.formData();
+        const rawWarnings = form.get('content_warnings');
+        if (typeof rawWarnings === 'string' && rawWarnings.trim().length > 0) {
+          try {
+            const parsed = JSON.parse(rawWarnings);
+            if (Array.isArray(parsed)) contentWarnings = parsed as string[];
+          } catch {
+            // Invalid JSON akan ditangani use case jika diperlukan.
+          }
+        }
+        const file = form.get('image');
+        if (file instanceof File && file.size > 0) {
+          censoredBytes = new Uint8Array(await file.arrayBuffer());
+          censoredMimeType = file.type || null;
+        }
+      } else if (ct.includes('application/json')) {
+        const jsonBody = (await c.req.json().catch(() => ({}))) as ApproveCommentImageBody;
+        contentWarnings = jsonBody?.content_warnings ?? [];
+      }
+    }
+
     const comment = await this.deps.approveImage.execute({
       commentId: id,
       actorId: actor.user_id,
-      contentWarnings: body.content_warnings ?? [],
+      censoredBytes,
+      censoredMimeType,
+      contentWarnings,
       requestId: this.requestId(c),
     });
 

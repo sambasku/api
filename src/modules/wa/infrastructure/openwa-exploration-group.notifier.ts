@@ -83,6 +83,7 @@ export class OpenWaExplorationGroupNotifier implements ExplorationGroupNotifier 
       name: notice.name,
       from: await this.fromLabel(notice.userId),
       resubmit: notice.resubmit,
+      heading: notice.heading,
       envTag: env.NODE_ENV === "staging" ? "Staging" : null,
     });
 

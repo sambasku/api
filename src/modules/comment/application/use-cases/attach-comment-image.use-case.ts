@@ -3,12 +3,13 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import {
+  COMMENT_MEDIA_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
-
-const COMMENT_IMAGE_MODERATOR_ROLES = ['admin', 'root', 'reviewer', 'editor'] as const;
-const PENDING_TITLE = 'Foto komentar menunggu cek';
 
 export interface AttachCommentImageCommand {
   commentId: string;
@@ -19,16 +20,17 @@ export interface AttachCommentImageCommand {
 }
 
 /**
- * Lampirkan foto staging ke komentar published (opsi B).
- * Teks sudah tayang; foto masuk antrean pending_review.
+ * Lampirkan foto ke komentar published (opsi B).
+ * Auto-tayang (post-moderation); notif ke grup WA untuk pemantauan.
  */
 export class AttachCommentImageUseCase {
   constructor(
     private readonly commentRepo: CommentRepository,
     private readonly auditRepo: AuditLogRepository,
-    private readonly userRepo?: UserRepository,
-    private readonly inbox?: RecordInboxNotificationUseCase,
-    private readonly notifyUser?: NotifyUserUseCase,
+    _userRepo?: UserRepository,
+    _inbox?: RecordInboxNotificationUseCase,
+    _notifyUser?: NotifyUserUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(cmd: AttachCommentImageCommand): Promise<Comment> {
@@ -75,15 +77,13 @@ export class AttachCommentImageUseCase {
       entityType: 'comment',
       entityId: updated.id,
       newData: {
-        image_status: 'pending_review',
+        image_status: 'published',
         image_provider: 'imagekit',
       },
       requestId: cmd.requestId ?? null,
     });
 
-    await this.notifyModerators({
-      commentId: updated.id,
-      wordId: updated.wordId,
+    await this.notifyGroup({
       actorId: cmd.userId,
       lemma: updated.wordLemma,
     });
@@ -91,65 +91,21 @@ export class AttachCommentImageUseCase {
     return updated;
   }
 
-  private async notifyModerators(input: {
-    commentId: string;
-    wordId: string;
+  private async notifyGroup(input: {
     actorId: string;
     lemma: string | null;
   }): Promise<void> {
-    if (!this.userRepo || (!this.inbox && !this.notifyUser)) return;
+    if (!this.groupNotifier) return;
     try {
-      const moderatorIds = await this.userRepo.listActiveIdsByRoles([
-        ...COMMENT_IMAGE_MODERATOR_ROLES,
-      ]);
-      const recipients = moderatorIds.filter((id) => id !== input.actorId);
-      if (recipients.length === 0) return;
-
-      const lemma = input.lemma?.trim() || 'sebuah kata';
-      const body = `Ada foto komentar di "${lemma}" yang menunggu pengecekan.`;
-      const title = PENDING_TITLE;
-
-      for (const userId of recipients) {
-        if (this.inbox) {
-          await this.inbox.execute({
-            userId,
-            type: 'comment_image_pending_review',
-            targetKind: 'word',
-            targetId: input.wordId,
-            actorId: input.actorId,
-            title,
-            body,
-            actionKind: 'word',
-            actionValue: input.wordId,
-          });
-        }
-        if (this.notifyUser) {
-          await this.notifyUser.execute({
-            userId,
-            title,
-            body,
-            actorId: input.actorId,
-            data: {
-              type: 'comment_image_pending_review',
-              target_kind: 'word',
-              target_id: input.wordId,
-              action_kind: 'word',
-              action_value: input.wordId,
-              comment_id: input.commentId,
-            },
-          });
-        }
-      }
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          time: new Date().toISOString(),
-          msg: 'comment image pending_review blast failed',
-          comment_id: input.commentId,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
+      await this.groupNotifier.notify({
+        heading: 'Foto komentar baru tayang.',
+        jenis: 'Foto komentar kata',
+        name: input.lemma?.trim() || 'sebuah kata',
+        userId: input.actorId,
+        eventKey: COMMENT_MEDIA_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan lampiran foto.
     }
   }
 }

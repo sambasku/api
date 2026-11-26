@@ -140,8 +140,8 @@ export class CommentRepositoryImpl implements CommentRepository {
         imageUrl: image?.url ?? null,
         imageProvider: image?.provider ?? null,
         imageProviderFileId: image?.providerFileId ?? null,
-        imagePublicUrl: null,
-        imageStatus: image ? 'pending_review' : null,
+        imagePublicUrl: image?.url ?? null,
+        imageStatus: image ? 'published' : null,
         imageContentWarnings: image ? '[]' : null,
         status: 'published',
       })
@@ -393,8 +393,8 @@ export class CommentRepositoryImpl implements CommentRepository {
         imageUrl: image.url,
         imageProvider: image.provider,
         imageProviderFileId: image.providerFileId,
-        imagePublicUrl: null,
-        imageStatus: 'pending_review',
+        imagePublicUrl: image.url,
+        imageStatus: 'published',
         imageContentWarnings: '[]',
         imageReviewedBy: null,
         imageReviewedAt: null,
@@ -439,7 +439,7 @@ export class CommentRepositoryImpl implements CommentRepository {
       .where(
         and(
           eq(comments.id, commentId),
-          eq(comments.imageStatus, 'pending_review'),
+          inArray(comments.imageStatus, ['pending_review', 'published']),
           isNull(comments.deletedAt),
         ),
       )
@@ -465,7 +465,7 @@ export class CommentRepositoryImpl implements CommentRepository {
       .where(
         and(
           eq(comments.id, commentId),
-          eq(comments.imageStatus, 'pending_review'),
+          inArray(comments.imageStatus, ['pending_review', 'published']),
           isNull(comments.deletedAt),
         ),
       )
