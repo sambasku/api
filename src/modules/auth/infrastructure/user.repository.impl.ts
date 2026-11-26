@@ -93,6 +93,31 @@ export class UserRepositoryImpl implements UserRepository {
     return toEntity(row, roles.get(row.id) ?? []);
   }
 
+  async findMentionableByUsernames(
+    usernames: string[],
+  ): Promise<Array<{ id: string; username: string; displayName: string }>> {
+    if (usernames.length === 0) return [];
+    const rows = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+      })
+      .from(users)
+      .where(
+        and(
+          inArray(users.username, usernames),
+          eq(users.isActive, true),
+          isNull(users.deletedAt),
+        ),
+      );
+    return rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      displayName: r.displayName?.trim() || r.username,
+    }));
+  }
+
   async findByPhone(phone: string): Promise<User | null> {
     const [row] = await this.db.select().from(users).where(eq(users.phone, phone)).limit(1);
     if (!row) return null;

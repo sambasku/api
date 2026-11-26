@@ -85,3 +85,34 @@ describe('UpdateAppSettingsUseCase - *_enabled boolean', () => {
     expect(settingsRepo.upsertMany).not.toHaveBeenCalled();
   });
 });
+
+describe('UpdateAppSettingsUseCase - wa_group_notify_enabled', () => {
+  it('memaksa type boolean saat upsert', async () => {
+    const { useCase, settingsRepo } = makeDeps();
+    await useCase.execute({
+      settings: [{ key: 'wa_group_notify_enabled', value: 'true', type: 'string' }],
+      actorId: ACTOR,
+    });
+    expect(settingsRepo.upsertMany).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          key: 'wa_group_notify_enabled',
+          value: 'true',
+          type: 'boolean',
+        }),
+      ],
+      ACTOR,
+    );
+  });
+
+  it.each(['1', 'yes', ''])('menolak nilai %j', async (value) => {
+    const { useCase, settingsRepo } = makeDeps();
+    await expect(
+      useCase.execute({
+        settings: [{ key: 'wa_group_notify_enabled', value }],
+        actorId: ACTOR,
+      }),
+    ).rejects.toMatchObject({ errorCode: 'VALIDATION_ERROR' });
+    expect(settingsRepo.upsertMany).not.toHaveBeenCalled();
+  });
+});

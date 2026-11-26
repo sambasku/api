@@ -1172,6 +1172,7 @@ export const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
 export const explorationGroupNotifier = new OpenWaExplorationGroupNotifier(
   userRepo,
   new WaMessageLogRepositoryImpl(db),
+  appSettingsRepo,
 );
 export const placeController = new PlaceController(
   new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),

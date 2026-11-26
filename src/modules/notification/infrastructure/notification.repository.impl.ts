@@ -159,4 +159,22 @@ export class NotificationRepositoryImpl implements NotificationRepository {
       .returning({ id: notifications.id });
     return updated.length;
   }
+
+  async deleteByTarget(input: {
+    type: InboxNotificationType;
+    targetKind: NotificationTargetKind;
+    targetId: string;
+  }): Promise<number> {
+    const deleted = await this.db
+      .delete(notifications)
+      .where(
+        and(
+          eq(notifications.type, input.type),
+          eq(notifications.targetKind, input.targetKind),
+          eq(notifications.targetId, input.targetId),
+        ),
+      )
+      .returning({ id: notifications.id });
+    return deleted.length;
+  }
 }

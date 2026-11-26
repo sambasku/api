@@ -19,6 +19,8 @@ export type InboxNotificationType =
   | 'jinye_comment'
   | 'word_comment'
   | 'word_comment_mention'
+  /** #360: @username di chat publik. */
+  | 'chat_mention'
   /** #200: foto komentar pre-moderation terpisah dari teks. */
   | 'comment_image_pending_review'
   | 'comment_image_approved'
@@ -78,6 +80,7 @@ export type NotificationTargetKind =
   | 'achievement'
   | 'pantun'
   | 'jinye'
+  | 'chat'
   | 'day';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
@@ -96,7 +99,8 @@ export type NotificationActionKind =
 | 'culinary_claim'
 | 'baleho_placement'
 | 'pantun'
-| 'jinye';
+| 'jinye'
+| 'chat';
 
 export interface InboxNotification {
   id: string;
@@ -234,6 +238,12 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       return {
         title: 'Kamu disebut di komentar',
         body: 'Seseorang menyebutmu di komentar kosakata.',
+        bodyType: 'plain',
+      };
+    case 'chat_mention':
+      return {
+        title: 'Kamu disebut di chat',
+        body: 'Seseorang menyebutmu di chat SambasKu.',
         bodyType: 'plain',
       };
     case 'comment_image_pending_review':

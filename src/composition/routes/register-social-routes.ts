@@ -2,6 +2,7 @@
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { AppVariables } from '@/shared/types';
 import * as di from '../container';
+import { NotifyChatMentionsUseCase } from "@/modules/chat/application/use-cases/notify-chat-mentions.use-case";
 import { db } from "@/shared/database/drizzle/client";
 import { ListAuditLogsUseCase } from "@/modules/audit/application/use-cases/list-audit-logs.use-case";
 import { AuditController } from "@/modules/audit/presentation/v1/audit.controller";
@@ -348,6 +349,13 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
   // Chat publik F1a + F1b voice note (teks/stiker/VN/reply/edit/tombstone).
   const chatRepo = new ChatRepositoryImpl(db);
   const chatMirror = new ChatSupabaseMirrorService();
+  const chatMentions = new NotifyChatMentionsUseCase(
+    di.userRepo,
+    di.recordInbox,
+    di.notifyUser,
+    di.notificationPushCooldownRepo,
+    di.notificationRepo,
+  );
   const chatController = new ChatController(
     new GetChatCapabilitiesUseCase(di.appSettingsRepo),
     new ListChatMessagesUseCase(chatRepo),
@@ -358,6 +366,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       chatMirror,
       di.stickerRepo,
       di.recordAbuseSignal,
+      chatMentions,
     ),
     new CreateChatVoiceNoteUseCase(
       chatRepo,
@@ -370,11 +379,23 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.commentBlocklistRepo,
       chatMirror,
       di.recordAbuseSignal,
+      chatMentions,
     ),
-    new DeleteChatMessageUseCase(chatRepo, chatMirror, di.pronunciationStorage),
+    new DeleteChatMessageUseCase(
+      chatRepo,
+      chatMirror,
+      di.pronunciationStorage,
+      chatMentions,
+    ),
     new ListChatRevisionsUseCase(chatRepo),
     new GetChatPingStatusUseCase(chatRepo),
-    new SendChatPingUseCase(chatRepo, di.userRepo, chatMirror, di.activityEvents),
+    new SendChatPingUseCase(
+      chatRepo,
+      di.userRepo,
+      chatMirror,
+      di.activityEvents,
+      di.explorationGroupNotifier,
+    ),
   );
   app.route(
     "/api/v1/chat",

@@ -14,6 +14,7 @@ function repo(overrides: Partial<NotificationRepository> = {}): NotificationRepo
     countUnread: vi.fn(),
     markRead: vi.fn(),
     markAllRead: vi.fn(),
+    deleteByTarget: vi.fn().mockResolvedValue(0),
     ...overrides,
   };
 }

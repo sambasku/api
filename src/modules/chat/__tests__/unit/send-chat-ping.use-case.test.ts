@@ -79,13 +79,57 @@ describe('SendChatPingUseCase', () => {
       findLatestPing: vi.fn(async () => last),
       create: vi.fn(),
     };
+    const notify = vi.fn(async () => undefined);
     const uc = new SendChatPingUseCase(
       repo as never,
       { findById: vi.fn() } as never,
       { upsert: vi.fn() } as never,
+      undefined,
+      { notify },
     );
     await expect(uc.execute('u1')).rejects.toBeInstanceOf(RateLimitedError);
     expect(repo.create).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  function makeUc(notify?: ReturnType<typeof vi.fn>) {
+    const repo = {
+      findLatestPing: vi.fn(async () => null),
+      create: vi.fn(async () => makePing(new Date())),
+    };
+    return new SendChatPingUseCase(
+      repo as never,
+      { findById: vi.fn(async () => USER) } as never,
+      { upsert: vi.fn(async () => undefined) } as never,
+      undefined,
+      (notify ? { notify } : undefined) as never,
+    );
+  }
+
+  it('meneruskan ping ke grup WA sekali dengan eventKey chat_ping', async () => {
+    const notify = vi.fn(async () => undefined);
+    await makeUc(notify).execute('u1');
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventKey: 'chat_ping',
+        userId: 'u1',
+        text: 'PING!!! dari @budi di chat SambasKu. Yuk ngobrol.',
+      }),
+    );
+  });
+
+  it('gagal kirim WA tidak membatalkan ping', async () => {
+    const notify = vi.fn(async () => {
+      throw new Error('gateway down');
+    });
+    const result = await makeUc(notify).execute('u1');
+    expect(result.message.body).toBe(CHAT_PING_BODY);
+  });
+
+  it('tanpa groupNotifier ping tetap sukses', async () => {
+    const result = await makeUc().execute('u1');
+    expect(result.message.body).toBe(CHAT_PING_BODY);
   });
 });
 

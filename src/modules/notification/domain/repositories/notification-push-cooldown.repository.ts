@@ -9,7 +9,9 @@ export type NotificationPushCooldownChannel =
   /** #133: notif media anak kata (contoh kalimat / audio pelafalan). */
   | 'word_media'
   | 'discussion_reply'
-  | 'pantun_reply';
+  | 'pantun_reply'
+  /** #360: push mention chat, 1 per penerima per 60 detik. */
+  | 'chat_mention';
 
 export interface NotificationPushCooldown {
   userId: string;

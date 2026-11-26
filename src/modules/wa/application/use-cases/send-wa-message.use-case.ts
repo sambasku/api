@@ -12,6 +12,7 @@ import type {
 } from '../../domain/repositories/wa-message.repository';
 import type { WaSendCommand, WaSenderPort } from '../ports/wa-sender.port';
 import { BadRequestError } from '@/shared/errors/app-error';
+import { isWaNotifyEnabled } from '../wa-notify-gate';
 
 export type WaSenderPortWithConfigured = WaSenderPort & { isConfigured?: () => boolean };
 
@@ -61,6 +62,10 @@ export class SendWaMessageUseCase {
   ) {}
 
   async execute(cmd: SendWaMessageCommand): Promise<SendWaMessageResult> {
+    // Master switch (app_settings.wa_group_notify_enabled). sendTest sengaja bypass.
+    if (!(await isWaNotifyEnabled(this.settingsRepo))) {
+      return { sent: false, reason: 'Notifikasi WA dinonaktifkan (wa_group_notify_enabled=false)' };
+    }
     const configured = this.senders.filter((s) => s.sender.isConfigured?.() ?? true);
     if (configured.length === 0) {
       return { sent: false, reason: 'WA sender belum dikonfigurasi (OPENWA_* env kosong)' };

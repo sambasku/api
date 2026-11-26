@@ -9,6 +9,10 @@ import {
 } from '@/modules/chat/domain/entities/chat-message.entity';
 import type { ChatRepository } from '@/modules/chat/domain/repositories/chat.repository';
 import type { ChatSupabaseMirror } from '@/modules/chat/infrastructure/chat-supabase-mirror';
+import {
+  CHAT_PING_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import { NotFoundError, RateLimitedError } from '@/shared/errors/app-error';
 
 export type ChatPingStatus = {
@@ -60,6 +64,7 @@ export class SendChatPingUseCase {
     private readonly userRepo: UserRepository,
     private readonly mirror: ChatSupabaseMirror,
     private readonly activityEvents?: Pick<RecordActivityEventUseCase, 'safe'>,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(userId: string): Promise<{ message: ChatMessage; status: ChatPingStatus }> {
@@ -102,6 +107,20 @@ export class SendChatPingUseCase {
       targetId: CHAT_CHANNEL_PUBLIC,
       occurredAt: created.createdAt,
     });
+
+    // Teruskan ke grup WA. Best-effort: gagal kirim tidak membatalkan ping.
+    // Cooldown ping global (5 menit) sudah membatasi frekuensi pesan WA.
+    try {
+      await this.groupNotifier?.notify({
+        jenis: 'Chat',
+        name: CHAT_PING_BODY,
+        userId,
+        eventKey: CHAT_PING_GROUP_EVENT_KEY,
+        text: `${CHAT_PING_BODY} dari @${user.username} di chat SambasKu. Yuk ngobrol.`,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan ping.
+    }
 
     const availableAt = new Date(
       created.createdAt.getTime() + CHAT_PING_COOLDOWN_SECONDS * 1000,

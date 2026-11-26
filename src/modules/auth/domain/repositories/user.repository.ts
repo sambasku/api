@@ -12,6 +12,13 @@ export interface UserRepository {
   findByEmail(email: string): Promise<User | null>;
   findByUsername(username: string): Promise<User | null>;
   findByPhone(phone: string): Promise<User | null>;
+  /**
+   * Batch mention: satu query `IN` (bukan N x findByUsername). Hanya user
+   * aktif dan belum soft-delete; kolom minimal tanpa email/phone/hash.
+   */
+  findMentionableByUsernames(
+    usernames: string[],
+  ): Promise<Array<{ id: string; username: string; displayName: string }>>;
   save(user: NewUser): Promise<User>;
   updatePassword(id: string, passwordHash: string): Promise<void>;
   markEmailVerified(id: string): Promise<void>;

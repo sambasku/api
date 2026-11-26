@@ -2,8 +2,11 @@ import type { UserRepository } from "@/modules/auth/domain/repositories/user.rep
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import { env } from "@/shared/config/env";
 import { logger } from "@/shared/logging/logger";
+import type { AppSettingsRepository } from "@/modules/legal/domain/repositories/app-settings.repository";
 import type { WaMessageLogRepository } from "../domain/repositories/wa-message.repository";
+import { isWaNotifyEnabled } from "../application/wa-notify-gate";
 import {
+  appendGroupEnvTag,
   EXPLORATION_GROUP_EVENT_KEY,
   formatExplorationGroupMessage,
   type ExplorationGroupNotice,
@@ -71,6 +74,7 @@ export class OpenWaExplorationGroupNotifier implements ExplorationGroupNotifier 
   constructor(
     private readonly users: Pick<UserRepository, "findById">,
     private readonly logs: Pick<WaMessageLogRepository, "record">,
+    private readonly settings: Pick<AppSettingsRepository, "getValue">,
     private readonly config: OpenWaGatewayConfig = openWaConfigFromEnv(),
   ) {}
 
@@ -78,14 +82,27 @@ export class OpenWaExplorationGroupNotifier implements ExplorationGroupNotifier 
     const config = readyOpenWaConfig(this.config);
     if (!config) return;
 
-    const text = formatExplorationGroupMessage({
-      jenis: notice.jenis,
-      name: notice.name,
-      from: await this.fromLabel(notice.userId),
-      resubmit: notice.resubmit,
-      heading: notice.heading,
-      envTag: env.NODE_ENV === "staging" ? "Staging" : null,
-    });
+    // Master switch: cek sebelum kerja lain (lookup user, kirim, log).
+    if (!(await isWaNotifyEnabled(this.settings))) {
+      logger.debug(
+        { eventKey: notice.eventKey ?? EXPLORATION_GROUP_EVENT_KEY },
+        "openwa exploration group skip: wa_group_notify_enabled=false",
+      );
+      return;
+    }
+
+    const envTag = env.NODE_ENV === "staging" ? "Staging" : null;
+    const customText = notice.text?.trim();
+    const text = customText
+      ? appendGroupEnvTag(customText, envTag)
+      : formatExplorationGroupMessage({
+          jenis: notice.jenis,
+          name: notice.name,
+          from: await this.fromLabel(notice.userId),
+          resubmit: notice.resubmit,
+          heading: notice.heading,
+          envTag,
+        });
 
     try {
       await sendOpenWaText(config, config.groupJid, text);
