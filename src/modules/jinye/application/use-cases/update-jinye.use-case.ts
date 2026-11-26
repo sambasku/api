@@ -4,6 +4,7 @@ import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/ut
 import type { RecordAbuseSignalUseCase } from '@/shared/moderation/record-abuse-signal.use-case';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
+import { jinyeFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 import {
   ForbiddenError,
   NotFoundError,
@@ -24,6 +25,15 @@ export class UpdateJinyeUseCase {
       'listAllActiveWords'
     >,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly activityEvents?: {
+      safe: (cmd: {
+        kind: 'jinye_created';
+        actorId: string;
+        targetId: string;
+        dedupeKey: string;
+        payload?: string | null;
+      }) => Promise<void>;
+    },
   ) {}
 
   async execute(input: {
@@ -97,6 +107,17 @@ export class UpdateJinyeUseCase {
 
     if (bodyChanged) {
       await this.repo.markLemmaLinksStale(input.id);
+      await this.activityEvents?.safe({
+        kind: 'jinye_created',
+        actorId: input.userId,
+        targetId: updated.id,
+        dedupeKey: `jinye:${updated.id}`,
+        payload: jinyeFeedPayload({
+          body: updated.body,
+          imageCount: updated.images.length,
+          hasAudio: !!updated.audio,
+        }),
+      });
     }
 
     await this.auditRepo.record({

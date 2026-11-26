@@ -102,9 +102,16 @@ const audit = { record: vi.fn(async () => undefined) } as never;
 const blocklist = { listAllActiveWords: vi.fn(async () => []) };
 
 describe('UpdateJinyeUseCase', () => {
-  it('owner edit body + stale lemma links', async () => {
+  it('owner edit body + stale lemma links + sync activity payload (#337)', async () => {
     const r = repo();
-    const out = await new UpdateJinyeUseCase(r, audit, blocklist).execute({
+    const activityEvents = { safe: vi.fn(async () => undefined) };
+    const out = await new UpdateJinyeUseCase(
+      r,
+      audit,
+      blocklist,
+      undefined,
+      activityEvents,
+    ).execute({
       id: JINYE_ID,
       userId: OWNER,
       body: 'edited',
@@ -112,6 +119,31 @@ describe('UpdateJinyeUseCase', () => {
     expect(out.body).toBe('edited');
     expect(r.updateBody).toHaveBeenCalled();
     expect(r.markLemmaLinksStale).toHaveBeenCalledWith(JINYE_ID);
+    expect(activityEvents.safe).toHaveBeenCalledWith({
+      kind: 'jinye_created',
+      actorId: OWNER,
+      targetId: JINYE_ID,
+      dedupeKey: `jinye:${JINYE_ID}`,
+      payload: 'Jinye : edited',
+    });
+  });
+
+  it('body tidak berubah -> tidak memanggil sync activity payload', async () => {
+    const r = repo();
+    const activityEvents = { safe: vi.fn(async () => undefined) };
+    await new UpdateJinyeUseCase(
+      r,
+      audit,
+      blocklist,
+      undefined,
+      activityEvents,
+    ).execute({
+      id: JINYE_ID,
+      userId: OWNER,
+      body: 'halo samabas',
+    });
+    expect(r.markLemmaLinksStale).not.toHaveBeenCalled();
+    expect(activityEvents.safe).not.toHaveBeenCalled();
   });
 
   it('bukan owner → Forbidden', async () => {

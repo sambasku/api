@@ -252,7 +252,10 @@ function jinyeImageCount(images: unknown): number {
 }
 
 /**
- * Copy Jinye dari payload beku atau kolom JOIN (event lama).
+ * Copy Jinye: untuk `jinye_created` / `jinye_quote_created` utamakan kolom JOIN
+ * live supaya edit body langsung konsisten di feed beranda & profil (#337);
+ * fallback ke payload beku hanya bila kolom JOIN kosong. Kind lain
+ * (`jinye_comment_created`, `jinye_reposted`) tetap pakai payload beku.
  * Hanya kind jinye_* - jangan ambil payload kind lain (mis. word_verified
  * "#56 Memverifikasi usulan X: {lemma}") atau placeholder lemma tak tersubstitusi.
  */
@@ -264,16 +267,23 @@ function jinyeCopyFromRow(
   >,
 ): string | null {
   if (!kind.startsWith('jinye_')) return null;
+  if (kind === 'jinye_created' || kind === 'jinye_quote_created') {
+    const hasJoined =
+      row.jinyeBody !== null ||
+      row.jinyeQuoteBody !== null ||
+      row.jinyeAudioUrl !== null ||
+      jinyeImageCount(row.jinyeImages) > 0;
+    if (hasJoined) {
+      return jinyeFeedPayload({
+        body: row.jinyeBody,
+        quoteBody: kind === 'jinye_quote_created' ? row.jinyeQuoteBody : null,
+        imageCount: jinyeImageCount(row.jinyeImages),
+        hasAudio: !!row.jinyeAudioUrl?.trim(),
+      });
+    }
+  }
   const frozen = row.payload?.trim();
   if (frozen) return frozen;
-  if (kind === 'jinye_created' || kind === 'jinye_quote_created') {
-    return jinyeFeedPayload({
-      body: row.jinyeBody,
-      quoteBody: kind === 'jinye_quote_created' ? row.jinyeQuoteBody : null,
-      imageCount: jinyeImageCount(row.jinyeImages),
-      hasAudio: !!row.jinyeAudioUrl?.trim(),
-    });
-  }
   return null;
 }
 

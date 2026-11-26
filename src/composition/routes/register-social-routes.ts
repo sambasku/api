@@ -648,6 +648,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.auditRepo,
       di.commentBlocklistRepo,
       di.recordAbuseSignal,
+      di.activityEvents,
     ),
     editHistory: new GetJinyeEditHistoryUseCase(jinyeRepo),
     repost: new RepostJinyeUseCase(jinyeRepo, di.auditRepo, di.activityEvents),
