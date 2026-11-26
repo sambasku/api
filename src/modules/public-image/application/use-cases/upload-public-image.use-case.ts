@@ -10,6 +10,7 @@ import {
   buildStickerImagePath,
   buildCommunityImagePath,
   buildKaryaImagePath,
+  buildAchievementLottiePath,
   buildUsahaImagePath,
   buildWordImagePath,
 } from '../utils/public-image-path';
