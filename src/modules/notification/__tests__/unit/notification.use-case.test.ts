@@ -146,3 +146,45 @@ describe('MarkNotificationReadUseCase', () => {
     });
   });
 });
+
+describe('RecordInboxNotificationUseCase.executeIfNew', () => {
+  const cmd = {
+    userId: '01AUTHORULID0000000000001',
+    type: 'article_clap' as const,
+    targetKind: 'article' as const,
+    targetId: '01ARTICLE:01ACTOR',
+    actorId: '01ACTORULID00000000000001',
+  };
+
+  it('true bila baris baru ter-insert', async () => {
+    const notificationRepo = repo({ createMany: vi.fn().mockResolvedValue(1) });
+    const useCase = new RecordInboxNotificationUseCase(notificationRepo);
+    await expect(useCase.executeIfNew(cmd)).resolves.toBe(true);
+    expect(notificationRepo.createMany).toHaveBeenCalledWith([
+      expect.objectContaining({ userId: cmd.userId, targetId: cmd.targetId }),
+    ]);
+  });
+
+  it('false bila baris sudah ada (conflict do nothing)', async () => {
+    const notificationRepo = repo({ createMany: vi.fn().mockResolvedValue(0) });
+    const useCase = new RecordInboxNotificationUseCase(notificationRepo);
+    await expect(useCase.executeIfNew(cmd)).resolves.toBe(false);
+  });
+
+  it('false tanpa insert untuk self, anonim, importer', async () => {
+    const notificationRepo = repo();
+    const useCase = new RecordInboxNotificationUseCase(notificationRepo);
+    await expect(useCase.executeIfNew({ ...cmd, actorId: cmd.userId })).resolves.toBe(false);
+    await expect(useCase.executeIfNew({ ...cmd, userId: ANONIM_USER_ID })).resolves.toBe(false);
+    await expect(useCase.executeIfNew({ ...cmd, userId: CSV_IMPORTER_USER_ID })).resolves.toBe(false);
+    expect(notificationRepo.createMany).not.toHaveBeenCalled();
+  });
+
+  it('false bila insert gagal (best-effort)', async () => {
+    const notificationRepo = repo({ createMany: vi.fn().mockRejectedValue(new Error('boom')) });
+    const useCase = new RecordInboxNotificationUseCase(notificationRepo);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(useCase.executeIfNew(cmd)).resolves.toBe(false);
+    spy.mockRestore();
+  });
+});

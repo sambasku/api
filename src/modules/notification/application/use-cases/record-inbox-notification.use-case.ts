@@ -84,6 +84,51 @@ export class RecordInboxNotificationUseCase {
   }
 
   /**
+   * Insert idempotent (ON CONFLICT DO NOTHING). Return true hanya bila baris
+   * baru benar-benar tertulis; false bila sudah ada, dilewati, atau gagal.
+   * Dipakai caller yang mau push hanya sekali per kejadian (mis. clap #345).
+   */
+  async executeIfNew(cmd: RecordInboxNotificationCommand): Promise<boolean> {
+    if (
+      !cmd.userId ||
+      cmd.userId === ANONIM_USER_ID ||
+      cmd.userId === CSV_IMPORTER_USER_ID
+    ) {
+      return false;
+    }
+    if (cmd.actorId && cmd.actorId === cmd.userId) return false;
+
+    const copy = inboxCopyFor(cmd.type);
+    try {
+      const inserted = await this.notificationRepo.createMany([
+        {
+          userId: cmd.userId,
+          type: cmd.type,
+          title: cmd.title?.trim() ? cmd.title.trim() : copy.title,
+          body: cmd.body?.trim() ? cmd.body.trim() : copy.body,
+          bodyType: cmd.bodyType ?? copy.bodyType,
+          targetKind: cmd.targetKind,
+          targetId: cmd.targetId,
+          actionKind: cmd.actionKind ?? null,
+          actionValue: cmd.actionValue ?? null,
+        },
+      ]);
+      return inserted > 0;
+    } catch (err) {
+      logError(
+        {
+          user_id: cmd.userId,
+          type: cmd.type,
+          target_id: cmd.targetId,
+          error: collectMessages(err).join(' | '),
+        },
+        'inbox notification insert failed',
+      );
+      return false;
+    }
+  }
+
+  /**
    * Versi batch dari execute() untuk jalur award scan: satu INSERT
    * multi-baris (createMany) = 1 subrequest, bukan 1 per penerima.
    * Aksi sendiri tidak relevan di sini (tidak ada actor). Best-effort

@@ -48,7 +48,10 @@ function makeRepo(overrides: Partial<ArticleRepository> = {}) {
 describe('SetArticleClapCountUseCase notify', () => {
   it('clap naik → inbox + push ke author', async () => {
     const repo = makeRepo();
-    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const inbox = {
+      execute: vi.fn().mockResolvedValue(undefined),
+      executeIfNew: vi.fn().mockResolvedValue(true),
+    };
     const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
     const userRepo = {
       findById: vi.fn().mockResolvedValue({
@@ -70,16 +73,15 @@ describe('SetArticleClapCountUseCase notify', () => {
 
     await uc.execute(ACTOR, ARTICLE_ID, 3);
 
-    expect(inbox.execute).toHaveBeenCalledWith(
+    expect(inbox.executeIfNew).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: AUTHOR,
         type: 'article_clap',
         targetKind: 'article',
-        targetId: ARTICLE_ID,
+        targetId: `${ARTICLE_ID}:${ACTOR}`,
         actorId: ACTOR,
         actionKind: 'article',
         actionValue: 'sejarah-istana',
-        refreshOnConflict: true,
       }),
     );
     expect(notifyUser.execute).toHaveBeenCalledWith(
@@ -100,7 +102,10 @@ describe('SetArticleClapCountUseCase notify', () => {
       getUserClapCount: vi.fn().mockResolvedValue(5),
       setClapCount: vi.fn().mockResolvedValue({ myCount: 2, clapTotal: 2 }),
     });
-    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const inbox = {
+      execute: vi.fn().mockResolvedValue(undefined),
+      executeIfNew: vi.fn().mockResolvedValue(true),
+    };
     const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
     const uc = new SetArticleClapCountUseCase(
       repo,
@@ -111,13 +116,16 @@ describe('SetArticleClapCountUseCase notify', () => {
 
     await uc.execute(ACTOR, ARTICLE_ID, 2);
 
-    expect(inbox.execute).not.toHaveBeenCalled();
+    expect(inbox.executeIfNew).not.toHaveBeenCalled();
     expect(notifyUser.execute).not.toHaveBeenCalled();
   });
 
   it('author clap sendiri → tidak notif', async () => {
     const repo = makeRepo();
-    const inbox = { execute: vi.fn().mockResolvedValue(undefined) };
+    const inbox = {
+      execute: vi.fn().mockResolvedValue(undefined),
+      executeIfNew: vi.fn().mockResolvedValue(true),
+    };
     const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
     const uc = new SetArticleClapCountUseCase(
       repo,
@@ -128,7 +136,58 @@ describe('SetArticleClapCountUseCase notify', () => {
 
     await uc.execute(AUTHOR, ARTICLE_ID, 2);
 
-    expect(inbox.execute).not.toHaveBeenCalled();
+    expect(inbox.executeIfNew).not.toHaveBeenCalled();
     expect(notifyUser.execute).not.toHaveBeenCalled();
+  });
+
+  it('clap kedua user yang sama (baris sudah ada) → tanpa push', async () => {
+    const repo = makeRepo({
+      getUserClapCount: vi.fn().mockResolvedValue(3),
+      setClapCount: vi.fn().mockResolvedValue({ myCount: 5, clapTotal: 5 }),
+    });
+    const inbox = {
+      executeIfNew: vi.fn().mockResolvedValue(false),
+    };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const pushCooldown = {
+      maySend: vi.fn().mockResolvedValue(true),
+      touchAfterSend: vi.fn().mockResolvedValue(undefined),
+    };
+    const uc = new SetArticleClapCountUseCase(
+      repo,
+      undefined,
+      inbox as never,
+      notifyUser as never,
+      pushCooldown as never,
+    );
+
+    await uc.execute(ACTOR, ARTICLE_ID, 5);
+
+    expect(inbox.executeIfNew).toHaveBeenCalledTimes(1);
+    expect(notifyUser.execute).not.toHaveBeenCalled();
+    expect(pushCooldown.touchAfterSend).not.toHaveBeenCalled();
+  });
+
+  it('dua clapper berbeda → dua target_id inbox terpisah', async () => {
+    const repo = makeRepo();
+    const inbox = { executeIfNew: vi.fn().mockResolvedValue(true) };
+    const notifyUser = { execute: vi.fn().mockResolvedValue(undefined) };
+    const uc = new SetArticleClapCountUseCase(
+      repo,
+      undefined,
+      inbox as never,
+      notifyUser as never,
+    );
+
+    await uc.execute(ACTOR, ARTICLE_ID, 1);
+    await uc.execute('01OTHERULID00000000000001', ARTICLE_ID, 1);
+
+    const ids = inbox.executeIfNew.mock.calls.map(
+      (c) => (c[0] as { targetId: string }).targetId,
+    );
+    expect(ids).toEqual([
+      `${ARTICLE_ID}:${ACTOR}`,
+      `${ARTICLE_ID}:01OTHERULID00000000000001`,
+    ]);
   });
 });

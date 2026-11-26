@@ -706,7 +706,8 @@ function articleClapBody(displayName: string, title: string): string {
 
 /**
  * Set clap user pada artikel (0..50). Saat count naik, inbox + push ke
- * author (best-effort). Push di-throttle per author lewat gate opsional.
+ * author hanya untuk clap pertama user itu pada artikel (per user, bukan per
+ * clap; best-effort). Push di-throttle per author lewat gate opsional.
  */
 export class SetArticleClapCountUseCase {
   constructor(
@@ -771,22 +772,24 @@ export class SetArticleClapCountUseCase {
       const title = ARTICLE_CLAP_TITLE;
       const body = articleClapBody(displayName, article.title.trim() || 'artikel');
 
+      // Sekali per clapper per artikel (#345): target_id komposit + insert
+      // do-nothing. Clap berikutnya / re-clap dari 0 = baris ada = tanpa push.
+      let isFirstClap = true;
       if (this.inbox) {
-        await this.inbox.execute({
+        isFirstClap = await this.inbox.executeIfNew({
           userId: article.authorUserId,
           type: 'article_clap',
           targetKind: 'article',
-          targetId: article.id,
+          targetId: `${article.id}:${input.actorId}`,
           actorId: input.actorId,
           title,
           body,
-          refreshOnConflict: true,
           actionKind: 'article',
           actionValue: article.slug,
         });
       }
 
-      if (this.notifyUser) {
+      if (this.notifyUser && isFirstClap) {
         const maySend =
           !this.pushCooldown || (await this.pushCooldown.maySend(article.authorUserId));
         if (maySend) {
