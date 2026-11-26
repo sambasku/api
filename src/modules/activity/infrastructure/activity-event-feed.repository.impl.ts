@@ -221,10 +221,10 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'place_comment_created',
     'usaha_comment_created',
     'cuisine_comment_created',
+    'jinye_comment_created',
   ],
   jinye: [
     'jinye_created',
-    'jinye_comment_created',
     'jinye_reposted',
     'jinye_quote_created',
   ],

@@ -6,10 +6,12 @@ import {
 } from '@/modules/search-miss/domain/quality-gate';
 import type {
   HotCheckItem,
+  HotCommentedItem,
   HotProposedItem,
   HotSearchedItem,
   HotTopicTabMeta,
   HotTopicsResult,
+  HotVerifiedItem,
   HotViewedItem,
 } from '../domain/hot-topic.entity';
 import type { HotTopicsRepository } from '../domain/hot-topics.repository';
@@ -41,7 +43,7 @@ function takeSafe<T extends { inWindow: boolean }>(
 }
 
 /**
- * G4/G6: kartu Sorotan Home - empat tab dalam satu response.
+ * G4/G6: kartu Sorotan Home - enam tab dalam satu response.
  * Setelah fetch: saring blocklist + quality (term/lemma) supaya
  * seksual / diskriminatif / kata diblokir tidak tampil di kartu.
  */
@@ -63,6 +65,8 @@ export class ListHotTopicsUseCase {
       ...raw.proposed.items.map((i) => i.lemma),
       ...raw.viewed.items.map((i) => i.lemma),
       ...raw.check.items.map((i) => i.lemma),
+      ...raw.verified.items.map((i) => i.lemma),
+      ...raw.commented.items.map((i) => i.lemma),
     ];
     const tokenSet = new Set<string>();
     for (const text of texts) {
@@ -89,6 +93,8 @@ export class ListHotTopicsUseCase {
       proposed: takeSafe(raw.proposed.items, limit, (i: HotProposedItem) => !isBlockedText(i.lemma)),
       viewed: takeSafe(raw.viewed.items, limit, (i: HotViewedItem) => !isBlockedText(i.lemma)),
       check: takeSafe(raw.check.items, limit, (i: HotCheckItem) => !isBlockedText(i.lemma)),
+      verified: takeSafe(raw.verified.items, limit, (i: HotVerifiedItem) => !isBlockedText(i.lemma)),
+      commented: takeSafe(raw.commented.items, limit, (i: HotCommentedItem) => !isBlockedText(i.lemma)),
     };
   }
 }

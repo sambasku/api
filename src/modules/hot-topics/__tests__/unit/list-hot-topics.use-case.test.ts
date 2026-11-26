@@ -9,6 +9,8 @@ const empty: HotTopicsResult = {
   proposed: { items: [], meta: emptyMeta },
   viewed: { items: [], meta: emptyMeta },
   check: { items: [], meta: emptyMeta },
+  verified: { items: [], meta: emptyMeta },
+  commented: { items: [], meta: emptyMeta },
 };
 
 describe('ListHotTopicsUseCase', () => {
@@ -27,7 +29,7 @@ describe('ListHotTopicsUseCase', () => {
     expect(listAllTabs).toHaveBeenCalledWith(3);
   });
 
-  it('menyaring Dicari + Usulan + Hits + Cek lewat wordlist', async () => {
+  it('menyaring Dicari + Usulan + Hits + Cek + Verif + Komen lewat wordlist', async () => {
     const listAllTabs = vi.fn().mockResolvedValue({
       searched: {
         items: [
@@ -111,6 +113,46 @@ describe('ListHotTopicsUseCase', () => {
         ],
         meta: emptyMeta,
       },
+      verified: {
+        items: [
+          {
+            kind: 'word_verified',
+            wordId: 'w-spam',
+            lemma: 'spam',
+            verifiedAt: new Date(),
+            inWindow: true,
+          },
+          {
+            kind: 'word_verified',
+            wordId: 'w-ok',
+            lemma: 'nganga',
+            verifiedAt: new Date(),
+            inWindow: true,
+          },
+        ],
+        meta: emptyMeta,
+      },
+      commented: {
+        items: [
+          {
+            kind: 'word_commented',
+            wordId: 'w-spam',
+            lemma: 'spam',
+            commentCount: 4,
+            lastCommentedAt: new Date(),
+            inWindow: true,
+          },
+          {
+            kind: 'word_commented',
+            wordId: 'w-ok',
+            lemma: 'nganga',
+            commentCount: 2,
+            lastCommentedAt: new Date(),
+            inWindow: true,
+          },
+        ],
+        meta: emptyMeta,
+      },
     } satisfies HotTopicsResult);
     const blocklist = {
       findActiveWordSet: vi.fn().mockResolvedValue(new Set(['spam'])),
@@ -125,6 +167,8 @@ describe('ListHotTopicsUseCase', () => {
     expect(result.proposed.items.map((i) => i.lemma)).toEqual(['nganga']);
     expect(result.viewed.items).toHaveLength(0);
     expect(result.check.items.map((i) => i.lemma)).toEqual(['nganga']);
+    expect(result.verified.items.map((i) => i.lemma)).toEqual(['nganga']);
+    expect(result.commented.items.map((i) => i.lemma)).toEqual(['nganga']);
     expect(blocklist.findActiveWordSet).toHaveBeenCalled();
   });
 });

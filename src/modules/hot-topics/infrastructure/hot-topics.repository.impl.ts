@@ -1,5 +1,6 @@
-import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import {
+  comments,
   contributions,
   meaningTranslations,
   meanings,
@@ -14,10 +15,12 @@ import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
 import type {
   HotCheckItem,
+  HotCommentedItem,
   HotProposedItem,
   HotSearchedItem,
   HotTopicTabMeta,
   HotTopicsResult,
+  HotVerifiedItem,
   HotViewedItem,
 } from '../domain/hot-topic.entity';
 import type { HotTopicsRepository } from '../domain/hot-topics.repository';
@@ -85,14 +88,16 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
     const windowStart = new Date(now - WINDOW_MS);
     const backfillStart = new Date(now - BACKFILL_MS);
 
-    const [searched, proposed, viewed, check] = await Promise.all([
+    const [searched, proposed, viewed, check, verified, commented] = await Promise.all([
       this.listSearched(limit, windowStart, backfillStart),
       this.listProposed(limit, windowStart, backfillStart),
       this.listViewed(limit),
       this.listCheck(limit, windowStart, backfillStart),
+      this.listVerified(limit, windowStart),
+      this.listCommented(limit, windowStart, backfillStart),
     ]);
 
-    return { searched, proposed, viewed, check };
+    return { searched, proposed, viewed, check, verified, commented };
   }
 
   private async listSearched(
@@ -342,6 +347,103 @@ export class HotTopicsRepositoryImpl implements HotTopicsRepository {
     }
 
     const items = [...windowItems, ...backfillItems];
+    const inWindowCount = items.filter((i) => i.inWindow).length;
+    return { items, meta: tabMeta(inWindowCount, items.length) };
+  }
+
+  /**
+   * Chip Verif: lemma published yang baru diverifikasi.
+   * Satu query, tanpa filter jendela keras (urut verified_at DESC, id DESC);
+   * `inWindow` = verified dalam 24 jam terakhir.
+   */
+  private async listVerified(
+    limit: number,
+    windowStart: Date,
+  ): Promise<{ items: HotVerifiedItem[]; meta: HotTopicTabMeta }> {
+    const rows = await this.db
+      .select({
+        wordId: words.id,
+        lemma: words.lemma,
+        verifiedAt: words.verifiedAt,
+      })
+      .from(words)
+      .where(
+        and(
+          eq(words.status, 'published'),
+          isNull(words.deletedAt),
+          isNotNull(words.verifiedAt),
+          ...withoutExcludedUsageLabels(),
+        ),
+      )
+      .orderBy(desc(words.verifiedAt), desc(words.id))
+      .limit(limit * 3);
+
+    // Pool oversized: use case saring blocklist lalu potong ke `limit`.
+    const items: HotVerifiedItem[] = [];
+    for (const r of rows) {
+      if (!r.verifiedAt) continue;
+      items.push({
+        kind: 'word_verified',
+        wordId: r.wordId,
+        lemma: r.lemma,
+        verifiedAt: r.verifiedAt,
+        inWindow: r.verifiedAt.getTime() >= windowStart.getTime(),
+      });
+    }
+    const inWindowCount = items.filter((i) => i.inWindow).length;
+    return { items, meta: tabMeta(inWindowCount, items.length) };
+  }
+
+  /**
+   * Chip Komen: lemma dengan komentar published terbaru.
+   * Satu agregat di `comments` (JOIN words), kandidat 7 hari terakhir;
+   * `commentCount` = jumlah komentar published dalam 7 hari itu,
+   * `lastCommentedAt` = max(created_at). `inWindow` = komentar terakhir
+   * dalam 24 jam. Kolom comments.created_at = unix detik.
+   */
+  private async listCommented(
+    limit: number,
+    windowStart: Date,
+    backfillStart: Date,
+  ): Promise<{ items: HotCommentedItem[]; meta: HotTopicTabMeta }> {
+    const countExpr = sql<number>`count(*)`.mapWith(Number);
+    const lastSecExpr = sql<number>`max(${comments.createdAt})`.mapWith(Number);
+
+    const rows = await this.db
+      .select({
+        wordId: comments.wordId,
+        lemma: words.lemma,
+        commentCount: countExpr,
+        lastSec: lastSecExpr,
+      })
+      .from(comments)
+      .innerJoin(words, eq(words.id, comments.wordId))
+      .where(
+        and(
+          eq(comments.status, 'published'),
+          isNull(comments.deletedAt),
+          gte(comments.createdAt, backfillStart),
+          eq(words.status, 'published'),
+          isNull(words.deletedAt),
+          ...withoutExcludedUsageLabels(),
+        ),
+      )
+      .groupBy(comments.wordId, words.lemma)
+      .orderBy(sql`${lastSecExpr} desc`, sql`${countExpr} desc`)
+      .limit(limit * 3);
+
+    // Pool oversized: use case saring blocklist lalu potong ke `limit`.
+    const items: HotCommentedItem[] = rows.map((r) => {
+      const last = new Date(r.lastSec * 1000);
+      return {
+        kind: 'word_commented',
+        wordId: r.wordId,
+        lemma: r.lemma,
+        commentCount: r.commentCount,
+        lastCommentedAt: last,
+        inWindow: last.getTime() >= windowStart.getTime(),
+      };
+    });
     const inWindowCount = items.filter((i) => i.inWindow).length;
     return { items, meta: tabMeta(inWindowCount, items.length) };
   }
