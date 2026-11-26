@@ -12,7 +12,11 @@ import {
   SetEventCancelledUseCase,
   UpdateEventUseCase,
 } from "../../application/use-cases/event.use-cases";
-import { occurrenceStatus } from "../../domain/entities/event.entity";
+import {
+  eventDateReached,
+  eventGoingActivityBody,
+  occurrenceStatus,
+} from "../../domain/entities/event.entity";
 import type { EventRepository } from "../../domain/repositories/event.repository";
 import type { RegionRepository } from "@/modules/region/domain/repositories/region.repository";
 
@@ -107,6 +111,47 @@ describe("occurrenceStatus", () => {
         new Date("2026-10-01T10:00:00Z"),
       ),
     ).toBe("completed");
+  });
+});
+
+describe("eventDateReached", () => {
+  // 2026-10-01T09:00:00Z = 16:00 WIB tanggal 1 Okt.
+  const startsAt = new Date("2026-10-01T09:00:00Z");
+
+  it("sehari sebelum tanggal acara", () => {
+    expect(eventDateReached(startsAt, new Date("2026-09-30T16:00:00Z"))).toBe(
+      false,
+    );
+  });
+
+  it("pagi hari-H masih upcoming by jam, tapi tanggal sudah tiba", () => {
+    const morning = new Date("2026-10-01T01:00:00Z");
+    expect(occurrenceStatus({ startsAt, endsAt: null, cancelledAt: null }, morning)).toBe(
+      "upcoming",
+    );
+    expect(eventDateReached(startsAt, morning)).toBe(true);
+  });
+
+  it("sehari sesudah", () => {
+    expect(eventDateReached(startsAt, new Date("2026-10-02T00:00:00Z"))).toBe(
+      true,
+    );
+  });
+
+  it("startsAt null = belum", () => {
+    expect(eventDateReached(null, new Date("2026-10-01T01:00:00Z"))).toBe(false);
+  });
+
+  it("kalimat feed ganti tense dan nama kosong", () => {
+    expect(
+      eventGoingActivityBody("Pawai", startsAt, new Date("2026-09-30T16:00:00Z")),
+    ).toBe('Berencana hadir di "Pawai"');
+    expect(
+      eventGoingActivityBody("Pawai", startsAt, new Date("2026-10-01T01:00:00Z")),
+    ).toBe('Hadir di "Pawai"');
+    expect(
+      eventGoingActivityBody("  ", startsAt, new Date("2026-09-30T16:00:00Z")),
+    ).toBe("Berencana hadir di acara");
   });
 });
 

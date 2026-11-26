@@ -12,6 +12,7 @@ import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { ActivityItem, ActivityKind } from '../domain/entities/activity-item.entity';
+import { eventGoingActivityBody } from '@/modules/event/domain/entities/event.entity';
 import { snippetActivityBody } from '../application/utils/activity-body-snippet';
 import type { ActivityEventKind } from '../domain/entities/activity-event.entity';
 import { jinyeFeedPayload } from '../application/utils/activity-body-snippet';
@@ -135,7 +136,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   place_visited: 'Pernah singgah di wisata',
   place_comment_created: 'Mengomentari wisata',
   event_published: 'Menambahkan acara',
-  event_going: 'Berencana datang ke acara',
+  event_going: 'Berencana hadir di acara',
   event_comment_created: 'Mengomentari acara',
 pantun_created: 'Menulis pantun',
 pantun_reply_created: 'Membalas pantun',
@@ -388,6 +389,8 @@ interface FeedRow {
   /** Acara untuk event_published (LEFT JOIN events, published saja). */
   eventSlug: string | null;
   eventName: string | null;
+  /** Jadwal acara untuk tense `event_going` (WIB, read-time). */
+  eventStartsAt: Date | null;
   /**
    * Kuliner untuk cuisine_published (LEFT JOIN cuisines, published saja).
    * Tempat jual kuliner = usaha (bukan culinary_places; dihapus migrasi 0184).
@@ -496,17 +499,23 @@ export class ActivityEventFeedRepositoryImpl {
             : null;
       const jinyeCopy = jinyeCopyFromRow(kind, row);
       const frozen = row.payload?.trim() || null;
+      const goingBody =
+        kind === 'event_going'
+          ? eventGoingActivityBody(row.eventName, row.eventStartsAt)
+          : null;
       items.push({
         id: row.id,
         kind: profileKind,
         occurredAt: row.occurredAt,
         wordId: jinyeTargetId ?? row.targetWordId,
         lemma,
-        summary: jinyeCopy
-          ? jinyeCopy
-          : frozen
-            ? this.applyLemmaPlaceholder(frozen, lemma)
-            : this.publicSummary(kind, lemma, row.targetId, voteValue),
+        summary: goingBody
+          ? goingBody
+          : jinyeCopy
+            ? jinyeCopy
+            : frozen
+              ? this.applyLemmaPlaceholder(frozen, lemma)
+              : this.publicSummary(kind, lemma, row.targetId, voteValue),
       });
     }
     return {
@@ -588,7 +597,7 @@ export class ActivityEventFeedRepositoryImpl {
     case 'event_published':
       return 'Menambahkan acara';
     case 'event_going':
-      return q ? `Berencana datang ke ${q}`.trim() : 'Berencana datang ke acara';
+      return 'Berencana hadir di acara';
     case 'event_comment_created':
       return 'Mengomentari acara';
     case 'karya_comment_created':
@@ -755,6 +764,7 @@ export class ActivityEventFeedRepositoryImpl {
       articleCommentImageUrl: articleComments.imageUrl,
       eventSlug: events.slug,
       eventName: events.name,
+      eventStartsAt: events.startsAt,
       cuisineSlug: cuisines.slug,
       cuisineName: cuisines.name,
 wordCommentBody: comments.body,
@@ -1298,18 +1308,24 @@ sql`(${activityEvents.kind} <> 'search_miss' or not exists (
     // Body wire announcement diisi setelah parse di bawah.
     const isAnnouncement = kind === 'announcement';
     const jinyeCopy = jinyeCopyFromRow(kind, row);
+    const goingBody =
+      kind === 'event_going'
+        ? eventGoingActivityBody(row.eventName, row.eventStartsAt)
+        : null;
     const joinedComment =
-      frozen === null && !jinyeCopy && COMMENT_FEED_BODY_KINDS.has(kind)
+      frozen === null && !jinyeCopy && !goingBody && COMMENT_FEED_BODY_KINDS.has(kind)
         ? liveCommentBodyFromRow(kind, row)
         : null;
     const body =
       isAnnouncement
         ? ''
-        : jinyeCopy
-          ? jinyeCopy
-          : frozen !== null
-            ? this.applyLemmaPlaceholder(frozen, lemma)
-            : joinedComment ?? this.bodyFor(kind, lemma);
+        : goingBody
+          ? goingBody
+          : jinyeCopy
+            ? jinyeCopy
+            : frozen !== null
+              ? this.applyLemmaPlaceholder(frozen, lemma)
+              : joinedComment ?? this.bodyFor(kind, lemma);
 const subtitle =
 kind === 'place_photo_added' || kind === 'place_published' || kind === 'place_visited'
 ? row.placeName

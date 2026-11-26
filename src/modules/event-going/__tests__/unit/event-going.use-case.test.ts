@@ -27,7 +27,7 @@ function repoMock(over: Partial<EventGoingRepository> = {}): EventGoingRepositor
 }
 
 describe('MarkEventGoingUseCase', () => {
-  it('menolak acara sebelum hari-H (upcoming)', async () => {
+  it('menerima acara sebelum hari-H (upcoming)', async () => {
     const repo = repoMock({
       findPublishedEvent: vi.fn().mockResolvedValue({
         id: '01EVENTGOINGTEST000000001',
@@ -38,10 +38,13 @@ describe('MarkEventGoingUseCase', () => {
         startsAt: new Date(Date.now() + 86_400_000),
         endsAt: new Date(Date.now() + 90_000_000),
       }),
+      viewerGoingByEventIds: vi.fn().mockResolvedValue(new Set()),
     });
-    await expect(
-      new MarkEventGoingUseCase(repo).execute('user1', '01EVENTGOINGTEST000000001'),
-    ).rejects.toMatchObject({ errorCode: 'EVENT_NOT_STARTED' });
+    const result = await new MarkEventGoingUseCase(repo).execute(
+      'user1',
+      '01EVENTGOINGTEST000000001',
+    );
+    expect(result.viewerGoing).toBe(true);
   });
 
   it('menerima acara sudah selesai (completed)', async () => {
