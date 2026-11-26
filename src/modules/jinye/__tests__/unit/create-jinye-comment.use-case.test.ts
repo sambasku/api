@@ -280,7 +280,7 @@ describe('CreateJinyeCommentUseCase', () => {
       { record: vi.fn() } as never,
       { listAllActiveWords: vi.fn(async () => []) },
     );
-    const url = 'https://ik.example.com/jinye/c.jpg';
+    const url = 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/jinye/01JINYECOMMENT.jpg';
     await uc.execute({
       jinyeId: JINYE_ID,
       userId: ACTOR,
@@ -288,7 +288,7 @@ describe('CreateJinyeCommentUseCase', () => {
       images: [
         {
           url,
-          providerFileId: 'file1',
+          providerFileId: 'assets/jinye/01JINYECOMMENT.jpg',
           publicUrl: null,
           contentWarnings: [],
         },

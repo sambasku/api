@@ -82,6 +82,8 @@ export function toWordImage(row: typeof wordImages.$inferSelect): WordImageMedia
     status: row.status as ChildStatus,
     isVerified: row.isVerified,
     isCorrected: row.isCorrected,
+    sourceType: row.sourceType ?? null,
+    sourceReference: row.sourceReference ?? null,
   };
 }
 

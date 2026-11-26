@@ -10,6 +10,7 @@ import {
   buildStickerImagePath,
   buildCommunityImagePath,
   buildKaryaImagePath,
+  buildJinyeImagePath,
   buildAchievementLottiePath,
   buildUsahaImagePath,
   buildWordImagePath,
@@ -30,6 +31,7 @@ export type PublicImagePurpose =
   | 'sticker'
   | 'community'
   | 'karya'
+  | 'jinye'
   | 'achievement';
 
 export interface UploadPublicImageResult {
@@ -63,6 +65,8 @@ function pathForPurpose(purpose: PublicImagePurpose, mimeType: string): string {
       return buildCommunityImagePath(mimeType);
     case 'karya':
       return buildKaryaImagePath(mimeType);
+    case 'jinye':
+      return buildJinyeImagePath(mimeType);
     case 'achievement':
       throw new Error('achievement purpose memakai path Lottie khusus');
     case 'word':

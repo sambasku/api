@@ -5,10 +5,13 @@ export interface WordImageUrlFields {
   provider?: string | null;
   isVerified?: boolean | null;
   providerFileId?: string | null;
+  /** `jinye` = salinan foto Jinye (GitHub) yang belum lolos review. */
+  sourceType?: string | null;
 }
 
 /**
- * Wire publik: staging ImageKit yang belum diverifikasi → placeholder.
+ * Wire publik: staging ImageKit atau salinan foto Jinye yang belum
+ * diverifikasi → placeholder.
  * Admin / antrean review memanggil dengan redact=false.
  */
 export function mapPublicWordImageUrl(
@@ -17,7 +20,7 @@ export function mapPublicWordImageUrl(
 ): { url: string; providerFileId: string } {
   const staging =
     opts.redactStaging &&
-    img.provider === 'imagekit' &&
+    (img.provider === 'imagekit' || img.sourceType === 'jinye') &&
     img.isVerified !== true;
 
   if (!staging) {

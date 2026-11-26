@@ -5,6 +5,7 @@ import {
   eq,
   inArray,
   isNull,
+  like,
   lt,
   ne,
   or,
@@ -1289,6 +1290,8 @@ memberLemma: string;
         contentWarnings: toContentWarnings(i.contentWarnings),
         attribution: i.attribution ?? null,
         isVerified: i.isVerified,
+        sourceType: i.sourceType ?? null,
+        sourceReference: i.sourceReference ?? null,
         ...(includeAll
           ? { status: i.status as ChildStatus, isCorrected: i.isCorrected }
           : {}),
@@ -2782,6 +2785,8 @@ memberLemma: string;
       attribution?: WordImageAttribution | null;
       status: ChildStatus;
       isVerified: boolean;
+      sourceType?: string | null;
+      sourceReference?: string | null;
     },
     actorId: string,
   ): Promise<WordImageMedia> {
@@ -2801,6 +2806,8 @@ memberLemma: string;
             attribution: data.attribution ?? null,
             status: data.status,
             isVerified: data.isVerified,
+            sourceType: data.sourceType ?? null,
+            sourceReference: data.sourceReference ?? null,
             createdBy: actorId,
           })
           .returning();
@@ -2817,6 +2824,45 @@ memberLemma: string;
       mapMediaViolation(err, 'provider_file_id');
       throw err;
     }
+  }
+
+  async findWordImageBySource(
+    wordId: string,
+    sourceType: string,
+    sourceReference: string,
+  ): Promise<WordImageMedia | null> {
+    const [row] = await this.db
+      .select()
+      .from(wordImages)
+      .where(
+        and(
+          eq(wordImages.wordId, wordId),
+          eq(wordImages.sourceType, sourceType),
+          eq(wordImages.sourceReference, sourceReference),
+          isNull(wordImages.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row ? toWordImage(row) : null;
+  }
+
+  async softDeleteWordImagesFromJinye(
+    jinyeId: string,
+    opts: { onlyUnverified: boolean },
+  ): Promise<WordImageMedia[]> {
+    const rows = await this.db
+      .update(wordImages)
+      .set({ deletedAt: new Date(), isPrimary: false, isVerified: false, status: 'rejected' })
+      .where(
+        and(
+          eq(wordImages.sourceType, 'jinye'),
+          like(wordImages.sourceReference, `${jinyeId}:%`),
+          isNull(wordImages.deletedAt),
+          ...(opts.onlyUnverified ? [eq(wordImages.isVerified, false)] : []),
+        ),
+      )
+      .returning();
+    return rows.map(toWordImage);
   }
 
   async setWordImageContentWarnings(

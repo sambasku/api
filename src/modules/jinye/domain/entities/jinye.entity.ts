@@ -13,6 +13,8 @@ export type JinyeImage = {
   providerFileId: string;
   publicUrl: string | null;
   contentWarnings: string[];
+  /** Blob sha GitHub (hapus file); null untuk ImageKit lama. */
+  sha?: string | null;
 };
 
 export type JinyeAudio = {
@@ -146,6 +148,15 @@ export interface JinyePromoteExampleResult {
   isVerified: boolean;
 }
 
+export interface JinyePromoteImageResult {
+  images: {
+    id: string;
+    url: string;
+    status: string;
+    isVerified: boolean;
+  }[];
+}
+
 export function toJinyeImages(rows: JinyeImageRow[] | null | undefined): JinyeImage[] {
   if (!Array.isArray(rows)) return [];
   return rows.map((r) => ({
@@ -153,6 +164,7 @@ export function toJinyeImages(rows: JinyeImageRow[] | null | undefined): JinyeIm
     providerFileId: r.provider_file_id,
     publicUrl: r.public_url ?? null,
     contentWarnings: Array.isArray(r.content_warnings) ? r.content_warnings : [],
+    sha: r.sha ?? null,
   }));
 }
 
@@ -162,5 +174,6 @@ export function toImageRows(images: JinyeImage[]): JinyeImageRow[] {
     provider_file_id: i.providerFileId,
     public_url: i.publicUrl,
     content_warnings: i.contentWarnings,
+    sha: i.sha ?? null,
   }));
 }

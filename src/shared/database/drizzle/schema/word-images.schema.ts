@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, index, unique } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, index, unique, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 import { words } from './words.schema';
 import { users } from './users.schema';
@@ -33,6 +34,10 @@ export const wordImages = sqliteTable(
     status: text('status').notNull().default('published'),
     isVerified: integer('is_verified', { mode: 'boolean' }).notNull().default(false),
     isCorrected: integer('is_corrected', { mode: 'boolean' }).notNull().default(false),
+    /** Asal foto (mis. `jinye`); null = upload langsung / stock. */
+    sourceType: text('source_type'),
+    /** `<jinyeId>:<providerFileId foto Jinye>` bila source_type=jinye. */
+    sourceReference: text('source_reference'),
     createdBy: text('created_by').references(() => users.id),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
@@ -41,5 +46,11 @@ export const wordImages = sqliteTable(
     // Per kata: foto stock yang sama boleh dipakai di banyak kata.
     unique('word_images_word_file_unique').on(t.wordId, t.provider, t.providerFileId),
     index('word_images_word_idx').on(t.wordId),
+    // Satu foto sumber hanya sekali per kata (race double-tap); baris
+    // ditolak/dibatalkan (deleted_at) tidak menghalangi promote ulang.
+    uniqueIndex('word_images_source_uidx')
+      .on(t.wordId, t.sourceType, t.sourceReference)
+      .where(sql`source_type IS NOT NULL AND deleted_at IS NULL`),
+    index('word_images_source_ref_idx').on(t.sourceType, t.sourceReference),
   ],
 );

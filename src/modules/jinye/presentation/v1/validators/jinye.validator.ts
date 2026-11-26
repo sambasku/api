@@ -14,6 +14,15 @@ const imageInputSchema = z.object({
     .min(1, 'Alamat gambar tidak valid'),
 });
 
+export const jinyeUploadImageResponseSchema = z.object({
+  data: z.object({
+    url: z.string().url(),
+    provider: z.string(),
+    provider_file_id: z.string(),
+    sha: z.string(),
+  }),
+});
+
 export const jinyeUploadTokenQuerySchema = z.object({
   folder: z
     .string({ error: 'Folder upload tidak valid' })
@@ -312,6 +321,29 @@ export const promoteJinyeExampleResponseSchema = z.object({
     word_audio_id: z.string().nullable(),
     status: z.string(),
     is_verified: z.boolean(),
+  }),
+});
+
+export const promoteJinyeImageBodySchema = z.object({
+  word_id: opaqueId,
+  /** `public_url` foto Jinye yang dipilih (1 sampai 4). */
+  image_urls: z
+    .array(z.string().trim().url('Alamat foto tidak valid'))
+    .min(1, 'Pilih minimal 1 foto')
+    .max(4, 'Maksimal 4 foto'),
+});
+export type PromoteJinyeImageBody = z.infer<typeof promoteJinyeImageBodySchema>;
+
+export const promoteJinyeImageResponseSchema = z.object({
+  data: z.object({
+    images: z.array(
+      z.object({
+        id: z.string(),
+        url: z.string(),
+        status: z.string(),
+        is_verified: z.boolean(),
+      }),
+    ),
   }),
 });
 

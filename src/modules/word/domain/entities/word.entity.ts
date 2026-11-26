@@ -141,6 +141,9 @@ export interface WordDetail extends Word {
     /** selalu diisi agar mapper publik bisa redact staging ImageKit */
     isVerified: boolean;
     isCorrected?: boolean;
+    /** Asal foto (`jinye` = hasil promote foto Jinye). */
+    sourceType?: string | null;
+    sourceReference?: string | null;
   }[];
   /** Audio pelafalan lemma (example_id IS NULL). Multi-take. */
   audios: {

@@ -2,6 +2,7 @@
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { AppVariables } from '@/shared/types';
 import * as di from '../container';
+import { env } from "@/shared/config/env";
 import { NotifyChatMentionsUseCase } from "@/modules/chat/application/use-cases/notify-chat-mentions.use-case";
 import { db } from "@/shared/database/drizzle/client";
 import { ListAuditLogsUseCase } from "@/modules/audit/application/use-cases/list-audit-logs.use-case";
@@ -107,6 +108,7 @@ import { CreateJinyeUseCase } from "@/modules/jinye/application/use-cases/create
 import { ListPublishedJinyeUseCase } from "@/modules/jinye/application/use-cases/list-published-jinye.use-case";
 import { GetJinyeDetailUseCase } from "@/modules/jinye/application/use-cases/get-jinye-detail.use-case";
 import { DeleteJinyeUseCase } from "@/modules/jinye/application/use-cases/delete-jinye.use-case";
+import { UploadPublicImageUseCase } from "@/modules/public-image/application/use-cases/upload-public-image.use-case";
 import { AttachJinyeAudioUseCase } from "@/modules/jinye/application/use-cases/attach-jinye-audio.use-case";
 import { CreateJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/create-jinye-comment.use-case";
 import { ListJinyeCommentsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-comments.use-case";
@@ -123,6 +125,7 @@ import { ListJinyeLemmaLinksUseCase } from "@/modules/jinye/application/use-case
 import { ProposeJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/propose-jinye-lemma-correction.use-case";
 import { ResolveJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-lemma-correction.use-case";
 import { DeleteJinyeLemmaLinkUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-lemma-link.use-case";
+import { PromoteJinyeImageUseCase } from "@/modules/jinye/application/use-cases/promote-jinye-image.use-case";
 import { PromoteJinyeExampleUseCase } from "@/modules/jinye/application/use-cases/promote-jinye-example.use-case";
 import { UpdateJinyeUseCase } from "@/modules/jinye/application/use-cases/update-jinye.use-case";
 import { CreateTranslationUseCase } from "@/modules/translation/application/use-cases/create-translation.use-case";
@@ -567,7 +570,12 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       requireLegalConsent: di.requireLegalConsent,
     }),
   );
-  const takedownJinye = new TakedownJinyeUseCase(jinyeRepo, di.auditRepo);
+  const takedownJinye = new TakedownJinyeUseCase(
+    jinyeRepo,
+    di.auditRepo,
+    di.wordRepo,
+    di.publicImageStorage,
+  );
   const takedownJinyeComment = new TakedownJinyeCommentUseCase(
     jinyeRepo,
     di.auditRepo,
@@ -599,6 +607,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.commentBlocklistRepo,
       di.recordAbuseSignal,
       di.activityEvents,
+      env.IMAGEKIT_URL_ENDPOINT,
     ),
     listPublished: new ListPublishedJinyeUseCase(jinyeRepo, di.userRepo),
     getDetail: new GetJinyeDetailUseCase(jinyeRepo),
@@ -607,12 +616,14 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.auditRepo,
       di.wordRepo,
       di.translationRepo,
+      di.publicImageStorage,
     ),
     attachAudio: new AttachJinyeAudioUseCase(
       jinyeRepo,
       di.pronunciationStorage,
       di.auditRepo,
     ),
+    uploadImage: new UploadPublicImageUseCase(di.publicImageStorage),
     createComment: new CreateJinyeCommentUseCase(
       jinyeRepo,
       di.auditRepo,
@@ -623,6 +634,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.recordInbox,
       di.notifyUser,
       di.stickerRepo,
+      env.IMAGEKIT_URL_ENDPOINT,
     ),
     listComments: new ListJinyeCommentsUseCase(jinyeRepo),
     deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, di.auditRepo),
@@ -638,6 +650,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.auditRepo,
       di.wordRepo,
       di.translationRepo,
+      di.publicImageStorage,
     ),
     unarchive: new UnarchiveJinyeUseCase(jinyeRepo, di.auditRepo),
     pin: new PinJinyeUseCase(jinyeRepo, di.auditRepo),
@@ -663,6 +676,13 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       jinyeRepo,
       di.wordRepo,
       di.auditRepo,
+    ),
+    promoteImage: new PromoteJinyeImageUseCase(
+      jinyeRepo,
+      di.wordRepo,
+      di.publicImageStorage,
+      di.auditRepo,
+      env.IMAGEKIT_URL_ENDPOINT,
     ),
     update: new UpdateJinyeUseCase(
       jinyeRepo,

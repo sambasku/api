@@ -92,3 +92,8 @@ export function buildCommunityImagePath(mimeType: string): string {
 export function buildKaryaImagePath(mimeType: string): string {
   return `assets/karyas/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path foto Jinye (post + komentar): assets/jinye/<ulid>.<ext> */
+export function buildJinyeImagePath(mimeType: string): string {
+  return `assets/jinye/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

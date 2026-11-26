@@ -8,6 +8,8 @@ export type JinyeImageRow = {
   provider_file_id: string;
   public_url?: string | null;
   content_warnings?: string[];
+  /** Blob sha GitHub; null/absen untuk baris ImageKit lama. */
+  sha?: string | null;
 };
 
 export const JINYE_STATUSES = [

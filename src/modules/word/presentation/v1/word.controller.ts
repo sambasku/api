@@ -626,6 +626,7 @@ export class WordController {
             provider: img.provider,
             isVerified: img.isVerified,
             providerFileId: img.providerFileId,
+            sourceType: img.sourceType,
           },
           { redactStaging: opts.redactStagingImages },
         );
@@ -635,11 +636,19 @@ export class WordController {
           // WAJIB untuk round-trip PUT edit (full-replace): tanpa ini form
           // edit tidak bisa mengirim ulang images[] → gambar terhapus senyap
           provider_file_id: mapped.providerFileId,
-          sha: opts.redactStagingImages && img.provider === 'imagekit' && img.isVerified !== true
-            ? null
-            : img.sha,
+          sha:
+            opts.redactStagingImages &&
+            (img.provider === 'imagekit' || img.sourceType === 'jinye') &&
+            img.isVerified !== true
+              ? null
+              : img.sha,
           alt_text: img.altText,
           is_primary: img.isPrimary,
+          // Foto lemma hasil promote Jinye: tautan balik ke Jinye sumber
+          source_jinye_id:
+            img.sourceType === 'jinye' && img.sourceReference
+              ? img.sourceReference.split(':')[0]
+              : null,
           content_warnings: img.contentWarnings ?? [],
           // Publik juga butuh is_verified agar klien blur/pending tanpa tebak placehold.co
           is_verified: img.isVerified ?? false,

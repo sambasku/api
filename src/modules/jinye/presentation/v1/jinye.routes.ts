@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import { createRoute } from '@hono/zod-openapi';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
@@ -21,12 +22,15 @@ import {
   jinyeIdParamSchema,
   jinyeLemmaLinkIdParamSchema,
   jinyeLemmaLinkResponseSchema,
+  jinyeUploadImageResponseSchema,
   jinyeUploadTokenQuerySchema,
   listJinyeCommentsResponseSchema,
   listJinyeLemmaLinksResponseSchema,
   listJinyeQuerySchema,
   listJinyeResponseSchema,
   promoteJinyeExampleBodySchema,
+  promoteJinyeImageBodySchema,
+  promoteJinyeImageResponseSchema,
   promoteJinyeExampleResponseSchema,
   proposeJinyeLemmaCorrectionBodySchema,
   quoteJinyeBodySchema,
@@ -128,6 +132,31 @@ const deleteRouteDef = createRoute({
   responses: {
     200: { description: 'OK', content: json(deleteJinyeResponseSchema) },
     404: { description: 'Not found', content: json(errorResponseSchema) },
+  },
+});
+
+const uploadImageRoute = createRoute({
+  method: 'post',
+  path: '/images',
+  tags: ['Jinye'],
+  summary: 'Unggah foto Jinye langsung ke repo GitHub (multipart `file`, login)',
+  request: {
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: z.object({
+            file: z.any().openapi({ type: 'string', format: 'binary' }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: { description: 'Foto tersimpan', content: json(jinyeUploadImageResponseSchema) },
+    400: { description: 'File/MIME tidak valid', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    503: { description: 'Storage gambar belum dikonfigurasi', content: json(errorResponseSchema) },
   },
 });
 
@@ -409,6 +438,28 @@ const promoteExampleRoute = createRoute({
   },
 });
 
+const promoteImageRoute = createRoute({
+  method: 'post',
+  path: '/{id}/promote-image',
+  tags: ['Jinye'],
+  summary: 'Ajukan foto Jinye jadi foto lemma (user login; user biasa masuk review)',
+  request: {
+    params: jinyeIdParamSchema,
+    body: { content: json(promoteJinyeImageBodySchema), required: true },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: json(promoteJinyeImageResponseSchema),
+    },
+    400: { description: 'Validation', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Jinye tidak ditemukan', content: json(errorResponseSchema) },
+    409: { description: 'Foto sudah diajukan', content: json(errorResponseSchema) },
+    429: { description: 'Rate limit', content: json(errorResponseSchema) },
+  },
+});
+
 const updateJinyeRoute = createRoute({
   method: 'patch',
   path: '/{id}',
@@ -512,6 +563,28 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     },
   });
 
+  const imageUploadLimit = rateLimit({
+    points: 60,
+    duration: 3600,
+    keyFn: (c) => {
+      const uid = (
+        c as { get: (k: 'user') => { user_id: string } | undefined }
+      ).get('user')?.user_id;
+      return uid ? `jinye-image-upload:${uid}` : '';
+    },
+  });
+
+  const promoteImageLimit = rateLimit({
+    points: 20,
+    duration: 3600,
+    keyFn: (c) => {
+      const uid = (
+        c as { get: (k: 'user') => { user_id: string } | undefined }
+      ).get('user')?.user_id;
+      return uid ? `jinye-promote-image:${uid}` : '';
+    },
+  });
+
   const writeClient = deps.requireApprovedClient
     ? [deps.requireApprovedClient]
     : [];
@@ -520,6 +593,25 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     : [];
 
   routes.use('/upload-token', deps.authenticate, ...writeClient, ...legalConsent, tokenUserLimit);
+  routes.use(
+    '/images',
+    deps.authenticate,
+    ...writeClient,
+    ...legalConsent,
+    imageUploadLimit,
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) =>
+        c.json(
+          {
+            success: false as const,
+            error_code: 'IMAGE_TOO_LARGE',
+            message: 'File gambar terlalu besar (maks 5 MB)',
+          },
+          400,
+        ),
+    }),
+  );
 
   routes.use('/', async (c, next) => {
     if (c.req.method === 'POST') return deps.authenticate(c, next);
@@ -707,6 +799,25 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     return writeLimit(c, next);
   });
 
+  routes.use('/:id/promote-image', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return deps.authenticate(c, next);
+  });
+  routes.use('/:id/promote-image', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireApprovedClient) return deps.requireApprovedClient(c, next);
+    return next();
+  });
+  routes.use('/:id/promote-image', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (deps.requireLegalConsent) return deps.requireLegalConsent(c, next);
+    return next();
+  });
+  routes.use('/:id/promote-image', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    return promoteImageLimit(c, next);
+  });
+
   // PATCH /:id edit body
   routes.use('/:id', async (c, next) => {
     if (c.req.method !== 'PATCH') return next();
@@ -748,6 +859,9 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
     });
   }
   routes.use('/archived', deps.authenticate);
+  routes.openapi(uploadImageRoute, (c) =>
+    deps.controller.uploadImage(c) as never,
+  );
   routes.openapi(uploadTokenRoute, (c) =>
     deps.controller.uploadCredentials(c, c.req.valid('query').folder) as never,
   );
@@ -812,6 +926,13 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
   });
   routes.openapi(promoteExampleRoute, (c) =>
     deps.controller.promoteExample(
+      c,
+      c.req.valid('param').id,
+      c.req.valid('json'),
+    ) as never,
+  );
+  routes.openapi(promoteImageRoute, (c) =>
+    deps.controller.promoteImage(
       c,
       c.req.valid('param').id,
       c.req.valid('json'),

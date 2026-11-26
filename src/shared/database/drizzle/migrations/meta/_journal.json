@@ -1401,6 +1401,13 @@
       "when": 1801680005000,
       "tag": "0200_wa_group_notify_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 200,
+      "version": "6",
+      "when": 1801680006000,
+      "tag": "0201_word_image_source",
+      "breakpoints": true
     }
   ]
 }

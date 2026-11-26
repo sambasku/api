@@ -91,6 +91,12 @@ export class ReviewContributionUseCase {
       );
     }
 
+    // Salinan foto Jinye (GitHub) ditolak: file dihapus SETELAH keputusan tersimpan.
+    const rejectedJinyeCopy =
+      contrib && cmd.decision === 'reject' && contrib.entityType === 'word_image'
+        ? await this.wordRepo.findWordImageById(contrib.entityId)
+        : null;
+
     const outcome = await this.contributionRepo.review({
       contributionId: cmd.contributionId,
       decision: cmd.decision,
@@ -102,6 +108,18 @@ export class ReviewContributionUseCase {
     // Soft-delete foto ditahan (stock + ImageKit) agar hilang dari GET publik.
     if (rejectedImageIds.length > 0) {
       await this.wordRepo.softDeleteWordImages(rejectedImageIds);
+    }
+
+    if (
+      rejectedJinyeCopy?.sourceType === 'jinye' &&
+      rejectedJinyeCopy.provider === 'github' &&
+      rejectedJinyeCopy.sha &&
+      !rejectedJinyeCopy.isVerified
+    ) {
+      await this.publicImageStorage.delete(
+        rejectedJinyeCopy.providerFileId,
+        rejectedJinyeCopy.sha,
+      );
     }
 
     // Approve kata → tutup sibling pending (ghost action=update dari correct

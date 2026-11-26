@@ -11,6 +11,7 @@ import { assertCanContribute } from '@/modules/word/application/utils/assert-can
 import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type { JinyeComment, JinyeImage } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
+import { isTrustedJinyeImage } from '../utils/jinye-image-trust';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import { commentFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
 
@@ -50,6 +51,8 @@ export class CreateJinyeCommentUseCase {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly stickerRepo?: StickerRepository,
+    /** IMAGEKIT_URL_ENDPOINT: host ImageKit lama yang masih diterima. */
+    private readonly imageKitEndpoint?: string,
   ) {}
 
   async execute(cmd: CreateJinyeCommentCommand): Promise<JinyeComment> {
@@ -99,7 +102,7 @@ export class CreateJinyeCommentUseCase {
       ]);
     }
     for (const img of images) {
-      if (!/^https?:\/\//i.test(img.url) || !img.providerFileId.trim()) {
+      if (!isTrustedJinyeImage(img, this.imageKitEndpoint)) {
         throw new ValidationError([
           {
             field: 'images',

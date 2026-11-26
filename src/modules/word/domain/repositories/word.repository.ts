@@ -679,9 +679,29 @@ export interface WordRepository {
       attribution?: WordImageAttribution | null;
       status: ChildStatus;
       isVerified: boolean;
+      /** Asal foto, mis. `jinye` + `<jinyeId>:<providerFileId>`. */
+      sourceType?: string | null;
+      sourceReference?: string | null;
     },
     actorId: string,
   ): Promise<WordImageMedia>;
+
+  /** Foto lemma aktif dengan asal tertentu (dedupe promote Jinye). */
+  findWordImageBySource(
+    wordId: string,
+    sourceType: string,
+    sourceReference: string,
+  ): Promise<WordImageMedia | null>;
+
+  /**
+   * Soft-delete foto lemma bersumber Jinye (archive/delete: hanya yang belum
+   * verified; takedown: semua). Mengembalikan baris yang dihapus supaya
+   * pemanggil bisa menghapus file GitHub-nya.
+   */
+  softDeleteWordImagesFromJinye(
+    jinyeId: string,
+    opts: { onlyUnverified: boolean },
+  ): Promise<WordImageMedia[]>;
 
   /** Set/clear peringatan visual foto (admin/verifikator atau resolve laporan). */
   setWordImageContentWarnings(
@@ -910,6 +930,8 @@ export interface WordImageMedia {
   status: ChildStatus;
   isVerified: boolean;
   isCorrected: boolean;
+  sourceType: string | null;
+  sourceReference: string | null;
 }
 
 export interface WordAudioMedia {
