@@ -6,6 +6,7 @@ import type { Discussion } from '../../domain/entities/discussion.entity';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
 import type { ImageStoragePort } from '@/modules/image/application/ports/image-storage.port';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import { discussionUploadTokenQuerySchema } from '../../presentation/v1/validators/discussion.validator';
 
 const ID = '01JDHELPTRANSL0000000000000';
@@ -111,7 +112,7 @@ function makeUc(
   audit = makeAudit(),
   publicStorage = makePublicStorage(),
   imageStorage = makeImageStorage(),
-  activityEvents?: { safe: ReturnType<typeof vi.fn> },
+  activityEvents?: Pick<RecordActivityEventUseCase, 'safe'>,
 ) {
   return {
     repo,
