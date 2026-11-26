@@ -125,6 +125,7 @@ export class ApproveDiscussionUseCase {
       images: nextImages,
       rejectionNote: null,
     });
+
     if (!updated) {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');
     }
