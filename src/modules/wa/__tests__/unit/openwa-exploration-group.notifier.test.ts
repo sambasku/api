@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/shared/config/env", () => ({
-  env: {},
+  env: { NODE_ENV: "test" as string },
 }));
 
+import { env } from "@/shared/config/env";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import { formatExplorationGroupMessage } from "../../application/ports/exploration-group-notifier.port";
 import { OpenWaExplorationGroupNotifier } from "../../infrastructure/openwa-exploration-group.notifier";
@@ -38,11 +39,25 @@ describe("formatExplorationGroupMessage", () => {
       }),
     ).toBe("Usulan dikirim ulang.\nJenis: Acara\nNama: tanpa nama\nDari: Anonim");
   });
+
+  it("menandai env Staging di footer italic", () => {
+    expect(
+      formatExplorationGroupMessage({
+        jenis: "Pengajuan verifikator",
+        name: "Budi",
+        from: "@budi",
+        envTag: "Staging",
+      }),
+    ).toBe(
+      "Usulan baru masuk.\nJenis: Pengajuan verifikator\nNama: Budi\nDari: @budi\n\n_Dikirim dari Staging._",
+    );
+  });
 });
 
 describe("OpenWaExplorationGroupNotifier", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    env.NODE_ENV = "test";
   });
 
   it("melewati kirim bila env belum lengkap", async () => {
@@ -104,6 +119,27 @@ describe("OpenWaExplorationGroupNotifier", () => {
         status: "sent",
       }),
     );
+  });
+
+  it("staging: sisip (Staging) di teks grup", async () => {
+    env.NODE_ENV = "staging";
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201 });
+    vi.stubGlobal("fetch", fetchMock);
+    const notifier = new OpenWaExplorationGroupNotifier(
+      { findById: vi.fn().mockResolvedValue({ username: "warga" }) },
+      { record: vi.fn().mockResolvedValue(undefined) },
+      CONFIG,
+    );
+
+    await notifier.notify({
+      jenis: "Pengajuan verifikator",
+      name: "Budi",
+      userId: "USER1",
+    });
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as { text: string };
+    expect(body.text.endsWith("\n\n_Dikirim dari Staging._")).toBe(true);
   });
 
   it("anonim tidak memanggil lookup user", async () => {

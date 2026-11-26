@@ -22,6 +22,7 @@ export const inboxNotificationTypeSchema = z.enum([
   'jinye_comment',
   'word_comment',
   'word_vote',
+  'article_clap',
   'meaning_auto_verified',
   'meaning_needs_review',
   'meaning_auto_rejected',
@@ -38,6 +39,7 @@ export const inboxNotificationTypeSchema = z.enum([
 ]);
 
 export const notificationTargetKindSchema = z.enum([
+  'article',
   'contribution',
   'suggestion',
   'word',
@@ -52,6 +54,7 @@ export const notificationTargetKindSchema = z.enum([
 ]);
 
 export const notificationActionKindSchema = z.enum([
+  'article',
   'word',
   'contribution',
   'suggestion',

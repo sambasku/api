@@ -24,6 +24,12 @@ import type {
 } from '../../domain/repositories/encyclopedia.repository';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { WordVotePushCooldownGate } from '@/modules/notification/application/use-cases/word-vote-push-cooldown-gate';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import { validateArticlePayload } from './article.use-cases';
 
 // ---------------------------------------------------------------- komentar
@@ -692,8 +698,28 @@ export class ListArticleContributionsUseCase {
 
 export type { NewArticleContributionInput };
 
+const ARTICLE_CLAP_TITLE = 'Clap baru';
+
+function articleClapBody(displayName: string, title: string): string {
+  return `${displayName} memberi clap pada "${title}".`;
+}
+
+/**
+ * Set clap user pada artikel (0..50). Saat count naik, inbox + push ke
+ * author (best-effort). Push di-throttle per author lewat gate opsional.
+ */
 export class SetArticleClapCountUseCase {
-  constructor(private readonly repo: ArticleRepository) {}
+  constructor(
+    private readonly repo: ArticleRepository,
+    private readonly userRepo?: Pick<UserRepository, 'findById'>,
+    private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly notifyUser?: NotifyUserUseCase,
+    private readonly pushCooldown?: Pick<
+      WordVotePushCooldownGate,
+      'maySend' | 'touchAfterSend'
+    >,
+  ) {}
+
   async execute(
     userId: string,
     articleId: string,
@@ -703,9 +729,95 @@ export class SetArticleClapCountUseCase {
     if (!exists) {
       throw new NotFoundError('ARTICLE_NOT_FOUND', 'Artikel tidak ditemukan');
     }
+    const previous = await this.repo.getUserClapCount(userId, articleId);
     const safe = Math.min(50, Math.max(0, Math.floor(count)));
     const result = await this.repo.setClapCount(userId, articleId, safe);
+
+    if (safe > previous) {
+      await this.notifyAuthor({
+        actorId: userId,
+        articleId,
+        newCount: safe,
+      });
+    }
+
     return { count: result.myCount, clap_total: result.clapTotal };
+  }
+
+  private async notifyAuthor(input: {
+    actorId: string;
+    articleId: string;
+    newCount: number;
+  }): Promise<void> {
+    try {
+      const article = await this.repo.findById(input.articleId);
+      if (!article) return;
+      if (article.authorUserId === input.actorId) return;
+      if (
+        article.authorUserId === ANONIM_USER_ID ||
+        article.authorUserId === CSV_IMPORTER_USER_ID
+      ) {
+        return;
+      }
+
+      let displayName = 'Seseorang';
+      if (this.userRepo) {
+        const actor = await this.userRepo.findById(input.actorId);
+        if (actor) {
+          displayName = actor.displayName?.trim() || actor.username;
+        }
+      }
+
+      const title = ARTICLE_CLAP_TITLE;
+      const body = articleClapBody(displayName, article.title.trim() || 'artikel');
+
+      if (this.inbox) {
+        await this.inbox.execute({
+          userId: article.authorUserId,
+          type: 'article_clap',
+          targetKind: 'article',
+          targetId: article.id,
+          actorId: input.actorId,
+          title,
+          body,
+          refreshOnConflict: true,
+          actionKind: 'article',
+          actionValue: article.slug,
+        });
+      }
+
+      if (this.notifyUser) {
+        const maySend =
+          !this.pushCooldown || (await this.pushCooldown.maySend(article.authorUserId));
+        if (maySend) {
+          await this.notifyUser.execute({
+            userId: article.authorUserId,
+            title,
+            body,
+            actorId: input.actorId,
+            data: {
+              type: 'article_clap',
+              target_kind: 'article',
+              target_id: article.id,
+              action_kind: 'article',
+              action_value: article.slug,
+            },
+          });
+          await this.pushCooldown?.touchAfterSend(article.authorUserId);
+        }
+      }
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          time: new Date().toISOString(),
+          msg: 'article clap notify failed',
+          article_id: input.articleId,
+          actor_id: input.actorId,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 }
 

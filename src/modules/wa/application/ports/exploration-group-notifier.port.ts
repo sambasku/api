@@ -1,5 +1,6 @@
 export const EXPLORATION_GROUP_EVENT_KEY = 'exploration_proposal_submitted';
 export const LEMMA_MERGE_GROUP_EVENT_KEY = 'lemma_merge_submitted';
+export const VERIFIER_APPLICATION_GROUP_EVENT_KEY = 'verifier_application_submitted';
 
 export interface ExplorationGroupNotice {
   /** Label jenis di pesan grup, mis. "Usaha" atau "Wisata (perbaikan)". */
@@ -22,8 +23,13 @@ export function formatExplorationGroupMessage(input: {
   name: string;
   from: string;
   resubmit?: boolean;
+  /** Nama env non-prod, mis. `Staging`. Footer italic WA: _Dikirim dari Staging._ */
+  envTag?: string | null;
 }): string {
   const head = input.resubmit ? "Usulan dikirim ulang." : "Usulan baru masuk.";
   const name = input.name.trim() || "tanpa nama";
-  return `${head}\nJenis: ${input.jenis}\nNama: ${name}\nDari: ${input.from}`;
+  const body = `${head}\nJenis: ${input.jenis}\nNama: ${name}\nDari: ${input.from}`;
+  const tag = input.envTag?.trim();
+  // WhatsApp italic: _teks_
+  return tag ? `${body}\n\n_Dikirim dari ${tag}._` : body;
 }

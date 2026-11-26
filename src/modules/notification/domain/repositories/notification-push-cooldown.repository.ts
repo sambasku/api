@@ -5,6 +5,7 @@ export type NotificationPushCooldownChannel =
   | ReviewPushCooldownChannel
   | 'word_comment'
   | 'word_vote'
+  | 'article_clap'
   /** #133: notif media anak kata (contoh kalimat / audio pelafalan). */
   | 'word_media'
   | 'discussion_reply'

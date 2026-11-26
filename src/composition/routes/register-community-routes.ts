@@ -210,7 +210,13 @@ export function registerCommunityRoutes(app: OpenAPIHono<{ Variables: AppVariabl
     takedownComment: new TakedownArticleCommentUseCase(encyclopediaRepo, di.auditRepo),
     ugcLemmaLinks: di.ugcCommentLemmaRepo,
     toggleBookmark: new ToggleArticleBookmarkUseCase(encyclopediaRepo),
-    setClapCount: new SetArticleClapCountUseCase(encyclopediaRepo),
+    setClapCount: new SetArticleClapCountUseCase(
+      encyclopediaRepo,
+      di.userRepo,
+      di.recordInbox,
+      di.notifyUser,
+      di.articleClapPushCooldown,
+    ),
     submitContribution: new SubmitArticleContributionUseCase(
       encyclopediaRepo,
       di.auditRepo,
@@ -395,11 +401,13 @@ export function registerCommunityRoutes(app: OpenAPIHono<{ Variables: AppVariabl
     create: new CreateVerifierApplicationUseCase(
       verifierApplicationRepo,
       di.userRepo,
+      di.explorationGroupNotifier,
     ),
     getMine: new GetMyVerifierApplicationUseCase(verifierApplicationRepo),
     resubmit: new ResubmitVerifierApplicationUseCase(
       verifierApplicationRepo,
       di.userRepo,
+      di.explorationGroupNotifier,
     ),
     list: new ListVerifierApplicationsUseCase(verifierApplicationRepo),
     getDetail: new GetVerifierApplicationDetailUseCase(verifierApplicationRepo),

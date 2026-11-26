@@ -572,6 +572,7 @@ import { ReviewPushCooldownGate } from "@/modules/notification/application/use-c
 import { WordCommentPushCooldownGate } from "@/modules/notification/application/use-cases/word-comment-push-cooldown-gate";
 import { DiscussionReplyPushCooldownGate, ReplyPushCooldownGate } from "@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate";
 import { WordVotePushCooldownGate } from "@/modules/notification/application/use-cases/word-vote-push-cooldown-gate";
+import { ArticleClapPushCooldownGate } from "@/modules/notification/application/use-cases/article-clap-push-cooldown-gate";
 import { WordMediaPushCooldownGate } from "@/modules/notification/application/use-cases/word-media-push-cooldown-gate";
 import { NotifyWordOwnerMediaUseCase } from "@/modules/notification/application/use-cases/notify-word-owner-media.use-case";
 import { ActivityEventRepositoryImpl } from "@/modules/activity/infrastructure/activity-event.repository.impl";
@@ -1602,6 +1603,10 @@ export const wordGroupController = new WordGroupController({
 // aksi admin - lihat KEPUTUSAN PRODUK di doc). ----
 export const voteRepo = new VoteRepositoryImpl(db);
 export const wordVotePushCooldown = new WordVotePushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
+export const articleClapPushCooldown = new ArticleClapPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
 );

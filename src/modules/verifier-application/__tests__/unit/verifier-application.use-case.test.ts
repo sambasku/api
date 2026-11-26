@@ -169,6 +169,23 @@ describe('CreateVerifierApplicationUseCase', () => {
       photo: null,
     });
   });
+
+  it('contributor baru → kabar WA grup pengajuan verifikator', async () => {
+    const appRepo = makeAppRepo();
+    const groupNotifier = { notify: vi.fn().mockResolvedValue(undefined) };
+    const useCase = new CreateVerifierApplicationUseCase(
+      appRepo,
+      makeUserRepo(),
+      groupNotifier,
+    );
+    await useCase.execute(submit);
+    expect(groupNotifier.notify).toHaveBeenCalledWith({
+      jenis: 'Pengajuan verifikator',
+      name: 'Budi Santoso',
+      userId: USER,
+      eventKey: 'verifier_application_submitted',
+    });
+  });
 });
 
 describe('ResubmitVerifierApplicationUseCase', () => {
@@ -190,6 +207,26 @@ describe('ResubmitVerifierApplicationUseCase', () => {
     const result = await useCase.execute(submit);
     expect(result.status).toBe('pending');
     expect(appRepo.resubmitWithPhone).toHaveBeenCalled();
+  });
+
+  it('status rejected → kabar WA grup pengajuan dikirim ulang', async () => {
+    const appRepo = makeAppRepo({
+      findByUserId: vi.fn().mockResolvedValue(makeApp({ status: 'rejected' })),
+    });
+    const groupNotifier = { notify: vi.fn().mockResolvedValue(undefined) };
+    const useCase = new ResubmitVerifierApplicationUseCase(
+      appRepo,
+      makeUserRepo(),
+      groupNotifier,
+    );
+    await useCase.execute(submit);
+    expect(groupNotifier.notify).toHaveBeenCalledWith({
+      jenis: 'Pengajuan verifikator',
+      name: 'Budi Santoso',
+      userId: USER,
+      resubmit: true,
+      eventKey: 'verifier_application_submitted',
+    });
   });
 });
 

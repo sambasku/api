@@ -10,7 +10,7 @@ import {
   type ExplorationGroupNotifier,
 } from "../application/ports/exploration-group-notifier.port";
 
-export { EXPLORATION_GROUP_EVENT_KEY, LEMMA_MERGE_GROUP_EVENT_KEY } from "../application/ports/exploration-group-notifier.port";
+export { EXPLORATION_GROUP_EVENT_KEY, LEMMA_MERGE_GROUP_EVENT_KEY, VERIFIER_APPLICATION_GROUP_EVENT_KEY } from "../application/ports/exploration-group-notifier.port";
 
 export interface OpenWaGatewayConfig {
   baseUrl?: string;
@@ -83,6 +83,7 @@ export class OpenWaExplorationGroupNotifier implements ExplorationGroupNotifier 
       name: notice.name,
       from: await this.fromLabel(notice.userId),
       resubmit: notice.resubmit,
+      envTag: env.NODE_ENV === "staging" ? "Staging" : null,
     });
 
     try {

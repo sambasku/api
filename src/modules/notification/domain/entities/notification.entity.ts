@@ -24,6 +24,7 @@ export type InboxNotificationType =
   | 'comment_image_approved'
   | 'comment_image_rejected'
   | 'word_vote'
+  | 'article_clap'
   /** G2: makna auto-verif Voting Warga / needs_review ke pembuat makna. */
   | 'meaning_auto_verified'
   | 'meaning_needs_review'
@@ -59,6 +60,7 @@ export type InboxNotificationType =
   | 'level_up';
 
 export type NotificationTargetKind =
+  | 'article'
   | 'contribution'
   | 'suggestion'
   | 'word'
@@ -80,6 +82,7 @@ export type NotificationTargetKind =
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
 export type NotificationActionKind =
+  | 'article'
   | 'word'
   | 'contribution'
   | 'suggestion'
@@ -255,6 +258,12 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
     return {
       title: 'Vote baru',
       body: 'Ada penilaian baru pada kosakatamu.',
+      bodyType: 'plain',
+    };
+  case 'article_clap':
+    return {
+      title: 'Clap baru',
+      body: 'Ada clap baru pada artikelmu.',
       bodyType: 'plain',
     };
   case 'meaning_auto_verified':
