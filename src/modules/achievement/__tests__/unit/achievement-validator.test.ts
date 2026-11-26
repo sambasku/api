@@ -161,6 +161,30 @@ it('menolak reward_type tak dikenal', () => {
   ).toBe(false);
 });
 
+describe('badge_asset_kind', () => {
+  it('menolak lottie untuk reward badge', () => {
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        reward_type: 'badge',
+        badge_asset_kind: 'lottie',
+        badge_url: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/x.json',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('menerima lottie untuk profile_border dengan URL', () => {
+    expect(
+      createAchievementBodySchema.safeParse({
+        ...baseBody,
+        reward_type: 'profile_border',
+        badge_asset_kind: 'lottie',
+        badge_url: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/x.json',
+      }).success,
+    ).toBe(true);
+  });
+});
+
 describe('badge_url guard (allowlist host)', () => {
   it('menerima jsDelivr + ImageKit', () => {
     expect(

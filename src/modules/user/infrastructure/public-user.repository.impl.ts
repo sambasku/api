@@ -106,6 +106,7 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         joinedAt: users.createdAt,
         avatarUrl: users.avatarUrl,
         activeBorderUrl: achievements.badgeUrl,
+        activeBorderAssetKind: achievements.badgeAssetKind,
       })
       .from(users)
       .leftJoin(userAchievements, eq(userAchievements.id, users.activeBorderId))
@@ -137,6 +138,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       joinedAt: row.joinedAt,
       avatarUrl: row.avatarUrl ?? null,
       activeBorderUrl: row.activeBorderUrl ?? null,
+      activeBorderAssetKind:
+        row.activeBorderUrl == null ? null : (row.activeBorderAssetKind ?? 'image'),
     };
   }
 

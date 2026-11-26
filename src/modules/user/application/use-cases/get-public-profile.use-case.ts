@@ -25,6 +25,7 @@ export class GetPublicProfileUseCase {
       joinedAt: user.joinedAt,
       avatarUrl: user.avatarUrl,
       activeBorderUrl: user.activeBorderUrl ?? null,
+      activeBorderAssetKind: user.activeBorderAssetKind ?? null,
       stats,
       leveling,
     };

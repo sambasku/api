@@ -1,0 +1,1 @@
+ALTER TABLE `achievements` ADD `badge_asset_kind` text DEFAULT 'image' NOT NULL;

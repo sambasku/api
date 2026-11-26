@@ -1,5 +1,6 @@
 import type {
   AchievementCategory,
+  BadgeAssetKind,
   RewardType,
 } from '@/shared/database/drizzle/schema/achievements.schema';
 
@@ -35,6 +36,7 @@ export interface Achievement {
   rewardType: RewardType;
   /** Aset reward (jsDelivr): bingkai border / lencana / stiker. */
   badgeUrl: string | null;
+  badgeAssetKind: BadgeAssetKind;
   criteria: AchievementCriteria;
   /** Grup tier, mis. 'kata-disetujui'. Null = tanpa tier. */
   family: string | null;
@@ -97,6 +99,7 @@ export interface CreateAchievementInput {
   category: AchievementCategory;
   rewardType: RewardType;
   badgeUrl: string | null;
+  badgeAssetKind?: BadgeAssetKind;
   criteria: AchievementCriteria;
   family: string | null;
   level: number | null;

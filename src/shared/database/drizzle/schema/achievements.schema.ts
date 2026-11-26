@@ -29,6 +29,10 @@ export const achievements = sqliteTable(
     rewardType: text('reward_type').notNull(),
     /** Aset reward (jsDelivr `sambasku/images`): bingkai border / lencana / stiker. */
     badgeUrl: text('badge_url'),
+    /** Cara render aset di client: statis atau Lottie (v1 animasi hanya profile_border). */
+    badgeAssetKind: text('badge_asset_kind', { enum: ['image', 'lottie'] })
+      .notNull()
+      .default('image'),
     /** JSON criteria - divalidasi Zod terhadap registry source. */
     criteria: text('criteria').notNull(),
     family: text('family'),
@@ -85,6 +89,10 @@ export const userAchievements = sqliteTable(
 /** Tipe reward - satu katalog, beda tampilan di client. */
 export const REWARD_TYPES = ['profile_border', 'badge', 'sticker'] as const;
 export type RewardType = (typeof REWARD_TYPES)[number];
+
+/** Cara render `badge_url` di client (mobile v1). */
+export const BADGE_ASSET_KINDS = ['image', 'lottie'] as const;
+export type BadgeAssetKind = (typeof BADGE_ASSET_KINDS)[number];
 
 /** Kategori katalog (grup tampilan admin/profil). */
 export const ACHIEVEMENT_CATEGORIES = [

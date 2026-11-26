@@ -63,6 +63,7 @@ function toDomain(row: AchievementRow): Achievement {
     category: row.category as Achievement['category'],
     rewardType: row.rewardType as Achievement['rewardType'],
     badgeUrl: row.badgeUrl ?? null,
+    badgeAssetKind: row.badgeAssetKind ?? 'image',
     criteria: parseCriteria(row.criteria),
     family: row.family ?? null,
     level: row.level ?? null,
@@ -107,6 +108,7 @@ export class AchievementRepositoryImpl implements AchievementRepository {
         category: input.category,
         rewardType: input.rewardType,
         badgeUrl: input.badgeUrl,
+        badgeAssetKind: input.badgeAssetKind ?? 'image',
         criteria: JSON.stringify(input.criteria),
         family: input.family,
         level: input.level,
@@ -129,6 +131,7 @@ export class AchievementRepositoryImpl implements AchievementRepository {
     if (input.category !== undefined) values.category = input.category;
     if (input.rewardType !== undefined) values.rewardType = input.rewardType;
     if (input.badgeUrl !== undefined) values.badgeUrl = input.badgeUrl;
+    if (input.badgeAssetKind !== undefined) values.badgeAssetKind = input.badgeAssetKind;
     if (input.criteria !== undefined) values.criteria = JSON.stringify(input.criteria);
     if (input.family !== undefined) values.family = input.family;
     if (input.level !== undefined) values.level = input.level;

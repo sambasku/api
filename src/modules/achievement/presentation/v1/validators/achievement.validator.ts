@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { ACHIEVEMENT_CATEGORIES, REWARD_TYPES } from '@/shared/database/drizzle/schema/achievements.schema';
+import {
+  ACHIEVEMENT_CATEGORIES,
+  BADGE_ASSET_KINDS,
+  REWARD_TYPES,
+} from '@/shared/database/drizzle/schema/achievements.schema';
 import {
   findAchievementSource,
   isAchievementSourceKnown,
@@ -34,6 +38,37 @@ export const badgeUrlSchema = z
     }
   }, 'Host aset tidak diizinkan (pakai jsDelivr atau ImageKit)');
 
+const badgeAssetKindSchema = z.enum(BADGE_ASSET_KINDS);
+
+function refineBadgeAssetKind(
+  data: {
+    reward_type?: (typeof REWARD_TYPES)[number];
+    badge_asset_kind?: (typeof BADGE_ASSET_KINDS)[number];
+    badge_url?: string | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const kind = data.badge_asset_kind ?? 'image';
+  if (kind === 'lottie') {
+    if (data.reward_type && data.reward_type !== 'profile_border') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['badge_asset_kind'],
+        message: 'Lottie hanya untuk reward border profil',
+      });
+    }
+    if (!data.badge_url) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['badge_url'],
+        message: 'URL aset wajib untuk border Lottie',
+      });
+    }
+  }
+  if (kind === 'image' && data.reward_type !== 'profile_border' && data.badge_url) {
+    // badge/sticker PNG tetap image - no extra rules
+  }
+}
 
 /**
  * Grammar kriteria achievement - divalidasi terhadap REGISTRY, bukan
@@ -170,31 +205,37 @@ export const achievementCodeSchema = z
   .max(60)
   .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'code hanya boleh huruf kecil, angka, dan hyphen');
 
-export const createAchievementBodySchema = z.object({
-  code: achievementCodeSchema,
-  title: z.string().trim().min(3).max(80),
-  description: z.string().trim().min(3).max(500),
-  category: z.enum(ACHIEVEMENT_CATEGORIES),
-  reward_type: z.enum(REWARD_TYPES),
-  badge_url: badgeUrlSchema.nullable(),
-  criteria: achievementCriteriaSchema,
-  family: z.string().trim().min(2).max(60).nullable().optional(),
-  level: z.number().int().min(1).max(10).nullable().optional(),
-  is_active: z.boolean().optional().default(true),
-});
+export const createAchievementBodySchema = z
+  .object({
+    code: achievementCodeSchema,
+    title: z.string().trim().min(3).max(80),
+    description: z.string().trim().min(3).max(500),
+    category: z.enum(ACHIEVEMENT_CATEGORIES),
+    reward_type: z.enum(REWARD_TYPES),
+    badge_url: badgeUrlSchema.nullable(),
+    badge_asset_kind: badgeAssetKindSchema.optional().default('image'),
+    criteria: achievementCriteriaSchema,
+    family: z.string().trim().min(2).max(60).nullable().optional(),
+    level: z.number().int().min(1).max(10).nullable().optional(),
+    is_active: z.boolean().optional().default(true),
+  })
+  .superRefine(refineBadgeAssetKind);
 
 /** `code` tidak bisa di-update (dipakai integrasi). */
-export const updateAchievementBodySchema = z.object({
-  title: z.string().trim().min(3).max(80).optional(),
-  description: z.string().trim().min(3).max(500).optional(),
-  category: z.enum(ACHIEVEMENT_CATEGORIES).optional(),
-  reward_type: z.enum(REWARD_TYPES).optional(),
-  badge_url: badgeUrlSchema.nullable().optional(),
-  criteria: achievementCriteriaSchema.optional(),
-  family: z.string().trim().min(2).max(60).nullable().optional(),
-  level: z.number().int().min(1).max(10).nullable().optional(),
-  is_active: z.boolean().optional(),
-});
+export const updateAchievementBodySchema = z
+  .object({
+    title: z.string().trim().min(3).max(80).optional(),
+    description: z.string().trim().min(3).max(500).optional(),
+    category: z.enum(ACHIEVEMENT_CATEGORIES).optional(),
+    reward_type: z.enum(REWARD_TYPES).optional(),
+    badge_url: badgeUrlSchema.nullable().optional(),
+    badge_asset_kind: badgeAssetKindSchema.optional(),
+    criteria: achievementCriteriaSchema.optional(),
+    family: z.string().trim().min(2).max(60).nullable().optional(),
+    level: z.number().int().min(1).max(10).nullable().optional(),
+    is_active: z.boolean().optional(),
+  })
+  .superRefine(refineBadgeAssetKind);
 
 export const listAchievementsQuerySchema = z.object({
   reward_type: z.enum(REWARD_TYPES).optional(),
@@ -239,6 +280,7 @@ const achievementItemSchema = z.object({
   category: z.string(),
   reward_type: z.string(),
   badge_url: z.string().nullable(),
+  badge_asset_kind: badgeAssetKindSchema,
   criteria: criteriaResponseSchema,
   family: z.string().nullable(),
   level: z.number().int().nullable(),
