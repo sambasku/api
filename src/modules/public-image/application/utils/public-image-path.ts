@@ -77,6 +77,12 @@ export function buildStickerImagePath(mimeType: string): string {
   return `assets/stickers/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
 
+/** Path border Lottie achievement: assets/achievements/<ulid>.json|.lottie */
+export function buildAchievementLottiePath(kind: 'json' | 'dotlottie'): string {
+  const ext = kind === 'json' ? 'json' : 'lottie';
+  return `assets/achievements/${generateId()}.${ext}`;
+}
+
 /** Path logo komunitas: assets/community/<ulid>.<ext> */
 export function buildCommunityImagePath(mimeType: string): string {
   return `assets/community/${generateId()}.${extensionForImageMime(mimeType)}`;

@@ -14,6 +14,7 @@ import {
   buildWordImagePath,
 } from '../utils/public-image-path';
 import { validateImageFile } from '../utils/validate-image-file';
+import { validateAchievementLottieFile } from '../utils/validate-achievement-lottie-file';
 
 export type PublicImagePurpose =
   | 'word'
@@ -27,7 +28,8 @@ export type PublicImagePurpose =
   | 'baleho'
   | 'sticker'
   | 'community'
-  | 'karya';
+  | 'karya'
+  | 'achievement';
 
 export interface UploadPublicImageResult {
   url: string;
@@ -60,6 +62,8 @@ function pathForPurpose(purpose: PublicImagePurpose, mimeType: string): string {
       return buildCommunityImagePath(mimeType);
     case 'karya':
       return buildKaryaImagePath(mimeType);
+    case 'achievement':
+      throw new Error('achievement purpose memakai path Lottie khusus');
     case 'word':
     default:
       return buildWordImagePath(mimeType);
@@ -77,6 +81,21 @@ export class UploadPublicImageUseCase {
     purpose?: PublicImagePurpose;
   }): Promise<UploadPublicImageResult> {
     const purpose = input.purpose ?? 'word';
+    if (purpose === 'achievement') {
+      const lottie = validateAchievementLottieFile(input);
+      const path = buildAchievementLottiePath(lottie.kind);
+      const uploaded = await this.storage.upload({
+        path,
+        content: lottie.bytes,
+        mimeType: lottie.mimeType,
+      });
+      return {
+        url: uploaded.url,
+        provider: this.storage.providerName,
+        providerFileId: uploaded.path,
+        sha: uploaded.sha,
+      };
+    }
     const file = validateImageFile(input, { allowGif: purpose === 'sticker' });
     const path = pathForPurpose(purpose, file.mimeType);
     const uploaded = await this.storage.upload({

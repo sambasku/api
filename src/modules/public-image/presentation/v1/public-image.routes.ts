@@ -53,7 +53,7 @@ export function createPublicImageRoutes(deps: {
     method: 'post',
     path: '/',
     tags: ['Images'],
-    summary: 'Upload gambar publik (kata atau campaign) ke GitHub - multipart field `file`',
+    summary: 'Upload gambar publik atau Lottie border (purpose=achievement) ke GitHub - multipart `file`',
     request: { query: uploadPublicImageQuerySchema },
     responses: {
       201: { description: 'Gambar tersimpan', content: json(uploadPublicImageResponseSchema) },
