@@ -8,8 +8,8 @@ export const PROFILE_COVER_DIMENSIONS: Record<
 > = {
   tab: { width: 1032, height: 400 },
   public: { width: 1032, height: 534 },
-  /** Kartu Kata Hari Ini (`wotd_cover.webp` bundled). */
-  wotd: { width: 600, height: 338 },
+  /** Kartu Kata Hari Ini (strip beranda mobile, ~5.86:1). */
+  wotd: { width: 1032, height: 176 },
 };
 
 export interface ProfileCover {
