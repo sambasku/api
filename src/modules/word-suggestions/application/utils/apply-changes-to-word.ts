@@ -372,7 +372,7 @@ export async function applyChangesToWord(
             wordClassId: mc.wordClassId ?? null,
             definition: mc.definition ?? '',
             orderIndex: existingMeanings.length,
-            createdBy: reviewerId,
+            createdBy: suggestion.userId,
             dedupeKey: meaningDedupeKey({
               definition: mc.definition ?? '',
               translations: mc.translations ?? [],
@@ -390,7 +390,7 @@ export async function applyChangesToWord(
                 languageId: t.languageId,
                 translationText: t.translationText,
                 translationType: t.translationType ?? 'direct',
-                createdBy: reviewerId,
+                createdBy: suggestion.userId,
               })
               .onConflictDoNothing();
           }
@@ -468,7 +468,7 @@ export async function applyChangesToWord(
                     languageId: t.languageId,
                     translationText: t.translationText,
                     translationType: t.translationType ?? 'direct',
-                    createdBy: reviewerId,
+                    createdBy: suggestion.userId,
                   })
                   .onConflictDoNothing();
               }
@@ -767,7 +767,7 @@ export async function applyChangesToWord(
             sourceWordId: word.id,
             targetWordId: targetId,
             relationType: rel.relationType,
-            createdBy: reviewerId,
+            createdBy: suggestion.userId,
           })
           .onConflictDoNothing();
         if (rel.relationType === 'synonym') {
@@ -777,7 +777,7 @@ export async function applyChangesToWord(
               sourceWordId: targetId,
               targetWordId: word.id,
               relationType: 'synonym',
-              createdBy: reviewerId,
+              createdBy: suggestion.userId,
             })
             .onConflictDoNothing();
         }
@@ -829,7 +829,7 @@ export async function applyChangesToWord(
             form,
             variantType: v.variantType ?? 'alternative',
             dialectId: v.dialectId ?? null,
-            createdBy: reviewerId,
+            createdBy: suggestion.userId,
           })
           .onConflictDoNothing();
         variantAudit.added.push({ form, variant_type: v.variantType ?? 'alternative' });
@@ -899,7 +899,7 @@ const groupAudit: {
               groupId: g.groupId,
               wordId: word.id,
               status: 'published',
-              createdBy: reviewerId,
+              createdBy: suggestion.userId,
             })
             .onConflictDoNothing();
         }
@@ -914,7 +914,7 @@ const groupAudit: {
       name,
       description: g.description ?? null,
       status: 'published',
-      createdBy: reviewerId,
+      createdBy: suggestion.userId,
     })
     .returning({ id: wordGroups.id });
   // Anggota dari lemma: resolve-or-create (kata baru bila belum ada di kamus).
@@ -936,7 +936,7 @@ const groupAudit: {
         groupId: newGroup.id,
         wordId: id,
         status: 'published',
-        createdBy: reviewerId,
+        createdBy: suggestion.userId,
       })),
     )
     .onConflictDoNothing();
@@ -997,7 +997,7 @@ const groupAudit: {
             altText: img.altText ?? null,
             isPrimary: img.isPrimary ?? false,
             attribution: stockImageAttribution(provider, img.attribution),
-            createdBy: reviewerId,
+            createdBy: suggestion.userId,
             status: 'published',
             isVerified,
           })

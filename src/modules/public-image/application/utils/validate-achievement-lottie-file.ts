@@ -1,4 +1,5 @@
 import { BadRequestError } from '@/shared/errors/app-error';
+import { sanitizeUploadFilename } from './sanitize-upload-filename';
 
 export const MAX_ACHIEVEMENT_LOTTIE_BYTES = 2 * 1024 * 1024;
 
@@ -40,8 +41,8 @@ export function validateAchievementLottieFile(input: {
   mimeType: string | null | undefined;
   filename?: string | null;
 }): ValidatedAchievementLottieFile {
-  const filename = input.filename?.trim() || null;
-  if (filename && (filename.includes('..') || filename.includes('\0'))) {
+  const filename = sanitizeUploadFilename(input.filename);
+  if (input.filename?.trim() && !filename) {
     throw new BadRequestError('VALIDATION_ERROR', 'Nama file tidak valid', [
       { field: 'file', message: 'Nama file tidak valid' },
     ]);

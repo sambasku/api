@@ -595,7 +595,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         imageOpts,
       );
       const [word] = await db
-        .select({ lemma: words.lemma, isVerified: words.isVerified })
+        .select({ lemma: words.lemma, isVerified: words.isVerified, createdBy: words.createdBy })
         .from(words)
         .where(eq(words.id, row.wordId))
         .limit(1);
@@ -623,7 +623,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           ),
         );
       await rollupWordVerifiedFromMeaningsDb(row.wordId);
-      // Event feed: pengusul (usulannya diterima) + verifikator.
+      // Event feed: pengusul (usulannya diterima) + verifikasi bila kata baru verified.
       await this.emitEvent({
         kind: 'suggestion_applied',
         actorId: row.proposerId ?? undefined,
@@ -631,20 +631,23 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         targetId: id,
         dedupeKey: `suggestion:${id}`,
       });
-      // #56: usulan edit diterima → verifikasi menyebut pengusulnya.
-      const proposedByName = row.proposerId
-        ? row.proposerId !== reviewerId
-          ? await this.displayNameOf(row.proposerId)
-          : null
-        : null;
-      await this.emitEvent({
-        kind: 'word_verified',
-        actorId: reviewerId,
-        targetWordId: row.wordId,
-        targetId: row.wordId,
-        dedupeKey: `word_verified:${row.wordId}`,
-        ...(proposedByName ? { proposedByName } : {}),
-      });
+      // #303: hanya emit word_verified saat kata memang belum verified, dan
+      // pengusul yang disebut adalah pembuat kata asli (word.createdBy), bukan
+      // pengusul edit.
+      if (word && !word.isVerified) {
+        const proposedByName =
+          word.createdBy && word.createdBy !== reviewerId
+            ? await this.displayNameOf(word.createdBy)
+            : null;
+        await this.emitEvent({
+          kind: 'word_verified',
+          actorId: reviewerId,
+          targetWordId: row.wordId,
+          targetId: row.wordId,
+          dedupeKey: `word_verified:${row.wordId}`,
+          ...(proposedByName ? { proposedByName } : {}),
+        });
+      }
       await db
         .update(wordEditSuggestions)
         .set({
@@ -682,27 +685,15 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         dedupeKey: `word:${created.id}`,
       });
     }
-    // Event feed: usulan diterima (pengusul) + verifikasi kata (reviewer).
+    // Event feed: usulan edit diterima (pengusul). Jalur ini tidak memverifikasi
+    // kata baru, jadi jangan emit word_verified agar riwayat pengusul asli
+    // pada event word_verified tidak tertimpa (#303).
     await this.emitEvent({
       kind: 'suggestion_applied',
       actorId: row.proposerId ?? undefined,
       targetWordId: row.wordId,
       targetId: id,
       dedupeKey: `suggestion:${id}`,
-    });
-    // #56: verifikasi menyebut pengusul (copy "Memverifikasi usulan B: ...").
-    const proposedByName = row.proposerId
-      ? row.proposerId !== reviewerId
-        ? await this.displayNameOf(row.proposerId)
-        : null
-      : null;
-    await this.emitEvent({
-      kind: 'word_verified',
-      actorId: reviewerId,
-      targetWordId: row.wordId,
-      targetId: row.wordId,
-      dedupeKey: `word_verified:${row.wordId}`,
-      ...(proposedByName ? { proposedByName } : {}),
     });
     return result;
   }

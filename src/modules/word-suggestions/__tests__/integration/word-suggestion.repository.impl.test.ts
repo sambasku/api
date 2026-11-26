@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { getTestDb } from '@/shared/database/drizzle/test-client';
 import {
+activityEvents,
 languages,
 lexicalRelations,
 meaningTranslations,
@@ -465,5 +466,113 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
       'contributor',
     );
     expect(sug.status).toBe('pending');
+  });
+
+  it('#303: approve usul edit makna pada kata terverifikasi tidak mengubah riwayat pengusul', async () => {
+    const IDN = ulid26('01TESTLANGIDN');
+    const OTHER_MEANING = ulid26('01TESTMEANOTH');
+    await db.insert(languages).values({ id: IDN, code: 'id', name: 'Indonesia' });
+    await db.insert(meanings).values({
+      id: OTHER_MEANING,
+      wordId: OTHER_WORD,
+      definition: 'arti lama',
+      createdBy: OWNER,
+      isVerified: true,
+      verifiedBy: REVIEWER,
+      verifiedAt: new Date(),
+    });
+    await db.insert(activityEvents).values({
+      kind: 'word_verified',
+      actorId: REVIEWER,
+      targetWordId: OTHER_WORD,
+      targetId: OTHER_WORD,
+      occurredAt: new Date(),
+      dedupeKey: `word_verified:${OTHER_WORD}`,
+      payload: 'Memverifikasi usulan owner1: {lemma}',
+    });
+
+    const sug = await repo.createSuggestion(
+      KONTRIBUTOR,
+      OTHER_WORD,
+      {
+        meanings: [
+          {
+            action: 'update',
+            meaningId: OTHER_MEANING,
+            definition: 'arti baru',
+            translations: [{ languageId: IDN, translationText: 'padanan baru' }],
+          },
+        ],
+      },
+      'perbaiki makna',
+      'change_meaning',
+      'contributor',
+    );
+    await repo.approveSuggestion(sug.id, REVIEWER, 'ok');
+
+    const [word] = await db.select().from(words).where(eq(words.id, OTHER_WORD));
+    const [meaning] = await db.select().from(meanings).where(eq(meanings.id, OTHER_MEANING));
+    expect(meaning.definition).toBe('arti baru');
+    expect(word.createdBy).toBe(OWNER);
+    expect(meaning.createdBy).toBe(OWNER);
+
+    const [verifiedEvent] = await db
+      .select()
+      .from(activityEvents)
+      .where(eq(activityEvents.dedupeKey, `word_verified:${OTHER_WORD}`));
+    expect(verifiedEvent?.payload).toBe('Memverifikasi usulan owner1: {lemma}');
+  });
+
+  it('#303: approve usul tambah makna mencatat createdBy sebagai pengusul, bukan reviewer', async () => {
+    const IDN = ulid26('01TESTLANGID2');
+    await db.insert(languages).values({ id: IDN, code: 'id', name: 'Indonesia' });
+
+    const sug = await repo.createSuggestion(
+      KONTRIBUTOR,
+      OTHER_WORD,
+      {
+        meanings: [
+          {
+            action: 'add',
+            definition: 'makna tambahan dari kontributor',
+            translations: [{ languageId: IDN, translationText: 'arti tambahan' }],
+          },
+        ],
+      },
+      'tambah makna',
+      'add_meaning',
+      'contributor',
+    );
+    await repo.approveSuggestion(sug.id, REVIEWER, 'ok');
+
+    const addedMeanings = await db.select().from(meanings).where(eq(meanings.wordId, OTHER_WORD));
+    expect(addedMeanings).toHaveLength(1);
+    expect(addedMeanings[0].createdBy).toBe(KONTRIBUTOR);
+
+    const addedTr = await db
+      .select()
+      .from(meaningTranslations)
+      .where(eq(meaningTranslations.meaningId, addedMeanings[0].id));
+    expect(addedTr).toHaveLength(1);
+    expect(addedTr[0].createdBy).toBe(KONTRIBUTOR);
+  });
+
+  it('#303: approve apply_pending pada kata belum terverifikasi menyebut pembuat kata asli di word_verified', async () => {
+    const sug = await repo.createSuggestion(
+      KONTRIBUTOR,
+      WORD,
+      { meanings: [{ action: 'update', meaningId: MEANING, definition: 'definisi perbaikan' }] },
+      'perbaiki definisi',
+      'change_meaning',
+      'contributor',
+    );
+    await repo.approveSuggestion(sug.id, REVIEWER, 'ok');
+
+    const [verifiedEvent] = await db
+      .select()
+      .from(activityEvents)
+      .where(eq(activityEvents.dedupeKey, `word_verified:${WORD}`));
+    expect(verifiedEvent).toBeDefined();
+    expect(verifiedEvent?.payload).toBe('Memverifikasi usulan owner1: {lemma}');
   });
 });

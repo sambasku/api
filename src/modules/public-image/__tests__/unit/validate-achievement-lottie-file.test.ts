@@ -12,6 +12,17 @@ describe('validateAchievementLottieFile', () => {
     expect(out.kind).toBe('json');
   });
 
+  it('menerima basename dengan .. di tengah nama (bukan path traversal)', () => {
+    const bytes = new TextEncoder().encode('{"v":"5.5.7","layers":[]}');
+    const out = validateAchievementLottieFile({
+      bytes,
+      mimeType: 'application/json',
+      filename: 'border..v2.json',
+    });
+    expect(out.kind).toBe('json');
+    expect(out.filename).toBe('border..v2.json');
+  });
+
   it('menolak file bukan Lottie', () => {
     const bytes = new TextEncoder().encode('not-json');
     expect(() =>
