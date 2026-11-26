@@ -372,6 +372,10 @@ export async function applyChangesToWord(
             wordClassId: mc.wordClassId ?? null,
             definition: mc.definition ?? '',
             orderIndex: existingMeanings.length,
+            status: 'published',
+            isVerified: true,
+            verifiedBy: reviewerId,
+            verifiedAt: new Date(),
             createdBy: suggestion.userId,
             dedupeKey: meaningDedupeKey({
               definition: mc.definition ?? '',

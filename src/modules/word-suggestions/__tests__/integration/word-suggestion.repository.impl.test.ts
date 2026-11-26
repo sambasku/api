@@ -548,6 +548,10 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
     const addedMeanings = await db.select().from(meanings).where(eq(meanings.wordId, OTHER_WORD));
     expect(addedMeanings).toHaveLength(1);
     expect(addedMeanings[0].createdBy).toBe(KONTRIBUTOR);
+    expect(addedMeanings[0].status).toBe('published');
+    expect(addedMeanings[0].isVerified).toBe(true);
+    expect(addedMeanings[0].verifiedBy).toBe(REVIEWER);
+    expect(addedMeanings[0].verifiedAt).toBeInstanceOf(Date);
 
     const addedTr = await db
       .select()
@@ -574,5 +578,36 @@ describe.skipIf(!hasTestDb)('WordSuggestionRepositoryImpl kategori', () => {
       .where(eq(activityEvents.dedupeKey, `word_verified:${WORD}`));
     expect(verifiedEvent).toBeDefined();
     expect(verifiedEvent?.payload).toBe('Memverifikasi usulan owner1: {lemma}');
+  });
+
+  it('#351: verifikator self-apply tambah makna menandai makna baru sebagai verified', async () => {
+    const IDN = ulid26('01TESTLANGID3');
+    await db.insert(languages).values({ id: IDN, code: 'id3', name: 'Indonesia' });
+
+    const sug = await repo.createSuggestion(
+      REVIEWER,
+      OTHER_WORD,
+      {
+        meanings: [
+          {
+            action: 'add',
+            definition: 'makna baru oleh verifikator',
+            translations: [{ languageId: IDN, translationText: 'arti baru' }],
+          },
+        ],
+      },
+      'tambah makna',
+      'add_meaning',
+      'reviewer',
+    );
+    expect(sug.status).toBe('approved');
+
+    const addedMeanings = await db.select().from(meanings).where(eq(meanings.wordId, OTHER_WORD));
+    expect(addedMeanings).toHaveLength(1);
+    expect(addedMeanings[0].definition).toBe('makna baru oleh verifikator');
+    expect(addedMeanings[0].status).toBe('published');
+    expect(addedMeanings[0].isVerified).toBe(true);
+    expect(addedMeanings[0].verifiedBy).toBe(REVIEWER);
+    expect(addedMeanings[0].verifiedAt).toBeInstanceOf(Date);
   });
 });
