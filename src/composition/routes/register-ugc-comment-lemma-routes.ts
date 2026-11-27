@@ -49,6 +49,13 @@ const MOUNTS: Mount[] = [
     commentParam: 'commentId',
   },
   {
+    mount: '/api/v1/karya',
+    anchorKind: 'karya_comment',
+    path: '/:id/comments/:commentId/lemma-links',
+    hostParam: 'id',
+    commentParam: 'commentId',
+  },
+  {
     mount: '/api/v1/encyclopedia',
     anchorKind: 'article_comment',
     path: '/articles/:id/comments/:commentId/lemma-links',

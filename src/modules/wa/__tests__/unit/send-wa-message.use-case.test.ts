@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/shared/logging/logger', () => ({
+  logger: { warn: vi.fn(), debug: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+
 import type { AppSettingsRepository } from '@/modules/legal/domain/repositories/app-settings.repository';
 import type { WaTemplateParam } from '../../domain/entities/wa-message.entity';
 import type {
@@ -37,6 +42,8 @@ function makeDeps(overrides: {
   usage?: { usedCount: number; limitCount: number };
   template?: { enabled: boolean } | null;
   configured?: boolean;
+  /** Nilai app_settings.wa_group_notify_enabled (default 'true'). */
+  notifyEnabled?: string | null;
 } = {}) {
   const sender = {
     provider: 'openwa',
@@ -81,6 +88,9 @@ function makeDeps(overrides: {
     update: vi.fn().mockResolvedValue(undefined),
   } as unknown as WaTemplateRepository;
   const settingsRepo = {
+    getValue: vi.fn().mockResolvedValue(
+      overrides.notifyEnabled === undefined ? 'true' : overrides.notifyEnabled,
+    ),
     getByKeys: vi.fn().mockResolvedValue([
       { key: 'wa.verifier_enabled', value: 'true' },
       { key: 'wa.group_cta_url', value: 'https://chat.whatsapp.com/abc' },
@@ -143,6 +153,49 @@ describe('SendWaMessageUseCase', () => {
       }),
     );
     expect(usageRepo.increment).toHaveBeenCalledWith('openwa', 1);
+    expect(logRepo.record).toHaveBeenCalledWith(expect.objectContaining({ status: 'sent' }));
+  });
+
+  it.each([['false'], [null], ['1']])(
+    'master flag %j: execute skip tanpa kirim, tanpa quota, tanpa log',
+    async (notifyEnabled) => {
+      const { useCase, sender, usageRepo, logRepo, templateRepo } = makeDeps({ notifyEnabled });
+      const result = await useCase.execute(cmd);
+      expect(result.sent).toBe(false);
+      expect(result.reason).toContain('wa_group_notify_enabled');
+      expect(sender.send).not.toHaveBeenCalled();
+      expect(usageRepo.getActive).not.toHaveBeenCalled();
+      expect(usageRepo.increment).not.toHaveBeenCalled();
+      expect(logRepo.record).not.toHaveBeenCalled();
+      expect(templateRepo.getByKey).not.toHaveBeenCalled();
+    },
+  );
+
+  it('master flag false: channel text (Baleho) juga skip', async () => {
+    const { useCase, sender } = makeDeps({ notifyEnabled: 'false' });
+    const result = await useCase.execute({
+      eventKey: 'baleho_payment',
+      toPhone: '6281234567890',
+      channel: 'text',
+      bodyText: 'halo',
+    });
+    expect(result.sent).toBe(false);
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
+  it('master flag error baca: fail-closed, tidak melempar', async () => {
+    const { useCase, sender, settingsRepo } = makeDeps();
+    (settingsRepo.getValue as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db down'));
+    const result = await useCase.execute(cmd);
+    expect(result.sent).toBe(false);
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
+  it('test send: bypass master flag (admin tetap bisa uji OpenWA)', async () => {
+    const { useCase, sender, logRepo } = makeDeps({ notifyEnabled: 'false' });
+    const result = await useCase.sendTest('628111111111', TPL_ROW);
+    expect(result.sent).toBe(true);
+    expect(sender.send).toHaveBeenCalled();
     expect(logRepo.record).toHaveBeenCalledWith(expect.objectContaining({ status: 'sent' }));
   });
 

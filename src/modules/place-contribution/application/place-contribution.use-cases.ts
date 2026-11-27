@@ -7,6 +7,7 @@ import {
   CreatePlaceUseCase,
   UpdatePlaceUseCase,
 } from '@/modules/place/application/use-cases/place.use-cases';
+import type { RecordEntityChange } from '@/modules/change-history/application/record-entity-change';
 import type { PlaceRepository } from '@/modules/place/domain/repositories/place.repository';
 import type { PlaceCategoryRepository } from '@/modules/place-category/domain/repositories/place-category.repository';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
@@ -55,6 +56,7 @@ export class PlaceContributionUseCases {
     private readonly inbox?: RecordInboxNotificationUseCase,
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly groupNotifier?: ExplorationGroupNotifier,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
   private async notifyGroup(
@@ -153,7 +155,7 @@ export class PlaceContributionUseCases {
         authorId: row.userId,
         images,
         status: 'published',
-      });
+      }, { actorId: row.userId, sourceContributionId: id });
       await this.contrib.setStatus(id, 'approved');
       await this.notifyDecision(row, 'approved', undefined, actorId);
       return;
@@ -182,7 +184,7 @@ export class PlaceContributionUseCases {
       villageId: row.payload.villageId,
       hours: row.payload.hours,
       contact: row.payload.contact,
-    });
+    }, { actorId: row.userId, sourceContributionId: id });
     // isMain diabaikan di mapping: appendImages set cover otomatis
     // jika place belum punya isMain visible (foto pertama batch).
     const have = new Set(place.images.map((img) => img.url));
@@ -190,6 +192,10 @@ export class PlaceContributionUseCases {
       .filter((img) => !have.has(img.url))
       .map((img) => ({ ...img, isMain: false }));
     await this.places.appendImages(place.id, fresh);
+    await this.changes?.photosChanged('place', place.id, 'photo_add', fresh.length, {
+      actorId: row.userId,
+      sourceContributionId: id,
+    });
     await this.contrib.setStatus(id, 'approved');
     await this.notifyDecision(row, 'approved', undefined, actorId);
   }

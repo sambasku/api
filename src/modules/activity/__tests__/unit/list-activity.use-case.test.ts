@@ -127,7 +127,16 @@ describe('ListActivityUseCase - kategori feed (#193)', () => {
 
   // JEBAKAN: [] = filter MATI diam-diam (repo cek kinds.length > 0).
   // Mengunci: 'all' HARUS null, bukan [].
-  it('FEED_CATEGORY_KINDS.all === null (bukan [])', () => {
+    it('FEED_CATEGORY_KINDS.jinye tanpa jinye_comment_created (#353)', () => {
+    expect(FEED_CATEGORY_KINDS.jinye).toEqual([
+      'jinye_created',
+      'jinye_reposted',
+      'jinye_quote_created',
+    ]);
+    expect(FEED_CATEGORY_KINDS.jinye).not.toContain('jinye_comment_created');
+  });
+
+it('FEED_CATEGORY_KINDS.all === null (bukan [])', () => {
     expect(FEED_CATEGORY_KINDS['all']).toBeNull();
   });
 });

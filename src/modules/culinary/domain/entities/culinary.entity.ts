@@ -13,6 +13,7 @@ export interface CulinaryCategoryRef {
 export interface CuisineComment {
   id: string;
   cuisineId: string;
+  parentId: string | null;
   userId: string;
   username: string | null;
   displayName: string | null;
@@ -27,6 +28,7 @@ export interface CuisineComment {
   isEdited: boolean;
   createdAt: Date;
   updatedAt: Date | null;
+  replies?: CuisineComment[];
 }
 
 /** Atribusi gambar - disimpan verbatim (PRD kuliner 13). */

@@ -3,7 +3,7 @@ import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import { BadRequestError, UnauthorizedError } from "@/shared/errors/app-error";
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
 import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
-import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
+import { attachLemmaLinksToNestedCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { CreatePlaceCommentAudioUseCase } from '../../application/use-cases/place-comment-audio.use-case';
@@ -59,6 +59,7 @@ function toCommentWire(c: PlaceComment) {
   return {
     id: c.id,
     place_id: c.placeId,
+    parent_id: c.parentId ?? null,
     user: {
       user_id: c.userId,
       username: deleted ? null : c.username,
@@ -409,6 +410,9 @@ export class PlaceController {
       related: body.related,
       images: mapImages(body.images),
       status: body.status,
+    }, {
+      actorId: c.get("user")?.user_id ?? null,
+      requestId: c.get("requestId") ?? null,
     });
     if (body.related && this.replaceRelated) {
       await this.replaceRelated.execute({
@@ -447,6 +451,9 @@ export class PlaceController {
       related: body.related,
       images: mapImages(body.images),
       status: body.status,
+    }, {
+      actorId: c.get("user")?.user_id ?? null,
+      requestId: c.get("requestId") ?? null,
     });
     if (body.related && this.replaceRelated) {
       await this.replaceRelated.execute({
@@ -495,13 +502,19 @@ export class PlaceController {
     imageId: string,
   ) {
     return this.hideImageUc
-      .execute(placeId, imageId)
+      .execute(placeId, imageId, {
+      actorId: c.get("user")?.user_id ?? null,
+      requestId: c.get("requestId") ?? null,
+    })
       .then(() => c.json({ success: true as const, data: null }));
   }
 
   remove(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.deleteUc
-      .execute(id)
+      .execute(id, {
+      actorId: c.get("user")?.user_id ?? null,
+      requestId: c.get("requestId") ?? null,
+    })
       .then(() => c.json({ success: true as const, data: null }));
   }
 
@@ -539,14 +552,12 @@ export class PlaceController {
     const q = c.req.valid("query" as never) as { cursor?: string; limit: number };
     const page = await this.comments.listComments.execute(id, q.cursor, q.limit);
     const repo = this.comments.ugcLemmaLinks;
-    const items = repo
-      ? await attachLemmaLinksToCommentWireItems(
-          repo,
-          'place_comment',
-          page.items,
-          (c) => toCommentWire(c),
-        )
-      : page.items.map((c) => ({ ...toCommentWire(c), lemma_links: [] as const }));
+    const items = await attachLemmaLinksToNestedCommentWireItems(
+      repo,
+      'place_comment',
+      page.items,
+      (item) => toCommentWire(item),
+    );
     return c.json({
       success: true as const,
       data: {
@@ -563,6 +574,7 @@ export class PlaceController {
     const body = c.req.valid("json" as never) as EntityCommentBody;
     const comment = await this.comments.createComment.execute({
       placeId: id,
+      parentId: body.parent_id ?? null,
       userId: user.user_id,
       body: body.body ?? '',
       stickerId: body.sticker_id ?? null,
@@ -594,6 +606,7 @@ export class PlaceController {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const comment = await this.comments.createCommentAudio.execute({
       placeId: id,
+      parentId: typeof body['parent_id'] === 'string' ? body['parent_id'] : null,
       userId: user.user_id,
       bytes,
       mimeType: file.type || null,
@@ -603,6 +616,12 @@ export class PlaceController {
       requestId: c.get("requestId") ?? null,
     });
     return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async getCommentEditHistory(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const data = await this.comments.listComments.getEditHistory(id);
+    return c.json({ success: true as const, data });
   }
 
   async updateComment(c: Context<{ Variables: AppVariables }>) {

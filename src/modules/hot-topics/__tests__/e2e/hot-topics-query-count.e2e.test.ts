@@ -7,8 +7,8 @@ const hasTestDb = !!parsed?.DATABASE_URL;
 if (parsed?.DATABASE_URL) process.env.DATABASE_URL = parsed.DATABASE_URL;
 
 /**
- * G5: GET /hot-topics = 4 tab paralel → target ≤4 query Turso / request
- * (Promise.all searched + proposed + viewed + check).
+ * G5: GET /hot-topics = 6 tab paralel → target ≤6 query Turso / request
+ * (Promise.all searched + proposed + viewed + check + verified + commented).
  */
 describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
   beforeAll(async () => {
@@ -35,7 +35,8 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
       lemma: 'makatn',
       languageId: '01E2ELANGHTQC0000000000001',
       status: 'published',
-      isVerified: false,
+      isVerified: true,
+      verifiedAt: new Date(),
       createdBy: 'u_htqc1',
       wordType: 'word',
     });
@@ -81,6 +82,15 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
         count: 1,
       },
     ]);
+    // Komentar published → masuk tab commented.
+    await db.insert(schema.comments).values({
+      id: 'cm_htqc1',
+      wordId: 'w_htqc1',
+      userId: 'u_htqc1',
+      body: 'mantap',
+      status: 'published',
+      createdAt: now,
+    });
     // Downvote aktif → masuk tab check.
     await db.insert(schema.votes).values({
       id: 'v_htqc1',
@@ -93,7 +103,7 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
     });
   });
 
-  it('listAllTabs <= 4 query (satu per tab, paralel)', async () => {
+  it('listAllTabs <= 6 query (satu per tab, paralel)', async () => {
     const { createClient } = await import('@libsql/client');
     const { drizzle } = await import('drizzle-orm/libsql');
     const schema = await import('@/shared/database/drizzle/schema');
@@ -120,6 +130,12 @@ describe.skipIf(!hasTestDb)('Hot topics query budget (G5)', () => {
     expect(result.check.items.length).toBeGreaterThan(0);
     expect(result.check.items[0]?.downvotes).toBe(1);
     expect(result.check.items[0]?.inWindow).toBe(true);
-    expect(queryCount).toBeLessThanOrEqual(4);
+    expect(result.verified.items[0]?.kind).toBe('word_verified');
+    expect(result.verified.items[0]?.lemma).toBe('makatn');
+    expect(result.verified.items[0]?.inWindow).toBe(true);
+    expect(result.commented.items[0]?.kind).toBe('word_commented');
+    expect(result.commented.items[0]?.commentCount).toBe(1);
+    expect(result.commented.items[0]?.inWindow).toBe(true);
+    expect(queryCount).toBeLessThanOrEqual(6);
   });
 });

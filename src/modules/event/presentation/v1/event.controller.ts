@@ -3,7 +3,7 @@ import type { AppVariables, AuthUser } from "@/shared/types";
 import { BadRequestError, UnauthorizedError } from "@/shared/errors/app-error";
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
 import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
-import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
+import { attachLemmaLinksToNestedCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { CreateEventCommentAudioUseCase } from '../../application/use-cases/event-comment-audio.use-case';
@@ -37,6 +37,11 @@ import type {
   updateEventBodySchema,
 } from "./validators/event.validator";
 
+/** Konteks riwayat perubahan: pelaku = user login (admin). */
+function changeCtx(c: Context<{ Variables: AppVariables }>) {
+  return { actorId: c.get("user")?.user_id ?? null, requestId: c.get("requestId") ?? null };
+}
+
 function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
   const user = c.get('user');
   if (!user) throw new UnauthorizedError();
@@ -48,6 +53,7 @@ function toCommentWire(c: EventComment) {
   return {
     id: c.id,
     event_id: c.eventId,
+    parent_id: c.parentId ?? null,
     user: {
       user_id: c.userId,
       username: deleted ? null : c.username,
@@ -348,7 +354,7 @@ export class EventController {
         placeIds: body.place_ids,
         authorId: body.author_id ?? c.get("user")?.user_id ?? null,
         status: body.status,
-      })
+      }, changeCtx(c))
       .then((event) =>
         c.json({
           success: true as const,
@@ -383,7 +389,7 @@ export class EventController {
         villageId: body.village_id,
         placeIds: body.place_ids,
         status: body.status,
-      })
+      }, changeCtx(c))
       .then((event) =>
         c.json({
           success: true as const,
@@ -396,7 +402,7 @@ export class EventController {
   }
 
   remove(c: Context<{ Variables: AppVariables }>, id: string) {
-    return this.deleteUc.execute(id).then(() =>
+    return this.deleteUc.execute(id, changeCtx(c)).then(() =>
       c.json({ success: true as const, data: null }),
     );
   }
@@ -406,7 +412,7 @@ export class EventController {
     id: string,
     body: { cancelled: boolean },
   ) {
-    return this.setCancelledUc.execute(id, body.cancelled).then((event) =>
+    return this.setCancelledUc.execute(id, body.cancelled, changeCtx(c)).then((event) =>
       c.json({
           success: true as const,
           data: serialize(event, {
@@ -448,18 +454,12 @@ export class EventController {
       data: {
         items: await (async () => {
           const repo = this.comments.ugcLemmaLinks;
-          if (repo) {
-            return attachLemmaLinksToCommentWireItems(
-              repo,
-              'event_comment',
-              page.items,
-              (c) => toCommentWire(c),
-            );
-          }
-          return page.items.map((c) => ({
-            ...toCommentWire(c),
-            lemma_links: [] as const,
-          }));
+          return attachLemmaLinksToNestedCommentWireItems(
+            repo,
+            'event_comment',
+            page.items,
+            (item) => toCommentWire(item),
+          );
         })(),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
@@ -473,6 +473,7 @@ export class EventController {
     const body = c.req.valid('json' as never) as EntityCommentBody;
     const comment = await this.comments.createComment.execute({
       eventId: id,
+      parentId: body.parent_id ?? null,
       userId: user.user_id,
       body: body.body ?? '',
       stickerId: body.sticker_id ?? null,
@@ -504,6 +505,7 @@ export class EventController {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const comment = await this.comments.createCommentAudio.execute({
       eventId: id,
+      parentId: typeof body['parent_id'] === 'string' ? body['parent_id'] : null,
       userId: user.user_id,
       bytes,
       mimeType: file.type || null,
@@ -513,6 +515,12 @@ export class EventController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async getCommentEditHistory(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const data = await this.comments.listComments.getEditHistory(id);
+    return c.json({ success: true as const, data });
   }
 
   async updateComment(c: Context<{ Variables: AppVariables }>) {
@@ -586,7 +594,7 @@ export class EventController {
 
   async hideImage(c: Context<{ Variables: AppVariables }>) {
     const { id, imageId } = c.req.valid('param' as never) as { id: string; imageId: string };
-    await this.images.hideImage.execute(id, imageId);
+    await this.images.hideImage.execute(id, imageId, changeCtx(c));
     return c.json({ success: true as const, data: null });
   }
 }

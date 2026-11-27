@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/shared/config/env", () => ({
-  env: {},
+  env: { NODE_ENV: "test" as string },
 }));
 
+import { env } from "@/shared/config/env";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import { formatExplorationGroupMessage } from "../../application/ports/exploration-group-notifier.port";
 import { OpenWaExplorationGroupNotifier } from "../../infrastructure/openwa-exploration-group.notifier";
+
+const enabledSettings = { getValue: vi.fn().mockResolvedValue("true") };
 
 const CONFIG = {
   baseUrl: "https://wa.example.com/",
@@ -38,11 +41,25 @@ describe("formatExplorationGroupMessage", () => {
       }),
     ).toBe("Usulan dikirim ulang.\nJenis: Acara\nNama: tanpa nama\nDari: Anonim");
   });
+
+  it("menandai env Staging di footer italic", () => {
+    expect(
+      formatExplorationGroupMessage({
+        jenis: "Pengajuan verifikator",
+        name: "Budi",
+        from: "@budi",
+        envTag: "Staging",
+      }),
+    ).toBe(
+      "Usulan baru masuk.\nJenis: Pengajuan verifikator\nNama: Budi\nDari: @budi\n\n_Dikirim dari Staging._",
+    );
+  });
 });
 
 describe("OpenWaExplorationGroupNotifier", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    env.NODE_ENV = "test";
   });
 
   it("melewati kirim bila env belum lengkap", async () => {
@@ -52,6 +69,7 @@ describe("OpenWaExplorationGroupNotifier", () => {
     const notifier = new OpenWaExplorationGroupNotifier(
       { findById: vi.fn() },
       logs,
+      enabledSettings,
       { baseUrl: "https://wa.example.com" },
     );
 
@@ -72,6 +90,7 @@ describe("OpenWaExplorationGroupNotifier", () => {
     const notifier = new OpenWaExplorationGroupNotifier(
       { findById: vi.fn().mockResolvedValue({ username: "warga" }) },
       logs,
+      enabledSettings,
       CONFIG,
     );
 
@@ -106,12 +125,108 @@ describe("OpenWaExplorationGroupNotifier", () => {
     );
   });
 
+  it("staging: sisip (Staging) di teks grup", async () => {
+    env.NODE_ENV = "staging";
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201 });
+    vi.stubGlobal("fetch", fetchMock);
+    const notifier = new OpenWaExplorationGroupNotifier(
+      { findById: vi.fn().mockResolvedValue({ username: "warga" }) },
+      { record: vi.fn().mockResolvedValue(undefined) },
+      enabledSettings,
+      CONFIG,
+    );
+
+    await notifier.notify({
+      jenis: "Pengajuan verifikator",
+      name: "Budi",
+      userId: "USER1",
+    });
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as { text: string };
+    expect(body.text.endsWith("\n\n_Dikirim dari Staging._")).toBe(true);
+  });
+
+  it("notice.text dipakai apa adanya, event key custom, footer Staging", async () => {
+    env.NODE_ENV = "staging";
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201 });
+    vi.stubGlobal("fetch", fetchMock);
+    const findById = vi.fn();
+    const logs = { record: vi.fn().mockResolvedValue(undefined) };
+    const notifier = new OpenWaExplorationGroupNotifier(
+      { findById },
+      logs,
+      enabledSettings,
+      CONFIG,
+    );
+
+    await notifier.notify({
+      jenis: "Chat",
+      name: "PING!!!",
+      userId: "USER1",
+      eventKey: "chat_ping",
+      text: "PING!!! dari @budi di chat SambasKu. Yuk ngobrol.",
+    });
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as { text: string };
+    expect(body.text).toBe(
+      "PING!!! dari @budi di chat SambasKu. Yuk ngobrol.\n\n_Dikirim dari Staging._",
+    );
+    expect(findById).not.toHaveBeenCalled();
+    expect(logs.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventKey: "chat_ping", status: "sent" }),
+    );
+  });
+
+  it.each([
+    ["false", "false"],
+    ["baris hilang", null],
+    ["nilai bukan true", "1"],
+  ])("flag %s: tidak kirim, tidak log, tidak lookup user", async (_label, value) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const findById = vi.fn();
+    const logs = { record: vi.fn() };
+    const notifier = new OpenWaExplorationGroupNotifier(
+      { findById },
+      logs,
+      { getValue: vi.fn().mockResolvedValue(value) },
+      CONFIG,
+    );
+
+    await expect(
+      notifier.notify({ jenis: "Usaha", name: "Warung", userId: "USER1" }),
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(findById).not.toHaveBeenCalled();
+    expect(logs.record).not.toHaveBeenCalled();
+  });
+
+  it("error baca flag: fail-closed, tidak melempar, tidak kirim", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const notifier = new OpenWaExplorationGroupNotifier(
+      { findById: vi.fn() },
+      { record: vi.fn() },
+      { getValue: vi.fn().mockRejectedValue(new Error("db down")) },
+      CONFIG,
+    );
+
+    await expect(
+      notifier.notify({ jenis: "Usaha", name: "Warung", userId: "USER1" }),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("anonim tidak memanggil lookup user", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 201 }));
     const findById = vi.fn();
     const notifier = new OpenWaExplorationGroupNotifier(
       { findById },
       { record: vi.fn().mockResolvedValue(undefined) },
+      enabledSettings,
       CONFIG,
     );
 
@@ -137,6 +252,7 @@ describe("OpenWaExplorationGroupNotifier", () => {
     const notifier = new OpenWaExplorationGroupNotifier(
       { findById: vi.fn().mockResolvedValue(null) },
       logs,
+      enabledSettings,
       CONFIG,
     );
 

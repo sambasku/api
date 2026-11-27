@@ -67,11 +67,21 @@ import {
   createPublicLayananRoutes,
 } from "@/modules/layanan/presentation/v1/layanan.routes";
 import {
+  createAdminCommunityOrgRoutes,
+  createAdminCommunityProposalRoutes,
+  createAuthCommunityRoutes,
+  createPublicCommunityRoutes,
+} from "@/modules/community/presentation/v1/community.routes";
+import {
   createAdminKaryaContributionRoutes,
   createAdminKaryaRoutes,
   createKaryaContributionRoutes,
   createPublicKaryaRoutes,
 } from "@/modules/karya/presentation/v1/karya.routes";
+import {
+  createAdminKaryaCommentRoutes,
+  createPublicKaryaCommentRoutes,
+} from "@/modules/karya/presentation/v1/karya-comment.routes";
 import {
   createAdminKaryaViewsRoutes,
   createPublicKaryaViewsRoutes,
@@ -141,6 +151,7 @@ import {
   createLanguageRoutes,
 } from "@/modules/language/presentation/v1/language.routes";
 import { createCategoryRoutes } from "@/modules/category/presentation/v1/category.routes";
+import { createEntityChangeHistoryRoutes } from "@/modules/change-history/presentation/v1/change-history.routes";
 
 export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables }>): void {
   // Places CRUD - katalog wisata/kuliner/budaya (SoT Turso).
@@ -158,6 +169,13 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
       controller: di.placeController,
       optionalAuthenticate: di.optionalAuthenticate,
       softAuthenticate: di.softAuthenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/places",
+    createEntityChangeHistoryRoutes({
+      entityType: "place",
+      useCase: di.getEntityChangeHistoryUseCase,
     }),
   );
   app.route(
@@ -228,6 +246,14 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
     createPublicEventRoutes({
       controller: di.eventController,
       optionalAuthenticate: di.optionalAuthenticate,
+    }),
+  );
+  // Riwayat perubahan publik: wajib sebelum route ber-auth (`use('*')`) di prefix yang sama.
+  app.route(
+    "/api/v1/events",
+    createEntityChangeHistoryRoutes({
+      entityType: "event",
+      useCase: di.getEntityChangeHistoryUseCase,
     }),
   );
   app.route(
@@ -414,9 +440,48 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
     createPublicLayananRoutes({ controller: di.layananController }),
   );
   app.route(
+    "/api/v1/community",
+    createPublicCommunityRoutes({ controller: di.communityController }),
+  );
+  app.route(
+    "/api/v1/community/orgs",
+    createEntityChangeHistoryRoutes({
+      entityType: "community",
+      useCase: di.getEntityChangeHistoryUseCase,
+    }),
+  );
+  app.route(
+    "/api/v1/community",
+    createAuthCommunityRoutes({
+      controller: di.communityController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/community/orgs",
+    createAdminCommunityOrgRoutes({
+      controller: di.communityController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/community-proposals",
+    createAdminCommunityProposalRoutes({
+      controller: di.communityController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
     "/api/v1/admin/karya",
     createAdminKaryaViewsRoutes({
       controller: di.karyaViewsController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/karya",
+    createAdminKaryaCommentRoutes({
+      controller: di.karyaCommentController,
       authenticate: di.authenticate,
     }),
   );
@@ -436,6 +501,8 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
     createKaryaContributionRoutes({
       controller: di.karyaController,
       authenticate: di.authenticate,
+      uploadKaryaImage: (c) =>
+        publicImageController.upload(c, { purpose: "karya" }),
     }),
   );
   app.route(
@@ -443,6 +510,14 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
     createPublicKaryaViewsRoutes({
       controller: di.karyaViewsController,
       softAuthenticate: di.softAuthenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/karya",
+    createPublicKaryaCommentRoutes({
+      controller: di.karyaCommentController,
+      authenticate: di.authenticate,
+      optionalAuthenticate: di.optionalAuthenticate,
     }),
   );
   app.route(
@@ -572,6 +647,27 @@ app.route(
       softAuthenticate: di.softAuthenticate,
     }),
   );
+  app.route(
+    "/api/v1/culinary/cuisines",
+    createEntityChangeHistoryRoutes({
+      entityType: "cuisine",
+      useCase: di.getEntityChangeHistoryUseCase,
+    }),
+  );
+  // Riwayat perubahan publik (fase 2): GET /:slug/change-history per entitas.
+  for (const [prefix, entityType] of [
+    ["/api/v1/usaha", "usaha"],
+    ["/api/v1/karya", "karya"],
+    ["/api/v1/layanan", "layanan"],
+  ] as const) {
+    app.route(
+      prefix,
+      createEntityChangeHistoryRoutes({
+        entityType,
+        useCase: di.getEntityChangeHistoryUseCase,
+      }),
+    );
+  }
   app.route(
     "/api/v1/culinary",
     createPublicCulinaryRoutes({ controller: di.culinaryController, optionalAuthenticate: di.optionalAuthenticate }),

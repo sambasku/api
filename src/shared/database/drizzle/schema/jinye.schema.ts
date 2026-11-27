@@ -8,6 +8,8 @@ export type JinyeImageRow = {
   provider_file_id: string;
   public_url?: string | null;
   content_warnings?: string[];
+  /** Blob sha GitHub; null/absen untuk baris ImageKit lama. */
+  sha?: string | null;
 };
 
 export const JINYE_STATUSES = [
@@ -117,6 +119,13 @@ export const jinyeComments = sqliteTable(
     bodyOriginal: text('body_original'),
     /** Slug katalog stickers; null = bukan komentar stiker. */
     stickerId: text('sticker_id'),
+    audioUrl: text('audio_url'),
+    audioMimeType: text('audio_mime_type'),
+    audioFileSize: integer('audio_file_size'),
+    audioDurationMs: integer('audio_duration_ms'),
+    audioProvider: text('audio_provider'),
+    audioProviderFileId: text('audio_provider_file_id'),
+    audioSha: text('audio_sha'),
     images: text('images', { mode: 'json' })
       .$type<JinyeImageRow[]>()
       .notNull()

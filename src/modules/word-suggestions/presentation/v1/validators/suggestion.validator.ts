@@ -638,6 +638,9 @@ export const changeHistoryResponseSchema = z.object({
         display_name: z.string().nullable(),
       }),
       type: z.enum(['direct_edit', 'suggest_edit', 'duplicate_vote']),
+      entity: z.string(),
+      action: z.string(),
+      action_label: z.string(),
       changes: z.array(
         z.object({
           entity: z.string(),

@@ -19,6 +19,11 @@ export const voteTargetTypeEnum = z.enum([
 'article_comment',
 'jinye',
 'jinye_comment',
+'place_comment',
+'usaha_comment',
+'cuisine_comment',
+'event_comment',
+'karya_comment',
 ]);
 
 export const toggleVoteSchema = z.object({
@@ -34,8 +39,11 @@ export type ToggleVoteBody = z.infer<typeof toggleVoteSchema>;
 // adalah cek eksistensi di use case (404). Alfabet sengaja longgar
 // ([0-9A-Za-z], bukan Crockford ketat) karena fixture ULID handmade di
 // repo memakai huruf bebas (mis. 01U2E... mengandung U).
-const TARGET_PATTERN =
-  /^(word|meaning|example|pronunciation|word_image|comment|discussion_reply|discussion):[0-9A-Za-z]{26}$/;
+// Dibangun dari enum supaya tipe baru (pantun, jinye, dst.) ikut valid di
+// /votes/counts dan /votes/my tanpa perlu menyalin daftar dua kali.
+const TARGET_PATTERN = new RegExp(
+  `^(${voteTargetTypeEnum.options.join('|')}):[0-9A-Za-z]{26}$`,
+);
 export const MAX_VOTE_TARGETS = 50;
 
 // "word:01X,meaning:01Y" → array target tervalidasi (trim, dedupe, maks 50)
@@ -157,6 +165,19 @@ export const voteDeckQuerySchema = z.object({
 });
 
 export type VoteDeckQuery = z.infer<typeof voteDeckQuerySchema>;
+
+/**
+ * GET /api/v1/votes/check-deck - Periksa Kata. Default `randomize=false`
+ * supaya antrean selalu urut voting terbanyak (#379); deck verified tetap acak.
+ */
+export const voteCheckDeckQuerySchema = voteDeckQuerySchema.extend({
+  randomize: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((v) => v === true || v === 'true' || v === '1'),
+});
+
+export type VoteCheckDeckQuery = z.infer<typeof voteCheckDeckQuerySchema>;
 
 /** 52: meaning_id (client baru) atau word_id (mobile ≤ v0.4.0). */
 export const skipVoteDeckSchema = z

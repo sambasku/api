@@ -5,7 +5,7 @@ import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { errorResponseSchema } from '@/shared/openapi/error-response.schema';
-import type { AppVariables } from '@/shared/types';
+import type { AppVariables, AuthUser } from '@/shared/types';
 import type { LeaderboardController } from './leaderboard.controller';
 import {
   addLeaderboardExclusionBodySchema,
@@ -16,6 +16,7 @@ import {
   leaderboardExclusionListResponseSchema,
   leaderboardExclusionMutationResponseSchema,
   leaderboardListResponseSchema,
+  shareLeaderboardRankResponseSchema,
 } from './validators/leaderboard.validator';
 
 const json = <T extends z.ZodType>(schema: T) => ({
@@ -27,9 +28,38 @@ export interface LeaderboardRoutesDeps {
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
 }
 
-export function createPublicLeaderboardRoutes(deps: { controller: LeaderboardController }) {
+export function createPublicLeaderboardRoutes(deps: LeaderboardRoutesDeps) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 100, duration: 60 }));
+  routes.use(
+    '/me/share',
+    deps.authenticate,
+    rateLimit({
+      points: 10,
+      duration: 3600,
+      keyFn: (c) => {
+        const user = (c.get('user') as AuthUser | undefined) ?? null;
+        return `leaderboard-share:${user?.user_id ?? 'unknown'}`;
+      },
+    }),
+  );
+
+  const shareRoute = createRoute({
+    method: 'post',
+    path: '/me/share',
+    tags: ['Leaderboard'],
+    summary: 'Bagikan posisi papan peringkat minggu berjalan ke feed (login)',
+    description:
+      'Hanya peringkat 1-25 minggu berjalan. Posisi dicari dari user token. ' +
+      'Satu event per user per minggu; share ulang menimpa peringkat terakhir.',
+    responses: {
+      200: { description: 'Posisi dibagikan', content: json(shareLeaderboardRankResponseSchema) },
+      401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
+      403: { description: 'Di luar peringkat 1-25', content: json(errorResponseSchema) },
+      429: { description: 'Rate limit', content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(shareRoute, (c) => deps.controller.shareMyRank(c) as never);
 
   const listRoute = createRoute({
     method: 'get',

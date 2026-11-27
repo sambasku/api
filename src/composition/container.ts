@@ -68,12 +68,24 @@ import { UpdateWordUseCase } from "@/modules/word/application/use-cases/update-w
 import { GetWordByIdUseCase } from "@/modules/word/application/use-cases/get-word-by-id.use-case";
 import { GetWordByLemmaUseCase } from "@/modules/word/application/use-cases/get-word-by-lemma.use-case";
 import { GetWordOfDayUseCase } from "@/modules/word/application/use-cases/get-word-of-day.use-case";
+import {
+  ClearAdminWordOfDayUseCase,
+  GetAdminWordOfDayUseCase,
+  ListAdminWordOfDayHistoryUseCase,
+  SetAdminWordOfDayUseCase,
+} from "@/modules/word/application/use-cases/admin-word-of-day.use-cases";
+import { WordOfDayAdminController } from "@/modules/word/presentation/v1/word-of-day-admin.controller";
 import { SearchWordsUseCase } from "@/modules/word/application/use-cases/search-words.use-case";
 import { ListAdminWordsUseCase } from "@/modules/word/application/use-cases/list-admin-words.use-case";
 import { ListWordsUseCase } from "@/modules/word/application/use-cases/list-words.use-case";
 import { ListLatestWordsUseCase } from "@/modules/word/application/use-cases/list-latest-words.use-case";
 import { ListDuplicateWordsUseCase } from "@/modules/word/application/use-cases/list-duplicate-words.use-case";
 import { MergeDuplicateWordsUseCase } from "@/modules/word/application/use-cases/merge-duplicate-words.use-case";
+import { ApproveLemmaMergeUseCase } from "@/modules/lemma-merge/application/approve-lemma-merge.use-case";
+import { CreateLemmaMergeUseCase } from "@/modules/lemma-merge/application/create-lemma-merge.use-case";
+import { LemmaMergeAdminReadUseCase } from "@/modules/lemma-merge/application/lemma-merge-admin-read.use-case";
+import { RejectLemmaMergeUseCase } from "@/modules/lemma-merge/application/reject-lemma-merge.use-case";
+import { LemmaMergeController } from "@/modules/lemma-merge/presentation/v1/lemma-merge.controller";
 import { ListCommaSplitsUseCase } from "@/modules/word/application/use-cases/list-comma-splits.use-case";
 import { ApplyCommaSplitUseCase } from "@/modules/word/application/use-cases/apply-comma-split.use-case";
 import { MarkCommaLiteralUseCase } from "@/modules/word/application/use-cases/mark-comma-literal.use-case";
@@ -148,6 +160,7 @@ import { ListAnnouncementsUseCase } from "@/modules/announcement/application/use
 import { AnnouncementController } from "@/modules/announcement/presentation/v1/announcement.controller";
 import { HotTopicsRepositoryImpl } from "@/modules/hot-topics/infrastructure/hot-topics.repository.impl";
 import { ListHotTopicsUseCase } from "@/modules/hot-topics/application/list-hot-topics.use-case";
+import { SyncHotViewedSlotsUseCase } from "@/modules/hot-topics/application/sync-hot-viewed-slots.use-case";
 import { HotTopicsController } from "@/modules/hot-topics/presentation/v1/hot-topics.controller";
 import { AboutRepositoryImpl } from "@/modules/about/infrastructure/about.repository.impl";
 import {
@@ -185,6 +198,7 @@ import { AchievementController } from "@/modules/achievement/presentation/v1/ach
 import { LeaderboardRepositoryImpl } from "@/modules/leaderboard/infrastructure/leaderboard.repository.impl";
 import { createLeaderboardStorage } from "@/modules/leaderboard/infrastructure/leaderboard-storage.factory";
 import { ComputeLiveLeaderboardUseCase } from "@/modules/leaderboard/application/use-cases/compute-live-leaderboard.use-case";
+import { ShareLeaderboardRankUseCase } from "@/modules/leaderboard/application/use-cases/share-leaderboard-rank.use-case";
 import { FinalizeLeaderboardWeekUseCase } from "@/modules/leaderboard/application/use-cases/finalize-leaderboard-week.use-case";
 import { RunDueLeaderboardJobsUseCase } from "@/modules/leaderboard/application/use-cases/run-due-leaderboard-jobs.use-case";
 import { GetLeaderboardUseCase } from "@/modules/leaderboard/application/use-cases/get-leaderboard.use-case";
@@ -312,6 +326,9 @@ import { UsahaContributionController } from "@/modules/usaha-contribution/presen
 import { LayananRepositoryImpl } from "@/modules/layanan/infrastructure/layanan.repository.impl";
 import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases";
 import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
+import { CommunityRepositoryImpl } from "@/modules/community/infrastructure/community.repository.impl";
+import { CommunityUseCases } from "@/modules/community/application/community.use-cases";
+import { CommunityController } from "@/modules/community/presentation/v1/community.controller";
 import {
   GetKaryaViewReportUseCase,
   ListKaryaViewsUseCase,
@@ -331,6 +348,15 @@ import { KaryaRepositoryImpl } from "@/modules/karya/infrastructure/karya.reposi
 import { KaryaUseCases } from "@/modules/karya/application/karya.use-cases";
 import { ResolveKaryaRelated } from "@/modules/karya/application/resolve-karya-related";
 import { KaryaController } from "@/modules/karya/presentation/v1/karya.controller";
+import {
+  CreateKaryaCommentUseCase,
+  DeleteKaryaCommentUseCase,
+  ListKaryaCommentsUseCase,
+  TakedownKaryaCommentUseCase,
+  UpdateKaryaCommentUseCase,
+} from "@/modules/karya/application/use-cases/karya-comment.use-cases";
+import { CreateKaryaCommentAudioUseCase } from "@/modules/karya/application/use-cases/karya-comment-audio.use-case";
+import { KaryaCommentController } from "@/modules/karya/presentation/v1/karya-comment.controller";
 import { CreateKaryaLemmaLinkUseCase } from "@/modules/karya/application/use-cases/create-karya-lemma-link.use-case";
 import { DeleteKaryaLemmaLinkUseCase } from "@/modules/karya/application/use-cases/delete-karya-lemma-link.use-case";
 import { ListKaryaExcerptLemmaLinksUseCase } from "@/modules/karya/application/use-cases/list-karya-excerpt-lemma-links.use-case";
@@ -437,14 +463,30 @@ import { CreateUploadCredentialsUseCase } from "@/modules/image/application/use-
 import { WordReportRepositoryImpl } from "@/modules/word-report/infrastructure/word-report.repository.impl";
 import { StickerRepositoryImpl } from "@/modules/sticker/infrastructure/sticker.repository.impl";
 import {
+  AddFavoriteStickerUseCase,
+  CreateMyStickerUseCase,
   CreateStickerUseCase,
+  DeleteMyStickerUseCase,
   DeleteStickerUseCase,
   GetActiveStickerUseCase,
+  GetStickerUploadTokenUseCase,
   ListActiveStickersUseCase,
   ListAdminStickersUseCase,
+  ListFavoriteStickersUseCase,
+  ListMyStickersUseCase,
+  RemoveFavoriteStickerUseCase,
   UpdateStickerUseCase,
 } from "@/modules/sticker/application/use-cases/sticker.use-cases";
 import { StickerController } from "@/modules/sticker/presentation/v1/sticker.controller";
+import { ProfileCoverRepositoryImpl } from "@/modules/profile-cover/infrastructure/profile-cover.repository.impl";
+import {
+  ActivateProfileCoverUseCase,
+  CreateProfileCoverUseCase,
+  DeleteProfileCoverUseCase,
+  GetActiveProfileCoversUseCase,
+  ListProfileCoversUseCase,
+} from "@/modules/profile-cover/application/use-cases/profile-cover.use-cases";
+import { ProfileCoverController } from "@/modules/profile-cover/presentation/v1/profile-cover.controller";
 import { ContentLinkRepositoryImpl } from "@/modules/content-link/infrastructure/content-link.repository.impl";
 import { ResolveContentLinks } from "@/modules/content-link/application/resolve-content-links";
 import {
@@ -498,6 +540,8 @@ import { ListMyCommentsUseCase } from "@/modules/comment/application/use-cases/l
 import { TakedownCommentUseCase } from "@/modules/comment/application/use-cases/takedown-comment.use-case";
 import { UncensorCommentUseCase } from "@/modules/comment/application/use-cases/uncensor-comment.use-case";
 import { CommentController } from "@/modules/comment/presentation/v1/comment.controller";
+import { AdminExploreCommentService } from "@/modules/comment/infrastructure/admin-explore-comment.service";
+import { AdminExplorePhotoService } from "@/modules/public-image/infrastructure/admin-explore-photo.service";
 import { UgcCommentLemmaRepositoryImpl } from "@/modules/ugc-comment-lemma/infrastructure/ugc-comment-lemma.repository.impl";
 import { CreateUgcCommentLemmaLinkUseCase } from "@/modules/ugc-comment-lemma/application/use-cases/create-ugc-comment-lemma-link.use-case";
 import { DeleteUgcCommentLemmaLinkUseCase } from "@/modules/ugc-comment-lemma/application/use-cases/delete-ugc-comment-lemma-link.use-case";
@@ -538,6 +582,7 @@ import { ReviewPushCooldownGate } from "@/modules/notification/application/use-c
 import { WordCommentPushCooldownGate } from "@/modules/notification/application/use-cases/word-comment-push-cooldown-gate";
 import { DiscussionReplyPushCooldownGate, ReplyPushCooldownGate } from "@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate";
 import { WordVotePushCooldownGate } from "@/modules/notification/application/use-cases/word-vote-push-cooldown-gate";
+import { ArticleClapPushCooldownGate } from "@/modules/notification/application/use-cases/article-clap-push-cooldown-gate";
 import { WordMediaPushCooldownGate } from "@/modules/notification/application/use-cases/word-media-push-cooldown-gate";
 import { NotifyWordOwnerMediaUseCase } from "@/modules/notification/application/use-cases/notify-word-owner-media.use-case";
 import { ActivityEventRepositoryImpl } from "@/modules/activity/infrastructure/activity-event.repository.impl";
@@ -560,6 +605,9 @@ import {
 import { createWebAnalyticsProviders } from "@/modules/web-analytics/infrastructure/web-analytics-providers.factory";
 import { createPlayAnalyticsProviders } from "@/modules/play-analytics/infrastructure/play-analytics-providers.factory";
 import { createFcmAnalyticsProviders } from "@/modules/fcm-analytics/infrastructure/fcm-analytics-providers.factory";
+import { RecordEntityChange } from '@/modules/change-history/application/record-entity-change';
+import { GetEntityChangeHistoryUseCase } from '@/modules/change-history/application/get-entity-change-history.use-case';
+import { ChangeHistoryRepositoryImpl } from '@/modules/change-history/infrastructure/change-history.repository.impl';
 // ---- Composition root: rakit semua dependency (manual DI, api-base-stack.md Section 2) ----
 bindCanContributeLookup(lookupCanContribute);
 export const userRepo = new UserRepositoryImpl(db);
@@ -594,6 +642,11 @@ export const identityRepo = new AuthIdentityRepositoryImpl(db);
 
 // ---- Modul audit (Section 21) - direkspos ke use case modul lain ----
 export const auditRepo = new AuditLogRepositoryImpl(db);
+// Riwayat perubahan entitas eksplorasi (timeline publik).
+export const recordEntityChange = new RecordEntityChange(auditRepo);
+export const getEntityChangeHistoryUseCase = new GetEntityChangeHistoryUseCase(
+  new ChangeHistoryRepositoryImpl(db),
+);
 // Event log feed publik (write-through, #86) - dipakai lintas modul.
 export const activityEventRepo = new ActivityEventRepositoryImpl(db);
 export const activityEvents = new RecordActivityEventUseCase(activityEventRepo);
@@ -822,6 +875,7 @@ export const requireProfileWriteClient = createRequireApprovedClientMiddleware(
 // Index FTS5 untuk ranking pencarian (port WordSearchIndex - swap ke
 // Elasticsearch nanti cukup ganti adapter di sini, tanpa ubah use case).
 export const wordRepo = new WordRepositoryImpl(db, new FtsWordSearchIndex(client));
+export const getWordOfDayUseCase = new GetWordOfDayUseCase(wordRepo, appSettingsRepo);
 
 // ---- Span lemma pada komentar UGC (kata, wisata, …). ----
 export const ugcCommentLemmaRepo = new UgcCommentLemmaRepositoryImpl(db);
@@ -925,6 +979,7 @@ export const publishWord = new PublishWordUseCase(wordRepo, auditRepo, syncLiveW
 export const softDeleteWord = new SoftDeleteWordUseCase(wordRepo, auditRepo);
 export const commentBlocklistRepo = new CommentBlocklistRepositoryImpl(db);
 export const stickerRepo = new StickerRepositoryImpl(db);
+export const profileCoverRepo = new ProfileCoverRepositoryImpl(db);
 export const contentLinkRepo = new ContentLinkRepositoryImpl(db);
 export const resolveContentLinks = new ResolveContentLinks(db);
 export const listRelatedContent = new ListRelatedContentUseCase(
@@ -949,7 +1004,7 @@ export const wordController = new WordController({
   update: new UpdateWordUseCase(wordRepo, auditRepo, syncLiveWordContributions),
   getById: new GetWordByIdUseCase(wordRepo, karyaRepo),
   getByLemma: new GetWordByLemmaUseCase(wordRepo, karyaRepo),
-  wordOfDay: new GetWordOfDayUseCase(wordRepo, appSettingsRepo),
+  wordOfDay: getWordOfDayUseCase,
   search: new SearchWordsUseCase(
     wordRepo,
     searchMissRepo,
@@ -1080,6 +1135,11 @@ export const searchMissController = new SearchMissController({
 });
 
 export const hotTopicsRepo = new HotTopicsRepositoryImpl(db);
+export const syncHotViewedSlotsUseCase = new SyncHotViewedSlotsUseCase(
+  hotTopicsRepo,
+  commentBlocklistRepo,
+  appSettingsRepo,
+);
 export const hotTopicsController = new HotTopicsController({
   list: new ListHotTopicsUseCase(hotTopicsRepo, commentBlocklistRepo),
 });
@@ -1130,18 +1190,29 @@ export const placeVisitController = new PlaceVisitController({
   list: new ListPlaceVisitsUseCase(placeVisitRepo),
 });
 export const placeCategoryRepo = new PlaceCategoryRepositoryImpl(db);
+export const explorationGroupNotifier = new OpenWaExplorationGroupNotifier(
+  userRepo,
+  new WaMessageLogRepositoryImpl(db),
+  appSettingsRepo,
+);
 export const placeController = new PlaceController(
-  new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
-  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
-  new DeletePlaceUseCase(placeRepo),
+  new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents, recordEntityChange),
+  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents, recordEntityChange),
+  new DeletePlaceUseCase(placeRepo, recordEntityChange),
   new ListPlacesUseCase(placeRepo),
   new GetPlaceBySlugUseCase(placeRepo),
   new ListPlaceImagesUseCase(placeRepo),
-  new AppendPlaceImagesUseCase(placeRepo, userRepo, activityEvents),
+  new AppendPlaceImagesUseCase(
+    placeRepo,
+    userRepo,
+    activityEvents,
+    explorationGroupNotifier,
+    recordEntityChange,
+  ),
   new RecordPlaceViewUseCase(placeRepo),
   new ListPlaceViewsUseCase(placeRepo),
   new GetPlaceViewReportUseCase(placeRepo),
-  new HidePlaceImageUseCase(placeRepo, activityEvents),
+  new HidePlaceImageUseCase(placeRepo, activityEvents, recordEntityChange),
   listRelatedContent,
   replaceContentLinks,
   placeVisitRepo,
@@ -1183,10 +1254,6 @@ export const placeCategoryController = new PlaceCategoryController(
 );
 
 export const regionRepo = new RegionRepositoryImpl(db);
-export const explorationGroupNotifier = new OpenWaExplorationGroupNotifier(
-  userRepo,
-  new WaMessageLogRepositoryImpl(db),
-);
 export const placeContributionController = new PlaceContributionController(
   new PlaceContributionUseCases(
     new PlaceContributionRepositoryImpl(db),
@@ -1194,11 +1261,12 @@ export const placeContributionController = new PlaceContributionController(
     placeCategoryRepo,
     regionRepo,
     userRepo,
-    new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
-    new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
+    new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents, recordEntityChange),
+    new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents, recordEntityChange),
     recordInbox,
     notifyUser,
     explorationGroupNotifier,
+    recordEntityChange,
   ),
 );
 export const regionController = new RegionController(
@@ -1218,12 +1286,12 @@ export const eventGoingController = new EventGoingController({
   list: new ListEventGoingsUseCase(eventGoingRepo),
 });
 export const eventController = new EventController(
-  new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
-  new UpdateEventUseCase(eventRepo, regionRepo, activityEvents),
-  new DeleteEventUseCase(eventRepo),
+  new CreateEventUseCase(eventRepo, regionRepo, activityEvents, recordEntityChange),
+  new UpdateEventUseCase(eventRepo, regionRepo, activityEvents, recordEntityChange),
+  new DeleteEventUseCase(eventRepo, recordEntityChange),
   new ListEventsUseCase(eventRepo),
   new GetEventBySlugUseCase(eventRepo),
-  new SetEventCancelledUseCase(eventRepo),
+  new SetEventCancelledUseCase(eventRepo, recordEntityChange),
   new ListEventCategoriesUseCase(eventRepo),
   {
     listComments: new ListEventCommentsUseCase(eventRepo),
@@ -1255,8 +1323,14 @@ export const eventController = new EventController(
   },
   {
     listImages: new ListEventImagesUseCase(eventRepo),
-    appendImages: new AppendEventImagesUseCase(eventRepo, userRepo, activityEvents),
-    hideImage: new HideEventImageUseCase(eventRepo, activityEvents),
+    appendImages: new AppendEventImagesUseCase(
+      eventRepo,
+      userRepo,
+      activityEvents,
+      explorationGroupNotifier,
+      recordEntityChange,
+    ),
+    hideImage: new HideEventImageUseCase(eventRepo, activityEvents, recordEntityChange),
   },
   eventGoingRepo,
   listRelatedContent,
@@ -1266,7 +1340,7 @@ export const eventContributionController = new EventContributionController(
     new EventContributionRepositoryImpl(db),
     eventRepo,
     regionRepo,
-    new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
+    new CreateEventUseCase(eventRepo, regionRepo, activityEvents, recordEntityChange),
     recordInbox,
     notifyUser,
     explorationGroupNotifier,
@@ -1289,20 +1363,26 @@ export const usahaCategoryController = new UsahaCategoryController(
   new ListUsahaCategoryCatalogUseCase(usahaCategoryRepo),
   new GetUsahaCategoryUseCase(usahaCategoryRepo),
 );
-export const createUsahaUc = new CreateUsahaUseCase(usahaRepo, regionRepo);
+export const createUsahaUc = new CreateUsahaUseCase(usahaRepo, regionRepo, recordEntityChange);
 export const usahaController = new UsahaController(
   createUsahaUc,
-  new UpdateUsahaUseCase(usahaRepo, regionRepo),
-  new DeleteUsahaUseCase(usahaRepo),
+  new UpdateUsahaUseCase(usahaRepo, regionRepo, recordEntityChange),
+  new DeleteUsahaUseCase(usahaRepo, recordEntityChange),
   new ListUsahasUseCase(usahaRepo),
   new GetUsahaBySlugUseCase(usahaRepo),
-  new RestrictUsahaUseCase(usahaRepo),
-  new RestoreUsahaUseCase(usahaRepo),
+  new RestrictUsahaUseCase(usahaRepo, recordEntityChange),
+  new RestoreUsahaUseCase(usahaRepo, recordEntityChange),
   new ListUsahaCategoriesUseCase(usahaRepo),
   new FindUsahaDuplicatesUseCase(usahaRepo),
   new ListUsahaImagesUseCase(usahaRepo),
-  new AppendUsahaImagesUseCase(usahaRepo, userRepo, activityEvents),
-  new HideUsahaImageUseCase(usahaRepo),
+  new AppendUsahaImagesUseCase(
+    usahaRepo,
+    userRepo,
+    activityEvents,
+    explorationGroupNotifier,
+    recordEntityChange,
+  ),
+  new HideUsahaImageUseCase(usahaRepo, recordEntityChange),
   listRelatedContent,
   usahaVisitRepo,
   {
@@ -1353,6 +1433,7 @@ export const usahaContributionUseCases = new UsahaContributionUseCases(
   notifyUser,
   activityEventRepo,
   explorationGroupNotifier,
+  recordEntityChange,
 );
 export const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
@@ -1376,9 +1457,17 @@ export const layananController = new LayananController(
     regionRepo,
     activityEvents,
     explorationGroupNotifier,
+    recordEntityChange,
   ),
   listRelatedContent,
 );
+export const communityRepo = new CommunityRepositoryImpl(db);
+export const communityUseCases = new CommunityUseCases(
+  communityRepo,
+  activityEvents,
+  recordEntityChange,
+);
+export const communityController = new CommunityController(communityUseCases);
 export const karyaLemmaLinkController = new KaryaLemmaLinkController({
   listByExcerpt: new ListKaryaExcerptLemmaLinksUseCase(karyaRepo),
   create: new CreateKaryaLemmaLinkUseCase(karyaRepo, wordRepo, auditRepo),
@@ -1396,10 +1485,39 @@ export const karyaController = new KaryaController(
     activityEvents,
     new ResolveKaryaRelated(db),
     explorationGroupNotifier,
+    recordEntityChange,
   ),
   listRelatedContent,
   replaceContentLinks,
 );
+export const karyaCommentController = new KaryaCommentController({
+  listComments: new ListKaryaCommentsUseCase(karyaRepo),
+  createComment: new CreateKaryaCommentUseCase(
+    karyaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+    stickerRepo,
+  ),
+  createCommentAudio: new CreateKaryaCommentAudioUseCase(
+    karyaRepo,
+    pronunciationStorage,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+  ),
+  updateComment: new UpdateKaryaCommentUseCase(
+    karyaRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  deleteComment: new DeleteKaryaCommentUseCase(karyaRepo),
+  takedownComment: new TakedownKaryaCommentUseCase(karyaRepo, auditRepo),
+  ugcLemmaLinks: ugcCommentLemmaRepo,
+});
 export const kreatorController = new KreatorController(
   new KreatorUseCases(new KreatorRepositoryImpl(db), activityEvents),
 );
@@ -1451,10 +1569,16 @@ export const culinaryController = new CulinaryController(
   new GetCuisineBySlugUseCase(culinaryRepo),
   new ListCulinaryCategoriesUseCase(culinaryRepo),
   new FindCulinaryDuplicatesUseCase(culinaryRepo),
-  new RestrictCulinaryUseCase(culinaryRepo),
-  new RestoreCulinaryUseCase(culinaryRepo),
-  new DeleteCulinaryUseCase(culinaryRepo),
-  new AppendCuisineImagesUseCase(culinaryRepo, userRepo, activityEvents),
+  new RestrictCulinaryUseCase(culinaryRepo, recordEntityChange),
+  new RestoreCulinaryUseCase(culinaryRepo, recordEntityChange),
+  new DeleteCulinaryUseCase(culinaryRepo, recordEntityChange),
+  new AppendCuisineImagesUseCase(
+    culinaryRepo,
+    userRepo,
+    activityEvents,
+    explorationGroupNotifier,
+    recordEntityChange,
+  ),
   listRelatedContent,
   {
     listComments: new ListCuisineCommentsUseCase(culinaryRepo),
@@ -1484,6 +1608,7 @@ export const culinaryController = new CulinaryController(
     takedownComment: new TakedownCuisineCommentUseCase(culinaryRepo, auditRepo),
     ugcLemmaLinks: ugcCommentLemmaRepo,
   },
+  recordEntityChange,
 );
 export const cuisineViewsRepo = new CuisineViewsRepositoryImpl(db);
 export const cuisineViewsController = new CuisineViewsController(
@@ -1502,6 +1627,7 @@ export const culinaryContributionUseCases = new CulinaryContributionUseCases(
   notifyUser,
   activityEventRepo,
   explorationGroupNotifier,
+  recordEntityChange,
 );
 export const culinaryContributionController = new CulinaryContributionController(
   culinaryContributionUseCases,
@@ -1532,6 +1658,10 @@ export const wordGroupController = new WordGroupController({
 // aksi admin - lihat KEPUTUSAN PRODUK di doc). ----
 export const voteRepo = new VoteRepositoryImpl(db);
 export const wordVotePushCooldown = new WordVotePushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+);
+export const articleClapPushCooldown = new ArticleClapPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
 );
@@ -1629,7 +1759,30 @@ export const stickerController = new StickerController({
   listAdmin: new ListAdminStickersUseCase(stickerRepo),
   create: new CreateStickerUseCase(stickerRepo, auditRepo),
   update: new UpdateStickerUseCase(stickerRepo, auditRepo),
-  remove: new DeleteStickerUseCase(stickerRepo, auditRepo),
+  remove: new DeleteStickerUseCase(stickerRepo, auditRepo, imageStorage),
+  listFavorites: new ListFavoriteStickersUseCase(stickerRepo),
+  addFavorite: new AddFavoriteStickerUseCase(stickerRepo),
+  removeFavorite: new RemoveFavoriteStickerUseCase(stickerRepo),
+  getUploadToken: new GetStickerUploadTokenUseCase(imageStorage),
+  listMine: new ListMyStickersUseCase(stickerRepo),
+  createMine: new CreateMyStickerUseCase(stickerRepo, { allowedUrlPrefix: env.IMAGEKIT_URL_ENDPOINT }),
+  removeMine: new DeleteMyStickerUseCase(stickerRepo, imageStorage),
+});
+
+
+export const wordOfDayAdminController = new WordOfDayAdminController({
+  get: new GetAdminWordOfDayUseCase(wordRepo, appSettingsRepo),
+  listHistory: new ListAdminWordOfDayHistoryUseCase(wordRepo, appSettingsRepo),
+  set: new SetAdminWordOfDayUseCase(wordRepo, appSettingsRepo, getWordOfDayUseCase, auditRepo),
+  clear: new ClearAdminWordOfDayUseCase(appSettingsRepo, getWordOfDayUseCase, auditRepo),
+});
+
+export const profileCoverController = new ProfileCoverController({
+  list: new ListProfileCoversUseCase(profileCoverRepo),
+  getActive: new GetActiveProfileCoversUseCase(profileCoverRepo),
+  create: new CreateProfileCoverUseCase(profileCoverRepo, auditRepo),
+  activate: new ActivateProfileCoverUseCase(profileCoverRepo, auditRepo),
+  remove: new DeleteProfileCoverUseCase(profileCoverRepo, imageStorage, auditRepo),
 });
 
 // ---- Modul comment (09-api-comment.md) - post-moderation + blocklist. ----
@@ -1646,6 +1799,19 @@ export const pantunReplyPushCooldown = new ReplyPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
   'pantun_reply',
+);
+export const adminExplorePhotoService = new AdminExplorePhotoService(
+  db,
+  publicImageStorage,
+  auditRepo,
+  activityEvents,
+);
+export const adminExploreCommentService = new AdminExploreCommentService(
+  db,
+  publicImageStorage,
+  imageStorage,
+  auditRepo,
+  recordAbuseSignal,
 );
 export const commentUploadCredentials = new CreateUploadCredentialsUseCase({
   imageStorage,
@@ -1665,6 +1831,7 @@ export const commentController = new CommentController({
     recordAbuseSignal,
     activityEvents,
     stickerRepo,
+    explorationGroupNotifier,
   ),
   createAudio: new CreateCommentAudioUseCase(
     commentRepo,
@@ -1678,6 +1845,7 @@ export const commentController = new CommentController({
     wordCommentPushCooldown,
     recordAbuseSignal,
     activityEvents,
+    explorationGroupNotifier,
   ),
   attachImage: new AttachCommentImageUseCase(
     commentRepo,
@@ -1685,6 +1853,7 @@ export const commentController = new CommentController({
     userRepo,
     recordInbox,
     notifyUser,
+    explorationGroupNotifier,
   ),
   approveImage: new ApproveCommentImageUseCase(
     commentRepo,
@@ -1816,12 +1985,13 @@ export const finalizeLeaderboardWeekUseCase = new FinalizeLeaderboardWeekUseCase
     // Award lencana leaderboard_top dari snapshot yang baru dibekukan.
     await runDueAchievementScanUseCase.execute(new Date(), { force: true });
   },
-  userXpSnapshotAdapter,
 );
 export const runDueLeaderboardJobsUseCase = new RunDueLeaderboardJobsUseCase(
   leaderboardRepo,
   finalizeLeaderboardWeekUseCase,
   computeLiveLeaderboardUseCase,
+  userXpSnapshotAdapter,
+  appSettingsRepo,
 );
 export const getLeaderboardUseCase = new GetLeaderboardUseCase(
   leaderboardRepo,
@@ -1844,6 +2014,7 @@ export const leaderboardController = new LeaderboardController({
   finalizeWeek: finalizeLeaderboardWeekUseCase,
   manageExclusions: manageLeaderboardExclusionsUseCase,
   getPointsHistory: getPointsHistoryUseCase,
+  shareRank: new ShareLeaderboardRankUseCase(computeLiveLeaderboardUseCase, activityEventRepo),
 });
 
 export const runStreakReminderUseCase = new RunStreakReminderUseCase(
@@ -1864,6 +2035,22 @@ export const suggestionRepo = new WordSuggestionRepositoryImpl(
   publicImageStorage,
   imageStorage,
 );
+const approveLemmaMerge = new ApproveLemmaMergeUseCase(db, wordRepo, auditRepo, activityEvents);
+const rejectLemmaMerge = new RejectLemmaMergeUseCase(db, activityEvents);
+const lemmaMergeAdminRead = new LemmaMergeAdminReadUseCase(db);
+export const createLemmaMerge = new CreateLemmaMergeUseCase(
+  db,
+  activityEvents,
+  approveLemmaMerge,
+  explorationGroupNotifier,
+);
+export const lemmaMergeController = new LemmaMergeController(
+  createLemmaMerge,
+  approveLemmaMerge,
+  rejectLemmaMerge,
+  lemmaMergeAdminRead,
+);
+
 export const suggestionController = new WordSuggestionController({
   repository: suggestionRepo,
   inbox: recordInbox,

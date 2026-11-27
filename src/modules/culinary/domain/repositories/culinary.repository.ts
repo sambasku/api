@@ -15,6 +15,7 @@ import type {
 
 export interface NewCuisineCommentInput {
   cuisineId: string;
+  parentId?: string | null;
   userId: string;
   body: string;
   bodyOriginal: string | null;
@@ -142,5 +143,6 @@ export interface CulinaryRepository {
   }): Promise<CuisineComment | null>;
   markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownComment(id: string, actorId: string): Promise<boolean>;
+  listCommentRevisions?(commentId: string): Promise<Array<{ editorId: string; body: string; createdAt: Date }>>;
   cuisineTargetExists(id: string): Promise<boolean>;
 }

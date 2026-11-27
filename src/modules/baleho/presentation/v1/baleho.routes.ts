@@ -44,6 +44,21 @@ export function createPublicBalehoRoutes(deps: {
   routes.openapi(
     createRoute({
       method: 'get',
+      path: '/kosakata-stats',
+      tags: ['Baleho'],
+      responses: {
+        200: {
+          description: 'Total, diverifikasi, antrian, ditolak',
+          content: json,
+        },
+      },
+    }),
+    (c) => deps.controller.getKosakataStats(c) as never,
+  );
+
+  routes.openapi(
+    createRoute({
+      method: 'get',
       path: '/pricing',
       tags: ['Baleho'],
       responses: {

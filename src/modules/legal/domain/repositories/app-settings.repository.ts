@@ -24,4 +24,8 @@ export interface AppSettingsRepository {
     entries: { key: AppSettingKey | string; value: string; type?: AppSettingType; description?: string }[],
     updatedBy: string | null,
   ): Promise<AppSetting[]>;
+  /** Hapus key (mis. reset kata hari ini ke algoritma). */
+  deleteKey(key: string): Promise<void>;
+  /** Riwayat pengaturan dinamis (prefix), terbaru dulu. */
+  listByKeyPrefix(prefix: string, limit: number): Promise<AppSetting[]>;
 }

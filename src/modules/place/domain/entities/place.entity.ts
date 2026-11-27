@@ -87,11 +87,13 @@ export interface Place {
   status: PlaceStatus;
   createdAt: Date;
   updatedAt: Date | null;
+  replies?: PlaceComment[];
 }
 
 export interface PlaceComment {
   id: string;
   placeId: string;
+  parentId: string | null;
   userId: string;
   username: string | null;
   displayName: string | null;

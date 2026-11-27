@@ -4,12 +4,10 @@ import {
   ValidationError,
 } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
-import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
-import type { UserRole } from '@/modules/auth/domain/entities/user.entity';
+import { discussionCreatedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
+import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
 import { applyBlocklistFilter } from '@/modules/comment-blocklist/application/utils/apply-blocklist-filter';
-import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
-import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import { assertCanContribute } from '@/modules/word/application/utils/assert-can-contribute';
 import { isHeavyCensor } from '@/shared/moderation/assert-ugc-text-quality';
 import { assertUgcTextQualityWithStrike } from '@/shared/moderation/assert-ugc-text-quality-with-strike';
@@ -27,22 +25,6 @@ export interface UpdateDiscussionCommand {
   /** undefined = biarkan tautan lama; null/'' = hapus; string = set https. */
   linkUrl?: string | null;
   requestId?: string | null;
-}
-
-const DISCUSSION_MODERATOR_ROLES: UserRole[] = [
-  'reviewer',
-  'admin',
-  'root',
-  'editor',
-];
-
-const SNIPPET_MAX = 80;
-const PENDING_TITLE = 'Diskusi menunggu tinjauan';
-
-function truncateSnippet(text: string, max = SNIPPET_MAX): string {
-  const trimmed = text.trim().replace(/\s+/g, ' ');
-  if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, max - 1).trimEnd()}...`;
 }
 
 function normalizeLinkUrl(raw: string | null | undefined): string | null {
@@ -66,9 +48,9 @@ function normalizeLinkUrl(raw: string | null | undefined): string | null {
 }
 
 /**
- * Edit OP yang sudah tayang (#202): body + link, lalu kembali `pending_review`
- * (pra-moderasi ulang - cegah sunting jadi SARA/seksual tanpa tinjauan).
- * Feed publik sembunyi sampai approve lagi. Tanpa activity event baru.
+ * Edit OP yang sudah tayang (#202 + #338): body + link, tetap `published`
+ * (pasca-moderasi, sama create). Snapshot revision bila body berubah.
+ * Payload activity di-update (dedupe key sama); `occurred_at` beku.
  */
 export class UpdateDiscussionUseCase {
   constructor(
@@ -76,9 +58,7 @@ export class UpdateDiscussionUseCase {
     private readonly auditRepo: AuditLogRepository,
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
-    private readonly userRepo?: UserRepository,
-    private readonly inbox?: RecordInboxNotificationUseCase,
-    private readonly notifyUser?: NotifyUserUseCase,
+    private readonly activityEvents?: Pick<RecordActivityEventUseCase, 'safe'>,
   ) {}
 
   async execute(cmd: UpdateDiscussionCommand): Promise<Discussion> {
@@ -132,7 +112,7 @@ export class UpdateDiscussionUseCase {
       body: filteredBody,
       bodyOriginal,
       linkUrl,
-      requeuePendingReview: true,
+      requeuePendingReview: false,
     });
     if (!updated) {
       throw new NotFoundError('DISCUSSION_NOT_FOUND', 'Diskusi tidak ditemukan');
@@ -140,6 +120,14 @@ export class UpdateDiscussionUseCase {
 
     if (bodyChanged) {
       await this.repo.markLemmaLinksStale(cmd.discussionId);
+      // Feed cuplikan mengikuti teks terbaru; waktu kejadian tetap beku.
+      await this.activityEvents?.safe({
+        kind: 'discussion_created',
+        actorId: help.userId,
+        targetId: help.id,
+        dedupeKey: `discussion:${help.id}`,
+        payload: discussionCreatedPayload(filteredBody),
+      });
     }
 
     await this.auditRepo.record({
@@ -154,12 +142,12 @@ export class UpdateDiscussionUseCase {
         link_url: help.linkUrl,
       },
       newData: {
-        status: 'pending_review',
+        status: 'published',
         body: filteredBody,
         body_original: bodyOriginal,
         link_url: linkUrl,
         censored: wasFiltered,
-        requeued: true,
+        requeued: false,
       },
       requestId: cmd.requestId ?? null,
     });
@@ -174,73 +162,6 @@ export class UpdateDiscussionUseCase {
       });
     }
 
-    await this.notifyModerators({
-      discussionId: help.id,
-      actorId: cmd.actorId,
-      bodySnippet: filteredBody,
-    });
-
     return updated;
-  }
-
-  private async notifyModerators(input: {
-    discussionId: string;
-    actorId: string;
-    bodySnippet: string;
-  }): Promise<void> {
-    if (!this.userRepo || (!this.inbox && !this.notifyUser)) return;
-
-    try {
-      const moderatorIds = await this.userRepo.listActiveIdsByRoles(DISCUSSION_MODERATOR_ROLES);
-      const recipients = moderatorIds.filter((id) => id !== input.actorId);
-      if (recipients.length === 0) return;
-
-      const snippet = truncateSnippet(input.bodySnippet);
-      const body = snippet
-        ? `Ada suntingan diskusi: "${snippet}"`
-        : 'Ada suntingan diskusi yang menunggu pemeriksaan.';
-      const title = PENDING_TITLE;
-
-      for (const userId of recipients) {
-        if (this.inbox) {
-          await this.inbox.execute({
-            userId,
-            type: 'discussion_pending_review',
-            targetKind: 'discussion',
-            targetId: input.discussionId,
-            actorId: input.actorId,
-            title,
-            body,
-            actionKind: 'discussion',
-            actionValue: input.discussionId,
-          });
-        }
-        if (this.notifyUser) {
-          await this.notifyUser.execute({
-            userId,
-            title,
-            body,
-            actorId: input.actorId,
-            data: {
-              type: 'discussion_pending_review',
-              target_kind: 'discussion',
-              target_id: input.discussionId,
-              action_kind: 'discussion',
-              action_value: input.discussionId,
-            },
-          });
-        }
-      }
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          time: new Date().toISOString(),
-          msg: 'discussion edit requeue blast failed',
-          discussion_id: input.discussionId,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    }
   }
 }

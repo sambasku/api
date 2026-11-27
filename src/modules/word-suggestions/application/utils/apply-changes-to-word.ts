@@ -25,6 +25,7 @@ import { contributions } from '@/shared/database/drizzle/schema';
 import { normalizeLemma } from '@/modules/word/application/utils/normalize-lemma';
 import { generateId } from '@/shared/utils/ulid';
 import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import { resolveWordClassDiffs } from '../../infrastructure/suggestion-snapshot-diff';
 import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import {
   loadActiveMeaningIdentities,
@@ -319,6 +320,7 @@ export async function applyChangesToWord(
   await assertWordTypeAllowsComponents(word.id, changes.wordType);
 
   const nextLemma = changes.lemma === undefined ? undefined : normalizeLemma(changes.lemma);
+  const classPairs: { oldId: string | null; newId: string | null }[] = [];
   const oldAudit: Record<string, unknown> = {
     lemma: word.lemma,
     notes: word.notes,
@@ -372,7 +374,11 @@ export async function applyChangesToWord(
             wordClassId: mc.wordClassId ?? null,
             definition: mc.definition ?? '',
             orderIndex: existingMeanings.length,
-            createdBy: reviewerId,
+            status: 'published',
+            isVerified: true,
+            verifiedBy: reviewerId,
+            verifiedAt: new Date(),
+            createdBy: suggestion.userId,
             dedupeKey: meaningDedupeKey({
               definition: mc.definition ?? '',
               translations: mc.translations ?? [],
@@ -390,7 +396,7 @@ export async function applyChangesToWord(
                 languageId: t.languageId,
                 translationText: t.translationText,
                 translationType: t.translationType ?? 'direct',
-                createdBy: reviewerId,
+                createdBy: suggestion.userId,
               })
               .onConflictDoNothing();
           }
@@ -409,6 +415,10 @@ export async function applyChangesToWord(
             meaningContentChanged = true;
           }
           if (mc.wordClassId !== undefined && mc.wordClassId !== existing.wordClassId) {
+            classPairs.push({
+              oldId: existing.wordClassId ?? null,
+              newId: mc.wordClassId,
+            });
             await db
               .update(meanings)
               .set({ wordClassId: mc.wordClassId, updatedAt: new Date() })
@@ -468,7 +478,7 @@ export async function applyChangesToWord(
                     languageId: t.languageId,
                     translationText: t.translationText,
                     translationType: t.translationType ?? 'direct',
-                    createdBy: reviewerId,
+                    createdBy: suggestion.userId,
                   })
                   .onConflictDoNothing();
               }
@@ -767,7 +777,7 @@ export async function applyChangesToWord(
             sourceWordId: word.id,
             targetWordId: targetId,
             relationType: rel.relationType,
-            createdBy: reviewerId,
+            createdBy: suggestion.userId,
           })
           .onConflictDoNothing();
         if (rel.relationType === 'synonym') {
@@ -777,7 +787,7 @@ export async function applyChangesToWord(
               sourceWordId: targetId,
               targetWordId: word.id,
               relationType: 'synonym',
-              createdBy: reviewerId,
+              createdBy: suggestion.userId,
             })
             .onConflictDoNothing();
         }
@@ -829,7 +839,7 @@ export async function applyChangesToWord(
             form,
             variantType: v.variantType ?? 'alternative',
             dialectId: v.dialectId ?? null,
-            createdBy: reviewerId,
+            createdBy: suggestion.userId,
           })
           .onConflictDoNothing();
         variantAudit.added.push({ form, variant_type: v.variantType ?? 'alternative' });
@@ -899,7 +909,7 @@ const groupAudit: {
               groupId: g.groupId,
               wordId: word.id,
               status: 'published',
-              createdBy: reviewerId,
+              createdBy: suggestion.userId,
             })
             .onConflictDoNothing();
         }
@@ -914,7 +924,7 @@ const groupAudit: {
       name,
       description: g.description ?? null,
       status: 'published',
-      createdBy: reviewerId,
+      createdBy: suggestion.userId,
     })
     .returning({ id: wordGroups.id });
   // Anggota dari lemma: resolve-or-create (kata baru bila belum ada di kamus).
@@ -936,7 +946,7 @@ const groupAudit: {
         groupId: newGroup.id,
         wordId: id,
         status: 'published',
-        createdBy: reviewerId,
+        createdBy: suggestion.userId,
       })),
     )
     .onConflictDoNothing();
@@ -997,7 +1007,7 @@ const groupAudit: {
             altText: img.altText ?? null,
             isPrimary: img.isPrimary ?? false,
             attribution: stockImageAttribution(provider, img.attribution),
-            createdBy: reviewerId,
+            createdBy: suggestion.userId,
             status: 'published',
             isVerified,
           })
@@ -1057,6 +1067,14 @@ const groupAudit: {
         updatedAt: new Date(),
       })
       .where(and(eq(wordEditSuggestions.id, suggestionId), isNull(wordEditSuggestions.deletedAt)));
+  }
+
+  if (classPairs.length > 0) {
+    const [classDiff] = await resolveWordClassDiffs([classPairs]);
+    if (classDiff) {
+      oldAudit.word_class = classDiff.displayOld;
+      newAudit.word_class = classDiff.displayNew;
+    }
   }
 
   await db

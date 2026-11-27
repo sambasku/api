@@ -44,7 +44,7 @@ export function createEventGoingRoutes(deps: {
     method: 'post',
     path: '/:id/going',
     tags: ['Event Going'],
-    summary: 'Tandai berencana datang ke acara (login)',
+    summary: 'Tandai kehadiran acara (login)',
     request: { params: eventGoingParamsSchema },
     responses: {
       200: { description: 'State going', content: json(eventGoingStateSchema) },
@@ -59,7 +59,7 @@ export function createEventGoingRoutes(deps: {
     method: 'delete',
     path: '/:id/going',
     tags: ['Event Going'],
-    summary: 'Batal rencana datang (login)',
+    summary: 'Batal kehadiran (login)',
     request: { params: eventGoingParamsSchema },
     responses: {
       200: { description: 'State going', content: json(eventGoingStateSchema) },
@@ -99,7 +99,7 @@ export function createAdminEventGoingRoutes(deps: {
     method: 'get',
     path: '/:id/goings',
     tags: ['Admin Event Going'],
-    summary: 'Daftar orang yang berencana datang (admin)',
+    summary: 'Daftar orang yang menandai kehadiran (admin)',
     request: {
       params: eventGoingParamsSchema,
       query: listEventGoingsQuerySchema,

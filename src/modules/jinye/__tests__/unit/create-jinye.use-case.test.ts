@@ -342,11 +342,18 @@ describe('CreateJinyeUseCase', () => {
       { record: vi.fn() } as never,
       { listAllActiveWords: vi.fn(async () => []) },
     );
-    const url = 'https://ik.example.com/jinye/a.jpg';
+    const url = 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/jinye/01JINYEPHOTO.jpg';
     await uc.execute({
       userId: ACTOR,
       body: '',
-      images: [{ url, providerFileId: 'file1', publicUrl: null, contentWarnings: [] }],
+      images: [
+        {
+          url,
+          providerFileId: 'assets/jinye/01JINYEPHOTO.jpg',
+          publicUrl: null,
+          contentWarnings: [],
+        },
+      ],
     });
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -360,4 +367,32 @@ describe('CreateJinyeUseCase', () => {
     );
   });
 
+  it('menolak foto dengan URL di luar penyimpanan kita (cegah SSRF)', async () => {
+    const create = vi.fn();
+    const repo = {
+      create,
+      findLatestCreatedAtByUser: vi.fn(async () => null),
+      findLatestQuotaConsumingCreatedAtByUser: vi.fn(async () => null),
+    } as unknown as JinyeRepository;
+    const uc = new CreateJinyeUseCase(
+      repo,
+      { record: vi.fn() } as never,
+      { listAllActiveWords: vi.fn(async () => []) },
+    );
+    await expect(
+      uc.execute({
+        userId: ACTOR,
+        body: '',
+        images: [
+          {
+            url: 'http://169.254.169.254/latest/meta-data',
+            providerFileId: 'file1',
+            publicUrl: null,
+            contentWarnings: [],
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(create).not.toHaveBeenCalled();
+  });
 });

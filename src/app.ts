@@ -17,6 +17,7 @@ export {
   runDueLeaderboardJobs,
   runDueStreakReminder,
   runDueBalehoRelease,
+  runDueHotViewedSlotsSync,
 } from './composition/cron-jobs';
 
 // ---- HTTP app ----

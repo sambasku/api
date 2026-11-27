@@ -1,0 +1,20 @@
+[
+  {
+    "variant": "tab",
+    "url": "https://ik.imagekit.io/example/profile-covers/tab.webp",
+    "file_id": "file_id_tab",
+    "width": 1032,
+    "height": 400,
+    "size_bytes": 120000,
+    "activate": true
+  },
+  {
+    "variant": "public",
+    "url": "https://ik.imagekit.io/example/profile-covers/public.webp",
+    "file_id": "file_id_public",
+    "width": 1032,
+    "height": 534,
+    "size_bytes": 140000,
+    "activate": true
+  }
+]

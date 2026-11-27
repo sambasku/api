@@ -17,6 +17,7 @@ export const UGC_COMMENT_ANCHOR_KINDS = [
   'cuisine_comment',
   'event_comment',
   'article_comment',
+  'karya_comment',
 ] as const;
 export type UgcCommentAnchorKind = (typeof UGC_COMMENT_ANCHOR_KINDS)[number];
 

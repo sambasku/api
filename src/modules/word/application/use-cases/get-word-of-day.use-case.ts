@@ -45,6 +45,11 @@ export function wibDateString(now: Date): string {
 export class GetWordOfDayUseCase {
   private cache: { date: string; result: WordOfDayResult } | null = null;
 
+  /** Setelah admin ubah pilihan harian (isolate Worker ini saja). */
+  invalidateCache(): void {
+    this.cache = null;
+  }
+
   constructor(
     private readonly wordRepo: WordRepository,
     private readonly settingsRepo: AppSettingsRepository | null = null,

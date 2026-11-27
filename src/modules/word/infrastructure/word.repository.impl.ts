@@ -5,6 +5,7 @@ import {
   eq,
   inArray,
   isNull,
+  like,
   lt,
   ne,
   or,
@@ -49,7 +50,8 @@ import { mapDuplicateMeaningIndexes, meaningDeduplicationFingerprint, meaningDed
 import { normalizeLemma } from '../application/utils/normalize-lemma';
 import { throwDuplicateMeaningConflict } from '../application/utils/throw-duplicate-meaning-conflict';
 import { publishOrMergeMeaningsInTx } from './publish-or-merge-meanings';
-import { mergeDuplicateWordsInTx } from './merge-duplicate-words';
+import { mergeDuplicateWordsInTx, mergeWordEntriesInTx } from './merge-duplicate-words';
+import type { MergeWordEntriesOptions } from '../application/utils/merge-word-entries-options';
 import {
   applyCommaSplitLemmaInTx,
   applyCommaSplitTranslationInTx,
@@ -1288,6 +1290,8 @@ memberLemma: string;
         contentWarnings: toContentWarnings(i.contentWarnings),
         attribution: i.attribution ?? null,
         isVerified: i.isVerified,
+        sourceType: i.sourceType ?? null,
+        sourceReference: i.sourceReference ?? null,
         ...(includeAll
           ? { status: i.status as ChildStatus, isCorrected: i.isCorrected }
           : {}),
@@ -2613,6 +2617,17 @@ memberLemma: string;
     );
   }
 
+  async mergeWordEntries(
+    keepWordId: string,
+    mergeWordIds: string[],
+    actorId: string,
+    options: MergeWordEntriesOptions,
+  ): Promise<{ keepWordId: string; mergedWordIds: string[] }> {
+    return this.db.transaction((tx) =>
+      mergeWordEntriesInTx(tx, keepWordId, mergeWordIds, actorId, options),
+    );
+  }
+
   async listCommaSplitCandidates(): Promise<CommaSplitCandidates> {
     return listCommaSplitCandidatesInDb(this.db);
   }
@@ -2770,6 +2785,8 @@ memberLemma: string;
       attribution?: WordImageAttribution | null;
       status: ChildStatus;
       isVerified: boolean;
+      sourceType?: string | null;
+      sourceReference?: string | null;
     },
     actorId: string,
   ): Promise<WordImageMedia> {
@@ -2789,6 +2806,8 @@ memberLemma: string;
             attribution: data.attribution ?? null,
             status: data.status,
             isVerified: data.isVerified,
+            sourceType: data.sourceType ?? null,
+            sourceReference: data.sourceReference ?? null,
             createdBy: actorId,
           })
           .returning();
@@ -2805,6 +2824,45 @@ memberLemma: string;
       mapMediaViolation(err, 'provider_file_id');
       throw err;
     }
+  }
+
+  async findWordImageBySource(
+    wordId: string,
+    sourceType: string,
+    sourceReference: string,
+  ): Promise<WordImageMedia | null> {
+    const [row] = await this.db
+      .select()
+      .from(wordImages)
+      .where(
+        and(
+          eq(wordImages.wordId, wordId),
+          eq(wordImages.sourceType, sourceType),
+          eq(wordImages.sourceReference, sourceReference),
+          isNull(wordImages.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row ? toWordImage(row) : null;
+  }
+
+  async softDeleteWordImagesFromJinye(
+    jinyeId: string,
+    opts: { onlyUnverified: boolean },
+  ): Promise<WordImageMedia[]> {
+    const rows = await this.db
+      .update(wordImages)
+      .set({ deletedAt: new Date(), isPrimary: false, isVerified: false, status: 'rejected' })
+      .where(
+        and(
+          eq(wordImages.sourceType, 'jinye'),
+          like(wordImages.sourceReference, `${jinyeId}:%`),
+          isNull(wordImages.deletedAt),
+          ...(opts.onlyUnverified ? [eq(wordImages.isVerified, false)] : []),
+        ),
+      )
+      .returning();
+    return rows.map(toWordImage);
   }
 
   async setWordImageContentWarnings(
@@ -3505,6 +3563,19 @@ memberLemma: string;
       mapMediaViolation(err, 'translation_text');
       throw err;
     }
+  }
+
+
+  async findLemmaByIds(
+    ids: readonly string[],
+  ): Promise<Map<string, { lemma: string; status: string }>> {
+    if (ids.length === 0) return new Map();
+    const uniq = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+    const rows = await this.db
+      .select({ id: words.id, lemma: words.lemma, status: words.status })
+      .from(words)
+      .where(and(inArray(words.id, uniq), isNull(words.deletedAt)));
+    return new Map(rows.map((r) => [r.id, { lemma: r.lemma, status: r.status }]));
   }
 
   async findById(id: string): Promise<Word | null> {

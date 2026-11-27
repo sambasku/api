@@ -21,7 +21,12 @@ import {
   safeRecordAbuseSignal,
 } from '@/shared/moderation/record-abuse-signal.use-case';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import {
+  COMMENT_MEDIA_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import { commentFeedPayload } from '@/modules/activity/application/utils/activity-body-snippet';
+import { resolveCommentParentId } from '@/shared/comment/comment-threading';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 import { resolveDiscussionNotifyRecipients } from '../utils/resolve-discussion-notify-recipients';
@@ -29,6 +34,7 @@ import { buildCommentAudioPath } from '../utils/comment-audio-path';
 
 export interface CreateCommentAudioCommand {
   wordId: string;
+  parentId?: string | null;
   userId: string;
   role: string;
   bytes: Uint8Array;
@@ -70,6 +76,7 @@ export class CreateCommentAudioUseCase {
     private readonly pushCooldown?: WordCommentPushCooldownGate,
     private readonly abuse?: RecordAbuseSignalUseCase,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(cmd: CreateCommentAudioCommand): Promise<Comment> {
@@ -103,6 +110,15 @@ export class CreateCommentAudioUseCase {
       );
     }
 
+    const parentId = await resolveCommentParentId({
+      rawParentId: cmd.parentId,
+      hostId: cmd.wordId,
+      findParent: async (id) => {
+        const p = await this.commentRepo.findById(id);
+        return p ? { id: p.id, hostId: p.wordId, parentId: p.parentId ?? null, status: p.status } : null;
+      },
+    });
+
     const file = validateAudioFile({
       bytes: cmd.bytes,
       mimeType: cmd.mimeType,
@@ -134,6 +150,7 @@ export class CreateCommentAudioUseCase {
 
     const comment = await this.commentRepo.create({
       wordId: cmd.wordId,
+      parentId,
       userId: cmd.userId,
       body: filteredBody,
       bodyOriginal,
@@ -191,6 +208,20 @@ export class CreateCommentAudioUseCase {
       actorId: cmd.userId,
       commentBody: comment.body,
     });
+
+    if (this.groupNotifier) {
+      try {
+        await this.groupNotifier.notify({
+          heading: 'Audio komentar baru tayang.',
+          jenis: 'Audio komentar kata',
+          name: word.lemma.trim() || 'sebuah kata',
+          userId: cmd.userId,
+          eventKey: COMMENT_MEDIA_GROUP_EVENT_KEY,
+        });
+      } catch {
+        // Gagal kirim grup tidak membatalkan komentar audio.
+      }
+    }
 
     return (await this.commentRepo.findById(comment.id)) ?? comment;
   }

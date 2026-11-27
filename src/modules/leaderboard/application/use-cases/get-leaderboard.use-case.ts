@@ -80,7 +80,7 @@ export class GetLeaderboardUseCase {
       if (!row?.finalizedAt) {
         throw new NotFoundError('LEADERBOARD_WEEK_NOT_FOUND', 'Snapshot minggu ini belum tersedia');
       }
-      entries = await this.repo.listEntriesForWeek(targetWeekId);
+      entries = await this.repo.listVisibleEntriesForWeek(targetWeekId);
     }
 
     return {

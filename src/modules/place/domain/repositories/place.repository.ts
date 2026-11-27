@@ -18,6 +18,7 @@ import type {
 
 export interface NewPlaceCommentInput {
   placeId: string;
+  parentId?: string | null;
   userId: string;
   body: string;
   bodyOriginal: string | null;
@@ -168,5 +169,6 @@ export interface PlaceRepository {
   }): Promise<PlaceComment | null>;
   markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownComment(id: string, actorId: string): Promise<boolean>;
+  listCommentRevisions?(commentId: string): Promise<Array<{ editorId: string; body: string; createdAt: Date }>>;
   placeTargetExists(id: string): Promise<boolean>;
 }

@@ -1,3 +1,5 @@
+import { redactEntityCommentAudio } from '@/shared/comment/entity-comment-wire';
+import type { CreateJinyeCommentAudioUseCase } from '../../application/use-cases/create-jinye-comment-audio.use-case';
 import type { Context } from 'hono';
 import {
   BadRequestError,
@@ -5,6 +7,8 @@ import {
 } from '@/shared/errors/app-error';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
 import type { ImageController } from '@/modules/image/presentation/v1/image.controller';
+import { MAX_IMAGE_BYTES } from '@/modules/public-image/application/utils/validate-image-file';
+import type { UploadPublicImageUseCase } from '@/modules/public-image/application/use-cases/upload-public-image.use-case';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { AppVariables, AuthUser } from '@/shared/types';
 import type { Jinye, JinyeComment } from '../../domain/entities/jinye.entity';
@@ -28,6 +32,7 @@ import type { ProposeJinyeLemmaCorrectionUseCase } from '../../application/use-c
 import type { ResolveJinyeLemmaCorrectionUseCase } from '../../application/use-cases/resolve-jinye-lemma-correction.use-case';
 import type { DeleteJinyeLemmaLinkUseCase } from '../../application/use-cases/delete-jinye-lemma-link.use-case';
 import type { ListJinyeLemmaLinksUseCase } from '../../application/use-cases/list-jinye-lemma-links.use-case';
+import type { PromoteJinyeImageUseCase } from '../../application/use-cases/promote-jinye-image.use-case';
 import type { PromoteJinyeExampleUseCase } from '../../application/use-cases/promote-jinye-example.use-case';
 import type { UpdateJinyeUseCase } from '../../application/use-cases/update-jinye.use-case';
 import type { GetJinyeEditHistoryUseCase } from '../../application/use-cases/get-jinye-edit-history.use-case';
@@ -45,6 +50,7 @@ import type {
   ListAdminJinyeQuery,
   ListJinyeQuery,
   PromoteJinyeExampleBody,
+  PromoteJinyeImageBody,
   ProposeJinyeLemmaCorrectionBody,
   QuoteJinyeBody,
   ResolveJinyeLemmaCorrectionBody,
@@ -130,6 +136,9 @@ type JinyeCommentWire = {
   is_verifier: boolean;
   body: string;
   sticker_id: string | null;
+  audio_url: string | null;
+  audio_mime_type: string | null;
+  audio_duration_ms: number | null;
   images: JinyeCommentImageWire[];
   status: string;
   created_at: string;
@@ -169,6 +178,7 @@ function toCommentWire(
     is_verifier: isVerifierRole(c.userRole ?? ''),
     body: c.body,
     sticker_id: c.stickerId ?? null,
+    ...redactEntityCommentAudio({ status: c.status as 'published' | 'taken_down' | 'deleted_by_author', audio: c.audio ?? null }),
     images,
     status: c.status,
     created_at: c.createdAt.toISOString(),
@@ -193,7 +203,9 @@ export class JinyeController {
       getDetail: GetJinyeDetailUseCase;
       deleteJinye: DeleteJinyeUseCase;
       attachAudio: AttachJinyeAudioUseCase;
+      uploadImage: UploadPublicImageUseCase;
       createComment: CreateJinyeCommentUseCase;
+      createCommentAudio?: CreateJinyeCommentAudioUseCase;
       listComments: ListJinyeCommentsUseCase;
       deleteComment: DeleteJinyeCommentUseCase;
       updateComment: UpdateJinyeCommentUseCase;
@@ -209,6 +221,7 @@ export class JinyeController {
       resolveLemmaCorrection: ResolveJinyeLemmaCorrectionUseCase;
       deleteLemmaLink: DeleteJinyeLemmaLinkUseCase;
       promoteExample: PromoteJinyeExampleUseCase;
+      promoteImage: PromoteJinyeImageUseCase;
       update: UpdateJinyeUseCase;
       editHistory: GetJinyeEditHistoryUseCase;
       repost: RepostJinyeUseCase;
@@ -390,6 +403,42 @@ export class JinyeController {
     return c.json({ data: { ok: true as const } });
   }
 
+  /** Foto Jinye langsung ke repo GitHub (tanpa staging ImageKit). */
+  async uploadImage(c: Context<{ Variables: AppVariables }>) {
+    requireUser(c);
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_IMAGE_BYTES + 1024 * 1024) {
+      throw new BadRequestError('IMAGE_TOO_LARGE', 'File gambar terlalu besar (maks 5 MB)', [
+        { field: 'file', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+    const body = await c.req.parseBody({ all: true });
+    const part = body['file'];
+    if (!part || typeof part === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File gambar wajib diunggah', [
+        { field: 'file', message: 'Field multipart `file` wajib berisi file' },
+      ]);
+    }
+    const file = part as File;
+    const out = await this.deps.uploadImage.execute({
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      mimeType: file.type || null,
+      filename: file.name || null,
+      purpose: 'jinye',
+    });
+    return c.json(
+      {
+        data: {
+          url: out.url,
+          provider: out.provider,
+          provider_file_id: out.providerFileId,
+          sha: out.sha,
+        },
+      },
+      201,
+    );
+  }
+
   async attachAudio(c: Context<{ Variables: AppVariables }>, jinyeId: string) {
     const user = requireUser(c);
     const contentLength = Number(c.req.header('content-length') ?? 0);
@@ -447,6 +496,41 @@ export class JinyeController {
       { data: toCommentWire(row, { exposeStaging: true }) },
       201,
     );
+  }
+
+  async createCommentAudio(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    if (!this.deps.createCommentAudio) {
+      throw new BadRequestError('FEATURE_UNAVAILABLE', 'Komentar suara belum aktif');
+    }
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const created = await this.deps.createCommentAudio.execute({
+      jinyeId: id,
+      parentId: typeof body['parent_id'] === 'string' ? body['parent_id'] : null,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: typeof body['body'] === 'string' ? body['body'] : null,
+      durationMs: body['duration_ms'],
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(created) }, 201);
   }
 
   async listComments(c: Context<{ Variables: AppVariables }>, jinyeId: string) {
@@ -617,6 +701,35 @@ export class JinyeController {
           word_audio_id: out.wordAudioId,
           status: out.status,
           is_verified: out.isVerified,
+        },
+      },
+      201,
+    );
+  }
+
+  async promoteImage(
+    c: Context<{ Variables: AppVariables }>,
+    jinyeId: string,
+    body: PromoteJinyeImageBody,
+  ) {
+    const user = requireUser(c);
+    const out = await this.deps.promoteImage.execute({
+      jinyeId,
+      userId: user.user_id,
+      role: user.roles ?? ['contributor'],
+      wordId: body.word_id,
+      imageUrls: body.image_urls,
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json(
+      {
+        data: {
+          images: out.images.map((i) => ({
+            id: i.id,
+            url: i.url,
+            status: i.status,
+            is_verified: i.isVerified,
+          })),
         },
       },
       201,

@@ -81,6 +81,7 @@ function toUserEntity(row: UserRow, roles: User['roles']): User {
     isTeam: row.isTeam ?? false,
     teamAs: row.teamAs ?? null,
     teamNote: row.teamNote ?? null,
+    teamSortOrder: row.teamSortOrder ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt,

@@ -402,6 +402,10 @@ export interface WordRepository {
    * semua user melihat kata sama per hari. Null = korpus kosong.
    */
   findWordOfDayId(date: string): Promise<string | null>;
+  /** Batch lemma/status untuk riwayat admin kata hari ini (satu query). */
+  findLemmaByIds(ids: readonly string[]): Promise<
+    Map<string, { lemma: string; status: string }>
+  >;
   /** kata by id (belum soft-deleted, semua status) - validasi parent kontribusi media */
   findById(id: string): Promise<Word | null>;
   /** replace semantics: hapus children lama, insert baru - satu transaksi.
@@ -557,6 +561,13 @@ export interface WordRepository {
     actorId: string,
   ): Promise<{ keepWordId: string; mergedWordIds: string[] }>;
 
+  mergeWordEntries(
+    keepWordId: string,
+    mergeWordIds: string[],
+    actorId: string,
+    options: import('../../application/utils/merge-word-entries-options').MergeWordEntriesOptions,
+  ): Promise<{ keepWordId: string; mergedWordIds: string[] }>;
+
   /** Antrean tab Pemisahan: lemma/padanan mengandung koma dan belum di-flag literal. */
   listCommaSplitCandidates(): Promise<CommaSplitCandidates>;
 
@@ -668,9 +679,29 @@ export interface WordRepository {
       attribution?: WordImageAttribution | null;
       status: ChildStatus;
       isVerified: boolean;
+      /** Asal foto, mis. `jinye` + `<jinyeId>:<providerFileId>`. */
+      sourceType?: string | null;
+      sourceReference?: string | null;
     },
     actorId: string,
   ): Promise<WordImageMedia>;
+
+  /** Foto lemma aktif dengan asal tertentu (dedupe promote Jinye). */
+  findWordImageBySource(
+    wordId: string,
+    sourceType: string,
+    sourceReference: string,
+  ): Promise<WordImageMedia | null>;
+
+  /**
+   * Soft-delete foto lemma bersumber Jinye (archive/delete: hanya yang belum
+   * verified; takedown: semua). Mengembalikan baris yang dihapus supaya
+   * pemanggil bisa menghapus file GitHub-nya.
+   */
+  softDeleteWordImagesFromJinye(
+    jinyeId: string,
+    opts: { onlyUnverified: boolean },
+  ): Promise<WordImageMedia[]>;
 
   /** Set/clear peringatan visual foto (admin/verifikator atau resolve laporan). */
   setWordImageContentWarnings(
@@ -899,6 +930,8 @@ export interface WordImageMedia {
   status: ChildStatus;
   isVerified: boolean;
   isCorrected: boolean;
+  sourceType: string | null;
+  sourceReference: string | null;
 }
 
 export interface WordAudioMedia {

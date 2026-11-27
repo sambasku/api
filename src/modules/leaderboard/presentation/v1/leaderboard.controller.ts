@@ -5,6 +5,7 @@ import type { GetLeaderboardUseCase } from '../../application/use-cases/get-lead
 import type { ComputeLiveLeaderboardUseCase } from '../../application/use-cases/compute-live-leaderboard.use-case';
 import type { FinalizeLeaderboardWeekUseCase } from '../../application/use-cases/finalize-leaderboard-week.use-case';
 import type { GetPointsHistoryUseCase } from '../../application/use-cases/get-points-history.use-case';
+import type { ShareLeaderboardRankUseCase } from '../../application/use-cases/share-leaderboard-rank.use-case';
 import type { ManageLeaderboardExclusionsUseCase } from '../../application/use-cases/manage-leaderboard-exclusions.use-case';
 import { serializeWireEntry } from '../../application/use-cases/leaderboard-payload.utils';
 import type { AppVariables } from '@/shared/types';
@@ -31,6 +32,7 @@ export class LeaderboardController {
       finalizeWeek: FinalizeLeaderboardWeekUseCase;
       manageExclusions: ManageLeaderboardExclusionsUseCase;
       getPointsHistory: GetPointsHistoryUseCase;
+      shareRank: ShareLeaderboardRankUseCase;
     },
   ) {}
 
@@ -53,6 +55,14 @@ export class LeaderboardController {
     const result = await this.deps.getPointsHistory.execute({ username, limit });
     c.header('Cache-Control', 'public, max-age=300');
     return c.json({ success: true as const, ...result });
+  }
+
+  async shareMyRank(c: Context<{ Variables: AppVariables }>) {
+    const result = await this.deps.shareRank.execute(c.get('user')!.user_id);
+    return c.json({
+      success: true as const,
+      data: { rank: result.rank, combined: result.combined, week_id: result.weekId },
+    });
   }
 
   async adminRefresh(c: Context) {

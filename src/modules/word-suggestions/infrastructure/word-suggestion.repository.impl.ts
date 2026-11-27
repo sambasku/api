@@ -1,4 +1,8 @@
-import { eq, and, desc, isNull, inArray, lt, or } from 'drizzle-orm';
+import { eq, and, desc, isNull, inArray, lt, or, sql } from 'drizzle-orm';
+import {
+  WORD_CHILD_ENTITY_TYPES,
+  describeWordAction,
+} from '@/modules/change-history/domain/word-action-labels';
 import { db } from '@/shared/database/drizzle/client';
 import { words, wordEditSuggestions, users, auditLogs, wordImages, meanings } from '@/shared/database/drizzle/schema';
 import type { WordSuggestionRepository, ChangeHistoryItem, SuggestionSource } from '../domain/repositories/word-suggestion.repository';
@@ -36,7 +40,9 @@ import {
   getCurrentWordSnapshot,
   buildDiff,
   asProposed,
+  resolveWordClassDiffs,
 } from './suggestion-snapshot-diff';
+import { wordClassPairsFromSuggestion } from '../domain/word-class-history-diff';
 
 export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
   /** Event log feed (write-through, AGENTS.md #25). Best-effort. */
@@ -595,7 +601,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         imageOpts,
       );
       const [word] = await db
-        .select({ lemma: words.lemma, isVerified: words.isVerified })
+        .select({ lemma: words.lemma, isVerified: words.isVerified, createdBy: words.createdBy })
         .from(words)
         .where(eq(words.id, row.wordId))
         .limit(1);
@@ -623,7 +629,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           ),
         );
       await rollupWordVerifiedFromMeaningsDb(row.wordId);
-      // Event feed: pengusul (usulannya diterima) + verifikator.
+      // Event feed: pengusul (usulannya diterima) + verifikasi bila kata baru verified.
       await this.emitEvent({
         kind: 'suggestion_applied',
         actorId: row.proposerId ?? undefined,
@@ -631,20 +637,23 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         targetId: id,
         dedupeKey: `suggestion:${id}`,
       });
-      // #56: usulan edit diterima → verifikasi menyebut pengusulnya.
-      const proposedByName = row.proposerId
-        ? row.proposerId !== reviewerId
-          ? await this.displayNameOf(row.proposerId)
-          : null
-        : null;
-      await this.emitEvent({
-        kind: 'word_verified',
-        actorId: reviewerId,
-        targetWordId: row.wordId,
-        targetId: row.wordId,
-        dedupeKey: `word_verified:${row.wordId}`,
-        ...(proposedByName ? { proposedByName } : {}),
-      });
+      // #303: hanya emit word_verified saat kata memang belum verified, dan
+      // pengusul yang disebut adalah pembuat kata asli (word.createdBy), bukan
+      // pengusul edit.
+      if (word && !word.isVerified) {
+        const proposedByName =
+          word.createdBy && word.createdBy !== reviewerId
+            ? await this.displayNameOf(word.createdBy)
+            : null;
+        await this.emitEvent({
+          kind: 'word_verified',
+          actorId: reviewerId,
+          targetWordId: row.wordId,
+          targetId: row.wordId,
+          dedupeKey: `word_verified:${row.wordId}`,
+          ...(proposedByName ? { proposedByName } : {}),
+        });
+      }
       await db
         .update(wordEditSuggestions)
         .set({
@@ -682,27 +691,15 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         dedupeKey: `word:${created.id}`,
       });
     }
-    // Event feed: usulan diterima (pengusul) + verifikasi kata (reviewer).
+    // Event feed: usulan edit diterima (pengusul). Jalur ini tidak memverifikasi
+    // kata baru, jadi jangan emit word_verified agar riwayat pengusul asli
+    // pada event word_verified tidak tertimpa (#303).
     await this.emitEvent({
       kind: 'suggestion_applied',
       actorId: row.proposerId ?? undefined,
       targetWordId: row.wordId,
       targetId: id,
       dedupeKey: `suggestion:${id}`,
-    });
-    // #56: verifikasi menyebut pengusul (copy "Memverifikasi usulan B: ...").
-    const proposedByName = row.proposerId
-      ? row.proposerId !== reviewerId
-        ? await this.displayNameOf(row.proposerId)
-        : null
-      : null;
-    await this.emitEvent({
-      kind: 'word_verified',
-      actorId: reviewerId,
-      targetWordId: row.wordId,
-      targetId: row.wordId,
-      dedupeKey: `word_verified:${row.wordId}`,
-      ...(proposedByName ? { proposedByName } : {}),
     });
     return result;
   }
@@ -984,13 +981,25 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       .limit(1);
     if (!word) throw new NotFoundError('WORD_NOT_FOUND', 'Kata tidak ditemukan');
 
-    const conditions = [eq(auditLogs.entityType, 'word'), eq(auditLogs.entityId, wordId)];
+    // Kata sendiri (entity_id = wordId) + aksi anak (arti, contoh, foto, ...)
+    // yang menyimpan word_id di old/new_data. `word_ref` = kolom virtual
+    // ber-index (migrasi 0204), jadi OR ini tidak scan penuh audit_logs.
+    const conditions = [
+      or(
+        and(eq(auditLogs.entityType, 'word'), eq(auditLogs.entityId, wordId)),
+        and(
+          inArray(auditLogs.entityType, [...WORD_CHILD_ENTITY_TYPES]),
+          sql`${auditLogs}.word_ref = ${wordId}`,
+        ),
+      ),
+    ];
     if (cursor) conditions.push(lt(auditLogs.id, cursor));
 
     const rows = await db
       .select({
         auditId: auditLogs.id,
         auditUserId: auditLogs.userId,
+        entityType: auditLogs.entityType,
         action: auditLogs.action,
         oldData: auditLogs.oldData,
         newData: auditLogs.newData,
@@ -999,7 +1008,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       })
       .from(auditLogs)
       .where(and(...conditions))
-      .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+      .orderBy(desc(auditLogs.id))
       .limit(Math.min(limit + 1, 101));
 
     if (rows.length === 0) return { items: [], nextCursor: null, hasMore: false };
@@ -1015,7 +1024,14 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
 
     const suggestionMap: Record<
       string,
-      { userId: string; reason: string; reviewedBy: string | null; reviewComment: string | null }
+      {
+        userId: string;
+        reason: string;
+        reviewedBy: string | null;
+        reviewComment: string | null;
+        proposedChanges: unknown;
+        baselineSnapshot: unknown;
+      }
     > = {};
     if (sourceIds.length > 0) {
       const sugRows = await db
@@ -1025,6 +1041,8 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           reason: wordEditSuggestions.reason,
           reviewedBy: wordEditSuggestions.reviewedBy,
           reviewComment: wordEditSuggestions.reviewComment,
+          proposedChanges: wordEditSuggestions.proposedChanges,
+          baselineSnapshot: wordEditSuggestions.baselineSnapshot,
         })
         .from(wordEditSuggestions)
         .where(inArray(wordEditSuggestions.id, sourceIds));
@@ -1034,6 +1052,8 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           reason: s.reason,
           reviewedBy: s.reviewedBy,
           reviewComment: s.reviewComment,
+          proposedChanges: s.proposedChanges,
+          baselineSnapshot: s.baselineSnapshot,
         };
         userIds.push(s.userId);
         if (s.reviewedBy) userIds.push(s.reviewedBy);
@@ -1041,6 +1061,20 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     }
 
     const labelMap = await getUserPublicLabels([...new Set(userIds)]);
+
+    // Usulan lama tidak menulis nama kelas ke audit. Satu query untuk semua baris.
+    const classGroups = sourceIds.map((id) => {
+      const sug = suggestionMap[id];
+      if (!sug) return [];
+      return wordClassPairsFromSuggestion(
+        asProposed(sug.proposedChanges),
+        sug.baselineSnapshot as { meanings?: { id?: string; wordClassId?: string | null }[] } | null,
+      );
+    });
+    const classResolved = await resolveWordClassDiffs(classGroups);
+    const classBySuggestion = new Map(
+      sourceIds.map((id, index) => [id, classResolved[index] ?? null]),
+    );
 
     const mapped: ChangeHistoryItem[] = rows.map((r) => {
       const type: ChangeHistoryItem['type'] =
@@ -1052,7 +1086,20 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       const changes =
         r.action === 'duplicate_vote'
           ? this._extractDuplicateVoteChanges(r.newData)
-          : this._extractChanges(r.oldData, r.newData);
+          : this._extractChanges(r.entityType, r.oldData, r.newData);
+      const classDiff = r.sourceContributionId
+        ? classBySuggestion.get(r.sourceContributionId)
+        : null;
+      if (classDiff && !changes.some((change) => change.field === 'word_class')) {
+        changes.push({
+          entity: 'meaning',
+          field: 'word_class',
+          oldValue: classDiff.displayOld,
+          newValue: classDiff.displayNew,
+          displayOld: classDiff.displayOld,
+          displayNew: classDiff.displayNew,
+        });
+      }
       let source: SuggestionSource | null = null;
       if (r.sourceContributionId && suggestionMap[r.sourceContributionId]) {
         const sug = suggestionMap[r.sourceContributionId];
@@ -1080,6 +1127,9 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         actorUsername: actor?.username ?? null,
         actorDisplayName: actor?.displayName ?? actor?.username ?? null,
         type,
+        entity: r.entityType,
+        action: r.action,
+        actionLabel: describeWordAction(r.entityType, r.action),
         changes,
         source,
       };
@@ -1129,7 +1179,11 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     ];
   }
 
-  private _extractChanges(oldData: unknown, newData: unknown): ChangeHistoryItem['changes'] {
+  private _extractChanges(
+    entity: string,
+    oldData: unknown,
+    newData: unknown,
+  ): ChangeHistoryItem['changes'] {
     if (!oldData && !newData) return [];
     const oObj = (oldData ?? {}) as Record<string, unknown>;
     const nObj = (newData ?? {}) as Record<string, unknown>;
@@ -1140,7 +1194,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       const n = nObj[key] ?? null;
       if (JSON.stringify(o) !== JSON.stringify(n)) {
         changes.push({
-          entity: 'word',
+          entity,
           field: key,
           oldValue: o,
           newValue: n,

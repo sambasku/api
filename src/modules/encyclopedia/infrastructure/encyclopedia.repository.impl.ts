@@ -1,4 +1,5 @@
-import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { attachCommentRepliesTwoLevel } from '@/shared/comment/comment-threading';
+import { and, desc, eq, inArray, lt, or, sql, isNull } from 'drizzle-orm';
 import {
   articleBookmarks,
   articleClaps,
@@ -131,6 +132,7 @@ function toComment(
   return {
     id: row.id,
     articleId: row.articleId,
+    parentId: row.parentId ?? null,
     userId: row.userId,
     username: profile.username,
     displayName: profile.displayName,
@@ -368,12 +370,12 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         changeNote: input.revision.changeNote,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: articleRevisions.id })
         .from(articleRevisions)
         .where(eq(articleRevisions.articleId, input.revision.articleId))
-        .orderBy(desc(articleRevisions.createdAt))
-        .offset(ARTICLE_REVISION_CAP);
+        .orderBy(desc(articleRevisions.createdAt));
+      const excess = revisions.slice(ARTICLE_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(articleRevisions)
@@ -696,6 +698,7 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
       .insert(articleComments)
       .values({
         articleId: input.articleId,
+        parentId: input.parentId ?? null,
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
@@ -745,7 +748,7 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
     filter: ArticleCommentListFilter,
   ): Promise<CursorPage<ArticleComment>> {
     const limit = filter.limit;
-    const conditions = [eq(articleComments.articleId, articleId)];
+    const conditions = [eq(articleComments.articleId, articleId), isNull(articleComments.parentId)];
     if (filter.status) conditions.push(eq(articleComments.status, filter.status));
     if (filter.cursor) conditions.push(lt(articleComments.id, filter.cursor));
 
@@ -770,8 +773,39 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    return {
-      items: page.map((row) =>
+    const tops = page.map((row) =>
+      toComment(row.c, {
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        userRole: row.userRole,
+        authorDeletedAt: row.authorDeletedAt,
+        isEdited: Boolean(row.isEdited),
+      }),
+    );
+    const topIds = tops.map((t) => t.id);
+    let replies: ArticleComment[] = [];
+    if (topIds.length > 0) {
+      const replyConds = [inArray(articleComments.parentId, topIds)];
+      if (filter.status) replyConds.push(eq(articleComments.status, filter.status));
+      const replyRows = await this.db
+        .select({
+          c: articleComments,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          authorDeletedAt: users.deletedAt,
+          userRole: highestUserRoleSql,
+          isEdited: sql<boolean>`EXISTS (
+            SELECT 1 FROM ${ articleCommentRevisions }
+            WHERE ${ articleCommentRevisions.commentId } = ${ articleComments.id }
+          )`,
+        })
+        .from(articleComments)
+        .leftJoin(users, eq(users.id, articleComments.userId))
+        .where(and(...replyConds))
+        .orderBy(articleComments.createdAt, articleComments.id);
+      replies = replyRows.map((row) =>
         toComment(row.c, {
           username: row.username,
           displayName: row.displayName,
@@ -780,7 +814,10 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
           authorDeletedAt: row.authorDeletedAt,
           isEdited: Boolean(row.isEdited),
         }),
-      ),
+      );
+    }
+    return {
+      items: attachCommentRepliesTwoLevel(tops, replies),
       nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
       hasMore,
     };
@@ -806,12 +843,12 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
         body: current.body,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: articleCommentRevisions.id })
         .from(articleCommentRevisions)
         .where(eq(articleCommentRevisions.commentId, input.commentId))
-        .orderBy(desc(articleCommentRevisions.createdAt))
-        .offset(COMMENT_REVISION_CAP);
+        .orderBy(desc(articleCommentRevisions.createdAt));
+      const excess = revisions.slice(COMMENT_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(articleCommentRevisions)
@@ -861,6 +898,21 @@ export class EncyclopediaRepositoryImpl implements ArticleRepository {
       .where(and(eq(articleComments.id, id), eq(articleComments.status, 'published')))
       .returning({ id: articleComments.id });
     return Boolean(row);
+  }
+
+  async listCommentRevisions(
+    commentId: string,
+  ): Promise<Array<{ editorId: string; body: string; createdAt: Date }>> {
+    const rows = await this.db
+      .select({
+        editorId: articleCommentRevisions.editorId,
+        body: articleCommentRevisions.body,
+        createdAt: articleCommentRevisions.createdAt,
+      })
+      .from(articleCommentRevisions)
+      .where(eq(articleCommentRevisions.commentId, commentId))
+      .orderBy(desc(articleCommentRevisions.createdAt), desc(articleCommentRevisions.id));
+    return rows;
   }
 
   async commentTargetExists(id: string): Promise<boolean> {

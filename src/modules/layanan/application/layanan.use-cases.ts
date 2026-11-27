@@ -1,6 +1,12 @@
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
 import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
+import {
+  toChangeCtx,
+  type EntityChangeContext,
+  type RecordEntityChange,
+} from '@/modules/change-history/application/record-entity-change';
+import { layananSnapshot } from '@/modules/change-history/domain/entity-change';
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type { Layanan, LayananFields, LayananPhone } from '../domain/layanan';
 import { LAYANAN_PHONES_MAX, LAYANAN_PHONES_MIN, slugifyLayanan } from '../domain/layanan';
@@ -14,6 +20,7 @@ export class LayananUseCases {
     private readonly regions: RegionRepository,
     private readonly activity: RecordActivityEventUseCase,
     private readonly groupNotifier?: ExplorationGroupNotifier,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
   private async notifyGroup(
@@ -52,20 +59,45 @@ export class LayananUseCases {
     const normalized = await this.normalize(fields);
     const slug = await this.uniqueSlug(normalized.name);
     const row = await this.repo.insert({ ...normalized, slug, authorId });
+    await this.changes?.created('layanan', row.id, layananSnapshot(row), { actorId: authorId });
     await this.emitPublished(row);
     return row;
   }
 
-  async adminUpdate(id: string, fields: LayananFields): Promise<Layanan> {
+  async adminUpdate(
+    id: string,
+    fields: LayananFields,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<Layanan> {
     const current = await this.mustLayanan(id);
     const normalized = await this.normalize(fields);
     await this.repo.update(id, normalized);
-    return (await this.repo.findById(current.id))!;
+    const after = (await this.repo.findById(current.id))!;
+    await this.changes?.updated(
+      'layanan',
+      id,
+      layananSnapshot(current),
+      layananSnapshot(after),
+      toChangeCtx(ctx),
+    );
+    return after;
   }
 
-  async adminSetPublish(id: string, published: boolean): Promise<void> {
-    await this.mustLayanan(id);
-    await this.repo.update(id, { publishStatus: published ? 'published' : 'unpublished' });
+  async adminSetPublish(
+    id: string,
+    published: boolean,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<void> {
+    const before = await this.mustLayanan(id);
+    const next = published ? 'published' : 'unpublished';
+    await this.repo.update(id, { publishStatus: next });
+    await this.changes?.updated(
+      'layanan',
+      id,
+      layananSnapshot(before),
+      layananSnapshot({ ...before, publishStatus: next }),
+      toChangeCtx(ctx),
+    );
   }
 
   async submit(userId: string, fields: LayananFields, kind: 'new' | 'edit', layananId?: string | null) {
@@ -123,13 +155,27 @@ export class LayananUseCases {
     const row = await this.mustPending(id);
     if (row.kind === 'edit') {
       if (!row.layananId) throw new NotFoundError('LAYANAN_NOT_FOUND', 'Layanan tidak ditemukan');
-      await this.mustLayanan(row.layananId);
+      const before = await this.mustLayanan(row.layananId);
       await this.repo.update(row.layananId, row.payload);
+      const after = await this.repo.findById(row.layananId);
+      if (after) {
+        await this.changes?.updated(
+          'layanan',
+          row.layananId,
+          layananSnapshot(before),
+          layananSnapshot(after),
+          { actorId: row.userId, sourceContributionId: id },
+        );
+      }
       await this.repo.updateContribution(id, { status: 'approved', resultLayananId: row.layananId });
       return;
     }
     const slug = await this.uniqueSlug(row.payload.name);
     const created = await this.repo.insert({ ...row.payload, slug, authorId: row.userId });
+    await this.changes?.created('layanan', created.id, layananSnapshot(created), {
+      actorId: row.userId,
+      sourceContributionId: id,
+    });
     await this.repo.updateContribution(id, { status: 'approved', resultLayananId: created.id });
     await this.emitPublished(created);
   }

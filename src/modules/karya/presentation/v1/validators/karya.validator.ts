@@ -26,6 +26,7 @@ export const KARYA_SAMBAS_CONNECTION_TYPES = [
 export const KARYA_ACCESS_LINK_KINDS = [
   'listen',
   'watch',
+  'trailer',
   'buy',
   'read',
   'stream',
@@ -198,6 +199,39 @@ function refineKaryaCredits(
   }
 }
 
+/** Trailer hanya untuk film - musik menolak kind access `trailer`. */
+function refineTrailerFilmOnly(
+  data: {
+    kind: (typeof KARYA_KINDS)[number];
+    access_links?: { kind: string }[];
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.kind === 'film') return;
+  const links = data.access_links ?? [];
+  for (let i = 0; i < links.length; i++) {
+    if (links[i]?.kind === 'trailer') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['access_links', i, 'kind'],
+        message: 'Trailer hanya untuk karya film',
+      });
+    }
+  }
+}
+
+function refineKaryaPayload(
+  data: {
+    kind: (typeof KARYA_KINDS)[number];
+    credits: { role: string }[];
+    access_links?: { kind: string }[];
+  },
+  ctx: z.RefinementCtx,
+): void {
+  refineKaryaCredits(data, ctx);
+  refineTrailerFilmOnly(data, ctx);
+}
+
 /** Field bersama; year + sambas opsional di usulan, edit, admin, dan publish. */
 const karyaPayloadShared = {
   title: nonEmpty.max(300),
@@ -228,7 +262,7 @@ const karyaPayloadShared = {
 export const newKaryaPayloadSchema = z
   .object(karyaPayloadShared)
   .strict()
-  .superRefine(refineKaryaCredits);
+  .superRefine(refineKaryaPayload);
 
 /** Body admin create/update + usulan edit: year + sambas tetap opsional. */
 export const karyaFieldsSchema = newKaryaPayloadSchema;

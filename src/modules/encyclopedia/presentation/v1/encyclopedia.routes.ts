@@ -1,3 +1,4 @@
+import { entityCommentEditHistoryResponseSchema } from '@/shared/comment/entity-comment-response.schema';
 import type { MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
@@ -244,6 +245,17 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
       },
     }),
     createRoute({
+      method: 'get',
+      path: '/comments/:id/edit-history',
+      tags: ['Encyclopedia', 'Article Comments'],
+      summary: 'Riwayat sunting komentar artikel',
+      request: { params: commentIdParamSchema },
+      responses: {
+        200: { description: 'Riwayat sunting', content: json(entityCommentEditHistoryResponseSchema) },
+        404: { description: 'Komentar tidak ditemukan', content: json(errorResponseSchema) },
+      },
+    }),
+    createRoute({
       method: 'patch',
       path: '/comments/:id',
       tags: ['Encyclopedia', 'Article Comments'],
@@ -356,6 +368,7 @@ export function createEncyclopediaRoutes(deps: EncyclopediaRoutesDeps) {
     'get /articles/:id/comments': (c) => deps.controller.listComments(c),
     'post /articles/:id/comments': (c) => deps.controller.createComment(c),
     'post /articles/:id/comments/audio': (c) => deps.controller.createCommentAudio(c),
+    'get /comments/:id/edit-history': (c) => deps.controller.getCommentEditHistory(c),
     'patch /comments/:id': (c) => deps.controller.updateComment(c),
     'delete /comments/:id': (c) => deps.controller.deleteComment(c),
     'post /articles/:id/bookmark': (c) => deps.controller.toggleBookmark(c),

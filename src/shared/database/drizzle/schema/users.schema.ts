@@ -89,11 +89,13 @@ export const users = sqliteTable(
       .default(true),
     /**
      * Anggota Tim Kami (kurasi admin). true = tampil di GET /about/team.
-     * `team_as` = peran (mis. developer); `team_note` = keterangan apresiasi.
+     * `team_as` = peran singkat; `team_note` = kontribusi (max 5 baris, newline).
+     * `team_sort_order` = urutan tampil Tim Kami; null = belakangan.
      */
     isTeam: integer('is_team', { mode: 'boolean' }).notNull().default(false),
     teamAs: text('team_as'),
     teamNote: text('team_note'),
+    teamSortOrder: integer('team_sort_order'),
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   },
   (t) => [

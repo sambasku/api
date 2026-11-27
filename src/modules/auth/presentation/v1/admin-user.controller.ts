@@ -30,6 +30,7 @@ export class AdminUsersController {
         isTeam?: boolean;
         teamAs?: string | null;
         teamNote?: string | null;
+        teamSortOrder?: number | null;
       }) => Promise<User | null>;
       setUserSponsor: (userId: string, isSponsor: boolean) => Promise<{
         isSponsor: boolean;
@@ -60,6 +61,7 @@ export class AdminUsersController {
       is_team: u.isTeam,
       team_as: u.teamAs,
       team_note: u.teamNote,
+      team_sort_order: u.teamSortOrder,
       is_sponsor: u.isSponsor ?? false,
       // Enrichment admin: OTP terakhir (list admin saja; default null).
       otp:
@@ -203,12 +205,18 @@ export class AdminUsersController {
   async updateTeam(
     c: AdminCtx,
     targetId: string,
-    body: { is_team?: boolean; team_as?: string | null; team_note?: string | null },
+    body: {
+      is_team?: boolean;
+      team_as?: string | null;
+      team_note?: string | null;
+      team_sort_order?: number | null;
+    },
   ) {
     const updated = await this.deps.updateTeam(targetId, {
       isTeam: body.is_team,
       teamAs: body.team_as,
       teamNote: body.team_note,
+      teamSortOrder: body.team_sort_order,
     });
     if (!updated) {
       return c.json(

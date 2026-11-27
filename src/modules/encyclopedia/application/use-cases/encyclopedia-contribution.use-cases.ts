@@ -1,3 +1,4 @@
+import { buildCommentEditHistoryWire, resolveCommentParentId } from '@/shared/comment/comment-threading';
 import {
   BadRequestError,
   ConflictError,
@@ -24,12 +25,19 @@ import type {
 } from '../../domain/repositories/encyclopedia.repository';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
 import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
+import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
+import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
+import type { WordVotePushCooldownGate } from '@/modules/notification/application/use-cases/word-vote-push-cooldown-gate';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import { CSV_IMPORTER_USER_ID } from '@/shared/constants/csv-importer';
 import { validateArticlePayload } from './article.use-cases';
 
 // ---------------------------------------------------------------- komentar
 
 export interface CreateCommentInput {
   articleId: string;
+  parentId?: string | null;
   userId: string;
   body: string;
   imageUrl?: string | null;
@@ -49,6 +57,18 @@ export class ListArticleCommentsUseCase {
       cursor,
       limit,
     });
+  }
+
+  async getEditHistory(commentId: string) {
+    const comment = await this.repo.findCommentById(commentId);
+    if (!comment) {
+      throw new NotFoundError('COMMENT_NOT_FOUND', 'Komentar tidak ditemukan');
+    }
+    const revisions =
+      typeof this.repo.listCommentRevisions === 'function'
+        ? await this.repo.listCommentRevisions(commentId)
+        : [];
+    return buildCommentEditHistoryWire(comment, revisions);
   }
 }
 
@@ -87,7 +107,9 @@ export class CreateArticleCommentUseCase {
           { field: 'sticker_id', message: 'Stiker tidak tersedia' },
         ]);
       }
-      const catalog = await this.stickerRepo.findActiveById(rawSticker);
+      const catalog = typeof this.stickerRepo.findUsableByUser === 'function'
+        ? await this.stickerRepo.findUsableByUser(rawSticker, input.userId)
+        : await this.stickerRepo.findActiveById(rawSticker);
       if (!catalog) {
         throw new ValidationError([
           {
@@ -124,8 +146,17 @@ export class CreateArticleCommentUseCase {
       bodyOriginal = filtered !== body ? body : null;
     }
 
+    const parentId = await resolveCommentParentId({
+      rawParentId: input.parentId,
+      hostId: input.articleId,
+      findParent: async (id) => {
+        const p = await this.repo.findCommentById(id);
+        return p ? { id: p.id, hostId: p.articleId, parentId: p.parentId, status: p.status } : null;
+      },
+    });
     const created = await this.repo.createComment({
       articleId: input.articleId,
+      parentId,
       userId: input.userId,
       body: filtered,
       bodyOriginal,
@@ -692,8 +723,29 @@ export class ListArticleContributionsUseCase {
 
 export type { NewArticleContributionInput };
 
+const ARTICLE_CLAP_TITLE = 'Clap baru';
+
+function articleClapBody(displayName: string, title: string): string {
+  return `${displayName} memberi clap pada "${title}".`;
+}
+
+/**
+ * Set clap user pada artikel (0..50). Saat count naik, inbox + push ke
+ * author hanya untuk clap pertama user itu pada artikel (per user, bukan per
+ * clap; best-effort). Push di-throttle per author lewat gate opsional.
+ */
 export class SetArticleClapCountUseCase {
-  constructor(private readonly repo: ArticleRepository) {}
+  constructor(
+    private readonly repo: ArticleRepository,
+    private readonly userRepo?: Pick<UserRepository, 'findById'>,
+    private readonly inbox?: RecordInboxNotificationUseCase,
+    private readonly notifyUser?: NotifyUserUseCase,
+    private readonly pushCooldown?: Pick<
+      WordVotePushCooldownGate,
+      'maySend' | 'touchAfterSend'
+    >,
+  ) {}
+
   async execute(
     userId: string,
     articleId: string,
@@ -703,9 +755,97 @@ export class SetArticleClapCountUseCase {
     if (!exists) {
       throw new NotFoundError('ARTICLE_NOT_FOUND', 'Artikel tidak ditemukan');
     }
+    const previous = await this.repo.getUserClapCount(userId, articleId);
     const safe = Math.min(50, Math.max(0, Math.floor(count)));
     const result = await this.repo.setClapCount(userId, articleId, safe);
+
+    if (safe > previous) {
+      await this.notifyAuthor({
+        actorId: userId,
+        articleId,
+        newCount: safe,
+      });
+    }
+
     return { count: result.myCount, clap_total: result.clapTotal };
+  }
+
+  private async notifyAuthor(input: {
+    actorId: string;
+    articleId: string;
+    newCount: number;
+  }): Promise<void> {
+    try {
+      const article = await this.repo.findById(input.articleId);
+      if (!article) return;
+      if (article.authorUserId === input.actorId) return;
+      if (
+        article.authorUserId === ANONIM_USER_ID ||
+        article.authorUserId === CSV_IMPORTER_USER_ID
+      ) {
+        return;
+      }
+
+      let displayName = 'Seseorang';
+      if (this.userRepo) {
+        const actor = await this.userRepo.findById(input.actorId);
+        if (actor) {
+          displayName = actor.displayName?.trim() || actor.username;
+        }
+      }
+
+      const title = ARTICLE_CLAP_TITLE;
+      const body = articleClapBody(displayName, article.title.trim() || 'artikel');
+
+      // Sekali per clapper per artikel (#345): target_id komposit + insert
+      // do-nothing. Clap berikutnya / re-clap dari 0 = baris ada = tanpa push.
+      let isFirstClap = true;
+      if (this.inbox) {
+        isFirstClap = await this.inbox.executeIfNew({
+          userId: article.authorUserId,
+          type: 'article_clap',
+          targetKind: 'article',
+          targetId: `${article.id}:${input.actorId}`,
+          actorId: input.actorId,
+          title,
+          body,
+          actionKind: 'article',
+          actionValue: article.slug,
+        });
+      }
+
+      if (this.notifyUser && isFirstClap) {
+        const maySend =
+          !this.pushCooldown || (await this.pushCooldown.maySend(article.authorUserId));
+        if (maySend) {
+          await this.notifyUser.execute({
+            userId: article.authorUserId,
+            title,
+            body,
+            actorId: input.actorId,
+            data: {
+              type: 'article_clap',
+              target_kind: 'article',
+              target_id: article.id,
+              action_kind: 'article',
+              action_value: article.slug,
+            },
+          });
+          await this.pushCooldown?.touchAfterSend(article.authorUserId);
+        }
+      }
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          time: new Date().toISOString(),
+          msg: 'article clap notify failed',
+          article_id: input.articleId,
+          actor_id: input.actorId,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 }
 

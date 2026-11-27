@@ -112,6 +112,7 @@ export interface ArticleRevision {
 export interface ArticleComment {
   id: string;
   articleId: string;
+  parentId: string | null;
   userId: string;
   username: string | null;
   displayName: string | null;
@@ -127,4 +128,5 @@ export interface ArticleComment {
   isEdited: boolean;
   createdAt: Date;
   updatedAt: Date | null;
+  replies?: ArticleComment[];
 }

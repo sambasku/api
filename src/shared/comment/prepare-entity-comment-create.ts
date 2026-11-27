@@ -39,6 +39,7 @@ export async function prepareEntityCommentCreate(
   }
   const stickerId = await resolveCommentStickerId({
     rawStickerId: rawSticker || null,
+    userId: input.userId,
     stickerRepo: input.stickerRepo,
   });
   if (rawBody.length === 0 && !hasImage && !stickerId) {

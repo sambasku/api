@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
-import { generateId } from '@/shared/utils/ulid';
+import { generateMonotonicId } from '@/shared/utils/ulid';
 import { users } from './users.schema';
 
 // Jejak audit setiap mutasi data - base-stack.md Section 21.
@@ -7,7 +7,7 @@ import { users } from './users.schema';
 export const auditLogs = sqliteTable(
   'audit_logs',
   {
-    id: text('id').primaryKey().$defaultFn(() => generateId()),
+    id: text('id').primaryKey().$defaultFn(() => generateMonotonicId()),
     userId: text('user_id').references(() => users.id),
     action: text('action').notNull(),
     entityType: text('entity_type').notNull(),

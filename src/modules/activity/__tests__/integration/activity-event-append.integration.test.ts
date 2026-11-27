@@ -92,5 +92,39 @@ describe.skipIf(!hasTestDb)(
       expect(rows).toHaveLength(1);
       expect(rows[0].payload).toBe('Jinye : kedua');
     });
+
+    it('feed beranda & timeline profil menampilkan body Jinye terbaru walau payload lama (#337)', async () => {
+      const { jinye } = await import('@/shared/database/drizzle/schema');
+      const { ActivityEventFeedRepositoryImpl } = await import(
+        '@/modules/activity/infrastructure/activity-event-feed.repository.impl'
+      );
+      const JINYE_EDITED = '01ACTAPPENDJINYEED';
+      await db.insert(jinye).values({
+        id: JINYE_EDITED,
+        userId: ACTOR,
+        body: 'teks sesudah edit',
+        status: 'published',
+      });
+      await repo.append({
+        kind: 'jinye_created',
+        actorId: ACTOR,
+        targetId: JINYE_EDITED,
+        dedupeKey: `jinye:${JINYE_EDITED}`,
+        payload: 'Jinye : teks sebelum edit',
+      });
+
+      const feedRepo = new ActivityEventFeedRepositoryImpl(db);
+      const publicFeed = await feedRepo.listFeed(20, undefined, undefined, [
+        'jinye_created',
+      ]);
+      const publicItem = publicFeed.find((i) => i.target?.id === JINYE_EDITED);
+      expect(publicItem?.body).toBe('Jinye : teks sesudah edit');
+
+      const profileFeed = await feedRepo.listPublicByActor(ACTOR, 'jinye', 20);
+      const profileItem = profileFeed.items.find(
+        (i) => i.wordId === JINYE_EDITED,
+      );
+      expect(profileItem?.summary).toBe('Jinye : teks sesudah edit');
+    });
   },
 );

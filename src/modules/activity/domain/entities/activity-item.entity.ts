@@ -23,12 +23,14 @@ export type ActivityKind =
   | 'event'
 | 'usaha'
 | 'layanan'
+  | 'community'
 | 'karya'
 | 'culinary'
 | 'pantun'
 | 'article'
 | 'jinye'
-  | 'chat';
+  | 'chat'
+  | 'leaderboard_rank';
 
 export interface ActivityActor {
   username: string | null;

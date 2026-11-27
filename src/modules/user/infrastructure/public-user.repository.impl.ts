@@ -106,6 +106,7 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
         joinedAt: users.createdAt,
         avatarUrl: users.avatarUrl,
         activeBorderUrl: achievements.badgeUrl,
+        activeBorderAssetKind: achievements.badgeAssetKind,
       })
       .from(users)
       .leftJoin(userAchievements, eq(userAchievements.id, users.activeBorderId))
@@ -137,6 +138,8 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       joinedAt: row.joinedAt,
       avatarUrl: row.avatarUrl ?? null,
       activeBorderUrl: row.activeBorderUrl ?? null,
+      activeBorderAssetKind:
+        row.activeBorderUrl == null ? null : (row.activeBorderAssetKind ?? 'image'),
     };
   }
 
@@ -394,95 +397,100 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           and (repost_of_id is null or quote_body is not null)
       ) as jny
       cross join (
-        select coalesce(count(*), 0) * ${W.vote_received} as vote_received_points
-        from votes v
-        where v.value = 1
-          and v.user_id <> ${userId}
-          and (
-            (
-              v.entity_type = 'word'
-              and exists (
-                select 1 from words w
-                where w.id = v.entity_id
-                  and w.created_by = ${userId}
-                  and w.deleted_at is null
-              )
+        select coalesce(sum(vr.cnt), 0) * ${W.vote_received} as vote_received_points
+        from (
+          -- Mulai dari konten milik user (index owner), lalu cocokkan votes lewat
+          -- index (entity_type, entity_id). Hindari scan seluruh tabel votes.
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'word'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select w.id from words w
+              where w.created_by = ${userId} and w.deleted_at is null
             )
-            or (
-              v.entity_type = 'meaning'
-              and exists (
-                select 1 from meanings m
-                where m.id = v.entity_id
-                  and m.created_by = ${userId}
-                  and m.deleted_at is null
-              )
+          union all
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'meaning'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select m.id from meanings m
+              where m.created_by = ${userId} and m.deleted_at is null
             )
-            or (
-              v.entity_type = 'example'
-              and exists (
-                select 1 from examples e
-                where e.id = v.entity_id
-                  and e.created_by = ${userId}
-                  and e.deleted_at is null
-              )
+          union all
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'example'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select e.id from examples e
+              where e.created_by = ${userId} and e.deleted_at is null
             )
-            or (
-              v.entity_type = 'pronunciation'
-              and exists (
-                select 1 from pronunciations p
-                where p.id = v.entity_id
-                  and p.created_by = ${userId}
-                  and p.deleted_at is null
-              )
+          union all
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'pronunciation'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select p.id from pronunciations p
+              where p.created_by = ${userId} and p.deleted_at is null
             )
-            or (
-              v.entity_type = 'word_image'
-              and exists (
-                select 1 from word_images wi
-                where wi.id = v.entity_id
-                  and wi.created_by = ${userId}
-                  and wi.deleted_at is null
-              )
+          union all
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'word_image'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select wi.id from word_images wi
+              where wi.created_by = ${userId} and wi.deleted_at is null
             )
-            or (
-              v.entity_type = 'word_audio'
-              and exists (
-                select 1 from word_audios wa
-                where wa.id = v.entity_id
-                  and wa.created_by = ${userId}
-                  and wa.deleted_at is null
-              )
+          union all
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'word_audio'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select wa.id from word_audios wa
+              where wa.created_by = ${userId} and wa.deleted_at is null
             )
-            or (
-              v.entity_type = 'comment'
-              and exists (
-                select 1 from comments cm
-                where cm.id = v.entity_id
-                  and cm.user_id = ${userId}
-                  and cm.status = 'published'
-                  and cm.deleted_at is null
-              )
+          union all
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'comment'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select cm.id from comments cm
+              where cm.user_id = ${userId} and cm.status = 'published' and cm.deleted_at is null
             )
-            or (
-              v.entity_type = 'pantun'
-              and exists (
-                select 1 from pantuns pn
-                where pn.id = v.entity_id
-                  and pn.user_id = ${userId}
-                  and pn.status = 'published'
-              )
+          union all
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'pantun'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select pn.id from pantuns pn
+              where pn.user_id = ${userId} and pn.status = 'published'
             )
-            or (
-              v.entity_type = 'article'
-              and exists (
-                select 1 from articles ar
-                where ar.id = v.entity_id
-                  and ar.author_user_id = ${userId}
-                  and ar.status = 'published'
-                  and ar.deleted_at is null
-              )
+          union all
+          select count(*) as cnt
+          from votes v
+          where v.entity_type = 'article'
+            and v.value = 1
+            and v.user_id <> ${userId}
+            and v.entity_id in (
+              select ar.id from articles ar
+              where ar.author_user_id = ${userId} and ar.status = 'published' and ar.deleted_at is null
             )
-          )
+        ) as vr
       ) as vot
       cross join (
         select coalesce((

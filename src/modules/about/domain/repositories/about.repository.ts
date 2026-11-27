@@ -13,6 +13,12 @@ export interface ListContributorsPage {
   hasMore: boolean;
 }
 
+export interface ListVerifiersPage {
+  items: VerifierListItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface AboutRepository {
   listTeam(): Promise<TeamMember[]>;
   listSponsorships(): Promise<Sponsorship[]>;
@@ -31,7 +37,7 @@ export interface AboutRepository {
   /** Checkbox sponsor: upsert aktif atau restore soft-deleted. */
   setUserSponsor(userId: string, isSponsor: boolean): Promise<Sponsorship | null>;
   listContributors(limit: number, cursor?: string): Promise<ListContributorsPage>;
-  listVerifiers(): Promise<VerifierListItem[]>;
+  listVerifiers(limit: number, cursor?: string): Promise<ListVerifiersPage>;
   /** User IDs yang punya sponsorship aktif (untuk enrich list admin). */
   listActiveSponsorUserIds(userIds: string[]): Promise<Set<string>>;
 }

@@ -33,6 +33,7 @@
     "db:backfill-activity": "tsx src/scripts/backfill-activity-events.ts",
     "db:backfill-consents": "tsx src/scripts/backfill-user-consents.ts",
     "db:backfill-content-links": "tsx src/scripts/backfill-content-links.ts",
+    "db:backfill-jinye-images": "tsx src/scripts/backfill-jinye-images.ts",
     "db:backfill-lemma-example-translations": "tsx src/scripts/backfill-lemma-example-translations.ts",
     "db:backfill-unverify-empty-words": "tsx src/scripts/backfill-unverify-empty-words.ts",
     "db:dedupe-meanings": "tsx src/scripts/dedupe-meanings.ts",

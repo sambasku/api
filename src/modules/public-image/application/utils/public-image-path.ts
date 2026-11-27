@@ -76,3 +76,24 @@ export function buildBalehoImagePath(mimeType: string): string {
 export function buildStickerImagePath(mimeType: string): string {
   return `assets/stickers/${generateId()}.${extensionForImageMime(mimeType)}`;
 }
+
+/** Path border Lottie achievement: assets/achievements/<ulid>.json|.lottie */
+export function buildAchievementLottiePath(kind: 'json' | 'dotlottie'): string {
+  const ext = kind === 'json' ? 'json' : 'lottie';
+  return `assets/achievements/${generateId()}.${ext}`;
+}
+
+/** Path logo komunitas: assets/community/<ulid>.<ext> */
+export function buildCommunityImagePath(mimeType: string): string {
+  return `assets/community/${generateId()}.${extensionForImageMime(mimeType)}`;
+}
+
+/** Path cover/poster karya: assets/karyas/<ulid>.<ext> */
+export function buildKaryaImagePath(mimeType: string): string {
+  return `assets/karyas/${generateId()}.${extensionForImageMime(mimeType)}`;
+}
+
+/** Path foto Jinye (post + komentar): assets/jinye/<ulid>.<ext> */
+export function buildJinyeImagePath(mimeType: string): string {
+  return `assets/jinye/${generateId()}.${extensionForImageMime(mimeType)}`;
+}

@@ -25,8 +25,9 @@ export interface AttachDiscussionAudioCommand {
 }
 
 /**
- * Lampirkan audio ke opening thread pending_review (owner only).
- * Storage sama balasan suara; wire publik mereadact sampai published.
+ * Lampirkan audio ke opening thread (owner only).
+ * Boleh pada `pending_review` (antrean edit) atau `published` (create auto-tayang).
+ * Storage sama balasan suara.
  */
 export class AttachDiscussionAudioUseCase {
   constructor(
@@ -45,10 +46,10 @@ export class AttachDiscussionAudioUseCase {
     if (discussion.userId !== cmd.userId) {
       throw new ForbiddenError('FORBIDDEN', 'Hanya pemilik yang boleh menambah audio');
     }
-    if (discussion.status !== 'pending_review') {
+    if (discussion.status !== 'pending_review' && discussion.status !== 'published') {
       throw new ConflictError(
         'DISCUSSION_NOT_PENDING',
-        'Audio hanya bisa dilampirkan saat diskusi menunggu pengecekan',
+        'Audio hanya bisa dilampirkan saat diskusi tayang atau menunggu pengecekan',
       );
     }
 

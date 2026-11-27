@@ -40,6 +40,14 @@ export type BalehoBoard = {
   placements: BalehoPlacementView[];
 };
 
+/** Hitungan kosakata publik untuk kartu slide 2. Draft dan yang dihapus tidak masuk. */
+export type KosakataBoardStats = {
+  total: number;
+  verified: number;
+  queue: number;
+  rejected: number;
+};
+
 export type CreateBalehoPlacementInput = {
   slide: number;
   col: number;

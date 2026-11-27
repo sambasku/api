@@ -12,6 +12,8 @@ export const APP_SETTING_KEYS = [
   'notification.word_media_push_cooldown_minutes',
   'wa.verifier_enabled',
   'wa.group_cta_url',
+  /** Master switch semua pesan WA keluar (grup, verifikator, Baleho). Default false. */
+  'wa_group_notify_enabled',
   /** Kill switch pengingat aktivitas (leveling/streak). Default off sampai dry-run. */
   'streak_reminder_enabled',
   /** Tarif Baleho: rupiah per sel 1x1 per hari. */
@@ -47,6 +49,7 @@ export const DEFAULT_WA_GROUP_CTA_URL =
   'https://chat.whatsapp.com/Kw64lxFEGXfK5gw6T6GEoN?mode=gi_t&utm_source=sambasku.com&utm_medium=referral';
 export const WA_VERIFIER_ENABLED_KEY = 'wa.verifier_enabled' as const;
 export const WA_GROUP_CTA_URL_KEY = 'wa.group_cta_url' as const;
+export const WA_GROUP_NOTIFY_ENABLED_KEY = 'wa_group_notify_enabled' as const;
 
 export const REVIEW_APPROVE_PUSH_COOLDOWN_MINUTES_KEY =
   'notification.review_approve_push_cooldown_minutes' as const;
@@ -123,6 +126,7 @@ export const APP_SETTING_KEY_TYPES: Record<AppSettingKey, AppSettingType> = {
   'notification.word_media_push_cooldown_minutes': 'number',
   'wa.verifier_enabled': 'boolean',
   'wa.group_cta_url': 'url',
+  wa_group_notify_enabled: 'boolean',
   streak_reminder_enabled: 'boolean',
   'baleho.price_per_cell_per_day': 'number',
   'voice.room_enabled': 'boolean',

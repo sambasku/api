@@ -35,10 +35,24 @@ export interface LeaderboardRepository {
 
   listEntriesForWeek(weekId: string): Promise<LeaderboardEntry[]>;
 
+  /** Snapshot minggu tanpa user yang saat ini di-exclude; rank dinomori ulang 1..n. */
+  listVisibleEntriesForWeek(weekId: string): Promise<LeaderboardEntry[]>;
+
   findWeekByWeekId(weekId: string): Promise<LeaderboardWeekRecord | null>;
+
+  findWeeksByWeekIds(weekIds: string[]): Promise<LeaderboardWeekRecord[]>;
 
   /** Minggu sudah lewat (`ended_at <= now`) tapi `finalized_at` masih null. */
   listUnfinalizedWeeksDue(now: Date): Promise<LeaderboardWeekRecord[]>;
+
+  /**
+   * Entri minggu yang sudah finalized tapi belum punya baris `user_week_stats`
+   * (untuk backfill XP bertahap di cron).
+   */
+  listEntriesMissingWeekStats(
+    fromWeekId: string,
+    limit: number,
+  ): Promise<Array<{ weekId: string; entry: LeaderboardEntry }>>;
 
   touchWeekUpdatedAt(weekId: string, at: Date): Promise<void>;
 

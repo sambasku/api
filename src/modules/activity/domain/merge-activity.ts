@@ -78,6 +78,8 @@ explore: [
 'pantun_created',
 'pantun_reply_created',
 'article_published',
+'community_published',
+'community_proposal_created',
 'place_photo_added',
 'usaha_photo_added',
 'cuisine_photo_added',
@@ -86,7 +88,6 @@ explore: [
   joined: ['user_joined'],
   jinye: [
     'jinye_created',
-    'jinye_comment_created',
     'jinye_reposted',
     'jinye_quote_created',
   ],

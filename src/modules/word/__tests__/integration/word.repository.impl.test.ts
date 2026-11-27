@@ -566,6 +566,8 @@ const repo = new WordRepositoryImpl(db, hasTestDb ? new FtsWordSearchIndex(getTe
         attribution: null,
         // ImageKit staging tidak auto-verified; kata induk juga belum verified
         isVerified: false,
+        sourceType: null,
+        sourceReference: null,
         status: 'published',
         isCorrected: false,
       },

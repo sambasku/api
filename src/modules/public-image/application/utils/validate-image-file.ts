@@ -1,5 +1,6 @@
 import { BadRequestError } from '@/shared/errors/app-error';
 import { extensionForImageMime } from './public-image-path';
+import { sanitizeUploadFilename } from './sanitize-upload-filename';
 
 export const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -89,8 +90,8 @@ export function validateImageFile(
     ? 'Hanya jpg, png, webp, atau gif'
     : 'Hanya jpg, png, atau webp';
 
-  const filename = input.filename?.trim() || null;
-  if (filename && (filename.includes('..') || filename.includes('\0'))) {
+  const filename = sanitizeUploadFilename(input.filename);
+  if (input.filename?.trim() && !filename) {
     throw new BadRequestError('VALIDATION_ERROR', 'Nama file tidak valid', [
       { field: 'file', message: 'Nama file tidak valid' },
     ]);

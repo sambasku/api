@@ -121,6 +121,8 @@ function stagingImage(id: string): WordImageMedia {
     status: 'published',
     isVerified: false,
     isCorrected: false,
+    sourceType: null,
+    sourceReference: null,
   };
 }
 

@@ -1,5 +1,9 @@
 import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/app-error';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import {
+  VERIFIER_APPLICATION_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import type {
   SocialLink,
   SocialScreenshot,
@@ -28,6 +32,7 @@ export class ResubmitVerifierApplicationUseCase {
   constructor(
     private readonly appRepo: VerifierApplicationRepository,
     private readonly userRepo: UserRepository,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(cmd: ResubmitVerifierApplicationCommand): Promise<VerifierApplication> {
@@ -75,6 +80,22 @@ export class ResubmitVerifierApplicationUseCase {
         'Pengajuan hanya bisa diperbaiki setelah ditolak',
       );
     }
+
+    await this.notifyGroup(updated.userId, updated.fullName ?? cmd.fullName);
     return updated;
+  }
+
+  private async notifyGroup(userId: string, fullName: string): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis: 'Pengajuan verifikator',
+        name: fullName.trim() || 'tanpa nama',
+        userId,
+        resubmit: true,
+        eventKey: VERIFIER_APPLICATION_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan pengajuan.
+    }
   }
 }

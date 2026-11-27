@@ -210,7 +210,7 @@ describe.skipIf(!hasTestDb)('Event Going E2E', () => {
     expect(hidden?.hiddenAt).toBeTruthy();
   });
 
-  it('tolak mark pada acara sebelum hari-H (upcoming)', async () => {
+  it('terima mark pada acara sebelum hari-H (upcoming)', async () => {
     const future = await (
       await post(
         '/api/v1/admin/events',
@@ -232,7 +232,7 @@ describe.skipIf(!hasTestDb)('Event Going E2E', () => {
       undefined,
       userToken,
     );
-    expect(res.status).toBe(400);
-    expect((await res.json()).error_code).toBe('EVENT_NOT_STARTED');
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.viewer_going).toBe(true);
   });
 });

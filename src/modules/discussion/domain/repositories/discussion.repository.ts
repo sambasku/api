@@ -70,7 +70,7 @@ export interface DiscussionRepository {
 
   /**
    * Edit OP published (#202): body + link; snapshot revisi bila body berubah.
-   * `requeuePendingReview` → status pending_review (pra-moderasi ulang).
+   * `requeuePendingReview` → status pending_review (legacy antrean; create/edit #338 pakai false).
    */
   updateDiscussionBodyWithRevision(input: {
     discussionId: string;

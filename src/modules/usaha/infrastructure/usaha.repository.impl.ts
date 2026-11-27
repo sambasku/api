@@ -1,3 +1,4 @@
+import { attachCommentRepliesTwoLevel } from '@/shared/comment/comment-threading';
 import {
   and,
   asc,
@@ -105,6 +106,7 @@ function toUsahaComment(
   return {
     id: row.id,
     usahaId: row.usahaId,
+    parentId: row.parentId ?? null,
     userId: row.userId,
     username: meta.authorDeletedAt ? null : meta.username,
     displayName: meta.authorDeletedAt ? null : meta.displayName,
@@ -743,6 +745,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .insert(usahaComments)
       .values({
         usahaId: input.usahaId,
+        parentId: input.parentId ?? null,
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
@@ -792,7 +795,7 @@ export class UsahaRepositoryImpl implements UsahaRepository {
     filter: UsahaCommentListFilter,
   ): Promise<CursorPage<UsahaComment>> {
     const limit = filter.limit;
-    const conditions = [eq(usahaComments.usahaId, usahaId)];
+    const conditions = [eq(usahaComments.usahaId, usahaId), isNull(usahaComments.parentId)];
     if (filter.status) conditions.push(eq(usahaComments.status, filter.status));
     if (filter.cursor) conditions.push(lt(usahaComments.id, filter.cursor));
 
@@ -817,8 +820,39 @@ export class UsahaRepositoryImpl implements UsahaRepository {
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    return {
-      items: page.map((row) =>
+    const tops = page.map((row) =>
+      toUsahaComment(row.c, {
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        userRole: row.userRole,
+        authorDeletedAt: row.authorDeletedAt,
+        isEdited: Boolean(row.isEdited),
+      }),
+    );
+    const topIds = tops.map((t) => t.id);
+    let replies: UsahaComment[] = [];
+    if (topIds.length > 0) {
+      const replyConds = [inArray(usahaComments.parentId, topIds)];
+      if (filter.status) replyConds.push(eq(usahaComments.status, filter.status));
+      const replyRows = await this.db
+        .select({
+          c: usahaComments,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          authorDeletedAt: users.deletedAt,
+          userRole: highestUserRoleSql,
+          isEdited: sql<boolean>`EXISTS (
+            SELECT 1 FROM ${ usahaCommentRevisions }
+            WHERE ${ usahaCommentRevisions.commentId } = ${ usahaComments.id }
+          )`,
+        })
+        .from(usahaComments)
+        .leftJoin(users, eq(users.id, usahaComments.userId))
+        .where(and(...replyConds))
+        .orderBy(usahaComments.createdAt, usahaComments.id);
+      replies = replyRows.map((row) =>
         toUsahaComment(row.c, {
           username: row.username,
           displayName: row.displayName,
@@ -827,7 +861,10 @@ export class UsahaRepositoryImpl implements UsahaRepository {
           authorDeletedAt: row.authorDeletedAt,
           isEdited: Boolean(row.isEdited),
         }),
-      ),
+      );
+    }
+    return {
+      items: attachCommentRepliesTwoLevel(tops, replies),
       nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
       hasMore,
     };
@@ -853,12 +890,12 @@ export class UsahaRepositoryImpl implements UsahaRepository {
         body: current.body,
         createdAt: now,
       });
-      const excess = await tx
+      const revisions = await tx
         .select({ id: usahaCommentRevisions.id })
         .from(usahaCommentRevisions)
         .where(eq(usahaCommentRevisions.commentId, input.commentId))
-        .orderBy(desc(usahaCommentRevisions.createdAt))
-        .offset(COMMENT_REVISION_CAP);
+        .orderBy(desc(usahaCommentRevisions.createdAt));
+      const excess = revisions.slice(COMMENT_REVISION_CAP);
       if (excess.length > 0) {
         await tx
           .delete(usahaCommentRevisions)
@@ -904,6 +941,21 @@ export class UsahaRepositoryImpl implements UsahaRepository {
       .where(and(eq(usahaComments.id, id), eq(usahaComments.status, 'published')))
       .returning({ id: usahaComments.id });
     return Boolean(row);
+  }
+
+  async listCommentRevisions(
+    commentId: string,
+  ): Promise<Array<{ editorId: string; body: string; createdAt: Date }>> {
+    const rows = await this.db
+      .select({
+        editorId: usahaCommentRevisions.editorId,
+        body: usahaCommentRevisions.body,
+        createdAt: usahaCommentRevisions.createdAt,
+      })
+      .from(usahaCommentRevisions)
+      .where(eq(usahaCommentRevisions.commentId, commentId))
+      .orderBy(desc(usahaCommentRevisions.createdAt), desc(usahaCommentRevisions.id));
+    return rows;
   }
 
   async usahaTargetExists(id: string): Promise<boolean> {

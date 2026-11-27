@@ -54,4 +54,30 @@ describe('mapPublicWordImageUrl', () => {
       ).providerFileId,
     ).toBe('file_1');
   });
+  it('redact salinan foto Jinye (github) yang belum diverifikasi', () => {
+    const unverified = mapPublicWordImageUrl(
+      {
+        url: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/words/a.jpg',
+        provider: 'github',
+        isVerified: false,
+        providerFileId: 'assets/words/a.jpg',
+        sourceType: 'jinye',
+      },
+      { redactStaging: true },
+    );
+    expect(unverified.url).toBe(PENDING_WORD_IMAGE_PLACEHOLDER_URL);
+    expect(unverified.providerFileId).toBe('');
+
+    const verified = mapPublicWordImageUrl(
+      {
+        url: 'https://cdn.jsdelivr.net/gh/sambasku/images@main/assets/words/a.jpg',
+        provider: 'github',
+        isVerified: true,
+        providerFileId: 'assets/words/a.jpg',
+        sourceType: 'jinye',
+      },
+      { redactStaging: true },
+    );
+    expect(verified.url).toContain('assets/words/a.jpg');
+  });
 });

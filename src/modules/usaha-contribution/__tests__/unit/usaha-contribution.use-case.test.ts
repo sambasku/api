@@ -381,6 +381,7 @@ describe("UsahaContributionUseCases - approve per kind", () => {
     await uc.approve("C1", "ADMIN");
     expect(uc.__createUc.execute).toHaveBeenCalledWith(
       expect.objectContaining({ publishStatus: "published", name: "Usaha Baru" }),
+      expect.objectContaining({ sourceContributionId: "C1" }),
     );
     expect(contrib.setStatus).toHaveBeenCalledWith("C1", "approved", {
       resultUsahaId: "U_NEW",

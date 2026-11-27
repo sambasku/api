@@ -124,7 +124,11 @@ export class ActivityEventRepositoryImpl implements ActivityEventRepository {
             .update(activityEvents)
             .set({
               hiddenAt: input.hidden ? new Date() : null,
-              ...(payload !== null ? { payload } : {}),
+              // #303: payload word_verified yang sudah beku tidak boleh ditimpa
+              // saat bentrok dedupe_key; hanya isi bila sebelumnya masih null.
+              ...(payload !== null
+                ? { payload: sql`COALESCE(${activityEvents.payload}, ${payload})` }
+                : {}),
             })
             .where(eq(activityEvents.dedupeKey, input.dedupeKey));
           const [existing] = await tx

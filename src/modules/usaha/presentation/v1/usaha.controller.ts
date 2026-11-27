@@ -5,7 +5,7 @@ import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
 import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
-import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
+import { attachLemmaLinksToNestedCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
@@ -57,6 +57,7 @@ function toCommentWire(c: UsahaComment) {
   return {
     id: c.id,
     usaha_id: c.usahaId,
+    parent_id: c.parentId ?? null,
     user: {
       user_id: c.userId,
       username: deleted ? null : c.username,
@@ -184,6 +185,11 @@ type ListRelatedFn = {
     }>
   >;
 };
+
+/** Konteks riwayat perubahan: pelaku = user login (admin), bukan tamu. */
+function changeCtx(c: Context<{ Variables: AppVariables }>) {
+  return { actorId: c.get('user')?.user_id ?? null, requestId: c.get('requestId') ?? null };
+}
 
 export class UsahaController {
   constructor(
@@ -336,7 +342,7 @@ export class UsahaController {
         publishStatus: body.publish_status,
         operationalStatus: body.operational_status,
         authorId: c.get('user')?.user_id ?? null,
-      })
+      }, changeCtx(c))
       .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
   }
 
@@ -362,25 +368,25 @@ export class UsahaController {
         coverUrl: body.cover_url,
         publishStatus: body.publish_status,
         operationalStatus: body.operational_status,
-      })
+      }, changeCtx(c))
       .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
   }
 
   remove(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.deleteUc
-      .execute(id)
+      .execute(id, changeCtx(c))
       .then(() => c.json({ success: true as const, data: null }));
   }
 
   restrict(c: Context<{ Variables: AppVariables }>, id: string, reason: string) {
     return this.restrictUc
-      .execute(id, reason)
+      .execute(id, reason, changeCtx(c))
       .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
   }
 
   restore(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.restoreUc
-      .execute(id)
+      .execute(id, changeCtx(c))
       .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
   }
 
@@ -436,7 +442,7 @@ export class UsahaController {
     imageId: string,
   ) {
     return this.hideImageUc
-      .execute(usahaId, imageId)
+      .execute(usahaId, imageId, changeCtx(c))
       .then(() => c.json({ success: true as const, data: null }));
   }
 
@@ -449,18 +455,12 @@ export class UsahaController {
       data: {
         items: await (async () => {
           const repo = this.comments.ugcLemmaLinks;
-          if (repo) {
-            return attachLemmaLinksToCommentWireItems(
-              repo,
-              'usaha_comment',
-              page.items,
-              (c) => toCommentWire(c),
-            );
-          }
-          return page.items.map((c) => ({
-            ...toCommentWire(c),
-            lemma_links: [] as const,
-          }));
+          return attachLemmaLinksToNestedCommentWireItems(
+            repo,
+            'usaha_comment',
+            page.items,
+            (item) => toCommentWire(item),
+          );
         })(),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
@@ -474,6 +474,7 @@ export class UsahaController {
     const body = c.req.valid('json' as never) as EntityCommentBody;
     const comment = await this.comments.createComment.execute({
       usahaId: id,
+      parentId: body.parent_id ?? null,
       userId: user.user_id,
       body: body.body ?? '',
       stickerId: body.sticker_id ?? null,
@@ -505,6 +506,7 @@ export class UsahaController {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const comment = await this.comments.createCommentAudio.execute({
       usahaId: id,
+      parentId: typeof body['parent_id'] === 'string' ? body['parent_id'] : null,
       userId: user.user_id,
       bytes,
       mimeType: file.type || null,
@@ -514,6 +516,12 @@ export class UsahaController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async getCommentEditHistory(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const data = await this.comments.listComments.getEditHistory(id);
+    return c.json({ success: true as const, data });
   }
 
   async updateComment(c: Context<{ Variables: AppVariables }>) {

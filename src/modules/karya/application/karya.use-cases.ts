@@ -1,5 +1,11 @@
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import type { ExplorationGroupNotifier } from '@/modules/wa/application/ports/exploration-group-notifier.port';
+import {
+  toChangeCtx,
+  type EntityChangeContext,
+  type RecordEntityChange,
+} from '@/modules/change-history/application/record-entity-change';
+import { karyaSnapshot } from '@/modules/change-history/domain/entity-change';
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import type {
   Karya,
@@ -32,6 +38,7 @@ private readonly repo: KaryaRepositoryImpl,
 private readonly activity: RecordActivityEventUseCase,
 private readonly relatedResolver: ResolveKaryaRelated,
 private readonly groupNotifier?: ExplorationGroupNotifier,
+private readonly changes?: RecordEntityChange,
 ) {}
 
   listPublic(input: {
@@ -66,20 +73,45 @@ private readonly groupNotifier?: ExplorationGroupNotifier,
       slug,
       authorId,
     });
+    await this.changes?.created('karya', row.id, karyaSnapshot(row), { actorId: authorId });
     await this.emitPublished(row);
     return row;
   }
 
-  async adminUpdate(id: string, fields: KaryaFields): Promise<Karya> {
-    await this.mustKarya(id);
+  async adminUpdate(
+    id: string,
+    fields: KaryaFields,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<Karya> {
+    const before = await this.mustKarya(id);
     const normalized = this.normalizeFieldsFromDomain(fields);
     await this.repo.update(id, normalized);
-    return (await this.repo.findById(id))!;
+    const after = (await this.repo.findById(id))!;
+    await this.changes?.updated(
+      'karya',
+      id,
+      karyaSnapshot(before),
+      karyaSnapshot(after),
+      toChangeCtx(ctx),
+    );
+    return after;
   }
 
-  async adminSetPublish(id: string, published: boolean): Promise<void> {
-    await this.mustKarya(id);
-    await this.repo.updatePublishStatus(id, published ? 'published' : 'archived');
+  async adminSetPublish(
+    id: string,
+    published: boolean,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<void> {
+    const before = await this.mustKarya(id);
+    const next = published ? 'published' : 'archived';
+    await this.repo.updatePublishStatus(id, next);
+    await this.changes?.updated(
+      'karya',
+      id,
+      karyaSnapshot(before),
+      karyaSnapshot({ ...before, publishStatus: next }),
+      toChangeCtx(ctx),
+    );
   }
 
   async submit(
@@ -219,8 +251,18 @@ private readonly groupNotifier?: ExplorationGroupNotifier,
     if (isExcerptContributionPayload(row.payload)) {
       throw new ConflictError('INVALID_PAYLOAD', 'Payload usulan edit tidak valid');
     }
-    await this.mustKarya(row.karyaId);
+    const before = await this.mustKarya(row.karyaId);
     await this.repo.update(row.karyaId, row.payload);
+    const after = await this.repo.findById(row.karyaId);
+    if (after) {
+      await this.changes?.updated(
+        'karya',
+        row.karyaId,
+        karyaSnapshot(before),
+        karyaSnapshot(after),
+        { actorId: row.userId, sourceContributionId: id },
+      );
+    }
     await this.repo.updateContribution(id, {
       status: 'approved',
       resultKaryaId: row.karyaId,
@@ -235,6 +277,10 @@ private readonly groupNotifier?: ExplorationGroupNotifier,
       ...row.payload,
       slug,
       authorId: row.userId,
+    });
+    await this.changes?.created('karya', created.id, karyaSnapshot(created), {
+      actorId: row.userId,
+      sourceContributionId: id,
     });
     await this.repo.updateContribution(id, {
       status: 'approved',

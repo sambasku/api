@@ -28,6 +28,12 @@ export const commentBodySchema = z
       .min(1, 'Stiker tidak valid')
       .max(64, 'Stiker tidak valid')
       .nullish(),
+    parent_id: z
+      .string({ error: 'Parent komentar tidak valid' })
+      .trim()
+      .min(1, 'Parent komentar tidak valid')
+      .max(64, 'Parent komentar tidak valid')
+      .nullish(),
   })
   .superRefine((val, ctx) => {
     const hasBody = (val.body?.trim().length ?? 0) > 0;
@@ -96,6 +102,7 @@ const publicCommentImageSchema = z
 const commentDataSchema = z.object({
   id: z.string(),
   word_id: z.string(),
+  parent_id: z.string().nullable().optional(),
   word_lemma: z.string().nullable(),
   user_id: z.string(),
   username: z.string().nullable(),
@@ -157,9 +164,18 @@ const cursorMetaSchema = z.object({
   has_more: z.boolean(),
 });
 
+const commentListItemBaseSchema = commentDataSchema.extend({
+  upvotes: z.number().int(),
+  downvotes: z.number().int(),
+});
+
 export const listCommentsResponseSchema = z.object({
   success: z.literal(true),
-  data: z.array(commentDataSchema.extend({ upvotes: z.number().int(), downvotes: z.number().int() })),
+  data: z.array(
+    commentListItemBaseSchema.extend({
+      replies: z.array(commentListItemBaseSchema).optional(),
+    }),
+  ),
   meta: cursorMetaSchema,
 });
 

@@ -67,6 +67,19 @@ export class BalehoController {
     return c.json({ success: true as const, data: serializeBoard(board) });
   }
 
+  async getKosakataStats(c: Context<{ Variables: AppVariables }>) {
+    const stats = await this.uc.getKosakataStats();
+    return c.json({
+      success: true as const,
+      data: {
+        total: stats.total,
+        verified: stats.verified,
+        queue: stats.queue,
+        rejected: stats.rejected,
+      },
+    });
+  }
+
   async getPricing(c: Context<{ Variables: AppVariables }>) {
     const pricing = await this.uc.getPricing();
     return c.json({

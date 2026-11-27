@@ -73,6 +73,35 @@ export class HotTopicsController {
             backfill_used: result.check.meta.backfillUsed,
           },
         },
+        verified: {
+          items: result.verified.items.map((i) => ({
+            kind: i.kind,
+            word_id: i.wordId,
+            lemma: i.lemma,
+            verified_at: i.verifiedAt.toISOString(),
+            in_window: i.inWindow,
+          })),
+          meta: {
+            in_window: result.verified.meta.inWindow,
+            backfilled: result.verified.meta.backfilled,
+            backfill_used: result.verified.meta.backfillUsed,
+          },
+        },
+        commented: {
+          items: result.commented.items.map((i) => ({
+            kind: i.kind,
+            word_id: i.wordId,
+            lemma: i.lemma,
+            comment_count: i.commentCount,
+            last_commented_at: i.lastCommentedAt.toISOString(),
+            in_window: i.inWindow,
+          })),
+          meta: {
+            in_window: result.commented.meta.inWindow,
+            backfilled: result.commented.meta.backfilled,
+            backfill_used: result.commented.meta.backfillUsed,
+          },
+        },
       },
     });
   }

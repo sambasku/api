@@ -10,7 +10,6 @@ import {
 } from '../../domain/utils/iso-week';
 import { toFilePayload } from './leaderboard-payload.utils';
 import type { ComputeLiveLeaderboardUseCase } from './compute-live-leaderboard.use-case';
-import type { UserXpSnapshotPort } from '../ports/user-xp-snapshot.port';
 
 export interface FinalizeLeaderboardWeekResult {
   weekId: string;
@@ -30,8 +29,6 @@ export class FinalizeLeaderboardWeekUseCase {
     private readonly auditRepo?: AuditLogRepository,
     /** Opsional: kick scan achievement (leaderboard_top) setelah snapshot baru. */
     private readonly onFinalized?: (weekId: string) => Promise<void>,
-    /** Opsional: snapshot XP leveling per user saat finalize (riwayat poin). */
-    private readonly xpSnapshot?: UserXpSnapshotPort,
   ) {}
 
   async execute(weekIdInput?: string, now: Date = new Date()): Promise<FinalizeLeaderboardWeekResult> {
@@ -58,24 +55,6 @@ export class FinalizeLeaderboardWeekUseCase {
     }
 
     const entries = await this.repo.computeScoresForWindow(startedAt, endedAt);
-    if (this.xpSnapshot && entries.length > 0) {
-      try {
-        await this.repo.saveUserWeekStats(
-          await this.xpSnapshot.snapshot(entries, weekId, now),
-        );
-      } catch (err) {
-        // Snapshot XP gagal tidak boleh menggagalkan finalize; minggu
-        // berikutnya menyimpan nilai terbaru. Riwayat minggu ini kosong.
-        console.error(
-          JSON.stringify({
-            level: 'error',
-            msg: 'leaderboard finalize xp snapshot failed',
-            weekId,
-            err: err instanceof Error ? err.message : String(err),
-          }),
-        );
-      }
-    }
     await this.repo.upsertWeek({
       weekId,
       startedAt,

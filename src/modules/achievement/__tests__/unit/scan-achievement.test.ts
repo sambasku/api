@@ -53,6 +53,7 @@ const achievement: Achievement = {
   category: 'kohort',
   rewardType: 'profile_border',
   badgeUrl: null,
+  badgeAssetKind: 'image',
   criteria: {
     source: 'registration',
     window: { from: '2026-01-01T00:00:00+07:00', to: '2027-01-01T00:00:00+07:00' },

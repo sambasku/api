@@ -8,7 +8,17 @@ UnauthorizedError,
 import type { RegionRepository } from "@/modules/region/domain/repositories/region.repository";
 import type { UserRepository } from "@/modules/auth/domain/repositories/user.repository";
 import type { RecordActivityEventUseCase } from "@/modules/activity/application/use-cases/record-activity-event.use-case";
+import {
+  EXPLORE_PHOTO_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from "@/modules/wa/application/ports/exploration-group-notifier.port";
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
+import {
+  toChangeCtx,
+  type EntityChangeContext,
+  type RecordEntityChange,
+} from "@/modules/change-history/application/record-entity-change";
+import { eventSnapshot } from "@/modules/change-history/domain/entity-change";
 import type {
   EventCategoryRef,
   EventListItem,
@@ -93,9 +103,13 @@ export class CreateEventUseCase {
     private readonly repo: EventRepository,
     private readonly regions: RegionRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
-  async execute(input: CreateEventInput): Promise<EventListItem> {
+  async execute(
+    input: CreateEventInput,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<EventListItem> {
     if (
       input.startsAt &&
       input.endsAt &&
@@ -117,6 +131,10 @@ export class CreateEventUseCase {
     const event = await this.repo.create({
       ...input,
       villageId,
+    });
+    await this.changes?.created("event", event.id, eventSnapshot(event), {
+      ...toChangeCtx(ctx),
+      actorId: ctx?.actorId ?? input.authorId ?? null,
     });
     // Activity feed: acara tayang pertama kali = event activity (AGENTS.md #25).
     if (event.status === "published") {
@@ -161,9 +179,13 @@ export class UpdateEventUseCase {
     private readonly repo: EventRepository,
     private readonly regions: RegionRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
-  async execute(input: UpdateEventInput): Promise<EventListItem> {
+  async execute(
+    input: UpdateEventInput,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<EventListItem> {
     const existing = await this.repo.findById(input.id);
     if (!existing) {
       throw new NotFoundError("EVENT_NOT_FOUND", "Event tidak ditemukan");
@@ -205,6 +227,13 @@ export class UpdateEventUseCase {
     if (!updated) {
       throw new NotFoundError("EVENT_NOT_FOUND", "Event tidak ditemukan");
     }
+    await this.changes?.updated(
+      "event",
+      updated.id,
+      eventSnapshot(existing),
+      eventSnapshot(updated),
+      toChangeCtx(ctx),
+    );
     // Activity feed: draft -> published pertama kali = acara tayang (AGENTS.md #25).
     if (updated.status === "published" && existing.status !== "published") {
       await recordEventPublished(
@@ -219,12 +248,19 @@ export class UpdateEventUseCase {
 }
 
 export class DeleteEventUseCase {
-  constructor(private readonly repo: EventRepository) {}
+  constructor(
+    private readonly repo: EventRepository,
+    private readonly changes?: RecordEntityChange,
+  ) {}
 
-  async execute(id: string): Promise<void> {
+  async execute(id: string, ctx?: Partial<EntityChangeContext>): Promise<void> {
+    const before = this.changes ? await this.repo.findById(id) : null;
     const ok = await this.repo.softDelete(id);
     if (!ok) {
       throw new NotFoundError("EVENT_NOT_FOUND", "Event tidak ditemukan");
+    }
+    if (before) {
+      await this.changes?.deleted("event", id, eventSnapshot(before), toChangeCtx(ctx));
     }
   }
 }
@@ -250,13 +286,20 @@ export class GetEventBySlugUseCase {
 }
 
 export class SetEventCancelledUseCase {
-  constructor(private readonly repo: EventRepository) {}
+  constructor(
+    private readonly repo: EventRepository,
+    private readonly changes?: RecordEntityChange,
+  ) {}
 
   /**
    * Tandai batal/pulihkan. Status pelaksanaan lain diturunkan read-time -
    * di sini hanya kolom `cancelled_at` yang berubah.
    */
-  async execute(id: string, cancelled: boolean): Promise<EventListItem> {
+  async execute(
+    id: string,
+    cancelled: boolean,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<EventListItem> {
     const existing = await this.repo.findById(id);
     if (!existing) {
       throw new NotFoundError("EVENT_NOT_FOUND", "Event tidak ditemukan");
@@ -265,6 +308,13 @@ export class SetEventCancelledUseCase {
     if (!updated) {
       throw new NotFoundError("EVENT_NOT_FOUND", "Event tidak ditemukan");
     }
+    await this.changes?.updated(
+      "event",
+      id,
+      eventSnapshot(existing),
+      eventSnapshot(updated),
+      toChangeCtx(ctx),
+    );
     return updated;
   }
 }
@@ -312,6 +362,8 @@ export class AppendEventImagesUseCase {
     private readonly repo: EventRepository,
     private readonly users: UserRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
   async execute(slug: string, authorId: string, urls: string[]): Promise<void> {
@@ -367,6 +419,9 @@ export class AppendEventImagesUseCase {
       })),
     );
 
+    await this.changes?.photosChanged("event", event.id, "photo_add", fresh.length, {
+      actorId: authorId,
+    });
     // Satu event per batch unggah (pola place_photo_added #187).
     await this.activityEvents?.safe({
       kind: "event_photo_added",
@@ -375,6 +430,17 @@ export class AppendEventImagesUseCase {
       dedupeKey: `event_photo:${event.id}:${fresh.join("|")}`,
       payload: `Menambahkan foto acara ${event.name}`,
     });
+    try {
+      await this.groupNotifier?.notify({
+        heading: "Foto baru tayang.",
+        jenis: "Foto Acara",
+        name: `${event.name} (${fresh.length} foto)`,
+        userId: authorId,
+        eventKey: EXPLORE_PHOTO_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan unggah foto.
+    }
   }
 }
 
@@ -387,13 +453,19 @@ export class HideEventImageUseCase {
   constructor(
     private readonly repo: EventRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
-  async execute(eventId: string, imageId: string): Promise<void> {
+  async execute(
+    eventId: string,
+    imageId: string,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<void> {
     const image = await this.repo.hideImage(eventId, imageId);
     if (!image) {
       throw new NotFoundError("IMAGE_NOT_FOUND", "Foto tidak ditemukan");
     }
+    await this.changes?.photosChanged("event", eventId, "photo_remove", 1, toChangeCtx(ctx));
     await this.activityEvents?.safeHidePlacePhoto(eventId, image.url);
   }
 }

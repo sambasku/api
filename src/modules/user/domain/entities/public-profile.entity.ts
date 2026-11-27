@@ -34,6 +34,8 @@ export interface PublicProfile {
   avatarUrl: string | null;
   /** Bingkai profil aktif (reward `profile_border`); null = tanpa bingkai. */
   activeBorderUrl: string | null;
+  /** Cara render border aktif: `image` | `lottie`. */
+  activeBorderAssetKind: 'image' | 'lottie' | null;
   stats: PublicProfileStats;
   leveling: PublicProfileLeveling;
 }
@@ -53,6 +55,7 @@ export interface PublicUserRow {
   avatarUrl: string | null;
   /** Bingkai profil aktif (reward `profile_border`); null = tanpa bingkai. */
   activeBorderUrl?: string | null;
+  activeBorderAssetKind?: 'image' | 'lottie' | null;
 }
 
 /** Baris suggest mention (@username autocomplete). Kolom publik minimal. */

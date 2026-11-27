@@ -236,6 +236,8 @@ export const articleComments = sqliteTable(
     articleId: text('article_id')
       .notNull()
       .references(() => articles.id, { onDelete: 'cascade' }),
+    /** null = komentar utama; non-null = balasan (parent harus top-level). */
+    parentId: text('parent_id'),
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
@@ -265,6 +267,8 @@ export const articleComments = sqliteTable(
   },
   (t) => [
     index('article_comments_article_status_idx').on(t.articleId, t.status, t.id),
+    index('article_comments_article_parent_idx').on(t.articleId, t.parentId, t.id),
+    index('article_comments_parent_created_idx').on(t.parentId, t.createdAt, t.id),
     index('article_comments_user_status_idx').on(t.userId, t.status, t.id),
   ],
 );

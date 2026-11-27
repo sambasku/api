@@ -111,6 +111,7 @@ export interface EventListItem extends Event {
 export interface EventComment {
   id: string;
   eventId: string;
+  parentId: string | null;
   userId: string;
   username: string | null;
   displayName: string | null;
@@ -125,6 +126,7 @@ export interface EventComment {
   isEdited: boolean;
   createdAt: Date;
   updatedAt: Date | null;
+  replies?: EventComment[];
 }
 
 /**
@@ -141,4 +143,39 @@ export function occurrenceStatus(
   if (now < event.startsAt) return "upcoming";
   if (now > endsAt) return "completed";
   return "ongoing";
+}
+
+/** Kunci tanggal kalender WIB (UTC+7, tanpa DST). `en-CA` = YYYY-MM-DD. */
+function jakartaDateKey(instant: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
+}
+
+/**
+ * Hari acara (WIB) sudah tiba. `startsAt` null = belum.
+ * Pagi hari-H tetap true walau jam mulai masih nanti.
+ */
+export function eventDateReached(
+  startsAt: Date | null,
+  now: Date = new Date(),
+): boolean {
+  if (!startsAt) return false;
+  return jakartaDateKey(now) >= jakartaDateKey(startsAt);
+}
+
+/** Kalimat feed `event_going`. Tense dihitung saat dibaca, bukan payload beku. */
+export function eventGoingActivityBody(
+  name: string | null,
+  startsAt: Date | null,
+  now: Date = new Date(),
+): string {
+  const verb = eventDateReached(startsAt, now)
+    ? "Hadir di"
+    : "Berencana hadir di";
+  const label = name?.trim() ? `"${name.trim()}"` : "acara";
+  return `${verb} ${label}`;
 }

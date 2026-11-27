@@ -8,6 +8,7 @@ import { jinyeFeedPayload } from '@/modules/activity/application/utils/activity-
 import { RateLimitedError, ValidationError } from '@/shared/errors/app-error';
 import type { Jinye, JinyeImage } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
+import { isTrustedJinyeImage } from '../utils/jinye-image-trust';
 import {
   JINYE_CREATE_QUOTA_MS,
   isJinyeCreateQuotaEnforced,
@@ -44,6 +45,8 @@ export class CreateJinyeUseCase {
         payload?: string | null;
       }) => Promise<void>;
     },
+    /** IMAGEKIT_URL_ENDPOINT: host ImageKit lama yang masih diterima. */
+    private readonly imageKitEndpoint?: string,
   ) {}
 
   async execute(cmd: CreateJinyeCommand): Promise<Jinye> {
@@ -74,7 +77,7 @@ export class CreateJinyeUseCase {
       ]);
     }
     for (const img of images) {
-      if (!/^https?:\/\//i.test(img.url) || !img.providerFileId.trim()) {
+      if (!isTrustedJinyeImage(img, this.imageKitEndpoint)) {
         throw new ValidationError([
           {
             field: 'images',

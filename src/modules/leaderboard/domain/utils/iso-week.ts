@@ -13,6 +13,8 @@ export const LEADERBOARD_CREATE_SUBMIT_POINTS = 5;
 export const LEADERBOARD_EDIT_SUBMIT_POINTS = 3;
 export const LEADERBOARD_APPROVE_POINTS = 2;
 export const LEADERBOARD_VERIFICATION_POINTS = 2;
+/** Peringkat terendah (inklusif) yang boleh membagikan posisinya ke feed. */
+export const LEADERBOARD_SHARE_MAX_RANK = 25;
 
 /** Instant UTC → komponen kalender WIB. */
 export function wibParts(date: Date): {

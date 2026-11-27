@@ -1,7 +1,10 @@
+import { CreateJinyeCommentAudioUseCase } from '@/modules/jinye/application/use-cases/create-jinye-comment-audio.use-case';
 /** Audit/images/bug + discussions, chat, pantun, jinye. */
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { AppVariables } from '@/shared/types';
 import * as di from '../container';
+import { env } from "@/shared/config/env";
+import { NotifyChatMentionsUseCase } from "@/modules/chat/application/use-cases/notify-chat-mentions.use-case";
 import { db } from "@/shared/database/drizzle/client";
 import { ListAuditLogsUseCase } from "@/modules/audit/application/use-cases/list-audit-logs.use-case";
 import { AuditController } from "@/modules/audit/presentation/v1/audit.controller";
@@ -106,6 +109,7 @@ import { CreateJinyeUseCase } from "@/modules/jinye/application/use-cases/create
 import { ListPublishedJinyeUseCase } from "@/modules/jinye/application/use-cases/list-published-jinye.use-case";
 import { GetJinyeDetailUseCase } from "@/modules/jinye/application/use-cases/get-jinye-detail.use-case";
 import { DeleteJinyeUseCase } from "@/modules/jinye/application/use-cases/delete-jinye.use-case";
+import { UploadPublicImageUseCase } from "@/modules/public-image/application/use-cases/upload-public-image.use-case";
 import { AttachJinyeAudioUseCase } from "@/modules/jinye/application/use-cases/attach-jinye-audio.use-case";
 import { CreateJinyeCommentUseCase } from "@/modules/jinye/application/use-cases/create-jinye-comment.use-case";
 import { ListJinyeCommentsUseCase } from "@/modules/jinye/application/use-cases/list-jinye-comments.use-case";
@@ -122,6 +126,7 @@ import { ListJinyeLemmaLinksUseCase } from "@/modules/jinye/application/use-case
 import { ProposeJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/propose-jinye-lemma-correction.use-case";
 import { ResolveJinyeLemmaCorrectionUseCase } from "@/modules/jinye/application/use-cases/resolve-jinye-lemma-correction.use-case";
 import { DeleteJinyeLemmaLinkUseCase } from "@/modules/jinye/application/use-cases/delete-jinye-lemma-link.use-case";
+import { PromoteJinyeImageUseCase } from "@/modules/jinye/application/use-cases/promote-jinye-image.use-case";
 import { PromoteJinyeExampleUseCase } from "@/modules/jinye/application/use-cases/promote-jinye-example.use-case";
 import { UpdateJinyeUseCase } from "@/modules/jinye/application/use-cases/update-jinye.use-case";
 import { CreateTranslationUseCase } from "@/modules/translation/application/use-cases/create-translation.use-case";
@@ -178,7 +183,11 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
 
   const bugReportRepo = new BugReportRepositoryImpl(db);
   const bugReportController = new BugReportController({
-    create: new CreateBugReportUseCase(bugReportRepo, di.auditRepo),
+    create: new CreateBugReportUseCase(
+      bugReportRepo,
+      di.auditRepo,
+      di.explorationGroupNotifier,
+    ),
     list: new ListBugReportsUseCase(bugReportRepo),
     resolve: new ResolveBugReportUseCase(bugReportRepo, di.auditRepo),
     imageController,
@@ -220,9 +229,9 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
     create: new CreateDiscussionUseCase(
       discussionRepo,
       di.auditRepo,
-      di.userRepo,
-      di.recordInbox,
-      di.notifyUser,
+      di.publicImageStorage,
+      di.imageStorage,
+      di.activityEvents,
       di.recordAbuseSignal,
       di.commentBlocklistRepo,
     ),
@@ -295,9 +304,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.auditRepo,
       di.commentBlocklistRepo,
       di.recordAbuseSignal,
-      di.userRepo,
-      di.recordInbox,
-      di.notifyUser,
+      di.activityEvents,
     ),
     delete: new DeleteDiscussionUseCase(
       discussionRepo,
@@ -350,6 +357,13 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
   // Chat publik F1a + F1b voice note (teks/stiker/VN/reply/edit/tombstone).
   const chatRepo = new ChatRepositoryImpl(db);
   const chatMirror = new ChatSupabaseMirrorService();
+  const chatMentions = new NotifyChatMentionsUseCase(
+    di.userRepo,
+    di.recordInbox,
+    di.notifyUser,
+    di.notificationPushCooldownRepo,
+    di.notificationRepo,
+  );
   const chatController = new ChatController(
     new GetChatCapabilitiesUseCase(di.appSettingsRepo),
     new ListChatMessagesUseCase(chatRepo),
@@ -360,6 +374,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       chatMirror,
       di.stickerRepo,
       di.recordAbuseSignal,
+      chatMentions,
     ),
     new CreateChatVoiceNoteUseCase(
       chatRepo,
@@ -372,11 +387,23 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.commentBlocklistRepo,
       chatMirror,
       di.recordAbuseSignal,
+      chatMentions,
     ),
-    new DeleteChatMessageUseCase(chatRepo, chatMirror, di.pronunciationStorage),
+    new DeleteChatMessageUseCase(
+      chatRepo,
+      chatMirror,
+      di.pronunciationStorage,
+      chatMentions,
+    ),
     new ListChatRevisionsUseCase(chatRepo),
     new GetChatPingStatusUseCase(chatRepo),
-    new SendChatPingUseCase(chatRepo, di.userRepo, chatMirror, di.activityEvents),
+    new SendChatPingUseCase(
+      chatRepo,
+      di.userRepo,
+      chatMirror,
+      di.activityEvents,
+      di.explorationGroupNotifier,
+    ),
   );
   app.route(
     "/api/v1/chat",
@@ -548,7 +575,12 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       requireLegalConsent: di.requireLegalConsent,
     }),
   );
-  const takedownJinye = new TakedownJinyeUseCase(jinyeRepo, di.auditRepo);
+  const takedownJinye = new TakedownJinyeUseCase(
+    jinyeRepo,
+    di.auditRepo,
+    di.wordRepo,
+    di.publicImageStorage,
+  );
   const takedownJinyeComment = new TakedownJinyeCommentUseCase(
     jinyeRepo,
     di.auditRepo,
@@ -580,6 +612,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.commentBlocklistRepo,
       di.recordAbuseSignal,
       di.activityEvents,
+      env.IMAGEKIT_URL_ENDPOINT,
     ),
     listPublished: new ListPublishedJinyeUseCase(jinyeRepo, di.userRepo),
     getDetail: new GetJinyeDetailUseCase(jinyeRepo),
@@ -588,12 +621,14 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.auditRepo,
       di.wordRepo,
       di.translationRepo,
+      di.publicImageStorage,
     ),
     attachAudio: new AttachJinyeAudioUseCase(
       jinyeRepo,
       di.pronunciationStorage,
       di.auditRepo,
     ),
+    uploadImage: new UploadPublicImageUseCase(di.publicImageStorage),
     createComment: new CreateJinyeCommentUseCase(
       jinyeRepo,
       di.auditRepo,
@@ -604,6 +639,15 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.recordInbox,
       di.notifyUser,
       di.stickerRepo,
+      env.IMAGEKIT_URL_ENDPOINT,
+    ),
+    createCommentAudio: new CreateJinyeCommentAudioUseCase(
+      jinyeRepo,
+      di.pronunciationStorage,
+      di.auditRepo,
+      di.commentBlocklistRepo,
+      di.recordAbuseSignal,
+      di.activityEvents,
     ),
     listComments: new ListJinyeCommentsUseCase(jinyeRepo),
     deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, di.auditRepo),
@@ -619,6 +663,7 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.auditRepo,
       di.wordRepo,
       di.translationRepo,
+      di.publicImageStorage,
     ),
     unarchive: new UnarchiveJinyeUseCase(jinyeRepo, di.auditRepo),
     pin: new PinJinyeUseCase(jinyeRepo, di.auditRepo),
@@ -645,11 +690,19 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.wordRepo,
       di.auditRepo,
     ),
+    promoteImage: new PromoteJinyeImageUseCase(
+      jinyeRepo,
+      di.wordRepo,
+      di.publicImageStorage,
+      di.auditRepo,
+      env.IMAGEKIT_URL_ENDPOINT,
+    ),
     update: new UpdateJinyeUseCase(
       jinyeRepo,
       di.auditRepo,
       di.commentBlocklistRepo,
       di.recordAbuseSignal,
+      di.activityEvents,
     ),
     editHistory: new GetJinyeEditHistoryUseCase(jinyeRepo),
     repost: new RepostJinyeUseCase(jinyeRepo, di.auditRepo, di.activityEvents),

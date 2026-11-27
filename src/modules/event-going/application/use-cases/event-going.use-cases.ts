@@ -24,14 +24,6 @@ function assertMarkable(
       'Acara ini sudah dibatalkan. Presensi tidak bisa diubah.',
     );
   }
-  // Presensi = penegasan kehadiran, jadi baru valid saat acara sudah
-  // dimulai (berlangsung) atau sudah lewat. Sebelum hari-H ditolak.
-  if (status === 'upcoming') {
-    throw new BadRequestError(
-      'EVENT_NOT_STARTED',
-      'Presensi bisa dilakukan saat acara sudah dimulai ya.',
-    );
-  }
 }
 
 export class MarkEventGoingUseCase {
@@ -57,7 +49,6 @@ export class MarkEventGoingUseCase {
         actorId: userId,
         targetId: eventId,
         dedupeKey: `event.going:${userId}:${eventId}`,
-        payload: `Berencana datang ke "${event.name}"`,
       });
     }
 
@@ -88,7 +79,6 @@ export class UnmarkEventGoingUseCase {
         actorId: userId,
         targetId: eventId,
         dedupeKey: `event.going:${userId}:${eventId}`,
-        payload: `Berencana datang ke "${event.name}"`,
         hidden: true,
       });
     }

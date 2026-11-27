@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { createRoute } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
@@ -109,10 +109,27 @@ export function createAdminKaryaRoutes(deps: {
 export function createKaryaContributionRoutes(deps: {
   controller: KaryaController;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+  uploadKaryaImage: (c: Context) => Promise<Response> | Response;
 }) {
   const routes = createOpenApiApp();
   routes.use('*', rateLimit({ points: 30, duration: 60 }));
   routes.use('*', deps.authenticate);
+
+  const uploadImageLimit = rateLimit({ points: 20, duration: 60 * 60 });
+  routes.use('/images', uploadImageLimit);
+  routes.openapi(
+    createRoute({
+      method: 'post',
+      path: '/images',
+      tags: ['Karya'],
+      summary: 'Unggah cover/poster usulan karya - multipart field `file`',
+      responses: {
+        201: { description: 'Cover tersimpan', content: json },
+        400: { description: 'File tidak valid', content: json },
+      },
+    }),
+    (c) => deps.uploadKaryaImage(c) as never,
+  );
 
   routes.openapi(
     createRoute({

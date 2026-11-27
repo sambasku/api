@@ -2,6 +2,8 @@ import type { AuditLogRepository } from '@/modules/audit/domain/repositories/aud
 import type { TranslationRepository } from '@/modules/translation/domain/repositories/translation.repository';
 import type { WordRepository } from '@/modules/word/domain/repositories/word.repository';
 import { NotFoundError } from '@/shared/errors/app-error';
+import type { PublicImageStoragePort } from '@/modules/public-image/application/ports/public-image-storage.port';
+import { removeJinyeSourcedWordImages } from '../utils/remove-jinye-sourced-word-images';
 import type { Jinye } from '../../domain/entities/jinye.entity';
 import type { JinyeRepository } from '../../domain/repositories/jinye.repository';
 
@@ -12,11 +14,13 @@ export class ArchiveJinyeUseCase {
     private readonly words?: Pick<
       WordRepository,
       'cancelPendingExamplesFromJinye'
-    >,
+    > &
+      Partial<Pick<WordRepository, 'softDeleteWordImagesFromJinye'>>,
     private readonly translations?: Pick<
       TranslationRepository,
       'rejectPending'
     >,
+    private readonly publicImageStorage?: PublicImageStoragePort,
   ) {}
 
   async execute(input: {
@@ -45,6 +49,11 @@ export class ArchiveJinyeUseCase {
 
     await this.repo.clearPinnedIf(input.id);
     await this.words?.cancelPendingExamplesFromJinye(input.id);
+    await removeJinyeSourcedWordImages(
+      { words: this.words, storage: this.publicImageStorage },
+      input.id,
+      { onlyUnverified: true },
+    );
     await this.translations?.rejectPending('jinye', input.id);
 
     await this.auditRepo.record({

@@ -14,6 +14,7 @@ import type {
 import type {
   AboutRepository,
   ListContributorsPage,
+  ListVerifiersPage,
 } from '../domain/repositories/about.repository';
 
 type Db = LibSQLDatabase<typeof schema>;
@@ -72,7 +73,12 @@ export class AboutRepositoryImpl implements AboutRepository {
           sql`${users.id} != ${ANONIM_USER_ID}`,
         ),
       )
-      .orderBy(asc(users.displayName), asc(users.id));
+      .orderBy(
+        sql`CASE WHEN ${users.teamSortOrder} IS NULL THEN 1 ELSE 0 END`,
+        asc(users.teamSortOrder),
+        asc(users.displayName),
+        asc(users.id),
+      );
 
     return rows.map((r) => ({
       username: r.username,
@@ -339,32 +345,62 @@ export class AboutRepositoryImpl implements AboutRepository {
     return set;
   }
 
-  async listVerifiers(): Promise<VerifierListItem[]> {
+  async listVerifiers(
+    limit: number,
+    cursor?: string,
+  ): Promise<ListVerifiersPage> {
+    const conds = [
+      eq(users.isActive, true),
+      isNull(users.deletedAt),
+      sql`${users.id} != ${ANONIM_USER_ID}`,
+      sql`EXISTS (
+        SELECT 1 FROM ${userRoles}
+        WHERE ${userRoles.userId} = ${users.id}
+          AND ${userRoles.role} = 'reviewer'
+      )`,
+    ];
+
+    if (cursor) {
+      const [cur] = await this.db
+        .select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(eq(users.id, cursor))
+        .limit(1);
+      if (!cur) {
+        return { items: [], nextCursor: null, hasMore: false };
+      }
+      const curName = cur.displayName || '';
+      conds.push(
+        sql`(
+          ${users.displayName} > ${curName}
+          OR (${users.displayName} = ${curName} AND ${users.id} > ${cur.id})
+        )`,
+      );
+    }
+
     const rows = await this.db
-      .selectDistinct({
+      .select({
+        id: users.id,
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
-        joinedAt: users.createdAt,
-        id: users.id,
       })
       .from(users)
-      .innerJoin(userRoles, eq(userRoles.userId, users.id))
-      .where(
-        and(
-          eq(userRoles.role, 'reviewer'),
-          eq(users.isActive, true),
-          isNull(users.deletedAt),
-          sql`${users.id} != ${ANONIM_USER_ID}`,
-        ),
-      )
-      .orderBy(asc(users.createdAt), asc(users.id))
-      .limit(100);
+      .where(and(...conds))
+      .orderBy(asc(users.displayName), asc(users.id))
+      .limit(limit + 1);
 
-    return rows.map((r) => ({
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const items: VerifierListItem[] = page.map((r) => ({
       username: r.username,
       displayName: r.displayName || r.username,
       avatarUrl: r.avatarUrl ?? null,
     }));
+    return {
+      items,
+      nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
+      hasMore,
+    };
   }
 }

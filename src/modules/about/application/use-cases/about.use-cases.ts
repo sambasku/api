@@ -3,7 +3,6 @@ import type {
   Sponsorship,
   TeamMember,
   UpdateSponsorship,
-  VerifierListItem,
 } from '../../domain/entities/about.entity';
 import type {
   AboutRepository,
@@ -83,7 +82,7 @@ export class ListContributorsUseCase {
 
 export class ListVerifiersUseCase {
   constructor(private readonly repo: AboutRepository) {}
-  execute(): Promise<VerifierListItem[]> {
-    return this.repo.listVerifiers();
+  execute(input: { limit: number; cursor?: string }) {
+    return this.repo.listVerifiers(input.limit, input.cursor);
   }
 }

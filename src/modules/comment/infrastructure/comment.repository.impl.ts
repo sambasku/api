@@ -101,6 +101,7 @@ export class CommentRepositoryImpl implements CommentRepository {
 
   async create(data: {
     wordId: string;
+    parentId?: string | null;
     userId: string;
     body: string;
     bodyOriginal?: string | null;
@@ -126,6 +127,7 @@ export class CommentRepositoryImpl implements CommentRepository {
       .insert(comments)
       .values({
         wordId: data.wordId,
+        parentId: data.parentId ?? null,
         userId: data.userId,
         body: data.body,
         bodyOriginal: data.bodyOriginal ?? null,
@@ -140,8 +142,8 @@ export class CommentRepositoryImpl implements CommentRepository {
         imageUrl: image?.url ?? null,
         imageProvider: image?.provider ?? null,
         imageProviderFileId: image?.providerFileId ?? null,
-        imagePublicUrl: null,
-        imageStatus: image ? 'pending_review' : null,
+        imagePublicUrl: image?.url ?? null,
+        imageStatus: image ? 'published' : null,
         imageContentWarnings: image ? '[]' : null,
         status: 'published',
       })
@@ -156,11 +158,37 @@ export class CommentRepositoryImpl implements CommentRepository {
   async listByWord(wordId: string, params: ListCommentsParams): Promise<CursorPage<Comment>> {
     const where = and(
       eq(comments.wordId, wordId),
+      isNull(comments.parentId),
       inArray(comments.status, PUBLIC_STATUSES),
       isNull(comments.deletedAt),
       params.cursor ? lt(comments.id, params.cursor) : undefined,
     );
     return this.page(where, params.limit);
+  }
+
+  async listRepliesByParentIds(parentIds: string[]): Promise<Comment[]> {
+    if (parentIds.length === 0) return [];
+    const rows = await this.selectBase()
+      .where(
+        and(
+          inArray(comments.parentId, parentIds),
+          inArray(comments.status, PUBLIC_STATUSES),
+          isNull(comments.deletedAt),
+        ),
+      )
+      .orderBy(comments.createdAt, comments.id);
+    const items = rows.map((row) =>
+      this.toComment(
+        row.comment,
+        publicAccountName(row.username, row.authorDeletedAt),
+        publicAccountDisplayName(row.displayName, row.username, row.authorDeletedAt),
+        row.authorDeletedAt ? null : (row.avatarUrl ?? null),
+        row.authorDeletedAt ? null : (row.userRole ?? null),
+        row.wordLemma,
+        Boolean(row.isEdited),
+      ),
+    );
+    return items;
   }
 
   async findById(id: string): Promise<Comment | null> {
@@ -393,8 +421,8 @@ export class CommentRepositoryImpl implements CommentRepository {
         imageUrl: image.url,
         imageProvider: image.provider,
         imageProviderFileId: image.providerFileId,
-        imagePublicUrl: null,
-        imageStatus: 'pending_review',
+        imagePublicUrl: image.url,
+        imageStatus: 'published',
         imageContentWarnings: '[]',
         imageReviewedBy: null,
         imageReviewedAt: null,
@@ -439,7 +467,7 @@ export class CommentRepositoryImpl implements CommentRepository {
       .where(
         and(
           eq(comments.id, commentId),
-          eq(comments.imageStatus, 'pending_review'),
+          inArray(comments.imageStatus, ['pending_review', 'published']),
           isNull(comments.deletedAt),
         ),
       )
@@ -465,7 +493,7 @@ export class CommentRepositoryImpl implements CommentRepository {
       .where(
         and(
           eq(comments.id, commentId),
-          eq(comments.imageStatus, 'pending_review'),
+          inArray(comments.imageStatus, ['pending_review', 'published']),
           isNull(comments.deletedAt),
         ),
       )
@@ -525,6 +553,7 @@ export class CommentRepositoryImpl implements CommentRepository {
     return {
       id: row.id,
       wordId: row.wordId,
+      parentId: row.parentId ?? null,
       wordLemma,
       userId: row.userId,
       username,

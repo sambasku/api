@@ -1,19 +1,31 @@
 import {
+  BadRequestError,
   ConflictError,
   NotFoundError,
+  ServiceUnavailableError,
   ValidationError,
 } from '@/shared/errors/app-error';
+import { generateId } from '@/shared/utils/ulid';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type {
+  ImageStoragePort,
+  UploadCredentials,
+} from '@/modules/image/application/ports/image-storage.port';
 import type {
   Sticker,
   StickerListPage,
 } from '../../domain/entities/sticker.entity';
 import type {
+  AdminStickerVisibilityFilter,
   ListActiveStickersQuery,
   StickerRepository,
 } from '../../domain/repositories/sticker.repository';
 
+export const MAX_FAVORITE_STICKERS = 50;
+export const MAX_CUSTOM_STICKERS = 20;
+const CUSTOM_STICKER_FOLDER = '/stickers/custom';
 const SLUG_RE = /^[a-z0-9_-]{1,64}$/;
+const MAX_CUSTOM_SLUG_LEN = 37; // 37 + '-' (1) + ULID (26) = 64
 
 function assertSlug(id: string, field = 'id'): string {
   const trimmed = id.trim().toLowerCase();
@@ -48,6 +60,41 @@ function assertImageUrl(url: string): string {
   return trimmed;
 }
 
+function assertCustomImageUrl(url: string, allowedPrefix?: string): string {
+  const trimmed = assertImageUrl(url);
+  const endpoint = (allowedPrefix ?? '')
+    .trim()
+    .replace(/\/+$/, '');
+  if (endpoint && !trimmed.startsWith(`${endpoint}/`)) {
+    throw new ValidationError([
+      {
+        field: 'image_url',
+        message: 'URL gambar stiker harus berasal dari penyimpanan resmi',
+      },
+    ]);
+  }
+  return trimmed;
+}
+
+/**
+ * Bangun ID custom stiker `<slug-nama>-<ulid_lowercase>` (maks 64 karakter).
+ */
+export function buildCustomStickerId(
+  name?: string | null,
+  ulidValue?: string,
+): string {
+  const ulid = (ulidValue ?? generateId()).trim().toLowerCase();
+  const slug = (name ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_CUSTOM_SLUG_LEN)
+    .replace(/-+$/g, '');
+  const prefix = slug.length > 0 ? slug : 'stiker';
+  return `${prefix}-${ulid}`;
+}
+
 export class ListActiveStickersUseCase {
   constructor(private readonly repo: StickerRepository) {}
 
@@ -59,8 +106,8 @@ export class ListActiveStickersUseCase {
 export class ListAdminStickersUseCase {
   constructor(private readonly repo: StickerRepository) {}
 
-  execute(): Promise<Sticker[]> {
-    return this.repo.listAll();
+  execute(visibility: AdminStickerVisibilityFilter = 'all'): Promise<Sticker[]> {
+    return this.repo.listAll(visibility);
   }
 }
 
@@ -109,6 +156,7 @@ export class CreateStickerUseCase {
       sortOrder: cmd.sortOrder,
       isActive: cmd.isActive,
       categorySlug,
+      visibility: 'public',
     });
     await this.auditRepo?.record({
       userId: cmd.actorId,
@@ -174,6 +222,7 @@ export class DeleteStickerUseCase {
   constructor(
     private readonly repo: StickerRepository,
     private readonly auditRepo?: AuditLogRepository,
+    private readonly imageStorage?: ImageStoragePort,
   ) {}
 
   async execute(cmd: {
@@ -181,9 +230,12 @@ export class DeleteStickerUseCase {
     actorId: string;
     requestId?: string | null;
   }): Promise<void> {
-    const ok = await this.repo.softDelete(cmd.id);
-    if (!ok) {
+    const deleted = await this.repo.softDelete(cmd.id);
+    if (!deleted) {
       throw new NotFoundError('STICKER_NOT_FOUND', 'Stiker tidak ditemukan');
+    }
+    if (deleted.providerFileId && this.imageStorage) {
+      await this.imageStorage.deleteFile(deleted.providerFileId);
     }
     await this.auditRepo?.record({
       userId: cmd.actorId,
@@ -193,5 +245,147 @@ export class DeleteStickerUseCase {
       newData: { deleted: true },
       requestId: cmd.requestId ?? null,
     });
+  }
+}
+
+// --- Favorit Stiker per User ---
+
+export class ListFavoriteStickersUseCase {
+  constructor(private readonly repo: StickerRepository) {}
+
+  execute(userId: string): Promise<Sticker[]> {
+    return this.repo.listFavorites(userId);
+  }
+}
+
+export class AddFavoriteStickerUseCase {
+  constructor(
+    private readonly repo: StickerRepository,
+    private readonly maxFavorites = MAX_FAVORITE_STICKERS,
+  ) {}
+
+  async execute(cmd: { userId: string; stickerId: string }): Promise<Sticker> {
+    const sid = cmd.stickerId.trim();
+    const sticker = await this.repo.findActiveById(sid);
+    if (!sticker) {
+      throw new NotFoundError('STICKER_NOT_FOUND', 'Stiker tidak ditemukan');
+    }
+    const already = await this.repo.isFavorite(cmd.userId, sticker.id);
+    if (already) {
+      return sticker;
+    }
+    const total = await this.repo.countFavorites(cmd.userId);
+    if (total >= this.maxFavorites) {
+      throw new BadRequestError(
+        'STICKER_FAVORITE_LIMIT_REACHED',
+        `Favorit stiker sudah penuh (maksimal ${this.maxFavorites}). Hapus beberapa dulu ya.`,
+      );
+    }
+    await this.repo.addFavorite(cmd.userId, sticker.id);
+    return sticker;
+  }
+}
+
+export class RemoveFavoriteStickerUseCase {
+  constructor(private readonly repo: StickerRepository) {}
+
+  async execute(cmd: { userId: string; stickerId: string }): Promise<void> {
+    const sid = cmd.stickerId.trim();
+    if (!sid) return;
+    await this.repo.removeFavorite(cmd.userId, sid);
+  }
+}
+
+// --- Custom Stiker Privat per User ---
+
+export class GetStickerUploadTokenUseCase {
+  constructor(private readonly imageStorage?: ImageStoragePort) {}
+
+  async execute(): Promise<UploadCredentials> {
+    if (!this.imageStorage) {
+      throw new ServiceUnavailableError(
+        'IMAGE_UPLOAD_UNAVAILABLE',
+        'Penyimpanan gambar belum tersedia',
+      );
+    }
+    return this.imageStorage.createUploadCredentials(CUSTOM_STICKER_FOLDER);
+  }
+}
+
+export class ListMyStickersUseCase {
+  constructor(private readonly repo: StickerRepository) {}
+
+  execute(userId: string): Promise<Sticker[]> {
+    return this.repo.listByOwner(userId);
+  }
+}
+
+export class CreateMyStickerUseCase {
+  constructor(
+    private readonly repo: StickerRepository,
+    private readonly options?: {
+      maxCustom?: number;
+      allowedUrlPrefix?: string;
+    },
+  ) {}
+
+  async execute(cmd: {
+    userId: string;
+    name?: string | null;
+    imageUrl: string;
+    providerFileId?: string | null;
+    playOnce?: boolean;
+  }): Promise<Sticker> {
+    const maxCustom = this.options?.maxCustom ?? MAX_CUSTOM_STICKERS;
+    const rawName = cmd.name?.trim() ?? '';
+    if (rawName.length > 30) {
+      throw new ValidationError([
+        { field: 'name', message: 'Nama stiker maksimal 30 karakter' },
+      ]);
+    }
+    const imageUrl = assertCustomImageUrl(
+      cmd.imageUrl,
+      this.options?.allowedUrlPrefix,
+    );
+    const total = await this.repo.countActiveByOwner(cmd.userId);
+    if (total >= maxCustom) {
+      throw new BadRequestError(
+        'CUSTOM_STICKER_LIMIT_REACHED',
+        `Custom stiker kamu sudah penuh (maksimal ${maxCustom}). Hapus stiker lama dulu ya.`,
+      );
+    }
+    const id = buildCustomStickerId(rawName || null);
+    return this.repo.create({
+      id,
+      imageUrl,
+      playOnce: cmd.playOnce ?? false,
+      sortOrder: 0,
+      isActive: true,
+      categorySlug: null,
+      ownerUserId: cmd.userId,
+      displayName: rawName.length > 0 ? rawName : null,
+      visibility: 'private',
+      providerFileId: cmd.providerFileId?.trim() || null,
+    });
+  }
+}
+
+export class DeleteMyStickerUseCase {
+  constructor(
+    private readonly repo: StickerRepository,
+    private readonly imageStorage?: ImageStoragePort,
+  ) {}
+
+  async execute(cmd: { userId: string; stickerId: string }): Promise<void> {
+    const deleted = await this.repo.softDeleteByOwner(
+      cmd.stickerId.trim(),
+      cmd.userId,
+    );
+    if (!deleted) {
+      throw new NotFoundError('STICKER_NOT_FOUND', 'Stiker tidak ditemukan');
+    }
+    if (deleted.providerFileId && this.imageStorage) {
+      await this.imageStorage.deleteFile(deleted.providerFileId);
+    }
   }
 }

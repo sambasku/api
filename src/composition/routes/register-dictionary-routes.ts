@@ -18,6 +18,8 @@ import {
 } from "@/modules/word/presentation/v1/word-media.routes";
 import { createAnonContributionRoutes } from "@/modules/word/presentation/v1/anon-contribution.routes";
 import { createWordClassRoutes } from "@/modules/word/presentation/v1/word-class.routes";
+import { createLemmaMergeRoutes } from "@/modules/lemma-merge/presentation/v1/lemma-merge.routes";
+import { createAdminLemmaMergeRoutes } from "@/modules/lemma-merge/presentation/v1/lemma-merge-admin.routes";
 import {
   createWordSuggestionRoutes,
   createWordHistoryRoutes,
@@ -41,6 +43,11 @@ import {
   createPublicAboutUserListRoutes,
 } from "@/modules/about/presentation/v1/about.routes";
 import {
+  createAdminProfileCoverRoutes,
+  createPublicProfileCoverRoutes,
+} from "@/modules/profile-cover/presentation/v1/profile-cover.routes";
+import { createAdminWordOfDayRoutes } from "@/modules/word/presentation/v1/word-of-day-admin.routes";
+import {
   createAdminAchievementRoutes,
   createMyAchievementRoutes,
   createMyProfileBorderRoutes,
@@ -60,6 +67,8 @@ import {
   createWordCommentRoutes,
 } from "@/modules/comment/presentation/v1/comment.routes";
 import { createAdminCommentRoutes } from "@/modules/comment/presentation/v1/admin-comment.routes";
+import { createAdminExploreCommentRoutes } from "@/modules/comment/presentation/v1/admin-explore-comment.routes";
+import { createAdminExplorePhotoRoutes } from "@/modules/public-image/presentation/v1/admin-explore-photo.routes";
 import { createAdminCommentBlocklistRoutes } from "@/modules/comment-blocklist/presentation/v1/admin-comment-blocklist.routes";
 import { createBookmarkRoutes } from "@/modules/bookmark/presentation/v1/bookmark.routes";
 import {
@@ -151,6 +160,14 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
   );
   app.route(
     "/api/v1/words",
+    createLemmaMergeRoutes({
+      controller: di.lemmaMergeController,
+      authenticate: di.authenticate,
+      requireApprovedClient: di.requireContributeWriteClient,
+    }),
+  );
+  app.route(
+    "/api/v1/words",
     createWordSuggestionRoutes({
       controller: di.suggestionController,
       authenticate: di.authenticate,
@@ -162,6 +179,13 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
     "/api/v1/admin",
     createAdminSuggestionRoutes({
       controller: di.suggestionController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin",
+    createAdminLemmaMergeRoutes({
+      controller: di.lemmaMergeController,
       authenticate: di.authenticate,
     }),
   );
@@ -259,6 +283,24 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
     createPublicAboutRoutes({ controller: di.aboutController }),
   );
   app.route(
+    "/api/v1/about",
+    createPublicProfileCoverRoutes({ controller: di.profileCoverController }),
+  );
+  app.route(
+    "/api/v1/admin/profile-covers",
+    createAdminProfileCoverRoutes({
+      controller: di.profileCoverController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/word-of-day",
+    createAdminWordOfDayRoutes({
+      controller: di.wordOfDayAdminController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
     "/api/v1/admin/sponsorships",
     createAdminSponsorshipRoutes({
       controller: di.aboutController,
@@ -297,6 +339,20 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
   app.route(
     "/api/v1/admin/comments",
     createAdminCommentRoutes({ controller: di.commentController, authenticate: di.authenticate }),
+  );
+  app.route(
+    "/api/v1/admin/explore-comments",
+    createAdminExploreCommentRoutes({
+      service: di.adminExploreCommentService,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/explore-photos",
+    createAdminExplorePhotoRoutes({
+      service: di.adminExplorePhotoService,
+      authenticate: di.authenticate,
+    }),
   );
   app.route(
     "/api/v1/admin/comment-blocklist",
@@ -413,7 +469,10 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
   );
   app.route(
     "/api/v1/leaderboard",
-    createPublicLeaderboardRoutes({ controller: di.leaderboardController }),
+    createPublicLeaderboardRoutes({
+      controller: di.leaderboardController,
+      authenticate: di.authenticate,
+    }),
   );
   app.route(
     "/api/v1/admin/leaderboard",

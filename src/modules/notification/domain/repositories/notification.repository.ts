@@ -40,4 +40,10 @@ export interface NotificationRepository {
   countUnread(userId: string): Promise<number>;
   markRead(userId: string, id: string): Promise<'updated' | 'already_read' | 'not_found'>;
   markAllRead(userId: string): Promise<number>;
+  /** Hapus semua baris inbox untuk satu target (mis. pesan chat dihapus). */
+  deleteByTarget(input: {
+    type: InboxNotificationType;
+    targetKind: NotificationTargetKind;
+    targetId: string;
+  }): Promise<number>;
 }

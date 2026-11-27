@@ -2,14 +2,18 @@ import type { UserRepository } from "@/modules/auth/domain/repositories/user.rep
 import { ANONIM_USER_ID } from "@/shared/constants/anonim";
 import { env } from "@/shared/config/env";
 import { logger } from "@/shared/logging/logger";
+import type { AppSettingsRepository } from "@/modules/legal/domain/repositories/app-settings.repository";
 import type { WaMessageLogRepository } from "../domain/repositories/wa-message.repository";
+import { isWaNotifyEnabled } from "../application/wa-notify-gate";
 import {
+  appendGroupEnvTag,
+  EXPLORATION_GROUP_EVENT_KEY,
   formatExplorationGroupMessage,
   type ExplorationGroupNotice,
   type ExplorationGroupNotifier,
 } from "../application/ports/exploration-group-notifier.port";
 
-export const EXPLORATION_GROUP_EVENT_KEY = "exploration_proposal_submitted";
+export { EXPLORATION_GROUP_EVENT_KEY, LEMMA_MERGE_GROUP_EVENT_KEY, VERIFIER_APPLICATION_GROUP_EVENT_KEY } from "../application/ports/exploration-group-notifier.port";
 
 export interface OpenWaGatewayConfig {
   baseUrl?: string;
@@ -70,6 +74,7 @@ export class OpenWaExplorationGroupNotifier implements ExplorationGroupNotifier 
   constructor(
     private readonly users: Pick<UserRepository, "findById">,
     private readonly logs: Pick<WaMessageLogRepository, "record">,
+    private readonly settings: Pick<AppSettingsRepository, "getValue">,
     private readonly config: OpenWaGatewayConfig = openWaConfigFromEnv(),
   ) {}
 
@@ -77,23 +82,48 @@ export class OpenWaExplorationGroupNotifier implements ExplorationGroupNotifier 
     const config = readyOpenWaConfig(this.config);
     if (!config) return;
 
-    const text = formatExplorationGroupMessage({
-      jenis: notice.jenis,
-      name: notice.name,
-      from: await this.fromLabel(notice.userId),
-      resubmit: notice.resubmit,
-    });
+    // Master switch: cek sebelum kerja lain (lookup user, kirim, log).
+    if (!(await isWaNotifyEnabled(this.settings))) {
+      logger.debug(
+        { eventKey: notice.eventKey ?? EXPLORATION_GROUP_EVENT_KEY },
+        "openwa exploration group skip: wa_group_notify_enabled=false",
+      );
+      return;
+    }
+
+    const envTag = env.NODE_ENV === "staging" ? "Staging" : null;
+    const customText = notice.text?.trim();
+    const text = customText
+      ? appendGroupEnvTag(customText, envTag)
+      : formatExplorationGroupMessage({
+          jenis: notice.jenis,
+          name: notice.name,
+          from: await this.fromLabel(notice.userId),
+          resubmit: notice.resubmit,
+          heading: notice.heading,
+          envTag,
+        });
 
     try {
       await sendOpenWaText(config, config.groupJid, text);
-      await this.record(config.groupJid, "sent", null);
+      await this.record(
+        config.groupJid,
+        notice.eventKey ?? EXPLORATION_GROUP_EVENT_KEY,
+        "sent",
+        null,
+      );
       logger.info(
         { jenis: notice.jenis, resubmit: Boolean(notice.resubmit) },
         "openwa exploration group send ok",
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await this.record(config.groupJid, "failed", message);
+      await this.record(
+        config.groupJid,
+        notice.eventKey ?? EXPLORATION_GROUP_EVENT_KEY,
+        "failed",
+        message,
+      );
       logger.warn(
         { jenis: notice.jenis, error: message },
         "openwa exploration group send failed",
@@ -114,13 +144,14 @@ export class OpenWaExplorationGroupNotifier implements ExplorationGroupNotifier 
 
   private async record(
     groupJid: string,
+    eventKey: string,
     status: "sent" | "failed",
     errorMessage: string | null,
   ): Promise<void> {
     try {
       await this.logs.record({
         provider: "openwa",
-        eventKey: EXPLORATION_GROUP_EVENT_KEY,
+        eventKey,
         toPhone: groupJid,
         templateName: null,
         channel: "text",

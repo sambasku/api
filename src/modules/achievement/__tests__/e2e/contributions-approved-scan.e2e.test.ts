@@ -115,6 +115,7 @@ describe.skipIf(!hasTestDb)('Achievement aggregate - contributions_approved', ()
       category: 'kontribusi',
       rewardType: 'badge',
       badgeUrl: null,
+      badgeAssetKind: 'image',
       criteria: JSON.stringify({
         source: 'contributions_approved',
         threshold: 3,

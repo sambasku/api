@@ -43,6 +43,7 @@ function user(partial: Partial<User> = {}): User {
     isTeam: partial.isTeam ?? false,
     teamAs: partial.teamAs ?? null,
     teamNote: partial.teamNote ?? null,
+    teamSortOrder: partial.teamSortOrder ?? null,
   };
 }
 

@@ -17,6 +17,12 @@ export const entityCommentBodySchema = z
       .min(1, 'Stiker tidak valid')
       .max(64, 'Stiker tidak valid')
       .nullish(),
+    parent_id: z
+      .string({ error: 'Parent komentar tidak valid' })
+      .trim()
+      .min(1, 'Parent komentar tidak valid')
+      .max(64, 'Parent komentar tidak valid')
+      .nullish(),
   })
   .superRefine((val, ctx) => {
     const hasBody = (val.body?.trim().length ?? 0) > 0;

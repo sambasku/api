@@ -41,6 +41,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     isTeam: overrides.isTeam ?? false,
     teamAs: overrides.teamAs ?? null,
     teamNote: overrides.teamNote ?? null,
+    teamSortOrder: overrides.teamSortOrder ?? null,
   };
 }
 

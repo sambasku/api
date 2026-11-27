@@ -27,6 +27,8 @@ export const ACTIVITY_EVENT_KINDS = [
   'suggestion_applied',
   'suggestion_selfapply',
   'suggestion_created',
+  'lemma_merge_created',
+  'lemma_merge_applied',
   'contribution_submitted',
   'search_miss',
   'user_joined',
@@ -46,6 +48,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'article_published',
   'article_comment_created',
   'event_comment_created',
+  'karya_comment_created',
   'place_comment_created',
   'usaha_comment_created',
   'cuisine_comment_created',
@@ -54,6 +57,9 @@ export const ACTIVITY_EVENT_KINDS = [
   'jinye_comment_created',
   'jinye_reposted',
   'jinye_quote_created',
+  'community_proposal_created',
+  'community_published',
+  'leaderboard_rank_shared',
 ] as const;
 
 export type ActivityEventKind = (typeof ACTIVITY_EVENT_KINDS)[number];
@@ -93,6 +99,8 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'suggestion_applied':
       return 'suggestion';
     case 'suggestion_created':
+    case 'lemma_merge_created':
+    case 'lemma_merge_applied':
       return 'suggestion';
     case 'contribution_submitted':
       return 'contribution';
@@ -109,6 +117,7 @@ export function wireKind(kind: ActivityEventKind): string {
     case 'layanan_published':
       return 'layanan';
     case 'karya_published':
+    case 'karya_comment_created':
     case 'kreator_claimed':
       return 'karya';
     case 'cuisine_published':
@@ -136,8 +145,13 @@ case 'announcement':
     case 'jinye_reposted':
     case 'jinye_quote_created':
       return 'jinye';
+    case 'community_proposal_created':
+    case 'community_published':
+      return 'community';
     case 'chat_ping':
       return 'chat';
+    case 'leaderboard_rank_shared':
+      return 'leaderboard_rank';
   }
 }
 

@@ -164,6 +164,27 @@ export default {
         }),
       );
     }
+
+    try {
+      const result = await m.runDueHotViewedSlotsSync();
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          msg: 'hot viewed slots sync cron done',
+          ran: result.ran,
+          pruned: result.pruned,
+          recorded: result.recorded,
+        }),
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'hot viewed slots sync cron failed',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
   },
 };
 

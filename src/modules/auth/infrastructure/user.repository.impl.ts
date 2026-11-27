@@ -60,6 +60,7 @@ function toEntity(row: UserRow, roles: UserRole[]): User {
     isTeam: row.isTeam ?? false,
     teamAs: row.teamAs ?? null,
     teamNote: row.teamNote ?? null,
+    teamSortOrder: row.teamSortOrder ?? null,
     usernameChangedAt: row.usernameChangedAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -90,6 +91,31 @@ export class UserRepositoryImpl implements UserRepository {
     if (!row) return null;
     const roles = await loadRolesByUserIds(this.db, [row.id]);
     return toEntity(row, roles.get(row.id) ?? []);
+  }
+
+  async findMentionableByUsernames(
+    usernames: string[],
+  ): Promise<Array<{ id: string; username: string; displayName: string }>> {
+    if (usernames.length === 0) return [];
+    const rows = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+      })
+      .from(users)
+      .where(
+        and(
+          inArray(users.username, usernames),
+          eq(users.isActive, true),
+          isNull(users.deletedAt),
+        ),
+      );
+    return rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      displayName: r.displayName?.trim() || r.username,
+    }));
   }
 
   async findByPhone(phone: string): Promise<User | null> {
@@ -194,6 +220,7 @@ export class UserRepositoryImpl implements UserRepository {
       isTeam: users.isTeam,
       teamAs: users.teamAs,
       teamNote: users.teamNote,
+      teamSortOrder: users.teamSortOrder,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
         // Di-select juga untuk cursor comparison walau tidak di-return ke user (deletedAt
@@ -208,8 +235,9 @@ SELECT group_concat(DISTINCT ai.provider) FROM auth_identities ai
 WHERE ai.user_id = users.id AND ai.deleted_at IS NULL
 )`,
 // OTP verifikasi terakhir (email_verification_otps) - scalar subquery, tetap
-// 1 query. Kolom timestamps mode 'timestamp' Drizzle; max() di SQLite kembali
-// sebagai epoch integer, konversi manual di mapper bawah.
+// 1 query. Kolom timestamps mode 'timestamp' Drizzle menyimpan epoch DETIK;
+// raw SQL max() melewati decoder Drizzle, jadi mapper bawah wajib kalikan 1000
+// sebelum `new Date()` (JS Date pakai milidetik).
 otpCreatedAt: sql<number | null>`(
 SELECT max(o.created_at) FROM email_verification_otps o
 WHERE o.user_id = users.id
@@ -258,9 +286,9 @@ const entity = toEntity({ ...r, passwordHash: null } as unknown as UserRow, role
 return {
 ...entity,
 authProviders: r.authProviders ? r.authProviders.split(',') : [],
-// Enrichment OTP admin: epoch integer dari scalar subquery -> Date.
-otpCreatedAt: r.otpCreatedAt != null ? new Date(r.otpCreatedAt) : null,
-otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
+// Enrichment OTP admin: epoch DETIK dari scalar subquery -> Date (x1000 ke ms).
+otpCreatedAt: r.otpCreatedAt != null ? new Date(r.otpCreatedAt * 1000) : null,
+otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt * 1000) : null,
 };
 }),
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,
@@ -479,6 +507,7 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
       isTeam?: boolean;
       teamAs?: string | null;
       teamNote?: string | null;
+      teamSortOrder?: number | null;
     },
   ): Promise<User | null> {
     if (id === ANONIM_USER_ID) return null;
@@ -488,6 +517,7 @@ otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
         ...(data.isTeam !== undefined ? { isTeam: data.isTeam } : {}),
         ...(data.teamAs !== undefined ? { teamAs: data.teamAs } : {}),
         ...(data.teamNote !== undefined ? { teamNote: data.teamNote } : {}),
+        ...(data.teamSortOrder !== undefined ? { teamSortOrder: data.teamSortOrder } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(users.id, id), isNull(users.deletedAt)))

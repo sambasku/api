@@ -228,7 +228,7 @@ export class DiscussionRepositoryImpl implements DiscussionRepository {
         body: input.body,
         linkUrl: input.linkUrl ?? null,
         images: toImageRows(input.images),
-        status: 'pending_review',
+        status: 'published',
       })
       .returning();
     return toDiscussion(row, null, null, null);

@@ -37,6 +37,7 @@ import type {
 import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
 import type { ChatSupabaseMirror } from '../../infrastructure/chat-supabase-mirror';
 import { buildChatVoiceNotePath } from '../utils/chat-voice-note-path';
+import type { NotifyChatMentionsUseCase } from './notify-chat-mentions.use-case';
 
 export { VOICE_ROOM_ENABLED_KEY };
 
@@ -166,6 +167,7 @@ export class CreateChatMessageUseCase {
     private readonly mirror: ChatSupabaseMirror,
     private readonly stickerRepo: StickerRepository,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly mentions?: Pick<NotifyChatMentionsUseCase, 'safe'>,
   ) {}
 
   async execute(cmd: CreateChatMessageCommand): Promise<ChatMessage> {
@@ -221,7 +223,9 @@ export class CreateChatMessageUseCase {
           { field: 'sticker_id', message: 'Stiker wajib dipilih' },
         ]);
       }
-      const catalog = await this.stickerRepo.findActiveById(sid);
+      const catalog = typeof this.stickerRepo.findUsableByUser === 'function'
+        ? await this.stickerRepo.findUsableByUser(sid, cmd.userId)
+        : await this.stickerRepo.findActiveById(sid);
       if (!catalog) {
         throw new ValidationError([
           {
@@ -283,6 +287,7 @@ export class CreateChatMessageUseCase {
     });
 
     await this.mirror.upsert(created);
+    await this.mentions?.safe(created);
     return created;
   }
 }
@@ -300,6 +305,7 @@ export class EditChatMessageUseCase {
     private readonly blocklistRepo: CommentBlocklistRepository,
     private readonly mirror: ChatSupabaseMirror,
     private readonly abuse?: RecordAbuseSignalUseCase,
+    private readonly mentions?: Pick<NotifyChatMentionsUseCase, 'safe'>,
   ) {}
 
   async execute(cmd: EditChatMessageCommand): Promise<ChatMessage> {
@@ -377,6 +383,8 @@ export class EditChatMessageUseCase {
     }
 
     await this.mirror.patch(updated);
+    // Hanya username yang BARU ditambahkan lewat edit yang dinotifikasi.
+    await this.mentions?.safe(updated, previousBody);
     return updated;
   }
 }
@@ -481,6 +489,7 @@ export class DeleteChatMessageUseCase {
     private readonly repo: ChatRepository,
     private readonly mirror: ChatSupabaseMirror,
     private readonly storage?: PronunciationStoragePort,
+    private readonly mentions?: Pick<NotifyChatMentionsUseCase, 'clear'>,
   ) {}
 
   async execute(cmd: DeleteChatMessageCommand): Promise<ChatMessage> {
@@ -535,6 +544,7 @@ export class DeleteChatMessageUseCase {
     }
 
     await this.mirror.patch(tombstoned);
+    await this.mentions?.clear(existing.id);
     return tombstoned;
   }
 }

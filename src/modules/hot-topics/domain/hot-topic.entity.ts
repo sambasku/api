@@ -1,4 +1,10 @@
-export type HotTopicTab = 'searched' | 'proposed' | 'viewed' | 'check';
+export type HotTopicTab =
+  | 'searched'
+  | 'proposed'
+  | 'viewed'
+  | 'check'
+  | 'verified'
+  | 'commented';
 
 export interface HotTopicTabMeta {
   inWindow: number;
@@ -47,9 +53,30 @@ export interface HotCheckItem {
   inWindow: boolean;
 }
 
+/** Lemma published yang baru diverifikasi (words.verified_at DESC). Chip Verif. */
+export interface HotVerifiedItem {
+  kind: 'word_verified';
+  wordId: string;
+  lemma: string;
+  verifiedAt: Date;
+  inWindow: boolean;
+}
+
+/** Lemma dengan komentar published terbaru (agregat 7 hari). Chip Komen. */
+export interface HotCommentedItem {
+  kind: 'word_commented';
+  wordId: string;
+  lemma: string;
+  commentCount: number;
+  lastCommentedAt: Date;
+  inWindow: boolean;
+}
+
 export interface HotTopicsResult {
   searched: { items: HotSearchedItem[]; meta: HotTopicTabMeta };
   proposed: { items: HotProposedItem[]; meta: HotTopicTabMeta };
   viewed: { items: HotViewedItem[]; meta: HotTopicTabMeta };
   check: { items: HotCheckItem[]; meta: HotTopicTabMeta };
+  verified: { items: HotVerifiedItem[]; meta: HotTopicTabMeta };
+  commented: { items: HotCommentedItem[]; meta: HotTopicTabMeta };
 }

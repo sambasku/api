@@ -1,5 +1,9 @@
 import { ConflictError, ForbiddenError } from '@/shared/errors/app-error';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
+import {
+  VERIFIER_APPLICATION_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import type {
   SocialLink,
   SocialScreenshot,
@@ -28,6 +32,7 @@ export class CreateVerifierApplicationUseCase {
   constructor(
     private readonly appRepo: VerifierApplicationRepository,
     private readonly userRepo: UserRepository,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(cmd: CreateVerifierApplicationCommand): Promise<VerifierApplication> {
@@ -53,7 +58,7 @@ export class CreateVerifierApplicationUseCase {
 
     await assertEnoughContributions(this.appRepo, cmd.userId);
 
-    return this.appRepo.createWithPhone({
+    const created = await this.appRepo.createWithPhone({
       userId: cmd.userId,
       phone: cmd.phone,
       address: cmd.address,
@@ -64,5 +69,26 @@ export class CreateVerifierApplicationUseCase {
       reason: cmd.reason,
       photo: cmd.photo,
     });
+
+    await this.notifyGroup(created.userId, created.fullName ?? cmd.fullName, false);
+    return created;
+  }
+
+  private async notifyGroup(
+    userId: string,
+    fullName: string,
+    resubmit: boolean,
+  ): Promise<void> {
+    try {
+      await this.groupNotifier?.notify({
+        jenis: 'Pengajuan verifikator',
+        name: fullName.trim() || 'tanpa nama',
+        userId,
+        resubmit: resubmit || undefined,
+        eventKey: VERIFIER_APPLICATION_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan pengajuan.
+    }
   }
 }

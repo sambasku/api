@@ -1,8 +1,27 @@
-import { and, asc, eq, gt, isNotNull, isNull, or, sql } from 'drizzle-orm';
-import { stickers } from '@/shared/database/drizzle/schema';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
+import {
+  stickers,
+  userStickerFavorites,
+} from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import type { Sticker, StickerListPage } from '../domain/entities/sticker.entity';
 import type {
+  Sticker,
+  StickerListPage,
+  StickerVisibility,
+} from '../domain/entities/sticker.entity';
+import type {
+  AdminStickerVisibilityFilter,
   CreateStickerInput,
   ListActiveStickersQuery,
   StickerRepository,
@@ -20,6 +39,10 @@ function mapRow(r: typeof stickers.$inferSelect): Sticker {
     sortOrder: r.sortOrder,
     isActive: Boolean(r.isActive),
     categorySlug: r.categorySlug ?? null,
+    ownerUserId: r.ownerUserId ?? null,
+    displayName: r.displayName ?? null,
+    visibility: (r.visibility === 'private' ? 'private' : 'public') as StickerVisibility,
+    providerFileId: r.providerFileId ?? null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt ?? null,
     deletedAt: r.deletedAt ?? null,
@@ -56,6 +79,7 @@ export class StickerRepositoryImpl implements StickerRepository {
     const conds = [
       isNull(stickers.deletedAt),
       eq(stickers.isActive, true),
+      eq(stickers.visibility, 'public'),
     ];
     if (categorySlug) {
       conds.push(eq(stickers.categorySlug, categorySlug));
@@ -101,6 +125,7 @@ export class StickerRepositoryImpl implements StickerRepository {
         and(
           isNull(stickers.deletedAt),
           eq(stickers.isActive, true),
+          eq(stickers.visibility, 'public'),
           isNotNull(stickers.categorySlug),
           sql`trim(${stickers.categorySlug}) != ''`,
         ),
@@ -111,11 +136,17 @@ export class StickerRepositoryImpl implements StickerRepository {
       .filter((s): s is string => Boolean(s && s.trim()));
   }
 
-  async listAll(): Promise<Sticker[]> {
+  async listAll(
+    visibility: AdminStickerVisibilityFilter = 'all',
+  ): Promise<Sticker[]> {
+    const conds = [isNull(stickers.deletedAt)];
+    if (visibility === 'public' || visibility === 'private') {
+      conds.push(eq(stickers.visibility, visibility));
+    }
     const rows = await this.db
       .select()
       .from(stickers)
-      .where(isNull(stickers.deletedAt))
+      .where(and(...conds))
       .orderBy(asc(stickers.sortOrder), asc(stickers.id));
     return rows.map(mapRow);
   }
@@ -133,6 +164,34 @@ export class StickerRepositoryImpl implements StickerRepository {
       )
       .limit(1);
     const r = rows[0];
+    return r ? mapRow(r) : null;
+  }
+
+  async findUsableByUser(id: string, userId: string): Promise<Sticker | null> {
+    const rows = await this.db
+      .select({ sticker: stickers })
+      .from(stickers)
+      .leftJoin(
+        userStickerFavorites,
+        and(
+          eq(userStickerFavorites.stickerId, stickers.id),
+          eq(userStickerFavorites.userId, userId),
+        ),
+      )
+      .where(
+        and(
+          eq(stickers.id, id),
+          isNull(stickers.deletedAt),
+          eq(stickers.isActive, true),
+          or(
+            eq(stickers.visibility, 'public'),
+            eq(stickers.ownerUserId, userId),
+            isNotNull(userStickerFavorites.userId),
+          ),
+        ),
+      )
+      .limit(1);
+    const r = rows[0]?.sticker;
     return r ? mapRow(r) : null;
   }
 
@@ -156,6 +215,10 @@ export class StickerRepositoryImpl implements StickerRepository {
         sortOrder: input.sortOrder ?? 0,
         isActive: input.isActive ?? true,
         categorySlug: input.categorySlug ?? null,
+        ownerUserId: input.ownerUserId ?? null,
+        displayName: input.displayName ?? null,
+        visibility: input.visibility ?? 'public',
+        providerFileId: input.providerFileId ?? null,
       })
       .returning();
     return mapRow(rows[0]!);
@@ -172,6 +235,9 @@ export class StickerRepositoryImpl implements StickerRepository {
     if (input.categorySlug !== undefined) {
       values.categorySlug = input.categorySlug;
     }
+    if (input.displayName !== undefined) {
+      values.displayName = input.displayName;
+    }
     const rows = await this.db
       .update(stickers)
       .set(values)
@@ -181,12 +247,124 @@ export class StickerRepositoryImpl implements StickerRepository {
     return r ? mapRow(r) : null;
   }
 
-  async softDelete(id: string): Promise<boolean> {
+  async softDelete(id: string): Promise<Sticker | null> {
     const rows = await this.db
       .update(stickers)
       .set({ deletedAt: new Date(), updatedAt: new Date(), isActive: false })
       .where(and(eq(stickers.id, id), isNull(stickers.deletedAt)))
-      .returning({ id: stickers.id });
+      .returning();
+    const r = rows[0];
+    return r ? mapRow(r) : null;
+  }
+
+  async softDeleteByOwner(
+    id: string,
+    ownerUserId: string,
+  ): Promise<Sticker | null> {
+    const rows = await this.db
+      .update(stickers)
+      .set({ deletedAt: new Date(), updatedAt: new Date(), isActive: false })
+      .where(
+        and(
+          eq(stickers.id, id),
+          eq(stickers.ownerUserId, ownerUserId),
+          isNull(stickers.deletedAt),
+        ),
+      )
+      .returning();
+    const r = rows[0];
+    return r ? mapRow(r) : null;
+  }
+
+  async listFavorites(userId: string): Promise<Sticker[]> {
+    const rows = await this.db
+      .select({ sticker: stickers })
+      .from(userStickerFavorites)
+      .innerJoin(stickers, eq(userStickerFavorites.stickerId, stickers.id))
+      .where(
+        and(
+          eq(userStickerFavorites.userId, userId),
+          eq(stickers.isActive, true),
+          isNull(stickers.deletedAt),
+        ),
+      )
+      .orderBy(desc(userStickerFavorites.createdAt), asc(stickers.id));
+    return rows.map((r) => mapRow(r.sticker));
+  }
+
+  async countFavorites(userId: string): Promise<number> {
+    const rows = await this.db
+      .select({ total: count() })
+      .from(userStickerFavorites)
+      .innerJoin(stickers, eq(userStickerFavorites.stickerId, stickers.id))
+      .where(
+        and(
+          eq(userStickerFavorites.userId, userId),
+          eq(stickers.isActive, true),
+          isNull(stickers.deletedAt),
+        ),
+      );
+    return Number(rows[0]?.total ?? 0);
+  }
+
+  async isFavorite(userId: string, stickerId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ stickerId: userStickerFavorites.stickerId })
+      .from(userStickerFavorites)
+      .where(
+        and(
+          eq(userStickerFavorites.userId, userId),
+          eq(userStickerFavorites.stickerId, stickerId),
+        ),
+      )
+      .limit(1);
     return rows.length > 0;
+  }
+
+  async addFavorite(userId: string, stickerId: string): Promise<void> {
+    await this.db
+      .insert(userStickerFavorites)
+      .values({ userId, stickerId })
+      .onConflictDoNothing();
+  }
+
+  async removeFavorite(userId: string, stickerId: string): Promise<void> {
+    await this.db
+      .delete(userStickerFavorites)
+      .where(
+        and(
+          eq(userStickerFavorites.userId, userId),
+          eq(userStickerFavorites.stickerId, stickerId),
+        ),
+      );
+  }
+
+  async listByOwner(ownerUserId: string): Promise<Sticker[]> {
+    const rows = await this.db
+      .select()
+      .from(stickers)
+      .where(
+        and(
+          eq(stickers.ownerUserId, ownerUserId),
+          eq(stickers.isActive, true),
+          isNull(stickers.deletedAt),
+        ),
+      )
+      .orderBy(desc(stickers.createdAt), asc(stickers.id));
+    return rows.map(mapRow);
+  }
+
+  async countActiveByOwner(ownerUserId: string): Promise<number> {
+    const rows = await this.db
+      .select({ total: count() })
+      .from(stickers)
+      .where(
+        and(
+          eq(stickers.ownerUserId, ownerUserId),
+          eq(stickers.isActive, true),
+          isNull(stickers.deletedAt),
+        ),
+      );
+    return Number(rows[0]?.total ?? 0);
   }
 }

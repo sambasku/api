@@ -51,6 +51,23 @@ const checkItemSchema = z.object({
   in_window: z.boolean(),
 });
 
+const verifiedItemSchema = z.object({
+  kind: z.literal('word_verified'),
+  word_id: z.string(),
+  lemma: z.string(),
+  verified_at: z.string(),
+  in_window: z.boolean(),
+});
+
+const commentedItemSchema = z.object({
+  kind: z.literal('word_commented'),
+  word_id: z.string(),
+  lemma: z.string(),
+  comment_count: z.number().int(),
+  last_commented_at: z.string(),
+  in_window: z.boolean(),
+});
+
 export const hotTopicsResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -68,6 +85,14 @@ export const hotTopicsResponseSchema = z.object({
     }),
     check: z.object({
       items: z.array(checkItemSchema),
+      meta: tabMetaSchema,
+    }),
+    verified: z.object({
+      items: z.array(verifiedItemSchema),
+      meta: tabMetaSchema,
+    }),
+    commented: z.object({
+      items: z.array(commentedItemSchema),
       meta: tabMetaSchema,
     }),
   }),

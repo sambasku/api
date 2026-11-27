@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { config } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { getTestDb } from '@/shared/database/drizzle/test-client';
-import { users } from '@/shared/database/drizzle/schema';
+import { emailVerificationOtps, users } from '@/shared/database/drizzle/schema';
 
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
 import { UserRepositoryImpl } from '../../infrastructure/user.repository.impl';
@@ -59,5 +59,16 @@ describe.skipIf(!hasTestDb)('UserRepositoryImpl', () => {
     const saved = await repo.save({ username: 'rudi00', email: 'rudi@test.com', phone: null, passwordHash: 'lama' });
     await repo.updatePassword(saved.id, 'baru');
     expect((await repo.findById(saved.id))?.passwordHash).toBe('baru');
+  });
+
+  it('list mengembalikan otpExpiresAt/otpCreatedAt sebagai tanggal 2026, bukan 1970 (epoch DB dalam detik)', async () => {
+    const saved = await repo.save({ username: 'otp_owner', email: 'otp-owner@test.com', phone: null, passwordHash: 'hash' });
+    const expiresAt = new Date('2026-11-27T14:15:00Z');
+    await db.insert(emailVerificationOtps).values({ userId: saved.id, codeHash: 'hash', expiresAt });
+    const { items } = await repo.list({ limit: 20 });
+    const found = items.find((u) => u.id === saved.id);
+    expect(found?.otpExpiresAt?.getUTCFullYear()).toBe(2026);
+    expect(found?.otpExpiresAt?.getTime()).toBe(expiresAt.getTime());
+    expect(found?.otpCreatedAt?.getUTCFullYear()).toBe(2026);
   });
 });

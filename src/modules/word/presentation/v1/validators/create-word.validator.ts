@@ -570,6 +570,8 @@ export const wordDetailResponseSchema = z.object({
         sha: z.string().nullable().optional(),
         alt_text: z.string().nullable(),
         is_primary: z.boolean(),
+        /** Id Jinye sumber bila foto hasil promote Jinye. */
+        source_jinye_id: z.string().nullable().optional(),
         attribution: wordImageAttributionSchema
           .extend({ provider: z.string() })
           .nullable()

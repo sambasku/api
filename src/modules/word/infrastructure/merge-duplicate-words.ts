@@ -14,6 +14,17 @@ import {
 
 import { loadMeaningFingerprintById } from '@/modules/word/application/utils/meaning-deduplication';
 import { normalizeLemma } from '@/modules/word/application/utils/normalize-lemma';
+import { generateId } from '@/shared/utils/ulid';
+
+import type { MergeWordEntriesOptions } from '../application/utils/merge-word-entries-options';
+
+export type { MergeWordEntriesOptions };
+
+const MERGE_OPTS_ADMIN: MergeWordEntriesOptions = {
+  requireSameLemma: true,
+  variantizeSourceLemmas: false,
+  foldKeepLemma: true,
+};
 
 /**
  * Gabung manual beberapa entri lemma sama ke satu penunggu (tab Duplikasi).
@@ -29,6 +40,25 @@ export async function mergeDuplicateWordsInTx(
   mergeWordIds: string[],
   actorId: string,
 ): Promise<{ keepWordId: string; mergedWordIds: string[] }> {
+  return mergeWordEntriesInTx(tx, keepWordId, mergeWordIds, actorId, MERGE_OPTS_ADMIN);
+}
+
+/**
+ * Gabung beberapa entri ke satu penjaga (#318 lemma beda + admin duplikat).
+ */
+export async function mergeWordEntriesInTx(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  keepWordId: string,
+  mergeWordIds: string[],
+  actorId: string,
+  options: MergeWordEntriesOptions = MERGE_OPTS_ADMIN,
+): Promise<{ keepWordId: string; mergedWordIds: string[] }> {
+  const opts: Required<MergeWordEntriesOptions> = {
+    requireSameLemma: options.requireSameLemma ?? MERGE_OPTS_ADMIN.requireSameLemma!,
+    variantizeSourceLemmas: options.variantizeSourceLemmas ?? false,
+    foldKeepLemma: options.foldKeepLemma ?? MERGE_OPTS_ADMIN.foldKeepLemma!,
+  };
   const now = new Date();
   const sourceIds = [...new Set(mergeWordIds.filter((id) => id !== keepWordId))];
   if (sourceIds.length === 0) {
@@ -55,10 +85,27 @@ export async function mergeDuplicateWordsInTx(
 
   const keepLemma = keep.lemma.trim().toLowerCase();
   for (const src of sources) {
-    if (src.languageId !== keep.languageId || src.lemma.trim().toLowerCase() !== keepLemma) {
+    if (src.languageId !== keep.languageId) {
+      throw new Error('LANGUAGE_MISMATCH');
+    }
+    if (src.wordType !== keep.wordType) {
+      throw new Error('WORD_TYPE_MISMATCH');
+    }
+    if (opts.requireSameLemma && src.lemma.trim().toLowerCase() !== keepLemma) {
       throw new Error('LEMMA_MISMATCH');
     }
   }
+
+  const sourceById = new Map(sources.map((s: { id: string }) => [s.id, s] as const));
+
+  const [keepPrimaryRow] = await tx
+    .select({ id: wordImages.id })
+    .from(wordImages)
+    .where(
+      and(eq(wordImages.wordId, keepWordId), eq(wordImages.isPrimary, true), isNull(wordImages.deletedAt)),
+    )
+    .limit(1);
+  let keepHasPrimary = Boolean(keepPrimaryRow);
 
   const [maxRow] = await tx
     .select({ max: sql<number>`coalesce(max(${meanings.orderIndex}), -1)` })
@@ -149,10 +196,13 @@ export async function mergeDuplicateWordsInTx(
     for (const img of srcImg) {
       const key = `${img.provider}\0${img.providerFileId}`;
       if (keepImgKeys.has(key)) continue;
-      await tx
-        .update(wordImages)
-        .set({ wordId: keepWordId })
-        .where(eq(wordImages.id, img.id));
+      const patch: { wordId: string; isPrimary?: boolean } = { wordId: keepWordId };
+      if (img.isPrimary && keepHasPrimary) {
+        patch.isPrimary = false;
+      } else if (img.isPrimary) {
+        keepHasPrimary = true;
+      }
+      await tx.update(wordImages).set(patch).where(eq(wordImages.id, img.id));
       keepImgKeys.add(key);
     }
 
@@ -245,6 +295,27 @@ export async function mergeDuplicateWordsInTx(
       }
     }
 
+    if (opts.variantizeSourceLemmas) {
+      const srcWord = sourceById.get(sourceId) as { lemma: string } | undefined;
+      const form = srcWord?.lemma?.trim() ?? '';
+      const keepForm = keep.lemma.trim();
+      if (form && form !== keepForm) {
+        const varKey = `${form}\0`;
+        if (!keepVarKeys.has(varKey)) {
+          await tx.insert(wordVariants).values({
+            id: generateId(),
+            wordId: keepWordId,
+            form,
+            variantType: 'alternative',
+            createdBy: actorId,
+            createdAt: now,
+            updatedAt: now,
+          });
+          keepVarKeys.add(varKey);
+        }
+      }
+    }
+
     // Soft-delete sumber
     await tx
       .update(words)
@@ -257,6 +328,10 @@ export async function mergeDuplicateWordsInTx(
         updatedAt: now,
       })
       .where(eq(words.id, sourceId));
+  }
+
+  if (!opts.foldKeepLemma) {
+    return { keepWordId, mergedWordIds: sourceIds };
   }
 
   const folded = normalizeLemma(keep.lemma);

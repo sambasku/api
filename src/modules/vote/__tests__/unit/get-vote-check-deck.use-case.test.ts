@@ -7,6 +7,10 @@ import {
   encodeVoteDeckCursor,
   type VoteRepository,
 } from '../../domain/repositories/vote.repository';
+import {
+  voteCheckDeckQuerySchema,
+  voteDeckQuerySchema,
+} from '../../presentation/v1/validators/vote.validator';
 
 const DECK_REPO_SRC = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../../infrastructure/vote.repository.impl.ts'),
@@ -100,5 +104,24 @@ describe('GetVoteCheckDeckUseCase', () => {
     expect(DECK_REPO_SRC).toMatch(/eq\(meanings\.isVerified,\s*trust\.meaningVerified\)/);
     expect(DECK_REPO_SRC).toMatch(/opts\.q/);
     expect(DECK_REPO_SRC).toMatch(/ilikeCompat\(words\.lemma/);
+  });
+});
+
+describe('voteCheckDeckQuerySchema (#379)', () => {
+  it('default randomize=false → antrean Periksa Kata urut voting terbanyak', () => {
+    expect(voteCheckDeckQuerySchema.parse({}).randomize).toBe(false);
+  });
+
+  it('randomize=true eksplisit tetap diterima', () => {
+    expect(voteCheckDeckQuerySchema.parse({ randomize: 'true' }).randomize).toBe(true);
+    expect(voteCheckDeckQuerySchema.parse({ randomize: '1' }).randomize).toBe(true);
+  });
+
+  it('deck verified (/votes/deck) tetap default acak', () => {
+    expect(voteDeckQuerySchema.parse({}).randomize).toBe(true);
+  });
+
+  it('regresi: check-deck repo mengurutkan total DESC', () => {
+    expect(DECK_REPO_SRC).toMatch(/orderTotalVotesDesc:\s*true/);
   });
 });

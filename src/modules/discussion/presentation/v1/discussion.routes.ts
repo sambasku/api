@@ -278,7 +278,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     summary: 'Kirim permintaan ruang diskusi (wajib login)',
     request: { body: { content: json(createDiscussionBodySchema) } },
     responses: {
-      200: { description: 'Tersimpan pending_review', content: json(createDiscussionResponseSchema) },
+      200: { description: 'Tayang langsung (published)', content: json(createDiscussionResponseSchema) },
       400: { description: 'Body tidak valid', content: json(errorResponseSchema) },
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
       429: { description: 'Rate limit', content: json(errorResponseSchema) },
@@ -381,7 +381,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     method: 'post',
     path: '/:id/audio',
     tags: ['Discussions'],
-    summary: 'Lampirkan audio ke opening thread pending_review (owner)',
+    summary: 'Lampirkan audio ke opening thread (owner, pending_review atau published)',
     request: {
       params: discussionIdParamSchema,
       body: {
@@ -401,7 +401,7 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
       401: { description: 'Token tidak ada/invalid', content: json(errorResponseSchema) },
       403: { description: 'Bukan pemilik', content: json(errorResponseSchema) },
       404: { description: 'Diskusi tidak ditemukan', content: json(errorResponseSchema) },
-      409: { description: 'Bukan pending_review', content: json(errorResponseSchema) },
+      409: { description: 'Status tidak mengizinkan lampir audio', content: json(errorResponseSchema) },
       429: { description: 'Rate limit', content: json(errorResponseSchema) },
       503: { description: 'Storage audio belum dikonfigurasi', content: json(errorResponseSchema) },
     },
@@ -445,14 +445,14 @@ export function createDiscussionRoutes(deps: DiscussionRoutesDeps) {
     path: '/:id',
     tags: ['Discussions'],
     summary:
-      'Edit OP sendiri (published → pending_review; body+link; gambar/audio tidak diganti)',
+      'Edit OP sendiri (tetap published; body+link; gambar/audio tidak diganti)',
     request: {
       params: discussionIdParamSchema,
       body: { content: json(updateDiscussionBodySchema) },
     },
     responses: {
       200: {
-        description: 'Disimpan & menunggu tinjauan ulang',
+        description: 'Disimpan & tetap tayang',
         content: json(updateDiscussionResponseSchema),
       },
       400: { description: 'Body tidak valid', content: json(errorResponseSchema) },

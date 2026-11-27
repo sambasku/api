@@ -111,6 +111,11 @@ export const contributorsListResponseSchema = z.object({
   }),
 });
 
+export const verifiersListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: opaqueId.optional(),
+});
+
 export const verifiersListResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
@@ -121,6 +126,8 @@ export const verifiersListResponseSchema = z.object({
         avatar_url: z.string().nullable(),
       }),
     ),
+    next_cursor: z.string().nullable(),
+    has_more: z.boolean(),
   }),
 });
 
@@ -128,15 +135,14 @@ export const setUserSponsorBodySchema = z.object({
   is_sponsor: z.boolean(),
 });
 
-export const setUserTeamBodySchema = z.object({
-  is_team: z.boolean().optional(),
-  team_as: z.string().trim().max(200).nullable().optional(),
-  team_note: z.string().trim().max(2000).nullable().optional(),
-});
+import { adminUpdateTeamBodySchema } from '@/shared/validation/team-note';
+
+export const setUserTeamBodySchema = adminUpdateTeamBodySchema;
 
 export type CreateSponsorshipBody = z.infer<typeof createSponsorshipBodySchema>;
 export type UpdateSponsorshipBody = z.infer<typeof updateSponsorshipBodySchema>;
 export type ListAdminSponsorshipsQuery = z.infer<typeof listAdminSponsorshipsQuerySchema>;
 export type ContributorsListQuery = z.infer<typeof contributorsListQuerySchema>;
+export type VerifiersListQuery = z.infer<typeof verifiersListQuerySchema>;
 export type SetUserSponsorBody = z.infer<typeof setUserSponsorBodySchema>;
 export type SetUserTeamBody = z.infer<typeof setUserTeamBodySchema>;

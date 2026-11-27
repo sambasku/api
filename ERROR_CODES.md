@@ -84,7 +84,7 @@ Dokumen hidup - wajib diupdate tiap ada `errorCode` baru di PR yang sama
 | `DISCUSSION_NOT_FOUND` | 404 | Diskusi tidak ditemukan / tidak boleh diakses |
 | `DISCUSSION_REPLY_NOT_FOUND` | 404 | Balasan diskusi tidak ditemukan |
 | `DISCUSSION_NOT_PUBLISHED` | 409 | Balasan hanya untuk diskusi yang sudah tayang |
-| `DISCUSSION_NOT_PENDING` | 409 | Audio opening hanya untuk diskusi pending_review |
+| `DISCUSSION_NOT_PENDING` | 409 | Audio opening hanya untuk diskusi published atau pending_review |
 | `VERIFIER_APPLICATION_NOT_FOUND` | 404 | Pengajuan verifikator tidak ada (GET me belum apply; detail admin id tidak dikenal) |
 | `VERIFIER_APPLICATION_NOT_REJECTED` | 409 | PATCH me hanya boleh jika status rejected |
 | `SOCIAL_LINK_NOT_FOUND` | 404 | Admin ganti screenshot akun sosial dengan indeks di luar daftar |

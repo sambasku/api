@@ -34,8 +34,39 @@ export interface ContributionListFilter {
    */
   randomize?: boolean;
   limit: number;
-  /** cursor-based (Section 13): ULID id item terakhir halaman sebelumnya */
+  /**
+   * cursor-based (Section 13):
+   * - mode antrean pending (!mine): base64url "<tier>:<id>" (ContributionQueueCursor)
+   * - mode mine / non-pending: ULID id item terakhir halaman sebelumnya
+   */
   cursor?: string;
+}
+
+export type ContributionPriorityTier = 0 | 1 | 2;
+
+export interface ContributionQueueCursor {
+  tier: ContributionPriorityTier;
+  id: string;
+}
+
+const CONTRIBUTION_QUEUE_CURSOR_SEP = ':';
+
+/** Encode keyset antrean tinjauan (tier, id) -> base64url. */
+export function encodeContributionQueueCursor(c: ContributionQueueCursor): string {
+  return Buffer.from(`${c.tier}${CONTRIBUTION_QUEUE_CURSOR_SEP}${c.id}`).toString('base64url');
+}
+
+/** Decode cursor antrean tinjauan. Lempar Error jika rusak. */
+export function decodeContributionQueueCursor(s: string): ContributionQueueCursor {
+  const raw = Buffer.from(s, 'base64url').toString();
+  const sepIdx = raw.indexOf(CONTRIBUTION_QUEUE_CURSOR_SEP);
+  if (sepIdx <= 0) throw new Error('INVALID_CURSOR_FORMAT');
+  const tierNum = Number(raw.slice(0, sepIdx));
+  const id = raw.slice(sepIdx + 1);
+  if ((tierNum !== 0 && tierNum !== 1 && tierNum !== 2) || !id || id.length !== 26) {
+    throw new Error('INVALID_CURSOR_FORMAT');
+  }
+  return { tier: tierNum, id };
 }
 
 export interface MyContributionListFilter {

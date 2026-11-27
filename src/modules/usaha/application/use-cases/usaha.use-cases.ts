@@ -7,10 +7,20 @@ import {
   UnauthorizedError,
 } from '@/shared/errors/app-error';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import {
+  toChangeCtx,
+  type EntityChangeContext,
+  type RecordEntityChange,
+} from '@/modules/change-history/application/record-entity-change';
+import { usahaSnapshot } from '@/modules/change-history/domain/entity-change';
 import type { Region } from '@/modules/region/domain/entities/region.entity';
 import type { RegionRepository } from '@/modules/region/domain/repositories/region.repository';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
+import {
+  EXPLORE_PHOTO_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import type {
   UsahaCategoryRef,
   UsahaDetail,
@@ -113,9 +123,13 @@ export class CreateUsahaUseCase {
   constructor(
     private readonly repo: UsahaRepository,
     private readonly regions: RegionRepository,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
-  async execute(input: CreateUsahaInput): Promise<UsahaListItem> {
+  async execute(
+    input: CreateUsahaInput,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<UsahaListItem> {
     await assertCategory(this.repo, input.categoryId);
     const kec = await resolveKecamatan(this.regions, input.regionId);
     const desa = await resolveDesa(this.regions, input.villageId, kec.id);
@@ -124,11 +138,16 @@ export class CreateUsahaUseCase {
     if (existing) {
       throw new ConflictError('SLUG_TAKEN', 'Slug usaha sudah dipakai');
     }
-    return this.repo.create({
+    const created = await this.repo.create({
       ...input,
       regionId: kec.id,
       villageId: desa?.id ?? input.villageId ?? null,
     });
+    await this.changes?.created('usaha', created.id, usahaSnapshot(created), {
+      ...toChangeCtx(ctx),
+      actorId: ctx?.actorId ?? input.authorId ?? null,
+    });
+    return created;
   }
 }
 
@@ -136,9 +155,13 @@ export class UpdateUsahaUseCase {
   constructor(
     private readonly repo: UsahaRepository,
     private readonly regions: RegionRepository,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
-  async execute(input: UpdateUsahaInput): Promise<UsahaListItem> {
+  async execute(
+    input: UpdateUsahaInput,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<UsahaListItem> {
     const existing = await this.repo.findById(input.id);
     if (!existing) {
       throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
@@ -176,17 +199,31 @@ export class UpdateUsahaUseCase {
     if (!updated) {
       throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
     }
+    await this.changes?.updated(
+      'usaha',
+      updated.id,
+      usahaSnapshot(existing),
+      usahaSnapshot(updated),
+      toChangeCtx(ctx),
+    );
     return updated;
   }
 }
 
 export class DeleteUsahaUseCase {
-  constructor(private readonly repo: UsahaRepository) {}
+  constructor(
+    private readonly repo: UsahaRepository,
+    private readonly changes?: RecordEntityChange,
+  ) {}
 
-  async execute(id: string): Promise<void> {
+  async execute(id: string, ctx?: Partial<EntityChangeContext>): Promise<void> {
+    const before = this.changes ? await this.repo.findById(id) : null;
     const ok = await this.repo.softDelete(id);
     if (!ok) {
       throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
+    }
+    if (before) {
+      await this.changes?.deleted('usaha', id, usahaSnapshot(before), toChangeCtx(ctx));
     }
   }
 }
@@ -237,6 +274,8 @@ export class AppendUsahaImagesUseCase {
     private readonly repo: UsahaRepository,
     private readonly users: UserRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
   async execute(slug: string, userId: string, urls: string[]): Promise<void> {
@@ -282,6 +321,9 @@ export class AppendUsahaImagesUseCase {
         },
       })),
     );
+    await this.changes?.photosChanged('usaha', usaha.id, 'photo_add', fresh.length, {
+      actorId: userId,
+    });
     await this.activityEvents?.safe({
       kind: 'usaha_photo_added',
       actorId: userId,
@@ -289,25 +331,51 @@ export class AppendUsahaImagesUseCase {
       dedupeKey: `usaha_photo:${usaha.id}:${fresh.join('|')}`,
       payload: `Menambahkan foto usaha ${usaha.name}`,
     });
+    try {
+      await this.groupNotifier?.notify({
+        heading: 'Foto baru tayang.',
+        jenis: 'Foto Usaha',
+        name: `${usaha.name} (${fresh.length} foto)`,
+        userId,
+        eventKey: EXPLORE_PHOTO_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan unggah foto.
+    }
   }
 }
 
 export class HideUsahaImageUseCase {
-  constructor(private readonly repo: UsahaRepository) {}
+  constructor(
+    private readonly repo: UsahaRepository,
+    private readonly changes?: RecordEntityChange,
+  ) {}
 
-  async execute(usahaId: string, imageId: string): Promise<void> {
+  async execute(
+    usahaId: string,
+    imageId: string,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<void> {
     const hidden = await this.repo.hideImage(usahaId, imageId);
     if (!hidden) {
       throw new NotFoundError('IMAGE_NOT_FOUND', 'Foto tidak ditemukan');
     }
+    await this.changes?.photosChanged('usaha', usahaId, 'photo_remove', 1, toChangeCtx(ctx));
   }
 }
 
 /** Pembatasan sementara (PRD 12.4) - alasan wajib. */
 export class RestrictUsahaUseCase {
-  constructor(private readonly repo: UsahaRepository) {}
+  constructor(
+    private readonly repo: UsahaRepository,
+    private readonly changes?: RecordEntityChange,
+  ) {}
 
-  async execute(id: string, reason: string): Promise<UsahaListItem> {
+  async execute(
+    id: string,
+    reason: string,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<UsahaListItem> {
     if (!reason.trim()) {
       throw new BadRequestError(
         'REASON_REQUIRED',
@@ -315,6 +383,7 @@ export class RestrictUsahaUseCase {
         [{ field: 'reason', message: 'Tulis alasan pembatasan' }],
       );
     }
+    const before = this.changes ? await this.repo.findById(id) : null;
     const updated = await this.repo.update({
       id,
       publishStatus: 'restricted',
@@ -323,15 +392,27 @@ export class RestrictUsahaUseCase {
     if (!updated) {
       throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
     }
+    if (before) {
+      await this.changes?.updated(
+        'usaha',
+        id,
+        usahaSnapshot(before),
+        usahaSnapshot(updated),
+        toChangeCtx(ctx),
+      );
+    }
     return updated;
   }
 }
 
 /** Pulihkan dari archived/restricted ke published (PRD 12.3, inisiatif admin). */
 export class RestoreUsahaUseCase {
-  constructor(private readonly repo: UsahaRepository) {}
+  constructor(
+    private readonly repo: UsahaRepository,
+    private readonly changes?: RecordEntityChange,
+  ) {}
 
-  async execute(id: string): Promise<UsahaListItem> {
+  async execute(id: string, ctx?: Partial<EntityChangeContext>): Promise<UsahaListItem> {
     const existing = await this.repo.findById(id);
     if (!existing) {
       throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
@@ -344,6 +425,13 @@ export class RestoreUsahaUseCase {
     if (!updated) {
       throw new NotFoundError('USAHA_NOT_FOUND', 'Usaha tidak ditemukan');
     }
+    await this.changes?.updated(
+      'usaha',
+      id,
+      usahaSnapshot(existing),
+      usahaSnapshot(updated),
+      toChangeCtx(ctx),
+    );
     return updated;
   }
 }

@@ -544,6 +544,7 @@ async function main() {
       | typeof schema.usahaComments
       | typeof schema.cuisineComments
       | typeof schema.eventComments
+      | typeof schema.karyaComments
       | typeof schema.articleComments
       | typeof schema.jinyeComments;
   }> = [
@@ -552,6 +553,7 @@ async function main() {
     { kind: 'usaha_comment_created', table: schema.usahaComments },
     { kind: 'cuisine_comment_created', table: schema.cuisineComments },
     { kind: 'event_comment_created', table: schema.eventComments },
+    { kind: 'karya_comment_created', table: schema.karyaComments },
     { kind: 'article_comment_created', table: schema.articleComments },
     { kind: 'jinye_comment_created', table: schema.jinyeComments },
   ];
