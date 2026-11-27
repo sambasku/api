@@ -3,6 +3,7 @@ import type { StickerRepository } from '@/modules/sticker/domain/repositories/st
 
 export async function resolveCommentStickerId(input: {
   rawStickerId: string | null | undefined;
+  userId?: string;
   stickerRepo: StickerRepository | undefined;
 }): Promise<string | null> {
   const rawSticker = input.rawStickerId?.trim() ?? '';
@@ -12,7 +13,10 @@ export async function resolveCommentStickerId(input: {
       { field: 'sticker_id', message: 'Stiker tidak tersedia' },
     ]);
   }
-  const catalog = await input.stickerRepo.findActiveById(rawSticker);
+  const catalog =
+    input.userId && typeof input.stickerRepo.findUsableByUser === 'function'
+      ? await input.stickerRepo.findUsableByUser(rawSticker, input.userId)
+      : await input.stickerRepo.findActiveById(rawSticker);
   if (!catalog) {
     throw new ValidationError([
       {

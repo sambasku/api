@@ -223,7 +223,9 @@ export class CreateChatMessageUseCase {
           { field: 'sticker_id', message: 'Stiker wajib dipilih' },
         ]);
       }
-      const catalog = await this.stickerRepo.findActiveById(sid);
+      const catalog = typeof this.stickerRepo.findUsableByUser === 'function'
+        ? await this.stickerRepo.findUsableByUser(sid, cmd.userId)
+        : await this.stickerRepo.findActiveById(sid);
       if (!catalog) {
         throw new ValidationError([
           {

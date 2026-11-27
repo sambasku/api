@@ -125,7 +125,9 @@ export class CreateJinyeCommentUseCase {
           { field: 'sticker_id', message: 'Stiker tidak tersedia' },
         ]);
       }
-      const catalog = await this.stickerRepo.findActiveById(rawSticker);
+      const catalog = typeof this.stickerRepo.findUsableByUser === 'function'
+        ? await this.stickerRepo.findUsableByUser(rawSticker, cmd.userId)
+        : await this.stickerRepo.findActiveById(rawSticker);
       if (!catalog) {
         throw new ValidationError([
           {

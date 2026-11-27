@@ -462,11 +462,18 @@ import { CreateUploadCredentialsUseCase } from "@/modules/image/application/use-
 import { WordReportRepositoryImpl } from "@/modules/word-report/infrastructure/word-report.repository.impl";
 import { StickerRepositoryImpl } from "@/modules/sticker/infrastructure/sticker.repository.impl";
 import {
+  AddFavoriteStickerUseCase,
+  CreateMyStickerUseCase,
   CreateStickerUseCase,
+  DeleteMyStickerUseCase,
   DeleteStickerUseCase,
   GetActiveStickerUseCase,
+  GetStickerUploadTokenUseCase,
   ListActiveStickersUseCase,
   ListAdminStickersUseCase,
+  ListFavoriteStickersUseCase,
+  ListMyStickersUseCase,
+  RemoveFavoriteStickerUseCase,
   UpdateStickerUseCase,
 } from "@/modules/sticker/application/use-cases/sticker.use-cases";
 import { StickerController } from "@/modules/sticker/presentation/v1/sticker.controller";
@@ -1707,7 +1714,14 @@ export const stickerController = new StickerController({
   listAdmin: new ListAdminStickersUseCase(stickerRepo),
   create: new CreateStickerUseCase(stickerRepo, auditRepo),
   update: new UpdateStickerUseCase(stickerRepo, auditRepo),
-  remove: new DeleteStickerUseCase(stickerRepo, auditRepo),
+  remove: new DeleteStickerUseCase(stickerRepo, auditRepo, imageStorage),
+  listFavorites: new ListFavoriteStickersUseCase(stickerRepo),
+  addFavorite: new AddFavoriteStickerUseCase(stickerRepo),
+  removeFavorite: new RemoveFavoriteStickerUseCase(stickerRepo),
+  getUploadToken: new GetStickerUploadTokenUseCase(imageStorage),
+  listMine: new ListMyStickersUseCase(stickerRepo),
+  createMine: new CreateMyStickerUseCase(stickerRepo, { allowedUrlPrefix: env.IMAGEKIT_URL_ENDPOINT }),
+  removeMine: new DeleteMyStickerUseCase(stickerRepo, imageStorage),
 });
 
 

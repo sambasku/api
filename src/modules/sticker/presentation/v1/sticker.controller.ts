@@ -1,12 +1,20 @@
 import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
 import type { Sticker } from '../../domain/entities/sticker.entity';
+import type { AdminStickerVisibilityFilter } from '../../domain/repositories/sticker.repository';
 import type {
+  AddFavoriteStickerUseCase,
+  CreateMyStickerUseCase,
   CreateStickerUseCase,
+  DeleteMyStickerUseCase,
   DeleteStickerUseCase,
   GetActiveStickerUseCase,
+  GetStickerUploadTokenUseCase,
   ListActiveStickersUseCase,
   ListAdminStickersUseCase,
+  ListFavoriteStickersUseCase,
+  ListMyStickersUseCase,
+  RemoveFavoriteStickerUseCase,
   UpdateStickerUseCase,
 } from '../../application/use-cases/sticker.use-cases';
 
@@ -16,6 +24,8 @@ function toPublicWire(s: Sticker) {
     image_url: s.imageUrl,
     play_once: s.playOnce,
     category_slug: s.categorySlug,
+    display_name: s.displayName,
+    is_custom: s.ownerUserId !== null,
   };
 }
 
@@ -24,6 +34,8 @@ function toAdminWire(s: Sticker) {
     ...toPublicWire(s),
     sort_order: s.sortOrder,
     is_active: s.isActive,
+    visibility: s.visibility,
+    owner_user_id: s.ownerUserId,
   };
 }
 
@@ -36,6 +48,13 @@ export class StickerController {
       create: CreateStickerUseCase;
       update: UpdateStickerUseCase;
       remove: DeleteStickerUseCase;
+      listFavorites: ListFavoriteStickersUseCase;
+      addFavorite: AddFavoriteStickerUseCase;
+      removeFavorite: RemoveFavoriteStickerUseCase;
+      getUploadToken: GetStickerUploadTokenUseCase;
+      listMine: ListMyStickersUseCase;
+      createMine: CreateMyStickerUseCase;
+      removeMine: DeleteMyStickerUseCase;
     },
   ) {}
 
@@ -69,8 +88,84 @@ export class StickerController {
     return c.json({ success: true as const, data: toPublicWire(item) });
   }
 
-  async listAdmin(c: Context<{ Variables: AppVariables }>) {
-    const items = await this.deps.listAdmin.execute();
+  async listFavorites(c: Context<{ Variables: AppVariables }>) {
+    const user = c.get('user')!;
+    const items = await this.deps.listFavorites.execute(user.user_id);
+    return c.json({
+      success: true as const,
+      data: items.map(toPublicWire),
+    });
+  }
+
+  async addFavorite(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = c.get('user')!;
+    const item = await this.deps.addFavorite.execute({
+      userId: user.user_id,
+      stickerId: id,
+    });
+    return c.json({
+      success: true as const,
+      data: toPublicWire(item),
+    });
+  }
+
+  async removeFavorite(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = c.get('user')!;
+    await this.deps.removeFavorite.execute({
+      userId: user.user_id,
+      stickerId: id,
+    });
+    return c.json({ success: true as const, data: null });
+  }
+
+  async getUploadToken(c: Context<{ Variables: AppVariables }>) {
+    const creds = await this.deps.getUploadToken.execute();
+    return c.json({ success: true as const, data: creds });
+  }
+
+  async listMine(c: Context<{ Variables: AppVariables }>) {
+    const user = c.get('user')!;
+    const items = await this.deps.listMine.execute(user.user_id);
+    return c.json({
+      success: true as const,
+      data: items.map(toPublicWire),
+    });
+  }
+
+  async createMine(
+    c: Context<{ Variables: AppVariables }>,
+    body: {
+      name?: string | null;
+      image_url: string;
+      provider_file_id?: string | null;
+      play_once?: boolean;
+    },
+  ) {
+    const user = c.get('user')!;
+    const created = await this.deps.createMine.execute({
+      userId: user.user_id,
+      name: body.name,
+      imageUrl: body.image_url,
+      providerFileId: body.provider_file_id,
+      playOnce: body.play_once,
+    });
+    return c.json({ success: true as const, data: toPublicWire(created) }, 201);
+  }
+
+  async removeMine(c: Context<{ Variables: AppVariables }>, id: string) {
+    const user = c.get('user')!;
+    await this.deps.removeMine.execute({
+      userId: user.user_id,
+      stickerId: id,
+    });
+    return c.json({ success: true as const, data: null });
+  }
+
+  async listAdmin(
+    c: Context<{ Variables: AppVariables }>,
+    query?: { visibility?: AdminStickerVisibilityFilter },
+  ) {
+    const items = await this.deps.listAdmin.execute(query?.visibility ?? 'all');
     return c.json({ success: true as const, data: items.map(toAdminWire) });
   }
 
