@@ -473,6 +473,9 @@ export class WordSuggestionController {
             display_name: item.actorDisplayName,
           },
           type: item.type,
+          entity: item.entity,
+          action: item.action,
+          action_label: item.actionLabel,
           changes: item.changes.map((ch) => ({
             entity: ch.entity,
             field: ch.field,

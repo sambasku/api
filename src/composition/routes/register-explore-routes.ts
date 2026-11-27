@@ -151,6 +151,7 @@ import {
   createLanguageRoutes,
 } from "@/modules/language/presentation/v1/language.routes";
 import { createCategoryRoutes } from "@/modules/category/presentation/v1/category.routes";
+import { createEntityChangeHistoryRoutes } from "@/modules/change-history/presentation/v1/change-history.routes";
 
 export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables }>): void {
   // Places CRUD - katalog wisata/kuliner/budaya (SoT Turso).
@@ -168,6 +169,13 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
       controller: di.placeController,
       optionalAuthenticate: di.optionalAuthenticate,
       softAuthenticate: di.softAuthenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/places",
+    createEntityChangeHistoryRoutes({
+      entityType: "place",
+      useCase: di.getEntityChangeHistoryUseCase,
     }),
   );
   app.route(
@@ -622,6 +630,13 @@ app.route(
     createPublicCuisineViewsRoutes({
       controller: di.cuisineViewsController,
       softAuthenticate: di.softAuthenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/culinary/cuisines",
+    createEntityChangeHistoryRoutes({
+      entityType: "cuisine",
+      useCase: di.getEntityChangeHistoryUseCase,
     }),
   );
   app.route(

@@ -1,4 +1,8 @@
-import { eq, and, desc, isNull, inArray, lt, or } from 'drizzle-orm';
+import { eq, and, desc, isNull, inArray, lt, or, sql } from 'drizzle-orm';
+import {
+  WORD_CHILD_ENTITY_TYPES,
+  describeWordAction,
+} from '@/modules/change-history/domain/word-action-labels';
 import { db } from '@/shared/database/drizzle/client';
 import { words, wordEditSuggestions, users, auditLogs, wordImages, meanings } from '@/shared/database/drizzle/schema';
 import type { WordSuggestionRepository, ChangeHistoryItem, SuggestionSource } from '../domain/repositories/word-suggestion.repository';
@@ -975,13 +979,25 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       .limit(1);
     if (!word) throw new NotFoundError('WORD_NOT_FOUND', 'Kata tidak ditemukan');
 
-    const conditions = [eq(auditLogs.entityType, 'word'), eq(auditLogs.entityId, wordId)];
+    // Kata sendiri (entity_id = wordId) + aksi anak (arti, contoh, foto, ...)
+    // yang menyimpan word_id di old/new_data. `word_ref` = kolom virtual
+    // ber-index (migrasi 0204), jadi OR ini tidak scan penuh audit_logs.
+    const conditions = [
+      or(
+        and(eq(auditLogs.entityType, 'word'), eq(auditLogs.entityId, wordId)),
+        and(
+          inArray(auditLogs.entityType, [...WORD_CHILD_ENTITY_TYPES]),
+          sql`${auditLogs}.word_ref = ${wordId}`,
+        ),
+      ),
+    ];
     if (cursor) conditions.push(lt(auditLogs.id, cursor));
 
     const rows = await db
       .select({
         auditId: auditLogs.id,
         auditUserId: auditLogs.userId,
+        entityType: auditLogs.entityType,
         action: auditLogs.action,
         oldData: auditLogs.oldData,
         newData: auditLogs.newData,
@@ -990,7 +1006,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       })
       .from(auditLogs)
       .where(and(...conditions))
-      .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+      .orderBy(desc(auditLogs.id))
       .limit(Math.min(limit + 1, 101));
 
     if (rows.length === 0) return { items: [], nextCursor: null, hasMore: false };
@@ -1043,7 +1059,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       const changes =
         r.action === 'duplicate_vote'
           ? this._extractDuplicateVoteChanges(r.newData)
-          : this._extractChanges(r.oldData, r.newData);
+          : this._extractChanges(r.entityType, r.oldData, r.newData);
       let source: SuggestionSource | null = null;
       if (r.sourceContributionId && suggestionMap[r.sourceContributionId]) {
         const sug = suggestionMap[r.sourceContributionId];
@@ -1071,6 +1087,9 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         actorUsername: actor?.username ?? null,
         actorDisplayName: actor?.displayName ?? actor?.username ?? null,
         type,
+        entity: r.entityType,
+        action: r.action,
+        actionLabel: describeWordAction(r.entityType, r.action),
         changes,
         source,
       };
@@ -1120,7 +1139,11 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     ];
   }
 
-  private _extractChanges(oldData: unknown, newData: unknown): ChangeHistoryItem['changes'] {
+  private _extractChanges(
+    entity: string,
+    oldData: unknown,
+    newData: unknown,
+  ): ChangeHistoryItem['changes'] {
     if (!oldData && !newData) return [];
     const oObj = (oldData ?? {}) as Record<string, unknown>;
     const nObj = (newData ?? {}) as Record<string, unknown>;
@@ -1131,7 +1154,7 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
       const n = nObj[key] ?? null;
       if (JSON.stringify(o) !== JSON.stringify(n)) {
         changes.push({
-          entity: 'word',
+          entity,
           field: key,
           oldValue: o,
           newValue: n,

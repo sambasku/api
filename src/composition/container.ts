@@ -605,6 +605,9 @@ import {
 import { createWebAnalyticsProviders } from "@/modules/web-analytics/infrastructure/web-analytics-providers.factory";
 import { createPlayAnalyticsProviders } from "@/modules/play-analytics/infrastructure/play-analytics-providers.factory";
 import { createFcmAnalyticsProviders } from "@/modules/fcm-analytics/infrastructure/fcm-analytics-providers.factory";
+import { RecordEntityChange } from '@/modules/change-history/application/record-entity-change';
+import { GetEntityChangeHistoryUseCase } from '@/modules/change-history/application/get-entity-change-history.use-case';
+import { ChangeHistoryRepositoryImpl } from '@/modules/change-history/infrastructure/change-history.repository.impl';
 // ---- Composition root: rakit semua dependency (manual DI, api-base-stack.md Section 2) ----
 bindCanContributeLookup(lookupCanContribute);
 export const userRepo = new UserRepositoryImpl(db);
@@ -639,6 +642,11 @@ export const identityRepo = new AuthIdentityRepositoryImpl(db);
 
 // ---- Modul audit (Section 21) - direkspos ke use case modul lain ----
 export const auditRepo = new AuditLogRepositoryImpl(db);
+// Riwayat perubahan entitas eksplorasi (timeline publik).
+export const recordEntityChange = new RecordEntityChange(auditRepo);
+export const getEntityChangeHistoryUseCase = new GetEntityChangeHistoryUseCase(
+  new ChangeHistoryRepositoryImpl(db),
+);
 // Event log feed publik (write-through, #86) - dipakai lintas modul.
 export const activityEventRepo = new ActivityEventRepositoryImpl(db);
 export const activityEvents = new RecordActivityEventUseCase(activityEventRepo);
@@ -1188,17 +1196,23 @@ export const explorationGroupNotifier = new OpenWaExplorationGroupNotifier(
   appSettingsRepo,
 );
 export const placeController = new PlaceController(
-  new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
-  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
-  new DeletePlaceUseCase(placeRepo),
+  new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents, recordEntityChange),
+  new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents, recordEntityChange),
+  new DeletePlaceUseCase(placeRepo, recordEntityChange),
   new ListPlacesUseCase(placeRepo),
   new GetPlaceBySlugUseCase(placeRepo),
   new ListPlaceImagesUseCase(placeRepo),
-  new AppendPlaceImagesUseCase(placeRepo, userRepo, activityEvents, explorationGroupNotifier),
+  new AppendPlaceImagesUseCase(
+    placeRepo,
+    userRepo,
+    activityEvents,
+    explorationGroupNotifier,
+    recordEntityChange,
+  ),
   new RecordPlaceViewUseCase(placeRepo),
   new ListPlaceViewsUseCase(placeRepo),
   new GetPlaceViewReportUseCase(placeRepo),
-  new HidePlaceImageUseCase(placeRepo, activityEvents),
+  new HidePlaceImageUseCase(placeRepo, activityEvents, recordEntityChange),
   listRelatedContent,
   replaceContentLinks,
   placeVisitRepo,
@@ -1247,11 +1261,12 @@ export const placeContributionController = new PlaceContributionController(
     placeCategoryRepo,
     regionRepo,
     userRepo,
-    new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
-    new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents),
+    new CreatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents, recordEntityChange),
+    new UpdatePlaceUseCase(placeRepo, placeCategoryRepo, activityEvents, recordEntityChange),
     recordInbox,
     notifyUser,
     explorationGroupNotifier,
+    recordEntityChange,
   ),
 );
 export const regionController = new RegionController(
@@ -1538,10 +1553,16 @@ export const culinaryController = new CulinaryController(
   new GetCuisineBySlugUseCase(culinaryRepo),
   new ListCulinaryCategoriesUseCase(culinaryRepo),
   new FindCulinaryDuplicatesUseCase(culinaryRepo),
-  new RestrictCulinaryUseCase(culinaryRepo),
-  new RestoreCulinaryUseCase(culinaryRepo),
-  new DeleteCulinaryUseCase(culinaryRepo),
-  new AppendCuisineImagesUseCase(culinaryRepo, userRepo, activityEvents, explorationGroupNotifier),
+  new RestrictCulinaryUseCase(culinaryRepo, recordEntityChange),
+  new RestoreCulinaryUseCase(culinaryRepo, recordEntityChange),
+  new DeleteCulinaryUseCase(culinaryRepo, recordEntityChange),
+  new AppendCuisineImagesUseCase(
+    culinaryRepo,
+    userRepo,
+    activityEvents,
+    explorationGroupNotifier,
+    recordEntityChange,
+  ),
   listRelatedContent,
   {
     listComments: new ListCuisineCommentsUseCase(culinaryRepo),
@@ -1571,6 +1592,7 @@ export const culinaryController = new CulinaryController(
     takedownComment: new TakedownCuisineCommentUseCase(culinaryRepo, auditRepo),
     ugcLemmaLinks: ugcCommentLemmaRepo,
   },
+  recordEntityChange,
 );
 export const cuisineViewsRepo = new CuisineViewsRepositoryImpl(db);
 export const cuisineViewsController = new CuisineViewsController(
@@ -1589,6 +1611,7 @@ export const culinaryContributionUseCases = new CulinaryContributionUseCases(
   notifyUser,
   activityEventRepo,
   explorationGroupNotifier,
+  recordEntityChange,
 );
 export const culinaryContributionController = new CulinaryContributionController(
   culinaryContributionUseCases,

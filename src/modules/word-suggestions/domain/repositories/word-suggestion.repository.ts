@@ -106,6 +106,12 @@ export interface ChangeHistoryItem {
   actorUsername: string | null;
   actorDisplayName: string | null;
   type: 'direct_edit' | 'suggest_edit' | 'duplicate_vote';
+  /** Jenis data yang diubah: 'word' atau anak (meaning, example, word_image, ...). */
+  entity: string;
+  /** Aksi audit mentah (create, verify, ...). */
+  action: string;
+  /** Judul siap tampil untuk timeline. */
+  actionLabel: string;
   changes: ChangeRecord[];
   source: SuggestionSource | null;
 }

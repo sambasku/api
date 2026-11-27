@@ -5,6 +5,11 @@ import {
   UnauthorizedError,
 } from '@/shared/errors/app-error';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import type {
+  EntityChangeContext,
+  RecordEntityChange,
+} from '@/modules/change-history/application/record-entity-change';
+import { CuisineChangeWriter } from '../cuisine-change-writer';
 import type { UserRepository } from '@/modules/auth/domain/repositories/user.repository';
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import {
@@ -94,8 +99,11 @@ export class ListCulinaryCategoriesUseCase {
 
 /** Pembatasan sementara (pola usaha 12.4) - alasan wajib. */
 export class RestrictCulinaryUseCase {
-  constructor(private readonly repo: CulinaryRepository) {}
-  async execute(id: string, reason: string) {
+  private readonly writer: CuisineChangeWriter;
+  constructor(repo: CulinaryRepository, changes?: RecordEntityChange) {
+    this.writer = new CuisineChangeWriter(repo, changes);
+  }
+  async execute(id: string, reason: string, ctx?: Partial<EntityChangeContext>) {
     if (!reason.trim()) {
       throw new BadRequestError(
         'REASON_REQUIRED',
@@ -103,11 +111,14 @@ export class RestrictCulinaryUseCase {
         [{ field: 'reason', message: 'Tulis alasan pembatasan' }],
       );
     }
-    const updated = await this.repo.updateCuisine({
-      id,
-      publishStatus: 'restricted' as const,
-      restricted: { reason: reason.trim() },
-    });
+    const updated = await this.writer.update(
+      {
+        id,
+        publishStatus: 'restricted' as const,
+        restricted: { reason: reason.trim() },
+      },
+      ctx,
+    );
     if (!updated) {
       throw new NotFoundError('CUISINE_NOT_FOUND', 'Kuliner tidak ditemukan');
     }
@@ -117,13 +128,19 @@ export class RestrictCulinaryUseCase {
 
 /** Pulihkan dari archived/restricted ke published (pola usaha). */
 export class RestoreCulinaryUseCase {
-  constructor(private readonly repo: CulinaryRepository) {}
-  async execute(id: string) {
-    const updated = await this.repo.updateCuisine({
-      id,
-      publishStatus: 'published' as const,
-      restricted: null,
-    });
+  private readonly writer: CuisineChangeWriter;
+  constructor(repo: CulinaryRepository, changes?: RecordEntityChange) {
+    this.writer = new CuisineChangeWriter(repo, changes);
+  }
+  async execute(id: string, ctx?: Partial<EntityChangeContext>) {
+    const updated = await this.writer.update(
+      {
+        id,
+        publishStatus: 'published' as const,
+        restricted: null,
+      },
+      ctx,
+    );
     if (!updated) {
       throw new NotFoundError('CUISINE_NOT_FOUND', 'Kuliner tidak ditemukan');
     }
@@ -132,9 +149,12 @@ export class RestoreCulinaryUseCase {
 }
 
 export class DeleteCulinaryUseCase {
-  constructor(private readonly repo: CulinaryRepository) {}
-  async execute(id: string): Promise<void> {
-    const ok = await this.repo.softDeleteCuisine(id);
+  private readonly writer: CuisineChangeWriter;
+  constructor(repo: CulinaryRepository, changes?: RecordEntityChange) {
+    this.writer = new CuisineChangeWriter(repo, changes);
+  }
+  async execute(id: string, ctx?: Partial<EntityChangeContext>): Promise<void> {
+    const ok = await this.writer.remove(id, ctx);
     if (!ok) {
       throw new NotFoundError('CUISINE_NOT_FOUND', 'Kuliner tidak ditemukan');
     }
@@ -170,6 +190,7 @@ export class AppendCuisineImagesUseCase {
     private readonly users: UserRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
     private readonly groupNotifier?: ExplorationGroupNotifier,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
   async execute(slug: string, userId: string, urls: string[]): Promise<void> {
@@ -232,6 +253,9 @@ export class AppendCuisineImagesUseCase {
     await this.repo.updateCuisine({
       id: cuisine.id,
       imagesJson: imagesToJson(next),
+    });
+    await this.changes?.photosChanged('cuisine', cuisine.id, 'photo_add', fresh.length, {
+      actorId: userId,
     });
     await this.activityEvents?.safe({
       kind: 'cuisine_photo_added',

@@ -1,3 +1,5 @@
+import type { RecordEntityChange } from '@/modules/change-history/application/record-entity-change';
+import { CuisineChangeWriter } from '@/modules/culinary/application/cuisine-change-writer';
 import type { NotifyUserUseCase } from '@/modules/device/application/use-cases/notify-user.use-case';
 import type { InboxNotificationType } from '@/modules/notification/domain/entities/notification.entity';
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
@@ -155,7 +157,12 @@ export class CulinaryContributionUseCases {
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
     private readonly groupNotifier?: ExplorationGroupNotifier,
-  ) {}
+    changes?: RecordEntityChange,
+  ) {
+    this.cuisineWriter = new CuisineChangeWriter(culinary, changes);
+  }
+
+  private readonly cuisineWriter: CuisineChangeWriter;
 
   private async notifyGroup(
     userId: string,
@@ -456,7 +463,7 @@ export class CulinaryContributionUseCases {
     if (row.kind === 'new_cuisine') {
       const p = row.payload as NewCuisinePayload;
       const slug = await this.uniqueCuisineSlug.execute(p.name);
-      const cuisine = await this.culinary.createCuisine({
+      const cuisine = await this.cuisineWriter.create({
         slug,
         name: p.name,
         description: p.description ?? null,
@@ -471,7 +478,7 @@ export class CulinaryContributionUseCases {
         sourcesJson: p.sources?.length ? JSON.stringify(p.sources) : null,
         publishStatus: 'published',
         authorId: row.userId === ANONIM_USER_ID ? null : row.userId,
-      } satisfies CreateCuisineInput);
+      } satisfies CreateCuisineInput, { actorId: row.userId, sourceContributionId: id });
       await this.contrib.setStatus(id, 'approved', { resultCuisineId: cuisine.id });
       await this.emitPublished('cuisine', cuisine.id, cuisine.name, row.userId);
       await this.audit?.record({
@@ -541,7 +548,7 @@ export class CulinaryContributionUseCases {
             )[f];
           }
         }
-        await this.culinary.updateCuisine(patch);
+        await this.cuisineWriter.update(patch, { actorId: row.userId, sourceContributionId: id });
         break;
       }
       case 'usaha_edit': {
@@ -600,10 +607,10 @@ export class CulinaryContributionUseCases {
       }
       case 'archive': {
         if (row.cuisineId) {
-          await this.culinary.updateCuisine({
-            id: row.cuisineId,
-            publishStatus: 'archived',
-          });
+          await this.cuisineWriter.update(
+            { id: row.cuisineId, publishStatus: 'archived' },
+            { actorId: row.userId, sourceContributionId: id },
+          );
         } else if (row.usahaId) {
           await this.usahas.update({
             id: row.usahaId,
@@ -614,11 +621,10 @@ export class CulinaryContributionUseCases {
       }
       case 'restore': {
         if (row.cuisineId) {
-          await this.culinary.updateCuisine({
-            id: row.cuisineId,
-            publishStatus: 'published',
-            restricted: null,
-          });
+          await this.cuisineWriter.update(
+            { id: row.cuisineId, publishStatus: 'published', restricted: null },
+            { actorId: row.userId, sourceContributionId: id },
+          );
         } else if (row.usahaId) {
           await this.usahas.update({
             id: row.usahaId,

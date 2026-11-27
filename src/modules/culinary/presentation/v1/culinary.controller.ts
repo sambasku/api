@@ -1,4 +1,6 @@
 import type { Context } from 'hono';
+import type { RecordEntityChange } from '@/modules/change-history/application/record-entity-change';
+import { CuisineChangeWriter } from '../../application/cuisine-change-writer';
 import type { AppVariables } from '@/shared/types';
 import type { z } from 'zod';
 import { ANONIM_USER_ID } from '@/shared/constants/anonim';
@@ -178,7 +180,12 @@ export class CulinaryController {
     private readonly appendImagesUc: AppendCuisineImagesUseCase,
     private readonly listRelated?: ListRelatedFn,
     private readonly commentDeps?: CuisineCommentControllerDeps,
-  ) {}
+    changes?: RecordEntityChange,
+  ) {
+    this.cuisineWriter = new CuisineChangeWriter(repo, changes);
+  }
+
+  private readonly cuisineWriter: CuisineChangeWriter;
 
   private get cuisineComments(): CuisineCommentControllerDeps {
     if (!this.commentDeps) throw new Error('comment deps not wired');
@@ -283,19 +290,28 @@ export class CulinaryController {
 
   restrictCuisine(c: Context<{ Variables: AppVariables }>, id: string, reason: string) {
     return this.restrictCuisineUc
-      .execute(id, reason)
+      .execute(id, reason, {
+      actorId: c.get('user')?.user_id ?? null,
+      requestId: c.get('requestId') ?? null,
+    })
       .then((cuisine) => c.json({ success: true as const, data: serializeCuisine(cuisine as Cuisine) }));
   }
 
   restoreCuisine(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.restoreCuisineUc
-      .execute(id)
+      .execute(id, {
+      actorId: c.get('user')?.user_id ?? null,
+      requestId: c.get('requestId') ?? null,
+    })
       .then((cuisine) => c.json({ success: true as const, data: serializeCuisine(cuisine as Cuisine) }));
   }
 
   deleteCuisine(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.deleteCuisineUc
-      .execute(id)
+      .execute(id, {
+      actorId: c.get('user')?.user_id ?? null,
+      requestId: c.get('requestId') ?? null,
+    })
       .then(() => c.json({ success: true as const, data: null }));
   }
 
@@ -348,8 +364,11 @@ export class CulinaryController {
       publishStatus: 'published',
       authorId: c.get('user')?.user_id ?? null,
     } as CreateCuisineInput;
-    return this.repo
-      .createCuisine(input)
+    return this.cuisineWriter
+      .create(input, {
+      actorId: c.get('user')?.user_id ?? null,
+      requestId: c.get('requestId') ?? null,
+    })
       .then((cuisine) => c.json({ success: true as const, data: serializeCuisine(cuisine as Cuisine) }));
   }
 
@@ -359,7 +378,10 @@ export class CulinaryController {
     body: z.infer<typeof updateCuisineBodySchema>,
   ) {
     const input = { id, ...this.cuisineInput(body) } as UpdateCuisineInput;
-    return this.repo.updateCuisine(input).then((cuisine) => {
+    return this.cuisineWriter.update(input, {
+      actorId: c.get('user')?.user_id ?? null,
+      requestId: c.get('requestId') ?? null,
+    }).then((cuisine) => {
       if (!cuisine) {
         throw new NotFoundError('CUISINE_NOT_FOUND', 'Kuliner tidak ditemukan');
       }

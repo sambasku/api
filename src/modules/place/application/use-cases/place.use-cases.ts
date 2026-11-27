@@ -12,6 +12,11 @@ import {
   type ExplorationGroupNotifier,
 } from "@/modules/wa/application/ports/exploration-group-notifier.port";
 import type { UserRepository } from "@/modules/auth/domain/repositories/user.repository";
+import type {
+  EntityChangeContext,
+  RecordEntityChange,
+} from "@/modules/change-history/application/record-entity-change";
+import { placeSnapshot } from "@/modules/change-history/domain/entity-change";
 import type { PlaceCategoryRepository } from "@/modules/place-category/domain/repositories/place-category.repository";
 import type {
   Place,
@@ -45,15 +50,24 @@ export class CreatePlaceUseCase {
     private readonly repo: PlaceRepository,
     private readonly categories: PlaceCategoryRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
-  async execute(input: CreatePlaceInput): Promise<Place> {
+  async execute(
+    input: CreatePlaceInput,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<Place> {
     await assertCategory(this.categories, input.category);
     const existing = await this.repo.findBySlugAny(input.slug);
     if (existing) {
       throw new ConflictError("SLUG_TAKEN", "Slug place sudah dipakai");
     }
     const place = await this.repo.create(input);
+    await this.changes?.created("place", place.id, placeSnapshot(place), {
+      actorId: ctx?.actorId ?? input.authorId ?? null,
+      sourceContributionId: ctx?.sourceContributionId,
+      requestId: ctx?.requestId,
+    });
     // Activity feed: wisata tayang pertama kali = event activity (AGENTS.md #25).
     if (place.status === "published") {
       await recordPlacePublished(
@@ -89,9 +103,13 @@ export class UpdatePlaceUseCase {
     private readonly repo: PlaceRepository,
     private readonly categories: PlaceCategoryRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
-  async execute(input: UpdatePlaceInput): Promise<Place> {
+  async execute(
+    input: UpdatePlaceInput,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<Place> {
     if (input.category) {
       await assertCategory(this.categories, input.category);
     }
@@ -119,6 +137,19 @@ export class UpdatePlaceUseCase {
     if (!updated) {
       throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
     }
+    if (existingBefore) {
+      await this.changes?.updated(
+        "place",
+        updated.id,
+        placeSnapshot(existingBefore),
+        placeSnapshot(updated),
+        {
+          actorId: ctx?.actorId ?? null,
+          sourceContributionId: ctx?.sourceContributionId,
+          requestId: ctx?.requestId,
+        },
+      );
+    }
     // Activity feed: draft -> published pertama kali = wisata tayang (AGENTS.md #25).
     if (
       updated.status === "published" &&
@@ -139,12 +170,22 @@ export class UpdatePlaceUseCase {
 }
 
 export class DeletePlaceUseCase {
-  constructor(private readonly repo: PlaceRepository) {}
+  constructor(
+    private readonly repo: PlaceRepository,
+    private readonly changes?: RecordEntityChange,
+  ) {}
 
-  async execute(id: string): Promise<void> {
+  async execute(id: string, ctx?: Partial<EntityChangeContext>): Promise<void> {
+    const before = this.changes ? await this.repo.findById(id) : null;
     const ok = await this.repo.softDelete(id);
     if (!ok) {
       throw new NotFoundError("PLACE_NOT_FOUND", "Place tidak ditemukan");
+    }
+    if (before) {
+      await this.changes?.deleted("place", id, placeSnapshot(before), {
+        actorId: ctx?.actorId ?? null,
+        requestId: ctx?.requestId,
+      });
     }
   }
 }
@@ -242,6 +283,7 @@ export class AppendPlaceImagesUseCase {
     private readonly users: UserRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
     private readonly groupNotifier?: ExplorationGroupNotifier,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
   async execute(slug: string, userId: string, urls: string[]): Promise<void> {
@@ -284,6 +326,9 @@ export class AppendPlaceImagesUseCase {
         attribution: { name, provider: "sambasku", authorId: userId },
       })),
     );
+    await this.changes?.photosChanged("place", place.id, "photo_add", fresh.length, {
+      actorId: userId,
+    });
     // #187: satu event per batch unggah (bukan per foto - 5 foto sekali
     // unggah tak boleh jadi 5 baris feed). Dedupe = gabungan URL, jadi
     // retry kiriman sama tidak menulis dua kali.
@@ -317,13 +362,21 @@ export class HidePlaceImageUseCase {
   constructor(
     private readonly repo: PlaceRepository,
     private readonly activityEvents?: RecordActivityEventUseCase,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
-  async execute(placeId: string, imageId: string): Promise<void> {
+  async execute(
+    placeId: string,
+    imageId: string,
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<void> {
     const image = await this.repo.hideImage(placeId, imageId);
     if (!image) {
       throw new NotFoundError("IMAGE_NOT_FOUND", "Foto tidak ditemukan");
     }
+    await this.changes?.photosChanged("place", placeId, "photo_remove", 1, {
+      actorId: ctx?.actorId ?? null,
+    });
     await this.activityEvents?.safeHidePlacePhoto(placeId, image.url);
   }
 }

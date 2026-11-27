@@ -409,6 +409,9 @@ export class PlaceController {
       related: body.related,
       images: mapImages(body.images),
       status: body.status,
+    }, {
+      actorId: c.get("user")?.user_id ?? null,
+      requestId: c.get("requestId") ?? null,
     });
     if (body.related && this.replaceRelated) {
       await this.replaceRelated.execute({
@@ -447,6 +450,9 @@ export class PlaceController {
       related: body.related,
       images: mapImages(body.images),
       status: body.status,
+    }, {
+      actorId: c.get("user")?.user_id ?? null,
+      requestId: c.get("requestId") ?? null,
     });
     if (body.related && this.replaceRelated) {
       await this.replaceRelated.execute({
@@ -495,13 +501,19 @@ export class PlaceController {
     imageId: string,
   ) {
     return this.hideImageUc
-      .execute(placeId, imageId)
+      .execute(placeId, imageId, {
+      actorId: c.get("user")?.user_id ?? null,
+      requestId: c.get("requestId") ?? null,
+    })
       .then(() => c.json({ success: true as const, data: null }));
   }
 
   remove(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.deleteUc
-      .execute(id)
+      .execute(id, {
+      actorId: c.get("user")?.user_id ?? null,
+      requestId: c.get("requestId") ?? null,
+    })
       .then(() => c.json({ success: true as const, data: null }));
   }
 

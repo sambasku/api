@@ -24,6 +24,8 @@ export interface NewAuditLog {
   oldData?: Record<string, unknown> | null;
   newData?: Record<string, unknown> | null;
   requestId?: string | null;
+  /** Usulan/kontribusi asal perubahan (riwayat publik: chip "dari usulan"). */
+  sourceContributionId?: string | null;
 }
 
 export interface AuditLogFilter {
