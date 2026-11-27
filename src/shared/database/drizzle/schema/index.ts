@@ -13,6 +13,7 @@ export * from "./word-classes.schema";
 export * from "./word-edit-suggestions.schema";
 export * from "./words.schema";
 export * from "./word-views.schema";
+export * from "./hot-viewed-slots.schema";
 export * from "./meanings.schema";
 export * from "./meaning-translations.schema";
 export * from "./examples.schema";

@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNull, lt, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, inArray, isNull, lt, ne, notExists, or, sql, type SQL } from 'drizzle-orm';
 import {
   contributionReviews,
   contributions,
@@ -9,12 +9,13 @@ import {
   searchMisses,
   userSkips,
   users,
+  votes,
   wordAudios,
   wordImages,
   words,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
-import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
+import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/app-error';
 import { seededShuffle } from '@/shared/utils/seeded-shuffle';
 import { publishOrMergeMeaningsInTx } from '@/modules/word/infrastructure/publish-or-merge-meanings';
 import type { CursorPage } from '@/modules/word/domain/repositories/word.repository';
@@ -26,15 +27,18 @@ import type {
   MySubmission,
   ReviewOutcome,
 } from '../domain/entities/contribution.entity';
-import type {
-  ApplyChildCorrectionCommand,
-  ChildEntityWithParent,
-  ContributionListFilter,
-  ContributionRepository,
-  MeaningPatch,
-  ClosedLiveContribution,
-  MyContributionListFilter,
-  ReviewCommand,
+import {
+  decodeContributionQueueCursor,
+  encodeContributionQueueCursor,
+  type ApplyChildCorrectionCommand,
+  type ChildEntityWithParent,
+  type ContributionListFilter,
+  type ContributionPriorityTier,
+  type ContributionRepository,
+  type MeaningPatch,
+  type ClosedLiveContribution,
+  type MyContributionListFilter,
+  type ReviewCommand,
 } from '../domain/repositories/contribution.repository';
 
 // Tipe transaction Drizzle (pg) - sama dengan word.repository.impl.ts
@@ -181,8 +185,67 @@ const skippedOnly =
       )
     : undefined;
 
+    const priorityQueue = filter.status === 'pending' && !filter.mine;
+
+    // #371: Antrean Sesi Tinjau (pending, bukan mine):
+    // Tier 0 = belum ada voting sama sekali (urut paling tua dulu)
+    // Tier 1 = ada voting minus (value = -1) pada kontribusi belum diverifikasi
+    // Tier 2 = sisanya (sudah ada voting positif saja, urut paling tua dulu)
+    const voteMatchSql = sql`(
+      (
+        ${contributions.entityType} = 'word'
+        AND (
+          (
+            ${votes.entityType} = 'meaning'
+            AND ${votes.entityId} IN (
+              SELECT ${meanings.id} FROM ${meanings}
+              WHERE ${meanings.wordId} = ${contributions.entityId}
+                AND ${meanings.deletedAt} IS NULL
+            )
+          )
+          OR (
+            ${votes.entityType} = 'word'
+            AND ${votes.entityId} = ${contributions.entityId}
+          )
+        )
+      )
+      OR (
+        ${contributions.entityType} <> 'word'
+        AND ${votes.entityType} = ${contributions.entityType}
+        AND ${votes.entityId} = ${contributions.entityId}
+      )
+    )`;
+    const hasAnyVoteSql = sql`EXISTS (SELECT 1 FROM ${votes} WHERE ${voteMatchSql})`;
+    const hasDownvoteSql = sql`EXISTS (SELECT 1 FROM ${votes} WHERE ${voteMatchSql} AND ${votes.value} = -1)`;
+    const priorityTierExpr = sql<number>`CASE
+      WHEN NOT ${hasAnyVoteSql} THEN 0
+      WHEN ${hasDownvoteSql} THEN 1
+      ELSE 2
+    END`.mapWith(Number);
+
+    let cursorClause: SQL | undefined;
+    if (filter.cursor) {
+      if (priorityQueue) {
+        let decoded;
+        try {
+          decoded = decodeContributionQueueCursor(filter.cursor);
+        } catch {
+          throw new ValidationError([{ field: 'cursor', message: 'Format cursor tidak valid' }]);
+        }
+        cursorClause = sql`(${priorityTierExpr}, ${contributions.id}) > (${decoded.tier}, ${decoded.id})`;
+      } else {
+        if (filter.cursor.length !== 26) {
+          throw new ValidationError([{ field: 'cursor', message: 'Format cursor tidak valid' }]);
+        }
+        cursorClause = lt(contributions.id, filter.cursor);
+      }
+    }
+
     const rows = await this.db
-      .select(contributionColumns)
+      .select({
+        ...contributionColumns,
+        ...(priorityQueue ? { priorityTier: priorityTierExpr } : {}),
+      })
       .from(contributions)
       .leftJoin(users, eq(users.id, contributions.userId))
       .leftJoin(searchMisses, eq(searchMisses.id, contributions.searchMissId))
@@ -193,14 +256,18 @@ const skippedOnly =
           filter.entityType ? eq(contributions.entityType, filter.entityType) : undefined,
           filter.action ? eq(contributions.action, filter.action) : undefined,
           filter.wordId ? this.belongsToWord(filter.wordId) : undefined,
-          filter.cursor ? lt(contributions.id, filter.cursor) : undefined,
+          cursorClause,
           mineScope,
           reopenVisibility,
           hideSkipped,
           skippedOnly,
         ),
       )
-      .orderBy(desc(contributions.id))
+      .orderBy(
+        ...(priorityQueue
+          ? [asc(priorityTierExpr), asc(contributions.id)]
+          : [desc(contributions.id)]),
+      )
       .limit(filter.limit + 1);
 
     const hasMore = rows.length > filter.limit;
@@ -234,15 +301,23 @@ const skippedOnly =
               (item.wordLemma != null && item.wordLemma.trim() !== ''),
           );
     // Acak isi halaman per user (seeded, stabil untuk request identik) supaya
-    // antrean verifikator tidak seragam. Cursor tetap dari keyset id desc -
+    // antrean verifikator tidak seragam. Cursor tetap dari keyset asli -
     // diambil SEBELUM acak agar pagination tidak melompat/duplikat.
-    const lastId = sliced[sliced.length - 1]?.id ?? null;
+    const lastRow = sliced[sliced.length - 1];
+    const nextCursor = !hasMore || !lastRow
+      ? null
+      : priorityQueue
+        ? encodeContributionQueueCursor({
+            tier: ((lastRow as { priorityTier?: number }).priorityTier ?? 2) as ContributionPriorityTier,
+            id: lastRow.id,
+          })
+        : lastRow.id;
     return {
       items:
         filter.randomize === true && !filter.mine && filter.viewerId
           ? seededShuffle(items, `${filter.viewerId}:${filter.status ?? ''}:${filter.cursor ?? ''}`)
           : items,
-      nextCursor: hasMore ? lastId : null,
+      nextCursor,
       hasMore,
     };
   }

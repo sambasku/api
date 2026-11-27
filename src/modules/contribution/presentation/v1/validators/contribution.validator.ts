@@ -27,7 +27,7 @@ export const listContributionsQuerySchema = z.object({
     .optional()
     .transform((v) => v === true || v === 'true' || v === '1'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  cursor: z.string().length(26).optional(),
+  cursor: z.string().trim().min(1).max(128).optional(),
   /**
    * true = acak isi halaman per user (mobile). Default false: console
    * verifikator tetap kronologis.

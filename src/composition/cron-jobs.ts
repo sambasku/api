@@ -80,6 +80,18 @@ export async function runDueBalehoRelease(): Promise<{
   };
 }
 /**
+ * Cron HITS (#372): sinkronisasi slot Top 10 tab viewed (interval 5 menit via
+ * app_settings). Idempoten - tick berulang aman.
+ */
+export async function runDueHotViewedSlotsSync(): Promise<{
+  ran: boolean;
+  pruned: number;
+  recorded: number;
+}> {
+  return di.syncHotViewedSlotsUseCase.execute();
+}
+
+/**
  * Cron WA: reset used_count tiap awal bulan (tanggal 1, 00:00:01 WIB).
  * Idempoten - lazy reset di WaUsageRepository jadi jaring pengaman.
  */

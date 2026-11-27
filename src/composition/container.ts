@@ -160,6 +160,7 @@ import { ListAnnouncementsUseCase } from "@/modules/announcement/application/use
 import { AnnouncementController } from "@/modules/announcement/presentation/v1/announcement.controller";
 import { HotTopicsRepositoryImpl } from "@/modules/hot-topics/infrastructure/hot-topics.repository.impl";
 import { ListHotTopicsUseCase } from "@/modules/hot-topics/application/list-hot-topics.use-case";
+import { SyncHotViewedSlotsUseCase } from "@/modules/hot-topics/application/sync-hot-viewed-slots.use-case";
 import { HotTopicsController } from "@/modules/hot-topics/presentation/v1/hot-topics.controller";
 import { AboutRepositoryImpl } from "@/modules/about/infrastructure/about.repository.impl";
 import {
@@ -1126,6 +1127,11 @@ export const searchMissController = new SearchMissController({
 });
 
 export const hotTopicsRepo = new HotTopicsRepositoryImpl(db);
+export const syncHotViewedSlotsUseCase = new SyncHotViewedSlotsUseCase(
+  hotTopicsRepo,
+  commentBlocklistRepo,
+  appSettingsRepo,
+);
 export const hotTopicsController = new HotTopicsController({
   list: new ListHotTopicsUseCase(hotTopicsRepo, commentBlocklistRepo),
 });

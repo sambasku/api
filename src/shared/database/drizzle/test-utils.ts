@@ -114,6 +114,7 @@ discussions,
   wordVariants,
   meaningVoteCounts,
   meanings,
+  hotViewedSlots,
   wordViews,
   usahaViews,
   karyaViews,
@@ -517,7 +518,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     // meaning_vote_counts FK meanings - wajib sebelum meanings.
     meaningVoteCounts,
     meanings,
-    // word_views FK words - sebelum words.
+    // hot_viewed_slots & word_views FK words - sebelum words.
+    hotViewedSlots,
     wordViews,
     // Detail impor web FK words + web_imports - sebelum keduanya.
     webImportDetails,
