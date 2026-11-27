@@ -40,7 +40,9 @@ import {
   getCurrentWordSnapshot,
   buildDiff,
   asProposed,
+  resolveWordClassDiffs,
 } from './suggestion-snapshot-diff';
+import { wordClassPairsFromSuggestion } from '../domain/word-class-history-diff';
 
 export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
   /** Event log feed (write-through, AGENTS.md #25). Best-effort. */
@@ -1022,7 +1024,14 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
 
     const suggestionMap: Record<
       string,
-      { userId: string; reason: string; reviewedBy: string | null; reviewComment: string | null }
+      {
+        userId: string;
+        reason: string;
+        reviewedBy: string | null;
+        reviewComment: string | null;
+        proposedChanges: unknown;
+        baselineSnapshot: unknown;
+      }
     > = {};
     if (sourceIds.length > 0) {
       const sugRows = await db
@@ -1032,6 +1041,8 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           reason: wordEditSuggestions.reason,
           reviewedBy: wordEditSuggestions.reviewedBy,
           reviewComment: wordEditSuggestions.reviewComment,
+          proposedChanges: wordEditSuggestions.proposedChanges,
+          baselineSnapshot: wordEditSuggestions.baselineSnapshot,
         })
         .from(wordEditSuggestions)
         .where(inArray(wordEditSuggestions.id, sourceIds));
@@ -1041,6 +1052,8 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
           reason: s.reason,
           reviewedBy: s.reviewedBy,
           reviewComment: s.reviewComment,
+          proposedChanges: s.proposedChanges,
+          baselineSnapshot: s.baselineSnapshot,
         };
         userIds.push(s.userId);
         if (s.reviewedBy) userIds.push(s.reviewedBy);
@@ -1048,6 +1061,20 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
     }
 
     const labelMap = await getUserPublicLabels([...new Set(userIds)]);
+
+    // Usulan lama tidak menulis nama kelas ke audit. Satu query untuk semua baris.
+    const classGroups = sourceIds.map((id) => {
+      const sug = suggestionMap[id];
+      if (!sug) return [];
+      return wordClassPairsFromSuggestion(
+        asProposed(sug.proposedChanges),
+        sug.baselineSnapshot as { meanings?: { id?: string; wordClassId?: string | null }[] } | null,
+      );
+    });
+    const classResolved = await resolveWordClassDiffs(classGroups);
+    const classBySuggestion = new Map(
+      sourceIds.map((id, index) => [id, classResolved[index] ?? null]),
+    );
 
     const mapped: ChangeHistoryItem[] = rows.map((r) => {
       const type: ChangeHistoryItem['type'] =
@@ -1060,6 +1087,19 @@ export class WordSuggestionRepositoryImpl implements WordSuggestionRepository {
         r.action === 'duplicate_vote'
           ? this._extractDuplicateVoteChanges(r.newData)
           : this._extractChanges(r.entityType, r.oldData, r.newData);
+      const classDiff = r.sourceContributionId
+        ? classBySuggestion.get(r.sourceContributionId)
+        : null;
+      if (classDiff && !changes.some((change) => change.field === 'word_class')) {
+        changes.push({
+          entity: 'meaning',
+          field: 'word_class',
+          oldValue: classDiff.displayOld,
+          newValue: classDiff.displayNew,
+          displayOld: classDiff.displayOld,
+          displayNew: classDiff.displayNew,
+        });
+      }
       let source: SuggestionSource | null = null;
       if (r.sourceContributionId && suggestionMap[r.sourceContributionId]) {
         const sug = suggestionMap[r.sourceContributionId];

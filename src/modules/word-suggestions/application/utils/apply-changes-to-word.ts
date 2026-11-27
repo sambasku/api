@@ -25,6 +25,7 @@ import { contributions } from '@/shared/database/drizzle/schema';
 import { normalizeLemma } from '@/modules/word/application/utils/normalize-lemma';
 import { generateId } from '@/shared/utils/ulid';
 import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import { resolveWordClassDiffs } from '../../infrastructure/suggestion-snapshot-diff';
 import { isUniqueViolationOn } from '@/shared/database/drizzle/sqlite-errors';
 import {
   loadActiveMeaningIdentities,
@@ -319,6 +320,7 @@ export async function applyChangesToWord(
   await assertWordTypeAllowsComponents(word.id, changes.wordType);
 
   const nextLemma = changes.lemma === undefined ? undefined : normalizeLemma(changes.lemma);
+  const classPairs: { oldId: string | null; newId: string | null }[] = [];
   const oldAudit: Record<string, unknown> = {
     lemma: word.lemma,
     notes: word.notes,
@@ -413,6 +415,10 @@ export async function applyChangesToWord(
             meaningContentChanged = true;
           }
           if (mc.wordClassId !== undefined && mc.wordClassId !== existing.wordClassId) {
+            classPairs.push({
+              oldId: existing.wordClassId ?? null,
+              newId: mc.wordClassId,
+            });
             await db
               .update(meanings)
               .set({ wordClassId: mc.wordClassId, updatedAt: new Date() })
@@ -1061,6 +1067,14 @@ const groupAudit: {
         updatedAt: new Date(),
       })
       .where(and(eq(wordEditSuggestions.id, suggestionId), isNull(wordEditSuggestions.deletedAt)));
+  }
+
+  if (classPairs.length > 0) {
+    const [classDiff] = await resolveWordClassDiffs([classPairs]);
+    if (classDiff) {
+      oldAudit.word_class = classDiff.displayOld;
+      newAudit.word_class = classDiff.displayNew;
+    }
   }
 
   await db

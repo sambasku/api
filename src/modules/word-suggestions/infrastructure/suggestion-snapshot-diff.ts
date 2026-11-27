@@ -3,6 +3,10 @@ import { eq, and, isNull, inArray, asc, sql } from 'drizzle-orm';
 import { db } from '@/shared/database/drizzle/client';
 import { words, meanings, meaningTranslations, examples, pronunciations, wordCategories, wordClasses, lexicalRelations, wordVariants, wordImages, wordGroups, wordGroupMembers } from '@/shared/database/drizzle/schema';
 import type { CurrentWordSnapshot, DiffResult, ProposedChanges } from '../domain/entities/word-suggestion.entity';
+import {
+  formatWordClassDiff,
+  type WordClassHistoryPair,
+} from '../domain/word-class-history-diff';
 import { toUsageLabels } from '@/modules/word/infrastructure/word-row-mappers';
 export async function getCurrentWordSnapshot(wordId: string): Promise<CurrentWordSnapshot | null> {
   const [word] = await db
@@ -244,6 +248,24 @@ async function classLabels(ids: string[]): Promise<Map<string, string>> {
     .from(wordClasses)
     .where(inArray(wordClasses.id, unique));
   return new Map(rows.map((row) => [row.id, row.alias?.trim() || row.name]));
+}
+
+/** Satu query untuk semua grup. Grup kosong atau tanpa perubahan = null. */
+export async function resolveWordClassDiffs(
+  groups: WordClassHistoryPair[][],
+): Promise<({ displayOld: string; displayNew: string } | null)[]> {
+  const ids = groups.flatMap((group) =>
+    group.flatMap((pair) => [pair.oldId, pair.newId].filter((id): id is string => !!id)),
+  );
+  const labels = await classLabels(ids);
+  return groups.map((group) =>
+    formatWordClassDiff(
+      group.map((pair) => ({
+        oldLabel: pair.oldId ? (labels.get(pair.oldId) ?? null) : null,
+        newLabel: pair.newId ? (labels.get(pair.newId) ?? null) : null,
+      })),
+    ),
+  );
 }
 
 export async function buildDiff(proposed: ProposedChanges, current: CurrentWordSnapshot): Promise<DiffResult> {
