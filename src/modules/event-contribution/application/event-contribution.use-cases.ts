@@ -186,6 +186,9 @@ export class EventContributionUseCases {
       placeIds: p.placeIds,
       authorId: row.userId === ANONIM_USER_ID ? null : row.userId,
       status: "published",
+    }, {
+      actorId: row.userId === ANONIM_USER_ID ? null : row.userId,
+      sourceContributionId: id,
     });
     await this.contrib.setStatus(id, "approved", { eventId: event.id });
     await this.notifyDecision(row, "approved", undefined, actorId);

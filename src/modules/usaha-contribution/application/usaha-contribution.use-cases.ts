@@ -4,6 +4,8 @@ import type { InboxNotificationType } from '@/modules/notification/domain/entiti
 import type { RecordInboxNotificationUseCase } from '@/modules/notification/application/use-cases/record-inbox-notification.use-case';
 import type { ActivityEventRepository } from '@/modules/activity/domain/repositories/activity-event.repository';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import type { RecordEntityChange } from '@/modules/change-history/application/record-entity-change';
+import { usahaSnapshot } from '@/modules/change-history/domain/entity-change';
 import {
   CreateUsahaUseCase,
   UniqueUsahaSlugUseCase,
@@ -137,6 +139,7 @@ export class UsahaContributionUseCases {
     private readonly notifyUser?: NotifyUserUseCase,
     private readonly activityEvents?: Pick<ActivityEventRepository, 'append'>,
     private readonly groupNotifier?: ExplorationGroupNotifier,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
   private async notifyGroup(
@@ -438,6 +441,10 @@ export class UsahaContributionUseCases {
           priceText: it.priceText ?? null,
           imageUrl: it.imageUrl ?? null,
         })),
+      }, {
+        actorId: row.userId === ANONIM_USER_ID ? null : row.userId,
+        sourceContributionId: id,
+        requestId: requestId ?? null,
       });
       await this.contrib.setStatus(id, 'approved', { resultUsahaId: usaha.id });
 
@@ -535,6 +542,25 @@ export class UsahaContributionUseCases {
         break;
       default:
         break;
+    }
+
+    // Riwayat publik: beda snapshot (profil, status operasional, arsip/pulih).
+    // Aksi katalog item tidak ada di snapshot -> tidak menulis baris.
+    if (this.changes) {
+      const after = await this.usahas.findById(usaha.id);
+      if (after) {
+        await this.changes.updated(
+          'usaha',
+          usaha.id,
+          usahaSnapshot(usaha),
+          usahaSnapshot(after),
+          {
+            actorId: row.userId === ANONIM_USER_ID ? null : row.userId,
+            sourceContributionId: id,
+            requestId: requestId ?? null,
+          },
+        );
+      }
     }
 
     await this.contrib.setStatus(id, 'approved');

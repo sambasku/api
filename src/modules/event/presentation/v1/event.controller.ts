@@ -37,6 +37,11 @@ import type {
   updateEventBodySchema,
 } from "./validators/event.validator";
 
+/** Konteks riwayat perubahan: pelaku = user login (admin). */
+function changeCtx(c: Context<{ Variables: AppVariables }>) {
+  return { actorId: c.get("user")?.user_id ?? null, requestId: c.get("requestId") ?? null };
+}
+
 function requireUser(c: Context<{ Variables: AppVariables }>): AuthUser {
   const user = c.get('user');
   if (!user) throw new UnauthorizedError();
@@ -348,7 +353,7 @@ export class EventController {
         placeIds: body.place_ids,
         authorId: body.author_id ?? c.get("user")?.user_id ?? null,
         status: body.status,
-      })
+      }, changeCtx(c))
       .then((event) =>
         c.json({
           success: true as const,
@@ -383,7 +388,7 @@ export class EventController {
         villageId: body.village_id,
         placeIds: body.place_ids,
         status: body.status,
-      })
+      }, changeCtx(c))
       .then((event) =>
         c.json({
           success: true as const,
@@ -396,7 +401,7 @@ export class EventController {
   }
 
   remove(c: Context<{ Variables: AppVariables }>, id: string) {
-    return this.deleteUc.execute(id).then(() =>
+    return this.deleteUc.execute(id, changeCtx(c)).then(() =>
       c.json({ success: true as const, data: null }),
     );
   }
@@ -406,7 +411,7 @@ export class EventController {
     id: string,
     body: { cancelled: boolean },
   ) {
-    return this.setCancelledUc.execute(id, body.cancelled).then((event) =>
+    return this.setCancelledUc.execute(id, body.cancelled, changeCtx(c)).then((event) =>
       c.json({
           success: true as const,
           data: serialize(event, {
@@ -586,7 +591,7 @@ export class EventController {
 
   async hideImage(c: Context<{ Variables: AppVariables }>) {
     const { id, imageId } = c.req.valid('param' as never) as { id: string; imageId: string };
-    await this.images.hideImage.execute(id, imageId);
+    await this.images.hideImage.execute(id, imageId, changeCtx(c));
     return c.json({ success: true as const, data: null });
   }
 }

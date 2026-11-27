@@ -306,7 +306,9 @@ export class KaryaController {
     id: string,
     body: z.infer<typeof karyaFieldsSchema>,
   ) {
-    const row = await this.uc.adminUpdate(id, fieldsFrom(body));
+    const row = await this.uc.adminUpdate(id, fieldsFrom(body), {
+      actorId: requireUserId(c),
+    });
     if (body.related && this.replaceRelated) {
       await this.replaceRelated.execute({
         anchor: { kind: 'karya', id: row.id },
@@ -318,7 +320,7 @@ export class KaryaController {
   }
 
   async adminPublish(c: Context, id: string, published: boolean) {
-    await this.uc.adminSetPublish(id, published);
+    await this.uc.adminSetPublish(id, published, { actorId: requireUserId(c) });
     return c.json({ success: true as const, data: null });
   }
 

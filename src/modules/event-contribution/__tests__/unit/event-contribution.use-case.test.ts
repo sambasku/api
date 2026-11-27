@@ -265,6 +265,7 @@ describe("EventContributionUseCases - approve", () => {
         status: "published",
         sourceUrl: "https://facebook.com/pawai.blocks",
       }),
+      expect.objectContaining({ sourceContributionId: "01CONTRIB0000000000000000001" }),
     );
     expect(contrib.setStatus).toHaveBeenCalledWith(
       "01CONTRIB0000000000000000001",

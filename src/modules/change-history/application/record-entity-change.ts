@@ -96,3 +96,12 @@ export class RecordEntityChange {
     });
   }
 }
+
+/** Normalisasi ctx opsional dari use-case jadi EntityChangeContext lengkap. */
+export function toChangeCtx(ctx?: Partial<EntityChangeContext>): EntityChangeContext {
+  return {
+    actorId: ctx?.actorId ?? null,
+    sourceContributionId: ctx?.sourceContributionId,
+    requestId: ctx?.requestId,
+  };
+}

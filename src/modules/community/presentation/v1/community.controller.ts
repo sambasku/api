@@ -182,7 +182,9 @@ export class CommunityController {
     if (body.is_featured_kind !== undefined) {
       patch.isFeaturedKind = body.is_featured_kind;
     }
-    const row = await this.uc.adminUpdate(id, patch);
+    const row = await this.uc.adminUpdate(id, patch, {
+      actorId: requireUserId(c),
+    });
     return c.json({ success: true as const, data: toOrgWire(row, true) });
   }
 
@@ -191,7 +193,7 @@ export class CommunityController {
     id: string,
     body: z.infer<typeof setCommunityStatusSchema>,
   ) {
-    await this.uc.adminSetStatus(id, body.status);
+    await this.uc.adminSetStatus(id, body.status, { actorId: requireUserId(c) });
     return c.json({ success: true as const, data: { ok: true } });
   }
 

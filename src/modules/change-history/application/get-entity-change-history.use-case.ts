@@ -21,6 +21,11 @@ export interface EntityChangeHistoryItem {
 const NOT_FOUND: Record<ExploreEntityType, [string, string]> = {
   place: ['PLACE_NOT_FOUND', 'Wisata tidak ditemukan'],
   cuisine: ['CUISINE_NOT_FOUND', 'Kuliner tidak ditemukan'],
+  usaha: ['USAHA_NOT_FOUND', 'Usaha tidak ditemukan'],
+  event: ['EVENT_NOT_FOUND', 'Acara tidak ditemukan'],
+  karya: ['KARYA_NOT_FOUND', 'Karya tidak ditemukan'],
+  layanan: ['LAYANAN_NOT_FOUND', 'Layanan tidak ditemukan'],
+  community: ['COMMUNITY_NOT_FOUND', 'Komunitas tidak ditemukan'],
 };
 
 export class GetEntityChangeHistoryUseCase {

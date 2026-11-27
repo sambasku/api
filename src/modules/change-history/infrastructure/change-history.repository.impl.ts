@@ -1,6 +1,16 @@
 import { and, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
-import { auditLogs, cuisines, places, users } from '@/shared/database/drizzle/schema';
+import {
+  auditLogs,
+  communityOrgs,
+  cuisines,
+  events,
+  karyas,
+  layanans,
+  places,
+  usahas,
+  users,
+} from '@/shared/database/drizzle/schema';
 import type { ExploreEntityType } from '../domain/entity-change';
 
 /** Aksi audit yang boleh tampil di riwayat publik (selain itu = catatan internal). */
@@ -40,27 +50,63 @@ export interface ChangeHistoryRepository {
 export class ChangeHistoryRepositoryImpl implements ChangeHistoryRepository {
   constructor(private readonly db: AppDatabase) {}
 
+  // 1 query: slug -> id entitas yang tayang. Tiap tabel punya kolom status/soft-delete sendiri.
   async resolvePublishedId(entityType: ExploreEntityType, slug: string): Promise<string | null> {
-    if (entityType === 'place') {
-      const [row] = await this.db
-        .select({ id: places.id })
-        .from(places)
-        .where(and(eq(places.slug, slug), eq(places.status, 'published'), isNull(places.deletedAt)))
-        .limit(1);
-      return row?.id ?? null;
-    }
-    const [row] = await this.db
-      .select({ id: cuisines.id })
-      .from(cuisines)
-      .where(
-        and(
-          eq(cuisines.slug, slug),
-          eq(cuisines.publishStatus, 'published'),
-          isNull(cuisines.deletedAt),
-        ),
-      )
-      .limit(1);
+    const { table, where } = this.publishedLookup(entityType, slug);
+    const [row] = await this.db.select({ id: table.id }).from(table).where(where).limit(1);
     return row?.id ?? null;
+  }
+
+  private publishedLookup(entityType: ExploreEntityType, slug: string) {
+    switch (entityType) {
+      case 'place':
+        return {
+          table: places,
+          where: and(eq(places.slug, slug), eq(places.status, 'published'), isNull(places.deletedAt)),
+        };
+      case 'cuisine':
+        return {
+          table: cuisines,
+          where: and(
+            eq(cuisines.slug, slug),
+            eq(cuisines.publishStatus, 'published'),
+            isNull(cuisines.deletedAt),
+          ),
+        };
+      case 'usaha':
+        return {
+          table: usahas,
+          where: and(
+            eq(usahas.slug, slug),
+            eq(usahas.publishStatus, 'published'),
+            isNull(usahas.deletedAt),
+          ),
+        };
+      case 'event':
+        return {
+          table: events,
+          where: and(eq(events.slug, slug), eq(events.status, 'published'), isNull(events.deletedAt)),
+        };
+      case 'karya':
+        return {
+          table: karyas,
+          where: and(
+            eq(karyas.slug, slug),
+            eq(karyas.publishStatus, 'published'),
+            isNull(karyas.deletedAt),
+          ),
+        };
+      case 'layanan':
+        return {
+          table: layanans,
+          where: and(eq(layanans.slug, slug), eq(layanans.publishStatus, 'published')),
+        };
+      case 'community':
+        return {
+          table: communityOrgs,
+          where: and(eq(communityOrgs.slug, slug), eq(communityOrgs.status, 'published')),
+        };
+    }
   }
 
   // 1 query: audit_logs LEFT JOIN users (aktor). ULID = urut waktu, cursor = id terakhir.

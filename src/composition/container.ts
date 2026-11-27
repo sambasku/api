@@ -1286,12 +1286,12 @@ export const eventGoingController = new EventGoingController({
   list: new ListEventGoingsUseCase(eventGoingRepo),
 });
 export const eventController = new EventController(
-  new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
-  new UpdateEventUseCase(eventRepo, regionRepo, activityEvents),
-  new DeleteEventUseCase(eventRepo),
+  new CreateEventUseCase(eventRepo, regionRepo, activityEvents, recordEntityChange),
+  new UpdateEventUseCase(eventRepo, regionRepo, activityEvents, recordEntityChange),
+  new DeleteEventUseCase(eventRepo, recordEntityChange),
   new ListEventsUseCase(eventRepo),
   new GetEventBySlugUseCase(eventRepo),
-  new SetEventCancelledUseCase(eventRepo),
+  new SetEventCancelledUseCase(eventRepo, recordEntityChange),
   new ListEventCategoriesUseCase(eventRepo),
   {
     listComments: new ListEventCommentsUseCase(eventRepo),
@@ -1323,8 +1323,14 @@ export const eventController = new EventController(
   },
   {
     listImages: new ListEventImagesUseCase(eventRepo),
-    appendImages: new AppendEventImagesUseCase(eventRepo, userRepo, activityEvents, explorationGroupNotifier),
-    hideImage: new HideEventImageUseCase(eventRepo, activityEvents),
+    appendImages: new AppendEventImagesUseCase(
+      eventRepo,
+      userRepo,
+      activityEvents,
+      explorationGroupNotifier,
+      recordEntityChange,
+    ),
+    hideImage: new HideEventImageUseCase(eventRepo, activityEvents, recordEntityChange),
   },
   eventGoingRepo,
   listRelatedContent,
@@ -1334,7 +1340,7 @@ export const eventContributionController = new EventContributionController(
     new EventContributionRepositoryImpl(db),
     eventRepo,
     regionRepo,
-    new CreateEventUseCase(eventRepo, regionRepo, activityEvents),
+    new CreateEventUseCase(eventRepo, regionRepo, activityEvents, recordEntityChange),
     recordInbox,
     notifyUser,
     explorationGroupNotifier,
@@ -1357,20 +1363,26 @@ export const usahaCategoryController = new UsahaCategoryController(
   new ListUsahaCategoryCatalogUseCase(usahaCategoryRepo),
   new GetUsahaCategoryUseCase(usahaCategoryRepo),
 );
-export const createUsahaUc = new CreateUsahaUseCase(usahaRepo, regionRepo);
+export const createUsahaUc = new CreateUsahaUseCase(usahaRepo, regionRepo, recordEntityChange);
 export const usahaController = new UsahaController(
   createUsahaUc,
-  new UpdateUsahaUseCase(usahaRepo, regionRepo),
-  new DeleteUsahaUseCase(usahaRepo),
+  new UpdateUsahaUseCase(usahaRepo, regionRepo, recordEntityChange),
+  new DeleteUsahaUseCase(usahaRepo, recordEntityChange),
   new ListUsahasUseCase(usahaRepo),
   new GetUsahaBySlugUseCase(usahaRepo),
-  new RestrictUsahaUseCase(usahaRepo),
-  new RestoreUsahaUseCase(usahaRepo),
+  new RestrictUsahaUseCase(usahaRepo, recordEntityChange),
+  new RestoreUsahaUseCase(usahaRepo, recordEntityChange),
   new ListUsahaCategoriesUseCase(usahaRepo),
   new FindUsahaDuplicatesUseCase(usahaRepo),
   new ListUsahaImagesUseCase(usahaRepo),
-  new AppendUsahaImagesUseCase(usahaRepo, userRepo, activityEvents, explorationGroupNotifier),
-  new HideUsahaImageUseCase(usahaRepo),
+  new AppendUsahaImagesUseCase(
+    usahaRepo,
+    userRepo,
+    activityEvents,
+    explorationGroupNotifier,
+    recordEntityChange,
+  ),
+  new HideUsahaImageUseCase(usahaRepo, recordEntityChange),
   listRelatedContent,
   usahaVisitRepo,
   {
@@ -1421,6 +1433,7 @@ export const usahaContributionUseCases = new UsahaContributionUseCases(
   notifyUser,
   activityEventRepo,
   explorationGroupNotifier,
+  recordEntityChange,
 );
 export const usahaContributionController = new UsahaContributionController(
   usahaContributionUseCases,
@@ -1444,6 +1457,7 @@ export const layananController = new LayananController(
     regionRepo,
     activityEvents,
     explorationGroupNotifier,
+    recordEntityChange,
   ),
   listRelatedContent,
 );
@@ -1451,6 +1465,7 @@ export const communityRepo = new CommunityRepositoryImpl(db);
 export const communityUseCases = new CommunityUseCases(
   communityRepo,
   activityEvents,
+  recordEntityChange,
 );
 export const communityController = new CommunityController(communityUseCases);
 export const karyaLemmaLinkController = new KaryaLemmaLinkController({
@@ -1470,6 +1485,7 @@ export const karyaController = new KaryaController(
     activityEvents,
     new ResolveKaryaRelated(db),
     explorationGroupNotifier,
+    recordEntityChange,
   ),
   listRelatedContent,
   replaceContentLinks,

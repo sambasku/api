@@ -42,7 +42,15 @@ export const entityChangeHistoryResponseSchema = z.object({
   }),
 });
 
-const TAGS: Record<ExploreEntityType, string> = { place: 'Places', cuisine: 'Culinary' };
+const TAGS: Record<ExploreEntityType, string> = {
+  place: 'Places',
+  cuisine: 'Culinary',
+  usaha: 'Usaha',
+  event: 'Events',
+  karya: 'Karya',
+  layanan: 'Layanan',
+  community: 'Community',
+};
 
 /**
  * PUBLIK: `GET /:slug/change-history` untuk satu jenis entitas eksplorasi.

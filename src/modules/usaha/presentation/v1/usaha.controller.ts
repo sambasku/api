@@ -185,6 +185,11 @@ type ListRelatedFn = {
   >;
 };
 
+/** Konteks riwayat perubahan: pelaku = user login (admin), bukan tamu. */
+function changeCtx(c: Context<{ Variables: AppVariables }>) {
+  return { actorId: c.get('user')?.user_id ?? null, requestId: c.get('requestId') ?? null };
+}
+
 export class UsahaController {
   constructor(
     private readonly createUc: CreateUsahaUseCase,
@@ -336,7 +341,7 @@ export class UsahaController {
         publishStatus: body.publish_status,
         operationalStatus: body.operational_status,
         authorId: c.get('user')?.user_id ?? null,
-      })
+      }, changeCtx(c))
       .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
   }
 
@@ -362,25 +367,25 @@ export class UsahaController {
         coverUrl: body.cover_url,
         publishStatus: body.publish_status,
         operationalStatus: body.operational_status,
-      })
+      }, changeCtx(c))
       .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
   }
 
   remove(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.deleteUc
-      .execute(id)
+      .execute(id, changeCtx(c))
       .then(() => c.json({ success: true as const, data: null }));
   }
 
   restrict(c: Context<{ Variables: AppVariables }>, id: string, reason: string) {
     return this.restrictUc
-      .execute(id, reason)
+      .execute(id, reason, changeCtx(c))
       .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
   }
 
   restore(c: Context<{ Variables: AppVariables }>, id: string) {
     return this.restoreUc
-      .execute(id)
+      .execute(id, changeCtx(c))
       .then((usaha) => c.json({ success: true as const, data: serialize(usaha) }));
   }
 
@@ -436,7 +441,7 @@ export class UsahaController {
     imageId: string,
   ) {
     return this.hideImageUc
-      .execute(usahaId, imageId)
+      .execute(usahaId, imageId, changeCtx(c))
       .then(() => c.json({ success: true as const, data: null }));
   }
 

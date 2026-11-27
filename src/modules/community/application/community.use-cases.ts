@@ -1,5 +1,11 @@
 import type { RecordActivityEventUseCase } from '@/modules/activity/application/use-cases/record-activity-event.use-case';
 import {
+  toChangeCtx,
+  type EntityChangeContext,
+  type RecordEntityChange,
+} from '@/modules/change-history/application/record-entity-change';
+import { communitySnapshot } from '@/modules/change-history/domain/entity-change';
+import {
   ConflictError,
   NotFoundError,
   ValidationError,
@@ -38,6 +44,7 @@ export class CommunityUseCases {
   constructor(
     private readonly repo: CommunityRepository,
     private readonly activity: RecordActivityEventUseCase,
+    private readonly changes?: RecordEntityChange,
   ) {}
 
   listCategories() {
@@ -83,6 +90,9 @@ export class CommunityUseCases {
       slug,
       authorId,
     });
+    await this.changes?.created('community', row.id, communitySnapshot(row), {
+      actorId: authorId,
+    });
     await this.emitPublished(row);
     return row;
   }
@@ -90,8 +100,9 @@ export class CommunityUseCases {
   async adminUpdate(
     id: string,
     fields: Partial<CommunityOrgFields>,
+    ctx?: Partial<EntityChangeContext>,
   ): Promise<CommunityOrg> {
-    await this.mustOrg(id);
+    const before = await this.mustOrg(id);
     const patch: Partial<CommunityOrgFields> = {};
     if (fields.name !== undefined) patch.name = fields.name.trim();
     if (fields.categoryId !== undefined) {
@@ -113,12 +124,31 @@ export class CommunityUseCases {
       }
     }
     await this.repo.updateOrg(id, patch);
-    return (await this.repo.findById(id))!;
+    const after = (await this.repo.findById(id))!;
+    await this.changes?.updated(
+      'community',
+      id,
+      communitySnapshot(before),
+      communitySnapshot(after),
+      toChangeCtx(ctx),
+    );
+    return after;
   }
 
-  async adminSetStatus(id: string, status: CommunityOrg['status']): Promise<void> {
-    await this.mustOrg(id);
+  async adminSetStatus(
+    id: string,
+    status: CommunityOrg['status'],
+    ctx?: Partial<EntityChangeContext>,
+  ): Promise<void> {
+    const before = await this.mustOrg(id);
     await this.repo.updateOrg(id, { status });
+    await this.changes?.updated(
+      'community',
+      id,
+      communitySnapshot(before),
+      communitySnapshot({ ...before, status }),
+      toChangeCtx(ctx),
+    );
   }
 
   async submitProposal(
@@ -227,6 +257,10 @@ export class CommunityUseCases {
       isFeaturedKind,
       slug,
       authorId: row.userId,
+    });
+    await this.changes?.created('community', created.id, communitySnapshot(created), {
+      actorId: row.userId,
+      sourceContributionId: id,
     });
     await this.repo.updateProposal(id, {
       status: 'approved',

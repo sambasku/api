@@ -248,6 +248,14 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
       optionalAuthenticate: di.optionalAuthenticate,
     }),
   );
+  // Riwayat perubahan publik: wajib sebelum route ber-auth (`use('*')`) di prefix yang sama.
+  app.route(
+    "/api/v1/events",
+    createEntityChangeHistoryRoutes({
+      entityType: "event",
+      useCase: di.getEntityChangeHistoryUseCase,
+    }),
+  );
   app.route(
     "/api/v1/events",
     createEventGoingRoutes({
@@ -434,6 +442,13 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
   app.route(
     "/api/v1/community",
     createPublicCommunityRoutes({ controller: di.communityController }),
+  );
+  app.route(
+    "/api/v1/community/orgs",
+    createEntityChangeHistoryRoutes({
+      entityType: "community",
+      useCase: di.getEntityChangeHistoryUseCase,
+    }),
   );
   app.route(
     "/api/v1/community",
@@ -639,6 +654,20 @@ app.route(
       useCase: di.getEntityChangeHistoryUseCase,
     }),
   );
+  // Riwayat perubahan publik (fase 2): GET /:slug/change-history per entitas.
+  for (const [prefix, entityType] of [
+    ["/api/v1/usaha", "usaha"],
+    ["/api/v1/karya", "karya"],
+    ["/api/v1/layanan", "layanan"],
+  ] as const) {
+    app.route(
+      prefix,
+      createEntityChangeHistoryRoutes({
+        entityType,
+        useCase: di.getEntityChangeHistoryUseCase,
+      }),
+    );
+  }
   app.route(
     "/api/v1/culinary",
     createPublicCulinaryRoutes({ controller: di.culinaryController, optionalAuthenticate: di.optionalAuthenticate }),
