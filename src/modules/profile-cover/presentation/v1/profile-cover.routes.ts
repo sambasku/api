@@ -15,7 +15,7 @@ const json = <T extends z.ZodType>(schema: T) => ({
   'application/json': { schema },
 });
 
-const variantSchema = z.enum(['tab', 'public', 'wotd']);
+const variantSchema = z.enum(['tab', 'public', 'wotd', 'layanan']);
 
 const adminItemSchema = z.object({
   id: z.string(),
@@ -73,6 +73,7 @@ export function createPublicProfileCoverRoutes(deps: {
               tab_url: z.string().nullable(),
               public_url: z.string().nullable(),
               wotd_url: z.string().nullable(),
+              layanan_url: z.string().nullable(),
             }),
           }),
         ),

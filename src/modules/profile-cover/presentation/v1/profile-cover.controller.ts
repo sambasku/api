@@ -1,6 +1,9 @@
 import type { Context } from 'hono';
 import type { AppVariables } from '@/shared/types';
-import type { ProfileCover } from '../../domain/entities/profile-cover.entity';
+import type {
+  ProfileCover,
+  ProfileCoverVariant,
+} from '../../domain/entities/profile-cover.entity';
 import type {
   ActivateProfileCoverUseCase,
   CreateProfileCoverUseCase,
@@ -45,13 +48,14 @@ export class ProfileCoverController {
         tab_url: active.tabUrl,
         public_url: active.publicUrl,
         wotd_url: active.wotdUrl,
+        layanan_url: active.layananUrl,
       },
     });
   }
 
   async listAdmin(
     c: Context<{ Variables: AppVariables }>,
-    query: { variant: 'tab' | 'public' | 'wotd' },
+    query: { variant: ProfileCoverVariant },
   ) {
     const items = await this.deps.list.execute(query.variant);
     return c.json({

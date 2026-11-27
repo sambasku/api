@@ -1,6 +1,6 @@
-export type ProfileCoverVariant = 'tab' | 'public' | 'wotd';
+export type ProfileCoverVariant = 'tab' | 'public' | 'wotd' | 'layanan';
 
-export const PROFILE_COVER_VARIANTS = ['tab', 'public', 'wotd'] as const;
+export const PROFILE_COVER_VARIANTS = ['tab', 'public', 'wotd', 'layanan'] as const;
 
 export const PROFILE_COVER_DIMENSIONS: Record<
   ProfileCoverVariant,
@@ -10,6 +10,8 @@ export const PROFILE_COVER_DIMENSIONS: Record<
   public: { width: 1032, height: 534 },
   /** Kartu Kata Hari Ini (strip beranda mobile, ~5.86:1). */
   wotd: { width: 1032, height: 176 },
+  /** Detail Layanan Publik (ProfileHeaderVariant.compact). */
+  layanan: { width: 1032, height: 534 },
 };
 
 export interface ProfileCover {
@@ -30,4 +32,5 @@ export interface ActiveProfileCovers {
   tabUrl: string | null;
   publicUrl: string | null;
   wotdUrl: string | null;
+  layananUrl: string | null;
 }

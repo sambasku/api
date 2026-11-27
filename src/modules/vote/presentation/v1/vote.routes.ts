@@ -12,6 +12,7 @@ import {
   toggleVoteResponseSchema,
   toggleVoteSchema,
   voteCountsResponseSchema,
+  voteCheckDeckQuerySchema,
   voteDeckQuerySchema,
   voteDeckResponseSchema,
   voteHistoryQuerySchema,
@@ -188,7 +189,7 @@ export function createVoteRoutes(deps: VoteRoutesDeps) {
     summary:
       'Antrean makna published belum verified yang user belum vote - Periksa Kata (login)',
     request: {
-      query: voteDeckQuerySchema,
+      query: voteCheckDeckQuerySchema,
     },
     responses: {
       200: { description: 'Daftar kartu Periksa Kata', content: json(voteDeckResponseSchema) },

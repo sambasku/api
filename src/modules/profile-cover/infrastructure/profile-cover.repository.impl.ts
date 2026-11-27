@@ -59,12 +59,14 @@ export class ProfileCoverRepositoryImpl implements ProfileCoverRepository {
     let tabUrl: string | null = null;
     let publicUrl: string | null = null;
     let wotdUrl: string | null = null;
+    let layananUrl: string | null = null;
     for (const row of rows) {
       if (row.variant === 'tab') tabUrl = row.url;
       if (row.variant === 'public') publicUrl = row.url;
       if (row.variant === 'wotd') wotdUrl = row.url;
+      if (row.variant === 'layanan') layananUrl = row.url;
     }
-    return { tabUrl, publicUrl, wotdUrl };
+    return { tabUrl, publicUrl, wotdUrl, layananUrl };
   }
 
   async create(input: CreateProfileCoverInput): Promise<ProfileCover> {
