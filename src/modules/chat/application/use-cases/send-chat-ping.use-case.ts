@@ -116,7 +116,7 @@ export class SendChatPingUseCase {
         name: CHAT_PING_BODY,
         userId,
         eventKey: CHAT_PING_GROUP_EVENT_KEY,
-        text: `${CHAT_PING_BODY} dari @${user.username} di chat SambasKu. Yuk ngobrol.`,
+        text: `${CHAT_PING_BODY} dari @${user.username} di chat SambasKu.`,
       });
     } catch {
       // Gagal kirim grup tidak membatalkan ping.

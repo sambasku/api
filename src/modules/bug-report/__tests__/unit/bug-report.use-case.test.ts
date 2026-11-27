@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ValidationError, NotFoundError } from '@/shared/errors/app-error';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { CreateBugReportUseCase } from '../../application/use-cases/create-bug-report.use-case';
 import { ResolveBugReportUseCase } from '../../application/use-cases/resolve-bug-report.use-case';
 import type { BugReportRepository } from '../../domain/repositories/bug-report.repository';
@@ -129,6 +130,61 @@ describe('CreateBugReportUseCase', () => {
       platform: 'ios',
     });
     expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ userId: USER }));
+  });
+
+  it('login → kabar WA grup laporan masalah', async () => {
+    const repo = makeRepo({ create: vi.fn().mockResolvedValue(makeReport({ userId: USER })) });
+    const groupNotifier = { notify: vi.fn().mockResolvedValue(undefined) };
+    const uc = new CreateBugReportUseCase(repo, makeAudit(), groupNotifier);
+    await uc.execute({
+      userId: USER,
+      deviceId: DEVICE,
+      description: 'Tombol upvote tidak merespons di halaman detail',
+      images: [image],
+      appVersion: '0.1.0',
+      platform: 'android',
+    });
+    expect(groupNotifier.notify).toHaveBeenCalledWith({
+      heading: 'Laporan masalah baru.',
+      jenis: 'Laporan masalah (android, 0.1.0, 1 gambar)',
+      name: `Tombol upvote tidak merespons di halaman detail\n${image.url}`,
+      userId: USER,
+      eventKey: 'bug_report_submitted',
+    });
+  });
+
+  it('tamu → kabar WA grup sebagai Anonim', async () => {
+    const groupNotifier = { notify: vi.fn().mockResolvedValue(undefined) };
+    const uc = new CreateBugReportUseCase(makeRepo(), makeAudit(), groupNotifier);
+    await uc.execute({
+      userId: null,
+      deviceId: DEVICE,
+      description: 'Tombol upvote tidak merespons di halaman detail',
+      images: [],
+      appVersion: null,
+      platform: null,
+    });
+    expect(groupNotifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: ANONIM_USER_ID,
+        jenis: 'Laporan masalah',
+        eventKey: 'bug_report_submitted',
+      }),
+    );
+  });
+
+  it('gagal kirim WA grup tidak membatalkan laporan', async () => {
+    const groupNotifier = { notify: vi.fn().mockRejectedValue(new Error('wa down')) };
+    const uc = new CreateBugReportUseCase(makeRepo(), makeAudit(), groupNotifier);
+    const row = await uc.execute({
+      userId: USER,
+      deviceId: DEVICE,
+      description: 'Tombol upvote tidak merespons di halaman detail',
+      images: [],
+      appVersion: null,
+      platform: null,
+    });
+    expect(row.id).toBe(ID);
   });
 });
 

@@ -235,8 +235,9 @@ SELECT group_concat(DISTINCT ai.provider) FROM auth_identities ai
 WHERE ai.user_id = users.id AND ai.deleted_at IS NULL
 )`,
 // OTP verifikasi terakhir (email_verification_otps) - scalar subquery, tetap
-// 1 query. Kolom timestamps mode 'timestamp' Drizzle; max() di SQLite kembali
-// sebagai epoch integer, konversi manual di mapper bawah.
+// 1 query. Kolom timestamps mode 'timestamp' Drizzle menyimpan epoch DETIK;
+// raw SQL max() melewati decoder Drizzle, jadi mapper bawah wajib kalikan 1000
+// sebelum `new Date()` (JS Date pakai milidetik).
 otpCreatedAt: sql<number | null>`(
 SELECT max(o.created_at) FROM email_verification_otps o
 WHERE o.user_id = users.id
@@ -285,9 +286,9 @@ const entity = toEntity({ ...r, passwordHash: null } as unknown as UserRow, role
 return {
 ...entity,
 authProviders: r.authProviders ? r.authProviders.split(',') : [],
-// Enrichment OTP admin: epoch integer dari scalar subquery -> Date.
-otpCreatedAt: r.otpCreatedAt != null ? new Date(r.otpCreatedAt) : null,
-otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt) : null,
+// Enrichment OTP admin: epoch DETIK dari scalar subquery -> Date (x1000 ke ms).
+otpCreatedAt: r.otpCreatedAt != null ? new Date(r.otpCreatedAt * 1000) : null,
+otpExpiresAt: r.otpExpiresAt != null ? new Date(r.otpExpiresAt * 1000) : null,
 };
 }),
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1].id : null,

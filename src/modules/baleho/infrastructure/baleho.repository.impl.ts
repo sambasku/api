@@ -14,6 +14,7 @@ import {
   type BalehoPlacementStatus,
 } from '@/shared/database/drizzle/schema/baleho.schema';
 import { users } from '@/shared/database/drizzle/schema/users.schema';
+import { words } from '@/shared/database/drizzle/schema/words.schema';
 import { isUniqueViolation } from '@/shared/database/drizzle/sqlite-errors';
 import { ConflictError } from '@/shared/errors/app-error';
 import { generateId } from '@/shared/utils/ulid';
@@ -23,6 +24,7 @@ import type {
   BalehoFrame,
   BalehoPlacementView,
   CreateBalehoPlacementInput,
+  KosakataBoardStats,
 } from '../domain/baleho';
 import type { BalehoRepository } from '../domain/repositories/baleho.repository';
 import {
@@ -180,6 +182,25 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         ),
       );
     return Number(rows[0]?.n ?? 0);
+  }
+
+  async countKosakataStats(): Promise<KosakataBoardStats> {
+    const rows = await this.db
+      .select({
+        total: sql<number>`coalesce(sum(case when ${words.status} != 'draft' then 1 else 0 end), 0)`,
+        verified: sql<number>`coalesce(sum(case when ${words.isVerified} = 1 and ${words.status} = 'published' then 1 else 0 end), 0)`,
+        queue: sql<number>`coalesce(sum(case when ${words.status} = 'pending_review' then 1 else 0 end), 0)`,
+        rejected: sql<number>`coalesce(sum(case when ${words.status} = 'rejected' then 1 else 0 end), 0)`,
+      })
+      .from(words)
+      .where(isNull(words.deletedAt));
+    const row = rows[0];
+    return {
+      total: Number(row?.total ?? 0),
+      verified: Number(row?.verified ?? 0),
+      queue: Number(row?.queue ?? 0),
+      rejected: Number(row?.rejected ?? 0),
+    };
   }
 
   async hasActiveFingerprint(

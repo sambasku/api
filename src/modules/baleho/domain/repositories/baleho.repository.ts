@@ -2,11 +2,14 @@ import type {
   BalehoBoard,
   BalehoCreativeMeta,
   CreateBalehoPlacementInput,
+  KosakataBoardStats,
 } from '../baleho';
 import type { BalehoPlacementStatus } from '@/shared/database/drizzle/schema/baleho.schema';
 
 export type BalehoRepository = {
   getBoard(slide: number, viewerUserId: string | null): Promise<BalehoBoard>;
+  /** Satu query: total, diverifikasi, antrian, ditolak. */
+  countKosakataStats(): Promise<KosakataBoardStats>;
   countActiveForUser(userId: string): Promise<number>;
   /** True jika pengiklan sudah punya pesanan locking dengan fingerprint sama. */
   hasActiveFingerprint(

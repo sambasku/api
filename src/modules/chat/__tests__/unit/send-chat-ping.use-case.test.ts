@@ -114,7 +114,7 @@ describe('SendChatPingUseCase', () => {
       expect.objectContaining({
         eventKey: 'chat_ping',
         userId: 'u1',
-        text: 'PING!!! dari @budi di chat SambasKu. Yuk ngobrol.',
+        text: 'PING!!! dari @budi di chat SambasKu.',
       }),
     );
   });

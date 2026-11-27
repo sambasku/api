@@ -1,5 +1,10 @@
 import { ValidationError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
+import { ANONIM_USER_ID } from '@/shared/constants/anonim';
+import {
+  BUG_REPORT_GROUP_EVENT_KEY,
+  type ExplorationGroupNotifier,
+} from '@/modules/wa/application/ports/exploration-group-notifier.port';
 import type {
   BugReport,
   BugReportImage,
@@ -22,6 +27,7 @@ export class CreateBugReportUseCase {
   constructor(
     private readonly repo: BugReportRepository,
     private readonly auditRepo: AuditLogRepository,
+    private readonly groupNotifier?: ExplorationGroupNotifier,
   ) {}
 
   async execute(cmd: CreateBugReportCommand): Promise<BugReport> {
@@ -73,6 +79,33 @@ export class CreateBugReportUseCase {
       requestId: cmd.requestId ?? null,
     });
 
+    await this.notifyGroup(cmd, description);
     return row;
+  }
+
+  private async notifyGroup(
+    cmd: CreateBugReportCommand,
+    description: string,
+  ): Promise<void> {
+    if (!this.groupNotifier) return;
+    const meta = [
+      cmd.platform,
+      cmd.appVersion,
+      cmd.images.length > 0 ? `${cmd.images.length} gambar` : null,
+    ].filter((part): part is string => Boolean(part));
+    const clipped =
+      description.length > 500 ? `${description.slice(0, 500)}...` : description;
+    const urls = cmd.images.map((img) => img.url).join('\n');
+    try {
+      await this.groupNotifier.notify({
+        heading: 'Laporan masalah baru.',
+        jenis: meta.length > 0 ? `Laporan masalah (${meta.join(', ')})` : 'Laporan masalah',
+        name: urls ? `${clipped}\n${urls}` : clipped,
+        userId: cmd.userId ?? ANONIM_USER_ID,
+        eventKey: BUG_REPORT_GROUP_EVENT_KEY,
+      });
+    } catch {
+      // Gagal kirim grup tidak membatalkan laporan.
+    }
   }
 }

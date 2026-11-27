@@ -180,6 +180,10 @@ export class BalehoUseCases {
     return this.repo.getBoard(slide, viewerUserId);
   }
 
+  getKosakataStats() {
+    return this.repo.countKosakataStats();
+  }
+
   /** Tarif publik: IDR per sel 1x1 per hari (dari app_settings, default 3000). */
   async getPricing(): Promise<{ pricePerCellPerDay: number }> {
     const pricePerCellPerDay = await this.readPricePerCellPerDay();

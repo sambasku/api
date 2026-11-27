@@ -4,6 +4,7 @@ export const VERIFIER_APPLICATION_GROUP_EVENT_KEY = 'verifier_application_submit
 export const COMMENT_MEDIA_GROUP_EVENT_KEY = 'comment_media_published';
 export const EXPLORE_PHOTO_GROUP_EVENT_KEY = 'explore_photo_added';
 export const CHAT_PING_GROUP_EVENT_KEY = 'chat_ping';
+export const BUG_REPORT_GROUP_EVENT_KEY = 'bug_report_submitted';
 
 export interface ExplorationGroupNotice {
   /** Label jenis di pesan grup, mis. "Usaha" atau "Wisata (perbaikan)". */

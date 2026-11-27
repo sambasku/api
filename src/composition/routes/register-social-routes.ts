@@ -183,7 +183,11 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
 
   const bugReportRepo = new BugReportRepositoryImpl(db);
   const bugReportController = new BugReportController({
-    create: new CreateBugReportUseCase(bugReportRepo, di.auditRepo),
+    create: new CreateBugReportUseCase(
+      bugReportRepo,
+      di.auditRepo,
+      di.explorationGroupNotifier,
+    ),
     list: new ListBugReportsUseCase(bugReportRepo),
     resolve: new ResolveBugReportUseCase(bugReportRepo, di.auditRepo),
     imageController,
