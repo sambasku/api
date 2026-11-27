@@ -1,3 +1,4 @@
+import { attachCommentRepliesTwoLevel } from '@/shared/comment/comment-threading';
 import { and, asc, desc, eq, inArray, isNull, like, lt, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
@@ -79,6 +80,7 @@ function toKaryaComment(
   return {
     id: row.id,
     karyaId: row.karyaId,
+    parentId: row.parentId ?? null,
     userId: row.userId,
     username: meta.authorDeletedAt ? null : meta.username,
     displayName: meta.authorDeletedAt ? null : meta.displayName,
@@ -739,6 +741,7 @@ export class KaryaRepositoryImpl implements KaryaCommentRepository {
       .insert(karyaComments)
       .values({
         karyaId: input.karyaId,
+        parentId: input.parentId ?? null,
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
@@ -788,7 +791,7 @@ export class KaryaRepositoryImpl implements KaryaCommentRepository {
     filter: KaryaCommentListFilter,
   ): Promise<CursorPage<KaryaComment>> {
     const limit = filter.limit;
-    const conditions = [eq(karyaComments.karyaId, karyaId)];
+    const conditions = [eq(karyaComments.karyaId, karyaId), isNull(karyaComments.parentId)];
     if (filter.status) conditions.push(eq(karyaComments.status, filter.status));
     // Komentar id = ULID monoton -> lt(id, cursor) aman sebagai keyset.
     if (filter.cursor) conditions.push(lt(karyaComments.id, filter.cursor));
@@ -814,8 +817,39 @@ export class KaryaRepositoryImpl implements KaryaCommentRepository {
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    return {
-      items: page.map((row) =>
+    const tops = page.map((row) =>
+      toKaryaComment(row.c, {
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        userRole: row.userRole,
+        authorDeletedAt: row.authorDeletedAt,
+        isEdited: Boolean(row.isEdited),
+      }),
+    );
+    const topIds = tops.map((t) => t.id);
+    let replies: KaryaComment[] = [];
+    if (topIds.length > 0) {
+      const replyConds = [inArray(karyaComments.parentId, topIds)];
+      if (filter.status) replyConds.push(eq(karyaComments.status, filter.status));
+      const replyRows = await this.db
+        .select({
+          c: karyaComments,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          authorDeletedAt: users.deletedAt,
+          userRole: highestUserRoleSql,
+          isEdited: sql<boolean>`EXISTS (
+            SELECT 1 FROM ${ karyaCommentRevisions }
+            WHERE ${ karyaCommentRevisions.commentId } = ${ karyaComments.id }
+          )`,
+        })
+        .from(karyaComments)
+        .leftJoin(users, eq(users.id, karyaComments.userId))
+        .where(and(...replyConds))
+        .orderBy(karyaComments.createdAt, karyaComments.id);
+      replies = replyRows.map((row) =>
         toKaryaComment(row.c, {
           username: row.username,
           displayName: row.displayName,
@@ -824,7 +858,10 @@ export class KaryaRepositoryImpl implements KaryaCommentRepository {
           authorDeletedAt: row.authorDeletedAt,
           isEdited: Boolean(row.isEdited),
         }),
-      ),
+      );
+    }
+    return {
+      items: attachCommentRepliesTwoLevel(tops, replies),
       nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
       hasMore,
     };
@@ -901,6 +938,21 @@ export class KaryaRepositoryImpl implements KaryaCommentRepository {
       .where(and(eq(karyaComments.id, id), eq(karyaComments.status, 'published')))
       .returning({ id: karyaComments.id });
     return Boolean(row);
+  }
+
+  async listCommentRevisions(
+    commentId: string,
+  ): Promise<Array<{ editorId: string; body: string; createdAt: Date }>> {
+    const rows = await this.db
+      .select({
+        editorId: karyaCommentRevisions.editorId,
+        body: karyaCommentRevisions.body,
+        createdAt: karyaCommentRevisions.createdAt,
+      })
+      .from(karyaCommentRevisions)
+      .where(eq(karyaCommentRevisions.commentId, commentId))
+      .orderBy(desc(karyaCommentRevisions.createdAt), desc(karyaCommentRevisions.id));
+    return rows;
   }
 
   async karyaTargetExists(id: string): Promise<boolean> {

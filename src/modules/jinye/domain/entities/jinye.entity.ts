@@ -1,3 +1,4 @@
+import type { CommentAudio } from '@/modules/comment/domain/entities/comment.entity';
 import type {
   JinyeCommentStatus,
   JinyeImageRow,
@@ -95,6 +96,7 @@ export interface JinyeComment {
   bodyOriginal: string | null;
   /** Slug katalog stickers; null = bukan komentar stiker. */
   stickerId: string | null;
+  audio?: CommentAudio | null;
   images: JinyeImage[];
   status: JinyeCommentStatus;
   createdAt: Date;
@@ -119,6 +121,7 @@ export interface NewJinyeComment {
   body: string;
   bodyOriginal?: string | null;
   stickerId?: string | null;
+  audio?: CommentAudio | null;
   images?: JinyeImage[];
 }
 

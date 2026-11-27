@@ -10,8 +10,9 @@ const publicEntityCommentImageSchema = z
   })
   .nullable();
 
-export const entityCommentWireSchema = z.object({
+const entityCommentBaseWireSchema = z.object({
   id: z.string(),
+  parent_id: z.string().nullable().optional(),
   user: z.object({
     user_id: z.string(),
     username: z.string().nullable(),
@@ -29,4 +30,26 @@ export const entityCommentWireSchema = z.object({
   is_edited: z.boolean(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
+});
+
+export const entityCommentWireSchema = entityCommentBaseWireSchema.extend({
+  replies: z.array(entityCommentBaseWireSchema).optional(),
+});
+
+export const entityCommentEditHistoryResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    current: z.object({
+      body: z.string().nullable(),
+      updated_at: z.string().nullable(),
+      is_edited: z.boolean(),
+    }),
+    revisions: z.array(
+      z.object({
+        body: z.string(),
+        editor_id: z.string(),
+        created_at: z.string(),
+      }),
+    ),
+  }),
 });

@@ -1,3 +1,5 @@
+import { redactEntityCommentAudio } from '@/shared/comment/entity-comment-wire';
+import type { CreateJinyeCommentAudioUseCase } from '../../application/use-cases/create-jinye-comment-audio.use-case';
 import type { Context } from 'hono';
 import {
   BadRequestError,
@@ -134,6 +136,9 @@ type JinyeCommentWire = {
   is_verifier: boolean;
   body: string;
   sticker_id: string | null;
+  audio_url: string | null;
+  audio_mime_type: string | null;
+  audio_duration_ms: number | null;
   images: JinyeCommentImageWire[];
   status: string;
   created_at: string;
@@ -173,6 +178,7 @@ function toCommentWire(
     is_verifier: isVerifierRole(c.userRole ?? ''),
     body: c.body,
     sticker_id: c.stickerId ?? null,
+    ...redactEntityCommentAudio({ status: c.status as 'published' | 'taken_down' | 'deleted_by_author', audio: c.audio ?? null }),
     images,
     status: c.status,
     created_at: c.createdAt.toISOString(),
@@ -199,6 +205,7 @@ export class JinyeController {
       attachAudio: AttachJinyeAudioUseCase;
       uploadImage: UploadPublicImageUseCase;
       createComment: CreateJinyeCommentUseCase;
+      createCommentAudio?: CreateJinyeCommentAudioUseCase;
       listComments: ListJinyeCommentsUseCase;
       deleteComment: DeleteJinyeCommentUseCase;
       updateComment: UpdateJinyeCommentUseCase;
@@ -489,6 +496,41 @@ export class JinyeController {
       { data: toCommentWire(row, { exposeStaging: true }) },
       201,
     );
+  }
+
+  async createCommentAudio(c: Context<{ Variables: AppVariables }>) {
+    const user = requireUser(c);
+    if (!this.deps.createCommentAudio) {
+      throw new BadRequestError('FEATURE_UNAVAILABLE', 'Komentar suara belum aktif');
+    }
+    const { id } = c.req.valid('param' as never) as { id: string };
+    const contentLength = Number(c.req.header('content-length') ?? 0);
+    if (contentLength > MAX_AUDIO_BYTES + 1024 * 1024) {
+      throw new BadRequestError('AUDIO_TOO_LARGE', 'File audio terlalu besar (maks 5 MB)', [
+        { field: 'audio', message: 'Ukuran maksimal 5 MB' },
+      ]);
+    }
+    const body = await c.req.parseBody({ all: true });
+    const audioPart = body['audio'];
+    if (!audioPart || typeof audioPart === 'string') {
+      throw new BadRequestError('VALIDATION_ERROR', 'File audio wajib diunggah', [
+        { field: 'audio', message: 'Field multipart `audio` wajib berisi file' },
+      ]);
+    }
+    const file = audioPart as File;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const created = await this.deps.createCommentAudio.execute({
+      jinyeId: id,
+      parentId: typeof body['parent_id'] === 'string' ? body['parent_id'] : null,
+      userId: user.user_id,
+      bytes,
+      mimeType: file.type || null,
+      filename: file.name || null,
+      body: typeof body['body'] === 'string' ? body['body'] : null,
+      durationMs: body['duration_ms'],
+      requestId: c.get('requestId') ?? null,
+    });
+    return c.json({ success: true as const, data: toCommentWire(created) }, 201);
   }
 
   async listComments(c: Context<{ Variables: AppVariables }>, jinyeId: string) {

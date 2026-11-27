@@ -202,6 +202,20 @@ const listCommentsRoute = createRoute({
   },
 });
 
+const createCommentAudioRoute = createRoute({
+  method: 'post',
+  path: '/{id}/comments/audio',
+  tags: ['Jinye'],
+  summary: 'Kirim komentar audio pada Jinye',
+  request: { params: jinyeIdParamSchema },
+  responses: {
+    201: { description: 'Created', content: json(createJinyeCommentResponseSchema) },
+    400: { description: 'Bad Request', content: json(errorResponseSchema) },
+    401: { description: 'Unauthorized', content: json(errorResponseSchema) },
+    404: { description: 'Not Found', content: json(errorResponseSchema) },
+  },
+});
+
 const createCommentRoute = createRoute({
   method: 'post',
   path: '/{id}/comments',
@@ -967,6 +981,7 @@ export function createJinyeRoutes(deps: JinyeRoutesDeps) {
       c.req.valid('json'),
     ) as never,
   );
+  routes.openapi(createCommentAudioRoute, (c) => deps.controller.createCommentAudio(c) as never);
   routes.openapi(deleteCommentRoute, (c) => {
     const p = c.req.valid('param');
     return deps.controller.deleteComment(c, p.id, p.commentId) as never;

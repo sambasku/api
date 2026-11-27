@@ -34,10 +34,13 @@ export interface CommentRepository {
   create(data: NewComment): Promise<Comment>;
 
   /**
-   * Komentar tayang pada sebuah kata: published | taken_down |
+   * Komentar top-level tayang pada sebuah kata: published | taken_down |
    * deleted_by_author, urut terbaru (id DESC), cursor pagination.
    */
   listByWord(wordId: string, params: ListCommentsParams): Promise<CursorPage<Comment>>;
+
+  /** Batch ambil balasan untuk daftar parent top-level (1 query, anti N+1). */
+  listRepliesByParentIds?(parentIds: string[]): Promise<Comment[]>;
 
   /** By id, belum soft-deleted (semua status - untuk delete & takedown). */
   findById(id: string): Promise<Comment | null>;

@@ -1,3 +1,4 @@
+import { entityCommentEditHistoryResponseSchema } from '@/shared/comment/entity-comment-response.schema';
 import type { MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createRoute } from '@hono/zod-openapi';
@@ -130,6 +131,18 @@ export function createPublicCuisineCommentRoutes(deps: {
   routes.use('/comments/:id', deps.authenticate);
 
   routes.openapi(listRoute, (c) => deps.controller.listCuisineComments(c) as never);
+  const commentEditHistoryRoute = createRoute({
+    method: 'get',
+    path: '/comments/:id/edit-history',
+    tags: ['Culinary Comments'],
+    summary: 'Riwayat sunting komentar',
+    request: { params: commentIdParam },
+    responses: {
+      200: { description: 'Riwayat sunting', content: json(entityCommentEditHistoryResponseSchema) },
+      404: { description: 'Tidak ditemukan', content: json(errorResponseSchema) },
+    },
+  });
+  routes.openapi(commentEditHistoryRoute, (c) => deps.controller.getCuisineCommentEditHistory(c) as never);
   routes.openapi(createRoute_, (c) => deps.controller.createCuisineComment(c) as never);
   routes.openapi(createAudioRoute, (c) => deps.controller.createCuisineCommentAudio(c) as never);
   routes.openapi(updateRoute_, (c) => deps.controller.updateCuisineComment(c) as never);

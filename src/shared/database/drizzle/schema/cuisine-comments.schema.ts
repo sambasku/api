@@ -25,6 +25,8 @@ export const cuisineComments = sqliteTable(
     cuisineId: text('cuisine_id')
       .notNull()
       .references(() => cuisines.id, { onDelete: 'cascade' }),
+    /** null = komentar utama; non-null = balasan (parent harus top-level). */
+    parentId: text('parent_id'),
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
@@ -64,6 +66,12 @@ export const cuisineComments = sqliteTable(
       t.status,
       t.id,
     ),
+    index('cuisine_comments_cuisine_parent_idx').on(
+      t.cuisineId,
+      t.parentId,
+      t.id,
+    ),
+    index('cuisine_comments_parent_created_idx').on(t.parentId, t.createdAt, t.id),
     index('cuisine_comments_user_status_idx').on(t.userId, t.status, t.id),
     index('cuisine_comments_image_status_idx').on(t.imageStatus, t.id),
   ],

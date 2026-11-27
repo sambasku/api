@@ -24,12 +24,14 @@ import {
   COMMENT_MEDIA_GROUP_EVENT_KEY,
   type ExplorationGroupNotifier,
 } from '@/modules/wa/application/ports/exploration-group-notifier.port';
+import { resolveCommentParentId } from '@/shared/comment/comment-threading';
 import type { Comment } from '../../domain/entities/comment.entity';
 import type { CommentRepository } from '../../domain/repositories/comment.repository';
 import { resolveDiscussionNotifyRecipients } from '../utils/resolve-discussion-notify-recipients';
 
 export interface CreateCommentCommand {
   wordId: string;
+  parentId?: string | null;
   userId: string;
   role: string;
   requestId?: string | null;
@@ -129,6 +131,15 @@ export class CreateCommentUseCase {
       throw new ConflictError('WORD_NOT_PUBLISHED', 'Komentar hanya bisa ditambahkan pada kata yang tayang');
     }
 
+    const parentId = await resolveCommentParentId({
+      rawParentId: cmd.parentId,
+      hostId: cmd.wordId,
+      findParent: async (id) => {
+        const p = await this.commentRepo.findById(id);
+        return p ? { id: p.id, hostId: p.wordId, parentId: p.parentId ?? null, status: p.status } : null;
+      },
+    });
+
     const blocked = await this.blocklistRepo.listAllActiveWords();
     const filteredBody =
       body.length > 0
@@ -138,6 +149,7 @@ export class CreateCommentUseCase {
 
     const comment = await this.commentRepo.create({
       wordId: cmd.wordId,
+      parentId,
       userId: cmd.userId,
       body: filteredBody,
       bodyOriginal: wasFiltered ? body : null,

@@ -97,6 +97,7 @@ function toPublicCommentFields(cm: Comment) {
   return {
     id: cm.id,
     word_id: cm.wordId,
+    parent_id: cm.parentId ?? null,
     word_lemma: cm.wordLemma,
     user_id: cm.userId,
     username: cm.username,
@@ -144,6 +145,7 @@ export class CommentController {
     const actor = this.requireUser(c);
     const comment = await this.deps.create.execute({
       wordId,
+      parentId: body.parent_id ?? null,
       userId: actor.user_id,
       role: actor.role,
       requestId: this.requestId(c),
@@ -188,9 +190,11 @@ export class CommentController {
     const file = audioPart as File;
     const bytes = new Uint8Array(await file.arrayBuffer());
     const caption = typeof body['body'] === 'string' ? body['body'] : null;
+    const parentId = typeof body['parent_id'] === 'string' ? body['parent_id'] : null;
 
     const comment = await this.deps.createAudio.execute({
       wordId,
+      parentId,
       userId: actor.user_id,
       role: actor.role,
       bytes,
@@ -221,23 +225,29 @@ export class CommentController {
   async listByWord(c: Context, wordId: string, query: ListCommentsQueryBody) {
     const page = await this.deps.listByWord.execute(wordId, query);
     const repo = this.deps.ugcLemmaLinks;
-    const items = repo
-      ? await attachLemmaLinksToCommentWireItems(
-          repo,
-          'word_comment',
-          page.items,
-          (cm) => ({
-            ...toPublicCommentFields(cm),
-            upvotes: cm.upvotes,
-            downvotes: cm.downvotes,
-          }),
-        )
-      : page.items.map((cm) => ({
-          ...toPublicCommentFields(cm),
-          upvotes: cm.upvotes,
-          downvotes: cm.downvotes,
-          lemma_links: [] as const,
-        }));
+    const flatAll = page.items.flatMap((cm) => [cm, ...(cm.replies ?? [])]);
+    const lemmaMap = new Map<string, readonly unknown[]>();
+    if (repo && flatAll.length > 0) {
+      const enriched = await attachLemmaLinksToCommentWireItems(
+        repo,
+        'word_comment',
+        flatAll,
+        (cm) => ({ id: cm.id }),
+      );
+      for (const e of enriched) {
+        lemmaMap.set(String(e.id), e.lemma_links);
+      }
+    }
+    const mapOne = (cm: (typeof page.items)[number]) => ({
+      ...toPublicCommentFields(cm),
+      upvotes: cm.upvotes,
+      downvotes: cm.downvotes,
+      lemma_links: lemmaMap.get(cm.id) ?? ([] as const),
+    });
+    const items = page.items.map((cm) => ({
+      ...mapOne(cm),
+      replies: (cm.replies ?? []).map(mapOne),
+    }));
     return c.json({
       success: true as const,
       data: items,

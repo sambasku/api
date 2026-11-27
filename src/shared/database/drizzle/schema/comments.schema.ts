@@ -13,6 +13,8 @@ export const comments = sqliteTable(
     wordId: text('word_id')
       .notNull()
       .references(() => words.id),
+    /** null = komentar utama; non-null = balasan (parent harus top-level). */
+    parentId: text('parent_id'),
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
@@ -50,6 +52,8 @@ export const comments = sqliteTable(
   },
   (t) => [
     index('comments_word_status_idx').on(t.wordId, t.status, t.id),
+    index('comments_word_parent_idx').on(t.wordId, t.parentId, t.id),
+    index('comments_parent_created_idx').on(t.parentId, t.createdAt, t.id),
     index('comments_status_idx').on(t.status, t.id),
     index('comments_user_status_id_idx').on(t.userId, t.status, t.id),
     index('comments_image_status_idx').on(t.imageStatus, t.id),

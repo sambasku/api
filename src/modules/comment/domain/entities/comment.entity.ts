@@ -29,6 +29,7 @@ export interface CommentImage {
 export interface Comment {
   id: string;
   wordId: string;
+  parentId?: string | null;
   /** Lemma kata (JOIN words) - null kalau kata sudah hilang */
   wordLemma: string | null;
   userId: string;
@@ -77,6 +78,7 @@ export interface CommentEditHistory {
 
 export interface NewComment {
   wordId: string;
+  parentId?: string | null;
   userId: string;
   body: string;
   bodyOriginal?: string | null;

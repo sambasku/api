@@ -15,6 +15,11 @@ import {
   articleComments,
   jinye,
   jinyeComments,
+  placeComments,
+  usahaComments,
+  cuisineComments,
+  eventComments,
+  karyaComments,
   users,
   userSkips,
   votes,
@@ -302,6 +307,76 @@ case 'article_comment': {
             and(
               eq(jinyeComments.id, target.entityId),
               eq(jinyeComments.status, 'published'),
+            ),
+          )
+          .limit(1);
+        return rows.length > 0;
+      }
+      case 'place_comment': {
+        const rows = await this.db
+          .select({ id: placeComments.id })
+          .from(placeComments)
+          .where(
+            and(
+              eq(placeComments.id, target.entityId),
+              eq(placeComments.status, 'published'),
+              isNull(placeComments.deletedAt),
+            ),
+          )
+          .limit(1);
+        return rows.length > 0;
+      }
+      case 'usaha_comment': {
+        const rows = await this.db
+          .select({ id: usahaComments.id })
+          .from(usahaComments)
+          .where(
+            and(
+              eq(usahaComments.id, target.entityId),
+              eq(usahaComments.status, 'published'),
+              isNull(usahaComments.deletedAt),
+            ),
+          )
+          .limit(1);
+        return rows.length > 0;
+      }
+      case 'cuisine_comment': {
+        const rows = await this.db
+          .select({ id: cuisineComments.id })
+          .from(cuisineComments)
+          .where(
+            and(
+              eq(cuisineComments.id, target.entityId),
+              eq(cuisineComments.status, 'published'),
+              isNull(cuisineComments.deletedAt),
+            ),
+          )
+          .limit(1);
+        return rows.length > 0;
+      }
+      case 'event_comment': {
+        const rows = await this.db
+          .select({ id: eventComments.id })
+          .from(eventComments)
+          .where(
+            and(
+              eq(eventComments.id, target.entityId),
+              eq(eventComments.status, 'published'),
+              isNull(eventComments.deletedAt),
+            ),
+          )
+          .limit(1);
+        return rows.length > 0;
+      }
+      case 'karya_comment': {
+        const rows = await this.db
+          .select({ id: karyaComments.id })
+          .from(karyaComments)
+          .where(
+            and(
+              eq(karyaComments.id, target.entityId),
+              eq(karyaComments.status, 'published'),
+              isNull(karyaComments.deletedAt),
             ),
           )
           .limit(1);
@@ -834,7 +909,14 @@ case 'article_comment': {
     target.entityType === 'pantun' ||
     target.entityType === 'pantun_reply' ||
     target.entityType === 'article' ||
-    target.entityType === 'article_comment'
+    target.entityType === 'article_comment' ||
+    target.entityType === 'jinye' ||
+    target.entityType === 'jinye_comment' ||
+    target.entityType === 'place_comment' ||
+    target.entityType === 'usaha_comment' ||
+    target.entityType === 'cuisine_comment' ||
+    target.entityType === 'event_comment' ||
+    target.entityType === 'karya_comment'
     ) {
       return null;
     }

@@ -1,3 +1,4 @@
+import { entityCommentAudioInsertValues, toEntityCommentAudio } from '@/shared/comment/entity-comment-media';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { highestUserRoleSql } from '@/shared/database/highest-user-role-sql';
 import {
@@ -540,6 +541,7 @@ export class JinyeRepositoryImpl implements JinyeRepository {
         body: input.body,
         bodyOriginal: input.bodyOriginal ?? null,
         stickerId: input.stickerId ?? null,
+        ...entityCommentAudioInsertValues(input.audio),
         images: toImageRows(input.images ?? []),
         status: 'published',
       })
@@ -921,6 +923,7 @@ function mapCommentJoined(row: {
     body: row.comment.body ?? '',
     bodyOriginal: row.comment.bodyOriginal ?? null,
     stickerId: row.comment.stickerId ?? null,
+    audio: toEntityCommentAudio(row.comment),
     images: toJinyeImages(row.comment.images),
     status: row.comment.status as JinyeCommentStatus,
     createdAt: row.comment.createdAt,

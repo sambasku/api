@@ -81,6 +81,7 @@ describe('CreateCommentUseCase', () => {
     });
     expect(commentRepo.create).toHaveBeenCalledWith({
       wordId: WORD,
+      parentId: null,
       userId: AUTHOR,
       body: 'Ini *** sekali',
       bodyOriginal: 'Ini Bodoh sekali',

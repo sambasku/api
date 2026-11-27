@@ -17,6 +17,7 @@ import type { CursorPage } from '@/modules/word/domain/repositories/word.reposit
 
 export interface NewEventCommentInput {
   eventId: string;
+  parentId?: string | null;
   userId: string;
   body: string;
   bodyOriginal: string | null;
@@ -151,6 +152,7 @@ export interface EventRepository {
   }): Promise<EventComment | null>;
   markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownComment(id: string, actorId: string): Promise<boolean>;
+  listCommentRevisions?(commentId: string): Promise<Array<{ editorId: string; body: string; createdAt: Date }>>;
   /** Cek event masih published (dipakai use case sebelum create comment). */
   eventTargetExists(id: string): Promise<boolean>;
 

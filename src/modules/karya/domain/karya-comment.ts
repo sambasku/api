@@ -12,6 +12,7 @@ import type { CursorPage } from '@/modules/word/domain/repositories/word.reposit
 export interface KaryaComment {
   id: string;
   karyaId: string;
+  parentId?: string | null;
   userId: string;
   username: string | null;
   displayName: string | null;
@@ -26,10 +27,12 @@ export interface KaryaComment {
   isEdited: boolean;
   createdAt: Date;
   updatedAt: Date | null;
+  replies?: KaryaComment[];
 }
 
 export interface NewKaryaCommentInput {
   karyaId: string;
+  parentId?: string | null;
   userId: string;
   body: string;
   bodyOriginal: string | null;
@@ -59,6 +62,7 @@ export interface KaryaCommentRepository {
   }): Promise<KaryaComment | null>;
   markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownComment(id: string, actorId: string): Promise<boolean>;
+  listCommentRevisions?(commentId: string): Promise<Array<{ editorId: string; body: string; createdAt: Date }>>;
   /** Cek karya masih published (dipakai use case sebelum create comment). */
   karyaTargetExists(id: string): Promise<boolean>;
 }

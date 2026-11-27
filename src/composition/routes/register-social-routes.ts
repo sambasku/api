@@ -1,3 +1,4 @@
+import { CreateJinyeCommentAudioUseCase } from '@/modules/jinye/application/use-cases/create-jinye-comment-audio.use-case';
 /** Audit/images/bug + discussions, chat, pantun, jinye. */
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { AppVariables } from '@/shared/types';
@@ -635,6 +636,14 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.notifyUser,
       di.stickerRepo,
       env.IMAGEKIT_URL_ENDPOINT,
+    ),
+    createCommentAudio: new CreateJinyeCommentAudioUseCase(
+      jinyeRepo,
+      di.pronunciationStorage,
+      di.auditRepo,
+      di.commentBlocklistRepo,
+      di.recordAbuseSignal,
+      di.activityEvents,
     ),
     listComments: new ListJinyeCommentsUseCase(jinyeRepo),
     deleteComment: new DeleteJinyeCommentUseCase(jinyeRepo, di.auditRepo),

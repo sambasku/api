@@ -1,3 +1,4 @@
+import { attachCommentRepliesTwoLevel } from '@/shared/comment/comment-threading';
 import {
   and,
   count,
@@ -79,6 +80,7 @@ function toPlaceComment(
   return {
     id: row.id,
     placeId: row.placeId,
+    parentId: row.parentId ?? null,
     userId: row.userId,
     username: meta.authorDeletedAt ? null : meta.username,
     displayName: meta.authorDeletedAt ? null : meta.displayName,
@@ -797,6 +799,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
       .insert(placeComments)
       .values({
         placeId: input.placeId,
+        parentId: input.parentId ?? null,
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
@@ -846,7 +849,7 @@ export class PlaceRepositoryImpl implements PlaceRepository {
     filter: PlaceCommentListFilter,
   ): Promise<CursorPage<PlaceComment>> {
     const limit = filter.limit;
-    const conditions = [eq(placeComments.placeId, placeId)];
+    const conditions = [eq(placeComments.placeId, placeId), isNull(placeComments.parentId)];
     if (filter.status) conditions.push(eq(placeComments.status, filter.status));
     if (filter.cursor) conditions.push(lt(placeComments.id, filter.cursor));
 
@@ -871,8 +874,39 @@ export class PlaceRepositoryImpl implements PlaceRepository {
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    return {
-      items: page.map((row) =>
+    const tops = page.map((row) =>
+      toPlaceComment(row.c, {
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        userRole: row.userRole,
+        authorDeletedAt: row.authorDeletedAt,
+        isEdited: Boolean(row.isEdited),
+      }),
+    );
+    const topIds = tops.map((t) => t.id);
+    let replies: PlaceComment[] = [];
+    if (topIds.length > 0) {
+      const replyConds = [inArray(placeComments.parentId, topIds)];
+      if (filter.status) replyConds.push(eq(placeComments.status, filter.status));
+      const replyRows = await this.db
+        .select({
+          c: placeComments,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          authorDeletedAt: users.deletedAt,
+          userRole: highestUserRoleSql,
+          isEdited: sql<boolean>`EXISTS (
+            SELECT 1 FROM ${ placeCommentRevisions }
+            WHERE ${ placeCommentRevisions.commentId } = ${ placeComments.id }
+          )`,
+        })
+        .from(placeComments)
+        .leftJoin(users, eq(users.id, placeComments.userId))
+        .where(and(...replyConds))
+        .orderBy(placeComments.createdAt, placeComments.id);
+      replies = replyRows.map((row) =>
         toPlaceComment(row.c, {
           username: row.username,
           displayName: row.displayName,
@@ -881,7 +915,10 @@ export class PlaceRepositoryImpl implements PlaceRepository {
           authorDeletedAt: row.authorDeletedAt,
           isEdited: Boolean(row.isEdited),
         }),
-      ),
+      );
+    }
+    return {
+      items: attachCommentRepliesTwoLevel(tops, replies),
       nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
       hasMore,
     };
@@ -958,6 +995,21 @@ export class PlaceRepositoryImpl implements PlaceRepository {
       .where(and(eq(placeComments.id, id), eq(placeComments.status, "published")))
       .returning({ id: placeComments.id });
     return Boolean(row);
+  }
+
+  async listCommentRevisions(
+    commentId: string,
+  ): Promise<Array<{ editorId: string; body: string; createdAt: Date }>> {
+    const rows = await this.db
+      .select({
+        editorId: placeCommentRevisions.editorId,
+        body: placeCommentRevisions.body,
+        createdAt: placeCommentRevisions.createdAt,
+      })
+      .from(placeCommentRevisions)
+      .where(eq(placeCommentRevisions.commentId, commentId))
+      .orderBy(desc(placeCommentRevisions.createdAt), desc(placeCommentRevisions.id));
+    return rows;
   }
 
   async placeTargetExists(id: string): Promise<boolean> {

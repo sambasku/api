@@ -1,3 +1,4 @@
+import { buildCommentEditHistoryWire, resolveCommentParentId } from '@/shared/comment/comment-threading';
 import {
   BadRequestError,
   ConflictError,
@@ -36,6 +37,7 @@ import { validateArticlePayload } from './article.use-cases';
 
 export interface CreateCommentInput {
   articleId: string;
+  parentId?: string | null;
   userId: string;
   body: string;
   imageUrl?: string | null;
@@ -55,6 +57,18 @@ export class ListArticleCommentsUseCase {
       cursor,
       limit,
     });
+  }
+
+  async getEditHistory(commentId: string) {
+    const comment = await this.repo.findCommentById(commentId);
+    if (!comment) {
+      throw new NotFoundError('COMMENT_NOT_FOUND', 'Komentar tidak ditemukan');
+    }
+    const revisions =
+      typeof this.repo.listCommentRevisions === 'function'
+        ? await this.repo.listCommentRevisions(commentId)
+        : [];
+    return buildCommentEditHistoryWire(comment, revisions);
   }
 }
 
@@ -132,8 +146,17 @@ export class CreateArticleCommentUseCase {
       bodyOriginal = filtered !== body ? body : null;
     }
 
+    const parentId = await resolveCommentParentId({
+      rawParentId: input.parentId,
+      hostId: input.articleId,
+      findParent: async (id) => {
+        const p = await this.repo.findCommentById(id);
+        return p ? { id: p.id, hostId: p.articleId, parentId: p.parentId, status: p.status } : null;
+      },
+    });
     const created = await this.repo.createComment({
       articleId: input.articleId,
+      parentId,
       userId: input.userId,
       body: filtered,
       bodyOriginal,

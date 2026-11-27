@@ -19,6 +19,11 @@ export const voteTargetTypeEnum = z.enum([
 'article_comment',
 'jinye',
 'jinye_comment',
+'place_comment',
+'usaha_comment',
+'cuisine_comment',
+'event_comment',
+'karya_comment',
 ]);
 
 export const toggleVoteSchema = z.object({

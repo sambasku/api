@@ -3,7 +3,7 @@ import type { AppVariables, AuthUser } from "@/shared/types";
 import { BadRequestError, UnauthorizedError } from "@/shared/errors/app-error";
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
 import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
-import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
+import { attachLemmaLinksToNestedCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { CreateEventCommentAudioUseCase } from '../../application/use-cases/event-comment-audio.use-case';
@@ -53,6 +53,7 @@ function toCommentWire(c: EventComment) {
   return {
     id: c.id,
     event_id: c.eventId,
+    parent_id: c.parentId ?? null,
     user: {
       user_id: c.userId,
       username: deleted ? null : c.username,
@@ -453,18 +454,12 @@ export class EventController {
       data: {
         items: await (async () => {
           const repo = this.comments.ugcLemmaLinks;
-          if (repo) {
-            return attachLemmaLinksToCommentWireItems(
-              repo,
-              'event_comment',
-              page.items,
-              (c) => toCommentWire(c),
-            );
-          }
-          return page.items.map((c) => ({
-            ...toCommentWire(c),
-            lemma_links: [] as const,
-          }));
+          return attachLemmaLinksToNestedCommentWireItems(
+            repo,
+            'event_comment',
+            page.items,
+            (item) => toCommentWire(item),
+          );
         })(),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
@@ -478,6 +473,7 @@ export class EventController {
     const body = c.req.valid('json' as never) as EntityCommentBody;
     const comment = await this.comments.createComment.execute({
       eventId: id,
+      parentId: body.parent_id ?? null,
       userId: user.user_id,
       body: body.body ?? '',
       stickerId: body.sticker_id ?? null,
@@ -509,6 +505,7 @@ export class EventController {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const comment = await this.comments.createCommentAudio.execute({
       eventId: id,
+      parentId: typeof body['parent_id'] === 'string' ? body['parent_id'] : null,
       userId: user.user_id,
       bytes,
       mimeType: file.type || null,
@@ -518,6 +515,12 @@ export class EventController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toCommentWire(comment) }, 201);
+  }
+
+  async getCommentEditHistory(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const data = await this.comments.listComments.getEditHistory(id);
+    return c.json({ success: true as const, data });
   }
 
   async updateComment(c: Context<{ Variables: AppVariables }>) {

@@ -25,6 +25,8 @@ export const karyaComments = sqliteTable(
     karyaId: text('karya_id')
       .notNull()
       .references(() => karyas.id, { onDelete: 'cascade' }),
+    /** null = komentar utama; non-null = balasan (parent harus top-level). */
+    parentId: text('parent_id'),
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
@@ -60,6 +62,8 @@ export const karyaComments = sqliteTable(
   },
   (t) => [
     index('karya_comments_karya_status_idx').on(t.karyaId, t.status, t.id),
+    index('karya_comments_karya_parent_idx').on(t.karyaId, t.parentId, t.id),
+    index('karya_comments_parent_created_idx').on(t.parentId, t.createdAt, t.id),
     index('karya_comments_user_status_idx').on(t.userId, t.status, t.id),
     index('karya_comments_image_status_idx').on(t.imageStatus, t.id),
   ],

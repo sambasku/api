@@ -1,3 +1,4 @@
+import { resolveCommentParentId } from '@/shared/comment/comment-threading';
 import { NotFoundError } from '@/shared/errors/app-error';
 import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { CommentBlocklistRepository } from '@/modules/comment-blocklist/domain/repositories/comment-blocklist.repository';
@@ -17,6 +18,7 @@ import type { EventRepository } from '../../domain/repositories/event.repository
 
 export interface CreateEventCommentAudioCommand {
   eventId: string;
+  parentId?: string | null;
   userId: string;
   bytes: Uint8Array;
   mimeType: string | null | undefined;
@@ -72,8 +74,17 @@ export class CreateEventCommentAudioUseCase {
       mimeType: file.mimeType,
     });
 
+    const parentId = await resolveCommentParentId({
+      rawParentId: cmd.parentId,
+      hostId: cmd.eventId,
+      findParent: async (id) => {
+        const p = await this.repo.findCommentById(id);
+        return p ? { id: p.id, hostId: p.eventId, parentId: p.parentId, status: p.status } : null;
+      },
+    });
     const created = await this.repo.createComment({
       eventId: cmd.eventId,
+      parentId,
       userId: cmd.userId,
       body,
       bodyOriginal,

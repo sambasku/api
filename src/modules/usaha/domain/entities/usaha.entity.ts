@@ -73,6 +73,7 @@ export interface Usaha {
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
+  replies?: UsahaComment[];
 }
 
 export interface UsahaListItem extends Usaha {
@@ -117,6 +118,7 @@ export interface UsahaImageInput {
 export interface UsahaComment {
   id: string;
   usahaId: string;
+  parentId: string | null;
   userId: string;
   username: string | null;
   displayName: string | null;

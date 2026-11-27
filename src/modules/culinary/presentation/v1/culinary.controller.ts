@@ -7,7 +7,7 @@ import { ANONIM_USER_ID } from '@/shared/constants/anonim';
 import { BadRequestError, NotFoundError, UnauthorizedError } from '@/shared/errors/app-error';
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
 import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
-import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
+import { attachLemmaLinksToNestedCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import type { CreateCuisineCommentAudioUseCase } from '../../application/use-cases/cuisine-comment-audio.use-case';
@@ -63,6 +63,7 @@ function toCuisineCommentWire(c: CuisineComment) {
   return {
     id: c.id,
     cuisine_id: c.cuisineId,
+    parent_id: c.parentId ?? null,
     user: {
       user_id: c.userId,
       username: deleted ? null : c.username,
@@ -443,18 +444,12 @@ export class CulinaryController {
       data: {
         items: await (async () => {
           const repo = this.cuisineComments.ugcLemmaLinks;
-          if (repo) {
-            return attachLemmaLinksToCommentWireItems(
-              repo,
-              'cuisine_comment',
-              page.items,
-              (c) => toCuisineCommentWire(c),
-            );
-          }
-          return page.items.map((c) => ({
-            ...toCuisineCommentWire(c),
-            lemma_links: [] as const,
-          }));
+          return attachLemmaLinksToNestedCommentWireItems(
+            repo,
+            'cuisine_comment',
+            page.items,
+            (item) => toCuisineCommentWire(item),
+          );
         })(),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
@@ -468,6 +463,7 @@ export class CulinaryController {
     const body = c.req.valid('json' as never) as EntityCommentBody;
     const comment = await this.cuisineComments.createComment.execute({
       cuisineId: id,
+      parentId: body.parent_id ?? null,
       userId: user.user_id,
       body: body.body ?? '',
       stickerId: body.sticker_id ?? null,
@@ -499,6 +495,7 @@ export class CulinaryController {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const comment = await this.cuisineComments.createCommentAudio.execute({
       cuisineId: id,
+      parentId: typeof body['parent_id'] === 'string' ? body['parent_id'] : null,
       userId: user.user_id,
       bytes,
       mimeType: file.type || null,
@@ -508,6 +505,12 @@ export class CulinaryController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toCuisineCommentWire(comment) }, 201);
+  }
+
+  async getCuisineCommentEditHistory(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const data = await this.cuisineComments.listComments.getEditHistory(id);
+    return c.json({ success: true as const, data });
   }
 
   async updateCuisineComment(c: Context<{ Variables: AppVariables }>) {

@@ -1,3 +1,4 @@
+import { attachCommentRepliesTwoLevel } from '@/shared/comment/comment-threading';
 import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { cuisines } from '@/shared/database/drizzle/schema/cuisines.schema';
@@ -60,6 +61,7 @@ function toCuisineComment(
   return {
     id: row.id,
     cuisineId: row.cuisineId,
+    parentId: row.parentId ?? null,
     userId: row.userId,
     username: meta.authorDeletedAt ? null : meta.username,
     displayName: meta.authorDeletedAt ? null : meta.displayName,
@@ -507,6 +509,7 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .insert(cuisineComments)
       .values({
         cuisineId: input.cuisineId,
+        parentId: input.parentId ?? null,
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
@@ -556,7 +559,7 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
     filter: CuisineCommentListFilter,
   ): Promise<CursorPage<CuisineComment>> {
     const limit = filter.limit;
-    const conditions = [eq(cuisineComments.cuisineId, cuisineId)];
+    const conditions = [eq(cuisineComments.cuisineId, cuisineId), isNull(cuisineComments.parentId)];
     if (filter.status) conditions.push(eq(cuisineComments.status, filter.status));
     if (filter.cursor) conditions.push(lt(cuisineComments.id, filter.cursor));
     const rows = await this.db
@@ -579,8 +582,39 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .limit(limit + 1);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    return {
-      items: page.map((row) =>
+    const tops = page.map((row) =>
+      toCuisineComment(row.c, {
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        userRole: row.userRole,
+        authorDeletedAt: row.authorDeletedAt,
+        isEdited: Boolean(row.isEdited),
+      }),
+    );
+    const topIds = tops.map((t) => t.id);
+    let replies: CuisineComment[] = [];
+    if (topIds.length > 0) {
+      const replyConds = [inArray(cuisineComments.parentId, topIds)];
+      if (filter.status) replyConds.push(eq(cuisineComments.status, filter.status));
+      const replyRows = await this.db
+        .select({
+          c: cuisineComments,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          authorDeletedAt: users.deletedAt,
+          userRole: highestUserRoleSql,
+          isEdited: sql<boolean>`EXISTS (
+            SELECT 1 FROM ${ cuisineCommentRevisions }
+            WHERE ${ cuisineCommentRevisions.commentId } = ${ cuisineComments.id }
+          )`,
+        })
+        .from(cuisineComments)
+        .leftJoin(users, eq(users.id, cuisineComments.userId))
+        .where(and(...replyConds))
+        .orderBy(cuisineComments.createdAt, cuisineComments.id);
+      replies = replyRows.map((row) =>
         toCuisineComment(row.c, {
           username: row.username,
           displayName: row.displayName,
@@ -589,7 +623,10 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
           authorDeletedAt: row.authorDeletedAt,
           isEdited: Boolean(row.isEdited),
         }),
-      ),
+      );
+    }
+    return {
+      items: attachCommentRepliesTwoLevel(tops, replies),
       nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
       hasMore,
     };
@@ -664,6 +701,21 @@ export class CulinaryRepositoryImpl implements CulinaryRepository {
       .where(and(eq(cuisineComments.id, id), eq(cuisineComments.status, 'published')))
       .returning({ id: cuisineComments.id });
     return Boolean(row);
+  }
+
+  async listCommentRevisions(
+    commentId: string,
+  ): Promise<Array<{ editorId: string; body: string; createdAt: Date }>> {
+    const rows = await this.db
+      .select({
+        editorId: cuisineCommentRevisions.editorId,
+        body: cuisineCommentRevisions.body,
+        createdAt: cuisineCommentRevisions.createdAt,
+      })
+      .from(cuisineCommentRevisions)
+      .where(eq(cuisineCommentRevisions.commentId, commentId))
+      .orderBy(desc(cuisineCommentRevisions.createdAt), desc(cuisineCommentRevisions.id));
+    return rows;
   }
 
   async cuisineTargetExists(id: string): Promise<boolean> {

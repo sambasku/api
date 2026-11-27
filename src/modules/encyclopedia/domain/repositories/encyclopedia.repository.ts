@@ -63,6 +63,7 @@ export interface UpdateArticleInput {
 
 export interface NewArticleCommentInput {
   articleId: string;
+  parentId?: string | null;
   userId: string;
   /** Body pasca-blocklist. */
   body: string;
@@ -142,6 +143,7 @@ export interface ArticleRepository {
   }): Promise<ArticleComment | null>;
   markCommentDeletedByAuthor(id: string, actorId: string): Promise<boolean>;
   takedownComment(id: string, actorId: string): Promise<boolean>;
+  listCommentRevisions?(commentId: string): Promise<Array<{ editorId: string; body: string; createdAt: Date }>>;
   /** Resolve wordId induk tidak relevan untuk artikel; targetExists vote perlu ini. */
   commentTargetExists(id: string): Promise<boolean>;
   articleTargetExists(id: string): Promise<boolean>;

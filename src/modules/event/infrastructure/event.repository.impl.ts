@@ -1,3 +1,4 @@
+import { attachCommentRepliesTwoLevel } from '@/shared/comment/comment-threading';
 import { and, desc, eq, gt, gte, getTableColumns, inArray, isNull, lt, or, asc, sql, count } from "drizzle-orm";
 import type { AppDatabase } from "@/shared/database/drizzle/client";
 import { events, eventPlaces } from "@/shared/database/drizzle/schema/events.schema";
@@ -58,6 +59,7 @@ function toEventComment(
   return {
     id: row.id,
     eventId: row.eventId,
+    parentId: row.parentId ?? null,
     userId: row.userId,
     username: meta.authorDeletedAt ? null : meta.username,
     displayName: meta.authorDeletedAt ? null : meta.displayName,
@@ -590,6 +592,7 @@ export class EventRepositoryImpl implements EventRepository {
       .insert(eventComments)
       .values({
         eventId: input.eventId,
+        parentId: input.parentId ?? null,
         userId: input.userId,
         body: input.body,
         bodyOriginal: input.bodyOriginal,
@@ -639,7 +642,7 @@ export class EventRepositoryImpl implements EventRepository {
     filter: EventCommentListFilter,
   ): Promise<CursorPage<EventComment>> {
     const limit = filter.limit;
-    const conditions = [eq(eventComments.eventId, eventId)];
+    const conditions = [eq(eventComments.eventId, eventId), isNull(eventComments.parentId)];
     if (filter.status) conditions.push(eq(eventComments.status, filter.status));
     // Komentar id = ULID monoton -> lt(id, cursor) aman sebagai keyset
     // (satu kolom sort by id desc, bukan composite - lihat rule keyset).
@@ -666,8 +669,39 @@ export class EventRepositoryImpl implements EventRepository {
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    return {
-      items: page.map((row) =>
+    const tops = page.map((row) =>
+      toEventComment(row.c, {
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        userRole: row.userRole,
+        authorDeletedAt: row.authorDeletedAt,
+        isEdited: Boolean(row.isEdited),
+      }),
+    );
+    const topIds = tops.map((t) => t.id);
+    let replies: EventComment[] = [];
+    if (topIds.length > 0) {
+      const replyConds = [inArray(eventComments.parentId, topIds)];
+      if (filter.status) replyConds.push(eq(eventComments.status, filter.status));
+      const replyRows = await this.db
+        .select({
+          c: eventComments,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          authorDeletedAt: users.deletedAt,
+          userRole: highestUserRoleSql,
+          isEdited: sql<boolean>`EXISTS (
+            SELECT 1 FROM ${ eventCommentRevisions }
+            WHERE ${ eventCommentRevisions.commentId } = ${ eventComments.id }
+          )`,
+        })
+        .from(eventComments)
+        .leftJoin(users, eq(users.id, eventComments.userId))
+        .where(and(...replyConds))
+        .orderBy(eventComments.createdAt, eventComments.id);
+      replies = replyRows.map((row) =>
         toEventComment(row.c, {
           username: row.username,
           displayName: row.displayName,
@@ -676,7 +710,10 @@ export class EventRepositoryImpl implements EventRepository {
           authorDeletedAt: row.authorDeletedAt,
           isEdited: Boolean(row.isEdited),
         }),
-      ),
+      );
+    }
+    return {
+      items: attachCommentRepliesTwoLevel(tops, replies),
       nextCursor: hasMore ? (page[page.length - 1]?.c.id ?? null) : null,
       hasMore,
     };
@@ -753,6 +790,21 @@ export class EventRepositoryImpl implements EventRepository {
       .where(and(eq(eventComments.id, id), eq(eventComments.status, 'published')))
       .returning({ id: eventComments.id });
     return Boolean(row);
+  }
+
+  async listCommentRevisions(
+    commentId: string,
+  ): Promise<Array<{ editorId: string; body: string; createdAt: Date }>> {
+    const rows = await this.db
+      .select({
+        editorId: eventCommentRevisions.editorId,
+        body: eventCommentRevisions.body,
+        createdAt: eventCommentRevisions.createdAt,
+      })
+      .from(eventCommentRevisions)
+      .where(eq(eventCommentRevisions.commentId, commentId))
+      .orderBy(desc(eventCommentRevisions.createdAt), desc(eventCommentRevisions.id));
+    return rows;
   }
 
   async eventTargetExists(id: string): Promise<boolean> {

@@ -3,7 +3,7 @@ import type { AppVariables, AuthUser } from '@/shared/types';
 import { BadRequestError, UnauthorizedError } from '@/shared/errors/app-error';
 import type { EntityCommentBody } from '@/shared/comment/entity-comment-body.schema';
 import type { UgcCommentLemmaRepository } from '@/modules/ugc-comment-lemma/domain/repositories/ugc-comment-lemma.repository';
-import { attachLemmaLinksToCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
+import { attachLemmaLinksToNestedCommentWireItems } from '@/modules/ugc-comment-lemma/presentation/enrich-comment-lemma-links';
 import { entityCommentMediaWireFields } from '@/shared/comment/entity-comment-wire';
 import { MAX_AUDIO_BYTES } from '@/modules/word/application/utils/validate-audio-file';
 import { isVerifierRole } from '@/modules/word/application/utils/resolve-publication';
@@ -28,6 +28,7 @@ export function toKaryaCommentWire(c: KaryaComment) {
   return {
     id: c.id,
     karya_id: c.karyaId,
+    parent_id: c.parentId ?? null,
     user: {
       user_id: c.userId,
       username: deleted ? null : c.username,
@@ -75,18 +76,12 @@ export class KaryaCommentController {
       data: {
         items: await (async () => {
           const repo = this.comments.ugcLemmaLinks;
-          if (repo) {
-            return attachLemmaLinksToCommentWireItems(
-              repo,
-              'karya_comment',
-              page.items,
-              (c) => toKaryaCommentWire(c),
-            );
-          }
-          return page.items.map((c) => ({
-            ...toKaryaCommentWire(c),
-            lemma_links: [] as const,
-          }));
+          return attachLemmaLinksToNestedCommentWireItems(
+            repo,
+            'karya_comment',
+            page.items,
+            (item) => toKaryaCommentWire(item),
+          );
         })(),
         next_cursor: page.nextCursor,
         has_more: page.hasMore,
@@ -100,6 +95,7 @@ export class KaryaCommentController {
     const body = c.req.valid('json' as never) as EntityCommentBody;
     const comment = await this.comments.createComment.execute({
       karyaId: id,
+      parentId: body.parent_id ?? null,
       userId: user.user_id,
       body: body.body ?? '',
       stickerId: body.sticker_id ?? null,
@@ -131,6 +127,7 @@ export class KaryaCommentController {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const comment = await this.comments.createCommentAudio.execute({
       karyaId: id,
+      parentId: typeof body['parent_id'] === 'string' ? body['parent_id'] : null,
       userId: user.user_id,
       bytes,
       mimeType: file.type || null,
@@ -140,6 +137,12 @@ export class KaryaCommentController {
       requestId: c.get('requestId') ?? null,
     });
     return c.json({ success: true as const, data: toKaryaCommentWire(comment) }, 201);
+  }
+
+  async getCommentEditHistory(c: Context<{ Variables: AppVariables }>) {
+    const { id } = c.req.valid("param" as never) as { id: string };
+    const data = await this.deps.listComments.getEditHistory(id);
+    return c.json({ success: true as const, data });
   }
 
   async updateComment(c: Context<{ Variables: AppVariables }>) {

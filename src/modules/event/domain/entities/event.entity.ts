@@ -111,6 +111,7 @@ export interface EventListItem extends Event {
 export interface EventComment {
   id: string;
   eventId: string;
+  parentId: string | null;
   userId: string;
   username: string | null;
   displayName: string | null;
@@ -125,6 +126,7 @@ export interface EventComment {
   isEdited: boolean;
   createdAt: Date;
   updatedAt: Date | null;
+  replies?: EventComment[];
 }
 
 /**

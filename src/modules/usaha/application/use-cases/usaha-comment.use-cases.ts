@@ -1,3 +1,4 @@
+import { buildCommentEditHistoryWire, resolveCommentParentId } from '@/shared/comment/comment-threading';
 import {
   BadRequestError,
   ForbiddenError,
@@ -30,6 +31,18 @@ export class ListUsahaCommentsUseCase {
       limit,
     });
   }
+
+  async getEditHistory(commentId: string) {
+    const comment = await this.repo.findCommentById(commentId);
+    if (!comment) {
+      throw new NotFoundError('COMMENT_NOT_FOUND', 'Komentar tidak ditemukan');
+    }
+    const revisions =
+      typeof this.repo.listCommentRevisions === 'function'
+        ? await this.repo.listCommentRevisions(commentId)
+        : [];
+    return buildCommentEditHistoryWire(comment, revisions);
+  }
 }
 
 export class CreateUsahaCommentUseCase {
@@ -44,6 +57,7 @@ export class CreateUsahaCommentUseCase {
 
   async execute(input: {
     usahaId: string;
+    parentId?: string | null;
     userId: string;
     body?: string;
     stickerId?: string | null;
@@ -69,8 +83,17 @@ export class CreateUsahaCommentUseCase {
       blocklistRepo: this.blocklistRepo,
       abuse: this.abuse,
     });
+    const parentId = await resolveCommentParentId({
+      rawParentId: input.parentId,
+      hostId: input.usahaId,
+      findParent: async (id) => {
+        const p = await this.repo.findCommentById(id);
+        return p ? { id: p.id, hostId: p.usahaId, parentId: p.parentId, status: p.status } : null;
+      },
+    });
     const created = await this.repo.createComment({
       usahaId: input.usahaId,
+      parentId,
       userId: input.userId,
       body: prepared.body,
       bodyOriginal: prepared.bodyOriginal,
