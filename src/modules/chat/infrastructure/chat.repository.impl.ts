@@ -2,13 +2,16 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
   chatMessageDeletions,
+  chatMessageModerationSnapshots,
   chatMessageRevisions,
   chatMessages,
 } from '@/shared/database/drizzle/schema/chat.schema';
 import {
   CHAT_PING_BODY,
+  CHAT_TOMBSTONE_SNIPPET,
   type ChatMessage,
   type ChatMessageKind,
+  type ChatMessageModerationSnapshot,
   type ChatMessageRevision,
 } from '../domain/entities/chat-message.entity';
 import type {
@@ -162,7 +165,50 @@ export class ChatRepositoryImpl implements ChatRepository {
     input: TombstoneChatMessageInput,
   ): Promise<ChatMessage | null> {
     const now = new Date();
+    const reason = input.reason ?? 'author';
     return this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(chatMessages)
+        .where(eq(chatMessages.id, input.id));
+      if (!current) return null;
+
+      // Salinan moderasi (admin-only) sebelum body & revisi dihapus.
+      const revisions = await tx
+        .select()
+        .from(chatMessageRevisions)
+        .where(eq(chatMessageRevisions.messageId, input.id))
+        .orderBy(asc(chatMessageRevisions.createdAt));
+      await tx
+        .insert(chatMessageModerationSnapshots)
+        .values({
+          messageId: current.id,
+          userId: current.userId,
+          username: current.username,
+          displayName: current.displayName,
+          kind: current.kind,
+          body: current.body,
+          stickerId: current.stickerId,
+          replyToId: current.replyToId,
+          replySnippet: current.replySnippet,
+          revisionsJson: revisions.map((r) => ({
+            body: r.body,
+            editor_id: r.editorId,
+            created_at: r.createdAt.toISOString(),
+          })),
+          messageCreatedAt: current.createdAt,
+          deletedAt: now,
+          deletedBy: input.deletedBy,
+          deletionReason: reason,
+          snapshotAt: now,
+        })
+        .onConflictDoNothing();
+
+      // Riwayat suntingan tidak lagi bisa dibaca pengguna.
+      await tx
+        .delete(chatMessageRevisions)
+        .where(eq(chatMessageRevisions.messageId, input.id));
+
       const [row] = await tx
         .update(chatMessages)
         .set({
@@ -180,17 +226,51 @@ export class ChatRepositoryImpl implements ChatRepository {
         .returning();
       if (!row) return null;
 
+      // Kutipan di balasan orang lain tidak boleh menampilkan teks asli.
+      await tx
+        .update(chatMessages)
+        .set({ replySnippet: CHAT_TOMBSTONE_SNIPPET })
+        .where(eq(chatMessages.replyToId, input.id));
+
       await tx
         .insert(chatMessageDeletions)
         .values({
           messageId: input.id,
           deletedBy: input.deletedBy,
-          reason: input.reason ?? 'author',
+          reason,
         })
         .onConflictDoNothing();
 
       return toDomain(row);
     });
+  }
+
+  async findModerationSnapshot(
+    messageId: string,
+  ): Promise<ChatMessageModerationSnapshot | null> {
+    const [row] = await this.db
+      .select()
+      .from(chatMessageModerationSnapshots)
+      .where(eq(chatMessageModerationSnapshots.messageId, messageId))
+      .limit(1);
+    if (!row) return null;
+    return {
+      messageId: row.messageId,
+      userId: row.userId,
+      username: row.username ?? null,
+      displayName: row.displayName ?? null,
+      kind: (row.kind as ChatMessageKind) || 'text',
+      body: row.body ?? null,
+      stickerId: row.stickerId ?? null,
+      replyToId: row.replyToId ?? null,
+      replySnippet: row.replySnippet ?? null,
+      revisions: (row.revisionsJson as ChatMessageModerationSnapshot['revisions']) ?? [],
+      messageCreatedAt: row.messageCreatedAt,
+      deletedAt: row.deletedAt,
+      deletedBy: row.deletedBy,
+      deletionReason: row.deletionReason ?? null,
+      snapshotAt: row.snapshotAt,
+    };
   }
 
   async listRevisions(messageId: string): Promise<ChatMessageRevision[]> {

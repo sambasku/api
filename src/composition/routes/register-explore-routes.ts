@@ -4,6 +4,10 @@ import type { AppVariables } from '@/shared/types';
 import * as di from '../container';
 import { publicImageController } from './shared-late-controllers';
 import {
+  createAdminPhotoCommentRoutes,
+  createPublicPhotoCommentRoutes,
+} from "@/modules/photo-comment/presentation/v1/photo-comment.routes";
+import {
   createAdminPlaceRoutes,
   createPublicPlaceRoutes,
 } from "@/modules/place/presentation/v1/place.routes";
@@ -43,6 +47,10 @@ import {
   createAdminUsahaCategoryRoutes,
   createPublicUsahaCategoryRoutes,
 } from "@/modules/usaha-category/presentation/v1/usaha-category.routes";
+import {
+  createAdminLayananCategoryRoutes,
+  createPublicLayananCategoryRoutes,
+} from "@/modules/layanan-category/presentation/v1/layanan-category.routes";
 import {
   createAdminUsahaRoutes,
   createPublicUsahaRoutes,
@@ -191,6 +199,22 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
       controller: di.placeController,
       authenticate: di.authenticate,
       optionalAuthenticate: di.optionalAuthenticate,
+    }),
+  );
+  // Komentar foto UGC (#387).
+  app.route(
+    "/api/v1/photos",
+    createPublicPhotoCommentRoutes({
+      controller: di.photoCommentController,
+      authenticate: di.authenticate,
+      optionalAuthenticate: di.optionalAuthenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/admin/photos",
+    createAdminPhotoCommentRoutes({
+      controller: di.photoCommentController,
+      authenticate: di.authenticate,
     }),
   );
   app.route(
@@ -369,6 +393,17 @@ export function registerExploreRoutes(app: OpenAPIHono<{ Variables: AppVariables
   app.route(
     "/api/v1/usaha-categories",
     createPublicUsahaCategoryRoutes({ controller: di.usahaCategoryController }),
+  );
+  app.route(
+    "/api/v1/admin/layanan-categories",
+    createAdminLayananCategoryRoutes({
+      controller: di.layananCategoryController,
+      authenticate: di.authenticate,
+    }),
+  );
+  app.route(
+    "/api/v1/layanan-categories",
+    createPublicLayananCategoryRoutes({ controller: di.layananCategoryController }),
   );
   app.route(
     "/api/v1/usaha",

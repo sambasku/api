@@ -3,6 +3,14 @@ import { LAYANAN_PHONES_MAX, LAYANAN_PHONES_MIN } from '../../domain/layanan';
 
 const optionalText = z.string().trim().max(500).nullish();
 
+/** Slug kategori dari master layanan_categories (kebenaran di DB, dicek di use case). */
+const categorySlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
 const phoneItemSchema = z.object({
   phone: z.string().trim().min(8).max(40),
   note: optionalText,
@@ -10,7 +18,7 @@ const phoneItemSchema = z.object({
 });
 
 export const layananFieldsSchema = z.object({
-  category: z.enum(['ambulance', 'fire']),
+  category: categorySlugSchema,
   name: z.string().trim().min(2).max(120),
   phones: z.array(phoneItemSchema).min(LAYANAN_PHONES_MIN).max(LAYANAN_PHONES_MAX),
   logo_url: z.string().trim().max(500).nullish(),
@@ -25,7 +33,7 @@ export const layananFieldsSchema = z.object({
 
 export const listLayananQuerySchema = z.object({
   region_id: z.string().trim().min(1).max(80).optional(),
-  category: z.enum(['ambulance', 'fire']).optional(),
+  category: categorySlugSchema.optional(),
   q: z.string().trim().min(1).max(100).optional(),
 });
 

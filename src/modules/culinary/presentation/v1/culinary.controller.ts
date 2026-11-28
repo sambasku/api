@@ -1,3 +1,4 @@
+import { cuisinePhotoRef } from '@/modules/photo-comment/domain/photo-ref';
 import type { Context } from 'hono';
 import type { RecordEntityChange } from '@/modules/change-history/application/record-entity-change';
 import { CuisineChangeWriter } from '../../application/cuisine-change-writer';
@@ -121,6 +122,8 @@ export function serializeCuisine(c: Cuisine | CuisineDetail) {
     origin_region: c.originRegion,
     images: c.images.map((img) => ({
       url: img.url,
+      // #387: id stabil foto untuk komentar foto (images_json tanpa id).
+      photo_ref: cuisinePhotoRef(c.id, img.url),
       is_main: img.isMain,
       attribution: img.attribution,
     })),

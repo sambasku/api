@@ -325,6 +325,15 @@ import { UsahaContributionUseCases } from "@/modules/usaha-contribution/applicat
 import { UsahaContributionController } from "@/modules/usaha-contribution/presentation/v1/usaha-contribution.controller";
 import { LayananRepositoryImpl } from "@/modules/layanan/infrastructure/layanan.repository.impl";
 import { LayananUseCases } from "@/modules/layanan/application/layanan.use-cases";
+import { LayananCategoryRepositoryImpl } from "@/modules/layanan-category/infrastructure/layanan-category.repository.impl";
+import {
+  AssertSelectableLayananCategoryUseCase,
+  CreateLayananCategoryUseCase,
+  DeleteLayananCategoryUseCase,
+  ListLayananCategoriesUseCase,
+  UpdateLayananCategoryUseCase,
+} from "@/modules/layanan-category/application/use-cases/layanan-category.use-cases";
+import { LayananCategoryController } from "@/modules/layanan-category/presentation/v1/layanan-category.controller";
 import { LayananController } from "@/modules/layanan/presentation/v1/layanan.controller";
 import { CommunityRepositoryImpl } from "@/modules/community/infrastructure/community.repository.impl";
 import { CommunityUseCases } from "@/modules/community/application/community.use-cases";
@@ -580,6 +589,16 @@ import { NotificationPushCooldownRepositoryImpl } from "@/modules/notification/i
 import { RecordInboxNotificationUseCase } from "@/modules/notification/application/use-cases/record-inbox-notification.use-case";
 import { ReviewPushCooldownGate } from "@/modules/notification/application/use-cases/review-push-cooldown-gate";
 import { WordCommentPushCooldownGate } from "@/modules/notification/application/use-cases/word-comment-push-cooldown-gate";
+import { PhotoCommentRepositoryImpl } from "@/modules/photo-comment/infrastructure/photo-comment.repository.impl";
+import { PhotoResolverImpl } from "@/modules/photo-comment/infrastructure/photo-resolver.impl";
+import {
+  CreatePhotoCommentUseCase,
+  DeletePhotoCommentUseCase,
+  ListPhotoCommentsUseCase,
+  TakedownPhotoCommentUseCase,
+  UpdatePhotoCommentUseCase,
+} from "@/modules/photo-comment/application/use-cases/photo-comment.use-cases";
+import { PhotoCommentController } from "@/modules/photo-comment/presentation/v1/photo-comment.controller";
 import { DiscussionReplyPushCooldownGate, ReplyPushCooldownGate } from "@/modules/notification/application/use-cases/discussion-reply-push-cooldown-gate";
 import { WordVotePushCooldownGate } from "@/modules/notification/application/use-cases/word-vote-push-cooldown-gate";
 import { ArticleClapPushCooldownGate } from "@/modules/notification/application/use-cases/article-clap-push-cooldown-gate";
@@ -1451,10 +1470,18 @@ export const karyaViewsController = new KaryaViewsController(
   new ListKaryaViewsUseCase(karyaViewsRepo),
   new GetKaryaViewReportUseCase(karyaViewsRepo),
 );
+export const layananCategoryRepo = new LayananCategoryRepositoryImpl(db);
+export const layananCategoryController = new LayananCategoryController(
+  new CreateLayananCategoryUseCase(layananCategoryRepo),
+  new UpdateLayananCategoryUseCase(layananCategoryRepo),
+  new DeleteLayananCategoryUseCase(layananCategoryRepo),
+  new ListLayananCategoriesUseCase(layananCategoryRepo),
+);
 export const layananController = new LayananController(
   new LayananUseCases(
     new LayananRepositoryImpl(db),
     regionRepo,
+    new AssertSelectableLayananCategoryUseCase(layananCategoryRepo),
     activityEvents,
     explorationGroupNotifier,
     recordEntityChange,
@@ -1791,6 +1818,40 @@ export const wordCommentPushCooldown = new WordCommentPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,
 );
+export const photoCommentPushCooldown = new WordCommentPushCooldownGate(
+  appSettingsRepo,
+  notificationPushCooldownRepo,
+  "photo_comment",
+);
+// ---- Komentar foto UGC (#387): lemma, wisata, usaha, kuliner, acara. ----
+export const photoCommentRepo = new PhotoCommentRepositoryImpl(db);
+export const photoResolver = new PhotoResolverImpl(db);
+export const photoCommentController = new PhotoCommentController({
+  listComments: new ListPhotoCommentsUseCase(photoCommentRepo),
+  createComment: new CreatePhotoCommentUseCase(
+    photoCommentRepo,
+    photoResolver,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+    activityEvents,
+    {
+      userRepo,
+      inbox: recordInbox,
+      notifyUser,
+      pushCooldown: photoCommentPushCooldown,
+    },
+  ),
+  updateComment: new UpdatePhotoCommentUseCase(
+    photoCommentRepo,
+    auditRepo,
+    commentBlocklistRepo,
+    recordAbuseSignal,
+  ),
+  deleteComment: new DeletePhotoCommentUseCase(photoCommentRepo),
+  takedownComment: new TakedownPhotoCommentUseCase(photoCommentRepo, auditRepo),
+  ugcLemmaLinks: ugcCommentLemmaRepo,
+});
 export const discussionReplyPushCooldown = new DiscussionReplyPushCooldownGate(
   appSettingsRepo,
   notificationPushCooldownRepo,

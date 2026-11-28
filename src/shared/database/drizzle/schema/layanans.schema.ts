@@ -1,8 +1,8 @@
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { generateId } from '@/shared/utils/ulid';
 
-export const LAYANAN_CATEGORIES = ['ambulance', 'fire'] as const;
-export type LayananCategory = (typeof LAYANAN_CATEGORIES)[number];
+/** Slug kategori dari master `layanan_categories` (validasi di app, bukan enum DB). */
+export type LayananCategory = string;
 
 export const LAYANAN_PUBLISH_STATUSES = ['published', 'unpublished'] as const;
 export type LayananPublishStatus = (typeof LAYANAN_PUBLISH_STATUSES)[number];
@@ -15,7 +15,7 @@ export const layanans = sqliteTable(
       .primaryKey()
       .$defaultFn(() => generateId()),
     slug: text('slug').notNull(),
-    category: text('category', { enum: LAYANAN_CATEGORIES }).notNull(),
+    category: text('category').notNull(),
     name: text('name').notNull(),
     /** JSON: [{ phone, note?, whatsapp? }, ...] */
     phonesJson: text('phones_json').notNull(),

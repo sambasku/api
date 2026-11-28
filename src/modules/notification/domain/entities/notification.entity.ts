@@ -19,6 +19,9 @@ export type InboxNotificationType =
   | 'jinye_comment'
   | 'word_comment'
   | 'word_comment_mention'
+  /** #387: foto yang diunggah user dikomentari / komentar foto dibalas. */
+  | 'photo_comment'
+  | 'photo_comment_reply'
   /** #360: @username di chat publik. */
   | 'chat_mention'
   /** #200: foto komentar pre-moderation terpisah dari teks. */
@@ -81,6 +84,7 @@ export type NotificationTargetKind =
   | 'pantun'
   | 'jinye'
   | 'chat'
+  | 'photo'
   | 'day';
 
 /** CTA tap (#19). Null = fallback ke target_kind/target_id. */
@@ -100,7 +104,8 @@ export type NotificationActionKind =
 | 'baleho_placement'
 | 'pantun'
 | 'jinye'
-| 'chat';
+| 'chat'
+| 'photo';
 
 export interface InboxNotification {
   id: string;
@@ -238,6 +243,18 @@ export function inboxCopyFor(type: InboxNotificationType): { title: string; body
       return {
         title: 'Kamu disebut di komentar',
         body: 'Seseorang menyebutmu di komentar kosakata.',
+        bodyType: 'plain',
+      };
+    case 'photo_comment':
+      return {
+        title: 'Foto kamu dikomentari',
+        body: 'Ada komentar baru di fotomu.',
+        bodyType: 'plain',
+      };
+    case 'photo_comment_reply':
+      return {
+        title: 'Komentarmu dibalas',
+        body: 'Ada balasan baru di komentar fotomu.',
         bodyType: 'plain',
       };
     case 'chat_mention':

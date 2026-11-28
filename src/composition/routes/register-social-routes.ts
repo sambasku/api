@@ -62,6 +62,7 @@ import {
   GetChatCapabilitiesUseCase,
   ListChatMessagesUseCase,
   ListChatRevisionsUseCase,
+  GetChatModerationSnapshotUseCase,
 } from "@/modules/chat/application/use-cases/chat.use-cases";
 import {
   GetChatPingStatusUseCase,
@@ -69,6 +70,7 @@ import {
 } from "@/modules/chat/application/use-cases/send-chat-ping.use-case";
 import { ChatController } from "@/modules/chat/presentation/v1/chat.controller";
 import { createChatRoutes } from "@/modules/chat/presentation/v1/chat.routes";
+import { createChatAdminRoutes } from "@/modules/chat/presentation/v1/chat-admin.routes";
 import { MintVoiceTokenUseCase } from "@/modules/voice/application/mint-voice-token.use-case";
 import { MintTurnCredentialsUseCase } from "@/modules/voice/application/mint-turn-credentials.use-case";
 import { RecordVoiceRoomEventUseCase } from "@/modules/voice/application/record-voice-room-event.use-case";
@@ -404,6 +406,13 @@ export function registerSocialRoutes(app: OpenAPIHono<{ Variables: AppVariables 
       di.activityEvents,
       di.explorationGroupNotifier,
     ),
+  );
+  app.route(
+    "/api/v1/admin/chat",
+    createChatAdminRoutes({
+      getSnapshot: new GetChatModerationSnapshotUseCase(chatRepo, di.auditRepo),
+      authenticate: di.authenticate,
+    }),
   );
   app.route(
     "/api/v1/chat",

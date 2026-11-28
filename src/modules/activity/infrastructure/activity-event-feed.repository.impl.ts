@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { activityEvents, articleComments, comments, articles, contributions, cuisineComments, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyaComments, karyas, kreators, layanans, pantunReplies, pantuns, placeComments, places, searchMisses, usahaComments, users, usahas, votes, wordImages, words } from '@/shared/database/drizzle/schema';
+import { activityEvents, articleComments, comments, articles, contributions, cuisineComments, cuisines, discussions, eventComments, events, jinye, jinyeComments, karyaComments, karyas, kreators, layanans, pantunReplies, pantuns, photoComments, placeComments, places, searchMisses, usahaComments, users, usahas, votes, wordImages, words } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import type { PublicActivityItem } from '@/modules/user/domain/entities/public-profile.entity';
 import { feedExcludedUsageLabelClauses } from '@/shared/database/drizzle/usage-label-filters';
@@ -79,6 +79,7 @@ vote_meaning: 'vote',
   place_published: 'place_listing',
   place_visited: 'place_listing',
   place_comment_created: 'place_listing',
+  photo_comment_created: 'comment',
   event_published: 'event',
   event_going: 'event',
   event_comment_created: 'event',
@@ -135,6 +136,7 @@ const KIND_BODY: Record<ActivityEventKind, string> = {
   place_published: 'Menambahkan wisata',
   place_visited: 'Pernah singgah di wisata',
   place_comment_created: 'Mengomentari wisata',
+  photo_comment_created: 'Mengomentari foto',
   event_published: 'Menambahkan acara',
   event_going: 'Berencana hadir di acara',
   event_comment_created: 'Mengomentari acara',
@@ -220,6 +222,7 @@ const PROFILE_KIND_SETS: Record<ProfileCategory, ActivityEventKind[]> = {
     'event_comment_created',
     'karya_comment_created',
     'place_comment_created',
+    'photo_comment_created',
     'usaha_comment_created',
     'cuisine_comment_created',
     'jinye_comment_created',
@@ -600,6 +603,8 @@ export class ActivityEventFeedRepositoryImpl {
       return q ? `Pernah singgah di ${q}`.trim() : 'Pernah singgah di wisata';
     case 'place_comment_created':
       return 'Mengomentari wisata';
+    case 'photo_comment_created':
+      return 'Mengomentari foto';
     case 'usaha_comment_created':
       return 'Mengomentari usaha';
     case 'cuisine_comment_created':
@@ -846,6 +851,14 @@ articleTitle: articles.title,
         ),
       )
     .leftJoin(
+      photoComments,
+      and(
+        eq(activityEvents.kind, 'photo_comment_created'),
+        eq(photoComments.id, activityEvents.targetId),
+        eq(photoComments.status, 'published'),
+      ),
+    )
+    .leftJoin(
       usahaComments,
       and(
         eq(activityEvents.kind, 'usaha_comment_created'),
@@ -1082,6 +1095,7 @@ articleTitle: articles.title,
         // Wisata baru hanya tayang selama masih published (visibility read-time).
         sql`(${activityEvents.kind} <> 'place_published' or ${places.id} is not null)`,
         sql`(${activityEvents.kind} <> 'place_visited' or ${places.id} is not null)`,
+        sql`(${activityEvents.kind} <> 'photo_comment_created' or ${photoComments.id} is not null)`,
         sql`(${activityEvents.kind} <> 'place_comment_created' or ${placeComments.id} is not null)`,
         sql`(${activityEvents.kind} <> 'place_comment_created' or ${places.id} is not null)`,
         // Acara baru / berencana datang hanya tayang selama masih published.
@@ -1509,6 +1523,7 @@ case 'cuisine_comment_created':
 case 'place_published':
 case 'place_visited':
 case 'place_comment_created':
+case 'photo_comment_created':
 case 'event_published':
 case 'event_going':
 case 'event_comment_created':

@@ -7,6 +7,8 @@ import {
   DeleteChatMessageUseCase,
   EditChatMessageUseCase,
   GetChatCapabilitiesUseCase,
+  GetChatModerationSnapshotUseCase,
+  ListChatRevisionsUseCase,
 } from '../../application/use-cases/chat.use-cases';
 import type { ChatMessage } from '../../domain/entities/chat-message.entity';
 import type { ChatRepository } from '../../domain/repositories/chat.repository';
@@ -110,6 +112,7 @@ function emptyRepo(overrides: Partial<ChatRepository> = {}): ChatRepository {
     ),
     listRevisions: vi.fn(async () => []),
     findLatestPing: vi.fn(async () => null),
+    findModerationSnapshot: vi.fn(async () => null),
     ...overrides,
   };
 }
@@ -120,6 +123,7 @@ function emptyMirror(
   return {
     upsert: vi.fn(async () => undefined),
     patch: vi.fn(async () => undefined),
+    patchReplySnippets: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -440,6 +444,10 @@ describe('DeleteChatMessageUseCase', () => {
       }),
     );
     expect(mirror.patch).toHaveBeenCalledWith(result);
+    expect(mirror.patchReplySnippets).toHaveBeenCalledWith(
+      MSG_ID,
+      'Pesan dihapus',
+    );
     expect(result.body).toBeNull();
   });
 
@@ -476,5 +484,84 @@ describe('DeleteChatMessageUseCase', () => {
     );
     expect(repo.tombstone).toHaveBeenCalled();
     expect(mirror.patch).toHaveBeenCalledWith(tombstoned);
+  });
+});
+
+describe('ListChatRevisionsUseCase', () => {
+  it('pesan terhapus → CHAT_MESSAGE_NOT_FOUND (riwayat tidak bisa dibaca)', async () => {
+    const repo = emptyRepo({
+      findById: vi.fn(async () => makeMessage({ deletedAt: new Date() })),
+    });
+    const uc = new ListChatRevisionsUseCase(repo);
+    await expect(uc.execute(MSG_ID)).rejects.toThrow('Pesan tidak ditemukan');
+    expect(repo.listRevisions).not.toHaveBeenCalled();
+  });
+
+  it('pesan hidup → daftar revisi', async () => {
+    const revisions = [
+      {
+        id: 'rev-1',
+        messageId: MSG_ID,
+        editorId: ACTOR,
+        body: 'halo lama',
+        createdAt: new Date('2026-11-17T14:00:00.000Z'),
+      },
+    ];
+    const repo = emptyRepo({ listRevisions: vi.fn(async () => revisions) });
+    const uc = new ListChatRevisionsUseCase(repo);
+    await expect(uc.execute(MSG_ID)).resolves.toEqual(revisions);
+  });
+});
+
+describe('GetChatModerationSnapshotUseCase', () => {
+  const snapshot = {
+    messageId: MSG_ID,
+    userId: ACTOR,
+    username: 'rani',
+    displayName: 'Rani',
+    kind: 'text' as const,
+    body: 'isi asli',
+    stickerId: null,
+    replyToId: null,
+    replySnippet: null,
+    revisions: [{ body: 'versi awal', editorId: ACTOR, createdAt: '2026-11-17T14:00:00.000Z' }],
+    messageCreatedAt: new Date('2026-11-17T13:59:00.000Z'),
+    deletedAt: new Date('2026-11-17T14:05:00.000Z'),
+    deletedBy: ACTOR,
+    deletionReason: 'author',
+    snapshotAt: new Date('2026-11-17T14:05:00.000Z'),
+  };
+
+  it('snapshot tidak ada → CHAT_MESSAGE_SNAPSHOT_NOT_FOUND', async () => {
+    const repo = emptyRepo({ findModerationSnapshot: vi.fn(async () => null) });
+    const audit = { record: vi.fn(async () => undefined), list: vi.fn() };
+    const uc = new GetChatModerationSnapshotUseCase(repo, audit);
+    await expect(
+      uc.execute({ messageId: MSG_ID, actorId: 'ADMIN' }),
+    ).rejects.toThrow('Salinan moderasi pesan tidak ditemukan');
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it('snapshot ada → dikembalikan dan akses dicatat audit', async () => {
+    const repo = emptyRepo({
+      findModerationSnapshot: vi.fn(async () => snapshot),
+    });
+    const audit = { record: vi.fn(async () => undefined), list: vi.fn() };
+    const uc = new GetChatModerationSnapshotUseCase(repo, audit);
+    const result = await uc.execute({
+      messageId: MSG_ID,
+      actorId: 'ADMIN',
+      requestId: 'req-1',
+    });
+    expect(result).toEqual(snapshot);
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'ADMIN',
+        action: 'chat.moderation_snapshot.view',
+        entityType: 'chat_message',
+        entityId: MSG_ID,
+        requestId: 'req-1',
+      }),
+    );
   });
 });

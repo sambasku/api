@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   ChatMessageKind,
+  ChatMessageModerationSnapshot,
   ChatMessageRevision,
 } from '../entities/chat-message.entity';
 
@@ -62,4 +63,8 @@ export interface ChatRepository {
   listRevisions(messageId: string): Promise<ChatMessageRevision[]>;
   /** Ping terakhir (kind=system, body=PING!!!) di channel. */
   findLatestPing(channel: string): Promise<ChatMessage | null>;
+  /** Salinan moderasi pesan terhapus (admin only). */
+  findModerationSnapshot(
+    messageId: string,
+  ): Promise<ChatMessageModerationSnapshot | null>;
 }

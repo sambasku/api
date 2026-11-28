@@ -56,6 +56,14 @@ const MOUNTS: Mount[] = [
     commentParam: 'commentId',
   },
   {
+    // #387: hostId = photo_ref (unik lintas jenis: ULID atau `<cuisineId>.<hash>`).
+    mount: '/api/v1/photos',
+    anchorKind: 'photo_comment',
+    path: '/:kind/:ref/comments/:commentId/lemma-links',
+    hostParam: 'ref',
+    commentParam: 'commentId',
+  },
+  {
     mount: '/api/v1/encyclopedia',
     anchorKind: 'article_comment',
     path: '/articles/:id/comments/:commentId/lemma-links',

@@ -4,6 +4,8 @@ export type ReviewPushCooldownChannel = 'contribution_approved' | 'contribution_
 export type NotificationPushCooldownChannel =
   | ReviewPushCooldownChannel
   | 'word_comment'
+  /** #387: push komentar foto. */
+  | 'photo_comment'
   | 'word_vote'
   | 'article_clap'
   /** #133: notif media anak kata (contoh kalimat / audio pelafalan). */

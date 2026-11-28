@@ -50,6 +50,8 @@ export function toMirrorPayload(msg: ChatMessage): ChatMirrorPayload {
 export interface ChatSupabaseMirror {
   upsert(message: ChatMessage): Promise<void>;
   patch(message: ChatMessage): Promise<void>;
+  /** Setelah tombstone: kutipan balasan yang memuat teks asli ikut ditutup. */
+  patchReplySnippets(messageId: string, snippet: string): Promise<void>;
 }
 
 let skipLogged = false;
@@ -121,6 +123,15 @@ export class ChatSupabaseMirrorService implements ChatSupabaseMirror {
       'PATCH',
       `chat_messages?id=eq.${encodeURIComponent(message.id)}`,
       patch,
+      'return=minimal',
+    );
+  }
+
+  async patchReplySnippets(messageId: string, snippet: string): Promise<void> {
+    await postgrest(
+      'PATCH',
+      `chat_messages?reply_to_id=eq.${encodeURIComponent(messageId)}`,
+      { reply_snippet: snippet },
       'return=minimal',
     );
   }

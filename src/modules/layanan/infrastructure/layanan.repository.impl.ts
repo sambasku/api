@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import {
+  layananCategories,
   layananContributions,
   layanans,
   regions,
@@ -99,8 +100,9 @@ export class LayananRepositoryImpl {
       .from(layanans)
       .innerJoin(regions, eq(layanans.regionId, regions.id))
       .leftJoin(village, eq(layanans.villageId, village.id))
+      .leftJoin(layananCategories, eq(layanans.category, layananCategories.id))
       .where(and(...conds))
-      .orderBy(asc(layanans.category), asc(layanans.name))
+      .orderBy(asc(layananCategories.sortOrder), asc(layanans.category), asc(layanans.name))
       .limit(200);
     return rows.map((r) => toLayanan(r.layanan, r.regionName, r.regionSlug, r.villageName));
   }

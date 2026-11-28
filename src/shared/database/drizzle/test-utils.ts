@@ -49,6 +49,7 @@ import {
   usahaItems,
   usahas,
   usahaCategories,
+  layananCategories,
   layananContributions,
   layanans,
   culinaryCategories,
@@ -141,6 +142,8 @@ discussions,
   jinyeReports,
   jinye,
   discussionLemmaLinks,
+  photoCommentRevisions,
+  photoComments,
   placeCommentRevisions,
   placeComments,
   placeVisits,
@@ -427,6 +430,16 @@ export async function reseedTestReferenceData(db: AppDatabase): Promise<void> {
       })),
     )
     .onConflictDoNothing();
+  // Seed sama dengan migrasi 0212_layanan_categories (truncateAll menghapus master).
+  await db
+    .insert(layananCategories)
+    .values([
+      { id: "ambulance", name: "Ambulan", shortLabel: "Ambulan", icon: "ambulance", sortOrder: 0, createdAt: now },
+      { id: "fire", name: "Pemadam kebakaran", shortLabel: "Damkar", icon: "flame", sortOrder: 1, createdAt: now },
+      { id: "pmi", name: "Palang Merah Indonesia", shortLabel: "PMI", icon: "cross", status: "archived", sortOrder: 2, createdAt: now },
+    ])
+    .onConflictDoNothing();
+
   // Seed sama dengan migrasi 0098_culinary (truncateAll menghapus katalog).
   await db
     .insert(culinaryCategories)
@@ -544,6 +557,8 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
     // Katalog achievement - sebelum userAchievements (FK achievement_id)
     achievements,
     // Places CRUD (FK place_images.place_id) - anak dulu
+    photoCommentRevisions,
+    photoComments,
     placeCommentRevisions,
     placeComments,
     placeVisits,
@@ -570,6 +585,7 @@ export async function truncateAll(db: AppDatabase): Promise<void> {
 	layananContributions,
 	layananViews,
 	layanans,
+	layananCategories,
 // Kuliner (anak dulu: contributions -> relasi -> entitas -> kategori)
 cuisineCommentRevisions,
 cuisineComments,

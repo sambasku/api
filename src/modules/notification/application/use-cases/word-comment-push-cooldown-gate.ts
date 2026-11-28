@@ -5,7 +5,7 @@ import {
 } from '@/modules/legal/domain/entities/app-setting.entity';
 import type { NotificationPushCooldownRepository } from '../../domain/repositories/notification-push-cooldown.repository';
 
-const CHANNEL = 'word_comment' as const;
+type GateChannel = 'word_comment' | 'photo_comment';
 
 function log(level: 'info' | 'warn', msg: string, obj: Record<string, unknown> = {}) {
   const line = JSON.stringify({ level, time: new Date().toISOString(), msg, ...obj });
@@ -28,6 +28,8 @@ export class WordCommentPushCooldownGate {
   constructor(
     private readonly settingsRepo: AppSettingsRepository,
     private readonly cooldownRepo: NotificationPushCooldownRepository,
+    /** #387: channel terpisah untuk push komentar foto (setting menit sama). */
+    private readonly channel: GateChannel = 'word_comment',
   ) {}
 
   async resolveMinutes(): Promise<number> {
@@ -39,16 +41,16 @@ export class WordCommentPushCooldownGate {
     const minutes = await this.resolveMinutes();
     if (minutes <= 0) return true;
 
-    const last = await this.cooldownRepo.get(userId, CHANNEL);
+    const last = await this.cooldownRepo.get(userId, this.channel);
     if (!last) return true;
 
     const elapsedMs = Date.now() - last.lastPushAt.getTime();
     const windowMs = minutes * 60_000;
     if (elapsedMs >= windowMs) return true;
 
-    log('info', 'push skipped: word_comment cooldown aktif', {
+    log('info', 'push skipped: push cooldown aktif', {
       user_id: userId,
-      channel: CHANNEL,
+      channel: this.channel,
       cooldown_minutes: minutes,
       last_push_at: last.lastPushAt.toISOString(),
       remaining_ms: windowMs - elapsedMs,
@@ -57,6 +59,6 @@ export class WordCommentPushCooldownGate {
   }
 
   async touchAfterSend(userId: string): Promise<void> {
-    await this.cooldownRepo.touch(userId, CHANNEL);
+    await this.cooldownRepo.touch(userId, this.channel);
   }
 }

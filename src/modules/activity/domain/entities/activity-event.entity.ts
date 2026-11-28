@@ -50,6 +50,7 @@ export const ACTIVITY_EVENT_KINDS = [
   'event_comment_created',
   'karya_comment_created',
   'place_comment_created',
+  'photo_comment_created',
   'usaha_comment_created',
   'cuisine_comment_created',
   'announcement',
@@ -125,6 +126,8 @@ export function wireKind(kind: ActivityEventKind): string {
       return 'culinary';
     case 'place_published':
     case 'place_visited':
+    case 'photo_comment_created':
+      return 'comment';
     case 'place_comment_created':
       return 'place_listing';
 case 'event_published':

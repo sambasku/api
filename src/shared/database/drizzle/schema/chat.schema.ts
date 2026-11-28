@@ -68,6 +68,39 @@ export const chatMessageRevisions = sqliteTable(
   (t) => [index('chat_revisions_message_idx').on(t.messageId, t.createdAt)],
 );
 
+/**
+ * Salinan moderasi: isi pesan + revisi disalin saat tombstone, sebelum body
+ * di-null-kan dan revisi dipurge. Hanya dibaca admin (root/admin) lewat
+ * endpoint moderasi. Tidak pernah di-mirror Supabase / wire publik.
+ */
+export const chatMessageModerationSnapshots = sqliteTable(
+  'chat_message_moderation_snapshots',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    messageId: text('message_id').notNull(),
+    userId: text('user_id').notNull(),
+    username: text('username'),
+    displayName: text('display_name'),
+    kind: text('kind').notNull(),
+    body: text('body'),
+    stickerId: text('sticker_id'),
+    replyToId: text('reply_to_id'),
+    replySnippet: text('reply_snippet'),
+    /** Array JSON `{ body, editor_id, created_at }` saat delete. */
+    revisionsJson: text('revisions_json', { mode: 'json' }).notNull(),
+    messageCreatedAt: integer('message_created_at', { mode: 'timestamp' }).notNull(),
+    deletedAt: integer('deleted_at', { mode: 'timestamp' }).notNull(),
+    deletedBy: text('deleted_by').notNull(),
+    deletionReason: text('deletion_reason'),
+    snapshotAt: integer('snapshot_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [uniqueIndex('chat_moderation_snapshots_message_uidx').on(t.messageId)],
+);
+
 /** Audit hapus (tombstone juga di chat_messages.deleted_at). */
 export const chatMessageDeletions = sqliteTable(
   'chat_message_deletions',

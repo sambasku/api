@@ -1,5 +1,5 @@
-export const LAYANAN_CATEGORIES = ['ambulance', 'fire'] as const;
-export type LayananCategory = (typeof LAYANAN_CATEGORIES)[number];
+/** Slug dari master `layanan_categories` (validasi di app; lihat modul layanan-category). */
+export type LayananCategory = string;
 
 export const LAYANAN_PHONES_MIN = 1;
 export const LAYANAN_PHONES_MAX = 5;

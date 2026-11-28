@@ -114,11 +114,29 @@ export async function mergeWordEntriesInTx(
   let nextOrder = Number(maxRow?.max ?? -1) + 1;
 
   // Sidik makna penunggu - dipakai menolak pindahan yang duplikat (#174).
-  const seenFps = new Set((await loadMeaningFingerprintById(tx, keepWordId)).values());
+  // Makna penunggu per sidik + status verif (dipakai mewarisi verif dari duplikat).
+  const keepFpById = await loadMeaningFingerprintById(tx, keepWordId);
+  const keepVerifiedById = new Map<string, boolean>(
+    (
+      await tx
+        .select({ id: meanings.id, isVerified: meanings.isVerified })
+        .from(meanings)
+        .where(and(eq(meanings.wordId, keepWordId), isNull(meanings.deletedAt)))
+    ).map((k: { id: string; isVerified: boolean }) => [k.id, Boolean(k.isVerified)]),
+  );
+  const keepByFp = new Map<string, { id: string; isVerified: boolean }>();
+  for (const [id, fp] of keepFpById) {
+    keepByFp.set(fp, { id, isVerified: keepVerifiedById.get(id) ?? false });
+  }
 
   for (const sourceId of sourceIds) {
     const sourceMeanings = await tx
-      .select({ id: meanings.id })
+      .select({
+        id: meanings.id,
+        isVerified: meanings.isVerified,
+        verifiedBy: meanings.verifiedBy,
+        verifiedAt: meanings.verifiedAt,
+      })
       .from(meanings)
       .where(and(eq(meanings.wordId, sourceId), isNull(meanings.deletedAt)))
       .orderBy(asc(meanings.orderIndex));
@@ -128,15 +146,31 @@ export async function mergeWordEntriesInTx(
 
     for (const m of sourceMeanings) {
       const fp = fpById.get(m.id);
+      const existing = fp ? keepByFp.get(fp) : undefined;
       // Sudah ada di penunggu (atau sumber sebelumnya) → soft-delete, jangan pindah.
-      if (fp && seenFps.has(fp)) {
+      if (existing) {
+        // Verif tidak boleh hilang saat duplikat dibuang: penunggu yang belum verif mewarisi verif sumber.
+        if (!existing.isVerified && m.isVerified) {
+          await tx
+            .update(meanings)
+            .set({
+              isVerified: true,
+              verifiedBy: m.verifiedBy ?? actorId,
+              verifiedAt: m.verifiedAt ?? now,
+              updatedBy: actorId,
+              updatedAt: now,
+            })
+            .where(eq(meanings.id, existing.id));
+          existing.isVerified = true;
+        }
         await tx
           .update(meanings)
           .set({ deletedAt: now, deletedBy: actorId, updatedBy: actorId, updatedAt: now })
           .where(eq(meanings.id, m.id));
         continue;
       }
-      if (fp) seenFps.add(fp);
+      // Makna dipindah apa adanya: status verif, verifiedBy, verifiedAt tidak diubah.
+      if (fp) keepByFp.set(fp, { id: m.id, isVerified: Boolean(m.isVerified) });
       await tx
         .update(meanings)
         .set({

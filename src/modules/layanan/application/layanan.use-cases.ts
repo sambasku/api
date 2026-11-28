@@ -11,6 +11,7 @@ import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/a
 import type { Layanan, LayananFields, LayananPhone } from '../domain/layanan';
 import { LAYANAN_PHONES_MAX, LAYANAN_PHONES_MIN, slugifyLayanan } from '../domain/layanan';
 import type { LayananRepositoryImpl } from '../infrastructure/layanan.repository.impl';
+import type { AssertSelectableLayananCategoryUseCase } from '@/modules/layanan-category/application/use-cases/layanan-category.use-cases';
 
 const PENDING_CAP = 10;
 
@@ -18,6 +19,7 @@ export class LayananUseCases {
   constructor(
     private readonly repo: LayananRepositoryImpl,
     private readonly regions: RegionRepository,
+    private readonly categories: AssertSelectableLayananCategoryUseCase,
     private readonly activity: RecordActivityEventUseCase,
     private readonly groupNotifier?: ExplorationGroupNotifier,
     private readonly changes?: RecordEntityChange,
@@ -70,7 +72,7 @@ export class LayananUseCases {
     ctx?: Partial<EntityChangeContext>,
   ): Promise<Layanan> {
     const current = await this.mustLayanan(id);
-    const normalized = await this.normalize(fields);
+    const normalized = await this.normalize(fields, current.category);
     await this.repo.update(id, normalized);
     const after = (await this.repo.findById(current.id))!;
     await this.changes?.updated(
@@ -104,13 +106,14 @@ export class LayananUseCases {
     if ((await this.repo.countOpenByUser(userId)) >= PENDING_CAP) {
       throw new ConflictError('PENDING_CAP', 'Kamu masih punya 10 usulan yang belum selesai');
     }
-    const normalized = await this.normalize(fields);
+    let currentCategory: string | undefined;
     if (kind === 'edit') {
       if (!layananId) {
         throw new ValidationError([{ field: 'layanan_id', message: 'Usulan perbaikan butuh layanan yang dituju' }]);
       }
-      await this.mustLayanan(layananId);
+      currentCategory = (await this.mustLayanan(layananId)).category;
     }
+    const normalized = await this.normalize(fields, currentCategory);
     const id = await this.repo.insertContribution({
       kind,
       userId,
@@ -194,7 +197,14 @@ export class LayananUseCases {
     await this.repo.updateContribution(id, { status: 'needs_revision', revisionNote: note });
   }
 
-  private async normalize(fields: LayananFields): Promise<LayananFields> {
+  /**
+   * `currentCategory` = kategori layanan yang sedang disimpan (edit). Kategori arsip hanya
+   * ditolak bila user/admin memilihnya sebagai input baru (berbeda dari yang tersimpan).
+   */
+  private async normalize(fields: LayananFields, currentCategory?: string): Promise<LayananFields> {
+    if (fields.category !== currentCategory) {
+      await this.categories.execute(fields.category);
+    }
     if (fields.phones.length < LAYANAN_PHONES_MIN || fields.phones.length > LAYANAN_PHONES_MAX) {
       throw new ValidationError([
         {

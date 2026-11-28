@@ -145,6 +145,7 @@ export const culinaryCategoryRefSchema = z.object({
 
 export const cuisineImageResponseSchema = z.object({
   url: z.string(),
+  photo_ref: z.string().optional(),
   is_main: z.boolean(),
   attribution: z
     .object({

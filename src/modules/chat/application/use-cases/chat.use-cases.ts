@@ -26,8 +26,10 @@ import {
   buildReplySnippet,
   CHAT_BODY_MAX,
   CHAT_CHANNEL_PUBLIC,
+  CHAT_TOMBSTONE_SNIPPET,
   type ChatMessage,
   type ChatMessageKind,
+  type ChatMessageModerationSnapshot,
   type ChatMessageRevision,
 } from '../../domain/entities/chat-message.entity';
 import type {
@@ -35,6 +37,7 @@ import type {
   ListChatMessagesResult,
 } from '../../domain/repositories/chat.repository';
 import type { StickerRepository } from '@/modules/sticker/domain/repositories/sticker.repository';
+import type { AuditLogRepository } from '@/modules/audit/domain/repositories/audit-log.repository';
 import type { ChatSupabaseMirror } from '../../infrastructure/chat-supabase-mirror';
 import { buildChatVoiceNotePath } from '../utils/chat-voice-note-path';
 import type { NotifyChatMentionsUseCase } from './notify-chat-mentions.use-case';
@@ -544,6 +547,7 @@ export class DeleteChatMessageUseCase {
     }
 
     await this.mirror.patch(tombstoned);
+    await this.mirror.patchReplySnippets(existing.id, CHAT_TOMBSTONE_SNIPPET);
     await this.mentions?.clear(existing.id);
     return tombstoned;
   }
@@ -554,12 +558,46 @@ export class ListChatRevisionsUseCase {
 
   async execute(messageId: string): Promise<ChatMessageRevision[]> {
     const existing = await this.repo.findById(messageId);
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundError(
         'CHAT_MESSAGE_NOT_FOUND',
         'Pesan tidak ditemukan',
       );
     }
     return this.repo.listRevisions(messageId);
+  }
+}
+
+export interface GetChatModerationSnapshotCommand {
+  messageId: string;
+  actorId: string;
+  requestId?: string | null;
+}
+
+/** Baca salinan moderasi pesan terhapus (admin/root). Setiap akses diaudit. */
+export class GetChatModerationSnapshotUseCase {
+  constructor(
+    private readonly repo: ChatRepository,
+    private readonly auditRepo: AuditLogRepository,
+  ) {}
+
+  async execute(
+    cmd: GetChatModerationSnapshotCommand,
+  ): Promise<ChatMessageModerationSnapshot> {
+    const snapshot = await this.repo.findModerationSnapshot(cmd.messageId);
+    if (!snapshot) {
+      throw new NotFoundError(
+        'CHAT_MESSAGE_SNAPSHOT_NOT_FOUND',
+        'Salinan moderasi pesan tidak ditemukan',
+      );
+    }
+    await this.auditRepo.record({
+      userId: cmd.actorId,
+      action: 'chat.moderation_snapshot.view',
+      entityType: 'chat_message',
+      entityId: cmd.messageId,
+      requestId: cmd.requestId ?? null,
+    });
+    return snapshot;
   }
 }
