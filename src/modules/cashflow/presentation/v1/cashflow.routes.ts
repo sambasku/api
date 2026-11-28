@@ -21,6 +21,14 @@ import {
 const idSchema = z.string().min(1).max(64);
 const nominalSchema = z.number().int().positive().max(1_000_000_000_000);
 const tanggalSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal harus format YYYY-MM-DD.');
+/** Batas baris riwayat transaksi per request (satu query, tanpa N+1). */
+const MAX_LIMIT_TRANSAKSI = 500;
+const rentangTanggalSchema = z
+  .object({ from: tanggalSchema.optional(), to: tanggalSchema.optional() })
+  .refine((v) => !v.from || !v.to || v.from <= v.to, {
+    message: 'Tanggal mulai tidak boleh setelah tanggal akhir.',
+    path: ['from'],
+  });
 const periodeSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Periode harus format YYYY-MM.');
 const idempotencySchema = z.string().min(8).max(64);
 const catatanSchema = z.string().max(500).optional();
@@ -287,8 +295,9 @@ export function createAdminCashflowRoutes(deps: AdminCashflowRoutesDeps) {
   // ringkasan dan baca
   routes.get('/summary', async (c) => c.json({ success: true as const, data: wireSummary(await service.getSummary()) }));
   routes.get('/transactions', async (c) => {
-    const limit = Math.min(Number(c.req.query('limit') ?? 50) || 50, 200);
-    const rows = await service.listTransaksi(limit);
+    const limit = Math.min(Number(c.req.query('limit') ?? 50) || 50, MAX_LIMIT_TRANSAKSI);
+    const { from, to } = parse(rentangTanggalSchema, { from: c.req.query('from'), to: c.req.query('to') });
+    const rows = await service.listTransaksi({ limit, from, to });
     const jumlah = await attachments.hitungPerTransaksi(rows.map((r) => r.id));
     return c.json({
       success: true as const,

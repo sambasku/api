@@ -704,3 +704,35 @@ describe('lampiran bukti transaksi', () => {
     await expectConflict(attA.daftar('TX-TIDAK-ADA'), 'TRANSAKSI_TIDAK_DITEMUKAN');
   });
 });
+
+describe('riwayat transaksi: filter rentang tanggal', () => {
+  const masuk = (key: string, tanggal: string) =>
+    svcA.catatMasuk(
+      { kategoriId: 'KTR-MSK-DON', rekeningId: 'REK-BANK', nominal: 1_000, tanggal, idempotencyKey: key },
+      ADMIN,
+    );
+  const tanggalOf = async (opts: { from?: string; to?: string }) =>
+    (await svcA.listTransaksi({ limit: 500, ...opts })).map((r) => r.tanggal);
+
+  it('from dan to inklusif, hasil terurut tanggal terbaru', async () => {
+    await masuk('filter-tgl-0001', '2024-03-10');
+    await masuk('filter-tgl-0002', '2024-03-20');
+    await masuk('filter-tgl-0003', '2024-04-05');
+
+    expect(await tanggalOf({ from: '2024-03-10', to: '2024-03-20' })).toEqual(['2024-03-20', '2024-03-10']);
+    expect(await tanggalOf({ from: '2024-03-21', to: '2024-04-30' })).toEqual(['2024-04-05']);
+    expect(await tanggalOf({ from: '2024-04-05', to: '2024-12-31' })).toEqual(['2024-04-05']);
+    expect(await tanggalOf({ to: '2024-03-15' })).toEqual(['2024-03-10']);
+  });
+
+  it('rentang kosong mengembalikan daftar kosong, tanpa filter tetap urut tanggal terbaru', async () => {
+    expect(await tanggalOf({ from: '1999-01-01', to: '1999-12-31' })).toEqual([]);
+    const semua = await tanggalOf({});
+    expect(semua).toEqual([...semua].sort((a, b) => b.localeCompare(a)));
+  });
+
+  it('limit tetap berlaku di dalam rentang', async () => {
+    const dua = await svcA.listTransaksi({ limit: 2, from: '2024-01-01', to: '2024-12-31' });
+    expect(dua.map((r) => r.tanggal)).toEqual(['2024-04-05', '2024-03-20']);
+  });
+});

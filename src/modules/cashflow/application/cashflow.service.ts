@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 import type { AppDatabase, AppTransaction } from '@/shared/database/drizzle/client';
 import {
   cashTransactions,
@@ -278,12 +278,21 @@ export class CashflowService {
     };
   }
 
-  async listTransaksi(limit: number): Promise<CashRow[]> {
+  /**
+   * Riwayat terbaru dulu (tanggal transaksi, lalu waktu dicatat). `from` dan `to`
+   * (YYYY-MM-DD, inklusif) opsional dan memakai indeks `cash_tx_tanggal_idx`.
+   */
+  async listTransaksi(opts: { limit: number; from?: string; to?: string }): Promise<CashRow[]> {
+    const syarat = [
+      opts.from ? gte(cashTransactions.tanggal, opts.from) : undefined,
+      opts.to ? lte(cashTransactions.tanggal, opts.to) : undefined,
+    ].filter((c) => c !== undefined);
     return this.db
       .select()
       .from(cashTransactions)
-      .orderBy(desc(cashTransactions.createdAt), desc(cashTransactions.id))
-      .limit(limit);
+      .where(syarat.length > 0 ? and(...syarat) : undefined)
+      .orderBy(desc(cashTransactions.tanggal), desc(cashTransactions.createdAt), desc(cashTransactions.id))
+      .limit(opts.limit);
   }
 
   async listLoans(): Promise<LoanView[]> {

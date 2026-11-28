@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MiddlewareHandler } from 'hono';
 import type { AppVariables } from '@/shared/types';
+import { AppError } from '@/shared/errors/app-error';
 import { createAdminCashflowRoutes } from '../../presentation/v1/cashflow.routes';
 
 /** Dependency yang meledak bila disentuh: bukti request ditolak SEBELUM masuk handler. */
@@ -60,5 +61,41 @@ describe('akses Keuangan (cashflow): strict level admin ke atas', () => {
       const res = await request(r.method, r.path);
       expect(res.status, `${r.method} ${r.path}`).toBe(403);
     }
+  });
+});
+
+describe('GET /transactions: validasi rentang tanggal', () => {
+  const diterima: unknown[] = [];
+  const app = createAdminCashflowRoutes({
+    service: {
+      listTransaksi: async (opts: unknown) => {
+        diterima.push(opts);
+        return [];
+      },
+    } as never,
+    attachments: { hitungPerTransaksi: async () => new Map() } as never,
+    authenticate: fakeAuthenticate,
+  });
+  // Handler error global dimuat dengan env penuh; di sini cukup memetakan AppError ke status-nya.
+  app.onError((err, c) =>
+    err instanceof AppError ? c.json({ error_code: err.errorCode }, err.statusCode as 400) : c.json({}, 500),
+  );
+  const get = (qs: string) => app.request(`/transactions${qs}`, { headers: { 'x-test-roles': 'admin' } });
+
+  it('from dan to diteruskan ke service, limit dibatasi 500', async () => {
+    const res = await get('?from=2026-01-01&to=2026-01-31&limit=9999');
+    expect(res.status).toBe(200);
+    expect(diterima.at(-1)).toEqual({ limit: 500, from: '2026-01-01', to: '2026-01-31' });
+  });
+
+  it('tanpa from dan to tetap jalan', async () => {
+    const res = await get('');
+    expect(res.status).toBe(200);
+    expect(diterima.at(-1)).toEqual({ limit: 50, from: undefined, to: undefined });
+  });
+
+  it('format salah atau from setelah to ditolak 400', async () => {
+    expect((await get('?from=28-11-2026')).status).toBe(400);
+    expect((await get('?from=2026-02-01&to=2026-01-01')).status).toBe(400);
   });
 });
