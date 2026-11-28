@@ -133,3 +133,4 @@ export * from "./kategori-transaksi.schema";
 export * from "./rekening.schema";
 export * from "./kewajiban.schema";
 export * from "./cash-ledger.schema";
+export * from "./cash-attachment.schema";

@@ -44,6 +44,8 @@ CORS_ALLOWED_ORIGINS = "https://sambasku.com,https://console.sambasku.com,https:
 # deployment Deno dan Render.
 REFRESH_COOKIE_DOMAIN = ".sambasku.com"
 JWT_ACCESS_TOKEN_TTL = "900"
+# Lampiran bukti cashflow: batas per file di Workers (memori 128 MB). Node = 100.
+CASHFLOW_MAX_FILE_MB = "25"
 JWT_REFRESH_TOKEN_TTL = "2592000"
 MAIL_FROM = "SambasKu <no-reply@sambasku.com>"
 KBBI_PROVIDER = "raf555"
@@ -83,6 +85,9 @@ OPENWA_BASE_URL="https://wa.iamutaki.com"
 OPENWA_SESSION_ID="38d3dfa7-08c9-47f1-9490-f6ffe0124620"
 OPENWA_GROUP_JID="120363429405087787@g.us"
 GITHUB_CLIENT_ID="Ov23liuhFjUQj3bh5uWE"
+CASHFLOW_FILE_PROVIDER=r2
+CASHFLOW_R2_BUCKET=sambasku-bucket
+CASHFLOW_MAX_FILE_MB=25
 
 # #103: blok [limits] pernah dipasang di sini lalu DIHAPUS - akun Free plan
 # menolak config `limits` apa pun (error 100328 "CPU limits are not supported
@@ -127,6 +132,8 @@ CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:5174,https://cons
 # Staging belum punya tier cadangan - biarkan host-only (kosong = tidak di-set).
 REFRESH_COOKIE_DOMAIN = ""
 JWT_ACCESS_TOKEN_TTL = "900"
+# Lampiran bukti cashflow: batas per file di Workers (memori 128 MB). Node = 100.
+CASHFLOW_MAX_FILE_MB = "25"
 JWT_REFRESH_TOKEN_TTL = "2592000"
 MAIL_FROM = "SambasKu <no-reply@sambasku.com>"
 # Test deliverability OTP: kirim email nyata di staging (hapus/0 untuk skip lagi).
@@ -164,6 +171,9 @@ OPENWA_BASE_URL = "https://wa.iamutaki.com"
 OPENWA_SESSION_ID = "38d3dfa7-08c9-47f1-9490-f6ffe0124620"
 OPENWA_GROUP_JID = "120363429405087787@g.us"
 GITHUB_CLIENT_ID = "Ov23liEGNkEDuPNAhiTj"
+CASHFLOW_FILE_PROVIDER=r2
+CASHFLOW_R2_BUCKET=sambasku-bucket-staging
+CASHFLOW_MAX_FILE_MB=25
 
 # [env.staging.limits] DIHAPUS - lihat catatan [limits] di atas (Free plan).
 [env.staging.observability]

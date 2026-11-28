@@ -205,6 +205,16 @@ const envSchema = z.object({
       return n === 'true' || n === '1' || n === 'yes';
     }),
 
+  // Lampiran bukti cashflow: R2 privat lewat S3 API. Provider kosong atau kredensial
+  // belum lengkap = 503 CASHFLOW_FILE_UNAVAILABLE. Batas ukuran per file (MB):
+  // Node 100, Workers 25 (lihat wrangler.toml [vars]).
+  CASHFLOW_FILE_PROVIDER: z.string().optional(),
+  R2_S3_ENDPOINT: z.string().optional(), // https://<account-id>.r2.cloudflarestorage.com
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  CASHFLOW_R2_BUCKET: z.string().optional(),
+  CASHFLOW_MAX_FILE_MB: z.coerce.number().int().positive().max(100).default(100),
+
   // Identitas deploy (bake saat image build / wrangler --var). Kosong =
   // lokal/dev → response meta pakai "unknown". Bukan secret.
   GIT_SHA: z

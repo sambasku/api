@@ -7,6 +7,8 @@ import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { CashflowService, type LoanView } from '@/modules/cashflow/application/cashflow.service';
+import { CashflowAttachmentService } from '@/modules/cashflow/application/cashflow-attachment.service';
+import type { CashflowFileStorage } from '@/modules/cashflow/infrastructure/cashflow-file-storage';
 import { ValidationError } from '@/shared/errors/app-error';
 
 /**
@@ -16,7 +18,7 @@ import { ValidationError } from '@/shared/errors/app-error';
  */
 
 const DB_FILE = join(tmpdir(), `cashflow-it-${process.pid}-${Date.now()}.db`);
-const MIGRATIONS = ['0207_cashflow_ledger.sql', '0209_cashflow_donatur_ref.sql'].map((f) =>
+const MIGRATIONS = ['0207_cashflow_ledger.sql', '0209_cashflow_donatur_ref.sql', '0211_cashflow_attachments.sql'].map((f) =>
   resolve(process.cwd(), 'src/shared/database/drizzle/migrations', f),
 );
 const ADMIN = 'USR-ADMIN';
@@ -27,8 +29,37 @@ function openConnection(): { client: Client; db: AppDatabase } {
 }
 
 const clients: Client[] = [];
+
+/** Penyimpanan palsu: menyimpan objek di memori dan menghitung put/remove. */
+class FakeStorage implements CashflowFileStorage {
+  objects = new Map<string, Uint8Array>();
+  puts = 0;
+  removes = 0;
+  async put(key: string, body: Uint8Array): Promise<void> {
+    this.puts++;
+    this.objects.set(key, body);
+  }
+  async remove(key: string): Promise<void> {
+    this.removes++;
+    this.objects.delete(key);
+  }
+  async presignGet(key: string, expiresInSeconds: number): Promise<string> {
+    return `https://r2.test/${key}?X-Amz-Expires=${expiresInSeconds}`;
+  }
+}
+
+/** File dengan header PDF dan tag unik, supaya sha256-nya berbeda per tag. */
+function pdf(tag: string, size = 64): Uint8Array<ArrayBuffer> {
+  const head = new TextEncoder().encode(`%PDF-1.4 ${tag} `);
+  const out = new Uint8Array(new ArrayBuffer(Math.max(size, head.length)));
+  out.set(head);
+  return out;
+}
 let svcA: CashflowService;
 let svcB: CashflowService;
+let attA: CashflowAttachmentService;
+let storageA: FakeStorage;
+let dbA: AppDatabase;
 let rawClient: Client;
 
 async function expectConflict(p: Promise<unknown>, errorCode: string) {
@@ -99,6 +130,9 @@ beforeAll(async () => {
   }
   svcA = new CashflowService(a.db);
   svcB = new CashflowService(b.db);
+  storageA = new FakeStorage();
+  dbA = a.db;
+  attA = new CashflowAttachmentService(a.db, storageA, 1024 * 1024);
 });
 
 afterAll(() => {
@@ -552,5 +586,121 @@ describe('donatur, sponsor, dan penalang terhubung ke akun atau usaha', () => {
   it('pencarian usaha: abaikan usaha yang sudah dihapus', async () => {
     const hasil = await svcA.cariUsaha('toko');
     expect(hasil.map((h) => h.id)).toEqual(['USH-1']);
+  });
+});
+
+describe('lampiran bukti transaksi', () => {
+  let txId: string;
+  let txBatas: string;
+
+  beforeAll(async () => {
+    txId = (
+      await svcA.catatMasuk(
+        { kategoriId: 'KTR-MSK-DON', rekeningId: 'REK-BANK', nominal: 1_000, tanggal: '2026-11-28', idempotencyKey: 'att-tx-0001' },
+        ADMIN,
+      )
+    ).id;
+    txBatas = (
+      await svcA.catatMasuk(
+        { kategoriId: 'KTR-MSK-DON', rekeningId: 'REK-BANK', nominal: 1_000, tanggal: '2026-11-28', idempotencyKey: 'att-tx-0002' },
+        ADMIN,
+      )
+    ).id;
+  });
+
+  it('upload PDF tersimpan dengan object key privat dan bisa dibuka lewat URL presigned', async () => {
+    const row = await attA.tambah(txId, { bytes: pdf('nota-1'), name: 'nota.pdf', claimedMime: 'application/pdf' }, ADMIN);
+    expect(row.mime).toBe('application/pdf');
+    expect(row.originalName).toBe('nota.pdf');
+
+    const [key] = [...storageA.objects.keys()];
+    expect(key.startsWith(`cashflow/2026/11/${txId}/`)).toBe(true);
+    expect(key.endsWith('.pdf')).toBe(true);
+    expect(key).not.toContain('nota');
+
+    const daftar = await attA.daftar(txId);
+    expect(daftar.map((r) => r.id)).toContain(row.id);
+
+    const signed = await attA.urlUntuk(row.id);
+    expect(signed.expiresIn).toBe(300);
+    expect(signed.url).toContain('X-Amz-Expires=300');
+  });
+
+  it('file identik di transaksi yang sama tidak diupload ulang', async () => {
+    const pertama = (await attA.daftar(txId))[0];
+    const puts = storageA.puts;
+    const lagi = await attA.tambah(txId, { bytes: pdf('nota-1'), name: 'salinan.pdf', claimedMime: 'application/pdf' }, ADMIN);
+    expect(lagi.id).toBe(pertama.id);
+    expect(storageA.puts).toBe(puts);
+  });
+
+  it('jenis yang tidak didukung ditolak walau mime-nya mengaku PDF', async () => {
+    await expectConflict(
+      attA.tambah(txId, { bytes: new TextEncoder().encode('halo dunia'), name: 'a.pdf', claimedMime: 'application/pdf' }, ADMIN),
+      'LAMPIRAN_JENIS_TIDAK_DIDUKUNG',
+    );
+  });
+
+  it('JPG, PNG, dan WebP diterima dari isi file', async () => {
+    const jpg = new Uint8Array(new ArrayBuffer(32));
+    jpg.set([0xff, 0xd8, 0xff, 0xe0]);
+    const png = new Uint8Array(new ArrayBuffer(32));
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const webp = new TextEncoder().encode('RIFF\u0000\u0000\u0000\u0000WEBPVP8 ');
+    const hasil = [];
+    for (const [i, bytes] of [jpg, png, webp].entries()) {
+      hasil.push((await attA.tambah(txId, { bytes, name: `foto-${i}`, claimedMime: 'image/*' }, ADMIN)).mime);
+    }
+    expect(hasil).toEqual(['image/jpeg', 'image/png', 'image/webp']);
+  });
+
+  it('ukuran di atas batas ditolak dengan kode LAMPIRAN_TERLALU_BESAR', async () => {
+    await expectConflict(
+      attA.tambah(txBatas, { bytes: pdf('besar', 1024 * 1024 + 1), name: 'besar.pdf', claimedMime: 'application/pdf' }, ADMIN),
+      'LAMPIRAN_TERLALU_BESAR',
+    );
+  });
+
+  it('batas 10 lampiran aktif per transaksi, dan hapus membuka slot lagi', async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      ids.push((await attA.tambah(txBatas, { bytes: pdf(`batas-${i}`), name: `b${i}.pdf`, claimedMime: 'application/pdf' }, ADMIN)).id);
+    }
+    await expectConflict(
+      attA.tambah(txBatas, { bytes: pdf('batas-11'), name: 'b11.pdf', claimedMime: 'application/pdf' }, ADMIN),
+      'LAMPIRAN_MELEBIHI_BATAS',
+    );
+    expect((await attA.hitungPerTransaksi([txBatas])).get(txBatas)).toBe(10);
+
+    await attA.hapus(ids[0], ADMIN);
+    const sebelum = storageA.objects.size;
+    const baru = await attA.tambah(txBatas, { bytes: pdf('batas-11'), name: 'b11.pdf', claimedMime: 'application/pdf' }, ADMIN);
+    expect(baru.id).toBeTruthy();
+    expect((await attA.hitungPerTransaksi([txBatas])).get(txBatas)).toBe(10);
+    expect(storageA.objects.size).toBe(sebelum + 1);
+  });
+
+  it('hapus hanya soft delete: objek di R2 tetap ada dan lampiran tidak tampil lagi', async () => {
+    const [target] = await attA.daftar(txBatas);
+    const objekSebelum = storageA.objects.size;
+    const removesSebelum = storageA.removes;
+    await attA.hapus(target.id, ADMIN);
+
+    expect(storageA.objects.size).toBe(objekSebelum);
+    expect(storageA.removes).toBe(removesSebelum);
+    expect((await attA.daftar(txBatas)).map((r) => r.id)).not.toContain(target.id);
+    await expect(attA.urlUntuk(target.id)).rejects.toMatchObject({ errorCode: 'LAMPIRAN_TIDAK_DITEMUKAN' });
+  });
+
+  it('tanpa konfigurasi R2 membalas 503 CASHFLOW_FILE_UNAVAILABLE', async () => {
+    const tanpa = new CashflowAttachmentService(dbA, null, 1024);
+    await expectConflict(
+      tanpa.tambah(txId, { bytes: pdf('tanpa-r2'), name: 'x.pdf', claimedMime: 'application/pdf' }, ADMIN),
+      'CASHFLOW_FILE_UNAVAILABLE',
+    );
+  });
+
+  it('transaksi yang tidak ada ditolak', async () => {
+    await expectConflict(attA.daftar('TX-TIDAK-ADA'), 'TRANSAKSI_TIDAK_DITEMUKAN');
   });
 });

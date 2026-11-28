@@ -44,6 +44,9 @@ import {
 } from "@/modules/about/presentation/v1/about.routes";
 import { db } from "@/shared/database/drizzle/client";
 import { CashflowService } from "@/modules/cashflow/application/cashflow.service";
+import { CashflowAttachmentService } from "@/modules/cashflow/application/cashflow-attachment.service";
+import { createCashflowFileStorage } from "@/modules/cashflow/infrastructure/cashflow-file-storage";
+import { env } from "@/shared/config/env";
 import { createAdminCashflowRoutes } from "@/modules/cashflow/presentation/v1/cashflow.routes";
 import {
   createAdminProfileCoverRoutes,
@@ -307,6 +310,11 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
     "/api/v1/admin/cashflow",
     createAdminCashflowRoutes({
       service: new CashflowService(db),
+      attachments: new CashflowAttachmentService(
+        db,
+        createCashflowFileStorage(),
+        env.CASHFLOW_MAX_FILE_MB * 1024 * 1024,
+      ),
       authenticate: di.authenticate,
     }),
   );

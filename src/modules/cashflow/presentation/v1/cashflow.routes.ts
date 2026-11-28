@@ -10,6 +10,11 @@ import { REKENING_JENIS } from '@/shared/database/drizzle/schema/rekening.schema
 import { KEWAJIBAN_RECURRENCE } from '@/shared/database/drizzle/schema/kewajiban.schema';
 import { CASH_DONATUR_TIPE } from '@/shared/database/drizzle/schema/cash-ledger.schema';
 import type { CashflowService, LoanView, PengingatItem, Summary } from '../../application/cashflow.service';
+import type { AttachmentRow, CashflowAttachmentService } from '../../application/cashflow-attachment.service';
+import {
+  LampiranTerlaluBesarError,
+  MULTIPART_OVERHEAD_BYTES,
+} from '../../domain/cashflow-attachment-rules';
 
 // ---------------------------------------------------------------- validasi
 
@@ -256,12 +261,26 @@ function wirePengingat(p: PengingatItem) {
 
 export interface AdminCashflowRoutesDeps {
   service: CashflowService;
+  attachments: CashflowAttachmentService;
   authenticate: MiddlewareHandler<{ Variables: AppVariables }>;
+}
+
+function wireLampiran(r: AttachmentRow) {
+  return {
+    id: r.id,
+    transaction_id: r.transactionId,
+    original_name: r.originalName,
+    mime: r.mime,
+    size_bytes: r.sizeBytes,
+    sha256: r.sha256,
+    uploaded_by: r.uploadedBy,
+    created_at: iso(r.createdAt),
+  };
 }
 
 /** Admin cashflow. Mount di /api/v1/admin/cashflow. Hanya root dan admin. */
 export function createAdminCashflowRoutes(deps: AdminCashflowRoutesDeps) {
-  const { service } = deps;
+  const { service, attachments } = deps;
   const routes = createOpenApiApp();
   routes.use('*', deps.authenticate, authorizeRole('root', 'admin'), rateLimit({ points: 60, duration: 60 }));
 
@@ -270,7 +289,11 @@ export function createAdminCashflowRoutes(deps: AdminCashflowRoutesDeps) {
   routes.get('/transactions', async (c) => {
     const limit = Math.min(Number(c.req.query('limit') ?? 50) || 50, 200);
     const rows = await service.listTransaksi(limit);
-    return c.json({ success: true as const, data: rows.map(wireCash) });
+    const jumlah = await attachments.hitungPerTransaksi(rows.map((r) => r.id));
+    return c.json({
+      success: true as const,
+      data: rows.map((r) => ({ ...wireCash(r), lampiran_count: jumlah.get(r.id) ?? 0 })),
+    });
   });
   routes.get('/loans', async (c) => {
     const rows = await service.listLoans();
@@ -523,6 +546,41 @@ export function createAdminCashflowRoutes(deps: AdminCashflowRoutesDeps) {
       },
       201,
     );
+  });
+
+  // lampiran bukti (R2 privat). Batas ukuran dicek dari Content-Length sebelum multipart dibaca.
+  routes.get('/transactions/:id/attachments', async (c) => {
+    const rows = await attachments.daftar(c.req.param('id'));
+    return c.json({ success: true as const, data: rows.map(wireLampiran) });
+  });
+  routes.post('/transactions/:id/attachments', async (c) => {
+    const panjang = Number(c.req.header('content-length') ?? 0);
+    if (panjang > attachments.batasBytes + MULTIPART_OVERHEAD_BYTES) {
+      throw new LampiranTerlaluBesarError(Math.floor(attachments.batasBytes / (1024 * 1024)));
+    }
+    const body = await c.req.parseBody();
+    const file = body['file'];
+    if (!(file instanceof File)) {
+      throw new ValidationError([{ field: 'file', message: 'Pilih file lampirannya dulu ya.' }]);
+    }
+    const row = await attachments.tambah(
+      c.req.param('id'),
+      {
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        name: file.name,
+        claimedMime: file.type,
+      },
+      actorOf(c),
+    );
+    return c.json({ success: true as const, data: wireLampiran(row) }, 201);
+  });
+  routes.get('/attachments/:id/url', async (c) => {
+    const r = await attachments.urlUntuk(c.req.param('id'));
+    return c.json({ success: true as const, data: { url: r.url, expires_in: r.expiresIn } });
+  });
+  routes.delete('/attachments/:id', async (c) => {
+    const row = await attachments.hapus(c.req.param('id'), actorOf(c));
+    return c.json({ success: true as const, data: wireLampiran(row) });
   });
 
   return routes;
