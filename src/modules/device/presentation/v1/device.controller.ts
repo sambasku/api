@@ -20,10 +20,11 @@ export class DeviceController {
       userId: user.user_id,
       udid: body.udid,
       fcmToken: body.fcm_token,
+      platform: body.platform,
     });
 
     logger.info(
-      { request_id: this.requestId(c), udid: result.udid },
+      { request_id: this.requestId(c), udid: result.udid, platform: result.platform },
       'device token registered',
     );
 
@@ -31,6 +32,7 @@ export class DeviceController {
       success: true as const,
       data: {
         udid: result.udid,
+        platform: result.platform,
         // Echo supaya client/debug yakin FCM ikut tersimpan (bukan hanya udid).
         fcm_token_registered: true,
       },

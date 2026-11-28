@@ -1,5 +1,7 @@
 /** Topic FCM untuk broadcast campaign ke semua device terpasang. */
 export const CAMPAIGN_FCM_TOPIC = 'sambasku_campaigns';
+export const CAMPAIGN_FCM_TOPIC_ANDROID = 'sambasku_campaigns_android';
+export const CAMPAIGN_FCM_TOPIC_IOS = 'sambasku_campaigns_ios';
 
 /** User per invocation batch (budget subrequest Workers). */
 export const CAMPAIGN_CHUNK_SIZE = 10;
@@ -12,6 +14,14 @@ export type DeepLinkKind = 'word' | 'contribution' | 'suggestion' | 'url' | 'non
 export type CampaignBodyType = 'plain' | 'html' | 'md' | 'webview';
 
 export type CampaignAudienceType = 'all' | 'selected';
+
+export type CampaignTargetPlatform = 'all' | 'android' | 'ios';
+
+export function campaignFcmTopicForPlatform(targetPlatform: CampaignTargetPlatform): string {
+  if (targetPlatform === 'android') return CAMPAIGN_FCM_TOPIC_ANDROID;
+  if (targetPlatform === 'ios') return CAMPAIGN_FCM_TOPIC_IOS;
+  return CAMPAIGN_FCM_TOPIC;
+}
 
 export type CampaignStatus =
   | 'draft'
@@ -52,6 +62,7 @@ export interface NotificationCampaign {
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
   audienceType: CampaignAudienceType;
+  targetPlatform: CampaignTargetPlatform;
   status: CampaignStatus;
   sendAt: Date | null;
   targetedUsers: number;

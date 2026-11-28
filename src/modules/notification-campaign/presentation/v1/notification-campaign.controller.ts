@@ -119,6 +119,7 @@ export class NotificationCampaignController {
       deepLinkKind: body.deep_link_kind,
       deepLinkValue: body.deep_link_value,
       audienceType: body.audience_type,
+      targetPlatform: body.target_platform,
       userIds: body.user_ids,
       sendAt: body.send_at ? new Date(body.send_at) : null,
       createdBy: user.user_id,
@@ -189,6 +190,7 @@ export class NotificationCampaignController {
   async estimateAudience(c: AdminCtx, body: EstimateAudienceBody) {
     const result = await this.deps.estimateAudience.execute({
       audienceType: body.audience_type,
+      targetPlatform: body.target_platform,
       userIds: body.user_ids,
     });
     return c.json({ success: true as const, data: result });

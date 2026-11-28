@@ -1471,6 +1471,13 @@
       "when": 1801680014000,
       "tag": "0209_cashflow_donatur_ref",
       "breakpoints": true
+    },
+    {
+      "idx": 210,
+      "version": "6",
+      "when": 1801680015000,
+      "tag": "0210_device_tokens_platform",
+      "breakpoints": true
     }
   ]
 }

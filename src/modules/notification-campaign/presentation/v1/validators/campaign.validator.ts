@@ -63,6 +63,8 @@ function refineDeepLinkUrl<
 
 export const audienceTypeSchema = z.enum(['all', 'selected']);
 
+export const targetPlatformSchema = z.enum(['all', 'android', 'ios']);
+
 export const campaignStatusSchema = z.enum([
   'draft',
   'scheduled',
@@ -168,6 +170,7 @@ export const createCampaignBodySchema = refineDeepLinkUrl(
       deep_link_kind: deepLinkKindSchema.optional(),
       deep_link_value: z.string().trim().max(500).nullable().optional(),
       audience_type: audienceTypeSchema,
+      target_platform: targetPlatformSchema.default('all'),
       user_ids: z.array(opaqueId).max(500).optional(),
       send_at: z.string().datetime({ offset: true }).nullable().optional(),
     })
@@ -186,6 +189,7 @@ export const campaignIdParamsSchema = z.object({ id: opaqueId });
 
 export const estimateAudienceBodySchema = z.object({
   audience_type: audienceTypeSchema,
+  target_platform: targetPlatformSchema.default('all'),
   user_ids: z.array(opaqueId).max(500).optional(),
 });
 
@@ -198,6 +202,7 @@ const campaignItemSchema = z.object({
   deep_link_kind: deepLinkKindSchema,
   deep_link_value: z.string().nullable(),
   audience_type: audienceTypeSchema,
+  target_platform: targetPlatformSchema,
   status: campaignStatusSchema,
   send_at: z.string().nullable(),
   targeted_users: z.number().int(),
@@ -253,6 +258,10 @@ export const estimateAudienceResponseSchema = z.object({
   data: z.object({
     users_with_device: z.number().int(),
     devices: z.number().int(),
+    by_platform: z.object({
+      android: z.number().int(),
+      ios: z.number().int(),
+    }),
   }),
 });
 

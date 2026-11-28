@@ -95,12 +95,33 @@ describe('deep_link_value url whitelist', () => {
     expect(r.success).toBe(false);
   });
 
-  it('createCampaignBodySchema tanpa deep link tetap lolos', () => {
+  it('createCampaignBodySchema tanpa deep link tetap lolos dengan default target_platform all', () => {
     const r = createCampaignBodySchema.safeParse({
       title: 'Judul',
       body: 'Isi',
       audience_type: 'all',
     });
     expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.target_platform).toBe('all');
+    }
+  });
+
+  it('createCampaignBodySchema menerima target_platform ios/android dan menolak nilai asing', () => {
+    const ios = createCampaignBodySchema.safeParse({
+      title: 'Judul',
+      body: 'Isi',
+      audience_type: 'all',
+      target_platform: 'ios',
+    });
+    expect(ios.success).toBe(true);
+
+    const invalid = createCampaignBodySchema.safeParse({
+      title: 'Judul',
+      body: 'Isi',
+      audience_type: 'all',
+      target_platform: 'desktop',
+    });
+    expect(invalid.success).toBe(false);
   });
 });

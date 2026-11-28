@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   CreateCampaignDraftUseCase,
+  EstimateCampaignAudienceUseCase,
   ProcessCampaignDeliveryUseCase,
   SendCampaignUseCase,
 } from '../../application/use-cases/campaign.use-cases';
 import type { NotificationCampaignRepository } from '../../domain/repositories/notification-campaign.repository';
-import type { NotificationCampaign } from '../../domain/entities/campaign.entity';
+import {
+  CAMPAIGN_FCM_TOPIC_IOS,
+  type NotificationCampaign,
+} from '../../domain/entities/campaign.entity';
 import type { NotificationRepository } from '@/modules/notification/domain/repositories/notification.repository';
 import type { DeviceTokenRepository } from '@/modules/device/domain/repositories/device-token.repository';
 import type { PushSenderPort } from '@/modules/device/application/ports/push-sender.port';
@@ -22,6 +26,7 @@ function campaign(partial: Partial<NotificationCampaign> = {}): NotificationCamp
     deepLinkKind: 'none',
     deepLinkValue: null,
     audienceType: 'selected',
+    targetPlatform: 'all',
     status: 'draft',
     sendAt: null,
     targetedUsers: 1,
@@ -274,5 +279,129 @@ describe('SendCampaignUseCase schedule', () => {
       sendAt: future,
     });
     expect(processDelivery.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('Campaign targetPlatform abstraction', () => {
+  it('routes audience=all with targetPlatform=ios to iOS topic and filters inbox users by ios', async () => {
+    const c = campaign({
+      status: 'sending',
+      audienceType: 'all',
+      targetPlatform: 'ios',
+    });
+    const repo = {
+      findCampaignById: vi
+        .fn()
+        .mockResolvedValueOnce(c)
+        .mockResolvedValueOnce({ ...c, topicSent: true })
+        .mockResolvedValue({ ...c, topicSent: true, status: 'completed' }),
+      updateCampaignStatus: vi.fn(),
+      incrementCampaignStats: vi.fn(),
+      listActiveDeviceUserIds: vi
+        .fn()
+        .mockResolvedValueOnce({ userIds: ['01USER00000000000000000002'], nextCursor: null }),
+    } as unknown as NotificationCampaignRepository;
+    const notificationRepo = {
+      create: vi.fn(),
+      createMany: vi.fn().mockResolvedValue(1),
+    } as unknown as NotificationRepository;
+    const deviceTokenRepo = {
+      listActiveFcmTokensByUserId: vi.fn(),
+    } as unknown as DeviceTokenRepository;
+    const pushSender: PushSenderPort = {
+      isConfigured: true,
+      send: vi.fn(),
+      sendToTopic: vi.fn().mockResolvedValue(true),
+    };
+
+    const uc = new ProcessCampaignDeliveryUseCase(
+      repo,
+      notificationRepo,
+      deviceTokenRepo,
+      pushSender,
+    );
+    const result = await uc.execute({ campaignId: c.id });
+    expect(pushSender.sendToTopic).toHaveBeenCalledWith(
+      CAMPAIGN_FCM_TOPIC_IOS,
+      expect.objectContaining({ title: c.title }),
+    );
+    expect(repo.listActiveDeviceUserIds).toHaveBeenCalledWith(
+      expect.objectContaining({ platform: 'ios' }),
+    );
+    expect(result.done).toBe(true);
+  });
+
+  it('filters selected recipient tokens by targetPlatform=ios', async () => {
+    const c = campaign({
+      status: 'sending',
+      audienceType: 'selected',
+      targetPlatform: 'ios',
+    });
+    const repo = {
+      findCampaignById: vi
+        .fn()
+        .mockResolvedValueOnce(c)
+        .mockResolvedValue({ ...c, status: 'completed' }),
+      listPendingRecipients: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: '01REC000000000000000000001',
+            campaignId: c.id,
+            userId: '01USER00000000000000000002',
+            status: 'pending',
+            error: null,
+            createdAt: new Date(),
+            updatedAt: null,
+          },
+        ])
+        .mockResolvedValueOnce([]),
+      updateRecipientStatus: vi.fn(),
+      incrementCampaignStats: vi.fn(),
+      updateCampaignStatus: vi.fn(),
+      countRecipientsByStatus: vi.fn().mockResolvedValue({
+        pending: 0,
+        sent: 1,
+        failed: 0,
+        skipped_no_token: 0,
+      }),
+    } as unknown as NotificationCampaignRepository;
+    const notificationRepo = { create: vi.fn(), createMany: vi.fn() } as unknown as NotificationRepository;
+    const deviceTokenRepo = {
+      listActiveFcmTokensByUserId: vi.fn().mockResolvedValue(['ios-token-1']),
+    } as unknown as DeviceTokenRepository;
+    const pushSender: PushSenderPort = {
+      isConfigured: true,
+      send: vi.fn().mockResolvedValue({ success: ['ios-token-1'], failed: [] }),
+      sendToTopic: vi.fn(),
+    };
+
+    const uc = new ProcessCampaignDeliveryUseCase(
+      repo,
+      notificationRepo,
+      deviceTokenRepo,
+      pushSender,
+    );
+    await uc.execute({ campaignId: c.id });
+    expect(deviceTokenRepo.listActiveFcmTokensByUserId).toHaveBeenCalledWith(
+      '01USER00000000000000000002',
+      'ios',
+    );
+    expect(pushSender.send).toHaveBeenCalledWith(['ios-token-1'], expect.anything());
+  });
+
+  it('estimates audience with by_platform breakdown', async () => {
+    const repo = {
+      countUsersWithActiveDevices: vi.fn().mockResolvedValue(4),
+      countActiveDevicesByPlatform: vi.fn().mockResolvedValue({ android: 10, ios: 4 }),
+    } as unknown as NotificationCampaignRepository;
+    const uc = new EstimateCampaignAudienceUseCase(repo);
+    const res = await uc.execute({ audienceType: 'all', targetPlatform: 'ios' });
+    expect(repo.countUsersWithActiveDevices).toHaveBeenCalledWith('ios');
+    expect(res).toEqual({
+      users_with_device: 4,
+      devices: 4,
+      by_platform: { android: 10, ios: 4 },
+    });
   });
 });

@@ -14,6 +14,10 @@ export const deviceTokens = sqliteTable(
       .references(() => users.id),
     udid: text('udid').notNull(),
     fcmToken: text('fcm_token').notNull(),
+    /** android | ios */
+    platform: text('platform', { enum: ['android', 'ios'] })
+      .notNull()
+      .default('android'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer('updated_at', { mode: 'timestamp' }),
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
@@ -26,6 +30,9 @@ export const deviceTokens = sqliteTable(
       .where(sql`deleted_at is null`),
     index('device_tokens_active_user_id_idx')
       .on(t.userId)
+      .where(sql`deleted_at is null`),
+    index('device_tokens_active_platform_idx')
+      .on(t.platform)
       .where(sql`deleted_at is null`),
   ],
 );

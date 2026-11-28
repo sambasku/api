@@ -24,6 +24,10 @@ export const notificationCampaigns = sqliteTable(
     deepLinkValue: text('deep_link_value'),
     /** all | selected */
     audienceType: text('audience_type').notNull(),
+    /** all | android | ios */
+    targetPlatform: text('target_platform', { enum: ['all', 'android', 'ios'] })
+      .notNull()
+      .default('all'),
     /**
      * draft | scheduled | sending | completed | failed | cancelled
      */

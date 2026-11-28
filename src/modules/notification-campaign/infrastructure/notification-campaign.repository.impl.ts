@@ -6,12 +6,14 @@ import {
   notificationTemplates,
 } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
+import type { DevicePlatform } from '@/modules/device/domain/repositories/device-token.repository';
 import type {
   CampaignAudienceType,
   CampaignBodyType,
   CampaignRecipient,
   CampaignRecipientStatus,
   CampaignStatus,
+  CampaignTargetPlatform,
   DeepLinkKind,
   NotificationCampaign,
   NotificationTemplate,
@@ -56,6 +58,7 @@ function toCampaign(row: typeof notificationCampaigns.$inferSelect): Notificatio
     deepLinkKind: row.deepLinkKind as DeepLinkKind,
     deepLinkValue: row.deepLinkValue,
     audienceType: row.audienceType as CampaignAudienceType,
+    targetPlatform: (row.targetPlatform as CampaignTargetPlatform) ?? 'all',
     status: row.status as CampaignStatus,
     sendAt: row.sendAt,
     targetedUsers: row.targetedUsers,
@@ -169,6 +172,7 @@ export class NotificationCampaignRepositoryImpl implements NotificationCampaignR
         deepLinkKind: input.deepLinkKind,
         deepLinkValue: input.deepLinkValue,
         audienceType: input.audienceType,
+        targetPlatform: input.targetPlatform,
         status: 'draft',
         sendAt: input.sendAt,
         createdBy: input.createdBy,
@@ -385,6 +389,7 @@ export class NotificationCampaignRepositoryImpl implements NotificationCampaignR
   async listActiveDeviceUserIds(opts: {
     limit: number;
     cursor?: string | null;
+    platform?: DevicePlatform;
   }): Promise<{ userIds: string[]; nextCursor: string | null }> {
     const rows = await this.db
       .selectDistinct({ userId: deviceTokens.userId })
@@ -392,6 +397,7 @@ export class NotificationCampaignRepositoryImpl implements NotificationCampaignR
       .where(
         and(
           isNull(deviceTokens.deletedAt),
+          opts.platform ? eq(deviceTokens.platform, opts.platform) : undefined,
           opts.cursor ? sql`${deviceTokens.userId} > ${opts.cursor}` : undefined,
         ),
       )
@@ -407,20 +413,60 @@ export class NotificationCampaignRepositoryImpl implements NotificationCampaignR
     };
   }
 
-  async countUsersWithActiveDevices(): Promise<number> {
+  async countUsersWithActiveDevices(platform?: DevicePlatform): Promise<number> {
     const [row] = await this.db
       .select({ value: sql<number>`count(distinct ${deviceTokens.userId})` })
       .from(deviceTokens)
-      .where(isNull(deviceTokens.deletedAt));
+      .where(
+        and(
+          isNull(deviceTokens.deletedAt),
+          platform ? eq(deviceTokens.platform, platform) : undefined,
+        ),
+      );
     return Number(row?.value ?? 0);
   }
 
-  async countActiveDevicesForUsers(userIds: string[]): Promise<number> {
+  async countActiveDevicesForUsers(
+    userIds: string[],
+    platform?: DevicePlatform,
+  ): Promise<number> {
     if (userIds.length === 0) return 0;
     const [row] = await this.db
       .select({ value: count() })
       .from(deviceTokens)
-      .where(and(isNull(deviceTokens.deletedAt), inArray(deviceTokens.userId, userIds)));
+      .where(
+        and(
+          isNull(deviceTokens.deletedAt),
+          inArray(deviceTokens.userId, userIds),
+          platform ? eq(deviceTokens.platform, platform) : undefined,
+        ),
+      );
     return Number(row?.value ?? 0);
+  }
+
+  async countActiveDevicesByPlatform(
+    userIds?: string[],
+  ): Promise<{ android: number; ios: number }> {
+    if (userIds && userIds.length === 0) return { android: 0, ios: 0 };
+    const rows = await this.db
+      .select({
+        platform: deviceTokens.platform,
+        value: count(),
+      })
+      .from(deviceTokens)
+      .where(
+        and(
+          isNull(deviceTokens.deletedAt),
+          userIds ? inArray(deviceTokens.userId, userIds) : undefined,
+        ),
+      )
+      .groupBy(deviceTokens.platform);
+
+    const result = { android: 0, ios: 0 };
+    for (const row of rows) {
+      if (row.platform === 'ios') result.ios = Number(row.value);
+      else result.android += Number(row.value);
+    }
+    return result;
   }
 }

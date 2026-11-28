@@ -1,8 +1,10 @@
+import type { DevicePlatform } from '@/modules/device/domain/repositories/device-token.repository';
 import type {
   CampaignAudienceType,
   CampaignRecipient,
   CampaignRecipientStatus,
   CampaignStatus,
+  CampaignTargetPlatform,
   DeepLinkKind,
   NotificationCampaign,
   NotificationTemplate,
@@ -35,6 +37,7 @@ export interface CreateCampaignInput {
   deepLinkKind: DeepLinkKind;
   deepLinkValue: string | null;
   audienceType: CampaignAudienceType;
+  targetPlatform: CampaignTargetPlatform;
   sendAt: Date | null;
   createdBy: string;
 }
@@ -105,10 +108,15 @@ export interface NotificationCampaignRepository {
   resetFailedToPending(campaignId: string): Promise<number>;
 
   /** User unik dengan device token aktif (untuk audience=all inbox). */
-  listActiveDeviceUserIds(opts: { limit: number; cursor?: string | null }): Promise<{
+  listActiveDeviceUserIds(opts: {
+    limit: number;
+    cursor?: string | null;
+    platform?: DevicePlatform;
+  }): Promise<{
     userIds: string[];
     nextCursor: string | null;
   }>;
-  countUsersWithActiveDevices(): Promise<number>;
-  countActiveDevicesForUsers(userIds: string[]): Promise<number>;
+  countUsersWithActiveDevices(platform?: DevicePlatform): Promise<number>;
+  countActiveDevicesForUsers(userIds: string[], platform?: DevicePlatform): Promise<number>;
+  countActiveDevicesByPlatform(userIds?: string[]): Promise<{ android: number; ios: number }>;
 }

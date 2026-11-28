@@ -31,6 +31,7 @@ export function mapCampaign(c: NotificationCampaign) {
     deep_link_kind: c.deepLinkKind,
     deep_link_value: c.deepLinkValue,
     audience_type: c.audienceType,
+    target_platform: c.targetPlatform,
     status: c.status,
     send_at: c.sendAt ? c.sendAt.toISOString() : null,
     targeted_users: c.targetedUsers,

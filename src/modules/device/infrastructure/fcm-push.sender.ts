@@ -1,6 +1,9 @@
 import { logger } from '@/shared/logging/logger';
 import { getGoogleAccessToken } from '@/shared/google/service-account-token';
 import type { PushMessage, PushSendResult, PushSenderPort } from '../application/ports/push-sender.port';
+import { buildFcmMessagePayload } from './fcm-payload';
+
+export { buildFcmMessagePayload, type FcmTarget } from './fcm-payload';
 
 function getFcmAccessToken(clientEmail: string, privateKey: string): Promise<string> {
   return getGoogleAccessToken({ clientEmail, privateKey }, 'https://www.googleapis.com/auth/firebase.messaging');
@@ -12,30 +15,7 @@ async function pushOne(
   fcmToken: string,
   message: PushMessage,
 ): Promise<boolean> {
-  // Samakan 1:1 dengan jnn_api `pushOne`: notification + optional data.
-  // Jangan set android.channel_id - di jnn tidak ada dan notif background
-  // tampil lewat channel default Firebase Messaging. Channel AwesomeNotifications
-  // (`sambasku_notifications`) hanya untuk foreground via onMessage.
-  const payload = {
-    message: {
-      token: fcmToken,
-      notification: {
-        title: message.title,
-        body: message.body,
-        ...(message.imageUrl ? { image: message.imageUrl } : {}),
-      },
-      ...(message.imageUrl
-        ? { android: { notification: { image: message.imageUrl } } }
-        : {}),
-      ...(message.data && Object.keys(message.data).length > 0
-        ? { data: message.data }
-        : {}),
-      data: {
-        ...(message.data || {}),
-        ...(message.bodyType ? { body_type: message.bodyType } : {}),
-      },
-    },
-  };
+  const payload = buildFcmMessagePayload({ token: fcmToken }, message);
 
   const res = await fetch(
     `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
@@ -67,26 +47,7 @@ async function pushTopic(
   topic: string,
   message: PushMessage,
 ): Promise<boolean> {
-  const payload = {
-    message: {
-      topic,
-      notification: {
-        title: message.title,
-        body: message.body,
-        ...(message.imageUrl ? { image: message.imageUrl } : {}),
-      },
-      ...(message.imageUrl
-        ? { android: { notification: { image: message.imageUrl } } }
-        : {}),
-      ...(message.data && Object.keys(message.data).length > 0
-        ? { data: message.data }
-        : {}),
-      data: {
-        ...(message.data || {}),
-        ...(message.bodyType ? { body_type: message.bodyType } : {}),
-      },
-    },
-  };
+  const payload = buildFcmMessagePayload({ topic }, message);
 
   const res = await fetch(
     `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,

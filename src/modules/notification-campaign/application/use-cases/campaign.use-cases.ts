@@ -5,11 +5,12 @@ import type { DeviceTokenRepository } from '@/modules/device/domain/repositories
 import type { PushSenderPort } from '@/modules/device/application/ports/push-sender.port';
 import {
   buildCampaignPushData,
+  campaignFcmTopicForPlatform,
   campaignInboxAction,
   CAMPAIGN_CHUNK_SIZE,
-  CAMPAIGN_FCM_TOPIC,
   CAMPAIGN_MAX_CHUNKS_PER_RUN,
   type CampaignAudienceType,
+  type CampaignTargetPlatform,
   type DeepLinkKind,
   type NotificationCampaign,
 } from '../../domain/entities/campaign.entity';
@@ -35,6 +36,7 @@ export class CreateCampaignDraftUseCase {
     deepLinkKind?: DeepLinkKind;
     deepLinkValue?: string | null;
     audienceType: CampaignAudienceType;
+    targetPlatform?: CampaignTargetPlatform;
     userIds?: string[];
     sendAt?: Date | null;
     createdBy: string;
@@ -75,6 +77,9 @@ export class CreateCampaignDraftUseCase {
       }
     }
 
+    const targetPlatform: CampaignTargetPlatform = input.targetPlatform ?? 'all';
+    const platformFilter = targetPlatform === 'all' ? undefined : targetPlatform;
+
     const campaign = await this.repo.createCampaign({
       templateId,
       title,
@@ -83,6 +88,7 @@ export class CreateCampaignDraftUseCase {
       deepLinkKind,
       deepLinkValue,
       audienceType: input.audienceType,
+      targetPlatform,
       sendAt: input.sendAt ?? null,
       createdBy: input.createdBy,
     });
@@ -92,7 +98,7 @@ export class CreateCampaignDraftUseCase {
       await this.repo.insertRecipients(campaign.id, unique);
       await this.repo.setTargetedUsers(campaign.id, unique.length);
     } else if (input.audienceType === 'all') {
-      const count = await this.repo.countUsersWithActiveDevices();
+      const count = await this.repo.countUsersWithActiveDevices(platformFilter);
       await this.repo.setTargetedUsers(campaign.id, count);
     }
 
@@ -282,8 +288,12 @@ export class ProcessCampaignDeliveryUseCase {
   private async processAllAudience(campaign: NotificationCampaign): Promise<{ done: boolean }> {
     let current = campaign;
 
+    const platformFilter =
+      current.targetPlatform === 'all' ? undefined : current.targetPlatform;
+
     if (!current.topicSent) {
-      const ok = await this.pushSender.sendToTopic(CAMPAIGN_FCM_TOPIC, {
+      const topic = campaignFcmTopicForPlatform(current.targetPlatform);
+      const ok = await this.pushSender.sendToTopic(topic, {
         title: current.title,
         body: current.body,
         bodyType: current.bodyType,
@@ -314,6 +324,7 @@ export class ProcessCampaignDeliveryUseCase {
       const { userIds, nextCursor } = await this.repo.listActiveDeviceUserIds({
         limit: CAMPAIGN_CHUNK_SIZE,
         cursor: current.inboxCursor,
+        platform: platformFilter,
       });
       if (userIds.length === 0) {
         await this.repo.updateCampaignStatus(current.id, 'completed', {
@@ -367,8 +378,14 @@ export class ProcessCampaignDeliveryUseCase {
         return { done: true };
       }
 
+      const platformFilter =
+        campaign.targetPlatform === 'all' ? undefined : campaign.targetPlatform;
+
       for (const recipient of pending) {
-        const tokens = await this.deviceTokenRepo.listActiveFcmTokensByUserId(recipient.userId);
+        const tokens = await this.deviceTokenRepo.listActiveFcmTokensByUserId(
+          recipient.userId,
+          platformFilter,
+        );
         if (tokens.length === 0) {
           await this.repo.updateRecipientStatus(recipient.id, 'skipped_no_token', 'Tidak ada device');
           await this.repo.incrementCampaignStats(campaign.id, { pushFailed: 1 });
@@ -448,13 +465,31 @@ export class ProcessDueCampaignsUseCase {
 export class EstimateCampaignAudienceUseCase {
   constructor(private readonly repo: NotificationCampaignRepository) {}
 
-  async execute(input: { audienceType: CampaignAudienceType; userIds?: string[] }) {
+  async execute(input: {
+    audienceType: CampaignAudienceType;
+    targetPlatform?: CampaignTargetPlatform;
+    userIds?: string[];
+  }) {
+    const targetPlatform = input.targetPlatform ?? 'all';
+    const platformFilter = targetPlatform === 'all' ? undefined : targetPlatform;
+
     if (input.audienceType === 'all') {
-      const users = await this.repo.countUsersWithActiveDevices();
-      return { users_with_device: users, devices: users };
+      const [users, byPlatform] = await Promise.all([
+        this.repo.countUsersWithActiveDevices(platformFilter),
+        this.repo.countActiveDevicesByPlatform(),
+      ]);
+      const devices =
+        targetPlatform === 'all'
+          ? byPlatform.android + byPlatform.ios
+          : byPlatform[targetPlatform];
+      return { users_with_device: users, devices, by_platform: byPlatform };
     }
     const ids = [...new Set((input.userIds ?? []).filter(Boolean))];
-    const devices = await this.repo.countActiveDevicesForUsers(ids);
-    return { users_with_device: ids.length, devices };
+    const byPlatform = await this.repo.countActiveDevicesByPlatform(ids);
+    const devices =
+      targetPlatform === 'all'
+        ? byPlatform.android + byPlatform.ios
+        : byPlatform[targetPlatform];
+    return { users_with_device: ids.length, devices, by_platform: byPlatform };
   }
 }
