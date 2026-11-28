@@ -15,6 +15,7 @@ export interface CreateStickerInput {
   displayName?: string | null;
   visibility?: StickerVisibility;
   providerFileId?: string | null;
+  sourceStickerId?: string | null;
 }
 
 export interface UpdateStickerInput {
@@ -50,6 +51,13 @@ export interface StickerRepository {
   update(id: string, input: UpdateStickerInput): Promise<Sticker | null>;
   softDelete(id: string): Promise<Sticker | null>;
   softDeleteByOwner(id: string, ownerUserId: string): Promise<Sticker | null>;
+  /** Salinan aktif milik user hasil fork dari [sourceStickerId], atau null. */
+  findOwnedCopy(ownerUserId: string, sourceStickerId: string): Promise<Sticker | null>;
+  /**
+   * File ImageKit masih dipakai: ada baris lain dengan providerFileId sama
+   * (salinan/asal), atau stiker ini masih difavoritkan seseorang.
+   */
+  isStickerFileInUse(stickerId: string, providerFileId: string): Promise<boolean>;
 
   // Favorit per user
   listFavorites(userId: string): Promise<Sticker[]>;
@@ -57,6 +65,8 @@ export interface StickerRepository {
   isFavorite(userId: string, stickerId: string): Promise<boolean>;
   addFavorite(userId: string, stickerId: string): Promise<void>;
   removeFavorite(userId: string, stickerId: string): Promise<void>;
+  /** Hapus semua baris favorit untuk stiker (dipakai saat salinan dihapus). */
+  clearFavoritesOf(stickerId: string): Promise<void>;
 
   // Custom stiker milik user
   listByOwner(ownerUserId: string): Promise<Sticker[]>;

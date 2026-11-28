@@ -1450,6 +1450,20 @@
       "when": 1801680011000,
       "tag": "0206_username_allow_uppercase",
       "breakpoints": true
+    },
+    {
+      "idx": 207,
+      "version": "6",
+      "when": 1801680012000,
+      "tag": "0207_cashflow_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 208,
+      "version": "6",
+      "when": 1801680013000,
+      "tag": "0208_sticker_fork_source",
+      "breakpoints": true
     }
   ]
 }

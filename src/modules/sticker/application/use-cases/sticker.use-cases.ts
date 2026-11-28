@@ -270,19 +270,66 @@ export class AddFavoriteStickerUseCase {
     if (!sticker) {
       throw new NotFoundError('STICKER_NOT_FOUND', 'Stiker tidak ditemukan');
     }
-    const already = await this.repo.isFavorite(cmd.userId, sticker.id);
-    if (already) {
+    // Katalog resmi atau milik sendiri: favorit berupa referensi biasa.
+    if (sticker.ownerUserId === null || sticker.ownerUserId === cmd.userId) {
+      return this.addReference(cmd.userId, sticker);
+    }
+    // Stiker milik orang lain: favorit = salinan milik favoriter (fork),
+    // supaya penghapusan oleh pemilik tidak menghilangkannya dari deck.
+    const copy = await this.repo.findOwnedCopy(cmd.userId, sticker.id);
+    if (copy) {
+      return this.addReference(cmd.userId, copy);
+    }
+    // Favorit lama yang masih referensi ke asal tetap dihormati.
+    if (await this.repo.isFavorite(cmd.userId, sticker.id)) {
       return sticker;
     }
-    const total = await this.repo.countFavorites(cmd.userId);
+    await this.assertFavoriteRoom(cmd.userId);
+    const created = await this.createCopy(cmd.userId, sticker);
+    await this.repo.addFavorite(cmd.userId, created.id);
+    return created;
+  }
+
+  private async addReference(userId: string, sticker: Sticker): Promise<Sticker> {
+    if (await this.repo.isFavorite(userId, sticker.id)) {
+      return sticker;
+    }
+    await this.assertFavoriteRoom(userId);
+    await this.repo.addFavorite(userId, sticker.id);
+    return sticker;
+  }
+
+  private async assertFavoriteRoom(userId: string): Promise<void> {
+    const total = await this.repo.countFavorites(userId);
     if (total >= this.maxFavorites) {
       throw new BadRequestError(
         'STICKER_FAVORITE_LIMIT_REACHED',
         `Favorit stiker sudah penuh (maksimal ${this.maxFavorites}). Hapus beberapa dulu ya.`,
       );
     }
-    await this.repo.addFavorite(cmd.userId, sticker.id);
-    return sticker;
+  }
+
+  private async createCopy(userId: string, source: Sticker): Promise<Sticker> {
+    try {
+      return await this.repo.create({
+        id: buildCustomStickerId(source.displayName),
+        imageUrl: source.imageUrl,
+        playOnce: source.playOnce,
+        sortOrder: 0,
+        isActive: true,
+        categorySlug: null,
+        ownerUserId: userId,
+        displayName: source.displayName,
+        visibility: 'private',
+        providerFileId: source.providerFileId,
+        sourceStickerId: source.id,
+      });
+    } catch (e) {
+      // Tap ganda: request lain sudah membuat salinan (unique index).
+      const existing = await this.repo.findOwnedCopy(userId, source.id);
+      if (existing) return existing;
+      throw e;
+    }
   }
 }
 
@@ -384,8 +431,18 @@ export class DeleteMyStickerUseCase {
     if (!deleted) {
       throw new NotFoundError('STICKER_NOT_FOUND', 'Stiker tidak ditemukan');
     }
+    if (deleted.sourceStickerId) {
+      // Salinan dihapus pemiliknya: hilang juga dari favoritnya sendiri.
+      await this.repo.clearFavoritesOf(deleted.id);
+    }
     if (deleted.providerFileId && this.imageStorage) {
-      await this.imageStorage.deleteFile(deleted.providerFileId);
+      const inUse = await this.repo.isStickerFileInUse(
+        deleted.id,
+        deleted.providerFileId,
+      );
+      if (!inUse) {
+        await this.imageStorage.deleteFile(deleted.providerFileId);
+      }
     }
   }
 }

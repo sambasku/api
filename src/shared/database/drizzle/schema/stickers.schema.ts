@@ -5,6 +5,7 @@ import {
   integer,
   index,
   primaryKey,
+  uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import { users } from './users.schema';
 
@@ -32,6 +33,8 @@ export const stickers = sqliteTable(
     visibility: text('visibility').notNull().default('public'),
     /** ID file di storage (ImageKit) untuk penghapusan fisik saat takedown/hapus. */
     providerFileId: text('provider_file_id'),
+    /** Asal salinan hasil fork saat favorit; null = stiker asli. */
+    sourceStickerId: text('source_sticker_id'),
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -48,6 +51,10 @@ export const stickers = sqliteTable(
     index('stickers_owner_active_idx')
       .on(t.ownerUserId, t.createdAt)
       .where(sql`deleted_at is null`),
+    // Satu salinan aktif per (favoriter, asal): cegah duplikat saat tap ganda.
+    uniqueIndex('stickers_owner_source_uniq')
+      .on(t.ownerUserId, t.sourceStickerId)
+      .where(sql`source_sticker_id is not null and deleted_at is null`),
   ],
 );
 

@@ -42,6 +42,9 @@ import {
   createPublicAboutRoutes,
   createPublicAboutUserListRoutes,
 } from "@/modules/about/presentation/v1/about.routes";
+import { db } from "@/shared/database/drizzle/client";
+import { CashflowService } from "@/modules/cashflow/application/cashflow.service";
+import { createAdminCashflowRoutes } from "@/modules/cashflow/presentation/v1/cashflow.routes";
 import {
   createAdminProfileCoverRoutes,
   createPublicProfileCoverRoutes,
@@ -300,6 +303,14 @@ export function registerDictionaryRoutes(app: OpenAPIHono<{ Variables: AppVariab
       authenticate: di.authenticate,
     }),
   );
+  app.route(
+    "/api/v1/admin/cashflow",
+    createAdminCashflowRoutes({
+      service: new CashflowService(db),
+      authenticate: di.authenticate,
+    }),
+  );
+
   app.route(
     "/api/v1/admin/sponsorships",
     createAdminSponsorshipRoutes({

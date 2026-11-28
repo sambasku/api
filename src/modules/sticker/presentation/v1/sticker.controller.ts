@@ -26,6 +26,7 @@ function toPublicWire(s: Sticker) {
     category_slug: s.categorySlug,
     display_name: s.displayName,
     is_custom: s.ownerUserId !== null,
+    source_sticker_id: s.sourceStickerId,
   };
 }
 

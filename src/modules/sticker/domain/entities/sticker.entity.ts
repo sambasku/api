@@ -16,6 +16,8 @@ export interface Sticker {
   visibility: StickerVisibility;
   /** ID file di ImageKit untuk penghapusan fisik saat takedown/hapus. */
   providerFileId: string | null;
+  /** Asal salinan hasil fork favorit; null = stiker asli. */
+  sourceStickerId: string | null;
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null;

@@ -22,6 +22,7 @@ const publicItemSchema = z.object({
   category_slug: z.string().nullable(),
   display_name: z.string().nullable(),
   is_custom: z.boolean(),
+  source_sticker_id: z.string().nullable(),
 });
 
 const adminItemSchema = publicItemSchema.extend({

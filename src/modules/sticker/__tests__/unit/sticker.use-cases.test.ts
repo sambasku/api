@@ -25,6 +25,7 @@ const base: Sticker = {
   displayName: null,
   visibility: 'public',
   providerFileId: null,
+  sourceStickerId: null,
   createdAt: new Date(),
   updatedAt: null,
   deletedAt: null,
@@ -176,6 +177,82 @@ describe('AddFavoriteStickerUseCase', () => {
   });
 });
 
+describe('AddFavoriteStickerUseCase fork stiker milik orang lain', () => {
+  const foreign: Sticker = {
+    ...base,
+    id: 'kopi-01jabcdefghjkmnpqrstvwxyz1',
+    ownerUserId: 'u2',
+    displayName: 'Kopi',
+    visibility: 'private',
+    providerFileId: 'ik_9',
+  };
+
+  function makeRepo(overrides: Record<string, unknown> = {}) {
+    return {
+      findActiveById: vi.fn().mockResolvedValue(foreign),
+      findOwnedCopy: vi.fn().mockResolvedValue(null),
+      isFavorite: vi.fn().mockResolvedValue(false),
+      countFavorites: vi.fn().mockResolvedValue(3),
+      create: vi.fn(async (input: Record<string, unknown>) => ({
+        ...base,
+        ...input,
+        createdAt: new Date(),
+      })),
+      addFavorite: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  it('membuat salinan milik favoriter dan memfavoritkan salinan itu', async () => {
+    const repo = makeRepo();
+    const uc = new AddFavoriteStickerUseCase(repo as never, 50);
+    const res = await uc.execute({ userId: 'u1', stickerId: foreign.id });
+
+    expect(repo.create).toHaveBeenCalledTimes(1);
+    const input = repo.create.mock.calls[0]![0] as Record<string, unknown>;
+    expect(input).toMatchObject({
+      ownerUserId: 'u1',
+      sourceStickerId: foreign.id,
+      visibility: 'private',
+      providerFileId: 'ik_9',
+      imageUrl: foreign.imageUrl,
+    });
+    expect(res.sourceStickerId).toBe(foreign.id);
+    expect(res.ownerUserId).toBe('u1');
+    expect(repo.addFavorite).toHaveBeenCalledWith('u1', res.id);
+  });
+
+  it('memakai ulang salinan yang sudah ada tanpa membuat baru', async () => {
+    const copy = { ...foreign, id: 'kopi-copy-1', ownerUserId: 'u1', sourceStickerId: foreign.id };
+    const repo = makeRepo({ findOwnedCopy: vi.fn().mockResolvedValue(copy) });
+    const uc = new AddFavoriteStickerUseCase(repo as never, 50);
+    const res = await uc.execute({ userId: 'u1', stickerId: foreign.id });
+
+    expect(repo.create).not.toHaveBeenCalled();
+    expect(res.id).toBe('kopi-copy-1');
+    expect(repo.addFavorite).toHaveBeenCalledWith('u1', 'kopi-copy-1');
+  });
+
+  it('favorit lama yang masih referensi ke asal tetap dihormati (tanpa fork)', async () => {
+    const repo = makeRepo({ isFavorite: vi.fn().mockResolvedValue(true) });
+    const uc = new AddFavoriteStickerUseCase(repo as never, 50);
+    const res = await uc.execute({ userId: 'u1', stickerId: foreign.id });
+
+    expect(res.id).toBe(foreign.id);
+    expect(repo.create).not.toHaveBeenCalled();
+    expect(repo.addFavorite).not.toHaveBeenCalled();
+  });
+
+  it('kuota favorit penuh: fork ditolak tanpa membuat salinan', async () => {
+    const repo = makeRepo({ countFavorites: vi.fn().mockResolvedValue(50) });
+    const uc = new AddFavoriteStickerUseCase(repo as never, 50);
+    await expect(
+      uc.execute({ userId: 'u1', stickerId: foreign.id }),
+    ).rejects.toMatchObject({ errorCode: 'STICKER_FAVORITE_LIMIT_REACHED' });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('CreateMyStickerUseCase & DeleteMyStickerUseCase', () => {
   it('menolak URL di luar endpoint ImageKit resmi', async () => {
     const repo = { countActiveByOwner: vi.fn().mockResolvedValue(0), create: vi.fn() };
@@ -242,12 +319,55 @@ describe('CreateMyStickerUseCase & DeleteMyStickerUseCase', () => {
       }),
     };
     const storage = { deleteFile: vi.fn().mockResolvedValue(undefined) };
-    const uc = new DeleteMyStickerUseCase(repo as never, storage as never);
+    const repoWithUsage = {
+      ...repo,
+      isStickerFileInUse: vi.fn().mockResolvedValue(false),
+      clearFavoritesOf: vi.fn(),
+    };
+    const uc = new DeleteMyStickerUseCase(repoWithUsage as never, storage as never);
     await uc.execute({
       userId: 'u1',
       stickerId: 'kopi-01jabcdefghjkmnpqrstvwxyz1',
     });
     expect(storage.deleteFile).toHaveBeenCalledWith('ik_123');
+    expect(repoWithUsage.clearFavoritesOf).not.toHaveBeenCalled();
+  });
+
+  it('DeleteMyStickerUseCase tidak menghapus file saat masih dipakai (salinan/favorit)', async () => {
+    const repo = {
+      softDeleteByOwner: vi.fn().mockResolvedValue({
+        ...base,
+        id: 'kopi-01jabcdefghjkmnpqrstvwxyz1',
+        ownerUserId: 'u2',
+        visibility: 'private',
+        providerFileId: 'ik_123',
+      }),
+      isStickerFileInUse: vi.fn().mockResolvedValue(true),
+    };
+    const storage = { deleteFile: vi.fn() };
+    const uc = new DeleteMyStickerUseCase(repo as never, storage as never);
+    await uc.execute({
+      userId: 'u2',
+      stickerId: 'kopi-01jabcdefghjkmnpqrstvwxyz1',
+    });
+    expect(storage.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('DeleteMyStickerUseCase membersihkan favorit saat yang dihapus salinan fork', async () => {
+    const repo = {
+      softDeleteByOwner: vi.fn().mockResolvedValue({
+        ...base,
+        id: 'kopi-copy-1',
+        ownerUserId: 'u1',
+        visibility: 'private',
+        sourceStickerId: 'kopi-01jabcdefghjkmnpqrstvwxyz1',
+        providerFileId: null,
+      }),
+      clearFavoritesOf: vi.fn(),
+    };
+    const uc = new DeleteMyStickerUseCase(repo as never);
+    await uc.execute({ userId: 'u1', stickerId: 'kopi-copy-1' });
+    expect(repo.clearFavoritesOf).toHaveBeenCalledWith('kopi-copy-1');
   });
 
   it('DeleteMyStickerUseCase melempar 404 jika bukan milik user', async () => {

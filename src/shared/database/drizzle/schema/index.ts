@@ -129,3 +129,7 @@ export * from "./voice-room-events.schema";
 export * from "./user-week-stats.schema";
 export * from "./ugc-comment-lemma-links.schema";
 export * from "./lemma-merge-requests.schema";
+export * from "./kategori-transaksi.schema";
+export * from "./rekening.schema";
+export * from "./kewajiban.schema";
+export * from "./cash-ledger.schema";

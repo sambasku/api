@@ -7,6 +7,7 @@ import {
   gt,
   isNotNull,
   isNull,
+  ne,
   or,
   sql,
 } from 'drizzle-orm';
@@ -43,10 +44,24 @@ function mapRow(r: typeof stickers.$inferSelect): Sticker {
     displayName: r.displayName ?? null,
     visibility: (r.visibility === 'private' ? 'private' : 'public') as StickerVisibility,
     providerFileId: r.providerFileId ?? null,
+    sourceStickerId: r.sourceStickerId ?? null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt ?? null,
     deletedAt: r.deletedAt ?? null,
   };
+}
+
+/**
+ * Stiker yang dihapus pemiliknya tetap terlihat oleh favoriter lama (referensi).
+ * Salinan milik favoriter sendiri tidak masuk: penghapusannya berarti hilang dari deck.
+ */
+function ownerDeletedFavorite(userId: string) {
+  return and(
+    isNotNull(stickers.deletedAt),
+    isNotNull(stickers.ownerUserId),
+    ne(stickers.ownerUserId, userId),
+    eq(stickers.visibility, 'private'),
+  );
 }
 
 function encodeCursor(sortOrder: number, id: string): string {
@@ -181,12 +196,20 @@ export class StickerRepositoryImpl implements StickerRepository {
       .where(
         and(
           eq(stickers.id, id),
-          isNull(stickers.deletedAt),
-          eq(stickers.isActive, true),
           or(
-            eq(stickers.visibility, 'public'),
-            eq(stickers.ownerUserId, userId),
-            isNotNull(userStickerFavorites.userId),
+            and(
+              isNull(stickers.deletedAt),
+              eq(stickers.isActive, true),
+              or(
+                eq(stickers.visibility, 'public'),
+                eq(stickers.ownerUserId, userId),
+                isNotNull(userStickerFavorites.userId),
+              ),
+            ),
+            and(
+              isNotNull(userStickerFavorites.userId),
+              ownerDeletedFavorite(userId),
+            ),
           ),
         ),
       )
@@ -219,6 +242,7 @@ export class StickerRepositoryImpl implements StickerRepository {
         displayName: input.displayName ?? null,
         visibility: input.visibility ?? 'public',
         providerFileId: input.providerFileId ?? null,
+        sourceStickerId: input.sourceStickerId ?? null,
       })
       .returning();
     return mapRow(rows[0]!);
@@ -284,8 +308,10 @@ export class StickerRepositoryImpl implements StickerRepository {
       .where(
         and(
           eq(userStickerFavorites.userId, userId),
-          eq(stickers.isActive, true),
-          isNull(stickers.deletedAt),
+          or(
+            and(eq(stickers.isActive, true), isNull(stickers.deletedAt)),
+            ownerDeletedFavorite(userId),
+          ),
         ),
       )
       .orderBy(desc(userStickerFavorites.createdAt), asc(stickers.id));
@@ -300,8 +326,10 @@ export class StickerRepositoryImpl implements StickerRepository {
       .where(
         and(
           eq(userStickerFavorites.userId, userId),
-          eq(stickers.isActive, true),
-          isNull(stickers.deletedAt),
+          or(
+            and(eq(stickers.isActive, true), isNull(stickers.deletedAt)),
+            ownerDeletedFavorite(userId),
+          ),
         ),
       );
     return Number(rows[0]?.total ?? 0);
@@ -339,6 +367,54 @@ export class StickerRepositoryImpl implements StickerRepository {
       );
   }
 
+  async findOwnedCopy(
+    ownerUserId: string,
+    sourceStickerId: string,
+  ): Promise<Sticker | null> {
+    const rows = await this.db
+      .select()
+      .from(stickers)
+      .where(
+        and(
+          eq(stickers.ownerUserId, ownerUserId),
+          eq(stickers.sourceStickerId, sourceStickerId),
+          isNull(stickers.deletedAt),
+        ),
+      )
+      .limit(1);
+    const r = rows[0];
+    return r ? mapRow(r) : null;
+  }
+
+  async isStickerFileInUse(
+    stickerId: string,
+    providerFileId: string,
+  ): Promise<boolean> {
+    const sharing = await this.db
+      .select({ id: stickers.id })
+      .from(stickers)
+      .where(
+        and(
+          eq(stickers.providerFileId, providerFileId),
+          ne(stickers.id, stickerId),
+        ),
+      )
+      .limit(1);
+    if (sharing.length > 0) return true;
+    const favorited = await this.db
+      .select({ stickerId: userStickerFavorites.stickerId })
+      .from(userStickerFavorites)
+      .where(eq(userStickerFavorites.stickerId, stickerId))
+      .limit(1);
+    return favorited.length > 0;
+  }
+
+  async clearFavoritesOf(stickerId: string): Promise<void> {
+    await this.db
+      .delete(userStickerFavorites)
+      .where(eq(userStickerFavorites.stickerId, stickerId));
+  }
+
   async listByOwner(ownerUserId: string): Promise<Sticker[]> {
     const rows = await this.db
       .select()
@@ -348,6 +424,7 @@ export class StickerRepositoryImpl implements StickerRepository {
           eq(stickers.ownerUserId, ownerUserId),
           eq(stickers.isActive, true),
           isNull(stickers.deletedAt),
+          isNull(stickers.sourceStickerId),
         ),
       )
       .orderBy(desc(stickers.createdAt), asc(stickers.id));
@@ -363,6 +440,7 @@ export class StickerRepositoryImpl implements StickerRepository {
           eq(stickers.ownerUserId, ownerUserId),
           eq(stickers.isActive, true),
           isNull(stickers.deletedAt),
+          isNull(stickers.sourceStickerId),
         ),
       );
     return Number(rows[0]?.total ?? 0);
