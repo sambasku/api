@@ -426,4 +426,59 @@ describe('UpdateMyProfileUseCase', () => {
     });
     expect(result.username).toBe('budi00');
   });
+
+  it('ubah kapitalisasi saja → simpan casing baru dengan cooldown aktif', async () => {
+    const updated = makeUser({ username: 'Budi00' });
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(makeUser({ username: 'budi00' })),
+      findByUsername: vi.fn().mockResolvedValue(null),
+      updateProfile: vi.fn().mockResolvedValue(updated),
+    } as unknown as UserRepository;
+    const usernameChangeRepo = {
+      findActiveHold: vi.fn().mockResolvedValue(null),
+      applyUsernameChange: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await new UpdateMyProfileUseCase(
+      userRepo,
+      regionRepo,
+      undefined,
+      usernameChangeRepo as never,
+    ).execute(USER_ID, { username: 'Budi00' });
+
+    expect(usernameChangeRepo.applyUsernameChange).toHaveBeenCalledWith({
+      userId: USER_ID,
+      oldUsername: 'budi00',
+      newUsername: 'Budi00',
+      advanceCooldown: true,
+    });
+    expect(result.username).toBe('Budi00');
+  });
+
+  it('ubah kapitalisasi saja saat cooldown belum selesai → USERNAME_CHANGE_TOO_SOON', async () => {
+    const changedAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const userRepo = {
+      findById: vi.fn().mockResolvedValue(
+        makeUser({ username: 'budi00', usernameChangedAt: changedAt }),
+      ),
+      findByUsername: vi.fn().mockResolvedValue(null),
+      updateProfile: vi.fn(),
+    } as unknown as UserRepository;
+    const usernameChangeRepo = {
+      findActiveHold: vi.fn().mockResolvedValue(null),
+      applyUsernameChange: vi.fn(),
+    };
+
+    await expect(
+      new UpdateMyProfileUseCase(
+        userRepo,
+        regionRepo,
+        undefined,
+        usernameChangeRepo as never,
+      ).execute(USER_ID, { username: 'Budi00' }),
+    ).rejects.toMatchObject({
+      errorCode: 'USERNAME_CHANGE_TOO_SOON',
+    });
+    expect(usernameChangeRepo.applyUsernameChange).not.toHaveBeenCalled();
+  });
 });

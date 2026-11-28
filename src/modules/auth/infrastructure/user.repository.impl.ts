@@ -87,7 +87,11 @@ export class UserRepositoryImpl implements UserRepository {
   }
 
   async findByUsername(username: string): Promise<User | null> {
-    const [row] = await this.db.select().from(users).where(eq(users.username, username)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(users)
+      .where(eq(sql`lower(${users.username})`, username.toLowerCase()))
+      .limit(1);
     if (!row) return null;
     const roles = await loadRolesByUserIds(this.db, [row.id]);
     return toEntity(row, roles.get(row.id) ?? []);
@@ -96,7 +100,8 @@ export class UserRepositoryImpl implements UserRepository {
   async findMentionableByUsernames(
     usernames: string[],
   ): Promise<Array<{ id: string; username: string; displayName: string }>> {
-    if (usernames.length === 0) return [];
+    const lowerUsernames = [...new Set(usernames.map((u) => u.toLowerCase()))];
+    if (lowerUsernames.length === 0) return [];
     const rows = await this.db
       .select({
         id: users.id,
@@ -106,7 +111,7 @@ export class UserRepositoryImpl implements UserRepository {
       .from(users)
       .where(
         and(
-          inArray(users.username, usernames),
+          inArray(sql`lower(${users.username})`, lowerUsernames),
           eq(users.isActive, true),
           isNull(users.deletedAt),
         ),

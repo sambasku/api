@@ -277,7 +277,7 @@ export class UpdateMyProfileUseCase {
             message:
               availability.status === 'reserved'
                 ? 'Username tidak bisa dipakai'
-                : 'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore), tanpa titik/underscore beruntun.',
+                : 'Username tidak valid. Pakai 6-30 karakter (huruf a-z/A-Z, angka, titik, underscore), tanpa titik/underscore beruntun.',
           },
         ]);
       }

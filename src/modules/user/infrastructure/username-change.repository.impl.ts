@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { usernameChanges, users } from '@/shared/database/drizzle/schema';
 import type { AppDatabase } from '@/shared/database/drizzle/client';
 import { ConflictError, NotFoundError } from '@/shared/errors/app-error';
@@ -29,7 +29,7 @@ export class UsernameChangeRepositoryImpl implements UsernameChangeRepository {
       .from(usernameChanges)
       .where(
         and(
-          eq(usernameChanges.oldUsername, username),
+          eq(sql`lower(${usernameChanges.oldUsername})`, username.toLowerCase()),
           isNull(usernameChanges.releasedAt),
           gt(usernameChanges.holdUntil, now),
         ),
@@ -43,19 +43,19 @@ export class UsernameChangeRepositoryImpl implements UsernameChangeRepository {
     usernames: string[],
     now: Date = new Date(),
   ): Promise<Set<string>> {
-    const unique = [...new Set(usernames.filter((u) => u.length > 0))];
+    const unique = [...new Set(usernames.filter((u) => u.length > 0).map((u) => u.toLowerCase()))];
     if (unique.length === 0) return new Set();
     const rows = await this.db
       .select({ oldUsername: usernameChanges.oldUsername })
       .from(usernameChanges)
       .where(
         and(
-          inArray(usernameChanges.oldUsername, unique),
+          inArray(sql`lower(${usernameChanges.oldUsername})`, unique),
           isNull(usernameChanges.releasedAt),
           gt(usernameChanges.holdUntil, now),
         ),
       );
-    return new Set(rows.map((r) => r.oldUsername));
+    return new Set(rows.map((r) => r.oldUsername.toLowerCase()));
   }
 
   async listHistoryForUser(
@@ -91,14 +91,14 @@ export class UsernameChangeRepositoryImpl implements UsernameChangeRepository {
     const holdUntil = addDays(now, USERNAME_HOLD_DAYS);
 
     await this.db.transaction(async (tx) => {
-      // Reclaim: tutup hold aktif atas target.
+      // Reclaim: tutup hold aktif atas target (case-insensitive).
       await tx
         .update(usernameChanges)
         .set({ releasedAt: now })
         .where(
           and(
             eq(usernameChanges.userId, input.userId),
-            eq(usernameChanges.oldUsername, input.newUsername),
+            eq(sql`lower(${usernameChanges.oldUsername})`, input.newUsername.toLowerCase()),
             isNull(usernameChanges.releasedAt),
           ),
         );

@@ -68,8 +68,8 @@ describe('CreateAdminUserUseCase', () => {
 
     expect(hasher.hash).toHaveBeenCalledWith('Password123');
     expect(userRepo.save).toHaveBeenCalledWith({
-      // Username dinormalisasi ke handle mention (lowercase, tanpa spasi).
-      username: 'sitiok',
+      // Username mempertahankan kapitalisasi (tanpa spasi/hyphen).
+      username: 'Sitiok',
       email: 'siti@test.com',
       phone: null,
       passwordHash: 'argon2id$hash',

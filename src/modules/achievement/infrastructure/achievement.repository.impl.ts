@@ -347,13 +347,14 @@ export class AchievementRepositoryImpl implements AchievementRepository {
   async resolveUsernames(
     usernames: string[],
   ): Promise<Map<string, { id: string; username: string; displayName: string }>> {
-    if (usernames.length === 0) return new Map();
+    const lowers = [...new Set(usernames.map((u) => u.toLowerCase()))];
+    if (lowers.length === 0) return new Map();
     const rows = await this.db
       .select({ id: users.id, username: users.username, displayName: users.displayName })
       .from(users)
       .where(
         and(
-          inArray(users.username, usernames),
+          inArray(sql`lower(${users.username})`, lowers),
           isNull(users.deletedAt),
           eq(users.isActive, true),
         ),

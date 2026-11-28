@@ -118,7 +118,13 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
           isNull(achievements.deletedAt),
         ),
       )
-      .where(and(eq(users.username, username), isNull(users.deletedAt), eq(users.isActive, true)))
+      .where(
+        and(
+          eq(sql`lower(${users.username})`, username.toLowerCase()),
+          isNull(users.deletedAt),
+          eq(users.isActive, true),
+        ),
+      )
       .limit(1);
     if (!row) return null;
     const roles = await this.db
@@ -145,10 +151,11 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
 
   /** Prefix-search username untuk autocomplete mention. Kolom publik saja. */
   async suggestByUsernamePrefix(prefix: string, limit: number): Promise<MentionUserRow[]> {
-    // Range seek, bukan LIKE prefix||'%': LIKE tidak memakai index penuh
-    // (scan setengah index + wildcard user harus di-escape). Charset
-    // username `[a-z0-9._]` - '~' (0x7E) di atas 'z' (0x7A) = batas atas
-    // aman, jadi `>= prefix AND < prefix~` persis prefix-match.
+    // Range seek pada `lower(username)` (pakai index `users_username_lower_unique`),
+    // bukan LIKE prefix||'%': LIKE tidak memakai index penuh dan wildcard harus
+    // di-escape. Karena di-lower, charset `[a-z0-9._]` di bawah '~' (0x7E) tetap
+    // aman untuk prefix-match case-insensitive.
+    const lowerPrefix = prefix.toLowerCase();
     const rows = await this.db
       .select({
         id: users.id,
@@ -159,13 +166,13 @@ export class PublicUserRepositoryImpl implements PublicUserRepository {
       .from(users)
       .where(
         and(
-          sql`${users.username} >= ${prefix}`,
-          sql`${users.username} < ${`${prefix}~`}`,
+          sql`lower(${users.username}) >= ${lowerPrefix}`,
+          sql`lower(${users.username}) < ${`${lowerPrefix}~`}`,
           isNull(users.deletedAt),
           eq(users.isActive, true),
         ),
       )
-      .orderBy(users.username)
+      .orderBy(sql`lower(${users.username})`)
       .limit(limit);
 
     return rows.map((row) => ({

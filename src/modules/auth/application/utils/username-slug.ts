@@ -2,12 +2,12 @@ import { randomInt } from 'node:crypto';
 import { isReservedHandle } from './reserved-handles';
 
 /**
- * Handle mention: a-z, 0-9, titik, underscore. Tanpa hyphen. Min 6.
+ * Handle mention: a-z, A-Z, 0-9, titik, underscore. Tanpa hyphen. Min 6.
  * Wajib mulai/akhir alfanumerik; tidak boleh separator beruntun (`..` `__` `._` `_.`).
- * Angka saja (`123456`) boleh.
+ * Angka saja (`123456`) boleh. Case-preserving; unik case-insensitive di DB.
  */
 export const USERNAME_HANDLE_REGEX =
-  /^(?=.{6,30}$)(?!.*[._]{2})[a-z0-9][a-z0-9._]*[a-z0-9]$/;
+  /^(?=.{6,30}$)(?!.*[._]{2})[a-zA-Z0-9][a-zA-Z0-9._]*[a-zA-Z0-9]$/;
 
 const MAX_LEN = 30;
 const MIN_LEN = 6;
@@ -15,19 +15,25 @@ const MIN_LEN = 6;
 export type UsernameConflictProvider = 'google' | 'github' | 'facebook' | 'email' | 'x';
 
 /**
- * Normalisasi charset saja (tanpa pad / fallback `user`).
+ * Normalisasi charset untuk input user (mempertahankan huruf besar/kecil).
  * Tidak collapse separator beruntun - biar path validasi user menolak
  * `a..b` / `a._b` / `_____` sebagai invalid, bukan diam-diam diperbaiki.
  */
-export function normalizeUsernameSlug(raw: string | null | undefined): string {
+export function normalizeUsernameHandle(raw: string | null | undefined): string {
   return (raw ?? '')
     .trim()
-    .toLowerCase()
     .replace(/-/g, '_')
-    .replace(/[^a-z0-9._]+/g, '_')
+    .replace(/[^a-zA-Z0-9._]+/g, '_')
     .replace(/[._]+$/g, '')
     .replace(/^[._]+/g, '')
     .slice(0, MAX_LEN);
+}
+
+/**
+ * Normalisasi charset ke lowercase (untuk generator OAuth / register / slugify).
+ */
+export function normalizeUsernameSlug(raw: string | null | undefined): string {
+  return normalizeUsernameHandle(raw).toLowerCase();
 }
 
 /** Collapse separator beruntun untuk generator OAuth / slugify (bukan path edit user). */

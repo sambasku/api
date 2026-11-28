@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { getTestDb } from '@/shared/database/drizzle/test-client';
 import { truncateAll } from '@/shared/database/drizzle/test-utils';
 import { UserRepositoryImpl } from '../../infrastructure/user.repository.impl';
+import { PublicUserRepositoryImpl } from '@/modules/user/infrastructure/public-user.repository.impl';
 import {
   buildUsernameCandidates,
   USERNAME_HANDLE_REGEX,
@@ -53,6 +54,36 @@ describe.skipIf(!hasTestDb)('UserRepositoryImpl - username handle guard', () => 
         username: 'fedi',
         usernameCandidates: ['fedi'],
         email: 'fedi-409@test.com',
+        phone: null,
+        passwordHash: 'hash',
+      }),
+    ).rejects.toMatchObject({ errorCode: 'USERNAME_ALREADY_EXISTS', statusCode: 409 });
+  });
+
+  it('menerima kombinasi a-zA-Z, lookup case-insensitive, dan menolak duplikat beda case', async () => {
+    const saved = await repo.save({
+      username: 'IbnuSambas',
+      email: 'ibnu-case@test.com',
+      phone: null,
+      passwordHash: 'hash',
+    });
+    expect(saved.username).toBe('IbnuSambas');
+
+    const byLower = await repo.findByUsername('ibnusambas');
+    expect(byLower?.id).toBe(saved.id);
+    expect(byLower?.username).toBe('IbnuSambas');
+
+    const publicRepo = new PublicUserRepositoryImpl(testDb);
+    const publicByLower = await publicRepo.findPublicByUsername('ibnusambas');
+    expect(publicByLower?.username).toBe('IbnuSambas');
+
+    const suggestions = await publicRepo.suggestByUsernamePrefix('ibnu', 10);
+    expect(suggestions.map((s) => s.username)).toContain('IbnuSambas');
+
+    await expect(
+      repo.save({
+        username: 'ibnusambas',
+        email: 'ibnu-dup@test.com',
         phone: null,
         passwordHash: 'hash',
       }),

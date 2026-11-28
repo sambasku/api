@@ -1443,6 +1443,13 @@
       "when": 1801680010000,
       "tag": "0205_uniform_comments_parent_and_audio",
       "breakpoints": true
+    },
+    {
+      "idx": 206,
+      "version": "6",
+      "when": 1801680011000,
+      "tag": "0206_username_allow_uppercase",
+      "breakpoints": true
     }
   ]
 }

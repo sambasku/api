@@ -101,13 +101,13 @@ describe('updateMyProfileSchema', () => {
     expect(parsed.data.village_id).toBe(id);
   });
 
-  it('username valid dinormalisasi', () => {
+  it('username valid mempertahankan huruf besar/kecil', () => {
     const parsed = updateMyProfileSchema.safeParse({
       username: 'Warga.Sambas',
     });
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    expect(parsed.data.username).toBe('warga.sambas');
+    expect(parsed.data.username).toBe('Warga.Sambas');
   });
 
   it('username pendek ditolak', () => {

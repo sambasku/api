@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildUsernameCandidates,
   isSyntheticOauthEmail,
+  normalizeUsernameHandle,
   normalizeUsernameSlug,
   randomUsernameToken,
   slugifyUsername,
@@ -11,8 +12,8 @@ import {
 import { isReservedHandle, RESERVED_HANDLES } from '../../application/utils/reserved-handles';
 
 describe('USERNAME_HANDLE_REGEX', () => {
-  it('menerima handle valid termasuk angka saja', () => {
-    for (const h of ['warga.sambas', 'budi_01', '123456', 'a1b2c3']) {
+  it('menerima handle valid termasuk kombinasi a-z, A-Z, dan angka saja', () => {
+    for (const h of ['warga.sambas', 'Warga.Sambas', 'IbnuSambas', 'BUDI_01', 'budi_01', '123456', 'a1b2c3']) {
       expect(USERNAME_HANDLE_REGEX.test(h)).toBe(true);
     }
   });
@@ -34,6 +35,14 @@ describe('USERNAME_HANDLE_REGEX', () => {
     ]) {
       expect(USERNAME_HANDLE_REGEX.test(h)).toBe(false);
     }
+  });
+});
+
+describe('normalizeUsernameHandle', () => {
+  it('mempertahankan huruf besar/kecil dan tidak collapse separator beruntun', () => {
+    expect(normalizeUsernameHandle('Warga.Sambas')).toBe('Warga.Sambas');
+    expect(normalizeUsernameHandle('Ibnu-Sambas')).toBe('Ibnu_Sambas');
+    expect(normalizeUsernameHandle('Hello__World')).toBe('Hello__World');
   });
 });
 

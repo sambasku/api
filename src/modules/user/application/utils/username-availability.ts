@@ -1,5 +1,5 @@
 import {
-  normalizeUsernameSlug,
+  normalizeUsernameHandle,
   USERNAME_HANDLE_REGEX,
 } from '@/modules/auth/application/utils/username-slug';
 import { isReservedHandle } from '@/modules/auth/application/utils/reserved-handles';
@@ -19,12 +19,12 @@ export interface UsernameAvailabilityResult {
 
 /**
  * Klasifikasi format + reserved tanpa DB. Dipakai validator ringan /
- * gate awal sebelum cek uniqueness.
+ * gate awal sebelum cek uniqueness. Mempertahankan kapitalisasi input.
  */
 export function classifyUsernameLocal(
   raw: string,
 ): UsernameAvailabilityResult {
-  const username = normalizeUsernameSlug(raw);
+  const username = normalizeUsernameHandle(raw);
   if (!USERNAME_HANDLE_REGEX.test(username)) {
     return { username, status: 'invalid' };
   }
@@ -36,7 +36,9 @@ export function classifyUsernameLocal(
 
 /**
  * Status ketersediaan handle untuk user yang sedang login.
- * `current` = sama dengan handle sekarang.
+ * `current` = sama persis (termasuk kapitalisasi) dengan handle sekarang.
+ * Perubahan kapitalisasi saja (mis. `budi00` -> `Budi00`) mengembalikan
+ * `available` agar bisa disimpan dan tetap melalui alur cooldown 30 hari.
  * `reclaimable` = masih di-hold oleh user ini (boleh reclaim tanpa cooldown).
  */
 export async function resolveUsernameAvailability(opts: {
@@ -53,8 +55,12 @@ export async function resolveUsernameAvailability(opts: {
     return local;
   }
 
-  if (local.username === normalizeUsernameSlug(opts.currentUsername)) {
+  const currentHandle = normalizeUsernameHandle(opts.currentUsername);
+  if (local.username === currentHandle) {
     return { username: local.username, status: 'current' };
+  }
+  if (local.username.toLowerCase() === currentHandle.toLowerCase()) {
+    return { username: local.username, status: 'available' };
   }
 
   const hold = opts.findActiveHold

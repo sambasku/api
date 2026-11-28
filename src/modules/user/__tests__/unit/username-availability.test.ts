@@ -5,9 +5,9 @@ import {
 } from '../../application/utils/username-availability';
 
 describe('classifyUsernameLocal', () => {
-  it('normalisasi + available format', () => {
+  it('mempertahankan huruf besar/kecil + available format', () => {
     expect(classifyUsernameLocal('Warga.Sambas')).toEqual({
-      username: 'warga.sambas',
+      username: 'Warga.Sambas',
       status: 'available',
     });
   });
@@ -48,6 +48,20 @@ describe('resolveUsernameAvailability', () => {
         findByUsername,
       }),
     ).resolves.toEqual({ username: 'budi00', status: 'current' });
+  });
+
+  it('ubah kapitalisasi username sendiri → available (bukan current, bukan taken)', async () => {
+    const findByUsername = async () => {
+      throw new Error('should not call');
+    };
+    await expect(
+      resolveUsernameAvailability({
+        raw: 'Budi00',
+        currentUsername: 'budi00',
+        currentUserId: 'u1',
+        findByUsername,
+      }),
+    ).resolves.toEqual({ username: 'Budi00', status: 'available' });
   });
 
   it('taken bila user lain', async () => {

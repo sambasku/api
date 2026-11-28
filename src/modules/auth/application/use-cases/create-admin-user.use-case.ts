@@ -5,7 +5,7 @@ import { Password } from '../../domain/value-objects/password.vo';
 import type { User, UserRole } from '../../domain/entities/user.entity';
 import type { UserRepository } from '../../domain/repositories/user.repository';
 import type { PasswordHasherPort } from '../ports/password-hasher.port';
-import { normalizeUsernameSlug, USERNAME_HANDLE_REGEX } from '../utils/username-slug';
+import { normalizeUsernameHandle, USERNAME_HANDLE_REGEX } from '../utils/username-slug';
 import { isReservedHandle } from '../utils/reserved-handles';
 
 export const ASSIGNABLE_ADMIN_ROLES = ['contributor', 'editor', 'reviewer', 'admin'] as const;
@@ -41,15 +41,15 @@ export class CreateAdminUserUseCase {
     Password.create(cmd.password);
 
     // Username admin = handle @mention juga: normalisasi charset saja
-    // (lowercase, tanpa spasi/hyphen). Tolak bila hasil belum valid 6-30 /
-    // reserved - jangan pad diam-diam supaya admin sadar.
-    const username = normalizeUsernameSlug(cmd.username);
+    // (pertahankan huruf besar/kecil, tanpa spasi/hyphen). Tolak bila hasil
+    // belum valid 6-30 / reserved - jangan pad diam-diam supaya admin sadar.
+    const username = normalizeUsernameHandle(cmd.username);
     if (!USERNAME_HANDLE_REGEX.test(username) || isReservedHandle(username)) {
       throw new ValidationError([
         {
           field: 'username',
           message:
-            'Nama pengguna tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore), tanpa titik/underscore beruntun.',
+            'Nama pengguna tidak valid. Pakai 6-30 karakter (huruf a-z/A-Z, angka, titik, underscore), tanpa titik/underscore beruntun.',
         },
       ]);
     }

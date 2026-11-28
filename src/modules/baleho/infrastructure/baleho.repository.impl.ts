@@ -237,7 +237,7 @@ export class BalehoRepositoryImpl implements BalehoRepository {
         isActive: users.isActive,
       })
       .from(users)
-      .where(eq(users.username, username))
+      .where(eq(sql`lower(${users.username})`, username.toLowerCase()))
       .limit(1);
     return rows[0] ?? null;
   }

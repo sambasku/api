@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  normalizeUsernameSlug,
+  normalizeUsernameHandle,
   USERNAME_HANDLE_REGEX,
 } from '@/modules/auth/application/utils/username-slug';
 
@@ -20,7 +20,7 @@ function nullableRegionId(message: string) {
 }
 
 const USERNAME_FORMAT_MESSAGE =
-  'Username tidak valid. Pakai 6-30 karakter (huruf kecil, angka, titik, underscore), tanpa titik/underscore beruntun.';
+  'Username tidak valid. Pakai 6-30 karakter (huruf a-z/A-Z, angka, titik, underscore), tanpa titik/underscore beruntun.';
 
 export const updateMyProfileSchema = z
   .object({
@@ -30,7 +30,7 @@ export const updateMyProfileSchema = z
       .min(1, 'Username wajib diisi')
       .max(64, USERNAME_FORMAT_MESSAGE)
       .optional()
-      .transform((v) => (v === undefined ? undefined : normalizeUsernameSlug(v)))
+      .transform((v) => (v === undefined ? undefined : normalizeUsernameHandle(v)))
       .refine((v) => v === undefined || USERNAME_HANDLE_REGEX.test(v), {
         message: USERNAME_FORMAT_MESSAGE,
       }),
