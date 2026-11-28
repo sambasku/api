@@ -40,6 +40,7 @@ export const EXPLORE_COMMENT_MODULES = [
 export type ExploreCommentModule = (typeof EXPLORE_COMMENT_MODULES)[number];
 export type ExploreCommentStatus = 'published' | 'taken_down' | 'deleted_by_author';
 export type ExploreCommentMediaFilter = 'image' | 'audio' | 'any';
+export type ExploreCommentImageStatus = 'pending_review' | 'published' | 'rejected';
 
 export interface AdminExploreCommentItem {
   id: string;
@@ -71,6 +72,7 @@ export interface ListAdminExploreCommentsInput {
   module: ExploreCommentModule;
   status?: ExploreCommentStatus;
   hasMedia?: ExploreCommentMediaFilter;
+  imageStatus?: ExploreCommentImageStatus;
   q?: string;
   limit: number;
   cursor?: string;
@@ -205,6 +207,9 @@ export class AdminExploreCommentService {
     if (input.cursor) {
       conditions.push(lt(c.id, input.cursor));
     }
+    if (input.imageStatus) {
+      conditions.push(eq(c.imageStatus, input.imageStatus));
+    }
     if (input.hasMedia === 'image') {
       conditions.push(inArray(c.imageStatus, ['pending_review', 'published']));
     } else if (input.hasMedia === 'audio') {
@@ -303,7 +308,13 @@ export class AdminExploreCommentService {
   private async listEncyclopedia(
     input: ListAdminExploreCommentsInput,
   ): Promise<ListAdminExploreCommentsPage> {
+    if (input.imageStatus === 'pending_review' || input.imageStatus === 'rejected') {
+      return { items: [], next_cursor: null, has_more: false };
+    }
     const conditions = [isNull(articleComments.deletedAt)];
+    if (input.imageStatus === 'published') {
+      conditions.push(isNotNull(articleComments.imageUrl));
+    }
     if (input.status) {
       conditions.push(eq(articleComments.status, input.status));
     }
