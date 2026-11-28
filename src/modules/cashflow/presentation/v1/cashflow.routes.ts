@@ -1,6 +1,6 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import { z } from 'zod';
-import { authorizeRole } from '@/shared/middlewares/authorize-role.middleware';
+import { requireMinRole } from '@/shared/middlewares/authorize-role.middleware';
 import { rateLimit } from '@/shared/middlewares/rate-limit.middleware';
 import { createOpenApiApp } from '@/shared/openapi/openapi-app';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/app-error';
@@ -278,11 +278,11 @@ function wireLampiran(r: AttachmentRow) {
   };
 }
 
-/** Admin cashflow. Mount di /api/v1/admin/cashflow. Hanya root dan admin. */
+/** Keuangan (cashflow). Mount di /api/v1/admin/cashflow. Strict level admin ke atas (admin dan root). */
 export function createAdminCashflowRoutes(deps: AdminCashflowRoutesDeps) {
   const { service, attachments } = deps;
   const routes = createOpenApiApp();
-  routes.use('*', deps.authenticate, authorizeRole('root', 'admin'), rateLimit({ points: 60, duration: 60 }));
+  routes.use('*', deps.authenticate, requireMinRole('admin'), rateLimit({ points: 60, duration: 60 }));
 
   // ringkasan dan baca
   routes.get('/summary', async (c) => c.json({ success: true as const, data: wireSummary(await service.getSummary()) }));
