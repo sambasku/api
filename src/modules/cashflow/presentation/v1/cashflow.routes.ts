@@ -8,6 +8,7 @@ import type { AppVariables } from '@/shared/types';
 import { KATEGORI_TRANSAKSI_TIPE } from '@/shared/database/drizzle/schema/kategori-transaksi.schema';
 import { REKENING_JENIS } from '@/shared/database/drizzle/schema/rekening.schema';
 import { KEWAJIBAN_RECURRENCE } from '@/shared/database/drizzle/schema/kewajiban.schema';
+import { CASH_DONATUR_TIPE } from '@/shared/database/drizzle/schema/cash-ledger.schema';
 import type { CashflowService, LoanView, PengingatItem, Summary } from '../../application/cashflow.service';
 
 // ---------------------------------------------------------------- validasi
@@ -41,6 +42,9 @@ const masukSchema = z.object({
   nominal: nominalSchema,
   tanggal: tanggalSchema,
   catatan: catatanSchema,
+  donatur_tipe: z.enum(CASH_DONATUR_TIPE).nullable().optional(),
+  donatur_user_id: idSchema.nullable().optional(),
+  donatur_usaha_id: idSchema.nullable().optional(),
   donatur_nama: z.string().max(80).nullable().optional(),
   tampil_publik: z.boolean().optional(),
   idempotency_key: idempotencySchema,
@@ -175,6 +179,9 @@ function wireCash(r: {
   buktiUrl: string | null;
   pajakDipotong: number | null;
   donaturNama: string | null;
+  donaturTipe: string | null;
+  donaturUserId: string | null;
+  donaturUsahaId: string | null;
   tampilPublik: boolean;
   createdAt: Date;
 }) {
@@ -199,6 +206,9 @@ function wireCash(r: {
     bukti_url: r.buktiUrl,
     pajak_dipotong: r.pajakDipotong,
     donatur_nama: r.donaturNama,
+    donatur_tipe: r.donaturTipe,
+    donatur_user_id: r.donaturUserId,
+    donatur_usaha_id: r.donaturUsahaId,
     tampil_publik: r.tampilPublik,
     created_at: r.createdAt.toISOString(),
   };
@@ -271,6 +281,16 @@ export function createAdminCashflowRoutes(deps: AdminCashflowRoutesDeps) {
     return c.json({ success: true as const, data: rows.map(wirePengingat) });
   });
 
+  // pencarian untuk picker donatur, sponsor, dan penalang (maks 10 hasil, kata kunci minimal 2 huruf)
+  routes.get('/lookup/users', async (c) => {
+    const rows = await service.cariUser(c.req.query('q') ?? '');
+    return c.json({ success: true as const, data: rows });
+  });
+  routes.get('/lookup/usaha', async (c) => {
+    const rows = await service.cariUsaha(c.req.query('q') ?? '');
+    return c.json({ success: true as const, data: rows });
+  });
+
   // master
   routes.get('/categories', async (c) => {
     const rows = await service.listKategori();
@@ -317,6 +337,9 @@ export function createAdminCashflowRoutes(deps: AdminCashflowRoutesDeps) {
         nominal: body.nominal,
         tanggal: body.tanggal,
         catatan: body.catatan,
+        donaturTipe: body.donatur_tipe ?? null,
+        donaturUserId: body.donatur_user_id ?? null,
+        donaturUsahaId: body.donatur_usaha_id ?? null,
         donaturNama: body.donatur_nama ?? null,
         tampilPublik: body.tampil_publik,
         idempotencyKey: body.idempotency_key,

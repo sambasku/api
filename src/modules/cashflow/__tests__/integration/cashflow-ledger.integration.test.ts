@@ -16,7 +16,9 @@ import { ValidationError } from '@/shared/errors/app-error';
  */
 
 const DB_FILE = join(tmpdir(), `cashflow-it-${process.pid}-${Date.now()}.db`);
-const MIGRATION = resolve(process.cwd(), 'src/shared/database/drizzle/migrations/0207_cashflow_ledger.sql');
+const MIGRATIONS = ['0207_cashflow_ledger.sql', '0209_cashflow_donatur_ref.sql'].map((f) =>
+  resolve(process.cwd(), 'src/shared/database/drizzle/migrations', f),
+);
 const ADMIN = 'USR-ADMIN';
 
 function openConnection(): { client: Client; db: AppDatabase } {
@@ -53,14 +55,32 @@ beforeAll(async () => {
   clients.push(rawClient);
   await rawClient.execute('PRAGMA foreign_keys = ON');
 
-  // Stub tabel users: hanya id, cukup untuk FK ledger.
-  await rawClient.execute('CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL)');
-  await rawClient.execute(`INSERT INTO users (id) VALUES ('${ADMIN}')`);
+  // Stub users dan usahas: hanya kolom yang dipakai ledger (FK, nama donatur, pencarian).
+  await rawClient.execute(
+    `CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL, username TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '',
+      is_active INTEGER NOT NULL DEFAULT 1, deleted_at INTEGER)`,
+  );
+  await rawClient.execute(
+    `INSERT INTO users (id, username, display_name, is_active) VALUES
+       ('${ADMIN}', 'admin', 'Admin', 1),
+       ('USR-DONOR', 'siti', 'Siti Aminah', 1),
+       ('USR-OFF', 'sitioff', 'Siti Nonaktif', 0)`,
+  );
+  await rawClient.execute(
+    'CREATE TABLE usahas (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL, deleted_at INTEGER)',
+  );
+  await rawClient.execute(
+    `INSERT INTO usahas (id, name, slug, deleted_at) VALUES
+       ('USH-1', 'Toko Maju Jaya', 'toko-maju-jaya', NULL),
+       ('USH-DEL', 'Toko Dihapus', 'toko-dihapus', 1)`,
+  );
 
-  const migration = readFileSync(MIGRATION, 'utf8');
-  for (const stmt of migration.split('--> statement-breakpoint')) {
-    if (!stmt.trim()) continue;
-    await rawClient.execute(stmt);
+  for (const file of MIGRATIONS) {
+    const migration = readFileSync(file, 'utf8');
+    for (const stmt of migration.split('--> statement-breakpoint')) {
+      if (!stmt.trim()) continue;
+      await rawClient.execute(stmt);
+    }
   }
 
   await rawClient.execute(`
@@ -396,6 +416,26 @@ describe('kewajiban, transfer, dan rekonsiliasi', () => {
     expect(await saldoOf(svcA, 'REK-TUNAI')).toBe(10_000);
   });
 
+  it('transfer ditolak jika saldo rekening asal kurang', async () => {
+    await expectConflict(
+      svcA.catatTransfer(
+        { rekeningId: 'REK-TUNAI', keRekeningId: 'REK-BANK', nominal: 999_999_999, tanggal: '2026-11-28', idempotencyKey: 'transfer-kurang-1' },
+        ADMIN,
+      ),
+      'KAS_TIDAK_CUKUP',
+    );
+    expect(await saldoOf(svcA, 'REK-TUNAI')).toBe(10_000);
+  });
+
+  it('transfer ke rekening yang sama ditolak', async () => {
+    await expect(
+      svcA.catatTransfer(
+        { rekeningId: 'REK-BANK', keRekeningId: 'REK-BANK', nominal: 1_000, tanggal: '2026-11-28', idempotencyKey: 'transfer-sama-1' },
+        ADMIN,
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it('rekonsiliasi mencatat selisih terhadap saldo bank', async () => {
     const rek = await svcA.rekonsiliasi(
       { rekeningId: 'REK-TUNAI', tanggal: '2026-11-30', saldoBank: 12_000, catatan: 'Ada bunga Rp 2.000' },
@@ -403,5 +443,114 @@ describe('kewajiban, transfer, dan rekonsiliasi', () => {
     );
     expect(rek.saldoLedger).toBe(10_000);
     expect(rek.selisih).toBe(2_000);
+  });
+});
+
+describe('donatur, sponsor, dan penalang terhubung ke akun atau usaha', () => {
+  const base = { kategoriId: 'KTR-MSK-SPN', rekeningId: 'REK-BANK', nominal: 10_000, tanggal: '2026-12-02' };
+
+  it('sponsor usaha: nama diambil dari data usaha, bukan dari input client', async () => {
+    const row = await svcA.catatMasuk(
+      { ...base, donaturTipe: 'usaha', donaturUsahaId: 'USH-1', donaturNama: 'nama palsu', idempotencyKey: 'sponsor-usaha-01' },
+      ADMIN,
+    );
+    expect(row.donaturTipe).toBe('usaha');
+    expect(row.donaturUsahaId).toBe('USH-1');
+    expect(row.donaturUserId).toBeNull();
+    expect(row.donaturNama).toBe('Toko Maju Jaya');
+  });
+
+  it('sponsor usaha tanpa memilih usaha ditolak', async () => {
+    await expect(
+      svcA.catatMasuk({ ...base, donaturTipe: 'usaha', idempotencyKey: 'sponsor-usaha-02' }, ADMIN),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('usaha yang sudah dihapus tidak bisa jadi sponsor', async () => {
+    await expect(
+      svcA.catatMasuk({ ...base, donaturTipe: 'usaha', donaturUsahaId: 'USH-DEL', idempotencyKey: 'sponsor-usaha-03' }, ADMIN),
+    ).rejects.toMatchObject({ errorCode: 'USAHA_TIDAK_DITEMUKAN' });
+  });
+
+  it('donatur perorangan akun: nama diambil dari akun', async () => {
+    const row = await svcA.catatMasuk(
+      { ...base, donaturTipe: 'perorangan', donaturUserId: 'USR-DONOR', donaturNama: 'nama palsu', idempotencyKey: 'donatur-akun-01' },
+      ADMIN,
+    );
+    expect(row.donaturTipe).toBe('perorangan');
+    expect(row.donaturUserId).toBe('USR-DONOR');
+    expect(row.donaturNama).toBe('Siti Aminah');
+  });
+
+  it('akun nonaktif tidak bisa dipilih sebagai donatur', async () => {
+    await expect(
+      svcA.catatMasuk({ ...base, donaturTipe: 'perorangan', donaturUserId: 'USR-OFF', idempotencyKey: 'donatur-akun-02' }, ADMIN),
+    ).rejects.toMatchObject({ errorCode: 'USER_TIDAK_DITEMUKAN' });
+  });
+
+  it('donatur perorangan tanpa akun: nama bebas tersimpan', async () => {
+    const row = await svcA.catatMasuk(
+      { ...base, donaturTipe: 'perorangan', donaturNama: 'Hamba Allah', idempotencyKey: 'donatur-bebas-01' },
+      ADMIN,
+    );
+    expect(row.donaturTipe).toBe('perorangan');
+    expect(row.donaturUserId).toBeNull();
+    expect(row.donaturNama).toBe('Hamba Allah');
+  });
+
+  it('perorangan tanpa akun dan tanpa nama ditolak', async () => {
+    await expect(
+      svcA.catatMasuk({ ...base, donaturTipe: 'perorangan', idempotencyKey: 'donatur-bebas-02' }, ADMIN),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('donatur anonim tetap boleh, tapi tidak boleh membawa referensi tanpa jenis', async () => {
+    const anonim = await svcA.catatMasuk({ ...base, idempotencyKey: 'donatur-anonim-01' }, ADMIN);
+    expect(anonim.donaturTipe).toBeNull();
+    expect(anonim.donaturNama).toBeNull();
+    await expect(
+      svcA.catatMasuk({ ...base, donaturUserId: 'USR-DONOR', idempotencyKey: 'donatur-anonim-02' }, ADMIN),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('trigger database menolak referensi donatur yang tidak konsisten', async () => {
+    await expect(
+      rawClient.execute(
+        `INSERT INTO cash_transactions (id, tipe, kategori_id, nominal, tanggal, rekening_id, donatur_tipe, created_at)
+         VALUES ('bad-donatur', 'masuk', 'KTR-MSK-SPN', 1000, '2026-12-02', 'REK-BANK', 'usaha', unixepoch())`,
+      ),
+    ).rejects.toThrow(/DONATUR_TIDAK_VALID/);
+  });
+
+  it('penalang akun: nama diambil dari akun dan tersimpan sebagai referensi', async () => {
+    await rawClient.execute(
+      `INSERT INTO rekening (id, nama, jenis, saldo_awal, aktif, created_at) VALUES ('REK-TES', 'Kas tes', 'tunai', 0, 1, unixepoch())`,
+    );
+    const res = await svcA.catatKeluar(
+      {
+        kategoriId: 'KTR-KLR-OPS',
+        rekeningId: 'REK-TES',
+        nominal: 25_000,
+        tanggal: '2026-12-02',
+        talangan: [{ penalangUserId: 'USR-DONOR', penalangNama: 'nama palsu', pokok: 25_000 }],
+        idempotencyKey: 'penalang-akun-01',
+      },
+      ADMIN,
+    );
+    expect(res.loans[0].penalangUserId).toBe('USR-DONOR');
+    expect(res.loans[0].penalangNama).toBe('Siti Aminah');
+  });
+
+  it('pencarian akun: cocok nama, abaikan akun nonaktif dan kata kunci pendek', async () => {
+    const hasil = await svcA.cariUser('siti');
+    expect(hasil.map((h) => h.id)).toEqual(['USR-DONOR']);
+    expect(hasil[0]).toMatchObject({ nama: 'Siti Aminah', detail: '@siti' });
+    expect(await svcA.cariUser('s')).toEqual([]);
+    expect(await svcA.cariUser('%%')).toEqual([]);
+  });
+
+  it('pencarian usaha: abaikan usaha yang sudah dihapus', async () => {
+    const hasil = await svcA.cariUsaha('toko');
+    expect(hasil.map((h) => h.id)).toEqual(['USH-1']);
   });
 });

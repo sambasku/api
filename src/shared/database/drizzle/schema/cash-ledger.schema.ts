@@ -17,6 +17,9 @@ import { kewajiban } from './kewajiban.schema';
 export const CASH_TRANSAKSI_TIPE = ['masuk', 'keluar'] as const;
 export type CashTransaksiTipe = (typeof CASH_TRANSAKSI_TIPE)[number];
 
+export const CASH_DONATUR_TIPE = ['perorangan', 'usaha'] as const;
+export type CashDonaturTipe = (typeof CASH_DONATUR_TIPE)[number];
+
 /** Transaksi sistem yang tidak memakai master kategori. */
 export const CASH_KATEGORI_SISTEM = [
   'talangan',
@@ -64,6 +67,15 @@ export const cashTransactions = sqliteTable(
     /** Pajak yang dipotong dari bruto, integer rupiah. Disetor sebagai transaksi terpisah. */
     pajakDipotong: integer('pajak_dipotong'),
     donaturNama: text('donatur_nama'),
+    /**
+     * Jenis donatur/sponsor: perorangan atau usaha. NULL = anonim.
+     * `donatur_user_id` / `donatur_usaha_id` sengaja TANPA FK: ledger append-only,
+     * jadi FK restrict akan memblokir penghapusan akun/usaha, dan SET NULL ditolak trigger.
+     * Nama tetap tersimpan sebagai snapshot di `donatur_nama`.
+     */
+    donaturTipe: text('donatur_tipe').$type<CashDonaturTipe>(),
+    donaturUserId: text('donatur_user_id'),
+    donaturUsahaId: text('donatur_usaha_id'),
     tampilPublik: integer('tampil_publik', { mode: 'boolean' }).notNull().default(false),
     /** Kunci submit dari client. Mencegah input ganda saat double-submit. */
     idempotencyKey: text('idempotency_key'),
@@ -85,6 +97,10 @@ export const cashTransactions = sqliteTable(
     check(
       'cash_tx_publik_nama_chk',
       sql`${t.tampilPublik} = 0 OR ${t.donaturNama} IS NOT NULL`,
+    ),
+    check(
+      'cash_tx_donatur_tipe_chk',
+      sql`${t.donaturTipe} IS NULL OR ${t.donaturTipe} IN ('perorangan', 'usaha')`,
     ),
     uniqueIndex('cash_tx_dibatalkan_dari_uidx')
       .on(t.dibatalkanDariId)

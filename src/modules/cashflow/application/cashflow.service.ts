@@ -7,6 +7,9 @@ import {
   loans as loansTable,
   rekening,
   rekonsiliasi,
+  usahas,
+  users,
+  type CashDonaturTipe,
   type CashKategoriSistem,
   type CashTransaksiTipe,
   type KategoriTransaksiTipe,
@@ -100,8 +103,18 @@ export interface KeluarInput extends TransaksiBase {
 
 export interface MasukInput extends TransaksiBase {
   kategoriId: string;
+  /** Kosong = anonim. Untuk akun/usaha, nama diambil dari database. */
+  donaturTipe?: CashDonaturTipe | null;
+  donaturUserId?: string | null;
+  donaturUsahaId?: string | null;
   donaturNama?: string | null;
   tampilPublik?: boolean;
+}
+
+export interface LookupItem {
+  id: string;
+  nama: string;
+  detail: string;
 }
 
 /** Kode error trigger database -> pesan untuk user. Harus sama dengan migrasi 0207. */
@@ -111,6 +124,7 @@ const TRIGGER_ERRORS: Record<string, string> = {
   REFUND_MELEBIHI_DONASI: 'Nominal refund melebihi sisa donasi asal.',
   LOAN_TIDAK_AKTIF: 'Talangan ini sudah dihibahkan atau dibatalkan, jadi tidak bisa direimburse.',
   APPEND_ONLY: 'Riwayat transaksi tidak bisa diubah. Gunakan koreksi.',
+  DONATUR_TIDAK_VALID: 'Data donatur tidak konsisten. Pilih perorangan atau usaha dengan benar.',
   cash_tx_dibatalkan_dari_uidx: 'Transaksi ini sudah pernah dibatalkan.',
 };
 
@@ -140,6 +154,13 @@ function mapDbError(err: unknown): never {
 
 function bad(field: string, message: string): never {
   throw new ValidationError([{ field, message }]);
+}
+
+/** Pola LIKE aman: escape %, _, dan ! (karakter escape). Null jika kata kunci terlalu pendek. */
+function likeTerm(q: string): string | null {
+  const t = q.trim();
+  if (t.length < 2) return null;
+  return `%${t.replace(/[!%_]/g, (c) => `!${c}`)}%`;
 }
 
 function assertNominal(nominal: number): void {
@@ -391,6 +412,82 @@ export class CashflowService {
 
   // ---------------------------------------------------------------- transaksi
 
+  // ---------------------------------------------------------------- donatur, penalang, pencarian
+
+  /**
+   * Tentukan snapshot nama + referensi donatur. Untuk akun atau usaha, nama diambil
+   * dari database (bukan dari client) supaya tidak bisa dipalsukan.
+   */
+  private async resolveDonatur(
+    tx: Tx,
+    input: MasukInput,
+  ): Promise<{ tipe: CashDonaturTipe | null; userId: string | null; usahaId: string | null; nama: string | null }> {
+    const nama = input.donaturNama?.trim() || null;
+    if (!input.donaturTipe) {
+      if (input.donaturUserId || input.donaturUsahaId) {
+        bad('donatur_tipe', 'Pilih jenis donatur dulu: perorangan atau usaha.');
+      }
+      return { tipe: null, userId: null, usahaId: null, nama };
+    }
+    if (input.donaturTipe === 'usaha') {
+      if (!input.donaturUsahaId) bad('donatur_usaha_id', 'Pilih usahanya dulu ya.');
+      if (input.donaturUserId) bad('donatur_user_id', 'Donatur usaha tidak boleh punya akun perorangan.');
+      const [u] = await tx
+        .select({ id: usahas.id, name: usahas.name })
+        .from(usahas)
+        .where(and(eq(usahas.id, input.donaturUsahaId), isNull(usahas.deletedAt)))
+        .limit(1);
+      if (!u) throw new NotFoundError('USAHA_TIDAK_DITEMUKAN', 'Usaha tidak ditemukan.');
+      return { tipe: 'usaha', userId: null, usahaId: u.id, nama: u.name };
+    }
+    if (input.donaturUsahaId) bad('donatur_usaha_id', 'Donatur perorangan tidak boleh punya usaha.');
+    if (input.donaturUserId) {
+      const akunNama = await this.userDisplayName(tx, input.donaturUserId, 'Akun donatur tidak ditemukan.');
+      return { tipe: 'perorangan', userId: input.donaturUserId, usahaId: null, nama: akunNama };
+    }
+    if (!nama) bad('donatur_nama', 'Tulis nama donatur, atau pilih akunnya.');
+    return { tipe: 'perorangan', userId: null, usahaId: null, nama };
+  }
+
+  private async userDisplayName(tx: Tx, userId: string, notFoundMessage: string): Promise<string> {
+    const [u] = await tx
+      .select({ username: users.username, displayName: users.displayName })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.isActive, true), isNull(users.deletedAt)))
+      .limit(1);
+    if (!u) throw new NotFoundError('USER_TIDAK_DITEMUKAN', notFoundMessage);
+    return u.displayName.trim() || u.username;
+  }
+
+  /** Penalang akun: nama diambil dari database. Penalang bebas: nama dari input. */
+  private async resolvePenalangNama(tx: Tx, t: TalanganInput): Promise<string> {
+    if (!t.penalangUserId) return t.penalangNama.trim();
+    return this.userDisplayName(tx, t.penalangUserId, 'Akun penalang tidak ditemukan.');
+  }
+
+  /** Cari akun untuk dipilih sebagai donatur atau penalang. Satu query, maks 10 hasil. */
+  async cariUser(q: string): Promise<LookupItem[]> {
+    const term = likeTerm(q);
+    if (!term) return [];
+    const rows = await this.db.all<{ id: string; display_name: string; username: string }>(sql`
+      SELECT id, display_name, username FROM users
+      WHERE is_active = 1 AND deleted_at IS NULL
+        AND (display_name LIKE ${term} ESCAPE '!' OR username LIKE ${term} ESCAPE '!')
+      ORDER BY display_name, username LIMIT 10`);
+    return rows.map((r) => ({ id: r.id, nama: r.display_name.trim() || r.username, detail: `@${r.username}` }));
+  }
+
+  /** Cari usaha untuk dipilih sebagai sponsor. Satu query, maks 10 hasil. */
+  async cariUsaha(q: string): Promise<LookupItem[]> {
+    const term = likeTerm(q);
+    if (!term) return [];
+    const rows = await this.db.all<{ id: string; name: string; slug: string }>(sql`
+      SELECT id, name, slug FROM usahas
+      WHERE deleted_at IS NULL AND name LIKE ${term} ESCAPE '!'
+      ORDER BY name LIMIT 10`);
+    return rows.map((r) => ({ id: r.id, nama: r.name, detail: r.slug }));
+  }
+
   async catatMasuk(input: MasukInput, actorId: string): Promise<CashRow> {
     assertNominal(input.nominal);
     assertTanggal(input.tanggal);
@@ -399,8 +496,9 @@ export class CashflowService {
       if (existing) return existing;
       await this.requireKategori(tx, input.kategoriId, 'masuk');
       await this.requireRekeningAktif(tx, input.rekeningId);
+      const donatur = await this.resolveDonatur(tx, input);
       const tampilPublik = input.tampilPublik === true;
-      if (tampilPublik && !input.donaturNama?.trim()) {
+      if (tampilPublik && !donatur.nama) {
         bad('donatur_nama', 'Nama donatur wajib diisi jika ingin ditampilkan.');
       }
       const id = await this.insertCash(tx, {
@@ -410,7 +508,10 @@ export class CashflowService {
         tanggal: input.tanggal,
         catatan: input.catatan ?? '',
         rekeningId: input.rekeningId,
-        donaturNama: input.donaturNama?.trim() || null,
+        donaturNama: donatur.nama,
+        donaturTipe: donatur.tipe,
+        donaturUserId: donatur.userId,
+        donaturUsahaId: donatur.usahaId,
         tampilPublik,
         idempotencyKey: input.idempotencyKey,
         createdBy: actorId,
@@ -468,7 +569,7 @@ export class CashflowService {
         await tx.insert(loansTable).values({
           id: loanId,
           penalangUserId: t.penalangUserId ?? null,
-          penalangNama: t.penalangNama.trim(),
+          penalangNama: await this.resolvePenalangNama(tx, t),
           pokok: t.pokok,
           pengeluaranTxId: pengeluaranId,
           tanggalTalangan: input.tanggal,
